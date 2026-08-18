@@ -232,6 +232,20 @@
           (when (= effect-id (:effect-id instance)) instance-id))
         @(:instances runtime)))
 
+(defn instance-for-owner
+  "The instance id of `owner`'s live instance of `effect-id`, or nil.
+   For :transient effects, where instance-key already scopes at most one
+   live instance per (owner, activation, effect-id) -- see register-effect!'s
+   docstring -- so at most one of owner-index's ids for `owner` can match
+   `effect-id`. Composition roots use this to answer \"which instance is
+   mine\" for callbacks (e.g. a :hand transform-fn) that have no per-call
+   context of their own to carry an owner through."
+  [runtime effect-id owner]
+  (some (fn [instance-id]
+          (when (= effect-id (:effect-id (get @(:instances runtime) instance-id)))
+            instance-id))
+        (get @(:owner-index runtime) owner)))
+
 (defn ensure-instance!
   "Create the singleton state instance used by aggregate content effects."
   [runtime effect-id context]

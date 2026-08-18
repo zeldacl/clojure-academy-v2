@@ -14,16 +14,10 @@
   (arc-beam/build-spec
     {:effect-id :mag-manip
      :runtime :hand
-     :initial-state (fn [] {:states {}})
+     :lifecycle :transient
+     :initial-state (fn [] {:active? false :focus nil :block-id nil :ticks 0})
      :channels {:hold {:topic :mag-manip/fx-hold :targets [:hand] :handler on-fx-hold}
                 :throw {:topic :mag-manip/fx-throw :mode :throw :targets [:hand]}
                 :end {:topic :mag-manip/fx-end :mode :end :targets [:hand]}}}))
 
 (arc-beam/def-arc-beam-fx :mag-manip)
-
-(def ^:private default-state
-  {:active? false :focus nil :block-id nil :ticks 0})
-
-(defn current-state [selector]
-  (let [{:keys [states]} (fx-snapshot)]
-    (or (get states selector) default-state)))

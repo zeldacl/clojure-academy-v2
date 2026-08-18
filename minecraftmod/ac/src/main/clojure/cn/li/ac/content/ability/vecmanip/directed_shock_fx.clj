@@ -25,7 +25,8 @@
   (arc-beam/build-spec
     {:effect-id :directed-shock
      :runtime :hand
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :directed-shock/fx-start :mode :start :targets [:hand]}
                 :perform {:topic :directed-shock/fx-perform :mode :perform
                           :targets [:hand :immediate]

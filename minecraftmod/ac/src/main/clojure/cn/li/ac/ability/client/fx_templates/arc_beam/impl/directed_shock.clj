@@ -16,15 +16,6 @@
 (def ^:private prepare-duration-ms 150.0)
 (def ^:private punch-duration-ms 300.0)
 
-
-
-
-
-
-
-
-
-
 (defn- now-ms [] (System/currentTimeMillis))
 
 ;; ---------------------------------------------------------------------------
@@ -51,36 +42,42 @@
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue-state! [state ctx-id channel owner-key payload]
-  (let [state* (or state {:effect-state {}})
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration.
+;; combat_content.clj's :directed-shock skill sends exactly ONE :vfx step,
+;; ever: :event :perform from its :release phase, with
+;; :params {:charge-min-ticks 6} -- no :start/:end. Unlike most Batch 2/3
+;; effects, :perform here DOES match a real case branch (:stage :punch), so
+;; the punch hand-animation genuinely plays; only the windup (:start's
+;; :stage :prepare, which would show before the punch) never fires. The
+;; punch SOUND does not play either way -- it was queued by
+;; directed_shock_fx.clj's :immediate :channels handler, which has been
+;; dead code since :channels itself was deleted as dead infrastructure (see
+;; E section P1.3; fx_spec.clj's register! tolerates and ignores :channels
+;; entirely now).
+(defn- enqueue-state! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [mode performed? source-player-id world-id]} payload
-        owner-key* (or owner-key [:ctx ctx-id])
-        base-meta {:owner-key owner-key*
-                   :ctx-id ctx-id
+        base-meta {:ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case mode
       :start
-      (update state* :effect-state assoc owner-key*
-              (merge base-meta {:stage :prepare :started-at (now-ms)}))
+      (merge state* base-meta {:stage :prepare :started-at (now-ms)})
 
       ;; The punch sound itself is queued by directed-shock-fx.clj's
-      ;; :immediate channel handler instead of here — that one is
-      ;; world-positioned at the caster's coordinates (matching original's
-      ;; unconditional, non-isLocal-gated ACSounds.playClient), so it plays
-      ;; correctly for owner and nearby alike. Queuing it here too would
-      ;; double it for the owner and mislocate it for bystanders (this
-      ;; hand-effect enqueue always resolves to the LOCAL viewer's own
-      ;; position, not the caster's).
+      ;; :immediate channel handler instead of here — see the migration
+      ;; comment above for why that no longer fires at all.
       :perform
-      (update state* :effect-state assoc owner-key*
-              (merge base-meta {:stage :punch :started-at (now-ms)}))
+      (merge state* base-meta {:stage :punch :started-at (now-ms)})
 
       :end
-      (if performed?
-        state*
-        (update state* :effect-state dissoc owner-key*))
+      (if performed? state* {})
 
       state*)))
 
@@ -88,47 +85,47 @@
 ;; Tick
 ;; ---------------------------------------------------------------------------
 
-(defn- tick-state! [state]
-  (let [state* (or state {:effect-state {}})]
-    (update state* :effect-state
-            (fn [states]
-              (into {}
-                    (remove (fn [[_ {:keys [stage started-at]}]]
-                              (and (= stage :punch)
-                                   (>= (- (now-ms) (long started-at)) punch-duration-ms))))
-                    states)))))
+(defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Only the finished :punch stage naturally ends the
+   instance (matching the pre-migration per-owner removal exactly); a
+   :prepare stage (or no stage at all) persists, same as before."
+  [state]
+  (let [state* (or state {})]
+    (when-not (and (= :punch (:stage state*))
+                   (>= (- (now-ms) (long (or (:started-at state*) 0))) punch-duration-ms))
+      state*)))
 
 ;; ---------------------------------------------------------------------------
 ;; Transform
 ;; ---------------------------------------------------------------------------
 
 (defn- transform []
-  (when-let [[owner-key {:keys [stage started-at]}]
-             (some (fn [[owner-key st]]
-                     (when (:stage st)
-                       [owner-key st]))
-                   (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :directed-shock)))]
-    (let [elapsed (- (now-ms) (long started-at))]
-      (case stage
-        :prepare
-        (prepare-transform (min 1.0 (/ elapsed prepare-duration-ms)))
-        :punch
-        (let [progress (/ elapsed punch-duration-ms)]
-          (if (>= progress 1.0)
-            (do
-              (cn.li.ac.ability.client.fx-templates.arc-beam/clear-owner! :directed-shock owner-key)
-              nil)
-            (punch-transform progress)))
-        nil))))
+  (when-let [uuid (client-bridge/local-player-uuid)]
+    (when-let [{:keys [stage started-at]} (vfx-hand/instance-for-owner :directed-shock uuid)]
+      (when stage
+        (let [elapsed (- (now-ms) (long started-at))]
+          (case stage
+            :prepare
+            (prepare-transform (min 1.0 (/ elapsed prepare-duration-ms)))
+            :punch
+            (let [progress (/ elapsed punch-duration-ms)]
+              (when (< progress 1.0)
+                (punch-transform progress)))
+            nil))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-shock :hand] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-shock :hand] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:directed-shock :hand]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:directed-shock :hand] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :directed-shock [_effect-id] (transform))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :directed-shock [_ store owner-key]
-  (update store :effect-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).
+;; The finished-punch-stage removal above already handles the only
+;; teardown this file ever needed; the manual clear-owner! call this
+;; sampling function used to make once progress hit 1.0 was redundant with
+;; that and, like every other :clear-owner-fn caller, dead anyway.

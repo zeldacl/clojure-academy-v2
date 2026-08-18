@@ -592,7 +592,16 @@
                          {:initial-state (resolve-initial-state opts :hand)
                           :enqueue-state-fn #(dispatch-enqueue! :hand effect-id %1 %2 %3 %4 %5)
                           :tick-state-fn #(dispatch-tick! :hand effect-id %1)
-                          :transform-fn transform})
+                          :transform-fn transform
+                          ;; :destroy-fn was never wired for :hand under
+                          ;; :singleton (no :clear-owner-fn either -- see the
+                          ;; :level track's :destroy-fn comment above for why
+                          ;; that's fine there). Batch 4 (mag_manip) is the
+                          ;; first :hand track with an actual resource to
+                          ;; release on teardown (a loop sound), so it's
+                          ;; wired unconditionally here too, the same
+                          ;; dispatch-*!-over-method-registry* idiom.
+                          :destroy-fn #(dispatch-destroy! effect-id %1)})
                   spec)))
         (assoc ::arc-entry
                {:runtime runtime

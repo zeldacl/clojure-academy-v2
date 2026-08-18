@@ -85,6 +85,17 @@
       (is (= #{other-id} (set (keys @(:instances rt)))))
       (is (empty? (get @(:owner-index rt) :player-a #{}))))))
 
+(deftest instance-for-owner-finds-the-matching-effect-only
+  (let [rt (runtime/create-runtime)]
+    (runtime/register-effect! rt (test-effect))
+    (runtime/register-effect! rt (assoc (test-effect) :id :test/other-effect))
+    (runtime/freeze-registry! rt)
+    (let [mine-id (runtime/spawn! rt :test/effect {:owner :player-a})
+          _other-effect-same-owner (runtime/spawn! rt :test/other-effect {:owner :player-a})
+          _same-effect-other-owner (runtime/spawn! rt :test/effect {:owner :player-b})]
+      (is (= mine-id (runtime/instance-for-owner rt :test/effect :player-a)))
+      (is (nil? (runtime/instance-for-owner rt :test/effect :player-nobody))))))
+
 (deftest deterministic-frame-digest
   (let [rt (runtime/create-runtime)]
     (runtime/register-effect! rt (test-effect))

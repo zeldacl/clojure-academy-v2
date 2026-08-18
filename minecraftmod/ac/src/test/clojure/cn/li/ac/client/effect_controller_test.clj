@@ -43,3 +43,27 @@
   (vfx-level/tick! {:tick-id 2 :delta-seconds 0.05})
   (is (= 1 (count @(:instances (vfx-level/runtime))))
       "the one eternal aggregate instance must survive its tracked state going empty"))
+
+;; Batch 4 (directed_shock/mag_manip): a :hand transform-fn has no per-call
+;; context of its own to carry an owner through (sample-hand! calls it with
+;; zero arguments), so a :hand-only :transient effect needs a way to find
+;; "my own" instance given an owner resolved from elsewhere (e.g. the local
+;; player's uuid). instance-for-owner is that lookup.
+(deftest instance-for-owner-finds-only-the-matching-owners-hand-state-test
+  (vfx-level/reset-for-test!)
+  (vfx-level/register-effect!
+    :owner-probe
+    {:lifecycle :transient
+     :hand {:initial-state (fn [] {})
+            :enqueue-state-fn (fn [state _ _ _ payload] (merge state payload))
+            :tick-state-fn (fn [state] state)
+            :transform-fn (fn [] nil)}})
+  (vfx-level/dispatch-signal!
+    {:op :spawn :effect-id :owner-probe :owner "mine" :world-id "w"
+     :instance-key [:probe "mine"] :event-seq 0 :event :tag :params {:whose "mine"}})
+  (vfx-level/dispatch-signal!
+    {:op :spawn :effect-id :owner-probe :owner "someone-else" :world-id "w"
+     :instance-key [:probe "someone-else"] :event-seq 0 :event :tag :params {:whose "someone-else"}})
+  (vfx-level/tick! {:tick-id 1 :delta-seconds 0.05})
+  (is (= {:whose "mine" :mode :tag} (vfx-level/instance-for-owner :owner-probe "mine")))
+  (is (nil? (vfx-level/instance-for-owner :owner-probe "nobody"))))

@@ -203,6 +203,23 @@
      (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
        (handler-state (core/instance-state (runtime) instance-id) kind)))))
 
+(defn instance-for-owner
+  "State for `owner`'s live :transient instance of effect-id, or nil.
+
+   For callbacks like a :hand transform-fn that vfx-core calls with no
+   per-call context of their own (see sample-hand! -- transform-fn takes no
+   arguments), so they have no owner to scope a lookup by unless the caller
+   resolves and passes one in. Content resolves its own notion of \"owner\"
+   (usually the local player's uuid, e.g. via
+   cn.li.mcmod.client.platform-bridge/local-player-uuid) and calls this
+   directly; :singleton effects have no real per-owner instance to find
+   here (they all share the one aggregate instance -- use state-snapshot
+   instead)."
+  ([effect-id owner] (instance-for-owner effect-id owner :hand))
+  ([effect-id owner kind]
+   (when-let [instance-id (core/instance-for-owner (runtime) effect-id owner)]
+     (handler-state (core/instance-state (runtime) instance-id) kind))))
+
 (defn update-state!
   [effect-id kind f & args]
   (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
