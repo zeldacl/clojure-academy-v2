@@ -255,6 +255,24 @@
                      (when-let [child (:on-first data)]
                        (execute-component! frame host (:component child)
                                            (dissoc child :component) context)))))
+    :combat/damage-impact
+    (let [target (resolve-data (:target data) context)
+          amount (resolve-data (:amount data) context)
+          damage-type (resolve-data (or (:damage-type data) :generic) context)
+          impact (or (resolve-data (:impact-context data) context)
+                     {:entity-id target})
+          _ (emit-component! frame :combat/damage
+                             {:target target
+                              :amount amount
+                              :damage-type damage-type})
+          hook (:on-impact data)]
+      (when hook
+        (execute-component! frame host (:component hook)
+                            (dissoc hook :component)
+                            (assoc context :context
+                                   (assoc (:context context)
+                                          :impact impact
+                                          :hit-entity impact)))))
     :data/bind
     (do
       (when-let [slots* (:slots* context)]

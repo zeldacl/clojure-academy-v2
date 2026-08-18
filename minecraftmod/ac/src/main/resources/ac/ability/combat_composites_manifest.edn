@@ -1,0 +1,4 @@
+{:schema-version 1
+ :documents [{:kind :composite
+              :id :combat/electric-strike
+              :resource "ac/ability/combat_electric_strike.edn"}]}

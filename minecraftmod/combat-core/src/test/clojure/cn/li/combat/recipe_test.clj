@@ -31,6 +31,42 @@
         false
         (catch clojure.lang.ExceptionInfo _ true))))
 
+(deftest composites-expand-before-runtime
+  (components/reset-for-test!)
+  (let [composites {:test/finish
+                    {:kind :composite :id :test/finish :revision 1
+                     :inputs {:outcome {:type :keyword}}
+                     :body {:component :flow/finish
+                            :outcome {:ref [:input :outcome]}}}}
+        compiled (recipe/compile-ability
+                  {:schema-version 1 :kind :ability :id :composite-test
+                   :revision 1 :activation :instant
+                   :program {:component :test/finish :outcome :ok}}
+                  {:composites composites})]
+    (is (= :flow/finish (get-in compiled [:program :component])))
+    (is (= :ok (get-in compiled [:program :outcome])))
+    (is (not-any? #(= :test/finish (get-in % [:data :component]))
+                  (:compiled-ir compiled)))))
+
+(deftest composite-cycle-and-missing-input-are-rejected
+  (components/reset-for-test!)
+  (let [cycle {:test/a {:kind :composite :id :test/a :inputs {}
+                        :body {:component :test/b}}
+               :test/b {:kind :composite :id :test/b :inputs {}
+                        :body {:component :test/a}}}
+        ability {:schema-version 1 :kind :ability :id :cycle-test
+                 :revision 1 :activation :instant
+                 :program {:component :test/a}}]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (recipe/compile-ability ability {:composites cycle})))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (recipe/compile-ability
+                  (assoc ability :program {:component :test/a :extra 1})
+                  {:composites {:test/a {:kind :composite :id :test/a
+                                         :inputs {:required {:type :object}}
+                                         :body {:component :flow/finish
+                                                :outcome :ok}}}})))))
+
 (deftest primitive-vm-executes-array-ir
   (let [program (CompiledProgram.
                   (int-array [1 24])
@@ -93,3 +129,35 @@
     (is (= :entity/select (:capability @seen)))
     (is (= "world" (:world-id @seen)))
     (is (= 8 (:limit @seen)))))
+
+(deftest damage-impact-runs-generic-hook-with-impact-context
+  (components/reset-for-test!)
+  (let [ability (recipe/compile-ability
+                  {:schema-version 1 :kind :ability :id :impact-test
+                   :revision 1 :activation :instant
+                   :program {:component :flow/sequence
+                             :steps [{:component :combat/damage-impact
+                                      :target "target-1"
+                                      :amount 3.0
+                                      :damage-type :skill
+                                      :impact-context {:entity-id "target-1"
+                                                       :creeper? true}
+                                      :on-impact {:component :flow/branch
+                                                  :when {:ref [:context :impact :creeper?]}
+                                                  :then {:component :entity/status
+                                                         :target {:ref [:context :impact :entity-id]}
+                                                         :status-id :powered-creeper
+                                                         :duration-ticks 1}}
+                                      }
+                                     {:component :flow/finish :outcome :ok}]}})
+        frame (ExecutionFrame. (double-array 0) (long-array 0)
+                               (boolean-array 0) (object-array 0)
+                               (ArrayList.) (ArrayList.) (ArrayList.)
+                               (int-array 0))
+        result (vm/execute! (:compiled-program ability) frame
+                            (HostTable. (object-array 0) (fn [_] true) (fn [_ _] true))
+                            0 {:context {}})]
+    (is (= :finished (:status result)))
+    (is (= 2 (.size ^ArrayList (:actions result))))
+    (is (= :entity/damage (:capability (.get ^ArrayList (:actions result) 0))))
+    (is (= :entity/status (:capability (.get ^ArrayList (:actions result) 1))))))

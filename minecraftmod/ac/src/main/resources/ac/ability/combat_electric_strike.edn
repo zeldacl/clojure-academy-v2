@@ -1,0 +1,17 @@
+{:schema-version 1
+ :kind :composite
+ :id :combat/electric-strike
+ :revision 1
+ :inputs
+ {:target {:type :object}
+  :amount {:type :object}
+  :damage-type {:type :keyword :default :skill}
+  :impact-context {:type :object :default nil}
+  :on-impact {:type :node :default nil}}
+ :body
+ {:component :combat/damage-impact
+  :target {:ref [:input :target]}
+  :amount {:ref [:input :amount]}
+  :damage-type {:ref [:input :damage-type]}
+  :impact-context {:ref [:input :impact-context]}
+  :on-impact {:ref [:input :on-impact]}}}

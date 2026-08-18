@@ -55,6 +55,12 @@
                  :direction {:vec3 [0.0 0.0 1.0]} :length 1.0 :radius 0.1
                  :entity-limit 1 :result :beam}
    :combat/damage {:component :combat/damage :target {:ref [:slot :target-id]} :amount 1.0}
+   :combat/damage-impact {:component :combat/damage-impact
+                          :target {:ref [:slot :target-id]}
+                          :amount 1.0
+                          :damage-type :generic
+                          :impact-context {:ref [:slot :impact]}
+                          :on-impact finish-example}
    :combat/impulse {:component :combat/impulse :target {:ref [:slot :target-id]}
                     :vector vec3-example}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}

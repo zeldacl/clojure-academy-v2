@@ -71,6 +71,7 @@
            [:target/blocks #{:shape :projection :limit :result}]
            [:combat/beam #{:origin :direction :length :radius :result}]
            [:combat/damage #{:target :amount}]
+           [:combat/damage-impact #{:target :amount}]
            [:combat/impulse #{:target :vector}]
            [:combat/status #{:target :status-id :duration-ticks}]
            [:interaction/dispatch #{:kind :target :result}]

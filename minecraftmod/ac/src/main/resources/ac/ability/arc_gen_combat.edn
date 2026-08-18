@@ -83,22 +83,23 @@
                  {:component :flow/branch
                   :when {:ref [:slot :aim-hit :entity-id]}
                   :then {:component :flow/sequence
-                         :steps [{:component :combat/damage
+                         :steps [{:component :combat/electric-strike
                                   :target {:ref [:slot :aim-hit :entity-id]}
                                   :amount {:expr :math/lerp
                                            :args [{:ref [:param :damage 0]}
                                                   {:ref [:param :damage 1]}
                                                   {:ref [:context :skill-exp]}]}
-                                  :damage-type :skill}
-                                 {:component :flow/branch
+                                  :impact-context {:ref [:slot :aim-hit]}
+                                  :on-impact {:component :flow/branch
                                   :when {:expr :bool/and
-                                         :args [{:ref [:slot :aim-hit :creeper?]}
+                                         :args [{:ref [:context :impact :creeper?]}
                                                 {:expr :random/chance
                                                  :args [{:ref [:param :creeper-charge-chance]}]}]}
                                   :then {:component :entity/status
-                                         :target {:ref [:slot :aim-hit :entity-id]}
+                                         :target {:ref [:context :impact :entity-id]}
                                          :status-id :powered-creeper
                                          :duration-ticks 1 :amplifier 0}}
+                                 }
                                  {:component :data/bind
                                   :to :exp-award
                                   :value {:expr :math/add
