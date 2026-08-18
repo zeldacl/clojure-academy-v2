@@ -130,26 +130,37 @@
     (is (= "world" (:world-id @seen)))
     (is (= 8 (:limit @seen)))))
 
-(deftest damage-impact-runs-generic-hook-with-impact-context
+(deftest impact-composite-expands-to-generic-sequence
   (components/reset-for-test!)
-  (let [ability (recipe/compile-ability
+  (let [composites {:combat/impact-strike
+                    {:kind :composite :id :combat/impact-strike :revision 1
+                     :inputs {:target {:type :object}
+                              :amount {:type :object}
+                              :damage-type {:type :keyword}
+                              :on-impact {:type :node}}
+                     :body {:component :flow/sequence
+                            :steps [{:component :combat/damage
+                                     :target {:ref [:input :target]}
+                                     :amount {:ref [:input :amount]}
+                                     :damage-type {:ref [:input :damage-type]}}
+                                    {:ref [:input :on-impact]}]}}}
+        ability (recipe/compile-ability
                   {:schema-version 1 :kind :ability :id :impact-test
                    :revision 1 :activation :instant
                    :program {:component :flow/sequence
-                             :steps [{:component :combat/damage-impact
+                             :steps [{:component :combat/impact-strike
                                       :target "target-1"
                                       :amount 3.0
                                       :damage-type :skill
-                                      :impact-context {:entity-id "target-1"
-                                                       :creeper? true}
                                       :on-impact {:component :flow/branch
-                                                  :when {:ref [:context :impact :creeper?]}
+                                                  :when true
                                                   :then {:component :entity/status
-                                                         :target {:ref [:context :impact :entity-id]}
+                                                         :target "target-1"
                                                          :status-id :powered-creeper
                                                          :duration-ticks 1}}
                                       }
-                                     {:component :flow/finish :outcome :ok}]}})
+                                     {:component :flow/finish :outcome :ok}]}}
+                  {:composites composites})
         frame (ExecutionFrame. (double-array 0) (long-array 0)
                                (boolean-array 0) (object-array 0)
                                (ArrayList.) (ArrayList.) (ArrayList.)

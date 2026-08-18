@@ -1,0 +1,32 @@
+{:schema-version 1
+ :kind :composite
+ :id :combat/area-damage
+ :revision 1
+ :inputs
+ {:center {:type :object}
+  :radius {:type :object}
+  :filter {:type :object}
+  :projection {:type :object}
+  :limit {:type :object}
+  :damage {:type :object}
+  :damage-type {:type :keyword}
+  :on-impact {:type :node}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :target/entities
+           :shape {:type :sphere
+                   :center {:ref [:input :center]}
+                   :radius {:ref [:input :radius]}}
+           :filter {:ref [:input :filter]}
+           :projection {:ref [:input :projection]}
+           :limit {:ref [:input :limit]}
+           :result :area-targets}
+          {:component :flow/foreach
+           :items {:ref [:slot :area-targets]}
+           :as :area-target
+           :limit {:ref [:input :limit]}
+           :body {:component :combat/impact-strike
+                  :target {:ref [:slot :area-target :id]}
+                  :amount {:ref [:input :damage]}
+                  :damage-type {:ref [:input :damage-type]}
+                  :on-impact {:ref [:input :on-impact]}}}]}}

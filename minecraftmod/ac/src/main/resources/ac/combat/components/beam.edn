@@ -1,0 +1,20 @@
+{:schema-version 1
+ :kind :composite
+ :id :combat/beam
+ :revision 1
+ :inputs
+ {:origin {:type :object}
+  :direction {:type :object}
+  :length {:type :object}
+  :radius {:type :object}
+  :entity-limit {:type :object}
+  :block-policy {:type :node}}
+ :body
+ {:component :host/beam-trace
+  :origin {:ref [:input :origin]}
+  :direction {:ref [:input :direction]}
+  :length {:ref [:input :length]}
+  :radius {:ref [:input :radius]}
+  :entity-limit {:ref [:input :entity-limit]}
+  :block-policy {:ref [:input :block-policy]}
+  :result :beam-result}}

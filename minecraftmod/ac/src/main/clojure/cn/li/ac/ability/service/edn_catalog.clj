@@ -28,9 +28,9 @@
 (defn initialize! []
   (let [migration (safe-edn/read-resource! "ac/ability/migration_status.edn")
         combat (combat-recipe/load-catalog!
-                 {:manifest-resource "ac/ability/combat_manifest.edn"
+                 {:manifest-resource "ac/combat/manifest.edn"
                   :composites-manifest-resource
-                  "ac/ability/combat_composites_manifest.edn"})
+                  "ac/combat/components_manifest.edn"})
         vfx (vfx-recipe/load-catalog!
               {:manifest-resource "ac/ability/vfx_manifest.edn"})]
     (reset! state* {:initialized? true

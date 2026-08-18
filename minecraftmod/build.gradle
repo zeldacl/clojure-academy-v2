@@ -1075,7 +1075,7 @@ tasks.register("verifyCombatSkillCoverage") {
         def migration = file("ac/src/main/resources/ac/ability/migration_status.edn").text
         def migrated = [] as Set
         (migration =~ /(?:\{|\s):([A-Za-z0-9!?*-]+)\s+:migrated\b/).each { match -> migrated << ":${match[1]}" }
-        def manifest = file("ac/src/main/resources/ac/ability/combat_manifest.edn").text
+        def manifest = file("ac/src/main/resources/ac/combat/manifest.edn").text
         def manifestIds = [] as Set
         (manifest =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> manifestIds << match[1].toString() }
         def missing = migrated - manifestIds
@@ -1092,7 +1092,7 @@ tasks.register("verifyAbilityVfxRegistryCoverage") {
     description = "Every effect emitted by migrated EDN abilities must be present in the EDN VFX manifest."
     dependsOn ":vfx-core:runVfxClojureTests"
     doLast {
-        def combat = file("ac/src/main/resources/ac/ability/railgun_combat.edn").text
+        def combat = file("ac/src/main/resources/ac/combat/abilities/railgun.edn").text
         def vfxManifest = file("ac/src/main/resources/ac/ability/vfx_manifest.edn").text
         def emitted = [] as Set
         (combat =~ /:effect-id\s+(:[A-Za-z0-9!?*-]+)/).each { m -> emitted << m[1].toString() }

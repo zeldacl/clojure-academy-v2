@@ -1,10 +1,10 @@
 {:schema-version 1
  :documents [{:kind :ability
               :id :railgun
-              :resource "ac/ability/railgun_combat.edn"}
+              :resource "ac/combat/abilities/railgun.edn"}
              {:kind :ability
              :id :arc-gen
-              :resource "ac/ability/arc_gen_combat.edn"}
+             :resource "ac/combat/abilities/arc_gen.edn"}
              {:kind :ability
               :id :thunder-clap
-              :resource "ac/ability/thunder_clap_combat.edn"}]}
+             :resource "ac/combat/abilities/thunder_clap.edn"}]}

@@ -1,0 +1,16 @@
+{:schema-version 1
+ :kind :composite
+ :id :combat/impact-strike
+ :revision 1
+ :inputs
+ {:target {:type :object}
+  :amount {:type :object}
+  :damage-type {:type :keyword}
+  :on-impact {:type :node}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :combat/damage
+           :target {:ref [:input :target]}
+           :amount {:ref [:input :amount]}
+           :damage-type {:ref [:input :damage-type]}}
+          {:ref [:input :on-impact]}]}}

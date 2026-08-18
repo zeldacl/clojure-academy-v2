@@ -1,0 +1,10 @@
+{:schema-version 1
+ :documents [{:kind :composite
+              :id :combat/impact-strike
+              :resource "ac/combat/components/impact_strike.edn"}
+             {:kind :composite
+              :id :combat/area-damage
+              :resource "ac/combat/components/area_damage.edn"}
+             {:kind :composite
+              :id :combat/beam
+              :resource "ac/combat/components/beam.edn"}]}

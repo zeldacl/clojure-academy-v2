@@ -96,7 +96,11 @@
 (def ^:private query-capability-by-component
   {:target/raycast :raycast
    :target/entities :entity/select
-   :target/blocks :block/select})
+   :target/blocks :block/select
+   ;; Beam traversal is a host primitive.  Its neutral request shape is still
+   ;; handled by the existing raycast capability; the EDN composite owns the
+   ;; reusable beam pipeline and supplies all policy values.
+   :host/beam-trace :raycast})
 
 (def ^:private action-capability-by-component
   {:inventory/consume :inventory/consume
@@ -164,6 +168,8 @@
                     (merge {:capability capability
                             :owner (:owner context)
                             :world-id (str (or (get-in context [:context :world-id]) "unknown"))}
+                           (when (= component :host/beam-trace)
+                             {:query-kind :beam})
                            (dissoc data :result :component))
                     context))
         result (when handler (.invoke handler request frame))]
@@ -196,6 +202,7 @@
     :target/raycast (invoke-query-component! frame host component data context)
     :target/entities (invoke-query-component! frame host component data context)
     :target/blocks (invoke-query-component! frame host component data context)
+    :host/beam-trace (invoke-query-component! frame host component data context)
     :flow/phases
     (let [phase (or (:phase context) :start)
           child (if (= phase :events)
@@ -255,24 +262,6 @@
                      (when-let [child (:on-first data)]
                        (execute-component! frame host (:component child)
                                            (dissoc child :component) context)))))
-    :combat/damage-impact
-    (let [target (resolve-data (:target data) context)
-          amount (resolve-data (:amount data) context)
-          damage-type (resolve-data (or (:damage-type data) :generic) context)
-          impact (or (resolve-data (:impact-context data) context)
-                     {:entity-id target})
-          _ (emit-component! frame :combat/damage
-                             {:target target
-                              :amount amount
-                              :damage-type damage-type})
-          hook (:on-impact data)]
-      (when hook
-        (execute-component! frame host (:component hook)
-                            (dissoc hook :component)
-                            (assoc context :context
-                                   (assoc (:context context)
-                                          :impact impact
-                                          :hit-entity impact)))))
     :data/bind
     (do
       (when-let [slots* (:slots* context)]

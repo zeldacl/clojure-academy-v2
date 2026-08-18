@@ -99,50 +99,39 @@
                    :include-entities? false
                    :include-blocks? true
                    :result :aim-hit}
-                  {:component :target/entities
-                   :shape {:type :sphere
-                           :center {:ref [:slot :aim-hit :position]}
-                           :radius {:expr :math/lerp
-                                    :args [{:ref [:param :aoe-radius 0]}
-                                           {:ref [:param :aoe-radius 1]}
-                                           {:ref [:context :skill-exp]}]}}
+                  {:component :combat/area-damage
+                   :center {:ref [:slot :aim-hit :position]}
+                   :radius {:expr :math/lerp
+                            :args [{:ref [:param :aoe-radius 0]}
+                                   {:ref [:param :aoe-radius 1]}
+                                   {:ref [:context :skill-exp]}]}
                    :filter {}
                    :projection [:id :type :position]
                    :limit 256
-                   :result :victims}
-                  {:component :flow/foreach
-                   :items {:ref [:slot :victims]}
-                   :as :target
-                   :limit 256
-                   :body {:component :flow/sequence
-                          :steps [{:component :data/bind
-                                   :to :target-falloff
-                                   :value {:expr :math/max
-                                           :args [0.0
-                                                  {:expr :math/sub
-                                                   :args [1.0
-                                                          {:expr :math/div
-                                                           :args [{:expr :vec3/distance
-                                                                   :args [{:ref [:slot :target :position]}
-                                                                          {:ref [:slot :aim-hit :position]}]}
-                                                                  {:expr :math/lerp
-                                                                   :args [{:ref [:param :aoe-radius 0]}
-                                                                          {:ref [:param :aoe-radius 1]}
-                                                                          {:ref [:context :skill-exp]}]}]}]}]}}
-                                  {:component :combat/damage
-                                   :target {:ref [:slot :target :id]}
-                                   :amount {:expr :math/mul
-                                            :args [{:expr :math/lerp
-                                                    :args [{:ref [:param :damage 0]}
-                                                           {:ref [:param :damage 1]}
-                                                           {:ref [:context :skill-exp]}]}
-                                                   {:expr :math/mul
-                                                    :args [{:expr :math/lerp
-                                                            :args [{:ref [:param :overcharge-multiplier 0]}
-                                                                   {:ref [:param :overcharge-multiplier 1]}
-                                                                   {:ref [:slot :overcharge-ratio]}]}
-                                                           {:ref [:slot :target-falloff]}]}]}
-                                   :damage-type :skill}]}}
+                   :damage {:expr :math/mul
+                            :args [{:expr :math/lerp
+                                    :args [{:ref [:param :damage 0]}
+                                           {:ref [:param :damage 1]}
+                                           {:ref [:context :skill-exp]}]}
+                                   {:expr :math/mul
+                                    :args [{:expr :math/lerp
+                                            :args [{:ref [:param :overcharge-multiplier 0]}
+                                                   {:ref [:param :overcharge-multiplier 1]}
+                                                   {:ref [:slot :overcharge-ratio]}]}
+                                           {:expr :math/max
+                                            :args [0.0
+                                                   {:expr :math/sub
+                                                    :args [1.0
+                                                           {:expr :math/div
+                                                            :args [{:expr :vec3/distance
+                                                                    :args [{:ref [:slot :area-target :position]}
+                                                                           {:ref [:slot :aim-hit :position]}]}
+                                                                   {:expr :math/lerp
+                                                                    :args [{:ref [:param :aoe-radius 0]}
+                                                                           {:ref [:param :aoe-radius 1]}
+                                                                           {:ref [:context :skill-exp]}]}]}]}]}]}]}
+                   :damage-type :skill
+                   :on-impact {:component :flow/sequence :steps []}}
                   {:component :world/lightning
                    :world-id {:ref [:context :world-id]}
                    :position {:ref [:slot :aim-hit :position]}
@@ -242,49 +231,39 @@
                                                            {:ref [:param :charge-min]}]}
                                                    {:ref [:param :charge-max]}]}
                                            0.0 1.0]}}
-                           {:component :target/entities
-                            :shape {:type :sphere
-                                    :center {:ref [:slot :aim-hit :position]}
-                                    :radius {:expr :math/lerp
-                                             :args [{:ref [:param :aoe-radius 0]}
-                                                    {:ref [:param :aoe-radius 1]}
-                                                    {:ref [:context :skill-exp]}]}}
+                           {:component :combat/area-damage
+                            :center {:ref [:slot :aim-hit :position]}
+                            :radius {:expr :math/lerp
+                                     :args [{:ref [:param :aoe-radius 0]}
+                                            {:ref [:param :aoe-radius 1]}
+                                            {:ref [:context :skill-exp]}]}
                             :filter {}
                             :projection [:id :type :position]
                             :limit 256
-                            :result :victims}
-                           {:component :flow/foreach
-                            :items {:ref [:slot :victims]}
-                            :as :target :limit 256
-                            :body {:component :flow/sequence
-                                   :steps [{:component :data/bind
-                                            :to :target-falloff
-                                            :value {:expr :math/max
-                                                    :args [0.0
-                                                           {:expr :math/sub
-                                                            :args [1.0
-                                                                   {:expr :math/div
-                                                                    :args [{:expr :vec3/distance
-                                                                            :args [{:ref [:slot :target :position]}
-                                                                                   {:ref [:slot :aim-hit :position]}]}
-                                                                           {:expr :math/lerp
-                                                                            :args [{:ref [:param :aoe-radius 0]}
-                                                                                   {:ref [:param :aoe-radius 1]}
-                                                                                   {:ref [:context :skill-exp]}]}]}]}]}}
-                                           {:component :combat/damage
-                                            :target {:ref [:slot :target :id]}
-                                            :amount {:expr :math/mul
-                                                     :args [{:expr :math/lerp
-                                                             :args [{:ref [:param :damage 0]}
-                                                                    {:ref [:param :damage 1]}
-                                                                    {:ref [:context :skill-exp]}]}
-                                                            {:expr :math/mul
-                                                             :args [{:expr :math/lerp
-                                                                     :args [{:ref [:param :overcharge-multiplier 0]}
-                                                                            {:ref [:param :overcharge-multiplier 1]}
-                                                                            {:ref [:slot :overcharge-ratio]}]}
-                                                                    {:ref [:slot :target-falloff]}]}]}
-                                            :damage-type :skill}]}}
+                            :damage {:expr :math/mul
+                                     :args [{:expr :math/lerp
+                                             :args [{:ref [:param :damage 0]}
+                                                    {:ref [:param :damage 1]}
+                                                    {:ref [:context :skill-exp]}]}
+                                            {:expr :math/mul
+                                             :args [{:expr :math/lerp
+                                                     :args [{:ref [:param :overcharge-multiplier 0]}
+                                                            {:ref [:param :overcharge-multiplier 1]}
+                                                            {:ref [:slot :overcharge-ratio]}]}
+                                                    {:expr :math/max
+                                                     :args [0.0
+                                                            {:expr :math/sub
+                                                             :args [1.0
+                                                                    {:expr :math/div
+                                                                     :args [{:expr :vec3/distance
+                                                                             :args [{:ref [:slot :area-target :position]}
+                                                                                    {:ref [:slot :aim-hit :position]}]}
+                                                                            {:expr :math/lerp
+                                                                             :args [{:ref [:param :aoe-radius 0]}
+                                                                                    {:ref [:param :aoe-radius 1]}
+                                                                                    {:ref [:context :skill-exp]}]}]}]}]}]}]}
+                            :damage-type :skill
+                            :on-impact {:component :flow/sequence :steps []}}
                            {:component :world/lightning
                             :world-id {:ref [:context :world-id]}
                             :position {:ref [:slot :aim-hit :position]}
