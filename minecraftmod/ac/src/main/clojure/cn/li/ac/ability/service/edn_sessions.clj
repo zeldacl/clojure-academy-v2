@@ -16,7 +16,8 @@
                :parameter-snapshot (:parameter-snapshot intent)
                :activation-seed (long (or (:activation-seed intent)
                                           (hash [owner ability-id])))
-               :tick (long (or (:server-tick intent) 0))}]
+               :tick (long (or (:server-tick intent) 0))
+               :start-tick (long (or (:server-tick intent) 0))}]
     (swap! sessions* assoc owner entry)
     entry))
 

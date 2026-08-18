@@ -9,7 +9,6 @@
     cn.li.ac.content.ability.electromaster.mag-movement-fx/init!
     cn.li.ac.content.ability.electromaster.mine-detect-fx/init!
     cn.li.ac.content.ability.electromaster.thunder-bolt-fx/init!
-    cn.li.ac.content.ability.electromaster.thunder-clap-fx/init!
     cn.li.ac.content.ability.meltdowner.electron-bomb-fx/init!
     cn.li.ac.content.ability.meltdowner.electron-missile-fx/init!
     cn.li.ac.content.ability.meltdowner.jet-engine-fx/init!
@@ -38,7 +37,7 @@
     cn.li.ac.content.ability.vecmanip.vec-reflection-fx/init!])
 
 (deftest all-content-ability-fx-inits-register-via-fx-spec-test
-  (is (= 33 (count fx-init-symbols)))
+  (is (= 32 (count fx-init-symbols)))
   (doseq [init-sym fx-init-symbols]
     (let [register-calls* (atom [])]
       (with-redefs [fx-spec/register! (fn [spec] (swap! register-calls* conj spec))]

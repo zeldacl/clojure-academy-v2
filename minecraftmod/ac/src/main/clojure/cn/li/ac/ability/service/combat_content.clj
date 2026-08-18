@@ -349,54 +349,6 @@
                                  {:op :vfx :effect-id :groundshock
                                   :event :perform
                                   :params {:charge-min-ticks 5}}]}}}
-    {:id :thunder-clap
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 60
-     :cost {:overload (scale 390.0 252.0)}
-     :cooldown-phase :release
-     :cooldown {:ticks {:op :multiply
-                        :values [(session-value [:charge-ticks])
-                                 (scale 10.0 6.0)]}}
-     :program {:op :phase
-               :start {:op :sequence
-                       :steps [{:op :session-patch
-                                :entries [[[:charge-ticks] 0.0]]}
-                               {:op :query :query-type :thunder-clap
-                                :range 40.0 :aoe-radius 15.0
-                                :result-ref :clap}]}
-               :pulse {:op :sequence
-                       :steps [{:op :session-patch
-                                :entries [[[:charge-ticks]
-                                           {:op :increment :amount 1.0}]]}
-                               {:op :patch
-                                :entries [[:resource :cp
-                                           {:op :multiply
-                                            :values [-1.0
-                                                     {:op :scale :min 18.0 :max 25.0}]}]]}
-                               {:op :query :query-type :thunder-clap
-                                :range 40.0 :aoe-radius 15.0
-                                :result-ref :clap}]}
-               :release {:op :sequence
-                         :steps [{:op :require-session
-                                  :path [:charge-ticks] :min 40.0 :max 60.0}
-                                 {:op :query :query-type :thunder-clap
-                                  :range 40.0 :aoe-radius 15.0
-                                  :result-ref :clap}
-                                 {:op :world-effect
-                                  :effect-type :thunder-clap
-                                  :query-ref :clap
-                                  :charge-ticks (session-value [:charge-ticks])
-                                  :amount {:op :multiply
-                                           :values [(scale 36.0 72.0)
-                                                    (overcharge-multiplier)]}
-                                  :aoe-radius (scale 15.0 30.0)
-                                  :cooldown-multiplier (scale 10.0 6.0)}
-                                 {:op :vfx :effect-id :thunder-clap
-                                  :event :perform
-                                  :params {:min-charge-ticks 40
-                                           :max-charge-ticks 60}}]}}}
     {:id :blood-retrograde
      :revision 1
      :activation :session

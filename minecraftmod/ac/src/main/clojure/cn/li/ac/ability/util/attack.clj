@@ -4,8 +4,8 @@
   block or entity). Depends on platform raycast/world-effects/entity-damage
   bridges, so kept separate from the pure-geometry util/targeting.clj.
 
-  Extracted from thunder-bolt/thunder-clap, which had byte-for-byte identical
-  copies of hit-kind/block-impact-point/entity-impact-point."
+  Extracted from multiple point-target skills, which had byte-for-byte
+  identical copies of hit-kind/block-impact-point/entity-impact-point."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]

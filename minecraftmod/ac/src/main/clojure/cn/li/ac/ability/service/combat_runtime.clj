@@ -799,18 +799,6 @@
                                     :look-x (:x look)
                                     :look-y (:y look)
                                     :look-z (:z look)}))))
-              :thunder-clap (fn [context node]
-                              (if-let [host-query (contract/host-port :query)]
-                                (host-query :thunder-clap context node)
-                                (let [owner (:owner context)
-                                      range (double (or (:range node) 40.0))
-                                      attack-data (attack/resolve-attack-data owner range)
-                                      victims (attack/aoe-victims
-                                               (:world-id attack-data)
-                                               (:impact attack-data)
-                                               (double (or (:aoe-radius node) 15.0))
-                                               #{owner})]
-                                  (assoc attack-data :victims victims))))
               :blood-retrograde (fn [context node]
                                   (if-let [host-query (contract/host-port :query)]
                                     (host-query :blood-retrograde context node)
@@ -1377,27 +1365,6 @@
                                                owner :blindness
                                                (long blindness-ticks)
                                                (long blindness-amplifier)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :thunder-clap
-                         (let [{:keys [world-id query-result amount aoe-radius
-                                       charge-ticks cooldown-multiplier]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               valid? (and world-id (map? query-result)
-                                            (finite? amount) (pos? (double amount))
-                                            (<= (double amount) 1000.0)
-                                            (finite? aoe-radius)
-                                            (<= 0.0 (double aoe-radius) 64.0)
-                                            (finite? charge-ticks)
-                                            (<= 40.0 (double charge-ticks) 60.0)
-                                            (finite? cooldown-multiplier)
-                                            (<= 1.0 (double cooldown-multiplier) 1.2)
-                                            (world-effects/available?))
-                               plan (assoc effect :charge-ticks (long charge-ticks))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-thunder-clap!
-                                               world-id owner plan))
                                       :applied
                                       :failed)
                             :effect effect})
@@ -2006,7 +1973,7 @@
       (when-not (contains? (:queries (capabilities/snapshot)) :raycast)
         (capabilities/register-query!
          :raycast
-         (fn [{:keys [owner distance]} _frame]
+         (fn [{:keys [owner distance include-entities? include-blocks?]} _frame]
            (let [owner (str owner)
                  distance (max 0.0 (min 128.0 (double (or distance 0.0))))
                  world-id (geom/world-id-of owner)
@@ -2014,11 +1981,19 @@
                  look (when (raycast/available?)
                         (raycast/player-look-vector owner))
                  hit (when (and look (raycast/available?))
-                       (raycast/raycast-combined
-                        world-id (:x eye) (:y eye) (:z eye)
-                        (double (or (:x look) 0.0))
-                        (double (or (:y look) 0.0))
-                        (double (or (:z look) 1.0)) distance))
+                       (let [sx (:x eye) sy (:y eye) sz (:z eye)
+                             dx (double (or (:x look) 0.0))
+                             dy (double (or (:y look) 0.0))
+                             dz (double (or (:z look) 1.0))]
+                         (cond
+                           (and (not= false include-entities?)
+                                (not= false include-blocks?))
+                           (raycast/raycast-combined world-id sx sy sz dx dy dz distance)
+                           (not= false include-entities?)
+                           (raycast/raycast-entities world-id sx sy sz dx dy dz distance)
+                           (not= false include-blocks?)
+                           (raycast/raycast-blocks world-id sx sy sz dx dy dz distance)
+                           :else nil)))
                  kind (cond
                         (= :entity (:hit-type hit)) :entity
                         (= :block (:hit-type hit)) :block
@@ -2048,6 +2023,68 @@
               :block-id block-id
               :water? (= "minecraft:water" block-id)
               :world-id world-id}))))
+      (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
+        (capabilities/register-query!
+         :entity/select
+         (fn [{:keys [owner world-id shape filter projection limit]} _frame]
+           (let [center (or (:center shape) {})
+                 [cx cy cz] (if (and (map? center) (vector? (:vec3 center)))
+                              (:vec3 center)
+                              [(double (or (:x center) 0.0))
+                               (double (or (:y center) 0.0))
+                               (double (or (:z center) 0.0))])
+                 radius (double (or (:radius shape) 0.0))
+                 limit (max 0 (min 256 (long (or limit 0))))
+                 owner-id (str owner)
+                 type-filter (set (or (:entity-types filter) []))]
+             (when (and (= :sphere (:type shape)) world-id
+                        (every? #(Double/isFinite (double %)) [cx cy cz])
+                        (Double/isFinite radius) (<= 0.0 radius 64.0)
+                        (pos? limit) (world-effects/available?))
+               (let [project (fn [entity]
+                               (let [id (or (:uuid entity) (:entity-id entity))
+                                     type (or (:entity-type entity) (:type entity))
+                                     position {:x (double (or (:x entity) 0.0))
+                                               :y (double (or (:y entity) 0.0))
+                                               :z (double (or (:z entity) 0.0))}]
+                                 (reduce (fn [result field]
+                                           (assoc result field
+                                                  (case field
+                                                    :id id :type type :position position
+                                                    :age-ms (long (or (:age-ms entity) 0))
+                                                    :motion-progress (double (or (:motion-progress entity) 0.0))
+                                                    nil)))
+                                         {} (or projection [:id :type :position]))))]
+                 (->> (world-effects/find-entities-in-radius world-id cx cy cz radius)
+                      (filter map?)
+                      (remove #(= owner-id (str (or (:uuid %) (:entity-id %)))))
+                      (filter #(or (empty? type-filter)
+                                   (contains? type-filter (or (:entity-type %) (:type %)))))
+                      (map project)
+                      (take limit)
+                      vec)))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :world/lightning)
+        (capabilities/register-action!
+         :world/lightning
+         (fn [{:keys [owner world-id position visual-only?]}]
+           (let [point (if (and (map? position) (vector? (:vec3 position)))
+                         (:vec3 position)
+                         [(when (map? position) (:x position))
+                          (when (map? position) (:y position))
+                          (when (map? position) (:z position))])
+                 owner-world (geom/world-id-of (str owner))
+                 owner-pos (geom/body-pos (str owner))
+                 [x y z] point
+                 dx (- (double (or x 0.0)) (double (or (:x owner-pos) 0.0)))
+                 dy (- (double (or y 0.0)) (double (or (:y owner-pos) 0.0)))
+                 dz (- (double (or z 0.0)) (double (or (:z owner-pos) 0.0)))]
+             (when (and owner world-id (= world-id owner-world)
+                        (boolean visual-only?) owner-pos
+                        (= 3 (count point))
+                        (every? #(and (number? %) (Double/isFinite (double %))) point)
+                        (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* 64.0 64.0))
+                        (world-effects/available?))
+                (world-effects/spawn-lightning! world-id (double x) (double y) (double z) true))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/damage)
         (capabilities/register-action!
          :entity/damage
@@ -2079,6 +2116,7 @@
   [owner intent]
   (let [ability-id (edn-ability-id owner intent)
         op (or (:action intent) (:op intent) :start)
+        current-tick (long (or (:server-tick intent) @last-known-tick* 0))
         ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
         active-session (edn-sessions/session owner)
         normalized (assoc intent
@@ -2092,15 +2130,24 @@
                               (parameter-snapshot ability-id ability intent)))]
     (when (= :start op)
       (edn-sessions/start! owner ability-id normalized))
-    (let [session-context (edn-sessions/context-for owner normalized)
+    (let [session (edn-sessions/session owner)
+          session-context (edn-sessions/context-for owner normalized)
+          start-tick (long (or (:start-tick session) current-tick))
+          dynamic-context (merge (:context session-context)
+                                 {:server-tick current-tick
+                                  :session-start-tick start-tick
+                                  :hold-ticks (max 0 (- current-tick start-tick))})
           execution-intent (merge normalized
                                   (select-keys session-context
                                                [:context :parameter-snapshot
-                                                :activation-seed]))
+                                                :activation-seed])
+                                  {:context dynamic-context
+                                   :server-tick current-tick})
           result (edn-execution/execute! ability-id owner execution-intent)]
-      (when (and (#{:release :abort} op)
+      (when (or (:finish-session? result)
+                (and (#{:release :abort} op)
                  (or (= :accepted (:status result))
-                     (= :rejected (:status result))))
+                     (= :rejected (:status result)))))
         (edn-sessions/remove! owner))
       result)))
 

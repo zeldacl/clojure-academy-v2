@@ -4,4 +4,6 @@
              {:id :railgun-charge
               :resource "ac/ability/railgun_charge_vfx.edn"}
              {:id :arc-gen
-              :resource "ac/ability/arc_gen_vfx.edn"}]}
+              :resource "ac/ability/arc_gen_vfx.edn"}
+             {:id :thunder-clap
+              :resource "ac/ability/thunder_clap_vfx.edn"}]}

@@ -1,6 +1,5 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.load
-  (:require [cn.li.ac.ability.client.fx-templates.arc-beam.impl.thunder-clap]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mine-detect]
+  (:require [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mine-detect]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-manip]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement]

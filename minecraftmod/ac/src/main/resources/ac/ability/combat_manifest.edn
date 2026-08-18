@@ -3,5 +3,8 @@
               :id :railgun
               :resource "ac/ability/railgun_combat.edn"}
              {:kind :ability
-              :id :arc-gen
-              :resource "ac/ability/arc_gen_combat.edn"}]}
+             :id :arc-gen
+              :resource "ac/ability/arc_gen_combat.edn"}
+             {:kind :ability
+              :id :thunder-clap
+              :resource "ac/ability/thunder_clap_combat.edn"}]}

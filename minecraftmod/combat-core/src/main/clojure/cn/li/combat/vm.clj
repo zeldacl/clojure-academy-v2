@@ -22,6 +22,9 @@
 (defn- vec3-components [value]
   (cond
     (and (map? value) (vector? (:vec3 value))) (:vec3 value)
+    (and (map? value)
+         (every? #(number? (get value %)) [:x :y :z]))
+    [(double (:x value)) (double (:y value)) (double (:z value))]
     (vector? value) value
     :else (throw (ex-info "expected vec3 expression value" {:value value}))))
 
@@ -103,7 +106,8 @@
    :entity/spawn :entity/spawn
     :entity/discard :entity/discard
     :block/break-budget :block/break
-    :world/sound :world/sound})
+    :world/sound :world/sound
+   :world/lightning :world/lightning})
 
 (defn- append-object! [^ArrayList output value]
   (.add output value)
@@ -178,6 +182,7 @@
       (let [[scope key & path] (:ref value)]
         (get-in (case scope
                   :context (:context context)
+                  :param (:params context)
                   :params (:params context)
                   :slot (or (when-let [slots* (:slots* context)] @slots*)
                             (:slots context))

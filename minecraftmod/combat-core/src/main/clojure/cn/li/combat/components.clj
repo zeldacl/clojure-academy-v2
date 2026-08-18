@@ -79,6 +79,7 @@
            [:entity/discard #{:entity}]
            [:block/break-budget #{:blocks :energy :limit}]
            [:world/sound #{:sound-id :position}]
+           [:world/lightning #{:position}]
            [:effect/vfx #{:effect-id :operation :payload}]
            [:domain/event #{:event-type :payload}]]]
     (when-not (descriptor id)

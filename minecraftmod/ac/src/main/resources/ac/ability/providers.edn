@@ -6,16 +6,14 @@
    cn.li.ac.content.ability.electromaster.mag-manip
    cn.li.ac.content.ability.electromaster.mag-movement
    cn.li.ac.content.ability.electromaster.mine-detect
-   cn.li.ac.content.ability.electromaster.thunder-bolt
-   cn.li.ac.content.ability.electromaster.thunder-clap]
+   cn.li.ac.content.ability.electromaster.thunder-bolt]
   :fx-namespaces
   [cn.li.ac.content.ability.electromaster.body-intensify-fx
    cn.li.ac.content.ability.electromaster.current-charging-fx
    cn.li.ac.content.ability.electromaster.mag-manip-fx
    cn.li.ac.content.ability.electromaster.mag-movement-fx
    cn.li.ac.content.ability.electromaster.mine-detect-fx
-   cn.li.ac.content.ability.electromaster.thunder-bolt-fx
-   cn.li.ac.content.ability.electromaster.thunder-clap-fx]}
+   cn.li.ac.content.ability.electromaster.thunder-bolt-fx]}
  {:id :generic
   :priority 10
   :skill-namespaces

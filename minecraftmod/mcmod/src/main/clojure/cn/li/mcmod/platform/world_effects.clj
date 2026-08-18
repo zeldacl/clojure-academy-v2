@@ -58,11 +58,6 @@
   [world-id owner plan]
   (call :execute-shift-teleport! world-id owner plan))
 
-(defn execute-thunder-clap!
-  "Execute the charged lightning/area-damage plan behind a Host Port."
-  [world-id owner plan]
-  (call :execute-thunder-clap! world-id owner plan))
-
 (defn execute-blood-retrograde!
   "Execute the close-range blood damage/effect plan behind a Host Port."
   [world-id owner plan]

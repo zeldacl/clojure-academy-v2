@@ -194,8 +194,8 @@
   ;; new-server-context created the context. Reading it here expired every
   ;; server context keepalive-timeout-ms (1.5s) after creation however alive
   ;; the client was, which silently capped every hold/charge skill's duration
-  ;; — thunder-clap needs a 2s hold to reach min-ticks, so its strike was
-  ;; unreachable.
+  ;; — long-hold abilities otherwise expire before their minimum charge, so
+  ;; their terminal action becomes unreachable.
   (when-let [ctx-map (ctx/get-projected-transport-context registry-key)]
     (cond
       (expired-server-context? now timeout-ms ctx-map)

@@ -246,12 +246,6 @@
                                               (catch Exception e
                                                 (log/warn "Failed to apply AOE damage:" (ex-message e))
                                                 false)))
-        execute-thunder-clap! (fn [world-id owner plan]
-                                (let [{:keys [query-result amount aoe-radius]} plan
-                                      point (point-of (:impact query-result))]
-                                  (apply-aoe-damage-excluding-owner!
-                                   world-id owner (:x point) (:y point) (:z point)
-                                   aoe-radius amount :electric)))
         execute-blood-retrograde! (fn [world-id owner plan]
                                     (let [{:keys [query-result amount entity-search-radius]} plan
                                           point (point-of query-result)]
@@ -796,7 +790,6 @@
      :execute-mag-movement! execute-mag-movement!
      :execute-flashing! execute-flashing!
      :execute-mag-manip! execute-mag-manip!
-     :execute-thunder-clap! execute-thunder-clap!
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-plasma-cannon! execute-plasma-cannon!
      :execute-meltdowner! execute-meltdowner!
