@@ -38,6 +38,7 @@
 | `592e904ea` | P1.1/P1.2 迁移 Batch 3：`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport` 5/26 个效果，触发事件错位问题在这批同样复现（`ray_barrage` 甚至是这次迁移开始前就已经死的），见下方 E 节 |
 | `d80a8fb00` | P1.1/P1.2 迁移 Batch 4：`directed_shock`/`mag_manip` 2/26 个效果（hand-only），新增跨 vfx-core/effect_controller.clj 的 `instance-for-owner` API，见下方 E 节 |
 | `80ac1bc42` | P1.1/P1.2 迁移 Batch 5：`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap` 5/26 个效果（计划标注的最高复杂度批次），`railgun_shot`/`thunder_clap` 是目前 26 个里仅有的两个真正存活的复杂样本，新增 `update-state-for-owner!` API，见下方 E 节 |
+| `337e296a0` | P1.1/P1.2 迁移 Batch 6：`plasma_cannon`/`current_charging` 2/26 个效果（另一个最高复杂度批次），原计划 24 个待迁移效果全部完成，仅剩 Batch 7 收尾审计，见下方 E 节 |
 
 ## 分类清单
 
@@ -134,7 +135,7 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 进行中，17/26 效果已迁移）
+### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 里计划内 24/24 个效果已全部迁移，仅剩 Batch 7 收尾审计）
 
 不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 
@@ -173,7 +174,11 @@
 
 新增 `effect_controller.clj` API：`update-state-for-owner!`（`instance-for-owner` 的写版本）——`mine_detect` 的矿石重扫描结果需要在 `build-plan-fn` 内部写回**自己这个实例**的状态（`query-fn` 只在采样时才拿得到，`tick-state-fn` 永远拿不到），用 `update-state!` 会打到 `core/instance-for-effect` 挑出来的"随便一个 :mine-detect 实例"，一旦多个玩家同时用就会写错人。这顺带把计划里点名的"`mine_detect` 只渲染第一个 active owner"的潜藏 bug 从结构上解决了——虽然今天完全看不出来，因为压根没有事件能让它变 active。`jet_engine_fx.clj` 的 `flash-alpha`（2D 屏幕闪光 HUD 钩子，`reactive_hud.clj` 的真实活跃调用方，在 sample 回调之外调用、`*sample-state*` 没绑定）同样从旧的 owner-map 扫描换成了 `instance-for-owner`，因为它本来就已经拿到了唯一需要的 `player-uuid`。
 
-**待办（Batch 6-7，9/26 个效果）**：`plasma_cannon`/`current_charging`（Batch 6，计划里标注的最高复杂度，开始前同样要先核实真实触发事件）；收尾审计（Batch 7）。`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——已从 Batch 1 移出，未排期。
+**已完成（`337e296a0`）——Batch 6，2/26 个效果（`plasma_cannon`/`current_charging`，计划里标注的另一个最高复杂度批次，也是原计划 24 个待迁移效果的最后一批）**：执行前照例先核对了真实触发事件——两个都跟 Batch 5 的三个"死透"样本一样：`plasma_cannon` 只发一次 `:release`（`:params {:max-charge-ticks 120}`），`current_charging` 每 5 tick 发一次 `:pulse`（`:params {:strength 0.6}`），都跟各自文件的 case 分支（`:start`/`:update`/`:perform`/`:end`）对不上。这让这批比原计划设想的简单很多：`plasma_cannon` 原本以为要小心翼翼保住一套"活着的"客户端死算推演飞行仿真（`advance-flight`/`reconcile-sync`）和它的 `charge-visual-state` HUD 槽位读取路径，结果这套仿真根本没有真实输入可跑（`:start` 从不触发，充能/飞行状态从来不存在）——只拍平状态形状，case 分支原样保留。`charge-visual-state` 本身在生产环境零调用方（翻遍全树确认），但确实有单元测试覆盖，所以按 `flash-alpha` 的先例迁移（owner-map 扫描换成 `instance-for-owner`）而不是直接删掉。`current_charging` 同理简单，顺手把过时的异常隔离注释也更新了——原注释解释 try/catch 是为了防止旧 `fx_spec.clj` 的 `:channels` doseq 处理器被一个 target 的异常拖垮其它 target（那套机制早在 E 类 P1.3 就已经删成死代码），现在的真正原因不一样、而且对 `:transient` 效果来说更要紧：vfx-core 的 `tick-instance` 捕获未处理异常后会把**整个实例**判 fault 销毁（`tick!` 对 `:fault` 的清理和正常的 `::removed` 走的是同一条路径），不再是"漏掉一个 track 这一 tick 的更新"这么轻。`current_charging_fx.clj` 的 `current-state`（同样零生产调用方、同样有测试）的 selector 语义也相应调整：旧的 `[:ctx ctx-id]` 向量 selector 结构性地过不去这次迁移——`:transient` 下 ctx-id 恒为 nil（`effect_controller.clj` 的 `apply-enqueue` 早就这样），也没有 owner-map 可供索引——现在 selector 被当成 owner（通常是 player-uuid）传给 `instance-for-owner`，跟 `charge-visual-state` 的做法一致。
+
+至此，原计划 24 个待迁移效果（26 减去 `rad_intensify_mark`/`teleporter_crit` 两个已确认无意义迁移的）**全部完成**，只剩 Batch 7 的收尾审计。
+
+**待办（Batch 7）**：收尾审计——确认全部已迁移效果都声明了 `:lifecycle :transient`，`effect_controller.clj` 里 `:singleton` 分支此时应该已经不再被任何现有战斗特效使用；更新 `docs/04-systems/VFX_CORE.md` 记录迁移完成；`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——保持未排期状态。
 
 ### F. presentation-core 剩余部分（P2.1/P2.2 有意重新定位并完成；死代码已删；P2.6 未动）
 
