@@ -33,6 +33,8 @@
 | `61b87f4f1` | 删除确认死代码 `core/tree.clj`/`core/dirty.clj`/`frame.clj` 的 `frame-graph`/`host.clj` 的 tree 封装，F 类死代码清理完成，见下方 F 节 |
 | `07229a522` | P1.1/P1.2 迁移 Batch 0：`:lifecycle` 分派基础设施（vfx-core + `effect_controller.clj`），零行为变化，见下方 E 节 |
 | `e7c7113e6` | P1.1/P1.2 迁移 Batch 1：`vec_deviation`/`mag_movement`/`light_shield` 3/26 个效果迁移到真实 per-instance 状态，新增 vfx-core `:destroy` 钩子，见下方 E 节 |
+| `a019151cd` | 修复 effect_controller.clj `:transient` 实例从不自然结束的 bug（影响已迁移的 Batch 0/1），见下方 E 节 |
+| `6148ef128` | P1.1/P1.2 迁移 Batch 2：`mark_teleport`/`penetrate_teleport`/`flashing`/`groundshock`/`electron_bomb`/`flesh_ripping`/`vec_accel` 7/26 个效果，发现其中 6 个的触发事件与 combat_content.clj 实际 wiring 存在系统性错位，见下方 E 节 |
 
 ## 分类清单
 
@@ -129,7 +131,7 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 进行中，3/26 效果已迁移）
+### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 进行中，5/26 效果已迁移）
 
 不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 
@@ -147,7 +149,15 @@
 
 调查中发现 `light_shield` 的既有缺口比预想更深：不只是事件名对不上（`combat_content.clj` 实际发 `:active` 不是 `:tick`），`:active` 事件的 `:params` 从来只带 `{:radius 3.0}`，从没带过 `:pos`——原本带 `:pos` 的路径是已删除的死 channel/topic 总线（`light_shield_fx.clj` 的 `:channels`），从没在存活的 `:vfx` 信号路径上补过等价物。这是 `C-2.3`"仅 touch-damage 部分的保守实现"里已知的既有缺口（护盾的视觉/音效从没真正接完）——本次迁移只做了状态形状的拍平，原样保留了 `:start`/`:tick` 两个从未真正触发过的死分支及其行为，没有尝试"顺手"把它们接活，因为要接活需要一个这条管线现在根本没有的实时位置数据源，是一个真正的设计任务，不是生命周期拍平能顺带解决的。
 
-**待办（Batch 2-7，23/26 个效果）**：`mark_teleport`/`penetrate_teleport`/`flashing`/`groundshock`（双轨道）/`electron_bomb`/`flesh_ripping`/`vec_accel`（Batch 2）；`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport`（Batch 3）；`directed_shock`/`mag_manip`（Batch 4，hand-only）；`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap`（Batch 5，高复杂度）；`plasma_cannon`/`current_charging`（Batch 6，最高复杂度）；收尾审计（Batch 7）。`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——已从 Batch 1 移出，未排期。
+**已完成（前置修复 `a019151cd`）——effect_controller.clj 的 `:transient` 实例从不自然结束的 bug**：开始 Batch 2 之前重新推导 vfx-core `tick!`/`tick-instance` 的确切语义时发现，`effect_controller.clj` 的 descriptor `:update` 函数把 `state` 一路 `->` 穿过 `apply-events`/`apply-tick`，这两者只会在某个 track 的 `tick-state-fn` 返回 `nil` 时 `dissoc` 掉 `{:level .. :hand ..}` 里对应的那个 KEY，`:update` 函数本身返回的整个 map 永远不是 `nil`。而 vfx-core `tick!` 只认"整个 `:update` 返回 `nil`"这一种"实例自然结束"的信号（见 `runtime.clj` 的 `tick-instance` 文档字符串）——也就是说 Batch 0/1 写的"`tick-state-fn` 返回 `nil` 会让实例自然结束"这句话在 `effect_controller.clj` 这一层其实**从未生效过**：`:level`/`:hand` 内部 key 被清空之后，实例本身仍然天天被 `tick!`/`sample-frame!` 空转，直到玩家断线才会被 `clear-owner!` 真正清掉——每一次 `:transient` 效果的施法都会永久占用一个 vfx-core 实例槽位，只受 `create-runtime` 的 `:max-instances`（2048）兜底，达到上限后全体 `:transient` 效果会静默生成失败。修复方式：`register-effect!` 把 `lifecycle` 传进 `descriptor` 的构造参数，`:update` 在 `(= :transient lifecycle)` 且 `:level`/`:hand` 都已经是 `nil` 时才真正返回整个 `nil`；`:singleton` 效果这个条件永远不成立，行为不变。这个 bug 影响 Batch 0/1 已提交的三个效果，但修复点完全在 `effect_controller.clj` 内部，不需要改任何一个 impl 文件。
+
+**验证方式的新发现**：`ac/build.gradle` 的 `runAcClojureTestsFast` 支持 `-Dac.test.only=<namespace,...>`，且 `cn.li.test-support.auto-test-runner` 的 `select-namespaces` 在 `require` 之前就完成了过滤——意味着只要新测试文件自己不 `:require` 那个缺失的 `cn.li.ac.ability.client.fx-registry`，就可以用这个参数单独跑，绕开挡住全部 242 个测试命名空间的那个已知 pre-existing 问题。为这个修复写的回归测试（`ac/src/test/clojure/cn/li/ac/client/effect_controller_test.clj`）就是这样单独跑通的（2 tests，3 assertions，0 failures）——这是本次迁移里第一次能对 `effect_controller.clj` 这一层的行为做到运行时验证，而不仅仅是 `:ac:checkClojure` 的静态检查 + 推理；但每个效果自己的 `*_fx_test.clj` 大多直接或间接 `:require` 了 `fx-registry`（试过 `mag_movement_fx_test.clj`，一样触发同样的 `FileNotFoundException`），所以这个技巧只能验证 `effect_controller.clj`/`arc_beam.clj` 这类基础设施代码，不能用来验证具体某个效果 impl 文件的行为。
+
+**已完成（`6148ef128`）——Batch 2，7/26 个效果（`mark_teleport`/`penetrate_teleport`/`flashing`/`groundshock`/`electron_bomb`/`flesh_ripping`/`vec_accel`）**：状态形状拍平方式与 Batch 1 相同。`groundshock`（本批唯一双轨道效果）的 `:level` 轨道被显式改成无状态（它一直只是纯副作用的音效+粒子发射器，从没有任何 `effect-build-plan` 注册过读它），这样"两个轨道都空了才算自然结束"的检查才能在 `:hand` 轨道（真正带状态）清空后触发。
+
+**重大发现（对着 `combat_content.clj` 逐个核对 7 个效果的真实触发事件，跟 Batch 1 揪出 light_shield 的手法一样，这次是执行前系统性做了一遍）**：7 个效果里 6 个的 case 分支在生产环境里大部分或全部是死的——不是这次迁移引入的，是 `combat_content.clj` 对这些技能的 `:vfx` 步骤实际只发送一个终点事件（`:release`、`:perform`，或 `:spawn`）、带着极少的 `:params`，从来不发这些文件当初设计时假设的 `:start`/`:update` 连续追踪序列，很多时候连那一个真正会触发的事件都缺目标/位置数据。具体：`mark_teleport`/`penetrate_teleport`/`flashing` 三个（A 类传送技能共享的触发形状）只发一次 `:release`，`:params` 只有一个 `:max-range`/`:blink-distance` 数字，标记人形渲染整条链路是死的；`vec_accel`/`flesh_ripping` 只发一次 `:perform`，参数同样不含渲染需要的字段（`vec_accel` 的弹道线渲染死，`flesh_ripping` 的准星标记死，虽然音效/粒子的触发条件本身也读不到数据所以同样不响）；`electron_bomb` 的 `:spawn` 事件是活的（放一个施法音效），但它的 `:beam`（结算射线）走的是另一条更老的传输——`delayed_projectiles.clj` 的 `push-channel-to-player!`，发的是真实的 `MSG-CTX-CHANNEL` 网络包，跟 E 类 P1.3 删掉的 vfx-core 内部 channel/topic 总线是两回事——但翻遍整个仓库找不到任何客户端代码接收这个消息 id，所以同样到不了客户端；`groundshock` 是唯一有一部分真正工作的（`:hand` 轨道的第一人称后坐力/相机震动，靠 `update`-on-missing-key 的自愈写法，`:perform` 单独一个事件就能正确工作，不需要这次迁移改），`:level` 轨道的方块碎裂粒子理论上会响但 `:affected-blocks` 参数从来没被真正传过，所以视觉上也是空的。全部按 light_shield 的先例处理：只拍平状态形状，case 分支原样保留（包括死分支），在文件顶部写清楚哪些事件/字段今天真的会到、哪些不会，不在这次迁移里顺手"修好"——这类修复需要改 `combat_content.clj` 的 `:vfx` 步骤定义（把目标/位置数据接进 `:params`），是一个真正的设计任务，超出"把 owner-map 拍平成 per-instance 状态"这一件事的范围。
+
+**待办（Batch 3-7，19/26 个效果）**：`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport`（Batch 3——鉴于 Batch 2 的发现，这 5 个大概率也要先对着 `combat_content.clj` 核实一遍真实触发事件，不能假设 impl 文件的 case 分支还对得上）；`directed_shock`/`mag_manip`（Batch 4，hand-only）；`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap`（Batch 5，高复杂度）；`plasma_cannon`/`current_charging`（Batch 6，最高复杂度）；收尾审计（Batch 7）。`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——已从 Batch 1 移出，未排期。
 
 ### F. presentation-core 剩余部分（P2.1/P2.2 有意重新定位并完成；死代码已删；P2.6 未动）
 
