@@ -125,12 +125,26 @@
                             :start-alpha (long (rand-range 153 204))
                             :age 0 :life 20 :fade-in 5 :fade-out 20})))))))
 
-(defn- enqueue-state! [state ctx-id channel owner-key payload]
-  (let [state* (or state {:fx-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :fx-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today --
+;; same finding as mark_teleport.clj/penetrate_teleport.clj/flashing.clj.
+;; combat_content.clj's :threatening-teleport skill sends exactly ONE :vfx
+;; step, ever: :event :release from its :release phase, with
+;; :params {:max-range 15.0} -- no :start/:update/:perform/:end, and none of
+;; the :hit?/:target-x/:target-y/:target-z/:target-uuid/:target-width/
+;; :target-height/:start-x/:start-y/:start-z fields these branches read.
+;; :release itself falls through to the trailing `state*` no-op default. In
+;; production today the marker box never renders and the tp-trail particles
+;; never spawn -- migrated structurally only.
+(defn- enqueue-state! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [source-player-id world-id]} payload
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-sounds/current-effect-owner)
+        base-meta {:queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id :channel channel
                    :source-player-id source-player-id :world-id world-id}
         aim (fn [p]
@@ -142,21 +156,19 @@
                :z (double (or (:target-z p) 0.0))})]
     (case (:mode payload)
       :start
-      (update state* :fx-state assoc owner-key*
-              (merge base-meta {:active? true :ttl 0
-                                :aim (aim payload)
-                                :hit? (boolean (:hit? payload))
-                                :target-uuid (:target-uuid payload)
-                                :target-width (double (or (:target-width payload) default-marker-size))
-                                :target-height (double (or (:target-height payload) default-marker-size))}))
+      (merge state* base-meta {:active? true :ttl 0
+                               :aim (aim payload)
+                               :hit? (boolean (:hit? payload))
+                               :target-uuid (:target-uuid payload)
+                               :target-width (double (or (:target-width payload) default-marker-size))
+                               :target-height (double (or (:target-height payload) default-marker-size))})
       :update
-      (update state* :fx-state update owner-key*
-              (fn [st] (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                              :aim (aim payload)
-                              :hit? (boolean (:hit? payload))
-                              :target-uuid (:target-uuid payload)
-                              :target-width (double (or (:target-width payload) default-marker-size))
-                              :target-height (double (or (:target-height payload) default-marker-size)))))
+      (assoc (merge base-meta state*)
+             :aim (aim payload)
+             :hit? (boolean (:hit? payload))
+             :target-uuid (:target-uuid payload)
+             :target-width (double (or (:target-width payload) default-marker-size))
+             :target-height (double (or (:target-height payload) default-marker-size)))
       :perform
       (let [state* (if (:hit? payload)
                      ;; Upstream c_end: only on a hit — tp.tp sound + a loose
@@ -169,46 +181,45 @@
                        (update state* :trails conj (trail-particles payload)))
                      state*)]
         ;; Upstream c_end kills the marker on execute.
-        (update state* :fx-state dissoc owner-key*))
+        (assoc state* :active? false))
       :end
-      (update state* :fx-state dissoc owner-key*)
+      (assoc state* :active? false)
       state*)))
 
-(defn- tick-state! [state]
-  (let [state* (or state {:fx-state {}})]
+(defn- tick-state!
+  "Preserved exactly as it was before this migration: never signals a
+   natural end (the original never dropped an owner from :ttl expiry alone,
+   only via :end/:perform's dissoc -- and those never actually fire, see
+   enqueue-state! above). Lives until the owner disconnects, same as
+   before."
+  [state]
+  (let [state* (or state {})]
     (-> state*
-        (update :fx-state
-                (fn [states] (reduce-kv (fn [acc k st] (assoc acc k (update st :ttl (fnil inc 0)))) {} states)))
-        (update :trails
-                (fn [trails]
-                  (into [] (keep (fn [burst]
-                                   (let [alive (bp/tick-particles! burst)]
-                                     (when (seq alive) alive))))
-                        trails))))))
+        (update :ttl (fnil inc 0))
+        (assoc :trails (into [] (keep (fn [burst]
+                                         (let [alive (bp/tick-particles! burst)]
+                                           (when (seq alive) alive))))
+                              (or (:trails state*) []))))))
 
 (defn- build-plan [camera-pos _hand-center-pos tick]
-  (let [store (vfx-level/effect-state-snapshot :threatening-teleport)
-        trails (:trails store)
+  (let [st (vfx-level/effect-state-snapshot :threatening-teleport)
+        trails (:trails st)
         cam (when (seq trails) (rv3/map->v3 camera-pos))
-        marker-ops
-        (vec
-         (mapcat (fn [st]
-                   (when (and (:active? st) (:aim st))
-                     (marker-ops st tick)))
-                 (vals (:fx-state store))))
+        marker-ops (when (and (:active? st) (:aim st))
+                     (marker-ops st tick))
         trail-ops (if cam
                     (vec (mapcat (fn [burst] (bp/particle-ops cam burst)) trails))
                     [])
-        ops (into marker-ops trail-ops)]
+        ops (into (vec marker-ops) trail-ops)]
     (when (seq ops)
       {:ops ops})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:threatening-teleport :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:threatening-teleport :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:threatening-teleport :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:threatening-teleport :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :threatening-teleport
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :threatening-teleport [_ store owner-key]
-  (update store :fx-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

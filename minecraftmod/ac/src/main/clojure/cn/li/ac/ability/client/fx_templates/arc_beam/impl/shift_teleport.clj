@@ -71,11 +71,26 @@
                                   :start-alpha (long (rand-range 153 204))
                                   :age 0 :life 20 :fade-in 5 :fade-out 20))))))))
 
-(defn- enqueue-state! [state ctx-id channel owner-key payload]
-  (let [state* (or state {:fx-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :fx-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today --
+;; same finding as threatening_teleport.clj (:release, not the
+;; :start/:update/:perform/:end this file dispatches on).
+;; combat_content.clj's :shift-teleport skill sends exactly ONE :vfx step,
+;; ever: :event :release from its one-shot :instant program, with
+;; :params {:max-range 35.0} -- none of the :x/:y/:z/:target-count/
+;; :target-hit?/:hand-valid?/:entities/:from-x/:from-y/:from-z fields these
+;; branches read. :release itself falls through to the trailing `state*`
+;; no-op default. In production today neither the block/entity markers nor
+;; the teleport-trail particles ever render -- migrated structurally only.
+(defn- enqueue-state! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [source-player-id world-id]} payload
-        base-meta {:owner-key owner-key* :ctx-id ctx-id :channel channel
+        base-meta {:ctx-id ctx-id :channel channel
                    :source-player-id source-player-id :world-id world-id}
         target (fn [p]
                  {:x (double (or (:x p) 0.0))
@@ -83,103 +98,91 @@
                   :z (double (or (:z p) 0.0))})]
     (case (:mode payload)
       :start
-      (update state* :fx-state assoc owner-key*
-              (merge base-meta {:active? true :ttl 0
-                                :target (target payload)
-                                :target-count (long (or (:target-count payload) 0))
-                                :target-hit? (boolean (:target-hit? payload))
-                                :hand-valid? (boolean (if (contains? payload :hand-valid?)
-                                                        (:hand-valid? payload) true))
-                                :entities (vec (:entities payload))}))
+      (merge state* base-meta {:active? true :ttl 0
+                               :target (target payload)
+                               :target-count (long (or (:target-count payload) 0))
+                               :target-hit? (boolean (:target-hit? payload))
+                               :hand-valid? (boolean (if (contains? payload :hand-valid?)
+                                                       (:hand-valid? payload) true))
+                               :entities (vec (:entities payload))})
       :update
-      (update state* :fx-state update owner-key*
-              (fn [st]
-                (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                       :active? true
-                       :target (target payload)
-                       :target-count (long (or (:target-count payload) 0))
-                       :target-hit? (boolean (:target-hit? payload))
-                       :hand-valid? (boolean (if (contains? payload :hand-valid?)
-                                               (:hand-valid? payload) true))
-                       :entities (vec (:entities payload)))))
+      (assoc (merge base-meta state*)
+             :active? true
+             :target (target payload)
+             :target-count (long (or (:target-count payload) 0))
+             :target-hit? (boolean (:target-hit? payload))
+             :hand-valid? (boolean (if (contains? payload :hand-valid?)
+                                     (:hand-valid? payload) true))
+             :entities (vec (:entities payload)))
       :perform
       ;; Upstream c_end: kill the block marker and every target marker, then
       ;; leave the white TPParticleFactory trail — the state lingers (active?
       ;; false) until the particles have faded out.
-      (update state* :fx-state update owner-key*
-              (fn [st]
-                (-> (merge base-meta (or st {:active? true :ttl 0}))
-                    (assoc :active? false)
-                    (assoc :particles (trail-particles
-                                       {:x (double (or (:from-x payload) 0.0))
-                                        :y (double (or (:from-y payload) 0.0))
-                                        :z (double (or (:from-z payload) 0.0))}
-                                       {:x (double (or (:x payload) 0.0))
-                                        :y (+ 0.5 (double (or (:y payload) 0.0)))
-                                        :z (double (or (:z payload) 0.0))})))))
+      (-> (merge base-meta state*)
+          (assoc :active? false)
+          (assoc :particles (trail-particles
+                             {:x (double (or (:from-x payload) 0.0))
+                              :y (double (or (:from-y payload) 0.0))
+                              :z (double (or (:from-z payload) 0.0))}
+                             {:x (double (or (:x payload) 0.0))
+                              :y (+ 0.5 (double (or (:y payload) 0.0)))
+                              :z (double (or (:z payload) 0.0))})))
       :end
-      (update state* :fx-state dissoc owner-key*)
+      (assoc state* :active? false)
       state*)))
 
-(defn- tick-state! [state]
-  (let [state* (or state {:fx-state {}})]
-    (update state* :fx-state
-            (fn [states]
-              (reduce-kv
-                (fn [acc owner-key st]
-                  (if (:active? st)
-                    ;; Markers are static during hold; nothing advances.
-                    (assoc acc owner-key st)
-                    (let [particles (bp/tick-particles! (:particles st))]
-                      (if (seq particles)
-                        (assoc acc owner-key (assoc st :particles particles))
-                        acc))))
-                {} states)))))
+(defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Markers are static while :active? (nothing to advance);
+   once inactive, stay alive only while the teleport-trail particles are
+   still animating."
+  [state]
+  (let [state* (or state {})]
+    (if (:active? state*)
+      state*
+      (let [particles (bp/tick-particles! (:particles state*))]
+        (when (seq particles)
+          (assoc state* :particles particles))))))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
   (let [cam (rv3/map->v3 camera-pos)
-        states (vals (:fx-state (vfx-level/effect-state-snapshot :shift-teleport)))
+        st (vfx-level/effect-state-snapshot :shift-teleport)
         marker-ops
-        (vec
-         (mapcat (fn [st]
-                   (when (and (:active? st) (:hand-valid? st))
-                     (concat
-                       ;; Destination block marker: 1.2x1.2x1.2 cube whose
-                       ;; BOTTOM sits at the destination block (upstream
-                       ;; blockMarker.setPosition(dest[0]+.5, dest[1], ...)
-                       ;; with height/width 1.2 — the entity position is the
-                       ;; box's feet, so it spans dest[1]..dest[1]+1.2;
-                       ;; drawing it centered at dest[1] sank the lower half
-                       ;; into the block below).
-                       (when-let [t (:target st)]
-                         (cube-edges (assoc t :y (+ 0.6 (double (:y t))))
-                                     0.6 0.6 0.6 color-block-marker))
-                       ;; One red marker per entity in the line (upstream
-                       ;; EntityMarker(e): a width x height x width box
-                       ;; following the target's feet position).
-                       (mapcat (fn [e]
-                                 (let [w (double (or (:width e) 0.6))
-                                       h (double (or (:height e) 1.8))]
-                                   (cube-edges (assoc e :y (+ (/ h 2.0) (double (:y e))))
-                                               (/ w 2.0) (/ h 2.0) (/ w 2.0)
-                                               color-entity-marker)))
-                               (:entities st)))))
-                 states))
+        (when (and (:active? st) (:hand-valid? st))
+          (concat
+            ;; Destination block marker: 1.2x1.2x1.2 cube whose
+            ;; BOTTOM sits at the destination block (upstream
+            ;; blockMarker.setPosition(dest[0]+.5, dest[1], ...)
+            ;; with height/width 1.2 — the entity position is the
+            ;; box's feet, so it spans dest[1]..dest[1]+1.2;
+            ;; drawing it centered at dest[1] sank the lower half
+            ;; into the block below).
+            (when-let [t (:target st)]
+              (cube-edges (assoc t :y (+ 0.6 (double (:y t))))
+                          0.6 0.6 0.6 color-block-marker))
+            ;; One red marker per entity in the line (upstream
+            ;; EntityMarker(e): a width x height x width box
+            ;; following the target's feet position).
+            (mapcat (fn [e]
+                      (let [w (double (or (:width e) 0.6))
+                            h (double (or (:height e) 1.8))]
+                        (cube-edges (assoc e :y (+ (/ h 2.0) (double (:y e))))
+                                    (/ w 2.0) (/ h 2.0) (/ w 2.0)
+                                    color-entity-marker)))
+                    (:entities st))))
         ;; White TPParticleFactory trail left by a performed release — lingers
         ;; until the particles fade out.
-        particle-ops
-        (vec (mapcat (fn [st]
-                       (bp/particle-ops cam (:particles st)))
-                     states))]
-    (when (seq (concat marker-ops particle-ops))
-      {:ops (vec (concat marker-ops particle-ops))})))
+        particle-ops (bp/particle-ops cam (:particles st))
+        ops (vec (concat marker-ops particle-ops))]
+    (when (seq ops)
+      {:ops ops})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:shift-teleport :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:shift-teleport :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:shift-teleport :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:shift-teleport :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :shift-teleport
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :shift-teleport [_ store owner-key]
-  (update store :fx-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

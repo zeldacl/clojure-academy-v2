@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :directed-blastwave
-     :initial-state (fn [] {:effect-state {} :waves {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :directed-blastwave/fx-start :mode :start}
                 :update {:topic :directed-blastwave/fx-update :mode :update
                          :level-payload (fn [_ _ p]

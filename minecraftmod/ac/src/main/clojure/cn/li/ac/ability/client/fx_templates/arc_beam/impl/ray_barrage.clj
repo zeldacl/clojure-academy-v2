@@ -76,7 +76,7 @@
 
 (defn- all-rays
   []
-  (mapcat val (:beam-queue (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :ray-barrage))))
+  (:beam-queue (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :ray-barrage)))
 
 (defn- look-dir-from-yaw-pitch
   "Minecraft look vector from yaw/pitch in degrees."
@@ -111,13 +111,27 @@
            :wiggle-seed (* 2.0 Math/PI (rand))
            :barrage? true})))))
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- :beam-queue is a flat vector
+;; instead of an owner-map of vectors (owner isolation comes from instance
+;; identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; but unlike every other Batch 1/2 file, it was NEVER reachable through
+;; combat_content.clj's actual wiring even before this migration: this file
+;; dispatches on :mode values :preray/:barrage, but combat_content.clj's
+;; :ray-barrage skill sends exactly ONE :vfx step, ever: :event :perform
+;; from its one-shot :instant program, with
+;; :params {:ray-count 5 :cone-angle-degrees 55.0} -- :perform doesn't match
+;; either :preray or :barrage, so it falls straight through to the trailing
+;; `store*` no-op default. Neither the single pre-ray nor the barrage fan
+;; has ever rendered in production. Migrated structurally only.
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (or store {:beam-queue {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+  [store ctx-id channel _owner-key payload]
+  (let [store* (or store {})
         {:keys [mode source-player-id world-id]} (or payload {})
-        base-meta {:owner-key owner-key*
-                   :ctx-id ctx-id
+        base-meta {:ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}
@@ -139,16 +153,18 @@
                                  (:yaw payload) (:pitch payload))
                nil)]
     (if (seq rays)
-      (update store* :beam-queue
-        (fn [by-owner]
-          (assoc by-owner owner-key* (vec (concat (get by-owner owner-key*) rays)))))
+      (update store* :beam-queue (fnil into []) rays)
       store*)))
 
 (defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Stay alive while the beam queue is still animating,
+   mirroring vec_deviation's tick-state!."
   [store]
-  (let [store* (or store {:beam-queue {}})]
-    (update store* :beam-queue
-      store-tick/tick-ttl-items-by-owner)))
+  (let [store* (or store {})
+        next-beams (store-tick/tick-ttl-vec (:beam-queue store*))]
+    (when (seq next-beams)
+      (assoc store* :beam-queue next-beams))))
 
 (defn- expanding-barrage-beam
   "Barrage sub rays grow OUT of the silbarn: the endpoint starts at the
@@ -183,17 +199,13 @@
           fixed (into preray-fixed barrage)]
       {:ops (vec (mapcat #(ray-ops cam-v %) fixed))})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:ray-barrage :level] [_ _] {:beam-queue {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:ray-barrage :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:ray-barrage :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:ray-barrage :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :ray-barrage
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :ray-barrage [_ store _owner-key]
-  ;; The rays are one-shot world visuals (upstream EntityBarrageRayPre /
-  ;; EntityMdRayBarrage carry their own lives). The :instant context ends on
-  ;; the same tick as perform, so MSG-CTX-TERMINATED reaches
-  ;; clear-effect-owner! immediately — clearing the queue here deleted every
-  ;; ray a frame after it appeared. They expire on their own ttl instead.
-  store)
+;; No effect-clear-owner! override anymore -- no live caller. The rays are
+;; one-shot world visuals with their own ttl regardless (see tick-state!
+;; above), so there is nothing external for a teardown hook to release.

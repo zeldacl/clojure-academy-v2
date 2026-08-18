@@ -19,7 +19,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :ray-barrage
-     :initial-state (fn [] {:beam-queue {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:preray {:topic :ray-barrage/fx-preray
                          :mode :preray
                          :targets [:immediate :level]

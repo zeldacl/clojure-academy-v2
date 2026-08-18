@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :shift-teleport
-     :initial-state (fn [] {:fx-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :shift-teleport/fx-start :mode :start
                         :level-payload (fn [_ _ p]
                                          {:x (:x p) :y (:y p) :z (:z p)

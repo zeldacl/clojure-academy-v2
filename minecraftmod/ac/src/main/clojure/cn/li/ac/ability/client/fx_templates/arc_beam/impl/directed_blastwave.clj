@@ -20,40 +20,39 @@
 (def ^:private sound-id (modid/namespaced-path "vecmanip.directed_blast"))
 (def ^:private wave-life 15)
 
-
-
-
-
-
-
-
-
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state/:waves
+;; owner-map wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration.
+;; combat_content.clj's :directed-blastwave skill sends exactly ONE :vfx
+;; step, ever: :event :perform from its :release phase, with
+;; :params {:radius 3.0} -- no :start/:update/:end, and none of the
+;; :pos/:look-dir/:charge-ticks/:punched?/:performed? fields the branches
+;; read. In production today :perform still unconditionally queues its
+;; sound cue (below), but at world origin (0,0,0) rather than the caster's
+;; position, since :pos is always nil here; :active? never becomes true
+;; (only :start/:update would set it, and neither fires) so the charge-ring
+;; visual never renders, and wave-entry is always nil (:pos required) so the
+;; wave visual never renders either. Migrated structurally only.
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (or store {:effect-state {} :waves {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+  [store ctx-id channel _owner-key payload]
+  (let [store* (or store {})
         {:keys [mode charge-ticks punched? pos look-dir performed? source-player-id world-id]} (or payload {})
-        base-meta {:owner-key owner-key*
-                   :ctx-id ctx-id
+        base-meta {:ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case mode
       :start
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
+      (merge store* base-meta {:active? true :charge-ticks 0 :punched? false :performed? false})
       :update
-      (assoc-in store* [:effect-state owner-key*]
-                (assoc (merge base-meta (get-in store* [:effect-state owner-key*] {}))
-                       :owner-key owner-key*
-                       :ctx-id ctx-id
-                       :channel channel
-                       :source-player-id source-player-id
-                       :world-id world-id
-                       :active? true
-                       :charge-ticks (long (or charge-ticks 0))
-                       :punched? (boolean punched?)
-                       :performed? false))
+      (assoc (merge base-meta store*)
+             :active? true
+             :charge-ticks (long (or charge-ticks 0))
+             :punched? (boolean punched?)
+             :performed? false)
       :perform
       (let [wave-entry (when (map? pos)
                          (let [d (or look-dir {:x 0.0 :y 0.0 :z 1.0})
@@ -76,7 +75,7 @@
                                                        :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
                                                     (range rings)))})))
             updated-store (if wave-entry
-                            (update-in store* [:waves owner-key*] (fnil conj []) wave-entry)
+                            (update store* :waves (fnil conj []) wave-entry)
                             store*)]
         (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
@@ -85,17 +84,21 @@
            :z (double (or (:z pos) 0.0))})
         updated-store)
       :end
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta {:active? false :charge-ticks 0 :punched? false
-                                  :performed? (boolean performed?)}))
+      (merge store* base-meta {:active? false :charge-ticks 0 :punched? false
+                                :performed? (boolean performed?)})
       store*)))
 
 (defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Stay alive while :active? or a wave is still animating,
+   mirroring vec_deviation's tick-state! (no :ticks bump, matching the
+   pre-migration keep-active without inc-ticks)."
   [store]
-  (let [state* (or store {:effect-state {} :waves {}})]
-    (assoc state*
-           :effect-state (store-tick/keep-active (:effect-state state*))
-           :waves (store-tick/tick-ttl-items-by-owner (:waves state*)))))
+  (let [store* (or store {})
+        active? (boolean (:active? store*))
+        waves (store-tick/tick-ttl-vec (:waves store*))]
+    (when (or active? (seq waves))
+      (assoc store* :waves waves))))
 
 (defn- alpha-curve
   [t]
@@ -178,16 +181,22 @@
 
 (defn- build-plan
   [_camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state waves]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :directed-blastwave)
-        db (some (fn [st]
-                   (when (and (:active? st)
-                              (or (nil? (:source-player-id st))
-                                  (nil? (:player-uuid hand-center-pos))
-                                  (= (str (:source-player-id st))
-                                     (str (:player-uuid hand-center-pos)))))
-                     st))
-                 (vals effect-state))
-        current-waves (mapcat val waves)
+  (let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :directed-blastwave)
+        current-waves (:waves state)
+        ;; One real vfx-core instance now exists per active caster; the
+        ;; charge ring still only draws for the LOCAL player's own instance,
+        ;; because hand-center-pos is only ever the local viewer's own hand
+        ;; position -- there is no remote-player hand endpoint to draw the
+        ;; ring at. The waves above are NOT filtered by this: they are
+        ;; world-positioned (upstream's own spawned WaveEffect), visible to
+        ;; everyone the same as before this migration, same as
+        ;; mag_movement's precedent for this owner-check.
+        db (when (and (:active? state)
+                      (or (nil? (:source-player-id state))
+                          (nil? (:player-uuid hand-center-pos))
+                          (= (str (:source-player-id state))
+                             (str (:player-uuid hand-center-pos)))))
+             state)
         charge-plan (if (and hand-center-pos db (:active? db))
                       (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
                                   (long (or (:charge-ticks db) 0))
@@ -197,15 +206,14 @@
     (when (or (seq charge-plan) (seq wave-plan))
       {:ops (vec (concat charge-plan wave-plan))})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-blastwave :level] [_ _] {:effect-state {} :waves {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-blastwave :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:directed-blastwave :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:directed-blastwave :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :directed-blastwave
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :directed-blastwave [_ store owner-key]
-  ;; The hand effect is context-bound (upstream l_handEffectTerminate stops the
-  ;; render override); the wave is a spawned WaveEffect entity that nothing
-  ;; kills when the context ends. See railgun_shot.clj's clear-owner.
-  (update store :effect-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).
+;; The wave is upstream's own spawned WaveEffect entity, unaffected by this
+;; file's teardown either way.
