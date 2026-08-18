@@ -25,9 +25,12 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.potion :as potion-effects]
+            [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]
+            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
             [cn.li.ac.content.ability.teleporter.mark-teleport-dest :as mark-teleport-dest]
             [cn.li.ac.content.ability.teleporter.penetrate-dest :as penetrate-dest]
@@ -41,6 +44,7 @@
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
+(defonce ^:private edn-host-capabilities-installed? (atom false))
 ;; The authoritative source for `:now-tick` when a caller does not supply one.
 ;; `tick!` below updates this from the real server tick every call; intents
 ;; dispatched between full tick-loop passes read the last observed value.
@@ -1884,17 +1888,207 @@
     (when (seq commands)
       (command-runtime/run-commands-in-session! session-id owner commands))))
 
+(defn- edn-owner-patch-commands
+  "Translate the neutral owner-patch contract into AC reducer commands.
+
+  Core never knows AC's player-state layout; this adapter is the only place
+  where neutral paths become persistent state transitions."
+  [patch-actions]
+  (keep (fn [{:keys [entries]}]
+          (some (fn [{:keys [path mode value]}]
+                  (let [amount (when (number? value) (double value))]
+                    (cond
+                      (and (= mode :increment)
+                           (= path [:resources :cp])
+                           (some? amount))
+                      {:command :consume-resource :cp (- amount)}
+                      (and (= mode :increment)
+                           (= path [:resources :overload])
+                           (some? amount))
+                      {:command :consume-resource :overload (- amount)}
+                      (and (= mode :increment)
+                           (= 3 (count path))
+                           (= [:ability-data :skill-exps] (subvec (vec path) 0 2))
+                           (keyword? (nth path 2))
+                           (some? amount))
+                      {:command :add-skill-exp
+                       :skill-id (nth path 2)
+                       :amount amount
+                       :source :combat-core}
+                      (and (= mode :assign)
+                           (= 3 (count path))
+                           (= [:cooldown-data] (subvec (vec path) 0 1))
+                           (keyword? (nth path 1))
+                           (keyword? (nth path 2))
+                           (some? amount))
+                      {:command :set-cooldown
+                       :ctrl-id (nth path 1)
+                       :sub-id (nth path 2)
+                       :ticks (max 0 (long amount))}
+                      :else nil)))
+                entries))
+        (filter #(= :owner-patch (:type %)) patch-actions)))
+
+(defn- commit-edn-owner-patches!
+  [owner actions]
+  (let [patch-actions (vec (filter #(= :owner-patch (:type %)) actions))
+        commands (vec (edn-owner-patch-commands patch-actions))]
+    (when (seq commands)
+      (let [result (command-runtime/run-commands-in-session!
+                    (server-session-id) owner commands)]
+        [{:status (if (:success? result) :committed :failed)
+          :capability :owner-patch
+          :command-count (count commands)}]))))
+
 (defn- edn-ability-id [owner intent]
   (or (:ability-id intent)
       (:ability intent)
       (some-> (resolve-slot owner intent) :id)))
+
+(defn- parameter-snapshot
+  "Resolve EDN parameter declarations once at activation time.
+
+  The compiled core only sees this immutable map; it never reads live AC
+  configuration.  Unknown declarations are rejected rather than silently
+  falling back to a descriptor-shaped value that could make arithmetic
+  nondeterministic."
+  [ability-id ability intent]
+  (if (contains? intent :parameter-snapshot)
+    (:parameter-snapshot intent)
+    (into {}
+          (map (fn [[parameter-id {:keys [path type]}]]
+                 (let [field-id (last path)
+                       value (case type
+                               [:tuple :double 2]
+                               (skill-config/tunable-double-list ability-id field-id)
+                               :double
+                               (skill-config/tunable-double ability-id field-id)
+                               :long
+                               (skill-config/tunable-int ability-id field-id)
+                               (throw (ex-info "unsupported EDN parameter type"
+                                               {:ability-id ability-id
+                                                :parameter parameter-id
+                                                :type type})))]
+                   [parameter-id value]))
+               (:parameters ability)))))
+
+(defn- activation-context
+  [owner ability-id intent]
+  (let [state (runtime-store/get-player-state (server-session-id) (str owner))
+        resource-data (:resource-data state)
+        position (when (raycast/available?)
+                   (raycast/player-position (str owner)))
+        eye (geom/eye-pos (str owner))
+        look (when (raycast/available?)
+               (raycast/player-look-vector (str owner)))]
+    (merge {:owner owner
+            :ability-id ability-id
+            :world-id (or (:world-id position) (geom/world-id-of (str owner)))
+            :eye-pos eye
+            :look look
+            :activation-seed (long (or (:activation-seed intent)
+                                       (hash [owner ability-id])))
+            :skill-exp (double (or (get-in state [:ability-data :skill-exps ability-id])
+                                   0.0))
+            :resources {:cp (double (or (:cur-cp resource-data) 0.0))
+                        :overload (double (or (:cur-overload resource-data) 0.0))}
+            :creative? false}
+           (:context intent))))
+
+(defn- install-edn-host-capabilities!
+  "Link the generic EDN host table to neutral AC platform ports once.
+
+  The handlers exchange only maps and UUIDs.  They do not select abilities or
+  contain Arc Gen rules; those remain in EDN."
+  []
+  (when (compare-and-set! edn-host-capabilities-installed? false true)
+    (try
+      (when-not (contains? (:queries (capabilities/snapshot)) :raycast)
+        (capabilities/register-query!
+         :raycast
+         (fn [{:keys [owner distance]} _frame]
+           (let [owner (str owner)
+                 distance (max 0.0 (min 128.0 (double (or distance 0.0))))
+                 world-id (geom/world-id-of owner)
+                 eye (geom/eye-pos owner)
+                 look (when (raycast/available?)
+                        (raycast/player-look-vector owner))
+                 hit (when (and look (raycast/available?))
+                       (raycast/raycast-combined
+                        world-id (:x eye) (:y eye) (:z eye)
+                        (double (or (:x look) 0.0))
+                        (double (or (:y look) 0.0))
+                        (double (or (:z look) 1.0)) distance))
+                 kind (cond
+                        (= :entity (:hit-type hit)) :entity
+                        (= :block (:hit-type hit)) :block
+                        (:entity-id hit) :entity
+                        (:uuid hit) :entity
+                        hit :block
+                        :else :miss)
+                 position (case kind
+                            :entity {:x (double (or (:hit-x hit) (:x hit) 0.0))
+                                     :y (double (or (:hit-y hit) (:y hit) 0.0))
+                                     :z (double (or (:hit-z hit) (:z hit) 0.0))}
+                            :block {:x (double (or (:hit-x hit) (:x hit) 0.0))
+                                    :y (double (or (:hit-y hit) (:y hit) 0.0))
+                                    :z (double (or (:hit-z hit) (:z hit) 0.0))}
+                            {:x (+ (:x eye) (* (double (or (:x look) 0.0)) distance))
+                             :y (+ (:y eye) (* (double (or (:y look) 0.0)) distance))
+                             :z (+ (:z eye) (* (double (or (:z look) 1.0)) distance))})
+                 block-id (:block-id hit)]
+             {:hit-type kind
+              :entity-id (or (:entity-id hit) (:uuid hit))
+              :creeper? (= "minecraft:creeper" (:entity-type hit))
+              :position position
+              :block-position {:x (Math/floor (double (:x position)))
+                               :y (Math/floor (double (:y position)))
+                               :z (Math/floor (double (:z position)))}
+              :block-id block-id
+              :water? (= "minecraft:water" block-id)
+              :world-id world-id}))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/damage)
+        (capabilities/register-action!
+         :entity/damage
+         (fn [{:keys [world-id target amount damage-type owner]}]
+           (when (and target (entity-damage/available?)
+                      (Double/isFinite (double amount))
+                      (pos? (double amount)))
+             (entity-damage/apply-direct-damage!
+              world-id target (double amount) (or damage-type :generic)
+              {:attacker-uuid owner})))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/status)
+        (capabilities/register-action!
+         :entity/status
+         (fn [{:keys [world-id target status-id duration-ticks amplifier]}]
+           (when target
+             (if (= :powered-creeper status-id)
+               (motion-effects/power-creeper! world-id target)
+               (potion-effects/apply-effect!
+                target status-id (int (max 0 (min 1200 (long duration-ticks))))
+                (int (max 0 (min 255 (long amplifier))))))))))
+      (catch Throwable _
+        ;; A loader may freeze the registry before AC content boots.  Leave the
+        ;; registry state authoritative; missing ports surface as :unhandled.
+        (reset! edn-host-capabilities-installed? false)))
+  (capabilities/snapshot)))
 
 (defn- execute-edn-intent!
   "Execute a normalized EDN intent against the AC-owned session index." 
   [owner intent]
   (let [ability-id (edn-ability-id owner intent)
         op (or (:action intent) (:op intent) :start)
-        normalized (assoc intent :action op :ability-id ability-id)]
+        ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
+        active-session (edn-sessions/session owner)
+        normalized (assoc intent
+                          :action op
+                          :ability-id ability-id
+                          :context (or (:context active-session)
+                                       (activation-context owner ability-id intent))
+                          :parameter-snapshot
+                          (or (:parameter-snapshot intent)
+                              (:parameter-snapshot active-session)
+                              (parameter-snapshot ability-id ability intent)))]
     (when (= :start op)
       (edn-sessions/start! owner ability-id normalized))
     (let [session-context (edn-sessions/context-for owner normalized)
@@ -1919,13 +2113,15 @@
         ;; migrated EDN catalog before execution.
         ability-id (edn-ability-id owner intent)]
     (if-not (edn-catalog/available? ability-id)
-       {:schema-version 2
+      {:schema-version 2
         :status :rejected
         :reason :ability-not-migrated
         :feedback [{:type :ability-not-migrated
                     :ability-id ability-id
                     :status (edn-catalog/migration-status ability-id)}]}
-      (execute-edn-intent! owner intent))))
+      (do
+        (install-edn-host-capabilities!)
+        (execute-edn-intent! owner intent)))))
 
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
@@ -1954,7 +2150,81 @@
                        :ability-id (:ability trigger)
                        :event (:event trigger)
                        :context context})))
-(defn dispatch-domain-event! [event] (combat/dispatch-domain-event! (engine) event))
+(defn- handle-neutral-domain-event!
+  "Apply the two generic domain events emitted by the migrated Arc recipe.
+
+  The event contains only a bounded impact fact and probabilities from the
+  activation snapshot.  We re-read the target block immediately before a
+  mutation, so a stale raycast cannot overwrite a changed world block."
+  [event]
+  (case (:type event)
+    :achievement/trigger
+    (let [payload (:payload event)]
+      (when (and (map? payload) (:owner event) (:id payload))
+        (achievement-dispatcher/trigger-custom-event!
+         (str (:owner event)) (str (:id payload))))
+      {:status :applied :type (:type event)})
+
+    :world/block-impact
+    (let [{:keys [world-id position block-position water? ignite-probability
+                  fishing-probability fishing-exp-threshold skill-exp seed]} (:payload event)
+          point (cond
+                  (vector? position) position
+                  (map? position) [(:x position) (:y position) (:z position)]
+                  :else nil)
+          block-point (cond
+                        (vector? block-position) block-position
+                        (map? block-position) [(:x block-position)
+                                               (:y block-position)
+                                               (:z block-position)]
+                        :else nil)
+          finite-point? (fn [p]
+                          (and (vector? p) (= 3 (count p))
+                               (every? #(and (number? %) (Double/isFinite (double %))) p)))
+          seed (long (or seed 0))
+          fish? (and water? (> (double (or skill-exp 0.0))
+                               (double (or fishing-exp-threshold 1.0)))
+                     (< (seeded-rng/unit-double seed)
+                        (double (or fishing-probability 0.0))))
+          ignite? (and (not water?)
+                       (< (seeded-rng/unit-double (seeded-rng/next-long seed))
+                          (double (or ignite-probability 0.0))))]
+      (cond
+        (not (and (string? world-id) (finite-point? point)
+                  (finite-point? block-point)))
+        {:status :rejected :reason :invalid-impact-fact}
+
+        fish?
+        (if (and (server-bridge/server-bridge-available?)
+                 (<= (Math/abs (- (double (nth point 0))
+                                  (double (nth block-point 0)))) 1.0)
+                 (<= (Math/abs (- (double (nth point 1))
+                                  (double (nth block-point 1)))) 1.0)
+                 (<= (Math/abs (- (double (nth point 2))
+                                  (double (nth block-point 2)))) 1.0))
+          (do (server-bridge/spawn-item-stack-at!
+               world-id (double (nth point 0)) (double (nth point 1))
+               (double (nth point 2)) "minecraft:cooked_cod" 1)
+              {:status :applied :operation :spawn-item})
+          {:status :unhandled :reason :missing-item-spawn-port})
+
+        ignite?
+        (let [[x y z] (mapv #(int (Math/floor (double %))) block-point)
+              current (when (block-manipulation/available?)
+                        (block-manipulation/get-block world-id x (inc y) z))]
+          (if (and (block-manipulation/available?)
+                   (or (nil? current) (= "minecraft:air" current)))
+            (do (block-manipulation/set-block! world-id x (inc y) z "minecraft:fire")
+                {:status :applied :operation :ignite})
+            {:status :rejected :reason :impact-target-not-air}))
+
+        :else {:status :applied :operation :none}))
+
+    nil))
+
+(defn dispatch-domain-event! [event]
+  (or (handle-neutral-domain-event! event)
+      (combat/dispatch-domain-event! (engine) event)))
 
 (defn dispatch-result-domain-events!
   "Dispatch explicit domain events from one CombatResult.
@@ -2105,11 +2375,17 @@
   [owner result]
   (let [result (if (and (= 2 (:schema-version result))
                         (= :accepted (:status result)))
-                 (assoc result
-                        :action-results
-                        (edn-execution/commit-actions!
-                          owner (:actions result)
-                          (:actions (capabilities/snapshot))))
+                 (let [actions (vec (:actions result))
+                       patch-results (commit-edn-owner-patches! owner actions)
+                       action-results
+                       (edn-execution/commit-actions!
+                        owner
+                        (vec (remove #(#{:owner-patch :session-patch}
+                                       (:type %)) actions))
+                        (:actions (capabilities/snapshot)))]
+                   (assoc result
+                          :patch-results (vec patch-results)
+                          :action-results action-results))
                  result)
         result (execute-world-effects! owner result)
         domain-results (if (= :accepted (:status result))

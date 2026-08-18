@@ -158,6 +158,7 @@
         request (effect-contract/query-request
                   (resolve-data
                     (merge {:capability capability
+                            :owner (:owner context)
                             :world-id (str (or (get-in context [:context :world-id]) "unknown"))}
                            (dissoc data :result :component))
                     context))

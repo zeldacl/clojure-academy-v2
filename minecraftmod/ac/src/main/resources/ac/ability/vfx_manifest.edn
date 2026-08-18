@@ -2,4 +2,6 @@
  :documents [{:id :railgun-beam
               :resource "ac/ability/railgun_beam_vfx.edn"}
              {:id :railgun-charge
-              :resource "ac/ability/railgun_charge_vfx.edn"}]}
+              :resource "ac/ability/railgun_charge_vfx.edn"}
+             {:id :arc-gen
+              :resource "ac/ability/arc_gen_vfx.edn"}]}

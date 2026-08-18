@@ -76,14 +76,31 @@
           (let [capability (:capability action)
                 handler (get action-handlers capability)
                 request (assoc action :owner owner)]
-            (if-not handler
-              {:status :unhandled :capability capability :request request}
-              (try
-                {:status :committed
-                 :capability capability
-                 :result (handler request)}
-                (catch Throwable throwable
-                  {:status :failed
+            (if (and (= :block/set capability)
+                     (not (and (vector? (:expected-block-ids request))
+                               (seq (:expected-block-ids request))
+                               (<= (count (:expected-block-ids request)) 8)
+                               (string? (:block-id request))
+                               (let [position (:position request)
+                                     point (if (and (map? position)
+                                                    (vector? (:vec3 position)))
+                                             (:vec3 position)
+                                             position)]
+                                 (and (vector? point)
+                                      (= 3 (count point))
+                                      (every? number? point))))))
+              {:status :rejected
+               :capability capability
+               :reason :invalid-bounded-block-set
+               :request request}
+              (if (not handler)
+                {:status :unhandled :capability capability :request request}
+                (try
+                  {:status :committed
                    :capability capability
-                   :message (ex-message throwable)})))))
+                   :result (handler request)}
+                  (catch Throwable throwable
+                    {:status :failed
+                     :capability capability
+                     :message (ex-message throwable)}))))))
         actions))

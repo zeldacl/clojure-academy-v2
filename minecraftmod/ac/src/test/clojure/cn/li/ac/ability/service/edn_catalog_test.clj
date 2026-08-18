@@ -9,10 +9,12 @@
   (let [state (catalog/initialize!)]
     (is (true? (:initialized? state)))
     (is (catalog/available? :railgun))
+    (is (catalog/available? :arc-gen))
     (is (not (catalog/available? :thunder-bolt)))
     (is (= :pending (catalog/migration-status :thunder-bolt)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
-    (is (= :railgun-beam (get-in state [:vfx :effects :railgun-beam :id])))))
+    (is (= :railgun-beam (get-in state [:vfx :effects :railgun-beam :id])))
+    (is (= :arc-gen (get-in state [:vfx :effects :arc-gen :id])))))
 
 (deftest migrated-entry-executes-compiled-program
   (catalog/initialize!)

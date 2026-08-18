@@ -1,5 +1,6 @@
 {:schema-version 1
  :skills {:railgun :migrated
+          :arc-gen :migrated
           :thunder-bolt :pending
           :vec-reflection :pending
           :groundshock :pending}}

@@ -1,0 +1,163 @@
+{:schema-version 1
+ :kind :ability
+ :id :arc-gen
+ :revision 1
+ :activation :instant
+ :parameters
+ {:damage {:source :config :path [:arc-gen :combat.damage]
+           :type [:tuple :double 2] :snapshot :activation}
+  :max-distance {:source :config :path [:arc-gen :targeting.range]
+                 :type [:tuple :double 2] :snapshot :activation}
+  :ignite-probability {:source :config
+                       :path [:arc-gen :effect.ignite-probability]
+                       :type [:tuple :double 2] :snapshot :activation}
+  :fishing-probability {:source :config
+                        :path [:arc-gen :effect.fishing-probability]
+                        :type :double :snapshot :activation}
+  :fishing-exp-threshold {:source :config
+                          :path [:arc-gen :effect.fishing-exp-threshold]
+                          :type :double :snapshot :activation}
+  :creeper-charge-chance {:source :config
+                          :path [:arc-gen :effect.creeper-charge-chance]
+                          :type :double :snapshot :activation}
+  :cost-cp {:source :config :path [:arc-gen :cost.down.cp]
+            :type [:tuple :double 2] :snapshot :activation}
+  :cost-overload {:source :config :path [:arc-gen :cost.down.overload]
+                  :type [:tuple :double 2] :snapshot :activation}
+  :cooldown-ticks {:source :config :path [:arc-gen :cooldown.ticks]
+                   :type [:tuple :double 2] :snapshot :activation}
+  :exp-entity {:source :config :path [:arc-gen :progression.exp-entity]
+               :type [:tuple :double 2] :snapshot :activation}
+  :exp-block {:source :config :path [:arc-gen :progression.exp-block]
+              :type [:tuple :double 2] :snapshot :activation}}
+ :external-triggers []
+ :reactions []
+ :vfx-contracts
+ {:arc-fired {:effect-id :arc-gen :op :spawn
+              :payload {:start :vec3 :end :vec3
+                        :hit-type [:enum :entity :block :miss]
+                        :life-ticks :long}}}
+ :program
+ {:component :txn/atomic
+  :guards [{:component :guard/resource
+            :cost {:cp {:expr :math/lerp
+                         :args [{:ref [:param :cost-cp 0]}
+                                {:ref [:param :cost-cp 1]}
+                                {:ref [:context :skill-exp]}]}
+                    :overload {:expr :math/lerp
+                               :args [{:ref [:param :cost-overload 0]}
+                                      {:ref [:param :cost-overload 1]}
+                                      {:ref [:context :skill-exp]}]}}}]
+  :reservations []
+  :body {:component :flow/sequence
+         :steps [{:component :owner/patch
+                  :entries [{:path [:resources :cp] :mode :increment
+                             :value {:expr :math/mul
+                                     :args [-1.0 {:expr :math/lerp
+                                                  :args [{:ref [:param :cost-cp 0]}
+                                                         {:ref [:param :cost-cp 1]}
+                                                         {:ref [:context :skill-exp]}]}]}}
+                            {:path [:resources :overload] :mode :increment
+                             :value {:expr :math/mul
+                                     :args [-1.0 {:expr :math/lerp
+                                                  :args [{:ref [:param :cost-overload 0]}
+                                                         {:ref [:param :cost-overload 1]}
+                                                         {:ref [:context :skill-exp]}]}]}}]}
+                 {:component :target/raycast
+                  :origin {:ref [:context :eye-pos]}
+                  :direction {:ref [:context :look]}
+                  :distance {:expr :math/lerp
+                             :args [{:ref [:param :max-distance 0]}
+                                    {:ref [:param :max-distance 1]}
+                                    {:ref [:context :skill-exp]}]}
+                  :include-entities? true :include-blocks? true
+                  :result :aim-hit}
+                 {:component :effect/vfx
+                  :effect-id :arc-gen :operation :spawn
+                  :instance-key [:activation :arc-gen]
+                  :audience {:type :nearby :radius 32.0}
+                  :payload {:start {:ref [:context :eye-pos]}
+                            :end {:ref [:slot :aim-hit :position]}
+                            :hit-type {:ref [:slot :aim-hit :hit-type]}
+                            :life-ticks 10}}
+                 {:component :flow/branch
+                  :when {:ref [:slot :aim-hit :entity-id]}
+                  :then {:component :flow/sequence
+                         :steps [{:component :combat/damage
+                                  :target {:ref [:slot :aim-hit :entity-id]}
+                                  :amount {:expr :math/lerp
+                                           :args [{:ref [:param :damage 0]}
+                                                  {:ref [:param :damage 1]}
+                                                  {:ref [:context :skill-exp]}]}
+                                  :damage-type :skill}
+                                 {:component :flow/branch
+                                  :when {:expr :bool/and
+                                         :args [{:ref [:slot :aim-hit :creeper?]}
+                                                {:expr :random/chance
+                                                 :args [{:ref [:param :creeper-charge-chance]}]}]}
+                                  :then {:component :entity/status
+                                         :target {:ref [:slot :aim-hit :entity-id]}
+                                         :status-id :powered-creeper
+                                         :duration-ticks 1 :amplifier 0}}
+                                 {:component :data/bind
+                                  :to :exp-award
+                                  :value {:expr :math/add
+                                          :args [{:ref [:param :exp-entity 0]}
+                                                 {:expr :math/mul
+                                                  :args [{:ref [:param :exp-entity 1]}
+                                                         {:ref [:context :skill-exp]}]}]}}
+                                 {:component :owner/patch
+                                  :entries [{:path [:ability-data :skill-exps :arc-gen]
+                                             :mode :increment
+                                             :value {:expr :math/add
+                                                     :args [{:ref [:param :exp-entity 0]}
+                                                            {:expr :math/mul
+                                                          :args [{:ref [:param :exp-entity 1]}
+                                                                    {:ref [:context :skill-exp]}]}]}}]}
+                                 {:component :domain/event
+                                  :event-type :achievement/trigger
+                                  :payload {:id "electromaster.arc_gen"
+                                            :owner {:ref [:context :owner]}}}]}
+                  :else {:component :flow/sequence
+                         :steps [{:component :domain/event
+                                  :event-type :world/block-impact
+                                   :payload {:world-id {:ref [:context :world-id]}
+                                             :position {:ref [:slot :aim-hit :position]}
+                                             :block-position {:ref [:slot :aim-hit :block-position]}
+                                             :water? {:ref [:slot :aim-hit :water?]}
+                                             :skill-exp {:ref [:context :skill-exp]}
+                                             :seed {:ref [:context :activation-seed]}
+                                            :ignite-probability {:expr :math/lerp
+                                                                 :args [{:ref [:param :ignite-probability 0]}
+                                                                        {:ref [:param :ignite-probability 1]}
+                                                                        {:ref [:context :skill-exp]}]}
+                                            :fishing-probability {:ref [:param :fishing-probability]}
+                                            :fishing-exp-threshold {:ref [:param :fishing-exp-threshold]}}}
+                                 {:component :data/bind
+                                  :to :exp-award
+                                  :value {:expr :math/add
+                                          :args [{:ref [:param :exp-block 0]}
+                                                 {:expr :math/mul
+                                                  :args [{:ref [:param :exp-block 1]}
+                                                         {:ref [:context :skill-exp]}]}]}}
+                                 {:component :owner/patch
+                                  :entries [{:path [:ability-data :skill-exps :arc-gen]
+                                             :mode :increment
+                                             :value {:expr :math/add
+                                                     :args [{:ref [:param :exp-block 0]}
+                                                            {:expr :math/mul
+                                                          :args [{:ref [:param :exp-block 1]}
+                                                                    {:ref [:context :skill-exp]}]}]}}]}]}}
+                 {:component :owner/patch
+                  :entries [{:path [:cooldown-data :arc-gen :main]
+                             :mode :assign
+                             :value {:expr :math/lerp
+                                     :args [{:ref [:param :cooldown-ticks 0]}
+                                            {:ref [:param :cooldown-ticks 1]}
+                                            {:expr :math/add
+                                             :args [{:ref [:context :skill-exp]}
+                                                    {:ref [:slot :exp-award]}]}]}}]}
+                 {:component :flow/finish :outcome :performed
+                  :finish-session? true}]}
+  :on-fail {:component :flow/finish
+            :outcome :insufficient-resource}}}

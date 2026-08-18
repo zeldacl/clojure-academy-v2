@@ -1,4 +1,7 @@
 {:schema-version 1
  :documents [{:kind :ability
               :id :railgun
-              :resource "ac/ability/railgun_combat.edn"}]}
+              :resource "ac/ability/railgun_combat.edn"}
+             {:kind :ability
+              :id :arc-gen
+              :resource "ac/ability/arc_gen_combat.edn"}]}

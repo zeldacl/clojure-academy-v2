@@ -35,20 +35,7 @@
   {:provider-id :academy/base
    :revision 1
    :abilities
-   [{:id :arc-gen
-     :revision 1
-     :activation :instant
-     :cost {:cp 18}
-     :cooldown {:ticks 10}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :raycast
-                        :distance 12.0 :result-ref :hit}
-                       {:op :require :predicate :hit}
-                       {:op :damage :amount 7.0 :type :electric
-                        :target-ref :hit}
-                       {:op :vfx :effect-id :arc-gen
-                        :event :impact :params {:strength 1.0}}]}}
-    ;; Block-charging only -- see combat_runtime.clj's :charge-target/
+   [;; Block-charging only -- see combat_runtime.clj's :charge-target/
     ;; :charge-energy comments. :cost {:cp 2} and :amount 1.0 were
     ;; placeholders that never matched skill_config/electromaster.clj's
     ;; recovered schema (effect.charge-amount [15,35], cost.tick.cp [3,7],
