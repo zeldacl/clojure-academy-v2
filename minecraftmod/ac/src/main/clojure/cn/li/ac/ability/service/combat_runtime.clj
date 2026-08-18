@@ -2039,7 +2039,8 @@
                  block-id (:block-id hit)]
              {:hit-type kind
               :entity-id (or (:entity-id hit) (:uuid hit))
-              :creeper? (= "minecraft:creeper" (:entity-type hit))
+               :creeper? (contains? #{"minecraft:creeper" "entity.minecraft.creeper"}
+                                     (or (:entity-type hit) (:type hit)))
               :position position
               :block-position {:x (Math/floor (double (:x position)))
                                :y (Math/floor (double (:y position)))
