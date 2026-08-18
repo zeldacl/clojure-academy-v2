@@ -32,7 +32,9 @@
                   :composites-manifest-resource
                   "ac/combat/components_manifest.edn"})
         vfx (vfx-recipe/load-catalog!
-              {:manifest-resource "ac/ability/vfx_manifest.edn"})]
+              {:manifest-resource "ac/vfx/manifest.edn"
+               :composites-manifest-resource
+               "ac/vfx/components_manifest.edn"})]
     (reset! state* {:initialized? true
                     :migration (:skills migration)
                     :combat combat

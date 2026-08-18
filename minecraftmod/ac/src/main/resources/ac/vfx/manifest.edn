@@ -1,0 +1,13 @@
+{:schema-version 1
+ :documents [{:kind :vfx-effect
+              :id :railgun-beam
+              :resource "ac/vfx/effects/railgun_beam.edn"}
+             {:kind :vfx-effect
+              :id :railgun-charge
+              :resource "ac/vfx/effects/railgun_charge.edn"}
+             {:kind :vfx-effect
+              :id :arc-gen
+              :resource "ac/vfx/effects/arc_gen.edn"}
+             {:kind :vfx-effect
+              :id :thunder-clap
+              :resource "ac/vfx/effects/thunder_clap.edn"}]}

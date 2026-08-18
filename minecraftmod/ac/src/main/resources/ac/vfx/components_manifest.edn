@@ -1,0 +1,4 @@
+{:schema-version 1
+ :documents [{:kind :composite
+              :id :vfx/beam-arc-fade
+              :resource "ac/vfx/components/beam_arc_fade.edn"}]}

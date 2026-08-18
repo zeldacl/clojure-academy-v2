@@ -1093,7 +1093,7 @@ tasks.register("verifyAbilityVfxRegistryCoverage") {
     dependsOn ":vfx-core:runVfxClojureTests"
     doLast {
         def combat = file("ac/src/main/resources/ac/combat/abilities/railgun.edn").text
-        def vfxManifest = file("ac/src/main/resources/ac/ability/vfx_manifest.edn").text
+        def vfxManifest = file("ac/src/main/resources/ac/vfx/manifest.edn").text
         def emitted = [] as Set
         (combat =~ /:effect-id\s+(:[A-Za-z0-9!?*-]+)/).each { m -> emitted << m[1].toString() }
         def registered = [] as Set

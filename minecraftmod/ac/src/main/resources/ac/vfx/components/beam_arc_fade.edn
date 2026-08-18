@@ -1,0 +1,54 @@
+{:schema-version 1
+ :kind :composite
+ :id :vfx/beam-arc-fade
+ :revision 1
+ :inputs
+ {:duration-ticks {:type :long}
+  :beam-at {:type :long}
+  :start {:type :vec3}
+  :end {:type :vec3}
+  :grow-ticks {:type :long}
+  :layers {:type :object}
+  :arc-at {:type :long}
+  :arc-spacing {:type :object}
+  :arc-radius {:type :object}
+  :arc-count-limit {:type :long}
+  :arc-life-ticks {:type :long}
+  :seed {:type :long}
+  :fade-at {:type :long}
+  :fade-from-tick {:type :long}
+  :fade-to-tick {:type :long}
+  :fade-from-alpha {:type :double}
+  :fade-to-alpha {:type :double}
+  :ring-radius {:type :object}
+  :ring-segments {:type :long}
+  :ring-color {:type :object}}
+ :body
+ {:component :vfx/timeline
+  :duration-ticks {:ref [:input :duration-ticks]}
+  :children [{:at {:ref [:input :beam-at]}
+              :node {:component :vfx/beam
+                     :start {:ref [:input :start]}
+                     :end {:ref [:input :end]}
+                     :grow-ticks {:ref [:input :grow-ticks]}
+                     :layers {:ref [:input :layers]}}}
+             {:at {:ref [:input :arc-at]}
+              :node {:component :vfx/arc-field
+                     :start {:ref [:input :start]}
+                     :end {:ref [:input :end]}
+                     :spacing {:ref [:input :arc-spacing]}
+                     :radius {:ref [:input :arc-radius]}
+                     :count-limit {:ref [:input :arc-count-limit]}
+                     :life-ticks {:ref [:input :arc-life-ticks]}
+                     :seed {:ref [:input :seed]}}}
+             {:at {:ref [:input :fade-at]}
+              :node {:component :vfx/fade
+                     :from-tick {:ref [:input :fade-from-tick]}
+                     :to-tick {:ref [:input :fade-to-tick]}
+                     :from-alpha {:ref [:input :fade-from-alpha]}
+                     :to-alpha {:ref [:input :fade-to-alpha]}
+                     :child {:component :vfx/ring
+                             :center {:ref [:input :end]}
+                             :radius {:ref [:input :ring-radius]}
+                             :segments {:ref [:input :ring-segments]}
+                             :color {:ref [:input :ring-color]}}}}]}}

@@ -18,6 +18,7 @@
     (is (contains? (get-in state [:combat :composites]) :combat/area-damage))
     (is (contains? (get-in state [:combat :composites]) :combat/charged-area-damage))
     (is (contains? (get-in state [:combat :composites]) :txn/guarded-owner-patch))
+    (is (contains? (get-in state [:vfx :composites]) :vfx/beam-arc-fade))
     (is (= :railgun-beam (get-in state [:vfx :effects :railgun-beam :id])))
     (is (= :arc-gen (get-in state [:vfx :effects :arc-gen :id])))
     (is (= :thunder-clap (get-in state [:combat :abilities :thunder-clap :id])))
