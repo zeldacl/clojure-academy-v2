@@ -39,6 +39,8 @@
 | `d80a8fb00` | P1.1/P1.2 迁移 Batch 4：`directed_shock`/`mag_manip` 2/26 个效果（hand-only），新增跨 vfx-core/effect_controller.clj 的 `instance-for-owner` API，见下方 E 节 |
 | `80ac1bc42` | P1.1/P1.2 迁移 Batch 5：`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap` 5/26 个效果（计划标注的最高复杂度批次），`railgun_shot`/`thunder_clap` 是目前 26 个里仅有的两个真正存活的复杂样本，新增 `update-state-for-owner!` API，见下方 E 节 |
 | `337e296a0` | P1.1/P1.2 迁移 Batch 6：`plasma_cannon`/`current_charging` 2/26 个效果（另一个最高复杂度批次），原计划 24 个待迁移效果全部完成，仅剩 Batch 7 收尾审计，见下方 E 节 |
+| `793d096d2` | Batch 7 收尾审计发现并修复：`blood_retrograde_fx.clj` 在 Batch 3 被漏改，`:lifecycle`/`:initial-state` 一直没跟着 impl 文件拍平，见下方 E 节 |
+| `e22949e14` | 重写 `VFX_CORE.md` 的"运行时流程"/"实例模型"两节，反映 P1.1/P1.2/P1.3 全部完成后的当前状态（含 Batch 7 审计发现的 11 个仍在 `:singleton` 的效果清单），P1.1/P1.2/P1.3 到此结束 |
 
 ## 分类清单
 
@@ -135,7 +137,7 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 里计划内 24/24 个效果已全部迁移，仅剩 Batch 7 收尾审计）
+### E. vfx-core 通用化剩余部分（P1.1-P1.3 全部完成——P1.3 删死代码、P1.1/P1.2 计划内 24/24 个效果迁移到 :transient，Batch 7 收尾审计已跑完）
 
 不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 
@@ -178,7 +180,11 @@
 
 至此，原计划 24 个待迁移效果（26 减去 `rad_intensify_mark`/`teleporter_crit` 两个已确认无意义迁移的）**全部完成**，只剩 Batch 7 的收尾审计。
 
-**待办（Batch 7）**：收尾审计——确认全部已迁移效果都声明了 `:lifecycle :transient`，`effect_controller.clj` 里 `:singleton` 分支此时应该已经不再被任何现有战斗特效使用；更新 `docs/04-systems/VFX_CORE.md` 记录迁移完成；`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——保持未排期状态。
+**已完成（`793d096d2`/`e22949e14`）——Batch 7，收尾审计**：`grep` 全部 `arc_beam/impl/*.clj` 对应的 `_fx.clj` 文件里 `:lifecycle :transient` 的声明数量，只找到 23 个而不是预期的 24 个——**`blood_retrograde_fx.clj` 在 Batch 3 被漏改了**，`:lifecycle` 缺失（因而默认落回 `:singleton`），`:initial-state` 也还是旧的 `{:effect-state {} :splashes {} :sprays {}}` owner-map 形状，没有跟着 impl 文件一起拍平成 `{}`。这不只是文档层面的疏漏——`_fx.clj` 的 `:initial-state` 会覆盖 impl 文件自己注册的 `effect-initial-state`（见 `arc_beam.clj` 的 `resolve-initial-state`），所以 Batch 3 提交（`592e904ea`）之后，已经拍平的 `blood_retrograde.clj` 实际上一直拿着错误形状的初始状态在跑：`:perform` 分支的 `(update store* :splashes (fnil conj []) ...)` 打在一个已存在的 `{}`（map）上而不是 `nil`，`fnil` 的兜底完全没生效——今天看不出问题纯粹是因为 `combat_content.clj` 的 `:perform` 事件从来不带 `:splashes`/`:sprays` 数据（Batch 3 已确认的死分支），这个 `update` 调用永远是空操作；一旦 `combat_content.clj` 那边被修好，往一个 map 里 `conj` 多个记录会直接抛异常。已在这次审计里修好并单独提交。
+
+审计过程中还发现一个原计划遗漏的类别：**除了已知要另开批次的 5 个直接 `fx-spec/register!` 效果（`scatter_bomb`/`mine_ray`/`electron_missile`/`storm_wing`/`vec_reflection`）和 2 个故意推迟的死触发效果（`rad_intensify_mark`/`teleporter_crit`），还有 4 个效果压根不在原计划的 26 个统计范围内**：`body_intensify`/`location_teleport`（`build-spec` 用 `:runtime :none`，没有 `:level`/`:hand` 状态机可拍平，`:lifecycle` 对它们没有实际意义）、`arc_gen`/`thunder_bolt-strike`（没有自己的 impl 文件，走 `arc_beam.clj` 自己的通用默认渲染器——`build-arc-plan`/`tick-arc-state!`/`ensure-arc-store`，这套默认实现本身还是 owner-map 形状，P1.1/P1.2 全程没有碰过）。加上这 4 个，`effect_controller.clj` 的 `:singleton` 分支目前实际服务 **11 个**效果，不是原计划设想的"迁移完成后只剩两个故意推迟的"。详细清单和各自原因见 `VFX_CORE.md` 的"实例模型"一节，这里不重复。
+
+至此 Batch 0-7 全部完成：`:lifecycle` 分派基础设施、`:destroy` 钩子、`instance-for-owner`/`update-state-for-owner!` API 都已就位并有回归测试覆盖；24/26 个原计划效果迁移到真实 per-instance；`VFX_CORE.md` 已重写"运行时流程"/"实例模型"两节反映当前状态。剩余未迁移的 11 个效果（2 个故意推迟 + 4 个原计划外 + 5 个另开批次）全部有明确记录，不是被遗忘或误判为"已完成"。**P1.1/P1.2/P1.3 到此结束**，后续如果要继续扩大范围（迁移 `arc_beam.clj` 自己的默认渲染器、迁移 5 个直接注册效果、给 `rad_intensify_mark`/`teleporter_crit` 设计新触发机制），是独立的新工单，不在这份工单的范围内。
 
 ### F. presentation-core 剩余部分（P2.1/P2.2 有意重新定位并完成；死代码已删；P2.6 未动）
 
