@@ -5,13 +5,13 @@
 (deftest normalize-provider-contract-test
   (is (= {:id :demo
           :priority 42
-          :skill-namespaces ['cn.li.ac.content.ability.electromaster.railgun]
+          :skill-namespaces ['cn.li.ac.content.ability.generic.brain-course]
           :fx-namespaces []}
          (core/normalize-provider
            {:id :demo
             :priority 42
-            :skill-namespaces ['cn.li.ac.content.ability.electromaster.railgun
-                               'cn.li.ac.content.ability.electromaster.railgun]
+            :skill-namespaces ['cn.li.ac.content.ability.generic.brain-course
+                               'cn.li.ac.content.ability.generic.brain-course]
             :fx-namespaces []}))))
 
 (deftest provider-sort-key-orders-priority-then-id-test
@@ -22,7 +22,7 @@
 
 (deftest base-family-and-fx-namespace-landscan-test
   (is (= :electromaster
-         (core/base-family 'cn.li.ac.content.ability.electromaster/railgun))
+         (core/base-family 'cn.li.ac.content.ability.electromaster/thunder-bolt))
       "family segment follows the ability path segment")
-  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/railgun-fx)))
-  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/railgun))))
+  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/thunder-bolt-fx)))
+  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/thunder-bolt))))

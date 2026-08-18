@@ -124,19 +124,6 @@
                         :radius 5.0}
                        {:op :vfx :effect-id :location-teleport
                         :event :release :params {:strength 1.0}}]}}
-    {:id :railgun
-     :revision 1
-     :activation :instant
-     :cost {:cp 30}
-     :cooldown {:ticks 40}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :raycast
-                        :distance 64.0 :result-ref :hit}
-                       {:op :require :predicate :hit}
-                       {:op :damage :amount 28.0 :type :electric
-                        :target-ref :hit}
-                      {:op :vfx :effect-id :railgun-shot
-                        :event :release :params-ref :hit}]}}
     ;; The deleted defskill never scanned for ore blocks server-side despite
     ;; the name -- it's an unconditional self-blindness + a client-facing FX
     ;; event carrying :range/:advanced?, presumably driving purely

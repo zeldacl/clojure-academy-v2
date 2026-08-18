@@ -4,7 +4,6 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-manip]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.railgun-shot]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.ray-barrage]

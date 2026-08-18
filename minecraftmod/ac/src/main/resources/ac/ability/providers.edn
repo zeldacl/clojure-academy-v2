@@ -6,7 +6,6 @@
    cn.li.ac.content.ability.electromaster.mag-manip
    cn.li.ac.content.ability.electromaster.mag-movement
    cn.li.ac.content.ability.electromaster.mine-detect
-   cn.li.ac.content.ability.electromaster.railgun
    cn.li.ac.content.ability.electromaster.thunder-bolt
    cn.li.ac.content.ability.electromaster.thunder-clap]
   :fx-namespaces
@@ -15,7 +14,6 @@
    cn.li.ac.content.ability.electromaster.mag-manip-fx
    cn.li.ac.content.ability.electromaster.mag-movement-fx
    cn.li.ac.content.ability.electromaster.mine-detect-fx
-   cn.li.ac.content.ability.electromaster.railgun-fx
    cn.li.ac.content.ability.electromaster.thunder-bolt-fx
    cn.li.ac.content.ability.electromaster.thunder-clap-fx]}
  {:id :generic

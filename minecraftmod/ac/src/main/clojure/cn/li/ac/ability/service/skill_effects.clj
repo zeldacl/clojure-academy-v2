@@ -36,10 +36,6 @@
          apply-cooldown!
          enforce-overload-floor-in-session!
          enforce-overload-floor!
-         mark-railgun-coin-judged!
-         mark-railgun-coin-judged-in-session!
-         clear-railgun-coin-judged!
-         clear-railgun-coin-judged-in-session!
          gain-exp!
          get-player-state
          get-player-state-in-session!
@@ -229,36 +225,6 @@
       true)
     false))
 
-(defn mark-railgun-coin-judged!
-  "Record the currently judged railgun coin UUID in runtime state."
-  [player-id coin-uuid]
-  (mark-railgun-coin-judged-in-session! (resolve-session-id)
-                                        player-id
-                                        coin-uuid))
-
-(defn mark-railgun-coin-judged-in-session!
-  [session-id player-id coin-uuid]
-  (command-rt/run-command-in-session!
-   session-id
-   player-id
-   {:command :set-railgun-coin-judged-uuid
-    :coin-uuid coin-uuid})
-  true)
-
-(defn clear-railgun-coin-judged!
-  "Clear the one-shot judgement lock for railgun coin QTE."
-  [player-id]
-  (clear-railgun-coin-judged-in-session! (resolve-session-id)
-                                         player-id))
-
-(defn clear-railgun-coin-judged-in-session!
-  [session-id player-id]
-  (command-rt/run-command-in-session!
-   session-id
-   player-id
-   {:command :clear-railgun-coin-judged-uuid})
-  true)
-
 (defn gain-exp!
   "Apply exp gain from :exp-policy {:amount n :rate n} when present.
   Multiplies rate by the skill's :exp-incr-speed."
@@ -336,6 +302,5 @@
 (defn current-cp-in-session!
   [session-id player-id]
   (double (or (player-path-in-session! session-id player-id [:resource-data :cur-cp] 0.0) 0.0)))
-
 
 

@@ -815,19 +815,6 @@
       (rejected player-state :context-not-found)
       (ok (assoc-in player-state [:context-registry ctx-id :input-state] input-state))))
 
-  (defn- cmd-set-railgun-coin-judged-uuid
-    [player-state {:keys [coin-uuid]}]
-    (if (some? coin-uuid)
-      (ok (assoc-in player-state [:runtime :railgun :coin-judged-uuid] coin-uuid))
-      (rejected player-state :invalid-coin-uuid)))
-
-  (defn- cmd-clear-railgun-coin-judged-uuid
-    [player-state _]
-    (let [railgun (get-in player-state [:runtime :railgun])]
-      (if (map? railgun)
-        (ok (assoc-in player-state [:runtime :railgun] (dissoc railgun :coin-judged-uuid)))
-        (ok player-state))))
-
 ;; ============================================================================
 ;; Sub-Reducer: player runtime (delayed projectiles, radiation marks, vecmanip)
 ;; ============================================================================
@@ -1002,8 +989,6 @@
     :context-remove-toggle-state (cmd-context-remove-toggle-state player-state command)
     :context-clear-skill-state (cmd-context-clear-skill-state player-state command)
     :context-set-input-state (cmd-context-set-input-state player-state command)
-    :set-railgun-coin-judged-uuid (cmd-set-railgun-coin-judged-uuid player-state command)
-    :clear-railgun-coin-judged-uuid (cmd-clear-railgun-coin-judged-uuid player-state command)
     :claim-projectile (cmd-claim-projectile player-state command)
     :replace-projectile-claims (cmd-replace-projectile-claims player-state command)
     :clear-player-projectile-claims (cmd-clear-player-projectile-claims player-state command)

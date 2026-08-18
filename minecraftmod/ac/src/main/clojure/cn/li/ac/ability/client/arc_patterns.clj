@@ -128,23 +128,7 @@
     :fork-length   0.4
     :fork-angle    0.3}
 
-   :railgun
-   {:name          "railgunArc"
-    :segments      12
-    :amplitude     0.35
-    :width         0.10
-    :core-ratio    0.35
-    :tex-wiggle    0.4
-    :show-wiggle   0.2
-    :hide-wiggle   0.2
-    :life-ticks    30
-    :color-outer   {:r 160 :g 230 :b 255}
-    :color-inner   {:r 255 :g 255 :b 255}
-    :color-line    {:r 220 :g 250 :b 255}
-    :flicker       0.98
-    :fork-count    4
-    :fork-length   0.55
-    :fork-angle    0.7}})
+   })
 
 (defn get-pattern
   "Look up a named arc pattern. Falls back to :weak."
