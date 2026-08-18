@@ -39,26 +39,7 @@
    :line-rgb    {:r 165 :g 230 :b 255}
    :line-alpha  (fn [_ life] (+ 40.0 (* 120.0 (fade-out-factor life))))})
 
-
-
-
-
-
-
-
-
 (def ^:private charge-ttl 32)
-
-(defn- all-beam-effects []
-  (mapcat val (:beam-effects (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :railgun-shot))))
-
-(defn- all-charge-effects []
-  (vals (:charging (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :railgun-shot))))
-
-(defn- ensure-store [store]
-  (if (contains? (or store {}) :beam-effects)
-    (or store {:beam-effects {} :charging {}})
-    {:beam-effects {} :charging {}}))
 
 ;; SubArc: 30 ticks of life, a fixed random orientation, and a template that
 ;; is re-rolled about every other tick. `draw` starts false — an arc flickers
@@ -111,29 +92,56 @@
     [(vec3/v3 eye-x eye-y eye-z) (vec3/v3 hit-x hit-y hit-z)]
     :else nil))
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- :beams is a flat vector and
+;; :charging a single value instead of owner-maps (owner isolation comes
+;; from instance identity itself).
+;;
+;; Unlike most of this batch, the case dispatch here is NOT all dead:
+;; combat_content.clj's :railgun skill sends exactly ONE :vfx step, ever:
+;; :event :release with :params-ref :hit (not a literal :params map like
+;; every other effect in this migration -- it forwards the :raycast query's
+;; own result straight through). That result carries :eye-x/:eye-y/:eye-z
+;; (added by combat_runtime.clj's :raycast query-port) and :hit-x/:hit-y/
+;; :hit-z (part of the raycast result itself -- see attack.clj's
+;; block-impact-point and every teleport-dest namespace for the same
+;; fields treated as authoritative elsewhere in this codebase). :release
+;; doesn't match :charge-start/:charge-update/:charge-end, so it falls to
+;; the trailing default branch -- which is exactly the branch that reads
+;; those eye-*/hit-* fields and spawns a beam. The beam, the arcs, and the
+;; impact ring genuinely render in production today.
+;;
+;; What's dead: :railgun's program is a single flat :sequence (no charging
+;; phase at all), so :charge-start/:charge-update/:charge-end never fire —
+;; the charge hand-quad animation never plays. That was already true before
+;; this migration (there is nothing here for this migration to preserve
+;; "more" or "less" faithfully); :charging is kept as a real, if currently
+;; always-nil, field for the same reason :level-only effects elsewhere in
+;; this migration keep dead branches: preserve the mechanism, not just the
+;; branch that happens to fire today.
 (defn- enqueue-state!
   "Charge events keep a self-contained one-shot arc-burst state. A live
-  :charging entry also keeps level-effect rendering active before a beam exists."
-  [store ctx-id channel owner-key payload]
-  (let [store* (ensure-store store)
-        owner-key* (or owner-key [:ctx ctx-id])
+  :charging entry also keeps level-effect rendering active before a beam
+  exists."
+  [store ctx-id channel _owner-key payload]
+  (let [store* (or store {})
         {:keys [mode distance source-player-id world-id]} (or payload {})
         hit-distance distance
         [start end] (beam-endpoints payload)
-        base-meta {:owner-key owner-key*
-                   :ctx-id ctx-id
+        base-meta {:ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case mode
       :charge-start
-      (assoc-in store* [:charging owner-key*]
-                {:ttl charge-ttl
-                 :max-ttl charge-ttl
-                 ;; Wall clock, so the hand quad picks frames off the same
-                 ;; timebase the entity billboard does — see charge-hand-ops.
-                 :started-ms (System/currentTimeMillis)
-                 :source-player-id source-player-id})
+      (assoc store* :charging
+             {:ttl charge-ttl
+              :max-ttl charge-ttl
+              ;; Wall clock, so the hand quad picks frames off the same
+              ;; timebase the entity billboard does — see charge-hand-ops.
+              :started-ms (System/currentTimeMillis)
+              :source-player-id source-player-id})
 
       ;; RailgunHandEffect is a self-contained 1.6-second animation. Charging
       ;; updates and cancellation do not restart or delete it upstream.
@@ -141,16 +149,16 @@
       store*
 
       (if (and start end)
-        (update-in store* [:beam-effects owner-key*] (fnil conj [])
-                   (merge base-meta
-                          {:start start
-                           :end end
-                           :mode (or mode :block-hit)
-                           :hit-distance (double (or hit-distance 18.0))
-                           :ttl beam-life-ticks
-                           :max-ttl beam-life-ticks
-                           :arc-placements (arc-placements start end)
-                           :wiggle-seed (* 2.0 Math/PI (rand))}))  ;; random phase [0, 2π)
+        (update store* :beams (fnil conj [])
+                (merge base-meta
+                       {:start start
+                        :end end
+                        :mode (or mode :block-hit)
+                        :hit-distance (double (or hit-distance 18.0))
+                        :ttl beam-life-ticks
+                        :max-ttl beam-life-ticks
+                        :arc-placements (arc-placements start end)
+                        :wiggle-seed (* 2.0 Math/PI (rand))}))  ;; random phase [0, 2π)
         store*))))
 
 ;; EntityRailgunFX.onUpdate: arcHandler.clear() at ticksExisted == 30 — the
@@ -164,18 +172,25 @@
       (assoc beam :arc-placements [])
       (update beam :arc-placements #(vec (keep tick-sub-arc %))))))
 
+(defn- tick-charge
+  [charging]
+  (when charging
+    (let [ttl (dec (long (or (:ttl charging) 0)))]
+      (when (pos? ttl)
+        (assoc charging :ttl ttl)))))
+
 (defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Stay alive while a beam is still animating or a charge is
+   still counting down."
   [store]
-  (let [store* (ensure-store store)]
-    (-> store*
-        (update :beam-effects
-          (fn [by-owner]
-            (store-tick/tick-ttl-items-by-owner
-              (reduce-kv (fn [acc owner beams]
-                           (assoc acc owner (mapv tick-beam-arcs beams)))
-                         {}
-                         (or by-owner {})))))
-        (update :charging store-tick/tick-ttl-states-by-owner))))
+  (let [store* (or store {})
+        beams (store-tick/tick-ttl-vec (mapv tick-beam-arcs (:beams store*)))
+        charging (tick-charge (:charging store*))]
+    (when (or (seq beams) charging)
+      (cond-> (assoc store* :beams beams)
+        charging (assoc :charging charging)
+        (not charging) (dissoc :charging)))))
 
 (defn- visible-beam [beam]
   ;; EntityRayBase grows to full length over the first 150 ms.
@@ -313,16 +328,20 @@
   above) — a beam's endpoints never change after it's fired, so converting
   once there instead of once per frame here removes an otherwise-per-frame
   allocation for every live beam."
-  [camera-pos hand-center-pos game-ticks]
-  (let [beams (all-beam-effects)
+  [camera-pos hand-center-pos _game-ticks]
+  (let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :railgun-shot)
+        beams (:beams state)
         ^V3 cam-v (vec3/map->v3 camera-pos)
         player-uuid (:player-uuid hand-center-pos)
-        charge-state (when player-uuid
-                       (some (fn [state]
-                               (when (or (nil? (:source-player-id state))
-                                         (= player-uuid (:source-player-id state)))
-                                 state))
-                             (all-charge-effects)))
+        charging (:charging state)
+        ;; One real vfx-core instance now exists per shot; the charge quad
+        ;; still only draws for the LOCAL player's own instance, since
+        ;; RailgunHandEffect's first-person branch only ever meant "my own
+        ;; hand" (mirrors mag_movement.clj's precedent for this owner-check).
+        charge-state (when (and charging player-uuid
+                                 (or (nil? (:source-player-id charging))
+                                     (= player-uuid (:source-player-id charging))))
+                       charging)
         beam-plan (mapcat (fn [beam]
                             (let [visible (visible-beam beam)]
                               (concat
@@ -349,24 +368,17 @@
     (when (or (seq beam-plan) (seq charge-plan))
       {:ops (vec (concat beam-plan charge-plan))})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:railgun-shot :level] [_ _] {:beam-effects {} :charging {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:railgun-shot :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:railgun-shot :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:railgun-shot :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :railgun-shot
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :railgun-shot [_ store owner-key]
-  ;; Only the charge marker is context-bound — it exists to keep the effect
-  ;; non-idle while charging, and must stop when the context does.
-  ;;
-  ;; The beam must NOT be dropped here. Upstream's EntityRailgunFX is a world
-  ;; entity spawned by performClient with its own ~2.5 s life; nothing kills it
-  ;; when the ability context ends. Railgun's context ends immediately after
-  ;; firing (the charge window closes on the same tick the shot goes out, and
-  ;; MSG-CTX-TERMINATED then reaches client_ui_hooks' clear-effect-owner!),
-  ;; so clearing :beam-effects here deleted every beam a tick or two after it
-  ;; was created — the shot landed and dealt damage, the charge animation
-  ;; played, and the beam itself was never drawn. Live beams expire on their
-  ;; own ttl (beam-life-ticks) via tick-state!.
-  (update store :charging dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (no loop sound; :charging is plain data).
+;; The beam already carries its own bounded ttl (beam-life-ticks) regardless
+;; of context lifetime, same as it always did -- only now that also means
+;; the vfx-core instance itself naturally ends once both :beams and
+;; :charging are empty (see tick-state! above), instead of leaking a
+;; permanently-idle instance per shot.

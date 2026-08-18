@@ -227,6 +227,21 @@
       (fn [state]
         (set-handler-state state kind (apply f (handler-state state kind) args))))))
 
+(defn update-state-for-owner!
+  "Write counterpart to instance-for-owner: apply `f` to `owner`'s live
+   :transient instance of effect-id, same shape as update-state! but scoped
+   to one owner instead of \"the first instance of this effect-id\" (which,
+   for a :transient effect with more than one live caster, is an arbitrary
+   choice -- see mine_detect.clj's build-plan for why a :level build-plan-fn
+   sometimes needs to write back into ITS OWN instance's state, not just
+   read it: a rescan result computed at sample time, when a query-fn the
+   tick-state-fn never receives is available)."
+  [effect-id owner kind f & args]
+  (when-let [instance-id (core/instance-for-owner (runtime) effect-id owner)]
+    (core/update-instance-state! (runtime) instance-id
+      (fn [state]
+        (set-handler-state state kind (apply f (handler-state state kind) args))))))
+
 (defn enqueue!
   [effect-id kind ctx-id channel payload & {:keys [owner-key]}]
   (when-let [handler (get (effect-handlers effect-id) kind)]

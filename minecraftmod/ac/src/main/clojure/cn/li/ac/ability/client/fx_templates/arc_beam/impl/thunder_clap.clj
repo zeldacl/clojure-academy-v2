@@ -68,7 +68,14 @@
 
 (defn- tick-surround
   "Advance a surround batch; regenerate a fresh one when every arc died
-  (EntitySurroundArc.onUpdate: if(arcHandler.isEmpty()) doGenerate())."
+  (EntitySurroundArc.onUpdate: if(arcHandler.isEmpty()) doGenerate()) --
+  including when `surround` itself is nil (no batch has ever been
+  generated for this instance): `arcs*` is then `[]`, and `every?` on an
+  empty collection is vacuously true, so this branch fires immediately.
+  That is not a special case added by this migration -- it is how the
+  pre-migration code already behaved too, and it is load-bearing: see
+  thunder_clap.clj's enqueue-state! comment for why a live instance's
+  :surround can genuinely start nil today."
   [{:keys [templates arcs] :as surround}]
   (let [arcs* (mapv tick-sub-arc arcs)]
     (if (every? :dead arcs*)
@@ -145,112 +152,113 @@
    :charge-ratio (double (or charge-ratio 0.0))
    :bolt (arc-fx/strike-bolt-segments target)})
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state/:tails/
+;; :impacts owner-map wrapping (owner isolation comes from instance
+;; identity itself). :tails becomes a single optional :tail (an instance
+;; only ever has at most one, created once by :end); :impacts stays a flat
+;; vector (a single cast can accumulate more than one strike -- :perform
+;; and :end can each append one).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration.
+;; combat_content.clj's :thunder-clap skill sends exactly ONE :vfx step,
+;; ever: :event :perform from its :release phase, with
+;; :params {:min-charge-ticks 40 :max-charge-ticks 60} -- no :start/:update/
+;; :end, and no :target/:ticks/:charge-ratio/:caster-pos/:performed?. Unlike
+;; most of this batch, :perform DOES match a real case branch here, and
+;; what it does is genuinely surprising: it sets :active? true with
+;; :target/:caster-pos both nil (so the ripple aim mark and the impact
+;; strike below it -- gated on `(map? target)` -- never fire), but the very
+;; next tick's tick-surround call regenerates a fresh :surround batch from
+;; nil via the vacuous-truth accident documented on tick-surround above.
+;; The net live behavior: crackling EntitySurroundArc-style arcs appear
+;; around the caster's own position forever (:active? never goes false,
+;; :end never fires) and the walk-speed override eases down to its 0.001
+;; floor and stays there -- no ripple mark, no impact strike, no fade-out
+;; tail (since :end, the only thing that would create one, never fires
+;; either). This is exactly as surprising in production today as it reads
+;; here; not something this migration invented or is scoped to fix.
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (or store {:effect-state {} :tails {} :impacts {}})
+  [store ctx-id channel _owner-key payload]
+  (let [store* (or store {})
         {:keys [mode ticks charge-ratio target caster-pos performed? source-player-id world-id]} (or payload {})
-        owner-key* (or owner-key [:ctx ctx-id])
-        base-meta {:owner-key owner-key*
-                   :ctx-id ctx-id
+        base-meta {:ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
-                   :world-id world-id}
-        effect-state (:effect-state store*)
-        current-st (get effect-state owner-key*)]
+                   :world-id world-id}]
     (case mode
       :start
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta
-                       {:active? true
-                        :ticks 0
-                        :charge-ratio 0.0
-                        :target nil
-                        :caster-pos caster-pos
-                        :performed? false
-                        :surround (generate-surround-batch)}))
+      (merge store* base-meta
+             {:active? true
+              :ticks 0
+              :charge-ratio 0.0
+              :target nil
+              :caster-pos caster-pos
+              :performed? false
+              :surround (generate-surround-batch)})
 
       :update
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta
-                       current-st
-                       {:active? true
-                        :ticks (long (or ticks 0))
-                        :charge-ratio (double (or charge-ratio 0.0))
-                        :target target
-                        :caster-pos (or caster-pos (:caster-pos current-st))}))
+      (assoc (merge base-meta store*)
+             :active? true
+             :ticks (long (or ticks 0))
+             :charge-ratio (double (or charge-ratio 0.0))
+             :target target
+             :caster-pos (or caster-pos (:caster-pos store*)))
 
       :perform
-      (let [next-store (assoc-in store* [:effect-state owner-key*]
-                                 (merge base-meta
-                                        current-st
-                                        {:active? true
-                                         :ticks (long (or ticks (:ticks current-st) 0))
-                                         :charge-ratio (double (or charge-ratio (:charge-ratio current-st) 0.0))
-                                         :target (or target (:target current-st))
-                                         :caster-pos (or caster-pos (:caster-pos current-st))
-                                         :performed? true}))]
+      (let [next-store (assoc (merge base-meta store*)
+                               :active? true
+                               :ticks (long (or ticks (:ticks store*) 0))
+                               :charge-ratio (double (or charge-ratio (:charge-ratio store*) 0.0))
+                               :target (or target (:target store*))
+                               :caster-pos (or caster-pos (:caster-pos store*))
+                               :performed? true)]
         (if (map? target)
-          (update-in next-store [:impacts owner-key*] (fnil conj [])
-                     (merge base-meta (strike-impact target charge-ratio 8)))
+          (update next-store :impacts (fnil conj []) (merge base-meta (strike-impact target charge-ratio 8)))
           next-store))
 
       :end
-      (let [without-active (update store* :effect-state dissoc owner-key*)
-            ;; Original kills the caster-only ripple immediately but delays
-            ;; EntitySurroundArc removal by 10 ticks.
-            next-store (if current-st
-                         (assoc-in without-active [:tails owner-key*]
-                                   (merge base-meta current-st
-                                          {:active? false :ttl 10}))
-                         without-active)]
+      ;; Original kills the caster-only ripple immediately but delays
+      ;; EntitySurroundArc removal by 10 ticks -- :tail carries the
+      ;; surround batch (and its position) forward for that delay.
+      (let [without-active (dissoc store* :active? :ticks :charge-ratio :target
+                                    :caster-pos :performed? :surround)
+            next-store (assoc without-active :tail
+                               (merge base-meta store* {:active? false :ttl 10}))]
         (if (and (map? target) performed?)
-          (update-in next-store [:impacts owner-key*] (fnil conj [])
-                     (merge base-meta (strike-impact target charge-ratio 6)))
+          (update next-store :impacts (fnil conj []) (merge base-meta (strike-impact target charge-ratio 6)))
           next-store))
 
       store*)))
 
-(defn- tick-active-states
-  "Keep :active? states, increment :ticks, and advance their surround-arc
-  batches (the arcs keep flickering while charging, as upstream's
-  EntitySurroundArc.onUpdate runs every tick)."
-  [by-owner]
-  (persistent!
-   (reduce-kv (fn [acc owner-key st]
-                (if (:active? st)
-                  (assoc! acc owner-key
-                          (-> st
-                              (update :ticks (fnil inc 0))
-                              (update :surround tick-surround)))
-                  acc))
-              (transient {})
-              by-owner)))
-
-(defn- tick-tail-states
-  "Decrement :ttl on tail states (drop at 0), and keep the surround arcs
-  flickering during the 10-tick removal delay — upstream's surroundArc keeps
-  updating until it dies."
-  [by-owner]
-  (persistent!
-   (reduce-kv (fn [acc owner-key st]
-                (let [ttl (dec (long (or (:ttl st) 0)))]
-                  (if (pos? ttl)
-                    (assoc! acc owner-key
-                            (-> st
-                                (assoc :ttl ttl)
-                                (update :ticks (fnil inc 0))
-                                (update :surround tick-surround)))
-                    acc)))
-              (transient {})
-              by-owner)))
-
 (defn- tick-state!
-  [store]
-  (let [store* (or store {:effect-state {} :tails {} :impacts {}})]
-    (-> store*
-        (update :effect-state tick-active-states)
-        (update :tails tick-tail-states)
-        (update :impacts store-tick/tick-ttl-items-by-owner))))
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. :active? and :tail are mutually exclusive (matching the
+   pre-migration :effect-state/:tails split -- :end always moves out of the
+   former into the latter), :impacts ticks independently of either."
+  [state]
+  (let [state* (or state {})
+        impacts (store-tick/tick-ttl-vec (:impacts state*))]
+    (cond
+      (:active? state*)
+      (assoc state*
+             :ticks (inc (long (or (:ticks state*) 0)))
+             :surround (tick-surround (:surround state*))
+             :impacts impacts)
+
+      (:tail state*)
+      (let [tail (:tail state*)
+            ttl (dec (long (or (:ttl tail) 0)))]
+        (if (pos? ttl)
+          (cond-> {:tail (-> tail (assoc :ttl ttl)
+                              (update :ticks (fnil inc 0))
+                              (update :surround tick-surround))}
+            (seq impacts) (assoc :impacts impacts))
+          (when (seq impacts) {:impacts impacts})))
+
+      :else
+      (when (seq impacts) {:impacts impacts}))))
 
 (defn- bolt-alpha
   "Flash envelope for the descending channel: bright on the strike frame,
@@ -322,51 +330,41 @@
       (= (str (:source-player-id st)) (str (:player-uuid hand-center-pos)))))
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state tails impacts]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :thunder-clap)
-        active-states (filter :active? (vals effect-state))
-        own-tc (some #(when (own-state? % hand-center-pos) %) active-states)
+  (let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :thunder-clap)
+        active? (boolean (:active? state))
+        own? (own-state? state hand-center-pos)
+        ticks (long (or (:ticks state) 0))
         ;; The surround arcs are broadcast and public (matches original's
         ;; EntitySurroundArc, spawned for everyone to see); the ripple mark
-        ;; stays caster-only (matches original's isLocal EntityRippleMark) —
-        ;; per-state below, not per-message, since both ride the same fx.
+        ;; stays caster-only (matches original's isLocal EntityRippleMark).
         charge-ops
-        (vec (mapcat
-               (fn [st]
-                 (let [own? (own-state? st hand-center-pos)
-                       ;; Zero-latency live position for the caster's own
-                       ;; client; synced :caster-pos (from the fx payload)
-                       ;; for everyone else observing this cast.
-                       center (if (and own? hand-center-pos)
-                                (dissoc hand-center-pos :player-uuid)
-                                (:caster-pos st))
-                       ticks (long (or (:ticks st) 0))]
-                   (concat
-                     (when (and (map? center) (:surround st))
-                       (surround-ops (rv3/map->v3 center) (:surround st)))
-                     (when (and own? (map? (:target st)))
-                       (ripple-mark-ops (live-target (:target st)) ticks)))))
-               active-states))
-        tail-ops
-        (vec
-          (mapcat (fn [st]
-                    (when (and (map? (:caster-pos st)) (:surround st))
-                      (surround-ops (rv3/map->v3 (:caster-pos st)) (:surround st))))
-                  (vals tails)))
-        impact-render-ops (vec (mapcat impact-ops (mapcat val impacts)))
-        ws (when own-tc (local-walk-speed (:ticks own-tc)))]
+        (when active?
+          (let [;; Zero-latency live position for the caster's own client;
+                ;; synced :caster-pos (from the fx payload) for everyone
+                ;; else observing this cast.
+                center (if (and own? hand-center-pos)
+                         (dissoc hand-center-pos :player-uuid)
+                         (:caster-pos state))]
+            (concat
+              (when (and (map? center) (:surround state))
+                (surround-ops (rv3/map->v3 center) (:surround state)))
+              (when (and own? (map? (:target state)))
+                (ripple-mark-ops (live-target (:target state)) ticks)))))
+        tail (:tail state)
+        tail-ops (when (and tail (map? (:caster-pos tail)) (:surround tail))
+                   (surround-ops (rv3/map->v3 (:caster-pos tail)) (:surround tail)))
+        impact-render-ops (mapcat impact-ops (:impacts state))
+        ws (when (and active? own?) (local-walk-speed ticks))]
     (when (or (seq charge-ops) (seq tail-ops) (seq impact-render-ops) ws)
       {:ops (vec (concat charge-ops tail-ops impact-render-ops))
        :local-walk-speed ws})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:thunder-clap :level] [_ _] {:effect-state {} :tails {} :impacts {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:thunder-clap :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:thunder-clap :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:thunder-clap :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :thunder-clap
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :thunder-clap [_ store owner-key]
-  (-> store
-      (update :effect-state dissoc owner-key)
-      (update :tails dissoc owner-key)
-      (update :impacts dissoc owner-key)))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

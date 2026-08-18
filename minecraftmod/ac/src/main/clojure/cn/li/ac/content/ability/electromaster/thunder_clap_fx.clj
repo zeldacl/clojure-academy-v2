@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :thunder-clap
-     :initial-state (fn [] {:effect-state {} :tails {} :impacts {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :thunder-clap/fx-start :mode :start}
                 :update {:topic :thunder-clap/fx-update :mode :update
                          :level-payload (fn [_ _ p]

@@ -13,7 +13,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :railgun-shot
-     :initial-state (fn [] {:beam-effects {} :charging {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:shot {:topic :railgun/fx-shot}
                 :reflect {:topic :railgun/fx-reflect}
                 ;; :level target is the idle-gating marker — see

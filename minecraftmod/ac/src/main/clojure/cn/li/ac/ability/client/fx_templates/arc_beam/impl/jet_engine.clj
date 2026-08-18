@@ -15,8 +15,6 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam])
   (:import [cn.li.mcmod.math V3]))
 
-
-
 (def ^:private mark-ttl 8)
 (def ^:private trigger-ttl 20)
 (def ^:private min-segment-length 1.0e-5)
@@ -115,14 +113,6 @@
                    (ru/line-op base tip inner)]))
               (range 8)))))
 
-
-
-
-
-
-
-
-
 ;; RippleMarkRender: three flat quads on the aim point's XZ plane, staggered
 ;; across one 3.6-second cycle, each rising while it shrinks and fading in and
 ;; out over 1.6 seconds at either end. Drawn with depth test and depth write
@@ -196,10 +186,25 @@
   [entity-uuid]
   nil)
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :fx-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today.
+;; combat_content.clj's :jet-engine skill sends exactly ONE :vfx step,
+;; ever: :event :release from its :release phase, with :params {:range 12.0}
+;; -- no :mark-start/:mark-update/:mark-end/:trigger-start/:trigger-update/
+;; :trigger-end, and none of the :target/:pos/:owner-pos/:hold-ticks/
+;; :trigger-ticks fields these branches read. :release itself falls through
+;; to the trailing `state*` no-op default. In production today neither the
+;; ripple aim mark nor the trigger trail/impact visuals ever render, no
+;; screen shake/walk-speed slowdown ever applies -- migrated structurally
+;; only.
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (or store {:fx-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+  [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [mode start target pos owner-pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})
         ;; Capture the effect owner at enqueue time (fx events run with the
         ;; client session bound) so the per-tick particle queueing in
@@ -214,31 +219,28 @@
         ;; fitting sound is found.
         #_(client-sounds/queue-current-sound-effect!
            {:type :sound :sound-id (modid/namespaced-path "md.jet_charge") :volume 0.45 :pitch 1.0})
-        (assoc-in store* [:fx-state owner-key*]
-                  {:queue-owner queue-owner
-                   :phase :marking
-                   :target target
-                   :hold-ticks (long (or hold-ticks 0))
-                   :ttl mark-ttl}))
+        (merge state*
+               {:queue-owner queue-owner
+                :phase :marking
+                :target target
+                :hold-ticks (long (or hold-ticks 0))
+                :ttl mark-ttl}))
 
       :mark-update
-      (assoc-in store* [:fx-state owner-key*]
-                (merge (get-in store* [:fx-state owner-key*])
-                       {:queue-owner queue-owner
-                        :phase :marking
-                        :target target
-                        :hold-ticks (long (or hold-ticks 0))
-                        :ttl mark-ttl}))
+      (merge state*
+             {:queue-owner queue-owner
+              :phase :marking
+              :target target
+              :hold-ticks (long (or hold-ticks 0))
+              :ttl mark-ttl})
 
       :mark-end
-      (let [st (get-in store* [:fx-state owner-key*])]
-        (if (= :triggering (:phase st))
-          store*
-          (update store* :fx-state dissoc owner-key*)))
+      (if (= :triggering (:phase state*))
+        state*
+        {})
 
       :trigger-start
-      (let [prev-state (get-in store* [:fx-state owner-key*])
-            entering-trigger? (not= :triggering (:phase prev-state))
+      (let [entering-trigger? (not= :triggering (:phase state*))
             spawned-uuid (when entering-trigger?
                            ;; Keep parity with upstream JetEngine: spawn diamond-shield once on trigger phase entry.
                            (spawn-diamond-shield!))]
@@ -248,124 +250,116 @@
           ;; once a fitting sound is found.
           #_(client-sounds/queue-current-sound-effect!
              {:type :sound :sound-id (modid/namespaced-path "md.jet_engine") :volume 0.8 :pitch 1.0}))
-        (assoc-in store* [:fx-state owner-key*]
-                  (merge prev-state
-                         {:queue-owner (or (:queue-owner prev-state) queue-owner)
-                          :phase :triggering
-                          :start start
-                          :target target
-                          :pos (or pos start)
-                          :trigger-ticks (long (or trigger-ticks 0))
-                          :ttl trigger-ttl
-                          :shield-entity-uuid (or spawned-uuid
-                                                  (:shield-entity-uuid prev-state))})))
+        (merge state*
+               {:queue-owner (or (:queue-owner state*) queue-owner)
+                :phase :triggering
+                :start start
+                :target target
+                :pos (or pos start)
+                :trigger-ticks (long (or trigger-ticks 0))
+                :ttl trigger-ttl
+                :shield-entity-uuid (or spawned-uuid
+                                        (:shield-entity-uuid state*))}))
 
       :trigger-update
-      (assoc-in store* [:fx-state owner-key*]
-                (merge (get-in store* [:fx-state owner-key*])
-                       {:phase :triggering
-                        :pos pos
-                        :owner-pos owner-pos
-                        :trigger-ticks (long (or trigger-ticks 0))
-                        :shield-entity-uuid (or shield-entity-uuid
-                                                (get-in store* [:fx-state owner-key* :shield-entity-uuid]))
-                        :ttl trigger-ttl}))
+      (merge state*
+             {:phase :triggering
+              :pos pos
+              :owner-pos owner-pos
+              :trigger-ticks (long (or trigger-ticks 0))
+              :shield-entity-uuid (or shield-entity-uuid
+                                      (:shield-entity-uuid state*))
+              :ttl trigger-ttl})
 
       :trigger-end
-      (let [st (get-in store* [:fx-state owner-key*])
-            shield-entity-uuid (:shield-entity-uuid st)]
-        (remove-diamond-shield! shield-entity-uuid)
-        (update store* :fx-state dissoc owner-key*))
+      (do
+        (remove-diamond-shield! (:shield-entity-uuid state*))
+        {})
 
-      store*)))
+      state*)))
 
 (defn- tick-state!
-  [store]
-  (let [store* (or store {:fx-state {}})]
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Preserved exactly as it was before this migration: the
+   per-owner ttl countdown, now applied directly to this one instance."
+  [state]
+  (let [state* (or state {})]
     ;; c_tUpdateEffect: `for (i <- 0 to 10)` is 11 MdParticles per tick — soft
     ;; md_particle dots at player.pos +/- 0.3, not vanilla spark lines.
-    (doseq [[_ st] (:fx-state store*)]
-      (when (= :triggering (:phase st))
-        (let [pos (or (:owner-pos st) (:pos st))]
-          (dotimes [_ 11]
-            (client-particles/queue-particle-effect! (:queue-owner st)
-              {:type :particle :particle-type (modid/namespaced-path "md_particle")
-               :x (+ (double (:x pos)) (- (rand 0.6) 0.3))
-               :y (+ (double (:y pos)) (- (rand 0.6) 0.3))
-               :z (+ (double (:z pos)) (- (rand 0.6) 0.3))
-               ;; A single particle takes offset-* * speed as its velocity
-               ;; verbatim (see the mcbase particle bridge); :motion-* is not
-               ;; read, so every mote drifted the same fixed 0.002 diagonal
-               ;; instead of the original's ranged(-.02, .02) per axis.
-               :count 1 :speed 1.0
-               :offset-x (- (rand 0.04) 0.02)
-               :offset-y (- (rand 0.04) 0.02)
-               :offset-z (- (rand 0.04) 0.02)})))))
-    (update store* :fx-state
-      (fn [states]
-        (into {}
-              (keep (fn [[owner-key st]]
-                      (let [ttl (long (or (:ttl st) 0))]
-                        (if (> ttl 1)
-                          [owner-key (update st :ttl dec)]
-                          (do
-                            (remove-diamond-shield! (:shield-entity-uuid st))
-                            nil)))))
-              states)))))
+    (when (= :triggering (:phase state*))
+      (let [pos (or (:owner-pos state*) (:pos state*))]
+        (dotimes [_ 11]
+          (client-particles/queue-particle-effect! (:queue-owner state*)
+            {:type :particle :particle-type (modid/namespaced-path "md_particle")
+             :x (+ (double (:x pos)) (- (rand 0.6) 0.3))
+             :y (+ (double (:y pos)) (- (rand 0.6) 0.3))
+             :z (+ (double (:z pos)) (- (rand 0.6) 0.3))
+             ;; A single particle takes offset-* * speed as its velocity
+             ;; verbatim (see the mcbase particle bridge); :motion-* is not
+             ;; read, so every mote drifted the same fixed 0.002 diagonal
+             ;; instead of the original's ranged(-.02, .02) per axis.
+             :count 1 :speed 1.0
+             :offset-x (- (rand 0.04) 0.02)
+             :offset-y (- (rand 0.04) 0.02)
+             :offset-z (- (rand 0.04) 0.02)}))))
+    (let [ttl (long (or (:ttl state*) 0))]
+      (if (> ttl 1)
+        (assoc state* :ttl (dec ttl))
+        (do
+          (remove-diamond-shield! (:shield-entity-uuid state*))
+          nil)))))
 
 (defn- build-plan
   [camera-pos _hand-center-pos _tick]
   (let [^V3 cam-v (when (map? camera-pos) (vec3/map->v3 camera-pos))
-        states (vals (:fx-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :jet-engine)))
-        marking-states (filter #(= :marking (:phase %)) states)
-        triggering-states (filter #(= :triggering (:phase %)) states)
-        mark-ops (vec
-                   (mapcat (fn [st]
-                             (when-let [target (:target st)]
-                               ;; Green, matching JetEngine's mark.color.set(51, 255, 51, 179).
-                               ;; The port drew a single pulsing line ring here; the original is
-                               ;; EntityRippleMark, three textured ripples expanding out of the
-                               ;; aim point on a 3.6s loop.
-                               (ripple-ops (vec3/map->v3 target)
-                                           (/ (double (or (:hold-ticks st) 0)) 20.0)
-                                           {:r 51 :g 255 :b 51})))
-                           marking-states))
-        trigger-ops (vec
-                      (mapcat (fn [st]
-                                (let [ttl (long (or (:ttl st) 0))
-                                      start (:start st)
-                                      pos (:pos st)
-                                      target (:target st)
-                                      trigger-ticks (long (or (:trigger-ticks st) 0))
-                                      alpha (int (* 215 (/ (double ttl) (double trigger-ttl))))
-                                      impact-color {:r 210 :g 250 :b 255 :a (min 180 (+ 40 alpha))}
-                                      impact-radius (+ 0.45 (* 0.18 (Math/sin (* 0.3 (double trigger-ticks)))))]
-                                  (when (pos? ttl)
-                                    (concat
-                                      (when (and start pos)
-                                        (trail-layer-ops (vec3/map->v3 start) (vec3/map->v3 pos) ttl trigger-ticks))
-                                      (when target
-                                        (let [target-v (vec3/map->v3 target)]
-                                          (concat
-                                            (ring-ops target-v impact-radius impact-color)
-                                            (impact-spike-ops target-v ttl trigger-ticks)
-                                            (impact-billboard-ops cam-v target-v ttl trigger-ticks))))))))
-                              triggering-states))
+        state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :jet-engine)
+        marking? (= :marking (:phase state))
+        triggering? (= :triggering (:phase state))
+        mark-ops (when (and marking? (:target state))
+                   ;; Green, matching JetEngine's mark.color.set(51, 255, 51, 179).
+                   ;; The port drew a single pulsing line ring here; the original is
+                   ;; EntityRippleMark, three textured ripples expanding out of the
+                   ;; aim point on a 3.6s loop.
+                   (ripple-ops (vec3/map->v3 (:target state))
+                               (/ (double (or (:hold-ticks state) 0)) 20.0)
+                               {:r 51 :g 255 :b 51}))
+        trigger-ops (when triggering?
+                      (let [ttl (long (or (:ttl state) 0))
+                            start (:start state)
+                            pos (:pos state)
+                            target (:target state)
+                            trigger-ticks (long (or (:trigger-ticks state) 0))
+                            alpha (int (* 215 (/ (double ttl) (double trigger-ttl))))
+                            impact-color {:r 210 :g 250 :b 255 :a (min 180 (+ 40 alpha))}
+                            impact-radius (+ 0.45 (* 0.18 (Math/sin (* 0.3 (double trigger-ticks)))))]
+                        (when (pos? ttl)
+                          (concat
+                            (when (and start pos)
+                              (trail-layer-ops (vec3/map->v3 start) (vec3/map->v3 pos) ttl trigger-ticks))
+                            (when target
+                              (let [target-v (vec3/map->v3 target)]
+                                (concat
+                                  (ring-ops target-v impact-radius impact-color)
+                                  (impact-spike-ops target-v ttl trigger-ticks)
+                                  (impact-billboard-ops cam-v target-v ttl trigger-ticks))))))))
         ;; Screen-flash intensity during trigger is computed by the content
         ;; layer's jet-engine-fx/flash-alpha (same formula, player-scoped) for
         ;; the 2D overlay — this :ops vector is pure 3D world-space geometry,
         ;; it has no route to a full-screen tint.
-        ws (when (seq triggering-states) 0.07)  ;; walk speed during trigger (matching original)
-        ops (into mark-ops trigger-ops)]
+        ws (when triggering? 0.07)  ;; walk speed during trigger (matching original)
+        ops (into (vec mark-ops) trigger-ops)]
     (cond-> (when (seq ops) {:ops ops})
       ws (assoc :local-walk-speed (float ws)))))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:jet-engine :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:jet-engine :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:jet-engine :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:jet-engine :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :jet-engine
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :jet-engine [_ store owner-key]
-  (update store :fx-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).
+;; remove-diamond-shield! is already a no-op (see above); the natural-end
+;; path in tick-state! already calls it on the same teardown, so no
+;; :destroy-fn is needed either.

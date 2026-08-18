@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :mine-detect
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:perform {:topic :mine-detect/fx-perform :mode :perform
                          :level-payload (fn [_ _ p]
                                           {:range (:range p)

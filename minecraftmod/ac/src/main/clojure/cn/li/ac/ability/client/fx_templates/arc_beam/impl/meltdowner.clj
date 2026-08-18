@@ -10,9 +10,6 @@
             [cn.li.ac.ability.client.effects.rv3 :as vec3])
   (:import [cn.li.mcmod.math V3]))
 
-(defn- update-meltdowner-fx-state!
-  [f & args]
-  (apply vfx-level/update-effect-state! :meltdowner f args))
 (def ^:private charge-loop-sound (modid/namespaced-path "md.md_charge"))
 (def ^:private fire-sound (modid/namespaced-path "md.meltdowner"))
 (defn- loop-sound-key [ctx-id] (str "meltdowner/" ctx-id))
@@ -56,24 +53,35 @@
                 1.0
                 (max 0.0 (/ ttl ray-width-shrink-ticks))))))
 
-(defn- all-rays []
-  (mapcat val (:rays (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :meltdowner))))
-
-;; ---------------------------------------------------------------------------
-;; Enqueue
-;; ---------------------------------------------------------------------------
-
-(defn- enqueue! [store ctx-id channel owner-key payload]
-  (let [store* (or store {:effect-state {} :rays {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- :rays is a flat vector instead
+;; of an owner-map of vectors (owner isolation comes from instance identity
+;; itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that NONE of its branches match a real event today --
+;; not even :perform/:reflect, unlike most of this batch's other files.
+;; combat_content.clj's :meltdowner skill sends exactly ONE :vfx step, ever:
+;; :event :release from its :release phase, with :params {:range 64.0} --
+;; :release doesn't match :start/:update/:end/:perform/:reflect, so it falls
+;; straight through to the trailing `state*` no-op default every time. In
+;; production today: the charge loop sound never starts, no beam ever
+;; spawns, the walk-speed slowdown and FOV zoom-while-charging never
+;; activate. This is a MUCH simpler finding than it looks from the
+;; surrounding code's complexity (the original migration plan for this file
+;; expected to need a "fade after :end" state machine for beams that
+;; outlive their charge -- that concern doesn't apply, because no beam is
+;; ever created in the first place). Migrated structurally only.
+(defn- enqueue! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length
                 source-player-id player-id world-id caster-x caster-y caster-z]} (or payload {})
         ;; The content sends :player-id (the caster) on every charge event —
         ;; attribute the state to the caster so per-frame queries (walk-speed,
         ;; FOV zoom) can match their OWN charge instead of any nearby charge.
         source-player-id* (or source-player-id player-id)
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-sounds/current-effect-owner)
+        base-meta {:queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id*
@@ -93,25 +101,17 @@
           ;; setVolume(1.0) but never setLoop() — one playback that follows the
           ;; caster and is cut short by stop() on terminate.
           :loop? false})
-        (assoc-in store* [:effect-state owner-key*]
-                  (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false})))
+        (merge state* base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false}))
       :update
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta
-                       (get-in store* [:effect-state owner-key*])
-                       {:owner-key owner-key*
-                        :ctx-id ctx-id
-                        :channel channel
-                        :source-player-id source-player-id
-                        :world-id world-id
-                        :active? true
-                        :ticks (long (or ticks 0))
-                        :charge-ratio (double (or charge-ratio 0.0))
-                        :caster-pos (when (and caster-x caster-y caster-z)
-                                      {:x (double caster-x)
-                                       :y (double caster-y)
-                                       :z (double caster-z)})
-                        :performed? false}))
+      (assoc (merge base-meta state*)
+             :active? true
+             :ticks (long (or ticks 0))
+             :charge-ratio (double (or charge-ratio 0.0))
+             :caster-pos (when (and caster-x caster-y caster-z)
+                           {:x (double caster-x)
+                            :y (double caster-y)
+                            :z (double caster-z)})
+             :performed? false)
       :end
       (do
         ;; Original c_terminate: sound.stop() — the charge loop follows the
@@ -119,24 +119,23 @@
         (client-bridge/run-client-effect!
          :mcmod/stop-loop-sound
          {:key (loop-sound-key ctx-id)})
-        (assoc-in store* [:effect-state owner-key*]
-                  (merge base-meta
-                         {:active? false :performed? (boolean performed?)
-                          :ticks 0 :charge-ratio 0.0})))
+        (merge state* base-meta
+               {:active? false :performed? (boolean performed?)
+                :ticks 0 :charge-ratio 0.0}))
       :perform
-      (let [store* (if (and start end)
-                      ;; EntityMDRay.life is a flat 50 ticks — the port rolled
-                      ;; 16-23, so the beam vanished in a third of the time and
-                      ;; never twice the same.
-                      (update-in store* [:rays owner-key*] (fnil conj [])
-                                 (merge base-meta
-                                        {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
-                                         :ttl ray-life-ticks :max-ttl ray-life-ticks
-                                         :beam-length (double (or beam-length 30.0))
-                                         :charge-ticks (int (or charge-ticks 20))
-                                         :wiggle-seed (* 2.0 Math/PI (rand))
-                                         :is-reflect? false}))
-                      store*)]
+      (let [state* (if (and start end)
+                     ;; EntityMDRay.life is a flat 50 ticks — the port rolled
+                     ;; 16-23, so the beam vanished in a third of the time and
+                     ;; never twice the same.
+                     (update state* :rays (fnil conj [])
+                             (merge base-meta
+                                    {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
+                                     :ttl ray-life-ticks :max-ttl ray-life-ticks
+                                     :beam-length (double (or beam-length 30.0))
+                                     :charge-ticks (int (or charge-ticks 20))
+                                     :wiggle-seed (* 2.0 Math/PI (rand))
+                                     :is-reflect? false}))
+                     state*)]
         ;; ACSounds.playClient(player, "md.meltdowner", PLAYERS, 0.5f) — at the
         ;; caster, not wherever the listener happens to be standing.
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
@@ -145,19 +144,19 @@
             (map? start) (assoc :x (double (:x start))
                                 :y (double (:y start))
                                 :z (double (:z start)))))
-        store*)
+        state*)
       :reflect
       (if (and start end)
         ;; c_reflected spawns the same EntityMDRay, so the same 50-tick life.
-        (update-in store* [:rays owner-key*] (fnil conj [])
-                   (merge base-meta
-                          {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
-                           :ttl ray-life-ticks :max-ttl ray-life-ticks
-                           :beam-length 10.0 :charge-ticks 20
-                           :wiggle-seed (* 2.0 Math/PI (rand))
-                           :is-reflect? true}))
-        store*)
-      store*)))
+        (update state* :rays (fnil conj [])
+                (merge base-meta
+                       {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
+                        :ttl ray-life-ticks :max-ttl ray-life-ticks
+                        :beam-length 10.0 :charge-ticks 20
+                        :wiggle-seed (* 2.0 Math/PI (rand))
+                        :is-reflect? true}))
+        state*)
+      state*)))
 
 ;; ---------------------------------------------------------------------------
 ;; Tick
@@ -181,51 +180,42 @@
          :offset-x 1.0 :offset-y 1.0 :offset-z 1.0}))))
 
 (defn- tick-state!
-  [store]
-  (let [store* (or store {:effect-state {} :rays {}})
-        effect-state* (store-tick/map-active-states
-                       (:effect-state store*)
-                       (fn [_owner-key st]
-                         (let [ticks (inc (long (or (:ticks st) 0)))]
-                           ;; The charge loop is a continuous FollowEntitySound
-                           ;; started on :start and stopped on :end — no re-queue.
-                           ;; MdParticleFactory motes ringing the caster.
-                           ;;
-                           ;; The particle queue takes ABSOLUTE world
-                           ;; coordinates, and this was handing it the raw
-                           ;; (r*sin, h, r*cos) offsets — every mote spawned
-                           ;; within a block of world origin, so the charge had
-                           ;; no visible particles at all. (Upstream's own loop
-                           ;; is `for (count <- rangei(2,3) to 0)`, an empty
-                           ;; Scala range, so it spawns none either; this is the
-                           ;; effect it was written to produce.)
-                           (when-let [pos (:caster-pos st)]
-                             (dotimes [_ (+ 2 (rand-int 2))]
-                               (let [r (+ 0.7 (rand 0.3))
-                                     theta (rand (* 2 Math/PI))
-                                     h (+ 0.4 (rand 1.2))]
-                                 (client-particles/queue-particle-effect! (:queue-owner st)
-                                   {:type :particle :particle-type (modid/namespaced-path "md_particle")
-                                    :x (+ (double (:x pos)) (* r (Math/sin theta)))
-                                    :y (+ (double (:y pos)) h)
-                                    :z (+ (double (:z pos)) (* r (Math/cos theta)))
-                                    :count 1 :speed 0.04
-                                    :offset-x 0.5 :offset-y 0.8 :offset-z 0.5}))))
-                           (assoc st :ticks ticks))))
-        _ (doseq [[_owner rays] (:rays store*)
-                  ray rays]
-            (emit-ray-trail! ray))
-        rays* (store-tick/tick-ttl-items-by-owner (:rays store*))]
-    (assoc store* :effect-state effect-state* :rays rays*)))
-
-(defn- tick!
-  ([]
-   (update-meltdowner-fx-state!
-     (fn [store]
-       (tick-state! store)))
-   nil)
-  ([store]
-   (tick-state! store)))
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Stay alive while :active? or a ray is still animating.
+   Mirrors the pre-migration store-tick/map-active-states behavior exactly:
+   once :active? goes false, the charge-tracking fields (:ticks/
+   :charge-ratio/:caster-pos/...) are dropped on the NEXT tick (matching
+   map-active-states silently excluding every inactive owner from its
+   result) -- only :rays survives past that point."
+  [state]
+  (let [state* (or state {})
+        active? (boolean (:active? state*))]
+    (doseq [ray (:rays state*)] (emit-ray-trail! ray))
+    (let [rays (store-tick/tick-ttl-vec (:rays state*))]
+      (when (or active? (seq rays))
+        (if active?
+          (do
+            ;; The particle queue takes ABSOLUTE world coordinates, and this
+            ;; was handing it the raw (r*sin, h, r*cos) offsets — every mote
+            ;; spawned within a block of world origin, so the charge had no
+            ;; visible particles at all. (Upstream's own loop is
+            ;; `for (count <- rangei(2,3) to 0)`, an empty Scala range, so it
+            ;; spawns none either; this is the effect it was written to
+            ;; produce.)
+            (when-let [pos (:caster-pos state*)]
+              (dotimes [_ (+ 2 (rand-int 2))]
+                (let [r (+ 0.7 (rand 0.3))
+                      theta (rand (* 2 Math/PI))
+                      h (+ 0.4 (rand 1.2))]
+                  (client-particles/queue-particle-effect! (:queue-owner state*)
+                    {:type :particle :particle-type (modid/namespaced-path "md_particle")
+                     :x (+ (double (:x pos)) (* r (Math/sin theta)))
+                     :y (+ (double (:y pos)) h)
+                     :z (+ (double (:z pos)) (* r (Math/cos theta)))
+                     :count 1 :speed 0.04
+                     :offset-x 0.5 :offset-y 0.8 :offset-z 0.5}))))
+            (assoc state* :ticks (inc (long (or (:ticks state*) 0))) :rays rays))
+          {:rays rays})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -233,16 +223,6 @@
 
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))
-
-(defn- matching-active-state [hand-center-pos]
-  (some (fn [st]
-          (when (and (:active? st)
-                     (or (nil? (:source-player-id st))
-                         (nil? (:player-uuid hand-center-pos))
-                         (= (str (:source-player-id st))
-                            (str (:player-uuid hand-center-pos)))))
-            st))
-  (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :meltdowner)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Charge camera zoom (original's charge pull-back, restored on release)
@@ -259,8 +239,8 @@
   a module atom because it must keep decaying after the effect state's
   :end/abort has already cleared the :active? entry."
   [player-uuid]
-  (let [md (matching-active-state {:player-uuid (str player-uuid)})
-        target (if md
+  (let [md (vfx-level/instance-for-owner :meltdowner (str player-uuid) :level)
+        target (if (and md (:active? md))
                  (* fov-zoom-max-degrees (double (or (:charge-ratio md) 0.0)))
                  0.0)]
     (swap! fov-offset-eased*
@@ -282,8 +262,22 @@
   converting once there instead of once per frame here removes an
   otherwise-per-frame allocation for every live ray."
   [camera-pos hand-center-pos _tick]
-  (let [md (matching-active-state hand-center-pos)
-        current-rays (all-rays)
+  (let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :meltdowner)
+        ;; One real vfx-core instance now exists per active caster; this
+        ;; still only draws the LOCAL player's own charge (walk-speed
+        ;; override), because hand-center-pos is only ever the local
+        ;; viewer's own position -- there is no remote-player position to
+        ;; compare against otherwise. The rays below are NOT filtered by
+        ;; this: they are world-positioned, visible to everyone, same as
+        ;; before this migration (mirrors directed_blastwave.clj's
+        ;; precedent for this owner-check).
+        md (when (and (:active? state)
+                      (or (nil? (:source-player-id state))
+                          (nil? (:player-uuid hand-center-pos))
+                          (= (str (:source-player-id state))
+                             (str (:player-uuid hand-center-pos)))))
+             state)
+        current-rays (:rays state)
         ;; Original ViewOptimize: translate rays to the hand so the tube AND
         ;; glow board issue from off the caster's view axis and stay visible
         ;; in first person.
@@ -317,19 +311,23 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:meltdowner :level] [_ _] {:effect-state {} :rays {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:meltdowner :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:meltdowner :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue! store ctx-id channel owner-key payload))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:meltdowner :level] [_ _ store] (tick! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:meltdowner :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :meltdowner
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :meltdowner [_ store owner-key]
-  ;; Charge state and loop sound are context-bound; a fired ray is not.
-  ;; Upstream c_perform spawns EntityMDRay into the world and c_terminate only
-  ;; restores walk speed and stops the sound — the ray lives out its own life.
-  ;; See railgun_shot.clj's clear-owner for the full shape of this bug.
-  (client-bridge/run-client-effect!
-   :mcmod/stop-loop-sound
-   {:key (loop-sound-key (second owner-key))})
-  (update store :effect-state dissoc owner-key))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-destroy! :meltdowner
+  [_ state]
+  ;; Charge loop sound is context-bound; a fired ray is not (upstream
+  ;; c_perform spawns EntityMDRay into the world and c_terminate only
+  ;; restores walk speed and stops the sound — the ray lives out its own
+  ;; life). Only release the sound if it might actually be playing.
+  (when (:active? state)
+    (client-bridge/run-client-effect!
+     :mcmod/stop-loop-sound
+     {:key (loop-sound-key (:ctx-id state))})))
+;; No effect-clear-owner! override anymore -- superseded by :destroy-fn
+;; above (build-spec wires it unconditionally via dispatch-destroy!), which
+;; vfx-core's real destroy!/clear-owner! now reach correctly per instance.

@@ -146,19 +146,14 @@
       []))
 
 (defn- apply-perform!
-  [owner-key ctx-id channel {:keys [range advanced? life-ticks rescan-interval source-player-id world-id]}]
+  [{:keys [range advanced? life-ticks rescan-interval]}]
   (client-sounds/queue-current-sound-effect!
     {:type :sound
      :sound-id (modid/namespaced-path "em.minedetect")
      :source :ambient
      :volume 0.5
      :pitch 1.0})
-  {:owner-key owner-key
-   :ctx-id ctx-id
-   :channel channel
-   :source-player-id source-player-id
-   :world-id world-id
-   :active? true
+  {:active? true
    :ticks 0
    :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
    :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
@@ -167,86 +162,99 @@
    :advanced? (boolean advanced?)
    :ores []})
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state owner-map
+;; wrapping (owner isolation comes from instance identity itself, INCLUDING
+;; for the sample-time rescan write-back below, which previously picked
+;; "the first active owner in the shared map" -- a real latent bug that
+;; only mattered once combat_content.clj's actual wiring ever reaches this
+;; file, see the note below).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration.
+;; combat_content.clj's :mine-detect skill sends exactly ONE :vfx step,
+;; ever: :event :release from its one-shot :instant program, with
+;; :params {:range 30.0} -- :release doesn't match :perform/:end, so it
+;; falls straight through to the trailing `state*` no-op default every
+;; time. In production today apply-perform! never runs: no sound, no ore
+;; highlight, ever. Migrated structurally only.
+;;
+;; Separately, this file's OLD owner-map design had a real bug the plan
+;; flagged before any of this was investigated: build-plan's owner lookup
+;; used `some` to pick the first :active? entry in the shared map, so two
+;; players mine-detecting at once would only ever render (and rescan) for
+;; whichever one's entry `some` happened to reach first — the other saw no
+;; highlights at all. That bug is now structurally impossible: each
+;; instance is its own owner, so there is no "which active owner" choice
+;; left to make. It has no observable effect today (see above -- nothing
+;; reaches :perform to make an instance :active? in the first place), but
+;; is recorded here since it's a real, if currently unreachable, behavior
+;; change from before this migration.
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (if (contains? (or store {}) :effect-state)
-                 (or store {:effect-state {}})
-                 {:effect-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])]
+  [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})]
     (case (:mode payload)
       :perform
-      (assoc-in store* [:effect-state owner-key*]
-                (apply-perform! owner-key* ctx-id channel payload))
+      (apply-perform! payload)
 
       :end
-      (update store* :effect-state dissoc owner-key*)
+      {}
 
-      store*)))
+      state*)))
 
 (defn- tick-state!
-  [store]
-  (let [store* (if (contains? (or store {}) :effect-state)
-                 (or store {:effect-state {}})
-                 {:effect-state {}})]
-    (update store* :effect-state
-      (fn [states]
-        (reduce-kv (fn [acc owner-key st]
-                     (if (:active? st)
-                       (let [next-ticks (inc (long (:ticks st)))
-                             life-ticks (long (:life-ticks st))]
-                         (if (< next-ticks life-ticks)
-                           (assoc acc owner-key (assoc st :ticks next-ticks))
-                           acc))
-                       acc))
-                   {}
-                   states)))))
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Only reachable while :active? and before :life-ticks
+   elapses, matching the pre-migration per-owner expiry exactly."
+  [state]
+  (let [state* (or state {})]
+    (when (:active? state*)
+      (let [next-ticks (inc (long (:ticks state*)))
+            life-ticks (long (:life-ticks state*))]
+        (when (< next-ticks life-ticks)
+          (assoc state* :ticks next-ticks))))))
 
 (defn- maybe-refresh-ores!
-  [owner-key hand-center-pos query-fn]
-  (vfx-level/update-effect-state!
-    :mine-detect
-    (fn [store]
-      (let [store* (if (contains? (or store {}) :effect-state)
-                     (or store {:effect-state {}})
-                     {:effect-state {}})]
-        (update-in store* [:effect-state owner-key]
-                   (fn [st]
-                     (if (and st (should-rescan? st))
-                       (assoc st
-                              :ores (rescan-ores st hand-center-pos query-fn)
-                              :last-rescan-tick (:ticks st))
-                       st)))))))
+  "Write back a rescan result into THIS instance's own state -- see
+   update-state-for-owner!'s docstring for why a plain update-state! (which
+   would target vfx-core's core/instance-for-effect, \"the first instance
+   of :mine-detect\") is the wrong tool once more than one player can have
+   a live instance at once."
+  [uuid hand-center-pos query-fn state]
+  (when (should-rescan? state)
+    (vfx-level/update-state-for-owner! :mine-detect uuid :level
+      (fn [st]
+        (if (and st (should-rescan? st))
+          (assoc st
+                 :ores (rescan-ores st hand-center-pos query-fn)
+                 :last-rescan-tick (:ticks st))
+          st)))))
 
 (defn- build-plan
   [_camera-pos hand-center-pos _tick query-fn]
-  (when-let [[owner-key _] (some (fn [[owner-key st]]
-                                   (when (:active? st)
-                                     [owner-key st]))
-                                 (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)))]
-    (maybe-refresh-ores! owner-key hand-center-pos query-fn)
-    (let [player-pos (player-position hand-center-pos)
-          {:keys [ores advanced? range]} (get (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)) owner-key)
-          ops (into []
-                    (mapcat (fn [{:keys [x y z] :as ore}]
-                              (let [base-color (ore-color ore advanced?)
-                                    color (faded-color base-color player-pos
-                                                       x y z range)]
-                                (block-highlight-ops x y z color))))
-                    ores)]
-      (when (seq ops)
-        {:ops ops}))))
+  (let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)]
+    (when (:active? state)
+      (when-let [uuid (:player-uuid hand-center-pos)]
+        (maybe-refresh-ores! uuid hand-center-pos query-fn state))
+      (let [{:keys [ores advanced? range]}
+            (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)
+            player-pos (player-position hand-center-pos)
+            ops (into []
+                      (mapcat (fn [{:keys [x y z] :as ore}]
+                                (let [base-color (ore-color ore advanced?)
+                                      color (faded-color base-color player-pos
+                                                         x y z range)]
+                                  (block-highlight-ops x y z color))))
+                      ores)]
+        (when (seq ops)
+          {:ops ops})))))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mine-detect :level] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mine-detect :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mine-detect :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mine-detect :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mine-detect
   [_effect-id camera-pos hand-center-pos tick & [query-fn]]
   (build-plan camera-pos hand-center-pos tick query-fn))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mine-detect [_ store _owner-key]
-  ;; The ore-highlight visual is a one-shot world effect (upstream's
-  ;; HandlerEntity) with its own 100-tick life. The :instant context ends
-  ;; right after perform, so MSG-CTX-TERMINATED reaches clear-effect-owner!
-  ;; on the same tick — clearing the owner here deleted the highlights a
-  ;; frame after they appeared. They expire on their own life-ticks instead.
-  store)
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

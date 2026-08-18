@@ -67,3 +67,31 @@
   (vfx-level/tick! {:tick-id 1 :delta-seconds 0.05})
   (is (= {:whose "mine" :mode :tag} (vfx-level/instance-for-owner :owner-probe "mine")))
   (is (nil? (vfx-level/instance-for-owner :owner-probe "nobody"))))
+
+;; Batch 5 (mine_detect): a :level build-plan-fn sometimes needs to write
+;; back into ITS OWN instance's state (a query-fn result only available at
+;; sample time, never passed to tick-state-fn) without disturbing any other
+;; concurrent caster's instance of the same effect. update-state! alone
+;; can't do this -- it targets core/instance-for-effect, "the first
+;; instance of this effect-id", an arbitrary pick once more than one
+;; instance exists.
+(deftest update-state-for-owner-only-touches-the-matching-owners-instance-test
+  (vfx-level/reset-for-test!)
+  (vfx-level/register-effect!
+    :owner-write-probe
+    {:lifecycle :transient
+     :level {:initial-state (fn [] {:count 0})
+             :enqueue-state-fn (fn [state _ _ _ _] state)
+             :tick-state-fn (fn [state] state)
+             :build-plan-fn (fn [_ _ _ _] nil)}})
+  (vfx-level/dispatch-signal!
+    {:op :spawn :effect-id :owner-write-probe :owner "mine" :world-id "w"
+     :instance-key [:probe "mine"] :event-seq 0 :event :start :params {}})
+  (vfx-level/dispatch-signal!
+    {:op :spawn :effect-id :owner-write-probe :owner "someone-else" :world-id "w"
+     :instance-key [:probe "someone-else"] :event-seq 0 :event :start :params {}})
+  (vfx-level/tick! {:tick-id 1 :delta-seconds 0.05})
+  (vfx-level/update-state-for-owner! :owner-write-probe "mine" :level update :count inc)
+  (is (= {:count 1} (vfx-level/instance-for-owner :owner-write-probe "mine" :level)))
+  (is (= {:count 0} (vfx-level/instance-for-owner :owner-write-probe "someone-else" :level))
+      "a different owner's instance of the same effect must be untouched"))

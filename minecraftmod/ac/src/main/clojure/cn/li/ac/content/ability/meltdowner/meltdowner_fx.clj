@@ -7,7 +7,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :meltdowner
-     :initial-state (fn [] {:effect-state {} :rays {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      ;; Charge camera zoom: per-frame query into the impl's eased offset.
      :fov-offset-fn (fn [player-uuid] (meltdowner-impl/current-fov-offset player-uuid))
      :channels {:start {:topic :meltdowner/fx-start :mode :start}
