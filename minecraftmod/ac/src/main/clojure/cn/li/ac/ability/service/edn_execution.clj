@@ -62,6 +62,9 @@
            :schema-version 2
            :ability-id ability-id
            :owner owner
+           :vfx-signals (vec (:vfx result))
+           :actions (vec (:actions result))
+           :events (vec (:events result))
            :query-results @results*
            :status (if (= :finished (:status result)) :accepted (:status result)))))
 
