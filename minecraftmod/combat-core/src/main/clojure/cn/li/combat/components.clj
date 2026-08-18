@@ -70,7 +70,7 @@
            [:target/entities #{:shape :projection :limit :result}]
            [:target/blocks #{:shape :projection :limit :result}]
            [:combat/damage #{:target :amount}]
-           [:host/beam-trace #{:origin :direction :length :radius :result}]
+           [:host/beam-trace #{:origin :direction :length :radius :damage :result}]
            [:combat/impulse #{:target :vector}]
            [:combat/status #{:target :status-id :duration-ticks}]
            [:interaction/dispatch #{:kind :target :result}]

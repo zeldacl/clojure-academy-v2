@@ -53,7 +53,7 @@
                    :projection [:position :hardness] :limit 1 :result :blocks}
    :host/beam-trace {:component :host/beam-trace :origin vec3-example
                      :direction {:vec3 [0.0 0.0 1.0]} :length 1.0 :radius 0.1
-                     :entity-limit 1 :result :beam}
+                     :damage 1.0 :entity-limit 1 :result :beam}
    :combat/damage {:component :combat/damage :target {:ref [:slot :target-id]} :amount 1.0}
    :combat/impulse {:component :combat/impulse :target {:ref [:slot :target-id]}
                     :vector vec3-example}

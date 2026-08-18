@@ -16,7 +16,6 @@
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (is (contains? (get-in state [:combat :composites]) :combat/impact-strike))
     (is (contains? (get-in state [:combat :composites]) :combat/area-damage))
-    (is (contains? (get-in state [:combat :composites]) :combat/beam))
     (is (contains? (get-in state [:combat :composites]) :combat/charged-area-damage))
     (is (contains? (get-in state [:combat :composites]) :txn/guarded-owner-patch))
     (is (= :railgun-beam (get-in state [:vfx :effects :railgun-beam :id])))

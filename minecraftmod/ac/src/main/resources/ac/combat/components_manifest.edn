@@ -6,9 +6,6 @@
               :id :combat/area-damage
               :resource "ac/combat/components/area_damage.edn"}
              {:kind :composite
-              :id :combat/beam
-              :resource "ac/combat/components/beam.edn"}
-             {:kind :composite
               :id :combat/charged-area-damage
               :resource "ac/combat/components/charged_area_damage.edn"}
              {:kind :composite

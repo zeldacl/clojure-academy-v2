@@ -7,6 +7,26 @@
                             :path [:railgun :beam.damage]
                             :type [:tuple :double 2]
                             :snapshot :activation}
+              :beam-radius {:source :config
+                            :path [:railgun :beam.radius]
+                            :type :double
+                            :snapshot :activation}
+              :beam-query-radius {:source :config
+                                  :path [:railgun :beam.query-radius]
+                                  :type :double
+                                  :snapshot :activation}
+              :beam-step {:source :config
+                          :path [:railgun :beam.step]
+                          :type :double
+                          :snapshot :activation}
+              :beam-block-energy {:source :config
+                                  :path [:railgun :beam.block-energy]
+                                  :type [:tuple :double 2]
+                                  :snapshot :activation}
+              :beam-visual-distance {:source :config
+                                     :path [:railgun :beam.visual-distance]
+                                     :type :double
+                                     :snapshot :activation}
               :max-distance {:source :config
                              :path [:railgun :beam.max-distance]
                              :type :double
@@ -14,7 +34,15 @@
               :charge-ticks {:source :config
                              :path [:railgun :charge.item-charge-ticks]
                              :type :long
-                             :snapshot :activation}}
+                             :snapshot :activation}
+              :cost-down-cp {:source :config
+                             :path [:railgun :cost.down.cp]
+                             :type [:tuple :double 2]
+                             :snapshot :activation}
+              :cost-down-overload {:source :config
+                                   :path [:railgun :cost.down.overload]
+                                   :type [:tuple :double 2]
+                                   :snapshot :activation}}
  :external-triggers [{:source :item/use
                       :filter {:item-ids ["ac:coin" "academy:coin"]
                                :ability-mode? true}
@@ -52,19 +80,30 @@
                    :steps [{:component :target/raycast
                             :origin {:ref [:context :eye-pos]}
                             :direction {:ref [:context :look]}
-                            :distance 50.0
+                            :distance {:ref [:param :max-distance]}
                             :include-entities? true
                             :include-blocks? true
                             :result :aim-hit}
-                           {:component :combat/beam
+                           {:component :host/beam-trace
                             :origin {:ref [:slot :muzzle]}
                             :direction {:ref [:context :look]}
-                            :length 50.0
-                            :radius 2.0
+                            :length {:ref [:param :max-distance]}
+                            :visual-length {:ref [:param :beam-visual-distance]}
+                            :radius {:ref [:param :beam-radius]}
+                            :query-radius {:ref [:param :beam-query-radius]}
+                            :step {:ref [:param :beam-step]}
+                            :damage {:expr :math/lerp
+                                     :args [{:ref [:param :beam-damage 0]}
+                                            {:ref [:param :beam-damage 1]}
+                                            {:ref [:context :skill-exp]}]}
                             :entity-limit 256
                             :block-policy {:component :block/break-budget
                                            :blocks {:ref [:slot :blocks]}
-                                           :energy {:ref [:param :block-energy]}
+                                           :energy {:expr :math/lerp
+                                                    :args [{:ref [:param :beam-block-energy 0]}
+                                                           {:ref [:param :beam-block-energy 1]}
+                                                           {:ref [:context :skill-exp]}]}
+                                           :step {:ref [:param :beam-step]}
                                            :limit 4096}
                             :result :beam-result}
                            {:component :effect/vfx
@@ -83,7 +122,14 @@
                               :payload {}}
                              {:component :txn/atomic
                               :guards [{:component :guard/resource
-                               :cost {:cp 200.0 :overload 180.0}}
+                              :cost {:cp {:expr :math/lerp
+                                          :args [{:ref [:param :cost-down-cp 0]}
+                                                 {:ref [:param :cost-down-cp 1]}
+                                                 {:ref [:context :skill-exp]}]}
+                                      :overload {:expr :math/lerp
+                                                 :args [{:ref [:param :cost-down-overload 0]}
+                                                        {:ref [:param :cost-down-overload 1]}
+                                                        {:ref [:context :skill-exp]}]}}}
                               {:component :guard/held-item
                                :source :main-hand
                                :item-ids ["minecraft:iron_ingot"
