@@ -58,7 +58,7 @@
 ;; ============================================================================
 
 ;; This metadata will be processed by Clojure's gen-class to configure the class
-;; equivalent to: @Mod.EventBusSubscriber(modid = MyMod1201.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+;; equivalent to: @Mod.EventBusSubscriber(modid = AcademyCraft1201.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 
 ;; ============================================================================
 ;; DataGenerator Event Handler

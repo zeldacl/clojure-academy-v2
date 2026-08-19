@@ -12,11 +12,11 @@ import net.neoforged.fml.common.Mod;
  * Minimal Java bridge for @Mod annotation.
  * All logic implemented in cn.li.neoforge262.mod Clojure namespace.
  */
-@Mod(MyMod262.MODID)
-public class MyMod262 {
+@Mod(AcademyCraft262.MODID)
+public class AcademyCraft262 {
     public static final String MODID = ModId.ID;
 
-    public MyMod262(IEventBus modEventBus, ModContainer modContainer) {
+    public AcademyCraft262(IEventBus modEventBus, ModContainer modContainer) {
         try {
             IFn require = Clojure.var("clojure.core", "require");
             Object modNs = Clojure.read("cn.li.neoforge262.mod");

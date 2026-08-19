@@ -10,11 +10,11 @@ import net.minecraftforge.fml.common.Mod;
  * Minimal Java bridge for @Mod annotation.
  * All logic implemented in cn.li.forge1201.mod Clojure namespace.
  */
-@Mod(MyMod1201.MODID)
-public class MyMod1201 {
+@Mod(AcademyCraft1201.MODID)
+public class AcademyCraft1201 {
     public static final String MODID = ModId.ID;
 
-    public MyMod1201() {
+    public AcademyCraft1201() {
         // Load and instantiate the Clojure mod class for both normal run and datagen.
         // Datagen also needs platform registration state for official Forge model providers.
         try {

@@ -172,7 +172,7 @@
    :gui-menu-register (gui-registry-impl/menu-register)})
 
 ;; Runtime bootstrap entrypoint for Java @Mod bridge.
-;; MyMod262 injects the mod event bus + ModContainer (no FMLJavaModLoadingContext).
+;; AcademyCraft262 injects the mod event bus + ModContainer (no FMLJavaModLoadingContext).
 (defn start-neoforge-mod!
   [mod-bus mod-container]
   (log/info "[BOOTSTRAP_TRACE] start-neoforge-mod! enter"

@@ -1,6 +1,6 @@
 package cn.li.forge1201.client.render;
 
-import cn.li.forge1201.MyMod1201;
+import cn.li.forge1201.AcademyCraft1201;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraftforge.api.distmarker.Dist;
@@ -10,7 +10,7 @@ import net.minecraftforge.fml.common.Mod;
 
 import java.io.IOException;
 
-@Mod.EventBusSubscriber(modid = MyMod1201.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = AcademyCraft1201.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ModShaders {
     private ModShaders() {
     }

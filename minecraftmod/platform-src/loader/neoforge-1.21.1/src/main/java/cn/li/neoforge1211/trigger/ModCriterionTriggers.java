@@ -2,7 +2,7 @@ package cn.li.neoforge1211.trigger;
 
 import cn.li.mc1211.trigger.ModCustomTrigger;
 import cn.li.mc1211.trigger.ModTriggers;
-import cn.li.neoforge1211.MyMod1211;
+import cn.li.neoforge1211.AcademyCraft1211;
 import net.minecraft.advancements.CriterionTrigger;
 import net.minecraft.core.registries.Registries;
 import net.neoforged.bus.api.IEventBus;
@@ -18,7 +18,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public final class ModCriterionTriggers {
 
     public static final DeferredRegister<CriterionTrigger<?>> TRIGGERS =
-        DeferredRegister.create(Registries.TRIGGER_TYPE, MyMod1211.MODID);
+        DeferredRegister.create(Registries.TRIGGER_TYPE, AcademyCraft1211.MODID);
 
     public static final DeferredHolder<CriterionTrigger<?>, ModCustomTrigger> CUSTOM =
         TRIGGERS.register("custom", () -> ModTriggers.CUSTOM);

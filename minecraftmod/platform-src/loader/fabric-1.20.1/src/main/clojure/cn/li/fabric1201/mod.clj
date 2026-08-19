@@ -88,7 +88,7 @@
 (defn start-fabric-mod!
   "Main Fabric mod initialization called from the Java ModInitializer."
   []
-  (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
+  (log/info "Initializing AcademyCraft (Fabric 1.20.1) from Clojure...")
   (when-let [fw-inst (fw/create-framework)]
     (alter-var-root #'fw/framework (constantly fw-inst)))
   (lifecycle-init/init-lifecycle!

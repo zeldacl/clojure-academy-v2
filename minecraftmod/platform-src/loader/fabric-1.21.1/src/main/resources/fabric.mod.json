@@ -15,10 +15,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "cn.li.fabric1211.MyModFabric"
+      "cn.li.fabric1211.AcademyCraftFabric"
     ],
     "client": [
-      "cn.li.fabric1211.MyModFabricClient"
+      "cn.li.fabric1211.AcademyCraftFabricClient"
     ],
     "fabric-datagen": [
       "cn.li.fabric1211.datagen.DataGeneratorSetup"

@@ -1,6 +1,6 @@
 package cn.li.neoforge1211.client.render;
 
-import cn.li.neoforge1211.MyMod1211;
+import cn.li.neoforge1211.AcademyCraft1211;
 import cn.li.mc1211.client.render.ModRenderTypes;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.neoforged.api.distmarker.Dist;
@@ -10,7 +10,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.io.IOException;
 
-@EventBusSubscriber(modid = MyMod1211.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = AcademyCraft1211.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ModShaders {
     private ModShaders() {
     }

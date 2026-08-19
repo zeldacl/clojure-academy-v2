@@ -3,7 +3,7 @@ package cn.li.neoforge262.event;
 import cn.li.neoforgebase.event.ForgeCommandRegistrar;
 
 import cn.li.mcmod.ModId;
-import cn.li.neoforge262.MyMod262;
+import cn.li.neoforge262.AcademyCraft262;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -35,5 +35,5 @@ public final class ForgeEventBusManager {
 
     /** Kept for callers that still reference the old MODID constant path. */
     @SuppressWarnings("unused")
-    private static final String MODID = MyMod262.MODID;
+    private static final String MODID = AcademyCraft262.MODID;
 }

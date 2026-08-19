@@ -1,6 +1,6 @@
 package cn.li.neoforge262.entity;
 
-import cn.li.neoforge262.MyMod262;
+import cn.li.neoforge262.AcademyCraft262;
 import cn.li.mc262.entity.ScriptedBlockBodyEntity;
 import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mc262.entity.ScriptedMarkerEntity;
@@ -92,7 +92,7 @@ public final class ModEntities {
     }
 
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
-            DeferredRegister.create(Registries.ENTITY_TYPE, MyMod262.MODID);
+            DeferredRegister.create(Registries.ENTITY_TYPE, AcademyCraft262.MODID);
 
     private static final Map<String, DeferredHolder<EntityType<?>, EntityType<?>>> REGISTERED_ENTITY_TYPES = new ConcurrentHashMap<>();
     private static final Map<String, ScriptedProjectileSpec> SCRIPTED_PROJECTILE_SPECS = new ConcurrentHashMap<>();

@@ -1,6 +1,6 @@
 package cn.li.forge1201.recipe;
 
-import cn.li.forge1201.MyMod1201;
+import cn.li.forge1201.AcademyCraft1201;
 import cn.li.mc1201.recipe.ContentRecipe;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -19,16 +19,16 @@ import net.minecraftforge.registries.RegistryObject;
 public final class ModRecipeTypes {
 
     public static final DeferredRegister<RecipeType<?>> RECIPE_TYPES =
-        DeferredRegister.create(Registries.RECIPE_TYPE, MyMod1201.MODID);
+        DeferredRegister.create(Registries.RECIPE_TYPE, AcademyCraft1201.MODID);
 
     public static final DeferredRegister<RecipeSerializer<?>> RECIPE_SERIALIZERS =
-        DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.RECIPE_SERIALIZERS, MyMod1201.MODID);
+        DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.RECIPE_SERIALIZERS, AcademyCraft1201.MODID);
 
     public static final RegistryObject<RecipeType<ContentRecipe>> CONTENT_PROCESS_TYPE =
         RECIPE_TYPES.register("content_process", () -> new RecipeType<ContentRecipe>() {
             @Override
             public String toString() {
-                return MyMod1201.MODID + ":content_process";
+                return AcademyCraft1201.MODID + ":content_process";
             }
         });
 
@@ -36,7 +36,7 @@ public final class ModRecipeTypes {
         RECIPE_TYPES.register("content_mode", () -> new RecipeType<ContentRecipe>() {
             @Override
             public String toString() {
-                return MyMod1201.MODID + ":content_mode";
+                return AcademyCraft1201.MODID + ":content_mode";
             }
         });
 

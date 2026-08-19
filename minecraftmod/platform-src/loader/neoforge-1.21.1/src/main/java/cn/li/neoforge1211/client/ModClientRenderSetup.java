@@ -1,6 +1,6 @@
 package cn.li.neoforge1211.client;
 
-import cn.li.neoforge1211.MyMod1211;
+import cn.li.neoforge1211.AcademyCraft1211;
 import cn.li.neoforge1211.client.render.ForgeClientRenderRegistry;
 import cn.li.mcbase.clj.ClojureInterop;
 import net.neoforged.api.distmarker.Dist;
@@ -17,7 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
  * mod bus. Clojure {@code IEventBus.addListener(Class, Consumer)} for inner event types
  * can fail to match generics, so the handler never ran (no scripted BER in-game).
  */
-@EventBusSubscriber(modid = MyMod1211.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = AcademyCraft1211.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ModClientRenderSetup {
 
     private ModClientRenderSetup() {
