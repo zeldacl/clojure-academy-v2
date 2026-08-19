@@ -2127,10 +2127,15 @@
       (edn-sessions/start! owner ability-id normalized))
     (let [session (edn-sessions/session owner)
           session-context (edn-sessions/context-for owner normalized)
+          owner-view (owner-state owner)
           start-tick (long (or (:start-tick session) current-tick))
           dynamic-context (merge (:context session-context)
                                  {:server-tick current-tick
                                   :session-start-tick start-tick
+                                  :resources (:resources owner-view)
+                                  :skill-exp (double (or (get-in owner-view
+                                                                 [:ability-data :skill-exps ability-id])
+                                                          0.0))
                                   :hold-ticks (max 0 (- current-tick start-tick))})
           execution-intent (merge normalized
                                   (select-keys session-context
