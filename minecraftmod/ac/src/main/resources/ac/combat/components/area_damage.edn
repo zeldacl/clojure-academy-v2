@@ -2,13 +2,20 @@
  :kind :composite
  :id :combat/area-damage
  :revision 1
+ ;; :area-target is this composite's own :flow/foreach loop variable
+ ;; (bound below at :as :area-target) -- private to this body. :iterates
+ ;; publishes it as the abstract :item port instead, so a caller's :damage
+ ;; expression can vary per struck entity (e.g. falloff by distance)
+ ;; without ever knowing this internal name; see recipe.clj's
+ ;; check-per-item-input for the compile-time contract this enforces.
+ :iterates {:item {:as :area-target :fields [:id :type :position]}}
  :inputs
  {:center {:type :object}
   :radius {:type :object}
   :filter {:type :object}
   :projection {:type :object}
   :limit {:type :object}
-  :damage {:type :object}
+  :damage {:type :expr-per-item :port :item}
   :damage-type {:type :keyword}
   :on-impact {:type :node}}
  :body

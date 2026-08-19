@@ -72,7 +72,7 @@
                                               :args [1.0
                                                      {:expr :math/div
                                                       :args [{:expr :vec3/distance
-                                                              :args [{:ref [:slot :area-target :position]}
+                                                              :args [{:ref [:item :position]}
                                                                      {:ref [:slot :aim-hit :position]}]}
                                                              {:tunable :aoe-radius}]}]}]}]}]}
              :damage-type :skill

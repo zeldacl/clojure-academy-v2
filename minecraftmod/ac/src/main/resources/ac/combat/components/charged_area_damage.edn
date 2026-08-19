@@ -2,6 +2,14 @@
  :kind :composite
  :id :combat/charged-area-damage
  :revision 1
+ ;; Relays :combat/area-damage's :item port unchanged -- this composite's
+ ;; own body never touches it, only forwards whatever the caller supplied
+ ;; for :damage straight through to :combat/area-damage below, so :as must
+ ;; name the SAME internal loop variable :combat/area-damage itself uses.
+ ;; That coupling is between these two composites, which already have a
+ ;; direct, visible call relationship -- not something thunder_clap.edn (or
+ ;; any other ability) needs to know about anymore.
+ :iterates {:item {:as :area-target :fields [:id :type :position]}}
  :inputs
  {:current-ticks {:type :object}
   :minimum-ticks {:type :object}
@@ -14,7 +22,7 @@
   :filter {:type :object}
   :projection {:type :object}
   :limit {:type :object}
-  :damage {:type :object}
+  :damage {:type :expr-per-item :port :item}
   :damage-type {:type :keyword}
   :on-impact {:type :node}}
  :body

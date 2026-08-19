@@ -129,6 +129,86 @@
                   {:path path :component (:id descriptor) :input key}))))
       {} definitions)))
 
+;; Schema v2 design 0(d) (U3; defect #5's actual fix): a composite's own
+;; internal loop/iteration variable (its :flow/foreach's :as) is private to
+;; its body. Before this, the only way for a caller to compute a per-item
+;; value was to guess that internal name and write {:ref [:slot <name>
+;; ...]}; a substitution-only expander happily spliced that guess into the
+;; composite body, so it "worked" by lucky positional inlining -- and would
+;; silently break the moment the composite's author renamed their own local
+;; variable, since nothing declared the coupling.
+;;
+;; :iterates lets a composite publish an abstract per-item port instead:
+;; `:iterates {:item {:as :area-target :fields [:id :position]}}` says "my
+;; body iterates something bound internally as :area-target; callers may
+;; see these fields of it, addressed as :item, never as :area-target." A
+;; composite :inputs entry can then declare `{:type :expr-per-item :port
+;; :item}`, and callers write {:ref [:item :position]} -- never learning
+;; the composite's real internal name. Expansion rewrites :item refs to the
+;; composite's own :as name right here, at the one place that already knows
+;; both sides of the mapping; every other stage of the pipeline (dataflow
+;; checking, the VM) only ever sees ordinary {:ref [:slot ...]}` refs, same
+;; as before -- this is authoring-time sugar, not a new runtime concept.
+(defn- item-ref? [value]
+  (and (map? value)
+       (vector? (:ref value))
+       (= :item (first (:ref value)))
+       (keyword? (second (:ref value)))))
+
+(defn- collect-item-refs
+  "Every {:ref [:item field ...]} anywhere in `value`."
+  [value acc]
+  (cond
+    (item-ref? value) (conj acc value)
+    (map? value) (reduce-kv (fn [acc _ v] (collect-item-refs v acc)) acc value)
+    (vector? value) (reduce (fn [acc v] (collect-item-refs v acc)) acc value)
+    :else acc))
+
+(defn- rewrite-item-refs
+  "Desugar every {:ref [:item field & path]} in `value` to {:ref [:slot
+   as-name field & path]} -- the composite's own internal loop-variable
+   name, used here and nowhere else."
+  [value as-name]
+  (walk/postwalk
+    (fn [x]
+      (if (item-ref? x)
+        (assoc x :ref (into [:slot as-name] (rest (:ref x))))
+        x))
+    value))
+
+(defn- check-per-item-input
+  "Validate and desugar one composite-invocation input value. An
+   :expr-per-item input's {:ref [:item field]}` uses must all name a field
+   the composite's :iterates entry actually publishes; any other input must
+   not reference the :item scope at all -- it has no meaning there."
+  [descriptor key value path]
+  (let [definition (get (:inputs descriptor) key)]
+    (if (= :expr-per-item (:type definition))
+      (let [port (:port definition)
+            iterates (get (:iterates descriptor) port)
+            as-name (:as iterates)
+            fields (set (:fields iterates))]
+        (when-not as-name
+          (fail "composite input declares :type :expr-per-item for a :port with no matching :iterates entry"
+                {:path path :component (:id descriptor) :input key :port port}))
+        (doseq [ref (collect-item-refs value #{})]
+          (let [field (second (:ref ref))]
+            (when-not (contains? fields field)
+              (fail "per-item field is not published by the composite's :iterates entry"
+                    {:path path :component (:id descriptor) :input key
+                     :port port :field field :published (vec fields)}))))
+        (rewrite-item-refs value as-name))
+      (do
+        (when (seq (collect-item-refs value #{}))
+          (fail "{:ref [:item ...]} used on an input that is not :type :expr-per-item"
+                {:path path :component (:id descriptor) :input key}))
+        value))))
+
+(defn- fail-on-residual-item-refs! [program]
+  (when (seq (collect-item-refs program #{}))
+    (fail "{:ref [:item ...]} may only appear as the value of a composite's :type :expr-per-item input"
+          {})))
+
 (declare expand-node)
 
 (defn- expand-node [node composites path stack depth]
@@ -142,6 +222,9 @@
       (when (contains? stack id)
         (fail "composite expansion cycle" {:path path :component id}))
       (let [inputs (composite-inputs descriptor node path)
+            inputs (into {} (map (fn [[key value]]
+                                   [key (check-per-item-input descriptor key value path)]))
+                        inputs)
             body (substitute-inputs (:body descriptor) inputs path)]
         (expand-node body composites path (conj stack id) (inc depth))))
     (reduce (fn [result [suffix child]]
@@ -232,6 +315,12 @@
         ;; all substituted above), so validate-tree never needs `composites`
         ;; to resolve a node -- passed through anyway so a future relaxation
         ;; of expand-node doesn't silently make validation composite-blind.
+        ;; A well-formed {:ref [:item ...]} is always rewritten to a plain
+        ;; :slot ref during expansion (see check-per-item-input above); one
+        ;; surviving here means it was never inside a :type :expr-per-item
+        ;; input at all (e.g. written directly in the ability's own
+        ;; program), which check-per-item-input never gets a chance to see.
+        _ (fail-on-residual-item-refs! expanded-program)
         _ (try
             (dataflow/check-program! expanded-program)
             (catch clojure.lang.ExceptionInfo e

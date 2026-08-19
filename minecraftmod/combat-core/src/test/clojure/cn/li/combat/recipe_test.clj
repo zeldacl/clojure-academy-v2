@@ -49,6 +49,75 @@
     (is (not-any? #(= :test/finish (get-in % [:data :component]))
                   (:compiled-ir compiled)))))
 
+(def ^:private per-item-composites
+  {:test/per-item
+   {:kind :composite :id :test/per-item :revision 1
+    :iterates {:item {:as :internal-var :fields [:id :position]}}
+    :inputs {:amount {:type :expr-per-item :port :item}}
+    :body {:component :flow/foreach
+           :items [{:id 1 :position 10.0} {:id 2 :position 20.0}]
+           :as :internal-var
+           :limit 2
+           :body {:component :domain/event :event-type :hit
+                  :payload {:amount {:ref [:input :amount]}}}}}})
+
+(deftest per-item-input-resolves-a-distinct-value-for-each-iteration
+  (testing (str "defect #5's actual fix: the caller writes {:ref [:item "
+                ":position]}, never learning the composite's real internal "
+                ":as name (:internal-var), and still gets a fresh value "
+                "each iteration")
+    (components/reset-for-test!)
+    (let [ability (recipe/compile-ability
+                    {:schema-version 1 :kind :ability :id :per-item-test
+                     :revision 1 :activation :instant
+                     :program {:component :flow/sequence
+                               :steps [{:component :test/per-item
+                                        :amount {:ref [:item :position]}}
+                                       {:component :flow/finish :outcome :ok}]}}
+                    {:composites per-item-composites})
+          frame (ExecutionFrame. (double-array 0) (long-array 0)
+                                 (boolean-array 0) (object-array 0)
+                                 (ArrayList.) (ArrayList.) (ArrayList.)
+                                 (int-array 0))
+          result (vm/execute! (:compiled-program ability) frame
+                              (HostTable. (object-array 0) (fn [_] true) (fn [_ _] true))
+                              0 {:context {} :slots* (volatile! {})})]
+      (is (= :finished (:status result)))
+      (is (= [10.0 20.0] (mapv #(get-in % [:payload :amount]) (:events result)))))))
+
+(deftest per-item-ref-on-a-non-expr-per-item-input-is-rejected
+  (components/reset-for-test!)
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"not :type :expr-per-item"
+       (recipe/compile-ability
+         {:schema-version 1 :kind :ability :id :per-item-misuse-test
+          :revision 1 :activation :instant
+          :program {:component :test/finish :outcome {:ref [:item :position]}}}
+         {:composites {:test/finish
+                       {:kind :composite :id :test/finish :revision 1
+                        :inputs {:outcome {:type :keyword}}
+                        :body {:component :flow/finish
+                               :outcome {:ref [:input :outcome]}}}}}))))
+
+(deftest per-item-ref-outside-any-composite-invocation-is-rejected
+  (components/reset-for-test!)
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"may only appear as the value"
+       (recipe/compile-ability
+         {:schema-version 1 :kind :ability :id :per-item-residual-test
+          :revision 1 :activation :instant
+          :program {:component :flow/finish :outcome {:ref [:item :position]}}}))))
+
+(deftest per-item-field-not-published-by-iterates-is-rejected
+  (components/reset-for-test!)
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"not published by the composite's :iterates entry"
+       (recipe/compile-ability
+         {:schema-version 1 :kind :ability :id :per-item-field-test
+          :revision 1 :activation :instant
+          :program {:component :test/per-item :amount {:ref [:item :not-a-real-field]}}}
+         {:composites per-item-composites}))))
+
 (deftest composite-cycle-and-missing-input-are-rejected
   (components/reset-for-test!)
   (let [cycle {:test/a {:kind :composite :id :test/a :inputs {}
@@ -516,8 +585,10 @@
                    {:ref [:input :on-impact]}]}}
    :combat/area-damage
    {:kind :composite :id :combat/area-damage :revision 1
+    :iterates {:item {:as :area-target :fields [:id :type :position]}}
     :inputs {:center {:type :object} :radius {:type :object} :filter {:type :object}
-             :projection {:type :object} :limit {:type :object} :damage {:type :object}
+             :projection {:type :object} :limit {:type :object}
+             :damage {:type :expr-per-item :port :item}
              :damage-type {:type :keyword} :on-impact {:type :node}}
     :body {:component :flow/sequence
            :steps [{:component :target/entities
@@ -533,10 +604,12 @@
                            :on-impact {:ref [:input :on-impact]}}}]}}
    :combat/charged-area-damage
    {:kind :composite :id :combat/charged-area-damage :revision 1
+    :iterates {:item {:as :area-target :fields [:id :type :position]}}
     :inputs {:current-ticks {:type :object} :minimum-ticks {:type :object} :maximum-ticks {:type :object}
              :ratio-slot {:type :keyword} :ratio-min {:type :object} :ratio-max {:type :object}
              :center {:type :object} :radius {:type :object} :filter {:type :object}
-             :projection {:type :object} :limit {:type :object} :damage {:type :object}
+             :projection {:type :object} :limit {:type :object}
+             :damage {:type :expr-per-item :port :item}
              :damage-type {:type :keyword} :on-impact {:type :node}}
     :body {:component :flow/sequence
            :steps [{:component :data/bind
@@ -592,7 +665,7 @@
                                                                 :args [1.0
                                                                        {:expr :math/div
                                                                         :args [{:expr :vec3/distance
-                                                                                :args [{:ref [:slot :area-target :position]}
+                                                                                :args [{:ref [:item :position]}
                                                                                        {:x 0.0 :y 0.0 :z 0.0}]}
                                                                                {:tunable :aoe-radius}]}]}]}]}]}
                                :damage-type :skill
