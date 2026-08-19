@@ -10,7 +10,6 @@
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
             [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as ray-barrage-fx]
-            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
@@ -22,7 +21,6 @@
       (meltdowner-fx/init!)
       (mine-ray-fx/init!)
       (ray-barrage-fx/init!)
-      (scatter-bomb-fx/init!)
       (electron-bomb-fx/reset-fx-for-test!)
       (electron-missile-fx/reset-electron-missile-fx-for-test!)
       (jet-engine-fx/reset-fx-for-test!)
@@ -30,7 +28,6 @@
       (meltdowner-fx/reset-fx-for-test!)
       (mine-ray-fx/reset-mine-ray-fx-for-test!)
       (ray-barrage-fx/reset-fx-for-test!)
-      (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
       (try
         (f)
         (finally
@@ -41,7 +38,6 @@
           (meltdowner-fx/reset-fx-for-test!)
           (mine-ray-fx/reset-mine-ray-fx-for-test!)
           (ray-barrage-fx/reset-fx-for-test!)
-          (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
           (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -116,12 +112,6 @@
     (dispatch! :ray-barrage (event "ctx-b" :ray-barrage/fx-barrage
                                  {:mode :barrage :silbarn p1 :yaw 10.0 :pitch -5.0}))
 
-    (dispatch! :scatter-bomb (event "ctx-a" :scatter-bomb/fx-start {:mode :start}))
-    (dispatch! :scatter-bomb (event "ctx-b" :scatter-bomb/fx-start {:mode :start}))
-    (dispatch! :scatter-bomb (event "ctx-a" :scatter-bomb/fx-ball
-                                  {:mode :ball :x 1.0 :y 64.0 :z 1.0 :count 3}))
-    (dispatch! :scatter-bomb (event "ctx-b" :scatter-bomb/fx-ball
-                                  {:mode :ball :x 2.0 :y 64.0 :z 2.0 :count 5}))
 
     (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
     (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
@@ -143,6 +133,4 @@
       ;; though both happen to hold 1 preray + a random 25~30 sub rays
       (is (<= 26 a-count 31))
       (is (<= 26 b-count 31)))
-    (is (= 3 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"] :balls])))
-    (is (= 5 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :balls])))))
-
+    ))

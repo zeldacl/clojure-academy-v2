@@ -16,4 +16,10 @@
               :resource "ac/vfx/effects/vec_reflection_field.edn"}
              {:kind :vfx-effect
               :id :vec-reflection-wave
-              :resource "ac/vfx/effects/vec_reflection_wave.edn"}]}
+              :resource "ac/vfx/effects/vec_reflection_wave.edn"}
+             {:kind :vfx-effect
+              :id :scatter-bomb-charge
+              :resource "ac/vfx/effects/scatter_bomb_charge.edn"}
+             {:kind :vfx-effect
+              :id :scatter-bomb-beam
+              :resource "ac/vfx/effects/scatter_bomb_beam.edn"}]}

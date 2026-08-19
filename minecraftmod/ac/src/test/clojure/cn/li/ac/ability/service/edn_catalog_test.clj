@@ -11,6 +11,7 @@
     (is (catalog/available? :railgun))
     (is (catalog/available? :arc-gen))
     (is (catalog/available? :thunder-clap))
+    (is (catalog/available? :scatter-bomb))
     (is (not (catalog/available? :thunder-bolt)))
     (is (= :pending (catalog/migration-status :thunder-bolt)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))

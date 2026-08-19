@@ -69,6 +69,12 @@
                   :owner {:ref [:context :owner]} :position vec3-example
                   :velocity vec3-example :result :spawn}
    :entity/discard {:component :entity/discard :entity {:ref [:slot :entity-id]}}
+   :data/random-item {:component :data/random-item
+                      :items {:ref [:slot :candidates]} :result :candidate}
+   :projectile/schedule-beam {:component :projectile/schedule-beam
+                              :origin {:ref [:slot :origin]}
+                              :destination {:ref [:slot :destination]}
+                              :damage 1.0 :damage-type :generic :delay-ticks 1}
    :block/break-budget {:component :block/break-budget :blocks {:ref [:slot :blocks]}
                         :energy 1.0 :order :beam-forward :limit 1}
    :world/sound {:component :world/sound :sound-id "generic" :position vec3-example

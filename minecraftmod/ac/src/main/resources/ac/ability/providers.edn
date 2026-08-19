@@ -35,8 +35,7 @@
    cn.li.ac.content.ability.meltdowner.mine-ray-luck
    cn.li.ac.content.ability.meltdowner.mine-rays-base
    cn.li.ac.content.ability.meltdowner.rad-intensify
-   cn.li.ac.content.ability.meltdowner.ray-barrage
-   cn.li.ac.content.ability.meltdowner.scatter-bomb]
+   cn.li.ac.content.ability.meltdowner.ray-barrage]
   :fx-namespaces
   [cn.li.ac.content.ability.meltdowner.electron-bomb-fx
    cn.li.ac.content.ability.meltdowner.electron-missile-fx
@@ -45,8 +44,7 @@
    cn.li.ac.content.ability.meltdowner.meltdowner-fx
    cn.li.ac.content.ability.meltdowner.mine-ray-fx
    cn.li.ac.content.ability.meltdowner.rad-intensify-fx
-   cn.li.ac.content.ability.meltdowner.ray-barrage-fx
-   cn.li.ac.content.ability.meltdowner.scatter-bomb-fx]}
+   cn.li.ac.content.ability.meltdowner.ray-barrage-fx]}
  {:id :teleporter
   :priority 40
   :skill-namespaces

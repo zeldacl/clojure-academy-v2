@@ -2,6 +2,7 @@
  :skills {:railgun :migrated
           :arc-gen :migrated
           :thunder-clap :migrated
+          :scatter-bomb :migrated
           :thunder-bolt :pending
           :vec-reflection :migrated
           :groundshock :pending}}

@@ -17,7 +17,6 @@
     cn.li.ac.content.ability.meltdowner.mine-ray-fx/init!
     cn.li.ac.content.ability.meltdowner.rad-intensify-fx/init!
     cn.li.ac.content.ability.meltdowner.ray-barrage-fx/init!
-    cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/init!
     cn.li.ac.content.ability.teleporter.flashing-fx/init!
     cn.li.ac.content.ability.teleporter.flesh-ripping-fx/init!
     cn.li.ac.content.ability.teleporter.location-teleport-fx/init!
@@ -36,7 +35,7 @@
     cn.li.ac.content.ability.vecmanip.vec-deviation-fx/init!])
 
 (deftest all-content-ability-fx-inits-register-via-fx-spec-test
-  (is (= 31 (count fx-init-symbols)))
+  (is (= 30 (count fx-init-symbols)))
   (doseq [init-sym fx-init-symbols]
     (let [register-calls* (atom [])]
       (with-redefs [fx-spec/register! (fn [spec] (swap! register-calls* conj spec))]

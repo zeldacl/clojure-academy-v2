@@ -61,6 +61,7 @@
     :math/min (double (min (double (nth args 0)) (double (nth args 1))))
     :math/max (double (max (double (nth args 0)) (double (nth args 1))))
     :math/abs (double (Math/abs (double (nth args 0))))
+    :math/floor (double (Math/floor (double (nth args 0))))
     :math/sqrt (double (Math/sqrt (double (nth args 0))))
     :math/sin (double (Math/sin (double (nth args 0))))
     :math/cos (double (Math/cos (double (nth args 0))))
@@ -108,6 +109,28 @@
                         {:vec3 [(/ (double x) length)
                                 (/ (double y) length)
                                 (/ (double z) length)]}))
+    ;; Generic deterministic scatter geometry.  The endpoint is the sum of
+    ;; an exact forward range vector and a second vector rotated by an
+    ;; independently sampled pitch/yaw, matching the neutral projectile
+    ;; semantics used by any ability that needs bounded radial spread.
+    :vec3/scatter-end
+    (let [[ox oy oz] (vec3-components (nth args 0))
+          [lx ly lz] (vec3-components (nth args 1))
+          range (double (nth args 2))
+          angle (Math/toRadians (double (nth args 3)))
+          half (* 0.5 angle)
+          pitch (double (rng-uniform rng-state (- half) half))
+          yaw (double (rng-uniform (rng-next-long rng-state) (- half) half))
+          cp (Math/cos pitch) sp (Math/sin pitch)
+          px (double lx)
+          py (+ (* (double ly) cp) (* (double lz) sp))
+          pz (- (* (double lz) cp) (* (double ly) sp))
+          cy (Math/cos yaw) sy (Math/sin yaw)
+          rx (+ (* px cy) (* pz sy))
+          rz (- (* pz cy) (* px sy))]
+      {:vec3 [(+ (double ox) (* range (double lx)) (* range rx))
+              (+ (double oy) (* range (double ly)) (* range py))
+              (+ (double oz) (* range (double lz)) (* range rz))]})
     :random/uniform (double (rng-uniform rng-state (double (nth args 0)) (double (nth args 1))))
     :random/int (long (rng-bounded-int rng-state (long (nth args 0)) (long (nth args 1))))
     :random/chance (< (double (rng-unit-double rng-state)) (double (nth args 0)))
@@ -131,6 +154,7 @@
    :combat/status :entity/status
    :entity/spawn :entity/spawn
     :entity/discard :entity/discard
+   :projectile/schedule-beam :projectile/schedule-beam
     :block/break-budget :block/break
    :world/sound :world/sound
    :world/lightning :world/lightning
@@ -317,7 +341,9 @@
         (when (< index limit)
           (let [item (nth items index)]
           (when-let [slots* (:slots* context)]
-            (vswap! slots* assoc (:as data) item))
+            (vswap! slots* assoc (:as data) item)
+            (when-let [index-as (:index-as data)]
+              (vswap! slots* assoc index-as (long index))))
           (let [result (execute-component! frame host
                                            (:component (:body data))
                                            (dissoc (:body data) :component)
@@ -336,6 +362,21 @@
               (= :break-loop control) nil
               result result
               :else (recur (inc index))))))))
+    :data/random-item
+    (let [items (let [value (or (resolve-data (:items data) context) [])]
+                  (if (vector? value) value (vec value)))
+          counter* (:rng-counter* context)
+          call-index (if counter* (long (vswap! counter* inc)) 0)
+          seed (long (rng-next-long
+                       (unchecked-add (long (or (:activation-seed context) 0))
+                                      call-index)))
+          selected (when (seq items)
+                     (nth items
+                          (int (rng/bounded-int
+                                seed 0 (dec (count items))))))]
+      (when-let [slots* (:slots* context)]
+        (vswap! slots* assoc (:result data) selected))
+      nil)
     :flow/control {:control (:signal data)}
     :flow/window
     (let [value (double (resolve-data (:value data) context))

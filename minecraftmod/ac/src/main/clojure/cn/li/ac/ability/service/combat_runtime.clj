@@ -754,12 +754,6 @@
                                     ;; result (see combat_content.clj), so a
                                     ;; non-nil map is all :world-effect needs.
                                     {}))
-              :scatter-bomb (fn [context node]
-                              (if-let [host-query (contract/host-port :query)]
-                                (host-query :scatter-bomb context node)
-                                ;; Same as electron-missile -- execute-scatter-
-                                ;; bomb! does its own targeting.
-                                {}))
               :saved-location (fn [context node]
                                 (if-let [host-query (contract/host-port :query)]
                                   (host-query :saved-location context node)
@@ -1342,36 +1336,6 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-electron-missile!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :scatter-bomb
-                         (let [{:keys [world-id query-result ball-count scatter-range
-                                       scatter-angle-degrees auto-aim-radius damage
-                                       anti-afk-tick anti-afk-damage]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :ball-count (long (or ball-count 0))
-                                     :scatter-range (double (or scatter-range 0.0))
-                                     :scatter-angle-degrees (double (or scatter-angle-degrees 0.0))
-                                     :auto-aim-radius (double (or auto-aim-radius 0.0))
-                                     :damage (double (or damage 0.0))
-                                     :anti-afk-tick (long (or anti-afk-tick 200))
-                                     :anti-afk-damage (double (or anti-afk-damage 6.0))}
-                               valid? (and world-id (map? query-result)
-                                            (<= 0 (:ball-count plan) 7)
-                                            (finite? scatter-range) (<= 1.0 (:scatter-range plan) 64.0)
-                                            (finite? scatter-angle-degrees)
-                                            (<= 0.0 (:scatter-angle-degrees plan) 180.0)
-                                            (finite? auto-aim-radius) (<= 0.0 (:auto-aim-radius plan) 16.0)
-                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
-                                            (<= 1 (:anti-afk-tick plan) 400)
-                                            (finite? anti-afk-damage) (<= 0.0 (:anti-afk-damage plan) 100.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-scatter-bomb!
                                                world-id owner plan))
                                       :applied
                                       :failed)
@@ -2022,6 +1986,9 @@
                  owner-id (str owner)
                  type-filter (set (or (:entity-types filter) []))
                  excluded-filter (set (or (:excluded-entity-ids filter) []))
+                 entity-owner-filter (some-> (:owner-id filter) str)
+                 living-filter (when (contains? filter :living?)
+                                 (boolean (:living? filter)))
                  difficulty-map (reduce
                                   (fn [result entry]
                                     (if (string? entry)
@@ -2071,10 +2038,15 @@
                  (->> (world-effects/find-entities-in-radius world-id cx cy cz radius)
                       (filter map?)
                       (remove #(= owner-id (str (or (:uuid %) (:entity-id %)))))
-                      (filter #(let [entity-type (or (:entity-type %) (:type %))]
+                      (filter #(let [entity-type (or (:entity-type %) (:type %))
+                                     entity-owner (some-> (or (:owner-id %) (:owner-uuid %)) str)]
                                  (and (or (empty? type-filter)
                                           (contains? type-filter entity-type))
                                       (not (contains? excluded-filter entity-type))
+                                      (or (nil? entity-owner-filter)
+                                          (= entity-owner-filter entity-owner))
+                                      (or (nil? living-filter)
+                                          (= living-filter (boolean (:living? %))))
                                       (not (:item? %))
                                       (not (:living? %))
                                       (not (:mob? %))
@@ -2124,6 +2096,41 @@
                (potion-effects/apply-effect!
                 target status-id (int (max 0 (min 1200 (long duration-ticks))))
                 (int (max 0 (min 255 (long amplifier))))))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/spawn)
+        (capabilities/register-action!
+         :entity/spawn
+         (fn [{:keys [world-id owner entity-type position velocity life-ticks]}]
+           (if (and world-id owner (string? entity-type)
+                    (world-effects/available?))
+             {:status (if (world-effects/spawn-entity!
+                           world-id owner entity-type position velocity life-ticks)
+                        :applied :failed)}
+             {:status :rejected :reason :invalid-entity-spawn}))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/discard)
+        (capabilities/register-action!
+         :entity/discard
+         (fn [{:keys [world-id entity]}]
+           (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))]
+             {:status (if (and world-id entity-id
+                               (world-effects/available?)
+                               (world-effects/discard-entity-by-uuid!
+                                world-id entity-id))
+                        :applied :failed)}))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :projectile/schedule-beam)
+        (capabilities/register-action!
+         :projectile/schedule-beam
+         (fn [{:keys [owner world-id origin destination damage damage-type delay-ticks]}]
+           (if (and owner world-id (map? origin) (map? destination)
+                    (number? damage) (Double/isFinite (double damage)))
+             (do
+               ((requiring-resolve
+                 'cn.li.ac.ability.service.delayed-projectiles/schedule-beam!)
+                {:owner owner :world-id world-id :origin origin
+                 :destination destination :damage (double damage)
+                 :damage-type (or damage-type :generic)
+                 :delay-ticks (long (max 1 (or delay-ticks 1)))})
+               {:status :scheduled})
+             {:status :rejected :reason :invalid-beam-request}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :projectile/redirect)
         (capabilities/register-action!
          :projectile/redirect

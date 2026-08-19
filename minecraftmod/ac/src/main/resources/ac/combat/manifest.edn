@@ -10,4 +10,7 @@
              :resource "ac/combat/abilities/thunder_clap.edn"}
              {:kind :ability
               :id :vec-reflection
-              :resource "ac/combat/abilities/vec_reflection.edn"}]}
+              :resource "ac/combat/abilities/vec_reflection.edn"}
+             {:kind :ability
+              :id :scatter-bomb
+              :resource "ac/combat/abilities/scatter_bomb.edn"}]}

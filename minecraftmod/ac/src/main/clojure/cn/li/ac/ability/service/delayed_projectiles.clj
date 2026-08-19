@@ -5,8 +5,6 @@
   never serialized into player state."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -102,16 +100,17 @@
   [{:keys [player-id] :as task}]
   (schedule-task! player-id (:delay-ticks task) (assoc task :kind :electron-bomb-beam)))
 
-(defn schedule-scatter-bomb-beam!
-  [{:keys [player-id] :as task}]
-  (schedule-task! player-id (:delay-ticks task) (assoc task :kind :scatter-bomb-beam)))
+(defn schedule-beam!
+  "Schedule one neutral point-to-point beam settlement."
+  [{:keys [owner] :as task}]
+  (schedule-task! owner (:delay-ticks task) (assoc task :kind :beam)))
 
 (defn resolve-ball-position
   "Locate the spawned MdBall entity by uuid at settle time. The ball orbits
   the caster (body-level, radius 0.8-1.3), so a small AABB around the caster's
   eye covers it. Returns the ball's world position map, or nil when the ball
   is gone (world unloaded) — callers then fall back to the caster's eye.
-  Shared by electron-bomb and scatter-bomb so release rays originate from
+  Shared by ball-based projectile abilities so release rays originate from
   the balls' actual orbit positions."
   [world-id player-id ball-uuid]
   (when (and ball-uuid (world-effects/available?))
@@ -200,37 +199,35 @@
                 target-uuid
                 damage-amt
                 :magic)
-              (md-damage/mark-target! player-id target-uuid
-                                      {:ctx-id ctx-id
-                                       :target-pos {:x (:x hit)
-                                                    :y (:y hit)
-                                                    :z (:z hit)}}))
+              (when-let [mark-target (requiring-resolve
+                                      'cn.li.ac.content.ability.meltdowner.damage-helper/mark-target!)]
+                (mark-target player-id target-uuid
+                             {:ctx-id ctx-id
+                              :target-pos {:x (:x hit)
+                                           :y (:y hit)
+                                           :z (:z hit)}})))
             ;; Original broadcasts the small ray even when it hits no entity.
             (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam payload)
             (ctx-mgr/push-channel-to-nearby-players! player-id ctx-id :electron-bomb/fx-beam payload))))))
     (catch Exception e
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 
-(defn- run-scatter-bomb-beam!
-  "Matches original's per-ball resolution: a precise point-to-point raycast
-  from the ball's (approximated) origin to its independently-randomized
-  destination, single-entity hit, with hurtResistantTime=-1 (reset-
-  invulnerable-time?) so multiple balls can all connect on the same target
-  within one release — not a radius/falloff beam."
-  [{:keys [player-id ctx-id world-id origin dest damage]}]
+(defn- run-beam!
+  "Resolve one neutral point-to-point beam against blocks and entities."
+  [{:keys [owner world-id origin destination damage damage-type]}]
   (try
     (when (raycast/available?)
       (let [ox (double (:x origin)) oy (double (:y origin)) oz (double (:z origin))
-            dx (- (double (:x dest)) ox)
-            dy (- (double (:y dest)) oy)
-            dz (- (double (:z dest)) oz)
+            dx (- (double (:x destination)) ox)
+            dy (- (double (:y destination)) oy)
+            dz (- (double (:z destination)) oz)
             dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
             dir  (if (pos? dist)
                    {:x (/ dx dist) :y (/ dy dist) :z (/ dz dist)}
                    {:x 0.0 :y 0.0 :z 1.0})
             ;; Raytrace.perform(world, ballEyes, dest, everything.and(
             ;; exclude(player))) traces BLOCKS as well as entities, so a wall
-            ;; between the ball and its scatter point stops the shot. Tracing
+            ;; between the ball and its destination stops the shot. Tracing
             ;; entities alone let every ball hit through terrain.
             hit  (raycast/raycast-combined-all
                    world-id ox oy oz
@@ -240,21 +237,17 @@
                           (or (:uuid hit) (:entity-id hit)))]
         (when (and target-uuid (entity-damage/available?))
           (entity-damage/apply-direct-damage!
-            world-id target-uuid (double (or damage 0.0)) :magic
-            {:reset-invulnerable-time? true})
-          (md-damage/mark-target! player-id target-uuid {:ctx-id ctx-id}))
-        (ctx-mgr/push-channel-to-player! player-id ctx-id :scatter-bomb/fx-beam
-          {:start origin :end dest})
-        (ctx-mgr/push-channel-to-nearby-players! player-id ctx-id :scatter-bomb/fx-beam
-          {:start origin :end dest})))
+            world-id target-uuid (double (or damage 0.0))
+            (or damage-type :generic)
+            {:attacker-uuid owner :reset-invulnerable-time? true}))))
     (catch Exception e
-      (log/warn "Delayed ScatterBomb settle failed:" (ex-message e)))))
+      (log/warn "Delayed neutral beam settlement failed:" (ex-message e)))))
 
 (defn- run-task!
   [{:keys [kind] :as task}]
   (case kind
     :electron-bomb-beam (run-electron-bomb-beam! task)
-    :scatter-bomb-beam (run-scatter-bomb-beam! task)
+    :beam (run-beam! task)
     nil))
 
 (defn tick-player!

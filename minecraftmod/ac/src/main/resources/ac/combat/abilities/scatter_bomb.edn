@@ -1,0 +1,213 @@
+{:schema-version 2
+ :kind :ability
+ :id :scatter-bomb
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]
+ :tunables
+ {:max-balls {:curve :const :type :long}
+  :max-hold-ticks {:curve :const :type :long}
+  :spawn-interval-ticks {:curve :const :type :long}
+  :spawn-start-tick {:curve :const :type :long}
+  :scatter-range {:curve :const}
+  :scatter-angle-degrees {:curve :const}
+  :damage {:curve :mastery-lerp}
+  :auto-aim-exp-threshold {:curve :const}
+  :auto-aim-radius {:curve :const}
+  :anti-afk-tick {:curve :const :type :long}
+  :anti-afk-damage {:curve :const}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :exp-per-ball {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :progression {:ball-fired {:per-mark {:tunable :exp-per-ball}}}
+ :vfx
+ {:charge-started {:effect-id :scatter-bomb-charge :op :spawn
+                   :payload {:owner :owner-id :position :vec3 :balls :long}}
+  :charge-updated {:effect-id :scatter-bomb-charge :op :update
+                   :payload {:position :vec3 :balls :long}}
+  :beam-fired {:effect-id :scatter-bomb-beam :op :spawn
+               :payload {:start :vec3 :end :vec3 :life-ticks :long}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps [{:component :cost/spend
+            :budget :activate
+            :on-insufficient {:component :flow/finish
+                              :outcome :insufficient-resource
+                              :finish-session? true}}
+           {:component :session/patch
+           :entries [{:path [:balls] :mode :assign :value 0}
+                      {:path [:overload-floor]
+                       :mode :assign
+                       :value {:expr :math/sub
+                               :args [{:ref [:context :resources :overload]}
+                                      {:tunable :cost-down-overload}]}}
+                      {:path [:next-spawn-tick]
+                       :mode :assign
+                       :value {:tunable :spawn-start-tick}}]}
+           {:component :effect/vfx
+            :effect-id :scatter-bomb-charge
+            :operation :spawn
+            :instance-key [:activation :scatter-bomb]
+            :audience {:type :nearby :radius 32.0}
+            :payload {:owner {:from :caster/id}
+                      :position {:from :caster/eye}
+                      :balls 0}}
+           {:component :flow/finish :outcome :started}]}
+  :pulse
+  {:component :flow/branch
+   :when {:expr :math/eq
+          :args [{:from :charge/ticks} {:tunable :anti-afk-tick}]}
+   :then {:component :flow/sequence
+          :steps [{:component :combat/damage
+                   :world-id {:from :world/id}
+                   :target {:from :caster/id}
+                   :amount {:tunable :anti-afk-damage}
+                   :damage-type :generic}
+                  {:component :effect/vfx
+                   :effect-id :scatter-bomb-charge :operation :destroy
+                   :instance-key [:activation :scatter-bomb] :payload {}}
+                  {:component :flow/finish :outcome :anti-afk
+                   :finish-session? true}]}
+   :else {:component :flow/sequence
+          :steps [{:component :cost/spend
+                   :budget :charging
+                   :on-insufficient {:component :flow/sequence
+                                     :steps [{:component :effect/vfx
+                                              :effect-id :scatter-bomb-charge
+                                              :operation :destroy
+                                              :instance-key [:activation :scatter-bomb]
+                                              :payload {}}
+                                             {:component :flow/finish
+                                              :outcome :insufficient-resource
+                                              :finish-session? true}]}}
+                  {:component :resource/enforce-floor
+                   :resource :overload
+                   :minimum {:ref [:session :overload-floor]}}
+                  {:component :flow/branch
+                   :when {:expr :bool/and
+                          :args [{:expr :math/gte
+                                  :args [{:from :charge/ticks}
+                                         {:ref [:session :next-spawn-tick]}]}
+                                 {:expr :math/lt
+                                  :args [{:ref [:session :balls]}
+                                         {:tunable :max-balls}]}
+                                 {:expr :math/lte
+                                  :args [{:from :charge/ticks}
+                                         {:tunable :max-hold-ticks}]}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :entity/spawn
+                                   :world-id {:from :world/id}
+                                   :entity-type "academy:entity_md_ball"
+                                   :owner {:from :caster/id}
+                                   :position {:from :caster/eye}
+                                   :velocity {:vec3 [0.0 0.0 0.0]}
+                                   :life-ticks 2333333}
+                                  {:component :session/patch
+                                   :entries [{:path [:balls]
+                                              :mode :increment :value 1}
+                                             {:path [:next-spawn-tick]
+                                              :mode :assign
+                                              :value {:expr :math/add
+                                                      :args [{:from :charge/ticks}
+                                                             {:tunable :spawn-interval-ticks}]}}]}
+                                  {:component :effect/vfx
+                                   :effect-id :scatter-bomb-charge
+                                   :operation :update
+                                   :instance-key [:activation :scatter-bomb]
+                                   :payload {:position {:from :caster/eye}
+                                             :balls {:expr :math/add
+                                                     :args [{:ref [:session :balls]} 1]}}}]}
+                   :else nil}
+                  {:component :effect/vfx
+                   :effect-id :scatter-bomb-charge
+                   :operation :update
+                   :instance-key [:activation :scatter-bomb]
+                   :payload {:position {:from :caster/eye}
+                             :balls {:ref [:session :balls]}}}
+                  {:component :flow/finish :outcome :continue}]}}
+  :release
+  {:component :flow/sequence
+   :steps [{:component :target/entities
+            :shape {:type :sphere
+                    :center {:from :caster/eye}
+                    :radius 4.0}
+            :filter {:entity-types ["academy:entity_md_ball"]
+                     :owner-id {:from :caster/id}}
+            :projection [:id :type :position :owner-id]
+            :limit {:tunable :max-balls}
+            :result :balls}
+           {:component :target/entities
+            :shape {:type :sphere
+                    :center {:from :caster/eye}
+                    :radius {:tunable :auto-aim-radius}}
+            :filter {:living? true}
+            :projection [:id :type :position :eye-height :living?]
+            :limit 64
+            :result :auto-targets}
+           {:component :flow/foreach
+            :items {:ref [:slot :balls]}
+            :as :ball
+            :index-as :ball-index
+            :limit {:tunable :max-balls}
+            :body {:component :flow/sequence
+                   :steps [{:component :entity/discard
+                            :world-id {:from :world/id}
+                            :entity {:ref [:slot :ball]}}
+                           {:component :data/random-item
+                            :items {:ref [:slot :auto-targets]}
+                            :result :auto-target}
+                           {:component :flow/branch
+                            :when {:expr :bool/and
+                                   :args [{:expr :math/lt
+                                           :args [{:ref [:slot :ball-index]}
+                                                  {:expr :math/floor
+                                                   :args [{:expr :math/mul
+                                                           :args [{:ref [:session :balls]}
+                                                                  {:ref [:context :skill-exp]}]}]}
+                                          {:ref [:slot :auto-target :id]}]}]}
+                            :then {:component :data/bind
+                                   :to :destination
+                                   :value {:expr :vec3/add
+                                           :args [{:ref [:slot :auto-target :position]}
+                                                  {:vec3 [0.0
+                                                          {:ref [:slot :auto-target :eye-height]}
+                                                          0.0]}]}}
+                            :else {:component :data/bind
+                                   :to :destination
+                                   :value {:expr :vec3/scatter-end
+                                           :args [{:from :caster/eye}
+                                                  {:from :caster/aim}
+                                                  {:tunable :scatter-range}
+                                                  {:tunable :scatter-angle-degrees}]}}}
+                           {:component :projectile/schedule-beam
+                            :world-id {:from :world/id}
+                            :owner {:from :caster/id}
+                            :origin {:ref [:slot :ball :position]}
+                            :destination {:ref [:slot :destination]}
+                            :damage {:tunable :damage}
+                            :damage-type :magic
+                            :delay-ticks 1}
+                           {:component :effect/vfx
+                            :effect-id :scatter-bomb-beam
+                            :operation :spawn
+                            :audience {:type :nearby :radius 64.0}
+                            :payload {:start {:ref [:slot :ball :position]}
+                                      :end {:ref [:slot :destination]}
+                                      :life-ticks 14}}
+                           {:component :score/mark :tag :ball-fired}]}}
+           {:component :effect/vfx
+            :effect-id :scatter-bomb-charge :operation :destroy
+            :instance-key [:activation :scatter-bomb] :payload {}}
+           {:component :flow/finish :outcome :released :finish-session? true}]}
+  :abort
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :scatter-bomb-charge :operation :destroy
+            :instance-key [:activation :scatter-bomb] :payload {}}
+           {:component :flow/finish :outcome :aborted :finish-session? true}]}}}

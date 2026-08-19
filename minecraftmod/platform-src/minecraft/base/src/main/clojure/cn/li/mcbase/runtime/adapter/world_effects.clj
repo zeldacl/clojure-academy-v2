@@ -404,24 +404,6 @@
                                      (catch Exception e
                                        (log/warn "Failed to apply electron-missile:" (ex-message e))
                                        false)))
-        execute-scatter-bomb! (fn [world-id owner plan]
-                                (try
-                                  (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
-                                    (let [{:keys [ball-count auto-aim-radius damage]} plan
-                                          origin {:x (.getX player) :y (.getY player) :z (.getZ player)}
-                                          targets (->> (aoe-victims! world-id owner
-                                                                      (:x origin) (:y origin) (:z origin)
-                                                                      auto-aim-radius)
-                                                       (sort-by-distance origin)
-                                                       (take (long (or ball-count 0))))]
-                                      (doseq [{:keys [uuid]} targets]
-                                        (entity-damage/apply-direct-damage!
-                                         world-id uuid (double damage) :electric
-                                         {:attacker-uuid owner}))
-                                      true))
-                                  (catch Exception e
-                                    (log/warn "Failed to apply scatter-bomb:" (ex-message e))
-                                    false)))
         ;; directed-shock ("Directed Shock" / 定向冲力): "seize the counter-
         ;; force from a punch and redirect it into the target, making the
         ;; punch more powerful" -- a forward push along the caster's look
@@ -737,6 +719,21 @@
                             (catch Exception e
                               (log/warn "Failed to spawn projectile:" (ex-message e))
                               {:success? false})))
+     :spawn-entity! (fn [world-id owner entity-type _position velocity life-ticks]
+                      (try
+                        (when-let [^MinecraftServer server (server-fn)]
+                          (when-let [player (query-core/get-player-by-uuid server (str owner))]
+                            (let [v (or velocity {})
+                                  vx (double (or (:x v) 0.0))
+                                  vy (double (or (:y v) 0.0))
+                                  vz (double (or (:z v) 0.0))
+                                  speed (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
+                              (boolean
+                               (entity/player-spawn-tracked-entity-by-id!
+                                player (str entity-type) speed life-ticks)))))
+                        (catch Exception e
+                          (log/warn "Failed to spawn neutral entity:" (ex-message e))
+                          false)))
      :find-entities-in-radius find-entities-in-radius!
      :find-entities-in-aabb (fn [world-id min-x min-y min-z max-x max-y max-z]
                               (try
@@ -797,7 +794,6 @@
      :execute-storm-wing! execute-storm-wing!
      :execute-light-shield! execute-light-shield!
      :execute-electron-missile! execute-electron-missile!
-     :execute-scatter-bomb! execute-scatter-bomb!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!
      :execute-shift-teleport! execute-shift-teleport!

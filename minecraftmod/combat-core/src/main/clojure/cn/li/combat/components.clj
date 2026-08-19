@@ -100,6 +100,11 @@
             ;; to :body only -- see dataflow.clj's :iterates handling.
             :produces {}}
 
+           :data/random-item
+           {:schema {:required #{:items :result}}
+            :effects #{:pure}
+            :produces {:item {:name-field :result :type :object}}}
+
            :flow/window
            {:schema {:required #{:value :on-pass :on-fail}}
             :children {:on-pass {:kind :single :required? true}
@@ -192,6 +197,10 @@
 
            :entity/discard
            {:schema {:required #{:entity}} :effects #{:mutate}}
+
+           :projectile/schedule-beam
+           {:schema {:required #{:origin :destination :damage :damage-type :delay-ticks}}
+            :effects #{:mutate :emit}}
 
            :block/break-budget
            {:schema {:required #{:blocks :energy :limit}} :effects #{:mutate}}

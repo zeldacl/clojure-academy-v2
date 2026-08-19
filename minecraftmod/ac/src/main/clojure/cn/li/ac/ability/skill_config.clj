@@ -205,7 +205,22 @@
     :excluded-entity-ids :targeting.excluded-entity-ids
     :large-fireball-ids :targeting.large-fireball-ids
     :reflect-entity-cp :cost.reflect-entity.cp
-    :exp-reflect-entity-scale :progression.exp-reflect-entity-scale}})
+    :exp-reflect-entity-scale :progression.exp-reflect-entity-scale}
+   :scatter-bomb
+   {:max-balls :projectile.max-balls
+    :max-hold-ticks :projectile.max-hold-ticks
+    :spawn-interval-ticks :projectile.spawn-interval-ticks
+    :spawn-start-tick :projectile.spawn-start-tick
+    :scatter-range :projectile.scatter-range
+    :scatter-angle-degrees :projectile.scatter-angle-degrees
+    :damage :combat.damage
+    :auto-aim-exp-threshold :targeting.auto-aim-exp-threshold
+    :auto-aim-radius :targeting.auto-aim-radius
+    :anti-afk-tick :effect.anti-afk-tick
+    :anti-afk-damage :effect.anti-afk-damage
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :exp-per-ball :progression.exp-per-ball}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

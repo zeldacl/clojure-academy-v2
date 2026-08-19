@@ -1,0 +1,35 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :scatter-bomb-beam
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:start :vec3 :end :vec3 :life-ticks :long}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 14
+         :children [{:at 0
+                     :node {:component :vfx/beam
+                            :start {:ref [:input :start]}
+                            :end {:ref [:input :end]}
+                            :grow-ticks 2
+                            :layers [{:shape :tube :radius 0.08 :color [236 170 93 60]}
+                                     {:shape :tube :radius 0.05 :color [241 240 222 200]}
+                                     {:shape :line :width 0.015 :color [165 230 255 160]}]}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id "academy:md.sb_ray_small"
+                            :volume 0.45
+                            :pitch 1.0
+                            :position {:ref [:input :start]}}}
+                    {:at 4
+                     :node {:component :vfx/fade
+                            :from-tick 4 :to-tick 14
+                            :from-alpha 1.0 :to-alpha 0.0
+                            :child {:component :vfx/beam
+                                    :start {:ref [:input :start]}
+                                    :end {:ref [:input :end]}
+                                    :layers []}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius 0.8}}

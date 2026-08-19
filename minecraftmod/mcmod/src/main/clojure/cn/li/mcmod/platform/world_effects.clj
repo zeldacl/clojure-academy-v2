@@ -34,6 +34,11 @@
   [world-id projectile-spec]
   (call :spawn-projectile! world-id projectile-spec))
 
+(defn spawn-entity!
+  "Spawn a neutral tracked entity through the platform adapter."
+  [world-id owner entity-type position velocity life-ticks]
+  (call :spawn-entity! world-id owner entity-type position velocity life-ticks))
+
 (defn execute-ray-barrage!
   "Execute a bounded ray-barrage plan supplied by Combat Core.
 
@@ -67,11 +72,6 @@
   "Execute the bounded Electron Missile channel behind a neutral Host Port."
   [world-id owner plan]
   (call :execute-electron-missile! world-id owner plan))
-
-(defn execute-scatter-bomb!
-  "Execute the bounded Scatter Bomb release behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-scatter-bomb! world-id owner plan))
 
 (defn execute-plasma-cannon!
   "Execute the charged Plasma Cannon impact behind a neutral Host Port."
