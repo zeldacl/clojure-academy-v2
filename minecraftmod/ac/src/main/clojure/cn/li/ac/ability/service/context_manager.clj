@@ -248,7 +248,7 @@
    The payload map is created inside this static function where JVM
    escape analysis can cheaply stack-allocate or aggressively reclaim it.
    Carries the live ServerPlayer so :tick! callbacks that spawn entities
-   (scatter-bomb / electron-missile balls) get a player ref — the network
+   (ball-based projectile effects) get a player ref — the network
    key-tick payload doesn't flow here, this tick is server-driven.
 
    Server-driven ticks REFRESH the keepalive: the client only sends
