@@ -10,8 +10,7 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcbase.runtime DamageSourceAccess]
-           [net.minecraft.server MinecraftServer]
+  (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity LivingEntity]
@@ -74,11 +73,6 @@
                                 :else nil)]
            (when target
              (str (.getUUID target))))))
-
-     :vec-reflection-damage-source?
-     (fn [damage-source]
-       (and (instance? DamageSource damage-source)
-            (DamageSourceAccess/isVecReflection ^DamageSource damage-source)))
 
      :apply-direct-damage!
      (fn apply-direct-damage-impl

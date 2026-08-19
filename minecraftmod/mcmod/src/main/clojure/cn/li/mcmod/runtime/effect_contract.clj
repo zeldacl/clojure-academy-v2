@@ -9,7 +9,8 @@
 (def action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
     :entity/status :entity/spawn :entity/discard :block/break :block/set
-    :world/lightning :world/explosion :world/sound})
+    :world/lightning :world/explosion :world/sound
+    :projectile/redirect :resource/enforce-floor})
 
 (defn- require-map! [value message]
   (when-not (map? value)

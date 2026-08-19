@@ -32,7 +32,7 @@
         host (host/build-host-table-from-capabilities capability-state)
         query-order (vec (sort (keys (:queries capability-state))))
         results* (volatile! {})
-        latches* (volatile! #{})
+        latches* (volatile! (set (or (:latches intent) #{})))
         slots* (volatile! {})
         result (vm/execute! program execution-frame host 0
                             {:owner owner
@@ -45,6 +45,7 @@
                              :context (merge {:owner owner
                                               :ability-id ability-id}
                                              (:context intent))
+                             :session-state (:session-state intent)
                              ;; AC supplies an immutable activation snapshot
                              ;; on the neutral intent.  The EDN declaration is
                              ;; the fallback only for fields with no runtime
@@ -63,7 +64,9 @@
            :ability-id ability-id
            :owner owner
            :vfx-signals (vec (:vfx result))
-           :actions (vec (:actions result))
+           :actions (cond-> (vec (:actions result))
+                      (seq @latches*)
+                      (conj {:type :session-latches :latches @latches*}))
            :events (vec (:events result))
            :query-results @results*
            :status (if (= :finished (:status result)) :accepted (:status result)))))

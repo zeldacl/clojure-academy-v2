@@ -47,10 +47,6 @@
    cn.li.ac.content.ability.meltdowner.rad-intensify-fx
    cn.li.ac.content.ability.meltdowner.ray-barrage-fx
    cn.li.ac.content.ability.meltdowner.scatter-bomb-fx]}
- {:id :shared
-  :priority 100
-  :skill-namespaces
-  [cn.li.ac.content.ability.shared.vec-reflection-interaction]}
  {:id :teleporter
   :priority 40
   :skill-namespaces
@@ -88,7 +84,7 @@
    cn.li.ac.content.ability.vecmanip.storm-wing
    cn.li.ac.content.ability.vecmanip.vec-accel
    cn.li.ac.content.ability.vecmanip.vec-deviation
-   cn.li.ac.content.ability.vecmanip.vec-reflection]
+   ]
   :fx-namespaces
   [cn.li.ac.content.ability.vecmanip.blood-retrograde-fx
    cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
@@ -97,5 +93,4 @@
    cn.li.ac.content.ability.vecmanip.plasma-cannon-fx
    cn.li.ac.content.ability.vecmanip.storm-wing-fx
    cn.li.ac.content.ability.vecmanip.vec-accel-fx
-   cn.li.ac.content.ability.vecmanip.vec-deviation-fx
-   cn.li.ac.content.ability.vecmanip.vec-reflection-fx]}]
+   cn.li.ac.content.ability.vecmanip.vec-deviation-fx]}]

@@ -70,6 +70,7 @@
            [:target/entities #{:shape :projection :limit :result}]
            [:target/blocks #{:shape :projection :limit :result}]
            [:combat/damage #{:target :amount}]
+           [:damage/reflect #{:multiplier :cost-per-damage :minimum :max-depth}]
            [:host/beam-trace #{:origin :direction :length :radius :damage :result}]
            [:combat/impulse #{:target :vector}]
            [:combat/status #{:target :status-id :duration-ticks}]
@@ -80,6 +81,8 @@
            [:block/break-budget #{:blocks :energy :limit}]
            [:world/sound #{:sound-id :position}]
            [:world/lightning #{:position}]
+           [:projectile/redirect #{:entity :target-position :velocity :difficulty}]
+           [:resource/enforce-floor #{:resource :minimum}]
            [:effect/vfx #{:effect-id :operation :payload}]
            [:domain/event #{:event-type :payload}]]]
     (when-not (descriptor id)

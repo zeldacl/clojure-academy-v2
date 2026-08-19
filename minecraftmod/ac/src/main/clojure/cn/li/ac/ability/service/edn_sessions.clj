@@ -17,7 +17,9 @@
                :activation-seed (long (or (:activation-seed intent)
                                           (hash [owner ability-id])))
                :tick (long (or (:server-tick intent) 0))
-               :start-tick (long (or (:server-tick intent) 0))}]
+               :start-tick (long (or (:server-tick intent) 0))
+               :state {}
+               :latches #{}}]
     (swap! sessions* assoc owner entry)
     entry))
 
@@ -33,8 +35,37 @@
 
 (defn context-for [owner intent]
   (merge (select-keys (session owner)
-                      [:ability-id :context :parameter-snapshot :activation-seed])
+                      [:ability-id :context :parameter-snapshot :activation-seed
+                       :state :latches])
          (select-keys intent [:context :parameter-snapshot :activation-seed])))
+
+(defn apply-actions!
+  "Apply neutral session patches and latch claims after an accepted VM run.
+
+  The operation is deliberately generic: paths and modes come from EDN, and
+  this store contains no skill-specific keys or behavior."
+  [owner actions]
+  (let [patches (for [{:keys [type entries]} actions
+                      :when (= :session-patch type)
+                      entry entries]
+                  entry)]
+    (when (seq patches)
+      (swap! sessions*
+             update-in [owner :state]
+             (fn [state]
+               (reduce (fn [result {:keys [path mode value]}]
+                         (case mode
+                           :increment (update-in result path (fnil + 0.0)
+                                                  (double (or value 0.0)))
+                           :assign (assoc-in result path value)
+                           result))
+                       (or state {})
+                       patches))))
+    )
+  (when-let [latches (some (fn [{:keys [type latches]}]
+                             (when (= :session-latches type) latches)) actions)]
+    (swap! sessions* update-in [owner :latches] into latches))
+  nil)
 
 (defn tick! [tick]
   (mapv (fn [[owner entry]]

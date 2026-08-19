@@ -24,15 +24,9 @@
   (or (get-in (player-state player-uuid) [:runtime :vecmanip :projectile-claims])
       {:tick -1 :owners {}}))
 
-(defn vec-reflection-state
-  [player-uuid]
-  (or (get-in (player-state player-uuid) [:runtime :vecmanip :reflection])
-      {:reflecting-pairs [] :reflection-depths {}}))
-
 (defn reset-content-runtime-for-player!
   [player-uuid]
   (run-for-player! player-uuid {:command :clear-player-projectile-claims})
-  (run-for-player! player-uuid {:command :reset-vec-reflection-runtime})
   nil)
 
 (defn reset-all-content-runtimes!

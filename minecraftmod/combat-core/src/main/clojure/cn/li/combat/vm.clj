@@ -110,8 +110,10 @@
    :entity/spawn :entity/spawn
     :entity/discard :entity/discard
     :block/break-budget :block/break
-    :world/sound :world/sound
-   :world/lightning :world/lightning})
+   :world/sound :world/sound
+   :world/lightning :world/lightning
+   :projectile/redirect :projectile/redirect
+   :resource/enforce-floor :resource/enforce-floor})
 
 (defn- append-object! [^ArrayList output value]
   (.add output value)
@@ -123,7 +125,9 @@
                                 (effect-contract/vfx-signal
                                   {:effect-id (:effect-id data)
                                    :operation (or (:operation data) :spawn)
-                                   :payload (:payload data)}))
+                                   :payload (:payload data)
+                                   :instance-key (:instance-key data)
+                                   :audience (:audience data)}))
     :domain/event (append-object! (.-events frame)
                                   {:event-type (:event-type data)
                                    :payload (:payload data)})
@@ -190,6 +194,7 @@
                   :context (:context context)
                   :param (:params context)
                   :params (:params context)
+                  :session (:session-state context)
                   :slot (or (when-let [slots* (:slots* context)] @slots*)
                             (:slots context))
                   :input (:input context)

@@ -7,4 +7,7 @@
              :resource "ac/combat/abilities/arc_gen.edn"}
              {:kind :ability
               :id :thunder-clap
-             :resource "ac/combat/abilities/thunder_clap.edn"}]}
+             :resource "ac/combat/abilities/thunder_clap.edn"}
+             {:kind :ability
+              :id :vec-reflection
+              :resource "ac/combat/abilities/vec_reflection.edn"}]}

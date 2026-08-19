@@ -119,15 +119,35 @@
     :overcharge-multiplier :combat.overcharge-multiplier
     :aoe-radius :combat.aoe-radius
     :cooldown-per-hold :cooldown.ticks-per-hold
-    :exp-use :progression.exp-use}})
+    :exp-use :progression.exp-use}
+   :vec-reflection
+   {:tick-cp :cost.tick.cp
+    :overload-keep :cost.overload-keep
+    :target-radius :targeting.radius
+    :affected-entity-difficulty :targeting.affected-entity-difficulty
+    :excluded-entity-ids :targeting.excluded-entity-ids
+    :large-fireball-ids :targeting.large-fireball-ids
+    :small-fireball-ids :targeting.small-fireball-ids
+    :reflect-entity-cp :cost.reflect-entity.cp
+    :damage-multiplier :combat.damage-multiplier
+    :min-reflected-damage :combat.min-reflected-damage
+    :damage-cp :cost.damage.cp
+    :exp-reflect-entity-scale :progression.exp-reflect-entity-scale
+    :exp-damage-scale :progression.exp-damage-scale
+    :attacker-search-radius :targeting.attacker-search-radius
+    :arbitration-priority :interaction.projectile-arbitration-priority
+    :max-reflections :combat.max-reflections
+    :visited-ttl-ticks :tracking.visited-ttl-ticks
+    :visited-max-size :tracking.visited-max-size}})
 
-(declare tunable-double tunable-int tunable-double-list)
+(declare tunable-double tunable-int tunable-double-list tunable-string-list)
 
 (defn- read-edn-parameter
   [skill-id parameter-id field-id type]
   (case type
     :double (tunable-double skill-id field-id)
     :long (tunable-int skill-id field-id)
+    :string-list (tunable-string-list skill-id field-id)
     [:tuple :double 2] (tunable-double-list skill-id field-id)
     (throw (ex-info "unsupported EDN parameter type"
                     {:ability-id skill-id

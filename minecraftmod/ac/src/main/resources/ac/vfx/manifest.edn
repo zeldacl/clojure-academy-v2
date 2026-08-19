@@ -10,4 +10,10 @@
               :resource "ac/vfx/effects/arc_gen.edn"}
              {:kind :vfx-effect
               :id :thunder-clap
-              :resource "ac/vfx/effects/thunder_clap.edn"}]}
+              :resource "ac/vfx/effects/thunder_clap.edn"}
+             {:kind :vfx-effect
+              :id :vec-reflection-field
+              :resource "ac/vfx/effects/vec_reflection_field.edn"}
+             {:kind :vfx-effect
+              :id :vec-reflection-wave
+              :resource "ac/vfx/effects/vec_reflection_wave.edn"}]}

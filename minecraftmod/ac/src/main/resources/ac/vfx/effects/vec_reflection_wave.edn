@@ -1,0 +1,38 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :vec-reflection-wave
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:position :vec3
+                  :velocity :vec3
+                  :mode [:enum :reflect-entity :damage]}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 12
+         :children [{:at 0
+                     :node {:component :vfx/ring
+                            :center {:ref [:input :position]}
+                            :radius {:from 0.15 :to 1.1}
+                            :segments 16
+                            :color [236 170 93 180]}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id "academy:vecmanip.vec_reflection"
+                            :volume 0.5
+                            :pitch 1.0
+                            :position {:ref [:input :position]}}}
+                    {:at 6
+                     :node {:component :vfx/fade
+                            :from-tick 6
+                            :to-tick 12
+                            :from-alpha 1.0
+                            :to-alpha 0.0
+                            :child {:component :vfx/ring
+                                    :center {:ref [:input :position]}
+                                    :radius {:from 1.1 :to 1.3}
+                                    :segments 16
+                                    :color [188 252 238 130]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :position]}
+          :end {:ref [:input :position]}
+          :radius 1.4}}

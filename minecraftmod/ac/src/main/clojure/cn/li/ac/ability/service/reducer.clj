@@ -896,49 +896,6 @@
     (ok (assoc-in player-state (projectile-claims-path)
                 (assoc claims :owners next-owners)))))
 
-(defn- reflection-path
-  []
-  [:runtime :vecmanip :reflection])
-
-(defn- reflecting-pairs-set
-  [player-state]
-  (set (or (get-in player-state (into (reflection-path) [:reflecting-pairs])) [])))
-
-(defn- cmd-enter-vec-reflection
-  [player-state {:keys [owner-key]}]
-  (let [pairs (reflecting-pairs-set player-state)]
-    (if (contains? pairs owner-key)
-      (assoc (ok player-state) :granted? false)
-      (assoc (ok (update-in player-state (into (reflection-path) [:reflecting-pairs])
-                    (fnil conj []) owner-key))
-             :granted? true))))
-
-(defn- cmd-leave-vec-reflection
-  [player-state {:keys [owner-key]}]
-  (let [pairs (reflecting-pairs-set player-state)
-        depths (or (get-in player-state (into (reflection-path) [:reflection-depths])) {})
-        next-depths
-        (if-let [v (get depths owner-key)]
-          (let [nv (dec (long v))]
-            (if (pos? nv)
-              (assoc depths owner-key nv)
-              (dissoc depths owner-key)))
-          depths)
-        next-pairs (disj pairs owner-key)]
-    (ok (-> player-state
-            (assoc-in (into (reflection-path) [:reflecting-pairs]) (vec next-pairs))
-            (assoc-in (into (reflection-path) [:reflection-depths]) next-depths)))))
-
-(defn- cmd-set-vec-reflection-depth
-  [player-state {:keys [owner-key depth]}]
-  (ok (assoc-in player-state (into (reflection-path) [:reflection-depths owner-key])
-              (long depth))))
-
-(defn- cmd-reset-vec-reflection-runtime
-  [player-state _]
-  (ok (assoc-in player-state (reflection-path)
-              {:reflecting-pairs [] :reflection-depths {}})))
-
 ;; ============================================================================
 ;; Public Dispatcher
 ;; ============================================================================
@@ -992,10 +949,6 @@
     :claim-projectile (cmd-claim-projectile player-state command)
     :replace-projectile-claims (cmd-replace-projectile-claims player-state command)
     :clear-player-projectile-claims (cmd-clear-player-projectile-claims player-state command)
-    :enter-vec-reflection (cmd-enter-vec-reflection player-state command)
-    :leave-vec-reflection (cmd-leave-vec-reflection player-state command)
-    :set-vec-reflection-depth (cmd-set-vec-reflection-depth player-state command)
-    :reset-vec-reflection-runtime (cmd-reset-vec-reflection-runtime player-state command)
     (do
       (log/warn "Unknown ability command" (:command command))
       (ok player-state))))

@@ -3,5 +3,5 @@
           :arc-gen :migrated
           :thunder-clap :migrated
           :thunder-bolt :pending
-          :vec-reflection :pending
+          :vec-reflection :migrated
           :groundshock :pending}}

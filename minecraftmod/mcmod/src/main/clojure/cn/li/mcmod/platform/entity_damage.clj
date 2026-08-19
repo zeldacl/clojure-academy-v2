@@ -77,11 +77,6 @@
   [damage-source]
   (call :reflection-target-entity-id damage-source))
 
-(defn vec-reflection-damage-source?
-  "True when damage-source was created by VecReflection itself."
-  [damage-source]
-  (boolean (call :vec-reflection-damage-source? damage-source)))
-
 (defn apply-aoe-damage!
   [world-id x y z radius damage source-type falloff?]
   (call :apply-aoe-damage! world-id x y z radius damage source-type falloff?))

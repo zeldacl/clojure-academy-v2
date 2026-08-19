@@ -55,6 +55,9 @@
                      :direction {:vec3 [0.0 0.0 1.0]} :length 1.0 :radius 0.1
                      :damage 1.0 :entity-limit 1 :result :beam}
    :combat/damage {:component :combat/damage :target {:ref [:slot :target-id]} :amount 1.0}
+   :damage/reflect {:component :damage/reflect
+                    :multiplier 1.0 :cost-per-damage 1.0
+                    :minimum 1.0 :max-depth 6}
    :combat/impulse {:component :combat/impulse :target {:ref [:slot :target-id]}
                     :vector vec3-example}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}
@@ -70,6 +73,14 @@
                         :energy 1.0 :order :beam-forward :limit 1}
    :world/sound {:component :world/sound :sound-id "generic" :position vec3-example
                  :category :ambient :volume 1.0 :pitch 1.0}
+   :projectile/redirect {:component :projectile/redirect
+                         :entity {:ref [:slot :projectile]}
+                         :target-position {:ref [:slot :aim-point]}
+                         :velocity {:ref [:slot :velocity]}
+                         :difficulty 1.0}
+   :resource/enforce-floor {:component :resource/enforce-floor
+                            :resource :overload
+                            :minimum 1.0}
    :effect/vfx {:component :effect/vfx :effect-id :generic :operation :spawn
                 :payload {:position vec3-example}}
    :domain/event {:component :domain/event :event-type :generic :payload {}}})

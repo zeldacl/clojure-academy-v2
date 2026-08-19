@@ -1,15 +1,8 @@
 package cn.li.mcbase.runtime;
 
-import cn.li.mcmod.ModId;
 import cn.li.mcver.RegistryLookups;
-import cn.li.mcver.ResourceLocations;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.damagesource.DamageTypes;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
@@ -17,22 +10,7 @@ import net.minecraft.world.level.Level;
  * Loader-agnostic damage source resolution using direct typed MC API (Loom-remappable).
  */
 public final class DamageSourceAccess {
-    public static final ResourceKey<DamageType> VEC_REFLECTION = ResourceKey.create(
-            Registries.DAMAGE_TYPE,
-            ResourceLocations.of(ModId.ID, "vec_reflection"));
-
     private DamageSourceAccess() {
-    }
-
-    private static DamageSource vecReflection(Level level, Object attacker) {
-        Holder<DamageType> type = RegistryLookups.holderOrThrow(level, VEC_REFLECTION);
-        return attacker instanceof Entity entity
-                ? new DamageSource(type, entity)
-                : new DamageSource(type);
-    }
-
-    public static boolean isVecReflection(DamageSource source) {
-        return source != null && source.is(VEC_REFLECTION);
     }
 
     public static DamageSource resolve(Level level, String kind) {
@@ -49,9 +27,6 @@ public final class DamageSourceAccess {
     }
 
     public static DamageSource resolveKeyword(Level level, Object sourceType) {
-        if (level != null && ":vec-reflection".equals(String.valueOf(sourceType))) {
-            return vecReflection(level, null);
-        }
         String kind = switch (String.valueOf(sourceType)) {
             case ":magic" -> "magic";
             case ":lightning" -> "lightningBolt";
@@ -69,9 +44,6 @@ public final class DamageSourceAccess {
      * attacker-attributed vanilla source.
      */
     public static DamageSource resolveKeyword(Level level, Object sourceType, Object attacker) {
-        if (level != null && ":vec-reflection".equals(String.valueOf(sourceType))) {
-            return vecReflection(level, attacker);
-        }
         if (level != null && ":skill".equals(String.valueOf(sourceType)) && attacker instanceof Player player) {
             return level.damageSources().playerAttack(player);
         }

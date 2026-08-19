@@ -5,14 +5,7 @@ package cn.li.mc262.runtime;
  */
 @Deprecated
 public final class DamageSourceAccess {
-    public static final net.minecraft.resources.ResourceKey<net.minecraft.world.damagesource.DamageType> VEC_REFLECTION =
-            cn.li.mcbase.runtime.DamageSourceAccess.VEC_REFLECTION;
-
     private DamageSourceAccess() {
-    }
-
-    public static boolean isVecReflection(net.minecraft.world.damagesource.DamageSource source) {
-        return cn.li.mcbase.runtime.DamageSourceAccess.isVecReflection(source);
     }
 
     public static net.minecraft.world.damagesource.DamageSource resolve(

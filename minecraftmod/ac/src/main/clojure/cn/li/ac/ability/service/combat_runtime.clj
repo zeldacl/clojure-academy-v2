@@ -5,6 +5,7 @@
   (:require [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
             [cn.li.combat.runtime :as combat]
+            [cn.li.combat.vm :as combat-vm]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -51,32 +52,28 @@
 (defonce ^:private last-known-tick* (atom 0))
 (declare owner-state resolve-slot execute-world-effects! finalize-result! publish-result!)
 
-(defn- valid-reflection-world-effect?
+(defn- valid-damage-world-effect?
   [effect]
   (let [request (:request effect)
         base (:base request)]
-    (and (= :vec-reflection-damage (:type effect))
-         (= :vec-reflection (:type request))
+    (and (= :damage (:type effect))
          (:source request) (:target request)
          (not= (str (:source request)) (str (:target request)))
          (number? base) (Double/isFinite (double base))
          (pos? (double base)) (<= (double base) 10000.0))))
 
-(defn- execute-reflection-effects!
-  "Narrow damage-boundary interpreter for Combat Core reflection output.
-
-   Only the typed `:vec-reflection` damage effect is admitted here; arbitrary
-   pipeline world effects cannot silently acquire a live damage side effect."
+(defn- execute-damage-effects!
+  "Execute only validated neutral damage effects emitted by reactions."
   [owner result]
-  (let [effects (vec (filter valid-reflection-world-effect?
+  (let [effects (vec (filter valid-damage-world-effect?
                              (:world-effects result)))]
     (when (= (count effects) (count (:world-effects result)))
       (execute-world-effects! owner (assoc result :world-effects effects)))))
 
-(defn- reflection-output?
+(defn- damage-output?
   [result]
   (and (seq (:world-effects result))
-       (every? valid-reflection-world-effect? (:world-effects result))))
+       (some valid-damage-world-effect? (:world-effects result))))
 
 (defn- horizontal-yaw-degrees [x z]
   (- (Math/toDegrees (Math/atan2 (double x) (double z)))))
@@ -166,17 +163,6 @@
 
     :light-shield-end
     (update state :light-shields dissoc (str (:owner event)))
-
-    :vec-reflection-start
-    (assoc-in state [:vec-reflections (str (:owner event))]
-              {:active? true :depth 0})
-
-    :vec-reflection-tick
-    (update-in state [:vec-reflections (str (:owner event))]
-               #(when % (assoc % :active? true :depth 0)))
-
-    :vec-reflection-end
-    (update state :vec-reflections dissoc (str (:owner event)))
 
     state))
 
@@ -555,68 +541,6 @@
                               :tick (long (:tick context))
                               :event-id [:light-shield-absorb target
                                          (long (:tick context))]})))
-               request)))}
-   {:priority 60
-    :provider-id :academy/base
-    :ability-id :vec-reflection
-    :node-id :damage-reflection
-    :run (fn [request context]
-           (let [target (str (:target request))
-                 source (:source request)
-                 reflection (get-in context [:domain-state :vec-reflections target])
-                 metadata (:metadata request)
-                 base (double (:base request))
-                 source-id (when source (str source))
-                 reflected-source? (or (= :vec-reflection (:type request))
-                                       (= true (:reflection-source? metadata))
-                                       (contains? (:tags request) :vec-reflection))
-                 exp (double (ability-model/get-skill-exp
-                              (get-in (or (:target-state context)
-                                           (:state context) {}) [:ability-data])
-                              :vec-reflection))
-                 multiplier (skill-config/lerp-double
-                             :vec-reflection :combat.damage-multiplier exp)
-                 reflected (double (* base multiplier))
-                 cp-rate (skill-config/lerp-double
-                          :vec-reflection :cost.damage.cp exp)
-                 cp-available (double (or (get-in (:target-state context)
-                                                  [:resources :cp])
-                                          (get-in (:state context) [:resources :cp])
-                                          0.0))
-                 consumption (min cp-available
-                                  (max 0.0 (* base cp-rate)))
-                 min-reflected (skill-config/tunable-double
-                                :vec-reflection :combat.min-reflected-damage)
-                 max-depth (long (or (skill-config/tunable-int
-                                     :vec-reflection :combat.max-reflections)
-                                    6))
-                 depth (long (or (:reflection-depth metadata) 0))
-                 eligible? (and reflection (:active? reflection)
-                                (not reflected-source?) source-id
-                                (Double/isFinite base) (pos? base)
-                                (Double/isFinite reflected)
-                                (>= reflected min-reflected)
-                                (< depth max-depth)
-                                (pos? consumption))]
-             (if eligible?
-               (-> request
-                   (assoc :base (max 0.0 (- base reflected)))
-                   (assoc-in [:metadata :resource-cost] {:cp (- consumption)})
-                   (update :state-patch (fnil conj [])
-                           [:ability-exp :vec-reflection
-                            (* base (skill-config/tunable-double
-                                     :vec-reflection :progression.exp-damage-scale))])
-                   (update :world-effects (fnil conj [])
-                           {:type :vec-reflection-damage
-                            :request {:source target
-                                      :target source-id
-                                      :base reflected
-                                      :type :vec-reflection
-                                      :components {:direct reflected}
-                                      :tags #{:skill :vec-reflection}
-                                      :metadata {:reflection-source? true
-                                                 :reflection-depth (inc depth)
-                                                 :world-id (:world-id metadata)}}}))
                request)))}
    {:priority 50
     :provider-id :academy/base
@@ -1073,23 +997,6 @@
                      (if-let [handler (contract/host-port :world-effect)]
                        (handler owner effect)
                        (case (:type effect)
-                         :vec-reflection-damage
-                         (let [{:keys [request]} effect
-                               {:keys [world-id target base source]} request
-                               valid? (and world-id target source
-                                            (not= (str source) (str target))
-                                            (number? base)
-                                            (Double/isFinite (double base))
-                                            (pos? (double base))
-                                            (<= (double base) 10000.0)
-                                            (entity-damage/available?))
-                               applied? (when valid?
-                                          (entity-damage/apply-direct-damage!
-                                           world-id target (double base)
-                                           :vec-reflection
-                                           {:attacker-uuid source}))]
-                           {:status (if applied? :applied :failed)
-                            :effect effect})
                          :damage
                          (let [{:keys [request]} effect
                                {:keys [world-id target base type source]} request]
@@ -2027,7 +1934,23 @@
                  radius (double (or (:radius shape) 0.0))
                  limit (max 0 (min 256 (long (or limit 0))))
                  owner-id (str owner)
-                 type-filter (set (or (:entity-types filter) []))]
+                 type-filter (set (or (:entity-types filter) []))
+                 excluded-filter (set (or (:excluded-entity-ids filter) []))
+                 difficulty-map (reduce
+                                  (fn [result entry]
+                                    (if (string? entry)
+                                      (let [index (.lastIndexOf ^String entry ":")]
+                                        (if (pos? index)
+                                          (try
+                                            (assoc result
+                                                   (subs entry 0 index)
+                                                   (Double/parseDouble
+                                                    (subs entry (inc index))))
+                                            (catch Throwable _ result))
+                                          result))
+                                      result))
+                                  {}
+                                  (or (:difficulty-entries filter) []))]
              (when (and (= :sphere (:type shape)) world-id
                         (every? #(Double/isFinite (double %)) [cx cy cz])
                         (Double/isFinite radius) (<= 0.0 radius 64.0)
@@ -2043,14 +1966,33 @@
                                                   (case field
                                                     :id id :type type :position position
                                                     :age-ms (long (or (:age-ms entity) 0))
-                                                    :motion-progress (double (or (:motion-progress entity) 0.0))
+                                     :motion-progress (double (or (:motion-progress entity) 0.0))
+                                     :difficulty (double (or (get difficulty-map type) 0.0))
+                                                    :velocity (or (:velocity entity)
+                                                                  {:x (double (or (:vx entity) 0.0))
+                                                                   :y (double (or (:vy entity) 0.0))
+                                                                   :z (double (or (:vz entity) 0.0))})
+                                                    :owner-id (or (:owner-id entity) (:owner-uuid entity))
+                                                    :item? (boolean (:item? entity))
+                                                    :living? (boolean (:living? entity))
+                                                    :mob? (boolean (:mob? entity))
+                                                    :multipart? (boolean (:multipart? entity))
+                                                    :eye-height (double (or (:eye-height entity)
+                                                                            (:height entity) 0.0))
+                                                    :explosion-power (:explosion-power entity)
                                                     nil)))
                                          {} (or projection [:id :type :position]))))]
                  (->> (world-effects/find-entities-in-radius world-id cx cy cz radius)
                       (filter map?)
                       (remove #(= owner-id (str (or (:uuid %) (:entity-id %)))))
-                      (filter #(or (empty? type-filter)
-                                   (contains? type-filter (or (:entity-type %) (:type %)))))
+                      (filter #(let [entity-type (or (:entity-type %) (:type %))]
+                                 (and (or (empty? type-filter)
+                                          (contains? type-filter entity-type))
+                                      (not (contains? excluded-filter entity-type))
+                                      (not (:item? %))
+                                      (not (:living? %))
+                                      (not (:mob? %))
+                                      (not (:multipart? %)))))
                       (map project)
                       (take limit)
                       vec)))))))
@@ -2096,6 +2038,63 @@
                (potion-effects/apply-effect!
                 target status-id (int (max 0 (min 1200 (long duration-ticks))))
                 (int (max 0 (min 255 (long amplifier))))))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :projectile/redirect)
+        (capabilities/register-action!
+         :projectile/redirect
+         (fn [{:keys [owner world-id entity target-position velocity
+                      replacement-types]}]
+           (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
+                 entity-type (or (:type entity) (:entity-type entity))
+                 target (or target-position {})
+                 velocity (or velocity {})
+                 [tx ty tz] (if (vector? (:vec3 target))
+                              (:vec3 target)
+                              [(:x target) (:y target) (:z target)])
+                 [vx vy vz] (if (vector? (:vec3 velocity))
+                              (:vec3 velocity)
+                              [(:x velocity) (:y velocity) (:z velocity)])
+                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
+                 valid? (and owner world-id entity-id
+                             (every? finite? [tx ty tz vx vy vz]))]
+             (if-not valid?
+               {:status :rejected :reason :invalid-projectile-redirect}
+               (let [replacement? (contains? (set (or replacement-types []))
+                                              entity-type)
+                     spawn-result (when replacement?
+                                    (try
+                                      (world-effects/spawn-projectile!
+                                       world-id
+                                       {:entity-id entity-type
+                                        :x (double (or (:x entity) 0.0))
+                                        :y (double (or (:y entity) 0.0))
+                                        :z (double (or (:z entity) 0.0))
+                                        :vx (double vx) :vy (double vy) :vz (double vz)
+                                        :owner-uuid (:owner-id entity)
+                                        :explosion-power (:explosion-power entity)})
+                                      (catch Throwable _ {:success? false})))]
+                 (if (and replacement? (:success? spawn-result))
+                   (do
+                     (when (motion-effects/entity-motion-available?)
+                       (motion-effects/discard-entity! world-id entity-id))
+                     {:status :applied :replacement-id (:uuid spawn-result)})
+                   (if (motion-effects/entity-motion-available?)
+                     (do
+                       (motion-effects/set-entity-velocity!
+                        world-id entity-id (double vx) (double vy) (double vz))
+                       {:status :applied :entity-id entity-id})
+                     {:status :unhandled :reason :entity-motion-port-missing}))))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :resource/enforce-floor)
+        (capabilities/register-action!
+         :resource/enforce-floor
+         (fn [{:keys [owner resource minimum]}]
+           (if (and owner (= :overload resource) (number? minimum)
+                    (Double/isFinite (double minimum)))
+             (let [result (command-runtime/run-commands-in-session!
+                           (server-session-id) (str owner)
+                           [{:command :enforce-overload-floor
+                             :floor-value (double minimum)}])]
+               {:status (if (:success? result) :applied :failed)})
+             {:status :rejected :reason :invalid-resource-floor}))))
       (catch Throwable _
         ;; A loader may freeze the registry before AC content boots.  Leave the
         ;; registry state authoritative; missing ports surface as :unhandled.
@@ -2106,10 +2105,15 @@
   "Execute a normalized EDN intent against the AC-owned session index." 
   [owner intent]
   (let [ability-id (edn-ability-id owner intent)
-        op (or (:action intent) (:op intent) :start)
+        requested-op (or (:action intent) (:op intent) :start)
         current-tick (long (or (:server-tick intent) @last-known-tick* 0))
         ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
         active-session (edn-sessions/session owner)
+        toggle-close? (and (= :start requested-op)
+                           active-session
+                           (= :toggle (:activation ability))
+                           (= ability-id (:ability-id active-session)))
+        op (if toggle-close? :abort requested-op)
         normalized (assoc intent
                           :action op
                           :ability-id ability-id
@@ -2133,8 +2137,12 @@
                                                [:context :parameter-snapshot
                                                 :activation-seed])
                                   {:context dynamic-context
+                                   :session-state (:state session-context)
+                                   :latches (:latches session-context)
                                    :server-tick current-tick})
           result (edn-execution/execute! ability-id owner execution-intent)]
+      (when (= :accepted (:status result))
+        (edn-sessions/apply-actions! owner (:actions result)))
       (when (or (:finish-session? result)
                 (and (#{:release :abort} op)
                  (or (= :accepted (:status result))
@@ -2281,6 +2289,126 @@
           []
           (:events result)))
 
+(defn- scale-damage-components
+  "Scale numeric damage components while retaining their original shape."
+  [value factor]
+  (cond
+    (number? value) (* (double value) (double factor))
+    (map? value) (reduce-kv (fn [m k v]
+                              (assoc m k (scale-damage-components v factor)))
+                            (empty value) value)
+    (vector? value) (mapv #(scale-damage-components % factor) value)
+    (seq? value) (mapv #(scale-damage-components % factor) value)
+    :else value))
+
+(defn- reaction-value
+  "Resolve the bounded expression subset used by EDN damage reactions."
+  [value context]
+  (cond
+    (and (map? value) (:expr value))
+    (combat-vm/evaluate-expression
+     (:expr value)
+     (mapv #(reaction-value % context) (:args value))
+     (long (or (:activation-seed context) 0)))
+
+    (and (map? value) (:ref value))
+    (let [[scope key & path] (:ref value)
+          root (case scope
+                 :context (:context context)
+                 :request (:request context)
+                 :param (:params context)
+                 :state (:state context)
+                 {})]
+      (get-in root (into [key] path)))
+
+    (map? value) (reduce-kv (fn [m k v]
+                              (assoc m k (reaction-value v context)))
+                            (empty value) value)
+    (vector? value) (mapv #(reaction-value % context) value)
+    :else value))
+
+(defn- apply-edn-damage-reactions
+  "Run all EDN reactions for a damage request in deterministic priority order.
+
+  A reaction never reconstructs a damage type. Its reflected request is a
+  copy of the incoming request with only source/target, amount, and recursion
+  metadata changed. This keeps armor/resistance/component semantics intact."
+  [request {:keys [precheck?] :as boundary}]
+  (let [abilities (vals (get-in (edn-catalog/catalog) [:combat :abilities]))
+        reactions (->> abilities
+                       (mapcat (fn [ability]
+                                 (for [reaction (:reactions ability)
+                                       :when (= :combat/damage (:on reaction))]
+                                   (assoc reaction :ability-id (:id ability)))))
+                       (sort-by (juxt #(long (or (:priority %) 0))
+                                      #(str (:ability-id %)))))]
+    (reduce
+      (fn [current {:keys [ability-id when program]}]
+        (let [target (str (:target current))
+              session (edn-sessions/session target)
+              ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
+              params (:parameter-snapshot session)
+              state (owner-state target)
+              context {:request current
+                       :state state
+                       :params params
+                       :activation-seed (long (or (:activation-seed session) 0))
+                       :context {:enabled? (boolean session)
+                                 :resource (double (or (get-in state [:resources :cp]) 0.0))
+                                 :skill-exp (double (or (get-in state
+                                                                [:ability-data :skill-exps ability-id])
+                                                         0.0))
+                                 :depth (long (or (get-in current [:metadata :reflection-depth]) 0))
+                                 :damage (double (:base current))}}
+              condition? (or (nil? when)
+                             (boolean (reaction-value when context)))
+              component (:component program)]
+          (if-not (and session ability condition? (= :damage/reflect component))
+            current
+            (let [multiplier (double (or (reaction-value (:multiplier program) context) 0.0))
+                  cost-rate (double (or (reaction-value (:cost-per-damage program) context) 0.0))
+                  minimum (double (or (reaction-value (:minimum program) context) 0.0))
+                  max-depth (long (or (reaction-value (:max-depth program) context) 0))
+                  exp-scale (double (or (reaction-value (:exp-scale program) context) 0.0))
+                  depth (long (or (get-in current [:metadata :reflection-depth]) 0))
+                  base (double (:base current))
+                  reflected (* base multiplier (Math/pow 0.5 (double depth)))
+                  cp (double (or (get-in state [:resources :cp]) 0.0))
+                  consumption (max 0.0 (* base cost-rate))
+                  source (:source current)
+                  eligible? (and source (not= (str source) target)
+                                 (Double/isFinite base) (pos? base)
+                                 (Double/isFinite reflected)
+                                 (>= reflected minimum)
+                                 (< depth max-depth)
+                                 (pos? consumption)
+                                 (>= cp consumption))]
+              (if-not eligible?
+                current
+                (let [ratio (if (pos? base) (/ reflected base) 0.0)
+                      reflected-request
+                      (-> current
+                          (assoc :source target :target source :base reflected)
+                          (cond-> (vector? (:direction current))
+                            (assoc :direction
+                                   (mapv #(- (double %)) (:direction current))))
+                          (assoc :components
+                                 (scale-damage-components (:components current) ratio))
+                          (update :tags (fnil conj #{}) :reflected)
+                          (update :metadata merge
+                                  {:reflection-source? true
+                                   :reflection-depth (inc depth)
+                                   :reflection-ability ability-id}))]
+                  (-> current
+                      (assoc :base (max 0.0 (- base reflected)))
+                      (assoc-in [:metadata :resource-cost] {:cp (- consumption)})
+                      (update :state-patch (fnil conj [])
+                              [:ability-exp ability-id (* base exp-scale)])
+                      (update :world-effects (fnil conj [])
+                              {:type :damage :request reflected-request})
+                      (cond-> precheck? (assoc :cancelled? true)))))))))
+      request reactions)))
+
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
 
@@ -2288,16 +2416,13 @@
    returns the transformed neutral request; the platform writes only the
    resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
-  (let [request (combat/process-damage-request
+  (let [request (apply-edn-damage-reactions
+                (combat/process-damage-request
                  (engine)
                  {:source (or attacker-id :environment)
                   :target player-id
                   :base (double original-damage)
-                  :type (if (and damage-source (entity-damage/available?)
-                                  (entity-damage/vec-reflection-damage-source?
-                                   damage-source))
-                          :vec-reflection
-                          (or (:damage-type damage-source) :generic))
+                  :type (or (:damage-type damage-source) :generic)
                   :components {:direct (double original-damage)}
                   :tags #{:combat :intercepted}
                   :metadata {:damage-source damage-source
@@ -2306,7 +2431,8 @@
                                                     (str player-id))
                                                    :world-id))
                              :attacker-front? (attacker-front?
-                                               player-id attacker-id damage-source)}})]
+                                               player-id attacker-id damage-source)}})
+                {})]
     ;; Damage interception is the live boundary: Combat Core owns the
     ;; reduction decision, while AC remains the single writer for player
     ;; resources/cooldowns.  Apply only the neutral patch returned by the
@@ -2315,8 +2441,8 @@
                (seq (:state-patch request)))
       (commit-state-patch! player-id (:state-patch request)))
     (when (and (not (:cancelled? request))
-               (reflection-output? request))
-      (execute-reflection-effects! player-id request))
+               (damage-output? request))
+      (execute-damage-effects! player-id request))
     (when (and (not (:cancelled? request)) (seq (:events request)))
       (dispatch-result-domain-events! player-id request))
     (if (:cancelled? request)
@@ -2329,16 +2455,13 @@
    The removed mutable cancel/precheck registries have no replacement hook;
    combat nodes can cancel through the same deterministic request pipeline."
   [player-id attacker-id original-damage damage-source]
-  (let [request (combat/process-damage-request
+  (let [request (apply-edn-damage-reactions
+                (combat/process-damage-request
                  (engine)
                  {:source (or attacker-id :environment)
                   :target player-id
                   :base (double original-damage)
-                  :type (if (and damage-source (entity-damage/available?)
-                                  (entity-damage/vec-reflection-damage-source?
-                                   damage-source))
-                          :vec-reflection
-                          (or (:damage-type damage-source) :generic))
+                  :type (or (:damage-type damage-source) :generic)
                   :components {:direct (double original-damage)}
                   :tags #{:combat :attack-precheck}
                   :metadata {:damage-source damage-source
@@ -2347,7 +2470,8 @@
                                                     (str player-id))
                                                    :world-id))
                              :attacker-front? (attacker-front?
-                                               player-id attacker-id damage-source)}})]
+                                               player-id attacker-id damage-source)}})
+                {:precheck? true})]
     {:cancelled? (boolean (:cancelled? request))
      :request request}))
 
@@ -2360,12 +2484,12 @@
   [player-id attacker-id original-damage damage-source]
   (let [{:keys [request]} (process-attack-precheck!
                            player-id attacker-id original-damage damage-source)
-        reflection? (reflection-output? request)]
-    (when reflection?
+        damage? (damage-output? request)]
+    (when damage?
       (commit-state-patch! player-id (:state-patch request))
-      (execute-reflection-effects! player-id request)
+      (execute-damage-effects! player-id request)
       (dispatch-result-domain-events! player-id request))
-    (boolean reflection?)))
+    (boolean damage?)))
 
 (defn install-world-effect-handler!
   "Install AC's ordered WorldEffect interpreter.

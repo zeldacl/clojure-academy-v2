@@ -1,0 +1,29 @@
+{:schema-version 1
+ :kind :composite
+ :id :combat/projectile-reflection-scan
+ :revision 1
+ :inputs
+ {:center {:type :object}
+  :radius {:type :double}
+  :difficulty-entries {:type :object}
+  :excluded-entity-ids {:type :object}
+  :limit {:type :long}
+  :body {:type :object}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :target/entities
+           :shape {:type :sphere
+                   :center {:ref [:input :center]}
+                   :radius {:ref [:input :radius]}}
+           :filter {:difficulty-entries {:ref [:input :difficulty-entries]}
+                    :excluded-entity-ids {:ref [:input :excluded-entity-ids]}}
+           :projection [:id :type :position :velocity :owner-id :item?
+                        :living? :mob? :multipart? :eye-height :explosion-power
+                        :difficulty]
+           :limit {:ref [:input :limit]}
+           :result :projectiles}
+          {:component :flow/foreach
+           :items {:ref [:slot :projectiles]}
+           :as :projectile
+           :limit {:ref [:input :limit]}
+           :body {:ref [:input :body]}}]}}
