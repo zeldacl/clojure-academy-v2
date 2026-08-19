@@ -3,7 +3,8 @@
   (:require [cn.li.combat.recipe :as combat-recipe]
             [cn.li.mcmod.runtime.safe-edn :as safe-edn]
             [cn.li.vfx.recipe :as vfx-recipe]
-            [cn.li.ac.ability.skill-config :as skill-config]))
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private state*
   (atom {:initialized? false
@@ -28,7 +29,9 @@
 (defn- load-combat-document [resource]
   (let [document (safe-edn/read-resource! resource)]
     (if (= :ability (:kind document))
-      (skill-config/overlay-edn-parameters document)
+      (-> document
+          skill-config/overlay-edn-parameters
+          skill-config/overlay-edn-tunables)
       document)))
 
 (defn initialize! []
@@ -42,6 +45,13 @@
               {:manifest-resource "ac/vfx/manifest.edn"
                :composites-manifest-resource
                "ac/vfx/components_manifest.edn"})]
+    ;; A single ability failing to compile (bad EDN, a dataflow violation,
+    ;; ...) does not fail the whole catalog load -- combat-recipe/load-catalog!
+    ;; already dropped it from :abilities and carries the reason here so it
+    ;; is loud, not silent, while every other ability still boots normally.
+    (doseq [[ability-id error] (:errors combat)]
+      (log/error "EDN ability" ability-id "failed to compile and is disabled:"
+                 (:message error) (:data error)))
     (reset! state* {:initialized? true
                     :migration (:skills migration)
                     :combat combat

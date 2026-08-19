@@ -21,7 +21,6 @@
     (is (contains? (get-in state [:combat :composites]) :combat/impact-strike))
     (is (contains? (get-in state [:combat :composites]) :combat/area-damage))
     (is (contains? (get-in state [:combat :composites]) :combat/charged-area-damage))
-    (is (contains? (get-in state [:combat :composites]) :txn/guarded-owner-patch))
     (is (contains? (get-in state [:vfx :composites]) :vfx/beam-arc-fade))
     (is (= :railgun-beam (get-in state [:vfx :effects :railgun-beam :id])))
     (is (= :arc-gen (get-in state [:vfx :effects :arc-gen :id])))
@@ -34,7 +33,12 @@
         _ (do
             (is (pos? (count (:compiled-ir compiled))))
             (is (pos? (alength ^objects (.-objectConstants ^CompiledProgram (:compiled-program compiled))))))
-        result (execution/execute! :railgun "owner-1" {:action :start})]
+        result (execution/execute! :railgun "owner-1"
+                                   {:action :start
+                                    :from {:caster/eye {:x 0.0 :y 0.0 :z 0.0}
+                                           :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                                           :caster/id "owner-1"}
+                                    :tunables {:charge-ticks 20}})]
     (is (= :accepted (:status result)))
     (is (= :railgun (:ability-id result)))
     (is (= :started (:outcome result)))))

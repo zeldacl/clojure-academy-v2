@@ -1,289 +1,160 @@
-{:schema-version 1
+{:schema-version 2
  :kind :ability
  :id :thunder-clap
- :revision 1
+ :revision 2
  :activation :session
- :parameters
- {:targeting-range {:type :double :snapshot :activation}
-  :charge-min {:type :long :snapshot :activation}
-  :charge-max {:type :long :snapshot :activation}
-  :cost-down-overload {:type [:tuple :double 2] :snapshot :activation}
-  :cost-tick-cp {:type [:tuple :double 2] :snapshot :activation}
-  :damage {:type [:tuple :double 2] :snapshot :activation}
-  :overcharge-multiplier {:type [:tuple :double 2] :snapshot :activation}
-  :aoe-radius {:type [:tuple :double 2] :snapshot :activation}
-  :cooldown-per-hold {:type [:tuple :double 2] :snapshot :activation}
-  :exp-use {:type :double :snapshot :activation}}
- :external-triggers []
- :reactions []
- :vfx-contracts
+ :status :migrated
+ :requires [:caster/eye :caster/aim :world/id :charge/ticks]
+ :tunables
+ {:targeting-range {:curve :const}
+  :charge-min {:curve :const :type :long}
+  :charge-max {:curve :const :type :long}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :damage {:curve :mastery-lerp}
+  ;; Raw pair, no skill-exp curve: lerp'd against the runtime overcharge
+  ;; ratio inside :detonate below, not against mastery.
+  :overcharge-multiplier {:curve :pair}
+  :aoe-radius {:curve :mastery-lerp}
+  :cooldown-per-hold {:curve :mastery-lerp}
+  :exp-use {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  ;; Only spent while still charging up to the minimum -- once past
+  ;; charge-min, holding longer for overcharge costs nothing further.
+  :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :cooldown {:main {:ticks {:expr :math/mul
+                          :args [{:from :charge/ticks} {:tunable :cooldown-per-hold}]}}}
+ :progression {:cast {:per-mark {:tunable :exp-use}}}
+ :vfx
  {:charge-started {:effect-id :thunder-clap :op :spawn
- :payload {:caster :owner-id :caster-position :vec3 :target :vec3 :ticks :long}}
+                   :payload {:caster :owner-id :caster-position :vec3
+                             :target :vec3 :ticks :long}}
   :charge-updated {:effect-id :thunder-clap :op :update
-                   :payload {:target :vec3 :ticks :long :ratio :double}}
-  :charge-performed {:effect-id :thunder-clap :op :update
-                     :payload {:target :vec3 :ticks :long :ratio :double}}}
+                   :payload {:target :vec3 :ticks :long :ratio :double}}}
+ :fragments
+ {:aim {:inputs {}
+        :body {:component :target/raycast
+               :origin {:from :caster/eye} :direction {:from :caster/aim}
+               :distance {:tunable :targeting-range}
+               :include-entities? false :include-blocks? true
+               :result :aim-hit}}
+  ;; Shared by :pulse's charge-max branch and :release's sufficiently-
+  ;; charged branch -- previously two ~85-line near-duplicates whose only
+  ;; real difference was a VFX ratio field that was wrong in both places
+  ;; (raw hold-ticks instead of a 0..1 ratio). :overcharge-ratio here is
+  ;; the real ratio either way, computed once by charged-area-damage.
+  :detonate
+  {:inputs {}
+   :body
+   {:component :flow/sequence
+    :steps [{:component :combat/charged-area-damage
+             :current-ticks {:from :charge/ticks}
+             :minimum-ticks {:tunable :charge-min}
+             :maximum-ticks {:tunable :charge-max}
+             :ratio-slot :overcharge-ratio
+             :ratio-min 0.0 :ratio-max 1.0
+             :center {:ref [:slot :aim-hit :position]}
+             :radius {:tunable :aoe-radius}
+             :filter {}
+             :projection [:id :type :position]
+             :limit 256
+             :damage {:expr :math/mul
+                      :args [{:tunable :damage}
+                             {:expr :math/mul
+                              :args [{:expr :math/lerp
+                                      :args [{:tunable :overcharge-multiplier :path [0]}
+                                             {:tunable :overcharge-multiplier :path [1]}
+                                             {:ref [:slot :overcharge-ratio]}]}
+                                     {:expr :math/max
+                                      :args [0.0
+                                             {:expr :math/sub
+                                              :args [1.0
+                                                     {:expr :math/div
+                                                      :args [{:expr :vec3/distance
+                                                              :args [{:ref [:slot :area-target :position]}
+                                                                     {:ref [:slot :aim-hit :position]}]}
+                                                             {:tunable :aoe-radius}]}]}]}]}]}
+             :damage-type :skill
+             :on-impact {:component :flow/sequence :steps []}}
+            {:component :world/lightning
+             :world-id {:from :world/id}
+             :position {:ref [:slot :aim-hit :position]}
+             :visual-only? true}
+            {:component :score/mark :tag :cast}
+            {:component :cooldown/start :name :main}
+            {:component :effect/vfx :effect-id :thunder-clap :operation :update
+             :instance-key [:activation :thunder-clap]
+             :payload {:target {:ref [:slot :aim-hit :position]}
+                       :ticks {:from :charge/ticks}
+                       :ratio {:ref [:slot :overcharge-ratio]}}}
+            {:component :effect/vfx :effect-id :thunder-clap :operation :destroy
+             :instance-key [:activation :thunder-clap] :payload {}}
+            {:component :domain/event :event-type :achievement/trigger
+             :payload {:id "electromaster.thunder_clap"}}
+            {:component :flow/finish :outcome :performed :finish-session? true}]}}}
  :program
  {:component :flow/phases
   :start
   {:component :flow/sequence
-   :steps
-   [{:component :target/raycast
-     :origin {:ref [:context :eye-pos]}
-     :direction {:ref [:context :look]}
-     :distance {:ref [:param :targeting-range]}
-     :include-entities? false
-     :include-blocks? true
-     :result :aim-hit}
-    {:component :txn/guarded-owner-patch
-     :cost {:overload {:expr :math/lerp
-                       :args [{:ref [:param :cost-down-overload 0]}
-                              {:ref [:param :cost-down-overload 1]}
-                              {:ref [:context :skill-exp]}]}}
-     :reservations []
-     :entries [{:path [:resources :overload]
-                :mode :increment
-                :value {:expr :math/mul
-                        :args [-1.0
-                               {:expr :math/lerp
-                                :args [{:ref [:param :cost-down-overload 0]}
-                                       {:ref [:param :cost-down-overload 1]}
-                                       {:ref [:context :skill-exp]}]}]}}]
-     :body {:component :flow/sequence
-            :steps [{:component :effect/vfx
-                     :effect-id :thunder-clap
-                     :operation :spawn
-                     :instance-key [:activation :thunder-clap]
-                     :audience {:type :nearby :radius 64.0}
-                     :payload {:caster {:ref [:context :owner]}
-                               :caster-position {:ref [:context :eye-pos]}
-                               :target {:ref [:slot :aim-hit :position]}
-                               :ticks 0}}]}
-     :on-success {:component :flow/finish :outcome :started}
-     :on-fail {:component :flow/finish
-               :outcome :insufficient-resource
-               :finish-session? true}}]}
+   :steps [{:component :aim}
+           {:component :cost/spend
+            :budget :activate
+            :on-insufficient {:component :flow/finish
+                              :outcome :insufficient-resource
+                              :finish-session? true}}
+           {:component :effect/vfx :effect-id :thunder-clap :operation :spawn
+            :instance-key [:activation :thunder-clap]
+            :audience {:type :nearby :radius 64.0}
+            :payload {:caster {:from :caster/id}
+                      :caster-position {:from :caster/eye}
+                      :target {:ref [:slot :aim-hit :position]}
+                      :ticks 0}}
+           {:component :flow/finish :outcome :started}]}
   :pulse
   {:component :flow/branch
-   :when {:expr :math/gte
-          :args [{:ref [:context :hold-ticks]}
-                 {:ref [:param :charge-max]}]}
-   :then {:component :flow/sequence
-          :steps [{:component :target/raycast
-                   :origin {:ref [:context :eye-pos]}
-                   :direction {:ref [:context :look]}
-                   :distance {:ref [:param :targeting-range]}
-                   :include-entities? false
-                   :include-blocks? true
-                   :result :aim-hit}
-                  {:component :combat/charged-area-damage
-                   :current-ticks {:ref [:context :hold-ticks]}
-                   :minimum-ticks {:ref [:param :charge-min]}
-                   :maximum-ticks {:ref [:param :charge-max]}
-                   :ratio-slot :overcharge-ratio
-                   :ratio-min 0.0
-                   :ratio-max 1.0
-                   :center {:ref [:slot :aim-hit :position]}
-                   :radius {:expr :math/lerp
-                            :args [{:ref [:param :aoe-radius 0]}
-                                   {:ref [:param :aoe-radius 1]}
-                                   {:ref [:context :skill-exp]}]}
-                   :filter {}
-                   :projection [:id :type :position]
-                   :limit 256
-                   :damage {:expr :math/mul
-                            :args [{:expr :math/lerp
-                                    :args [{:ref [:param :damage 0]}
-                                           {:ref [:param :damage 1]}
-                                           {:ref [:context :skill-exp]}]}
-                                   {:expr :math/mul
-                                    :args [{:expr :math/lerp
-                                            :args [{:ref [:param :overcharge-multiplier 0]}
-                                                   {:ref [:param :overcharge-multiplier 1]}
-                                                   {:ref [:slot :overcharge-ratio]}]}
-                                           {:expr :math/max
-                                            :args [0.0
-                                                   {:expr :math/sub
-                                                    :args [1.0
-                                                           {:expr :math/div
-                                                            :args [{:expr :vec3/distance
-                                                                    :args [{:ref [:slot :area-target :position]}
-                                                                           {:ref [:slot :aim-hit :position]}]}
-                                                                   {:expr :math/lerp
-                                                                    :args [{:ref [:param :aoe-radius 0]}
-                                                                           {:ref [:param :aoe-radius 1]}
-                                                                           {:ref [:context :skill-exp]}]}]}]}]}]}]}
-                   :damage-type :skill
-                   :on-impact {:component :flow/sequence :steps []}}
-                  {:component :world/lightning
-                   :world-id {:ref [:context :world-id]}
-                   :position {:ref [:slot :aim-hit :position]}
-                   :visual-only? true}
-                  {:component :owner/patch
-                   :entries [{:path [:ability-data :skill-exps :thunder-clap]
-                              :mode :increment
-                              :value {:ref [:param :exp-use]}}
-                              {:path [:cooldown-data :thunder-clap :main]
-                               :mode :assign
-                               :value {:expr :math/mul
-                                       :args [{:ref [:context :hold-ticks]}
-                                              {:expr :math/lerp
-                                               :args [{:ref [:param :cooldown-per-hold 0]}
-                                                      {:ref [:param :cooldown-per-hold 1]}
-                                                      {:ref [:context :skill-exp]}]}]}}]}
-                  {:component :effect/vfx
-                   :effect-id :thunder-clap
-                   :operation :update
-                   :payload {:target {:ref [:slot :aim-hit :position]}
-                             :ticks {:ref [:context :hold-ticks]}
-                              :ratio {:ref [:context :hold-ticks]}}}
-                  {:component :effect/vfx
-                   :effect-id :thunder-clap
-                   :operation :destroy
-                   :payload {}}
-                  {:component :domain/event
-                   :event-type :achievement/trigger
-                   :payload {:id "electromaster.thunder_clap"
-                             :owner {:ref [:context :owner]}}}
-                  {:component :flow/finish :outcome :performed
-                   :finish-session? true}]}
+   :when {:expr :math/gte :args [{:from :charge/ticks} {:tunable :charge-max}]}
+   :then {:component :flow/sequence :steps [{:component :aim} {:component :detonate}]}
    :else {:component :flow/sequence
-          :steps [{:component :target/raycast
-                   :origin {:ref [:context :eye-pos]}
-                   :direction {:ref [:context :look]}
-                   :distance {:ref [:param :targeting-range]}
-                   :include-entities? false
-                   :include-blocks? true
-                   :result :aim-hit}
-                  {:component :effect/vfx
-                   :effect-id :thunder-clap
-                   :operation :update
+          :steps [{:component :aim}
+                  {:component :effect/vfx :effect-id :thunder-clap :operation :update
+                   :instance-key [:activation :thunder-clap]
                    :payload {:target {:ref [:slot :aim-hit :position]}
-                             :ticks {:ref [:context :hold-ticks]}
-                              :ratio {:ref [:context :hold-ticks]}}}
+                             :ticks {:from :charge/ticks}
+                             :ratio {:expr :math/div
+                                     :args [{:from :charge/ticks} {:tunable :charge-max}]}}}
                   {:component :flow/branch
-                   :when {:expr :math/lte
-                          :args [{:ref [:context :hold-ticks]}
-                                 {:ref [:param :charge-min]}]}
-                   :then {:component :txn/guarded-owner-patch
-                          :cost {:cp {:expr :math/lerp
-                                      :args [{:ref [:param :cost-tick-cp 0]}
-                                             {:ref [:param :cost-tick-cp 1]}
-                                             {:ref [:context :skill-exp]}]}}
-                          :reservations []
-                          :entries [{:path [:resources :cp]
-                                     :mode :increment
-                                     :value {:expr :math/mul
-                                             :args [-1.0
-                                                    {:expr :math/lerp
-                                                     :args [{:ref [:param :cost-tick-cp 0]}
-                                                            {:ref [:param :cost-tick-cp 1]}
-                                                            {:ref [:context :skill-exp]}]}]}}]
-                          :body {:component :flow/sequence :steps []}
-                          :on-success {:component :flow/finish :outcome :continue}
-                          :on-fail {:component :flow/sequence
-                                    :steps [{:component :effect/vfx
-                                             :effect-id :thunder-clap
+                   :when {:expr :math/lte :args [{:from :charge/ticks} {:tunable :charge-min}]}
+                   ;; :cost/spend's affordable path returns nil (continue),
+                   ;; correct when it's a step inside a sequence but not
+                   ;; when it's the whole value of a branch arm -- an
+                   ;; explicit :flow/finish is still needed after it so
+                   ;; this arm doesn't fall through with no result.
+                   :then {:component :flow/sequence
+                          :steps [{:component :cost/spend
+                                   :budget :charging
+                                   :on-insufficient
+                                   {:component :flow/sequence
+                                    :steps [{:component :effect/vfx :effect-id :thunder-clap
                                              :operation :destroy
-                                             :payload {}}
-                                            {:component :flow/finish
-                                             :outcome :insufficient-resource
+                                             :instance-key [:activation :thunder-clap] :payload {}}
+                                            {:component :flow/finish :outcome :insufficient-resource
                                              :finish-session? true}]}}
+                                  {:component :flow/finish :outcome :continue}]}
                    :else {:component :flow/finish :outcome :continue}}]}}
   :release
   {:component :flow/sequence
-   :steps [{:component :target/raycast
-            :origin {:ref [:context :eye-pos]}
-            :direction {:ref [:context :look]}
-            :distance {:ref [:param :targeting-range]}
-            :include-entities? false
-            :include-blocks? true
-            :result :aim-hit}
+   :steps [{:component :aim}
            {:component :flow/branch
-            :when {:expr :math/gte
-                   :args [{:ref [:context :hold-ticks]}
-                          {:ref [:param :charge-min]}]}
-            :then {:component :flow/sequence
-                   :steps [{:component :combat/charged-area-damage
-                            :current-ticks {:ref [:context :hold-ticks]}
-                            :minimum-ticks {:ref [:param :charge-min]}
-                            :maximum-ticks {:ref [:param :charge-max]}
-                            :ratio-slot :overcharge-ratio
-                            :ratio-min 0.0
-                            :ratio-max 1.0
-                            :center {:ref [:slot :aim-hit :position]}
-                            :radius {:expr :math/lerp
-                                     :args [{:ref [:param :aoe-radius 0]}
-                                            {:ref [:param :aoe-radius 1]}
-                                            {:ref [:context :skill-exp]}]}
-                            :filter {}
-                            :projection [:id :type :position]
-                            :limit 256
-                            :damage {:expr :math/mul
-                                     :args [{:expr :math/lerp
-                                             :args [{:ref [:param :damage 0]}
-                                                    {:ref [:param :damage 1]}
-                                                    {:ref [:context :skill-exp]}]}
-                                            {:expr :math/mul
-                                             :args [{:expr :math/lerp
-                                                     :args [{:ref [:param :overcharge-multiplier 0]}
-                                                            {:ref [:param :overcharge-multiplier 1]}
-                                                            {:ref [:slot :overcharge-ratio]}]}
-                                                    {:expr :math/max
-                                                     :args [0.0
-                                                            {:expr :math/sub
-                                                             :args [1.0
-                                                                    {:expr :math/div
-                                                                     :args [{:expr :vec3/distance
-                                                                             :args [{:ref [:slot :area-target :position]}
-                                                                                    {:ref [:slot :aim-hit :position]}]}
-                                                                            {:expr :math/lerp
-                                                                             :args [{:ref [:param :aoe-radius 0]}
-                                                                                    {:ref [:param :aoe-radius 1]}
-                                                                                    {:ref [:context :skill-exp]}]}]}]}]}]}]}
-                            :damage-type :skill
-                            :on-impact {:component :flow/sequence :steps []}}
-                           {:component :world/lightning
-                            :world-id {:ref [:context :world-id]}
-                            :position {:ref [:slot :aim-hit :position]}
-                            :visual-only? true}
-                           {:component :owner/patch
-                            :entries [{:path [:ability-data :skill-exps :thunder-clap]
-                                       :mode :increment
-                                       :value {:ref [:param :exp-use]}}
-                                       {:path [:cooldown-data :thunder-clap :main]
-                                        :mode :assign
-                                        :value {:expr :math/mul
-                                                :args [{:ref [:context :hold-ticks]}
-                                                       {:expr :math/lerp
-                                                        :args [{:ref [:param :cooldown-per-hold 0]}
-                                                               {:ref [:param :cooldown-per-hold 1]}
-                                                               {:ref [:context :skill-exp]}]}]}}]}
-                           {:component :effect/vfx
-                            :effect-id :thunder-clap :operation :update
-                            :payload {:target {:ref [:slot :aim-hit :position]}
-                                      :ticks {:ref [:context :hold-ticks]}
-                                      :ratio 1.0}}
-                           {:component :effect/vfx
-                            :effect-id :thunder-clap :operation :destroy
-                            :payload {}}
-                           {:component :domain/event
-                            :event-type :achievement/trigger
-                            :payload {:id "electromaster.thunder_clap"
-                                      :owner {:ref [:context :owner]}}}
-                           {:component :flow/finish :outcome :performed
-                            :finish-session? true}]}
+            :when {:expr :math/gte :args [{:from :charge/ticks} {:tunable :charge-min}]}
+            :then {:component :detonate}
             :else {:component :flow/sequence
-                   :steps [{:component :effect/vfx
-                            :effect-id :thunder-clap
-                            :operation :destroy
-                            :payload {}}
+                   :steps [{:component :effect/vfx :effect-id :thunder-clap :operation :destroy
+                            :instance-key [:activation :thunder-clap] :payload {}}
                            {:component :flow/finish :outcome :undercharged
                             :finish-session? true}]}}]}
-  :abort {:component :flow/sequence
-          :steps [{:component :effect/vfx
-                   :effect-id :thunder-clap
-                   :operation :destroy
-                   :payload {}}
-                  {:component :flow/finish :outcome :aborted
-                   :finish-session? true}]}}}
+  :abort
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx :effect-id :thunder-clap :operation :destroy
+            :instance-key [:activation :thunder-clap] :payload {}}
+           {:component :flow/finish :outcome :aborted :finish-session? true}]}}}

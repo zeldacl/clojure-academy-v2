@@ -1,28 +1,35 @@
-{:schema-version 1
+{:schema-version 2
  :kind :ability
  :id :vec-reflection
- :revision 1
+ :revision 2
  :activation :toggle
+ :status :migrated
+ :requires [:caster/eye :caster/aim]
+ ;; The damage :reactions block below is a separate subsystem
+ ;; (combat_runtime's apply-edn-damage-reactions) not yet folded into the
+ ;; :costs/:progression policy evaluator -- deferred to the plan's Phase 6.
+ ;; It still reads these 5 fields through the legacy :parameters/:param path.
  :parameters
- {:tick-cp {:type [:tuple :double 2] :snapshot :activation}
-  :overload-keep {:type [:tuple :double 2] :snapshot :activation}
-  :target-radius {:type :double :snapshot :activation}
-  :affected-entity-difficulty {:type :string-list :snapshot :activation}
-  :excluded-entity-ids {:type :string-list :snapshot :activation}
-  :large-fireball-ids {:type :string-list :snapshot :activation}
-  :small-fireball-ids {:type :string-list :snapshot :activation}
-  :reflect-entity-cp {:type [:tuple :double 2] :snapshot :activation}
-  :damage-multiplier {:type [:tuple :double 2] :snapshot :activation}
+ {:damage-multiplier {:type [:tuple :double 2] :snapshot :activation}
   :min-reflected-damage {:type :double :snapshot :activation}
   :damage-cp {:type [:tuple :double 2] :snapshot :activation}
-  :exp-reflect-entity-scale {:type :double :snapshot :activation}
   :exp-damage-scale {:type :double :snapshot :activation}
-  :attacker-search-radius {:type :double :snapshot :activation}
-  :arbitration-priority {:type :string-list :snapshot :activation}
-  :max-reflections {:type :long :snapshot :activation}
-  :visited-ttl-ticks {:type :long :snapshot :activation}
-  :visited-max-size {:type :long :snapshot :activation}}
- :external-triggers []
+  :max-reflections {:type :long :snapshot :activation}}
+ :tunables
+ {:tick-cp {:curve :mastery-lerp}
+  :overload-keep {:curve :mastery-lerp}
+  :target-radius {:curve :const}
+  :affected-entity-difficulty {:curve :const :type :string-list}
+  :excluded-entity-ids {:curve :const :type :string-list}
+  :large-fireball-ids {:curve :const :type :string-list}
+  :reflect-entity-cp {:curve :mastery-lerp}
+  :exp-reflect-entity-scale {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :overload-keep}}}
+  :per-tick {:resources {:cp {:tunable :tick-cp}}}
+  :per-reflect {:resources {:cp {:tunable :reflect-entity-cp}}}}
+ :invariants {:overload-floor {:tunable :overload-keep}}
+ :progression {:reflect-entity {:per-mark {:tunable :exp-reflect-entity-scale}}}
  :reactions
  [{:on :combat/damage
    :priority 60
@@ -42,7 +49,7 @@
              :minimum {:ref [:param :min-reflected-damage]}
              :max-depth {:ref [:param :max-reflections]}
              :exp-scale {:ref [:param :exp-damage-scale]}}}]
- :vfx-contracts
+ :vfx
  {:reflection-start {:effect-id :vec-reflection-field :op :spawn
                      :payload {:owner :owner-id}}
   :projectile-reflected {:effect-id :vec-reflection-wave :op :spawn
@@ -52,139 +59,97 @@
                      :payload {:position :vec3 :mode :damage}}}
  :program
  {:component :flow/phases
-  :start {:component :flow/sequence
-          :steps [{:component :txn/atomic
-                   :guards [{:component :guard/resource
-                             :cost {:overload {:expr :math/lerp
-                                               :args [{:ref [:param :overload-keep 0]}
-                                                      {:ref [:param :overload-keep 1]}
-                                                      {:ref [:context :skill-exp]}]}}}]
-                   :reservations []
-                   :body {:component :flow/sequence
-                          :steps [{:component :owner/patch
-                                   :entries [{:path [:resources :overload]
-                                              :mode :increment
-                                              :value {:expr :math/mul
-                                                      :args [-1.0
-                                                             {:expr :math/lerp
-                                                              :args [{:ref [:param :overload-keep 0]}
-                                                                     {:ref [:param :overload-keep 1]}
-                                                                     {:ref [:context :skill-exp]}]}]}}]}
-                                  {:component :resource/enforce-floor
-                                   :resource :overload
-                                   :minimum {:expr :math/lerp
-                                             :args [{:ref [:param :overload-keep 0]}
-                                                    {:ref [:param :overload-keep 1]}
-                                                    {:ref [:context :skill-exp]}]}}
-                                  {:component :effect/vfx
-                                   :effect-id :vec-reflection-field
-                                   :operation :spawn
-                                   :instance-key [:activation :vec-reflection]
-                                   :audience {:type :nearby :radius 64.0}
-                                   :payload {:mode :start
-                                             :position {:ref [:context :eye-pos]}}}
-                                  {:component :flow/finish :outcome :started}]}
-                   :on-fail {:component :flow/finish
-                             :outcome :insufficient-resource
-                             :finish-session? true}}]}
-  :pulse {:component :flow/sequence
-          :steps [{:component :owner/patch
-                   :entries [{:path [:resources :cp]
-                              :mode :increment
-                              :value {:expr :math/mul
-                                      :args [-1.0
-                                             {:expr :math/lerp
-                                              :args [{:ref [:param :tick-cp 0]}
-                                                     {:ref [:param :tick-cp 1]}
-                                                     {:ref [:context :skill-exp]}]}]}}]}
-                  {:component :resource/enforce-floor
-                   :resource :overload
-                   :minimum {:expr :math/lerp
-                             :args [{:ref [:param :overload-keep 0]}
-                                    {:ref [:param :overload-keep 1]}
-                                    {:ref [:context :skill-exp]}]}}
-                  {:component :target/raycast
-                   :origin {:ref [:context :eye-pos]}
-                   :direction {:ref [:context :look]}
-                   :distance 20.0
-                   :include-entities? true
-                   :include-blocks? true
-                   :result :aim-point}
-                  {:component :combat/projectile-reflection-scan
-                   :center {:ref [:context :eye-pos]}
-                   :radius {:ref [:param :target-radius]}
-                   :difficulty-entries {:ref [:param :affected-entity-difficulty]}
-                   :excluded-entity-ids {:ref [:param :excluded-entity-ids]}
-                   :limit 64
-                   :body {:component :flow/once
-                          :scope :owner
-                          :storage-path [:visited-projectiles]
-                          :strategy :last-key
-                          :key {:ref [:slot :projectile :id]}
-                          :on-first {:component :flow/sequence
-                                     :steps [{:component :flow/branch
-                                              :when {:expr :math/gt
-                                                     :args [{:ref [:slot :projectile :difficulty]} 0.0]}
-                                              :then {:component :txn/atomic
-                                                     :guards [{:component :guard/resource
-                                                               :cost {:cp {:expr :math/mul
-                                                                           :args [{:ref [:slot :projectile :difficulty]}
-                                                                                  {:expr :math/lerp
-                                                                                          :args [{:ref [:param :reflect-entity-cp 0]}
-                                                                                          {:ref [:param :reflect-entity-cp 1]}
-                                                                                          {:ref [:context :skill-exp]}]}]}}}]
-                                                     :reservations []
-                                                     :body {:component :flow/sequence
-                                                            :steps [{:component :owner/patch
-                                                                     :entries [{:path [:resources :cp]
-                                                                                :mode :increment
-                                                                                :value {:expr :math/mul
-                                                                                        :args [-1.0
-                                                                                               {:expr :math/mul
-                                                                                                :args [{:ref [:slot :projectile :difficulty]}
-                                                                                                       {:expr :math/lerp
-                                                                                                        :args [{:ref [:param :reflect-entity-cp 0]}
-                                                                                                               {:ref [:param :reflect-entity-cp 1]}
-                                                                                                               {:ref [:context :skill-exp]}]}]}]}}]}
-                                                                    {:component :projectile/redirect
-                                                                     :entity {:ref [:slot :projectile]}
-                                                                     :target-position {:ref [:slot :aim-point :position]}
-                                                                     :velocity {:ref [:slot :projectile :velocity]}
-                                                                     :difficulty {:ref [:slot :projectile :difficulty]}
-                                                                     :replacement-types {:ref [:param :large-fireball-ids]}}
-                                                                    {:component :owner/patch
-                                                                     :entries [{:path [:ability-data :skill-exps :vec-reflection]
-                                                                                :mode :increment
-                                                                                :value {:expr :math/mul
-                                                                                        :args [{:ref [:slot :projectile :difficulty]}
-                                                                                               {:ref [:param :exp-reflect-entity-scale]}]}}]}
-                                                                    {:component :effect/vfx
-                                                                     :effect-id :vec-reflection-wave
-                                                                     :operation :spawn
-                                                                     :instance-key [:projectile
-                                                                                    {:ref [:slot :projectile :id]}]
-                                                                     :payload {:mode :reflect-entity
-                                                                               :position {:ref [:slot :projectile :position]}
-                                                                               :velocity {:ref [:slot :projectile :velocity]}}}]}
-                                                     :on-fail {:component :flow/finish
-                                                               :outcome :insufficient-projectile-resource}}
-                                              :else {:component :flow/finish
-                                                     :outcome :ignored}}]}
-                           :on-duplicate {:component :flow/finish :outcome :duplicate}}}
-                  {:component :flow/finish :outcome :continue}]}
-  :release {:component :flow/sequence
-            :steps [{:component :effect/vfx
-                     :effect-id :vec-reflection-field
-                     :operation :destroy
-                     :instance-key [:activation :vec-reflection]
-                     :payload {}}
-                    {:component :flow/finish :outcome :released
-                     :finish-session? true}]}
-  :abort {:component :flow/sequence
-          :steps [{:component :effect/vfx
-                   :effect-id :vec-reflection-field
-                   :operation :destroy
-                   :instance-key [:activation :vec-reflection]
-                   :payload {}}
-                  {:component :flow/finish :outcome :aborted
-                   :finish-session? true}]}}}
+  :start
+  {:component :flow/sequence
+   :steps [{:component :cost/spend
+            :budget :activate
+            :on-insufficient {:component :flow/finish :outcome :insufficient-resource
+                              :finish-session? true}}
+           {:component :effect/vfx
+            :effect-id :vec-reflection-field
+            :operation :spawn
+            :instance-key [:activation :vec-reflection]
+            :audience {:type :nearby :radius 64.0}
+            :payload {:mode :start :position {:from :caster/eye}}}
+           {:component :flow/finish :outcome :started}]}
+  :pulse
+  {:component :flow/sequence
+   :steps [{:component :cost/spend
+            :budget :per-tick
+            :on-insufficient {:component :flow/sequence
+                              :steps [{:component :effect/vfx
+                                       :effect-id :vec-reflection-field
+                                       :operation :destroy
+                                       :instance-key [:activation :vec-reflection]
+                                       :payload {}}
+                                      {:component :flow/finish :outcome :insufficient-resource
+                                       :finish-session? true}]}}
+           {:component :resource/enforce-floor
+            :resource :overload
+            :minimum {:invariant :overload-floor}}
+           {:component :target/raycast
+            :origin {:from :caster/eye} :direction {:from :caster/aim}
+            :distance 20.0
+            :include-entities? true :include-blocks? true
+            :result :aim-point}
+           {:component :combat/projectile-reflection-scan
+            :center {:from :caster/eye}
+            :radius {:tunable :target-radius}
+            :difficulty-entries {:tunable :affected-entity-difficulty}
+            :excluded-entity-ids {:tunable :excluded-entity-ids}
+            :limit 64
+            :body {:component :flow/once
+                   :scope :owner
+                   :storage-path [:visited-projectiles]
+                   :strategy :last-key
+                   :key {:ref [:slot :projectile :id]}
+                   ;; No :else / :on-duplicate result: a non-reflectable or
+                   ;; already-seen projectile simply produces nil, which
+                   ;; :flow/foreach (in combat/projectile-reflection-scan's
+                   ;; body) reads as "move on to the next one" -- not a
+                   ;; :flow/finish, which would end the whole activation
+                   ;; over a single skipped projectile.
+                   :on-first {:component :flow/branch
+                              :when {:expr :math/gt
+                                     :args [{:ref [:slot :projectile :difficulty]} 0.0]}
+                              :then {:component :flow/sequence
+                                     :steps [{:component :cost/spend
+                                              :budget :per-reflect
+                                              :scale {:ref [:slot :projectile :difficulty]}
+                                              :on-insufficient
+                                              {:component :flow/control :signal :skip-item}}
+                                             {:component :projectile/redirect
+                                              :entity {:ref [:slot :projectile]}
+                                              :target-position {:ref [:slot :aim-point :position]}
+                                              :velocity {:ref [:slot :projectile :velocity]}
+                                              :difficulty {:ref [:slot :projectile :difficulty]}
+                                              :replacement-types {:tunable :large-fireball-ids}}
+                                             {:component :score/mark
+                                              :tag :reflect-entity
+                                              :weight {:ref [:slot :projectile :difficulty]}}
+                                             {:component :effect/vfx
+                                              :effect-id :vec-reflection-wave
+                                              :operation :spawn
+                                              :instance-key [:projectile {:ref [:slot :projectile :id]}]
+                                              :payload {:mode :reflect-entity
+                                                        :position {:ref [:slot :projectile :position]}
+                                                        :velocity {:ref [:slot :projectile :velocity]}}}]}}}}
+           {:component :flow/finish :outcome :continue}]}
+  :release
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :vec-reflection-field
+            :operation :destroy
+            :instance-key [:activation :vec-reflection]
+            :payload {}}
+           {:component :flow/finish :outcome :released
+            :finish-session? true}]}
+  :abort
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :vec-reflection-field
+            :operation :destroy
+            :instance-key [:activation :vec-reflection]
+            :payload {}}
+           {:component :flow/finish :outcome :aborted
+            :finish-session? true}]}}}

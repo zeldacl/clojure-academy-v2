@@ -50,7 +50,24 @@
 ;; `tick!` below updates this from the real server tick every call; intents
 ;; dispatched between full tick-loop passes read the last observed value.
 (defonce ^:private last-known-tick* (atom 0))
+;; Monotonic tiebreaker for activation-seed generation: (owner, ability-id,
+;; tick) alone can repeat within a single tick, so a plain hash of those three
+;; would make `random/*` behave identically for repeated activations. Mixing
+;; in this counter and wall-clock nanos gives every activation its own seed.
+(defonce ^:private activation-seed-counter* (atom 0))
 (declare owner-state resolve-slot execute-world-effects! finalize-result! publish-result!)
+
+(defn- generate-activation-seed
+  "Produce a fresh per-activation RNG seed. Never deterministic across
+  activations for the same owner/ability -- see `dispatch-intent!`'s only
+  caller, `execute-edn-intent!`, which threads the result into both the
+  program context and the session store so every reader of
+  :activation-seed observes the same real value instead of independently
+  recomputing a constant fallback."
+  [owner ability-id tick]
+  (hash [owner ability-id tick
+         (swap! activation-seed-counter* unchecked-inc)
+         (System/nanoTime)]))
 
 (defn- valid-damage-world-effect?
   [effect]
@@ -1766,42 +1783,46 @@
   "Translate the neutral owner-patch contract into AC reducer commands.
 
   Core never knows AC's player-state layout; this adapter is the only place
-  where neutral paths become persistent state transitions."
+  where neutral paths become persistent state transitions.
+
+  Every entry in every owner-patch action is translated independently: an
+  action carrying both a cp entry and an overload entry must commit both,
+  not just the first one a scan happens to hit."
   [patch-actions]
-  (keep (fn [{:keys [entries]}]
-          (some (fn [{:keys [path mode value]}]
-                  (let [amount (when (number? value) (double value))]
-                    (cond
-                      (and (= mode :increment)
-                           (= path [:resources :cp])
-                           (some? amount))
-                      {:command :consume-resource :cp (- amount)}
-                      (and (= mode :increment)
-                           (= path [:resources :overload])
-                           (some? amount))
-                      {:command :consume-resource :overload (- amount)}
-                      (and (= mode :increment)
-                           (= 3 (count path))
-                           (= [:ability-data :skill-exps] (subvec (vec path) 0 2))
-                           (keyword? (nth path 2))
-                           (some? amount))
-                      {:command :add-skill-exp
-                       :skill-id (nth path 2)
-                       :amount amount
-                       :source :combat-core}
-                      (and (= mode :assign)
-                           (= 3 (count path))
-                           (= [:cooldown-data] (subvec (vec path) 0 1))
-                           (keyword? (nth path 1))
-                           (keyword? (nth path 2))
-                           (some? amount))
-                      {:command :set-cooldown
-                       :ctrl-id (nth path 1)
-                       :sub-id (nth path 2)
-                       :ticks (max 0 (long amount))}
-                      :else nil)))
-                entries))
-        (filter #(= :owner-patch (:type %)) patch-actions)))
+  (mapcat (fn [{:keys [entries]}]
+            (keep (fn [{:keys [path mode value]}]
+                    (let [amount (when (number? value) (double value))]
+                      (cond
+                        (and (= mode :increment)
+                             (= path [:resources :cp])
+                             (some? amount))
+                        {:command :consume-resource :cp (- amount)}
+                        (and (= mode :increment)
+                             (= path [:resources :overload])
+                             (some? amount))
+                        {:command :consume-resource :overload (- amount)}
+                        (and (= mode :increment)
+                             (= 3 (count path))
+                             (= [:ability-data :skill-exps] (subvec (vec path) 0 2))
+                             (keyword? (nth path 2))
+                             (some? amount))
+                        {:command :add-skill-exp
+                         :skill-id (nth path 2)
+                         :amount amount
+                         :source :combat-core}
+                        (and (= mode :assign)
+                             (= 3 (count path))
+                             (= [:cooldown-data] (subvec (vec path) 0 1))
+                             (keyword? (nth path 1))
+                             (keyword? (nth path 2))
+                             (some? amount))
+                        {:command :set-cooldown
+                         :ctrl-id (nth path 1)
+                         :sub-id (nth path 2)
+                         :ticks (max 0 (long amount))}
+                        :else nil)))
+                  entries))
+          (filter #(= :owner-patch (:type %)) patch-actions)))
 
 (defn- commit-edn-owner-patches!
   [owner actions]
@@ -1838,7 +1859,7 @@
                (:parameters ability)))))
 
 (defn- activation-context
-  [owner ability-id intent]
+  [owner ability-id intent seed]
   (let [state (runtime-store/get-player-state (server-session-id) (str owner))
         resource-data (:resource-data state)
         position (when (raycast/available?)
@@ -1851,8 +1872,7 @@
             :world-id (or (:world-id position) (geom/world-id-of (str owner)))
             :eye-pos eye
             :look look
-            :activation-seed (long (or (:activation-seed intent)
-                                       (hash [owner ability-id])))
+            :activation-seed (long seed)
             :skill-exp (double (or (get-in state [:ability-data :skill-exps ability-id])
                                    0.0))
             :resources {:cp (double (or (:cur-cp resource-data) 0.0))
@@ -1860,11 +1880,77 @@
             :creative? false}
            (:context intent))))
 
-(defn- install-edn-host-capabilities!
+(defn- caster-facade
+  "Schema v2 design C: the neutral capability table an EDN ability reads via
+  `{:from :caster/...}` instead of `{:ref [:context ...]}` reaching straight
+  into AC's own context shape. This is the ONLY place that shape is allowed
+  to leak into a form combat-core sees -- change AC's context layout and
+  only this function needs updating, never any EDN.
+
+  Deliberately incomplete: `:caster/hand-item` and `:toggle/enabled?` are
+  not wired yet (the former needs a new cross-platform held-item port, the
+  latter needs the same session-presence check the damage-reaction path
+  already computes at combat_runtime.clj ~2394). Referencing either from
+  EDN fails closed (`combat-core/vm.clj`'s :from resolution throws) rather
+  than silently resolving to nil; both get added in Phase 5 alongside the
+  abilities that actually need them."
+  [owner context]
+  {:caster/eye (:eye-pos context)
+   :caster/aim (:look context)
+   :caster/id owner
+   :world/id (:world-id context)
+   :charge/ticks (long (or (:hold-ticks context) 0))
+   ;; Raw (pre-curve) mastery and RNG seed: legitimate exceptions to design
+   ;; B/E folding skill-exp/seed away. Some content hands both to an AC-side
+   ;; domain-event handler that isn't itself an EDN node (arc-gen's ignite/
+   ;; fishing resolution) -- that handler needs the same inputs the VM's own
+   ;; :expr evaluator would have used, just not through a lerp/random/* node.
+   :progression/mastery (double (or (:skill-exp context) 0.0))
+   :rng/seed (long (or (:activation-seed context) 0))})
+
+(defn- lerp [lo hi t]
+  (let [bounded (max 0.0 (min 1.0 (double t)))]
+    (+ (double lo) (* (- (double hi) (double lo)) bounded))))
+
+(defn- materialize-tunables
+  "Schema v2 design B: apply each :tunables declaration's curve against the
+  owner's live skill-exp, fresh every activation.
+
+  Catalog load (skill_config.clj's overlay-edn-tunables) only resolved the
+  config-driven pieces -- a constant, or the raw (lo,hi)/(base,slope) config
+  pair. The mastery-dependent math happens here and only here: skill-exp
+  changes over a player's lifetime, the catalog loads once at boot, so
+  baking the curve in at load time would freeze it at whatever mastery the
+  server happened to have on startup."
+  [ability skill-exp]
+  (reduce-kv
+    (fn [result tunable-id {:keys [curve value range]}]
+      (assoc result tunable-id
+             (case curve
+               :const value
+               ;; No curve applied here -- the ability supplies its own
+               ;; math/lerp against something other than skill-exp.
+               :pair value
+               :mastery-lerp (lerp (first range) (second range) skill-exp)
+               :affine (+ (double (first range))
+                         (* (double (second range)) (double skill-exp)))
+               (throw (ex-info "unsupported tunable curve at activation"
+                              {:tunable tunable-id :curve curve})))))
+    {}
+    (or (:tunables ability) {})))
+
+(defn install-edn-host-capabilities!
   "Link the generic EDN host table to neutral AC platform ports once.
 
   The handlers exchange only maps and UUIDs.  They do not select abilities or
-  contain Arc Gen rules; those remain in EDN."
+  contain Arc Gen rules; those remain in EDN.
+
+  Public and called from cn.li.ac.core.init/init, ahead of
+  edn-catalog/initialize!, so capabilities are registered before the catalog
+  ever loads (Design E precondition R9). It also still runs lazily on first
+  dispatch below (compare-and-set! below makes a second call a no-op) as a
+  safety net for any other entry path, but that is no longer the only time
+  it runs."
   []
   (when (compare-and-set! edn-host-capabilities-installed? false true)
     (try
@@ -2114,11 +2200,20 @@
                            (= :toggle (:activation ability))
                            (= ability-id (:ability-id active-session)))
         op (if toggle-close? :abort requested-op)
+        ;; Computed once per activation and threaded everywhere :activation-seed
+        ;; is read (program context, session store) so every reader agrees on
+        ;; the same real value instead of each independently falling back to
+        ;; a constant hash of [owner ability-id].
+        activation-seed (or (:activation-seed active-session)
+                            (:activation-seed intent)
+                            (generate-activation-seed owner ability-id current-tick))
         normalized (assoc intent
                           :action op
                           :ability-id ability-id
+                          :activation-seed activation-seed
                           :context (or (:context active-session)
-                                       (activation-context owner ability-id intent))
+                                       (activation-context owner ability-id intent
+                                                            activation-seed))
                           :parameter-snapshot
                           (or (:parameter-snapshot intent)
                               (:parameter-snapshot active-session)
@@ -2144,11 +2239,29 @@
                                   {:context dynamic-context
                                    :session-state (:state session-context)
                                    :latches (:latches session-context)
-                                   :server-tick current-tick})
+                                   :server-tick current-tick
+                                   :from (caster-facade owner dynamic-context)
+                                   :tunables (materialize-tunables
+                                              ability (:skill-exp dynamic-context))
+                                   ;; Schema v2 design A: pure passthrough of
+                                   ;; the ability's own declarative blocks.
+                                   ;; combat-core's :cost/spend, :score/mark,
+                                   ;; :cooldown/start, and {:invariant ...}
+                                   ;; resolve against these -- AC does no
+                                   ;; computation here, only hands the
+                                   ;; already-compiled EDN data through.
+                                   :costs (:costs ability)
+                                   :progression (:progression ability)
+                                   :cooldown (:cooldown ability)
+                                   :invariants (:invariants ability)})
           result (edn-execution/execute! ability-id owner execution-intent)]
       (when (= :accepted (:status result))
         (edn-sessions/apply-actions! owner (:actions result)))
       (when (or (:finish-session? result)
+                ;; Instant abilities are one-shot by definition: never leave a
+                ;; session for `tick!` to keep re-running, even if an EDN
+                ;; author forgets :finish-session? true on a failure branch.
+                (= :instant (:activation ability))
                 (and (#{:release :abort} op)
                  (or (= :accepted (:status result))
                      (= :rejected (:status result)))))

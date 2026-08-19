@@ -9,8 +9,5 @@
               :id :combat/charged-area-damage
               :resource "ac/combat/components/charged_area_damage.edn"}
              {:kind :composite
-              :id :txn/guarded-owner-patch
-              :resource "ac/combat/components/guarded_owner_patch.edn"}
-             {:kind :composite
               :id :combat/projectile-reflection-scan
               :resource "ac/combat/components/projectile_reflection_scan.edn"}]}

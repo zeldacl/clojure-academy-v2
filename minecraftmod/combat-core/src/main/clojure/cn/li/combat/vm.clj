@@ -28,22 +28,44 @@
     (vector? value) value
     :else (throw (ex-info "expected vec3 expression value" {:value value}))))
 
+;; Indirect through a local binding rather than calling the ^double-hinted
+;; `expr`/`rng` Vars directly. `evaluate-expression`'s `case` branches return
+;; a mix of double/boolean/map, so the whole function is Object-typed; from
+;; inside that context the compiler has (in practice, for 3-arg fns) picked
+;; the boxed-return primitive interface (e.g. IFn$DDDO) for some call sites
+;; while the callee only implements the primitive-return one it was hinted
+;; for (IFn$DDDD) -- two distinct JVM method signatures sharing the name
+;; `invokePrim`, so the mismatch throws AbstractMethodError at call time
+;; rather than failing to compile. Binding the Var's value to a local first
+;; forces a plain boxed IFn/.invoke dispatch, which every implementation
+;; satisfies.
+(def ^:private ^clojure.lang.IFn expr-add expr/add)
+(def ^:private ^clojure.lang.IFn expr-sub expr/sub)
+(def ^:private ^clojure.lang.IFn expr-mul expr/mul)
+(def ^:private ^clojure.lang.IFn expr-div expr/div)
+(def ^:private ^clojure.lang.IFn expr-clamp expr/clamp)
+(def ^:private ^clojure.lang.IFn expr-lerp expr/lerp)
+(def ^:private ^clojure.lang.IFn rng-uniform rng/uniform)
+(def ^:private ^clojure.lang.IFn rng-bounded-int rng/bounded-int)
+(def ^:private ^clojure.lang.IFn rng-next-long rng/next-long)
+(def ^:private ^clojure.lang.IFn rng-unit-double rng/unit-double)
+
 (defn evaluate-expression
   ([opcode args] (evaluate-expression opcode args 0))
   ([opcode args ^long rng-state]
   (case opcode
-    :math/add (expr/add (double (nth args 0)) (double (nth args 1)))
-    :math/sub (expr/sub (double (nth args 0)) (double (nth args 1)))
-    :math/mul (expr/mul (double (nth args 0)) (double (nth args 1)))
-    :math/div (expr/div (double (nth args 0)) (double (nth args 1)))
-    :math/min (min (double (nth args 0)) (double (nth args 1)))
-    :math/max (max (double (nth args 0)) (double (nth args 1)))
-    :math/abs (Math/abs (double (nth args 0)))
-    :math/sqrt (Math/sqrt (double (nth args 0)))
-    :math/sin (Math/sin (double (nth args 0)))
-    :math/cos (Math/cos (double (nth args 0)))
-    :math/clamp (expr/clamp (double (nth args 0)) (double (nth args 1)) (double (nth args 2)))
-    :math/lerp (expr/lerp (double (nth args 0)) (double (nth args 1)) (double (nth args 2)))
+    :math/add (double (expr-add (double (nth args 0)) (double (nth args 1))))
+    :math/sub (double (expr-sub (double (nth args 0)) (double (nth args 1))))
+    :math/mul (double (expr-mul (double (nth args 0)) (double (nth args 1))))
+    :math/div (double (expr-div (double (nth args 0)) (double (nth args 1))))
+    :math/min (double (min (double (nth args 0)) (double (nth args 1))))
+    :math/max (double (max (double (nth args 0)) (double (nth args 1))))
+    :math/abs (double (Math/abs (double (nth args 0))))
+    :math/sqrt (double (Math/sqrt (double (nth args 0))))
+    :math/sin (double (Math/sin (double (nth args 0))))
+    :math/cos (double (Math/cos (double (nth args 0))))
+    :math/clamp (double (expr-clamp (double (nth args 0)) (double (nth args 1)) (double (nth args 2))))
+    :math/lerp (double (expr-lerp (double (nth args 0)) (double (nth args 1)) (double (nth args 2))))
     :math/lt (< (double (nth args 0)) (double (nth args 1)))
     :math/lte (<= (double (nth args 0)) (double (nth args 1)))
     :math/eq (= (double (nth args 0)) (double (nth args 1)))
@@ -86,9 +108,9 @@
                         {:vec3 [(/ (double x) length)
                                 (/ (double y) length)
                                 (/ (double z) length)]}))
-    :random/uniform (rng/uniform rng-state (double (nth args 0)) (double (nth args 1)))
-    :random/int (rng/bounded-int rng-state (long (nth args 0)) (long (nth args 1)))
-    :random/chance (< (double (rng/unit-double rng-state)) (double (nth args 0)))
+    :random/uniform (double (rng-uniform rng-state (double (nth args 0)) (double (nth args 1))))
+    :random/int (long (rng-bounded-int rng-state (long (nth args 0)) (long (nth args 1))))
+    :random/chance (< (double (rng-unit-double rng-state)) (double (nth args 0)))
     (throw (ex-info "unsupported expression opcode" {:opcode opcode})))))
 
 (declare eval-node-value execute-component!)
@@ -150,6 +172,12 @@
     (eval-node-value value context)
     (and (map? value) (:ref value))
     (eval-node-value value context)
+    (and (map? value) (contains? value :from))
+    (eval-node-value value context)
+    (and (map? value) (contains? value :tunable))
+    (eval-node-value value context)
+    (and (map? value) (contains? value :invariant))
+    (eval-node-value value context)
     (map? value)
     (reduce-kv (fn [result key nested]
                  (assoc result key (resolve-data nested context)))
@@ -184,22 +212,73 @@
     nil))
 
 (defn- eval-node-value [value context]
-  (if (and (map? value) (:expr value))
-    (evaluate-expression (:expr value)
-                         (mapv #(eval-node-value % context) (:args value))
-                         (long (or (:activation-seed context) 0)))
-    (if (and (map? value) (:ref value))
-      (let [[scope key & path] (:ref value)]
-        (get-in (case scope
-                  :context (:context context)
-                  :param (:params context)
-                  :params (:params context)
-                  :session (:session-state context)
-                  :slot (or (when-let [slots* (:slots* context)] @slots*)
-                            (:slots context))
-                  :input (:input context)
-                  {}) (into [key] path)))
-      value)))
+  (cond
+    (and (map? value) (:expr value))
+    ;; Every :random/* opcode reduces to a pure fn of this rng-state, so
+    ;; reusing the raw activation-seed for the whole activation (as before)
+    ;; made every random/chance or random/uniform call in one activation
+    ;; return the same result. Mixing in a call-scoped counter -- via the
+    ;; same SplitMix64 step the RNG itself uses -- makes each call site draw
+    ;; its own value while staying fully deterministic given the seed.
+    (let [counter* (:rng-counter* context)
+          call-index (if counter* (long (vswap! counter* inc)) 0)
+          base-seed (long (or (:activation-seed context) 0))]
+      (evaluate-expression (:expr value)
+                           (mapv #(eval-node-value % context) (:args value))
+                           (long (rng-next-long (unchecked-add base-seed call-index)))))
+    (and (map? value) (:ref value))
+    (let [[scope key & path] (:ref value)]
+      (get-in (case scope
+                :context (:context context)
+                :param (:params context)
+                :params (:params context)
+                :session (:session-state context)
+                :slot (or (when-let [slots* (:slots* context)] @slots*)
+                          (:slots context))
+                :input (:input context)
+                ;; Design E: unknown scope fails the activation instead of
+                ;; silently resolving to nil. No production content uses a
+                ;; scope outside this set, so this cannot regress today's
+                ;; abilities; it exists so a typo in future content is a
+                ;; loud compile/runtime error, not a silently-inert node.
+                (throw (ex-info "unknown :ref scope" {:scope scope :ref value})))
+              (into [key] path)))
+    ;; Design C (caster facade): the ability names a capability the caller
+    ;; promises to provide, never the caller's own data shape -- see
+    ;; combat_runtime.clj's caster-facade table, the only place that shape
+    ;; is allowed to leak into combat-core.
+    (and (map? value) (contains? value :from))
+    (let [facade (:from context)]
+      (if (contains? facade (:from value))
+        (get facade (:from value))
+        (throw (ex-info "caster facade does not provide this capability"
+                        {:from (:from value)}))))
+    ;; Design B: a tunable is a value already resolved (curve applied) once
+    ;; at activation time -- the ability never sees the raw parameter pair
+    ;; or the growth-curve math. `:path` is only meaningful for a :pair
+    ;; tunable (design A/skill_config's :pair curve), whose (lo,hi) is
+    ;; handed through uncurved for the ability to lerp against something
+    ;; other than skill-exp.
+    (and (map? value) (contains? value :tunable))
+    (let [tunables (:tunables context)]
+      (if (contains? tunables (:tunable value))
+        (let [resolved (get tunables (:tunable value))]
+          (if (seq (:path value))
+            (get-in resolved (:path value))
+            resolved))
+        (throw (ex-info "tunable was not declared/materialized"
+                        {:tunable (:tunable value)}))))
+    ;; Design A: an invariant is declared once in the ability's own
+    ;; :invariants block (e.g. an overload floor); nodes that enforce it
+    ;; (:resource/enforce-floor) reference it by name instead of repeating
+    ;; the same lerp expression at every call site.
+    (and (map? value) (contains? value :invariant))
+    (let [invariants (:invariants context)]
+      (if (contains? invariants (:invariant value))
+        (resolve-data (get invariants (:invariant value)) context)
+        (throw (ex-info "invariant was not declared"
+                        {:invariant (:invariant value)}))))
+    :else value))
 
 (defn- execute-component!
   [^ExecutionFrame frame ^HostTable host component data context]
@@ -242,10 +321,22 @@
           (let [result (execute-component! frame host
                                            (:component (:body data))
                                            (dissoc (:body data) :component)
-                                           context)]
-            (if result
-              result
-              (recur (inc index))))))))
+                                           context)
+                control (when (map? result) (:control result))]
+            (cond
+              ;; Skip this item only -- the loop and everything after it
+              ;; still run. This is what lets a per-item guard failure (e.g.
+              ;; "this one entry can't afford its share of a shared budget")
+              ;; drop just that entry instead of aborting the whole program,
+              ;; which a bare truthy/nil return convention can't express.
+              (= :skip-item control) (recur (inc index))
+              ;; Stop iterating, but this is not itself a program finish --
+              ;; whatever follows the foreach step in its enclosing sequence
+              ;; still runs.
+              (= :break-loop control) nil
+              result result
+              :else (recur (inc index))))))))
+    :flow/control {:control (:signal data)}
     :flow/window
     (let [value (double (resolve-data (:value data) context))
           pass? (and (> value (double (:min-exclusive data)))
@@ -253,8 +344,15 @@
           child (if pass? (:on-pass data) (:on-fail data))]
       (execute-component! frame host (:component child)
                           (dissoc child :component) context))
+    ;; Every compiled ability lowers to a single opcode-26 :component node
+    ;; (see recipe.clj identity-lower), so this is the ONLY :flow/finish path
+    ;; any real ability program takes -- the bytecode-level `finish-result`
+    ;; helper above, which does carry :actions/:vfx/:events, is dead code no
+    ;; current lowering ever emits. Omitting those keys here silently
+    ;; discarded every action/vfx-signal/event any ability ever produced.
     :flow/finish {:status :finished :outcome (:outcome data)
-                  :finish-session? (boolean (:finish-session? data))}
+                  :finish-session? (boolean (:finish-session? data))
+                  :actions (.-actions frame) :vfx (.-vfx frame) :events (.-events frame)}
     :flow/once (let [key (resolve-data (:key data) context)
                      latches* (:latches* context)
                      seen? (and latches* (contains? @latches* key))]
@@ -282,6 +380,61 @@
     :guard/held-item
     (let [held (get-in context [:context :held-item])]
       (contains? (set (:item-ids data)) held))
+    ;; Schema v2 design A: a named budget declared once in the ability's own
+    ;; :costs block, spent by reference here. This deliberately emits the
+    ;; SAME neutral :owner/patch action shape the ability-authored :program
+    ;; used to build by hand -- the AC-side commit path (edn-owner-patch-
+    ;; commands) already correctly translates every resource key in one
+    ;; action's :entries, so :cost/spend needed no new commit machinery,
+    ;; only a declarative place for the cost to live once instead of
+    ;; wherever it happened to be spent.
+    :cost/spend
+    (let [spec (get-in context [:costs (:budget data)])
+          scale (when (contains? data :scale) (double (resolve-data (:scale data) context)))
+          amounts (into {}
+                        (map (fn [[key value]]
+                               [key (* (double (resolve-data value context))
+                                       (double (or scale 1.0)))]))
+                        (:resources spec))
+          available (or (get-in context [:context :resources]) {})
+          affordable? (every? (fn [[key amount]]
+                                (>= (double (or (get available key) 0.0)) (double amount)))
+                              amounts)]
+      (if affordable?
+        (do
+          (when (seq amounts)
+            (emit-component! frame :owner/patch
+                             {:entries (mapv (fn [[key amount]]
+                                               {:path [:resources key]
+                                                :mode :increment :value (- (double amount))})
+                                             amounts)}))
+          nil)
+        (when-let [on-insufficient (:on-insufficient data)]
+          (execute-component! frame host (:component on-insufficient)
+                              (dissoc on-insufficient :component) context))))
+    ;; A tagged experience mark: the ability names WHAT happened (:tag), the
+    ;; ability's own :progression block (not this node) says how much that
+    ;; is worth, and the ability id -- which the program never names itself
+    ;; -- comes from context, supplied by the caller, not authored here.
+    :score/mark
+    (let [spec (get-in context [:progression (:tag data)])
+          weight (when (contains? data :weight) (double (resolve-data (:weight data) context)))
+          per-mark (double (or (resolve-data (:per-mark spec) context) 0.0))
+          amount (* per-mark (double (or weight 1.0)))
+          ability-id (get-in context [:context :ability-id])]
+      (emit-component! frame :owner/patch
+                       {:entries [{:path [:ability-data :skill-exps ability-id]
+                                   :mode :increment :value amount}]})
+      nil)
+    :cooldown/start
+    (let [cooldown-name (:name data)
+          spec (get-in context [:cooldown cooldown-name])
+          ticks (long (or (resolve-data (:ticks spec) context) 0))
+          ability-id (get-in context [:context :ability-id])]
+      (emit-component! frame :owner/patch
+                       {:entries [{:path [:cooldown-data ability-id cooldown-name]
+                                   :mode :assign :value (double ticks)}]})
+      nil)
     :txn/atomic
     (let [guards (every? (fn [guard]
                            (boolean
@@ -295,12 +448,21 @@
           (doseq [reservation (:reservations data)]
             (execute-component! frame host (:component reservation)
                                 (dissoc reservation :component) context))
-          (when-let [body (:body data)]
-            (execute-component! frame host (:component body)
-                                (dissoc body :component) context))
-          (when-let [on-success (:on-success data)]
-            (execute-component! frame host (:component on-success)
-                                (dissoc on-success :component) context)))
+          (let [body-result (when-let [body (:body data)]
+                              (execute-component! frame host (:component body)
+                                                  (dissoc body :component) context))]
+            ;; :on-success, when present, is what determines the transaction's
+            ;; outcome (some content uses a bare action for :body and puts the
+            ;; actual :flow/finish in :on-success). When absent, :body's own
+            ;; result -- which may itself be a terminal :flow/finish -- IS the
+            ;; transaction's result and must not be discarded: doing so used
+            ;; to silently swallow every successful guarded activation's
+            ;; finish, leaving the bytecode loop to fall off the single
+            ;; compiled instruction and crash with an index-out-of-bounds.
+            (if-let [on-success (:on-success data)]
+              (execute-component! frame host (:component on-success)
+                                  (dissoc on-success :component) context)
+              body-result)))
         (when-let [on-fail (:on-fail data)]
           (execute-component! frame host (:component on-fail)
                               (dissoc on-fail :component) context))))
@@ -422,9 +584,18 @@
            25 (reject-result frame (aget operands base))
            26 (let [node (aget object-constants (aget operands base))
                     component (:component node)]
+                ;; A compiled ability is always exactly one opcode-26 (see
+                ;; recipe.clj's identity-lower), so falling through to nil
+                ;; here means the whole component tree ran to completion
+                ;; without ever reaching a :flow/finish -- every real
+                ;; program path must terminate in one. Silently recur-ing
+                ;; past the program's only instruction used to read the
+                ;; opcode array out of bounds instead of naming the actual
+                ;; problem.
                 (or (execute-component! frame host component
                                         (dissoc node :component) context)
-                    (recur (inc pc))))
+                    (throw (ex-info "component tree finished without reaching :flow/finish"
+                                    {:component component}))))
            (throw (ex-info "unknown combat opcode"
                            {:pc pc :opcode (aget opcodes pc)}))))))))
 

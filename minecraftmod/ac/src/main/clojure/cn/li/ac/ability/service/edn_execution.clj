@@ -34,6 +34,7 @@
         results* (volatile! {})
         latches* (volatile! (set (or (:latches intent) #{})))
         slots* (volatile! {})
+        rng-counter* (volatile! 0)
         result (vm/execute! program execution-frame host 0
                             {:owner owner
                              :ability-id ability-id
@@ -55,10 +56,29 @@
                                           (:parameters intent)
                                           (:parameters ability)
                                           {})
+                             ;; Schema v2 caster facade (design C) and
+                             ;; materialized tunable curves (design B):
+                             ;; AC assembles both once per activation and
+                             ;; hands them through unchanged. Combat Core
+                             ;; never reads AC's state shape to build them.
+                             :from (or (:from intent) {})
+                             :tunables (or (:tunables intent) {})
+                             ;; Schema v2 design A (:cost/spend, :score/mark,
+                             ;; :cooldown/start, {:invariant ...}): the
+                             ;; ability's own declarative blocks, passed
+                             ;; through unchanged. Falls back to the
+                             ;; compiled ability's own field when the intent
+                             ;; doesn't carry one (session pulses reuse the
+                             ;; ability lookup already done above).
+                             :costs (or (:costs intent) (:costs ability))
+                             :progression (or (:progression intent) (:progression ability))
+                             :cooldown (or (:cooldown intent) (:cooldown ability))
+                             :invariants (or (:invariants intent) (:invariants ability))
                              :query-order query-order
                              :results* results*
                              :latches* latches*
-                             :slots* slots*})]
+                             :slots* slots*
+                             :rng-counter* rng-counter*})]
     (assoc result
            :schema-version 2
            :ability-id ability-id

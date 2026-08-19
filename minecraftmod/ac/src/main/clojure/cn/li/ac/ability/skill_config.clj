@@ -86,6 +86,83 @@
 ;; config registry.  The values are materialized once while the catalog is
 ;; loaded, before combat-core compiles the program.
 (def edn-parameter-bindings
+  "Bindings for the legacy schema-version-1 :parameters/:param path.
+  railgun/arc-gen/thunder-clap are fully schema v2 now (see
+  edn-tunable-bindings below) and no longer declare :parameters at all.
+  Only vec-reflection still has an entry here, for the 5 fields its damage
+  :reactions block reads (see the comment on its entry)."
+  {;; vec-reflection is schema v2 (see :tunables/edn-tunable-bindings below)
+   ;; except for its damage :reactions block, which is a separate subsystem
+   ;; (combat_runtime's apply-edn-damage-reactions) not yet folded into the
+   ;; :costs/:progression policy evaluator -- deferred, see the plan's
+   ;; Phase 6. Its 5 fields still go through this legacy :parameters path
+   ;; unchanged.
+   :vec-reflection
+   {:damage-multiplier :combat.damage-multiplier
+    :min-reflected-damage :combat.min-reflected-damage
+    :damage-cp :cost.damage.cp
+    :exp-damage-scale :progression.exp-damage-scale
+    :max-reflections :combat.max-reflections}})
+
+(declare tunable-double tunable-int tunable-double-list tunable-string-list)
+
+(defn- read-edn-parameter
+  [skill-id parameter-id field-id type]
+  (case type
+    :double (tunable-double skill-id field-id)
+    :long (tunable-int skill-id field-id)
+    :string-list (tunable-string-list skill-id field-id)
+    [:tuple :double 2] (tunable-double-list skill-id field-id)
+    (throw (ex-info "unsupported EDN parameter type"
+                    {:ability-id skill-id
+                     :parameter parameter-id
+                     :field-id field-id
+                     :type type}))))
+
+(defn overlay-edn-parameters
+  "Materialize config values into an ability before combat-core compilation.
+
+  EDN remains a pure declarative program: it has no config paths or config
+  readers.  A missing binding is rejected so a migrated ability cannot compile
+  with a silently invented parameter value.
+
+  A schema v2 ability with no :parameters key at all (using :tunables
+  instead, see overlay-edn-tunables) passes through unchanged: :parameters
+  is a schema-version-1 mechanism, not something every ability must have."
+  [{:keys [id parameters] :as ability}]
+  (if (nil? parameters)
+    ability
+    (let [bindings (get edn-parameter-bindings id)]
+    (when-not (map? parameters)
+      (throw (ex-info "ability parameters must be a map" {:ability-id id})))
+    (when-not (map? bindings)
+      (throw (ex-info "missing EDN parameter bindings"
+                      {:ability-id id})))
+    (when-not (= (set (keys parameters)) (set (keys bindings)))
+      (throw (ex-info "EDN parameter binding mismatch"
+                      {:ability-id id
+                       :declared (set (keys parameters))
+                       :bound (set (keys bindings))})))
+    (assoc ability :parameters
+           (reduce-kv
+             (fn [result parameter-id declaration]
+               (let [field-id (get bindings parameter-id)
+                     type (:type declaration)]
+                 (assoc result parameter-id
+                        (assoc declaration
+                               :value (read-edn-parameter id parameter-id field-id type)))))
+             {}
+             parameters)))))
+
+(def edn-tunable-bindings
+  "Field-id overrides for schema v2 :tunables (design B) whose name doesn't
+  match its config field-id. Convention over configuration: a tunable named
+  :foo reads config field :foo by default, so this only needs an entry when
+  that doesn't hold -- in practice, every tunable here, because field-ids
+  are dotted/sectioned (:combat.damage, :targeting.range, ...) while a
+  readable EDN tunable name generally isn't. Compare to
+  edn-parameter-bindings above: this is still a single table entry per
+  ability, not five separate places to keep in sync."
   {:railgun
    {:beam-damage :beam.damage
     :beam-radius :beam.radius
@@ -127,62 +204,56 @@
     :affected-entity-difficulty :targeting.affected-entity-difficulty
     :excluded-entity-ids :targeting.excluded-entity-ids
     :large-fireball-ids :targeting.large-fireball-ids
-    :small-fireball-ids :targeting.small-fireball-ids
     :reflect-entity-cp :cost.reflect-entity.cp
-    :damage-multiplier :combat.damage-multiplier
-    :min-reflected-damage :combat.min-reflected-damage
-    :damage-cp :cost.damage.cp
-    :exp-reflect-entity-scale :progression.exp-reflect-entity-scale
-    :exp-damage-scale :progression.exp-damage-scale
-    :attacker-search-radius :targeting.attacker-search-radius
-    :arbitration-priority :interaction.projectile-arbitration-priority
-    :max-reflections :combat.max-reflections
-    :visited-ttl-ticks :tracking.visited-ttl-ticks
-    :visited-max-size :tracking.visited-max-size}})
+    :exp-reflect-entity-scale :progression.exp-reflect-entity-scale}})
 
-(declare tunable-double tunable-int tunable-double-list tunable-string-list)
+(defn- read-tunable-materialization
+  "The config-driven piece of a :tunables declaration -- a constant value for
+  :const, or the raw (lo,hi)/(base,slope) config pair for :mastery-lerp and
+  :affine. The curve itself (lerp against live skill-exp, or base+slope*exp)
+  is applied fresh per activation by combat_runtime's caster-facade sibling,
+  never baked in here: catalog load only ever sees config, never a player's
+  mastery."
+  [skill-id tunable-id field-id {:keys [curve type]}]
+  (case curve
+    :const (case (or type :double)
+             :double {:value (tunable-double skill-id field-id)}
+             :long {:value (tunable-int skill-id field-id)}
+             :string-list {:value (tunable-string-list skill-id field-id)}
+             (throw (ex-info "unsupported :const tunable type"
+                             {:ability-id skill-id :tunable tunable-id :type type})))
+    :mastery-lerp {:range (tunable-double-list skill-id field-id)}
+    :affine {:range (tunable-double-list skill-id field-id)}
+    ;; A raw (lo,hi) config pair with NO automatic curve applied against
+    ;; skill-exp -- for a tunable that needs to be interpolated against
+    ;; something other than mastery (e.g. a runtime charge ratio). The
+    ;; ability reads both ends via {:tunable name :path [0]}/[1] and
+    ;; supplies its own math/lerp.
+    :pair {:value (tunable-double-list skill-id field-id)}
+    (throw (ex-info "unsupported tunable curve"
+                    {:ability-id skill-id :tunable tunable-id :curve curve}))))
 
-(defn- read-edn-parameter
-  [skill-id parameter-id field-id type]
-  (case type
-    :double (tunable-double skill-id field-id)
-    :long (tunable-int skill-id field-id)
-    :string-list (tunable-string-list skill-id field-id)
-    [:tuple :double 2] (tunable-double-list skill-id field-id)
-    (throw (ex-info "unsupported EDN parameter type"
-                    {:ability-id skill-id
-                     :parameter parameter-id
-                     :field-id field-id
-                     :type type}))))
+(defn overlay-edn-tunables
+  "Materialize config-driven values into an ability's :tunables block before
+  combat-core compilation (schema v2 design B).
 
-(defn overlay-edn-parameters
-  "Materialize config values into an ability before combat-core compilation.
-
-  EDN remains a pure declarative program: it has no config paths or config
-  readers.  A missing binding is rejected so a migrated ability cannot compile
-  with a silently invented parameter value."
-  [{:keys [id parameters] :as ability}]
-  (let [bindings (get edn-parameter-bindings id)]
-    (when-not (map? parameters)
-      (throw (ex-info "ability parameters must be a map" {:ability-id id})))
-    (when-not (map? bindings)
-      (throw (ex-info "missing EDN parameter bindings"
-                      {:ability-id id})))
-    (when-not (= (set (keys parameters)) (set (keys bindings)))
-      (throw (ex-info "EDN parameter binding mismatch"
-                      {:ability-id id
-                       :declared (set (keys parameters))
-                       :bound (set (keys bindings))})))
-    (assoc ability :parameters
-           (reduce-kv
-             (fn [result parameter-id declaration]
-               (let [field-id (get bindings parameter-id)
-                     type (:type declaration)]
-                 (assoc result parameter-id
-                        (assoc declaration
-                               :value (read-edn-parameter id parameter-id field-id type)))))
-             {}
-             parameters))))
+  Additive and safe for content that doesn't declare :tunables: no
+  schema-version-1 ability (the only abilities shipped so far) has a
+  :tunables key, so this is a no-op for all of them today."
+  [{:keys [id tunables] :as ability}]
+  (if-not (map? tunables)
+    ability
+    (let [overrides (get edn-tunable-bindings id {})]
+      (assoc ability :tunables
+             (reduce-kv
+               (fn [result tunable-id declaration]
+                 (let [field-id (get overrides tunable-id tunable-id)]
+                   (assoc result tunable-id
+                          (merge declaration
+                                 (read-tunable-materialization
+                                  id tunable-id field-id declaration)))))
+               {}
+               tunables)))))
 
 (defn- skill-field-default
   [skill-def {:keys [id spec-key default]}]

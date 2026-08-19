@@ -1,135 +1,127 @@
-{:schema-version 1
+{:schema-version 2
  :kind :ability
  :id :railgun
- :revision 2
+ :revision 3
  :activation :session
- :parameters {:beam-damage {:type [:tuple :double 2]
-                            :snapshot :activation}
-              :beam-radius {:type :double
-                            :snapshot :activation}
-              :beam-query-radius {:type :double
-                                  :snapshot :activation}
-              :beam-step {:type :double
-                          :snapshot :activation}
-              :beam-block-energy {:type [:tuple :double 2]
-                                  :snapshot :activation}
-              :beam-visual-distance {:type :double
-                                     :snapshot :activation}
-              :max-distance {:type :double
-                             :snapshot :activation}
-              :charge-ticks {:type :long
-                             :snapshot :activation}
-              :cost-down-cp {:type [:tuple :double 2]
-                             :snapshot :activation}
-              :cost-down-overload {:type [:tuple :double 2]
-                                   :snapshot :activation}}
+ :status :migrated
+ :requires [:caster/eye :caster/aim :caster/id]
+ :tunables
+ {:beam-damage {:curve :mastery-lerp}
+  :beam-radius {:curve :const}
+  :beam-query-radius {:curve :const}
+  :beam-step {:curve :const}
+  :beam-block-energy {:curve :mastery-lerp}
+  :beam-visual-distance {:curve :const}
+  :max-distance {:curve :const}
+  :charge-ticks {:curve :const :type :long}
+  :cost-down-cp {:curve :mastery-lerp}
+  :cost-down-overload {:curve :mastery-lerp}}
+ ;; Only spent at :release -- :start/:pulse are free (charge-up and beam
+ ;; tracing cost nothing; the shot itself does).
+ :costs {:fire {:resources {:cp {:tunable :cost-down-cp}
+                            :overload {:tunable :cost-down-overload}}}}
  :external-triggers [{:source :item/use
                       :filter {:item-ids ["ac:coin" "academy:coin"]
                                :ability-mode? true}
                       :dispatch {:ability :railgun :event :coin-thrown}}]
- :reactions []
- :vfx-contracts {:beam-fired {:effect-id :railgun-beam
-                              :op :spawn
-                              :payload {:start :vec3
-                                        :end :vec3
-                                        :mode [:enum :main :reflected]
-                                        :life-ticks :long}}
-                 :charge-started {:effect-id :railgun-charge
-                                  :op :spawn
-                                  :payload {:source-owner :owner-id
-                                            :charge-ticks :long}}}
- :program {:component :flow/phases
-           :start {:component :flow/sequence
-                   :steps [{:component :target/entities
-                            :shape {:type :sphere
-                                    :center {:ref [:context :eye-pos]}
-                                    :radius 4.0}
-                            :filter {:entity-types ["academy:entity_coin_throwing"]}
-                            :projection [:id :age-ms :motion-progress]
-                            :limit 8
-                            :result :coins}
-                           {:component :effect/vfx
-                            :effect-id :railgun-charge
-                            :operation :spawn
-                            :instance-key [:activation :railgun-charge]
-                            :audience {:type :nearby :radius 32.0}
-                            :payload {:source-owner {:ref [:context :owner]}
-                                      :charge-ticks {:ref [:param :charge-ticks]}}}
-                           {:component :flow/finish :outcome :started}]}
-           :pulse {:component :flow/sequence
-                   :steps [{:component :target/raycast
-                            :origin {:ref [:context :eye-pos]}
-                            :direction {:ref [:context :look]}
-                            :distance {:ref [:param :max-distance]}
-                            :include-entities? true
-                            :include-blocks? true
-                            :result :aim-hit}
-                           {:component :host/beam-trace
-                            :origin {:ref [:slot :muzzle]}
-                            :direction {:ref [:context :look]}
-                            :length {:ref [:param :max-distance]}
-                            :visual-length {:ref [:param :beam-visual-distance]}
-                            :radius {:ref [:param :beam-radius]}
-                            :query-radius {:ref [:param :beam-query-radius]}
-                            :step {:ref [:param :beam-step]}
-                            :damage {:expr :math/lerp
-                                     :args [{:ref [:param :beam-damage 0]}
-                                            {:ref [:param :beam-damage 1]}
-                                            {:ref [:context :skill-exp]}]}
-                            :entity-limit 256
-                            :block-policy {:component :block/break-budget
-                                           :blocks {:ref [:slot :blocks]}
-                                           :energy {:expr :math/lerp
-                                                    :args [{:ref [:param :beam-block-energy 0]}
-                                                           {:ref [:param :beam-block-energy 1]}
-                                                           {:ref [:context :skill-exp]}]}
-                                           :step {:ref [:param :beam-step]}
-                                           :limit 4096}
-                            :result :beam-result}
-                           {:component :effect/vfx
-                            :effect-id :railgun-beam
-                            :operation :spawn
-                            :payload {:start {:ref [:slot :beam-result :start]}
-                                      :end {:ref [:slot :beam-result :end]}
-                                      :mode :main
-                                      :life-ticks 50}}
-                           {:component :flow/finish :outcome :continue}]}
-           :release {:component :flow/sequence
-                     :steps [{:component :effect/vfx
-                              :effect-id :railgun-charge
-                              :operation :destroy
-                              :instance-key [:activation :railgun-charge]
-                              :payload {}}
-                             {:component :txn/atomic
-                              :guards [{:component :guard/resource
-                              :cost {:cp {:expr :math/lerp
-                                          :args [{:ref [:param :cost-down-cp 0]}
-                                                 {:ref [:param :cost-down-cp 1]}
-                                                 {:ref [:context :skill-exp]}]}
-                                      :overload {:expr :math/lerp
-                                                 :args [{:ref [:param :cost-down-overload 0]}
-                                                        {:ref [:param :cost-down-overload 1]}
-                                                        {:ref [:context :skill-exp]}]}}}
-                              {:component :guard/held-item
-                               :source :main-hand
-                               :item-ids ["minecraft:iron_ingot"
-                                          "minecraft:iron_block"]}]
-                              :reservations [{:component :inventory/consume
-                                     :source :main-hand
-                                     :count 1}]
-                              :body {:component :world/sound
+ :vfx
+ {:beam-fired {:effect-id :railgun-beam
+              :op :spawn
+              :payload {:start :vec3 :end :vec3
+                        :mode [:enum :main :reflected]
+                        :life-ticks :long}}
+  :charge-started {:effect-id :railgun-charge
+                   :op :spawn
+                   :payload {:source-owner :owner-id :charge-ticks :long}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps [{:component :target/entities
+            :shape {:type :sphere :center {:from :caster/eye} :radius 4.0}
+            :filter {:entity-types ["academy:entity_coin_throwing"]}
+            :projection [:id :age-ms :motion-progress]
+            :limit 8
+            :result :coins}
+           {:component :effect/vfx
+            :effect-id :railgun-charge
+            :operation :spawn
+            :instance-key [:activation :railgun-charge]
+            :audience {:type :nearby :radius 32.0}
+            :payload {:source-owner {:from :caster/id}
+                      :charge-ticks {:tunable :charge-ticks}}}
+           {:component :flow/finish :outcome :started}]}
+  :pulse
+  {:component :flow/sequence
+   :steps [{:component :target/raycast
+            :origin {:from :caster/eye} :direction {:from :caster/aim}
+            :distance {:tunable :max-distance}
+            :include-entities? true :include-blocks? true
+            :result :aim-hit}
+           ;; :host/beam-trace's neutral raycast handler does not yet
+           ;; implement the beam contract (see docs/04-systems/
+           ;; COMBAT_CORE.md's known-limitations section) -- there is no
+           ;; capability that discovers a muzzle offset or the blocks a
+           ;; beam would pass through, so :origin falls back to the same
+           ;; caster/eye facade the raycast step above uses, and the
+           ;; block-break policy starts from an explicit empty block list
+           ;; rather than a dangling reference. Deferred alongside
+           ;; :caster/hand-item (see Phase 3).
+           {:component :host/beam-trace
+            :origin {:from :caster/eye}
+            :direction {:from :caster/aim}
+            :length {:tunable :max-distance}
+            :visual-length {:tunable :beam-visual-distance}
+            :radius {:tunable :beam-radius}
+            :query-radius {:tunable :beam-query-radius}
+            :step {:tunable :beam-step}
+            :damage {:tunable :beam-damage}
+            :entity-limit 256
+            :block-policy {:component :block/break-budget
+                           :blocks []
+                           :energy {:tunable :beam-block-energy}
+                           :step {:tunable :beam-step}
+                           :limit 4096}
+            :result :beam-result}
+           {:component :effect/vfx
+            :effect-id :railgun-beam
+            :operation :spawn
+            :payload {:start {:ref [:slot :beam-result :start]}
+                      :end {:ref [:slot :beam-result :end]}
+                      :mode :main
+                      :life-ticks 50}}
+           {:component :flow/finish :outcome :continue}]}
+  :release
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :railgun-charge
+            :operation :destroy
+            :instance-key [:activation :railgun-charge]
+            :payload {}}
+           {:component :txn/atomic
+            :guards [{:component :guard/held-item
+                     :source :main-hand
+                     :item-ids ["minecraft:iron_ingot" "minecraft:iron_block"]}]
+            :reservations [{:component :inventory/consume
+                            :source :main-hand
+                            :count 1}]
+            :body {:component :flow/sequence
+                   :steps [{:component :cost/spend
+                            :budget :fire
+                            :on-insufficient {:component :flow/finish
+                                              :outcome :insufficient-resource}}
+                           {:component :world/sound
                             :sound-id "academy:em.railgun"
-                            :position {:ref [:context :eye-pos]}}
-                              :on-success {:component :flow/finish
-                                           :outcome :committed}
-                              :on-fail {:component :flow/finish
-                                        :outcome :insufficient-resource}}]}
-           :abort {:component :flow/sequence
-                   :steps [{:component :effect/vfx
-                            :effect-id :railgun-charge
-                            :operation :destroy
-                            :instance-key [:activation :railgun-charge]
-                            :payload {}}
-                           {:component :flow/finish :outcome :aborted}]}
-           :events {:coin-thrown {:component :flow/finish
-                                  :outcome :received}}}}
+                            :position {:from :caster/eye}}
+                           {:component :flow/finish :outcome :committed}]}
+            :on-fail {:component :flow/finish
+                      :outcome :insufficient-resource}}]}
+  :abort
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :railgun-charge
+            :operation :destroy
+            :instance-key [:activation :railgun-charge]
+            :payload {}}
+           {:component :flow/finish :outcome :aborted}]}
+  :events {:coin-thrown {:component :flow/finish :outcome :received}}}}

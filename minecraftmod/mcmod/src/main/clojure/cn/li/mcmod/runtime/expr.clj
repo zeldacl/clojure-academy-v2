@@ -14,7 +14,13 @@
 (defn ^double clamp [^double value ^double lo ^double hi]
   (max lo (min hi value)))
 (defn ^double lerp [^double lo ^double hi ^double t]
-  (let [^double bounded (clamp t (double 0.0) (double 1.0))]
+  ;; Inlined rather than calling `clamp` (a separately-defined ^double Var):
+  ;; chaining into another multi-arg ^double-hinted fn here has been
+  ;; observed to make the JVM pick a primitive IFn interface the callee
+  ;; doesn't implement (AbstractMethodError on invokePrim), even for a
+  ;; same-namespace direct call. `max`/`min` are compiler-inlined, not Var
+  ;; calls, so they don't have that failure mode.
+  (let [bounded (max 0.0 (min 1.0 t))]
     (+ lo (* (- hi lo) bounded))))
 
 (defn ^double vec3-dot

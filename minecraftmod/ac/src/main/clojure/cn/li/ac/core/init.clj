@@ -7,6 +7,7 @@
             [cn.li.ac.ability.runtime-container :as ability-runtime-container]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.command.platform-bridge :as command-bridge]
@@ -46,6 +47,10 @@
   []
   (modid/install-modid!)
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
+  ;; Capabilities must be registered before the EDN catalog loads (Design E
+  ;; precondition R9) -- capability-aware load-time validation can only see
+  ;; what's already registered at the moment it runs.
+  (combat-runtime/install-edn-host-capabilities!)
   ;; The EDN catalog is authoritative for migrated abilities.  No legacy
   ;; catalog fallback is consulted when a skill is pending migration.
   (edn-catalog/initialize!)
