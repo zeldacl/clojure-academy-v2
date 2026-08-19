@@ -217,10 +217,16 @@
   [{:keys [owner world-id origin destination damage damage-type]}]
   (try
     (when (raycast/available?)
-      (let [ox (double (:x origin)) oy (double (:y origin)) oz (double (:z origin))
-            dx (- (double (:x destination)) ox)
-            dy (- (double (:y destination)) oy)
-            dz (- (double (:z destination)) oz)
+      (let [point (fn [value]
+                    (if (and (map? value) (vector? (:vec3 value)))
+                      (:vec3 value)
+                      [(:x value) (:y value) (:z value)]))
+            [ox0 oy0 oz0] (point origin)
+            [dx0 dy0 dz0] (point destination)
+            ox (double (or ox0 0.0)) oy (double (or oy0 0.0)) oz (double (or oz0 0.0))
+            dx (- (double (or dx0 0.0)) ox)
+            dy (- (double (or dy0 0.0)) oy)
+            dz (- (double (or dz0 0.0)) oz)
             dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
             dir  (if (pos? dist)
                    {:x (/ dx dist) :y (/ dy dist) :z (/ dz dist)}
