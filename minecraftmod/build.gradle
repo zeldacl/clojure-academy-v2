@@ -1075,6 +1075,24 @@ tasks.register("lintClojureNative") {
     dependsOn tasks.named("verifyNeutralClojureNoMinecraftApis")
     def lintLog = layout.buildDirectory.file("reports/clj-kondo-lint.log")
     outputs.file(lintLog)
+    // Declare the linted source roots as inputs; without them the task is
+    // UP-TO-DATE as soon as the report exists and silently skips real errors
+    // after the first run. Resolved lazily so per-target source wiring is
+    // visible at up-to-date-check time.
+    inputs.files {
+        def dirs = []
+        subprojects { sp ->
+            sp.plugins.withId("dev.clojurephant.clojure") {
+                sp.sourceSets.main.clojure.srcDirs.each { File dir ->
+                    if (dir.directory) {
+                        dirs << dir.absolutePath
+                    }
+                }
+            }
+        }
+        dirs
+    }
+    inputs.file(file(".clj-kondo/config.edn"))
     doLast {
         def dirs = []
         subprojects { sp ->

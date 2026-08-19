@@ -82,8 +82,7 @@
     (render-init/register-all-renderers!)
     (log/info "Block renderers registered")
     (catch Exception e
-      (log/stacktrace "Failed to register block renderers" e)
-      (log/stacktrace "Failed to register block renderers" e)))))
+      (log/stacktrace "Failed to register block renderers" e))))
 
 (defn register-fluid-render-layers!
   "Register 26.2 FluidModel definitions for each content fluid."

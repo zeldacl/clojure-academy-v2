@@ -97,7 +97,7 @@
     ;; Scripted BER: `ModClientRenderSetup` (Java @Mod.EventBusSubscriber) on mod bus.
     
     (catch Exception e
-      (log/stacktrace "Failed to register block renderers" e)))))
+      (log/stacktrace "Failed to register block renderers" e))))
 
 (defn- register-fluid-render-layers!
   []
