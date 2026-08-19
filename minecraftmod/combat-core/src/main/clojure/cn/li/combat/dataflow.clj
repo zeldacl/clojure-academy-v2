@@ -136,7 +136,11 @@
       ;; The loop's own scope -- including the :as binding -- never
       ;; escapes to what follows: the loop may run zero or many times, so
       ;; nothing inside it is ever "definitely" bound afterward.
-      (analyze-node (:body node) (conj bound (:as node)) true (conj path :body))
+      (analyze-node (:body node)
+                    (cond-> (conj bound (:as node))
+                      (:index-as node) (conj (:index-as node)))
+                    true
+                    (conj path :body))
       bound)
 
     :flow/phases
