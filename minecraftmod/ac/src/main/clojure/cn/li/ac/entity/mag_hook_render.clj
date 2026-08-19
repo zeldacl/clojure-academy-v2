@@ -48,4 +48,4 @@
         (finally
           (pose/pop-pose pose-stack))))
     (catch Exception e
-      (log/error "Error in mag hook renderer:" (ex-message e)))))
+      (log/debug "Error in mag hook renderer:" (ex-message e)))))

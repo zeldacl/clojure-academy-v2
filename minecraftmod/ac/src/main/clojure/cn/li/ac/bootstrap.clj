@@ -47,7 +47,7 @@
     nil
 
     (catch Exception e
-      (log/error e "Failed to initialize AC keybindings")
+      (log/stacktrace "Failed to initialize AC keybindings" e)
       (throw e))))
 
 ;; ============================================================================

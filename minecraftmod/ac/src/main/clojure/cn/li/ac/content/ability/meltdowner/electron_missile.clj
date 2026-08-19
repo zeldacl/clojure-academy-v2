@@ -226,7 +226,7 @@
                                     :active? true
                                     :overload-floor overload-floor}))))
       (catch Exception e
-        (log/warn "ElectronMissile tick! failed:" (ex-message e))))))
+        (log/debug "ElectronMissile tick! failed:" (ex-message e))))))
 
 (defn electron-missile-up!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]

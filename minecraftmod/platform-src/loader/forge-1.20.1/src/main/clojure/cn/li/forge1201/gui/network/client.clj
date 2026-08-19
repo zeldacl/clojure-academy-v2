@@ -27,7 +27,7 @@
            request-id
            payload)))
     (catch Throwable t
-      (log/error "[GUI-NETWORK] resp-handler UNCAUGHT request-id=" request-id ":" (ex-message t) (.printStackTrace t)))))
+      (log/stacktrace (str "[GUI-NETWORK] resp-handler UNCAUGHT request-id=" request-id ":" ) t))))
 
 (defn- make-response-handler
   []

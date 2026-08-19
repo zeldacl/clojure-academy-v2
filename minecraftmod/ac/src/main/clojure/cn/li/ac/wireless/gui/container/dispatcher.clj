@@ -117,7 +117,6 @@
   (try
     (boolean (validate-container container player))
     (catch Exception e
-      (log/error "Error validating container:"(ex-message e))
       (log/stacktrace "Error validating container" e)
       false)))
 
@@ -128,7 +127,6 @@
     (sync-container! container)
     true
     (catch Exception e
-      (log/error "Error in server menu sync:" (ex-message e))
       (log/stacktrace "Error in server menu sync" e)
       false)))
 
@@ -146,7 +144,6 @@
     (handle-button-click! container button-id player)
     true
     (catch Exception e
-      (log/error "Error handling button click:"(ex-message e))
       (log/stacktrace "Error handling button click" e)
       false)))
 
@@ -165,7 +162,6 @@
     (handle-text-input! container field-id text player)
     true
     (catch Exception e
-      (log/error "Error handling text input:"(ex-message e))
       (log/stacktrace "Error handling text input" e)
       false)))
 
@@ -181,7 +177,6 @@
     (close-container! container)
     true
     (catch Exception e
-      (log/error "Error closing container:"(ex-message e))
       (log/stacktrace "Error closing container" e)
       false)))
 
@@ -199,7 +194,6 @@
         0)
       0)
     (catch Exception e
-      (log/error "Error getting slot count:"(ex-message e))
       (log/stacktrace "Error getting slot count" e)
       0)))
 
@@ -211,7 +205,6 @@
       (when-let [f (slot-value cfg :slot-get-fn)]
         (f container slot-index)))
     (catch Exception e
-      (log/error "Error getting slot item:"(ex-message e))
       (log/stacktrace "Error getting slot item" e)
       nil)))
 
@@ -223,7 +216,6 @@
       (when-let [f (slot-value cfg :slot-set-fn)]
         (f container slot-index item-stack)))
     (catch Exception e
-      (log/error "Error setting slot item:"(ex-message e))
       (log/stacktrace "Error setting slot item" e)
       nil)))
 
@@ -237,7 +229,6 @@
         true)
       false)
     (catch Exception e
-      (log/error "Error checking slot placement:"(ex-message e))
       (log/stacktrace "Error checking slot placement" e)
       false)))
 
@@ -249,7 +240,6 @@
       (when-let [f (slot-value cfg :slot-changed-fn)]
         (f container slot-index)))
     (catch Exception e
-      (log/error "Error in slot changed notification:"(ex-message e))
       (log/stacktrace "Error in slot changed notification" e)
       nil)))
 
@@ -263,7 +253,6 @@
       (when-let [f (slot-value cfg :quick-move-fn)]
         (f container slot-index player-inventory-start)))
     (catch Exception e
-      (log/error "Error executing quick move:" (ex-message e))
       (log/stacktrace "Error executing quick move" e)
       nil)))
 

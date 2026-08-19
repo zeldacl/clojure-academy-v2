@@ -242,7 +242,7 @@
 
   (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
 
-  (log/info "Flashing: Deactivated" reason)
+  (log/debug "Flashing: Deactivated" reason)
 
   nil)
 

@@ -44,7 +44,7 @@
 		(try
 			(gui-open/open-gui-by-type player :energy-converter world pos)
 			(catch Exception e
-				(log/error "Failed to open Energy Converter GUI:" (ex-message e))
+				(log/stacktrace "Failed to open Energy Converter GUI" e)
 				nil))))
 
 (defn- register-converter-block!

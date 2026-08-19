@@ -397,7 +397,7 @@
    (when-let [player-uuid (or player-uuid (get-client-player-uuid))]
      ;; hasCategory check matching original: aData.hasCategory()
      (if-not (has-category? player-uuid)
-       (log/info "[V-TRACE][AC][CLIENT][NO-CATEGORY]"
+       (log/debug "[V-TRACE][AC][CLIENT][NO-CATEGORY]"
                  {:uuid (str player-uuid)
                   :session-id (current-client-session-id)
                   :state-keys (some-> (get-client-player-state player-uuid) keys vec)})
@@ -408,7 +408,7 @@
       (let [will-abort? (boolean (has-active-delegates? player-uuid))]
          (if-let [handler (get-active-handler player-uuid)]
            (do
-             (log/info "[V-TRACE][AC][CLIENT][HANDLER]"
+             (log/debug "[V-TRACE][AC][CLIENT][HANDLER]"
                        {:handler-id (:id handler) :uuid (str player-uuid)})
              ((:on-key-down-fn handler) player-uuid)
              ;; After handler runs, update client overlay state for
@@ -422,7 +422,7 @@
            ;; Fallback: no handler matched → build and execute toggle command
            (let [state   (get-client-player-state player-uuid)
                  current (boolean (get-in state [:resource-data :activated]))]
-             (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
+             (log/debug "[V-TRACE][AC][CLIENT][TOGGLE]"
                        {:uuid (str player-uuid) :current current :next (not current)})
              (processor/execute-input-command! (current-client-owner player-uuid)
                                                (cmd-builder/toggle-activated-command current))
@@ -551,7 +551,7 @@
                                                     PRESET-INDICATOR-DURATION-MS))
        (processor/execute-input-command! owner switch-cmd)
        (update-default-group! player-uuid)
-       (log/info "[PRESET-SWITCH]" {:preset (:preset-idx switch-cmd)})))))
+       (log/debug "[PRESET-SWITCH]" {:preset (:preset-idx switch-cmd)})))))
 
 (defn get-preset-switch-state
   "Get current preset switch state for HUD rendering."
@@ -590,5 +590,5 @@
     :handles-fn      (fn [uuid] (boolean (has-active-delegates? uuid)))
     :on-key-down-fn  (fn [uuid]
                        (runtime-hooks/client-abort-all!)
-                       (log/info "[V-TRACE] Aborted all contexts for" uuid))
+                       (log/debug "[V-TRACE] Aborted all contexts for" uuid))
     :hint-fn         (fn [_uuid] "ac.activate.hint.abort")}))

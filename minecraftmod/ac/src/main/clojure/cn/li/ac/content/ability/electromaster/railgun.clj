@@ -516,7 +516,7 @@
                 (set-skill-state! ctx-id [:charge-ticks] (dec ticks-left))
                 (send-charge-update! ctx-id player-id (dec ticks-left))))))))
     (catch Exception e
-      (log/warn "railgun-on-key-tick error" (ex-message e)))))
+      (log/debug "railgun-on-key-tick error" (ex-message e)))))
 
 (defn- railgun-on-key-up
   "Cancels an unfinished item charge. Cooldown is only applied on successful perform."

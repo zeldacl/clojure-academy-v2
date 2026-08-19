@@ -22,7 +22,7 @@
 (defn open-gui
   "Build a platform-neutral GUI open result for a concrete GUI id."
   [player gui-id world pos]
-  (log/info "Opening GUI" gui-id "for player" (entity/player-get-name player) "at" pos)
+  (log/debug "Opening GUI" gui-id "for player" (entity/player-get-name player) "at" pos)
 
   (when-not (get-gui-config gui-id)
     (log/warn "Invalid GUI ID:" gui-id)

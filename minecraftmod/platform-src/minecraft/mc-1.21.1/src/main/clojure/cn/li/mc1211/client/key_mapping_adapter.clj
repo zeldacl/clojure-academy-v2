@@ -58,8 +58,7 @@
                  :translation-key translation-key})
       key-mapping)
     (catch Exception e
-      (log/error e "Failed to register KeyMapping"
-                {:input-id input-id})
+      (log/stacktrace (str "Failed to register KeyMapping " {:input-id input-id}) e)
       nil)))
 
 (defn get-key-mapping
@@ -223,7 +222,7 @@
     nil
 
     (catch Exception e
-      (log/error e "Failed to register AC keybindings"))))
+      (log/stacktrace "Failed to register AC keybindings" e))))
 
 (defn reset-for-test!
   "Clear all registered mappings (testing only)"

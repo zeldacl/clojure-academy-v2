@@ -60,7 +60,7 @@
     (render-init/register-default-renderer-init-fns!)
     (render-init/register-all-renderers!)
     (catch Exception e
-      (log/error "Failed to register block renderers" e))))
+      (log/stacktrace "Failed to register block renderers" e))))
 
 (defn- init-render-bindings!
   []
@@ -289,7 +289,7 @@
   (try
     ((platform-bootstrap/post-spi-client-init-callback!))
     (catch Exception e
-      (log/error e "Failed to run post-SPI content keybinding init")))
+      (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
 
   (try
     ;; Create AC :alternative KeyMappings and register them through Fabric's
@@ -300,12 +300,12 @@
       (KeyBindingHelper/registerKeyBinding km))
     (key-mapping-adapter/install-bound-key-resolver!)
     (catch Exception e
-      (log/error e "Failed to register Fabric KeyMappings")))
+      (log/stacktrace "Failed to register Fabric KeyMappings" e)))
 
   (try
     (kb-init/install-keyboard-handler!)
     (catch Exception e
-      (log/error e "Failed to install Fabric keyboard handler")))
+      (log/stacktrace "Failed to install Fabric keyboard handler" e)))
 
   (init-render-bindings!)
   (init-content-client-bridge!)

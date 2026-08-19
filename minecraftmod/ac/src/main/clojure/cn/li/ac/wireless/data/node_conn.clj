@@ -207,12 +207,12 @@
     (cond
       (not (capacity-available? conn world))
       (do
-        (log/info (format "%s add failed: node at capacity" (str/capitalize device-name)))
+        (log/debug (format "%s add failed: node at capacity" (str/capitalize device-name)))
         false)
 
       (not (check-range conn device-vb world))
       (do
-        (log/info (format "%s add failed: out of range" (str/capitalize device-name)))
+        (log/debug (format "%s add failed: out of range" (str/capitalize device-name)))
         false)
 
       :else

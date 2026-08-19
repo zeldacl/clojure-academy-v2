@@ -126,7 +126,7 @@
        (try
          (clear-owner-state! owner opts)
          (catch Exception e
-           (log/error "Failed to clear client owner state during connection transition" e))))
+           (log/stacktrace "Failed to clear client owner state during connection transition" e))))
      (reset! (lifecycle-state-atom) {:connection-key current-connection-key
                                      :owner current-owner})
      nil)))

@@ -70,7 +70,7 @@
     (try
       ((:render-tile renderer) tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
-        (log/error "Error rendering scripted tile entity" block-id(ex-message e))
+        (log/debug "Error rendering scripted tile entity" block-id (ex-message e))
         (log/stacktrace "Error rendering scripted tile entity" e)))))
 
 (defn- get-block-id [tile-entity]
@@ -107,5 +107,5 @@
     (try
       ((:render-tile renderer) tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
-        (log/error "Error rendering tile entity:"(ex-message e))
+        (log/debug "Error rendering tile entity:" (ex-message e))
         (log/stacktrace "Error rendering tile entity" e)))))

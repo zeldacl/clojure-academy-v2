@@ -188,7 +188,7 @@
 
 ;; Runtime bootstrap entrypoint for Java @Mod bridge.
 (defn start-forge-mod! []
-  (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
+  (log/debug "[BOOTSTRAP_TRACE] start-forge-mod! enter"
             {:compile-context (aot/compile-context)})
   (when-let [fw-inst (fw/create-framework)]
     (alter-var-root #'fw/framework (constantly fw-inst)))

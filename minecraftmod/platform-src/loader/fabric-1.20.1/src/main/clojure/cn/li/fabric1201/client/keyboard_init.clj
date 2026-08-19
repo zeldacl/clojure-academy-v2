@@ -111,4 +111,4 @@
          (log/info "Fabric keyboard handler installed")))
 
     (catch Exception e
-      (log/error e "Failed to install Fabric keyboard handler"))))
+      (log/stacktrace "Failed to install Fabric keyboard handler" e))))

@@ -20,7 +20,7 @@
 (defn- send-sync-now-for-player!
   [send-sync-now! uuid]
   (let [payload (player-hooks/build-sync-payload uuid)]
-    (log/info "[SYNC-TRACE][SERVER] full sync send"
+    (log/debug "[SYNC-TRACE][SERVER] full sync send"
               {:uuid uuid
                :payload? (some? payload)
                :revision (:revision payload)

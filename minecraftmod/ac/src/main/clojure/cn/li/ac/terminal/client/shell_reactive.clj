@@ -66,7 +66,7 @@
    (query-terminal-state! owner callback true))
   ([owner callback gate-active?]
    (let [generation (term-rt/ensure-owner! owner)]
-     (log/info "[AC-Terminal] querying install state"
+     (log/debug "[AC-Terminal] querying install state"
                {:owner-key (term-rt/owner-key owner)
                 :generation generation
                 :gate-active? gate-active?})
@@ -450,19 +450,19 @@
     (query-terminal-state! owner
       (fn [response]
         (let [installed? (boolean (:terminal-installed? response))]
-          (log/info "[AC-Terminal] get-state response"
+          (log/debug "[AC-Terminal] get-state response"
                     {:installed? installed?
                      :error (:error response)
                      :keys (when (map? response) (keys response))
                      :app-count (count (:installed-apps response))})
           (if installed?
             (do
-              (log/info "[AC-Terminal] opening terminal UI")
+              (log/debug "[AC-Terminal] opening terminal UI")
               (open! player))
             (do
               (bridge/send-system-message!
                 player (str "terminal." modid/MOD-ID ".notinstalled"))
-              (log/info "[AC-Terminal] not installed — use terminal installer item first")))))
+              (log/debug "[AC-Terminal] not installed — use terminal installer item first")))))
       false)))
 
 (defn terminal-session-open?
@@ -481,7 +481,7 @@
 (defn toggle! [player]
   (if (terminal-session-open?)
     (do
-      (log/info "[AC-Terminal] terminal open — closing")
+      (log/debug "[AC-Terminal] terminal open — closing")
       (bridge/close-screen!))
     (open-terminal! player)))
 ;; ============================================================================

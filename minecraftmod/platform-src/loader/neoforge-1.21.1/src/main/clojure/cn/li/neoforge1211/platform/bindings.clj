@@ -110,7 +110,7 @@
 				(.setBlock level pos (.defaultBlockState blk) (int flags))
 				true))
 			(catch Exception e
-				(log/error "Failed to place block by id" block-id ":" (.getMessage e))
+				(log/stacktrace (str "Failed to place block by id" block-id ":" ) e)
 			false)))
 
 (defn be-get-level

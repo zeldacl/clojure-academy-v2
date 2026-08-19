@@ -60,8 +60,7 @@
                      (try
                        (render-at-origin! tile-entity pose-stack buffer-source packed-light packed-overlay)
                        (catch Exception e
-                         (log/error "Error in phase generator renderer:" (ex-message e))
-                         (.printStackTrace e))))}))
+                         (log/debug "Error in phase generator renderer:" (ex-message e)))))}))
 
 (defn init!
   []

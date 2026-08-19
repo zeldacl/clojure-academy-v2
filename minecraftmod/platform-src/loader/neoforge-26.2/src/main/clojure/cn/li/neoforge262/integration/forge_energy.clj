@@ -54,7 +54,7 @@
               (create-forge-energy-adapter content-energy (fe-conversion-rate))))
           (forge-energy-descriptors))
     (catch Exception e
-      (log/error "Error creating Forge EnergyHandler capability:" (ex-message e))
+      (log/stacktrace "Error creating Forge EnergyHandler capability:" e)
       nil)))
 
 (defn register-forge-energy-capability!

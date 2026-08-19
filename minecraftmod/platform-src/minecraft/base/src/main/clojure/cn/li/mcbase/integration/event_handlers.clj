@@ -43,8 +43,8 @@
   (let [{:keys [x y z block]} event-data
         block-name (str block)
         block-id (identify-block-id block)]
-    (log/info (str log-prefix " Event at (" x "," y "," z ") block:" block-name))
-    (log/info (str log-prefix " Identified block-id:" block-id))
+    (log/debug (str log-prefix " Event at (" x "," y "," z ") block:" block-name))
+    (log/debug (str log-prefix " Identified block-id:" block-id))
     (when block-id
       (dispatcher-fn (assoc event-data :block-id block-id :event-key event-key)))))
 
@@ -103,8 +103,8 @@
     (let [{:keys [x y z block]} event-data
           block-name (str block)
           block-id (identify-block-id block)]
-      (log/info (str log-prefix " Event at (" x "," y "," z ") block:" block-name))
-      (log/info (str log-prefix " Identified block-id:" block-id))
+      (log/debug (str log-prefix " Event at (" x "," y "," z ") block:" block-name))
+      (log/debug (str log-prefix " Identified block-id:" block-id))
 
       (if block-id
         (if (or (bquery/has-block-event-handler? block-id :on-right-click)
@@ -126,10 +126,10 @@
                             ^net.minecraft.core.BlockPos pos pos
                             tile-entity (.getBlockEntity world pos)]
                         (when tile-entity
-                          (log/info (str log-prefix " GUI result received: gui-id=" gui-id))
+                          (log/debug (str log-prefix " GUI result received: gui-id=" gui-id))
                           (gui-opener-fn gui-id player world pos tile-entity)))))
                   (catch Exception e
-                    (log/error (str log-prefix " Failed to open GUI:" (.getMessage e))))))
+                    (log/stacktrace (str log-prefix " Failed to open GUI") e))))
               ret))
           (log/info (str log-prefix " Block has no registered :on-right-click handler")))
-        (log/info (str log-prefix " Could not identify block-id from:" block-name))))))
+        (log/debug (str log-prefix " Could not identify block-id from:" block-name))))))

@@ -54,7 +54,7 @@
                                (empty? (node-conn/get-receivers conn)))]
           (if (or (not node-exists?) empty-conn?)
             (do (when empty-conn?
-                  (log/info "[wireless] Validate: disposing empty connection for node"
+                  (log/debug "[wireless] Validate: disposing empty connection for node"
                             (vb/vblock-to-string node-vb)))
                 (node-conn/set-disposed! conn true)
                 false)

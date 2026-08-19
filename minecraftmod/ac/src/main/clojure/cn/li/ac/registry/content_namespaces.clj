@@ -87,7 +87,7 @@
       (require-lock/safe-require ns-sym)
       (log/warn "[CONTENT_TRACE] require ok" ns-sym)
       (catch Throwable t
-        (log/error "[CONTENT_TRACE] require fail" ns-sym (ex-message t))
+        (log/stacktrace (str "[CONTENT_TRACE] require fail " ns-sym) t)
         (throw t)))))
 
 (defn- run-init-fns! [{:keys [init-fns] :as phase-spec}]
@@ -99,7 +99,7 @@
           (init-fn)
           (log/warn (str "[CONTENT_TRACE] " tag " ok") init-sym))
         (catch Throwable t
-          (log/error (str "[CONTENT_TRACE] " tag " fail") init-sym (ex-message t))
+          (log/stacktrace (str "[CONTENT_TRACE] " tag " fail " init-sym) t)
           (throw t))))))
 
 (defn load-all!

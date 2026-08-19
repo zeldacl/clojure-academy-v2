@@ -157,7 +157,7 @@
          "acceptsEnergyFrom" (fn [_] true)}
         "IC2 IEnergySink"))
     (catch Exception e
-      (log/error "Failed to create IC2 energy sink:" (ex-message e))
+      (log/stacktrace "Failed to create IC2 energy sink:" e)
       nil)))
 
 (defn- create-ic2-energy-source
@@ -188,7 +188,7 @@
          "emitsEnergyTo" (fn [_] true)}
         "IC2 IEnergySource"))
     (catch Exception e
-      (log/error "Failed to create IC2 energy source:" (ex-message e))
+      (log/stacktrace "Failed to create IC2 energy source:" e)
       nil)))
 
 (defn get-ic2-capability
@@ -219,7 +219,7 @@
               "export" (create-ic2-energy-source content-energy tier)
               nil)))))
     (catch Exception e
-      (log/error "Error creating IC2 capability:" (ex-message e))
+      (log/stacktrace "Error creating IC2 capability:" e)
       nil)))
 
 (defn register-ic2-capability!
@@ -240,7 +240,7 @@
       (log/info (format "Conversion rate: 1 content energy unit = %.1f EU" (eu-conversion-rate)))
       true
       (catch Exception e
-        (log/error "Failed to register IC2 capability:" (ex-message e))
+        (log/stacktrace "Failed to register IC2 capability:" e)
         false))
     (do
       (log/info "IC2 not detected - EU conversion disabled")

@@ -53,15 +53,13 @@
   (try
     (extract-level-plan! evt)
     (catch Exception e
-      (log/error "Level effect state extraction failed" e)
-      (log/stacktrace "Level effect state extraction failed" e))))
+      (log/debug "Level effect state extraction failed:" (ex-message e)))))
 
 (defn- on-submit-custom-geometry [^SubmitCustomGeometryEvent evt]
   (try
     (submit-level-plan! evt)
     (catch Exception e
-      (log/error "Level effect geometry submission failed" e)
-      (log/stacktrace "Level effect geometry submission failed" e))))
+      (log/debug "Level effect geometry submission failed:" (ex-message e)))))
 
 (defn init! []
   (install/process-once! ::tick-listener-registered

@@ -33,34 +33,34 @@
   (try
     (if-let [owner (send-owner)]
       (let [payload (action-payload/action-payload container {:node-name new-name})]
-        (log/info "[NodeGUI] Sending change-name:" {:new-name new-name :payload payload})
+        (log/debug "[NodeGUI] Sending change-name:" {:new-name new-name :payload payload})
         (net-client/send-to-server owner
           (msg :change-name)
           payload
           (fn [resp]
-            (log/info "[NodeGUI] change-name response:" resp)
+            (log/debug "[NodeGUI] change-name response:" resp)
             (when (:success resp)
               (reset! (:ssid container) new-name)))))
-      (log/warn "Skip change-name: no client session bound"))
+      (log/debug "Skip change-name: no client session bound"))
     (catch Exception e
-      (log/error "Error sending change-name:" (ex-message e)))))
+      (log/stacktrace "Error sending change-name" e))))
 
 (defn send-change-password
   [container new-pass]
   (try
     (if-let [owner (send-owner)]
       (let [payload (action-payload/action-payload container {:password new-pass})]
-        (log/info "[NodeGUI] Sending change-password:" {:new-pass-len (count new-pass) :payload payload})
+        (log/debug "[NodeGUI] Sending change-password:" {:new-pass-len (count new-pass) :payload payload})
         (net-client/send-to-server owner
           (msg :change-password)
           payload
           (fn [resp]
-            (log/info "[NodeGUI] change-password response:" resp)
+            (log/debug "[NodeGUI] change-password response:" resp)
             (when (:success resp)
               (reset! (:password container) new-pass)))))
-      (log/warn "Skip change-password: no client session bound"))
+      (log/debug "Skip change-password: no client session bound"))
     (catch Exception e
-      (log/error "Error sending change-password:" (ex-message e)))))
+      (log/stacktrace "Error sending change-password" e))))
 
 (defn rebuild!
   [^UiRt rt container player]
@@ -103,8 +103,7 @@
         (info-area/add-property! ctx "Node Name" (or @(:ssid container) "")))
       nil)
     (catch Exception e
-      (log/error "node-info-reactive rebuild failed:" (ex-message e))
-      (log/stacktrace "node-info-reactive rebuild exception:" e)
+      (log/stacktrace "node-info-reactive rebuild failed" e)
       nil)))
 
 (defn attach!

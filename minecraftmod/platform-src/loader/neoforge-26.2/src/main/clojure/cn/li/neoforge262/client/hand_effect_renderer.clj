@@ -31,8 +31,7 @@
                   (float rot-x) (float rot-y) (float rot-z))
             (.setCanceled evt true))))
       (catch Exception e
-        (log/error e "Transformed hand render failed")
-        (log/stacktrace "Transformed hand render failed" e)))))
+        (log/debug "Transformed hand render failed:" (ex-message e))))))
 
 (defn init! []
   (install/process-once! ::tick-listener-registered

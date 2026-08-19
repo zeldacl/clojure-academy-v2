@@ -59,12 +59,11 @@
             (interaction-result/interaction-consumed? ret)
             (do
               (when-not (.isClientSide level)
-                (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
+                (log/debug "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
                           "block=" (.getBlock block-state)))
               (event-apply/apply-consumed-right-click! evt (.isClientSide level)))))))
     (catch Throwable t
-      (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
-      (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))
+      (log/stacktrace "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" t))))
 
 (defn handle-left-click-block-event
   [^PlayerInteractEvent$LeftClickBlock evt]
@@ -77,8 +76,7 @@
             #(event-handlers/handle-block-left-click {:player player})))
           (event-apply/cancel-event! evt))))
     (catch Throwable t
-      (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" (ex-message t))
-      (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] Stack trace:" t))))
+      (log/stacktrace "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" t))))
 
 (defn handle-attack-entity-event
   [^AttackEntityEvent evt]
@@ -89,8 +87,7 @@
                 #(event-handlers/handle-entity-attack {:player player})))
         (event-apply/cancel-event! evt)))
     (catch Throwable t
-      (log/error "[FORGE-ATTACK-ENTITY-EVENT] EXCEPTION:" (ex-message t))
-      (log/error "[FORGE-ATTACK-ENTITY-EVENT] Stack trace:" t))))
+      (log/stacktrace "[FORGE-ATTACK-ENTITY-EVENT] EXCEPTION:" t))))
 
 (defn handle-entity-interact-event
   [^PlayerInteractEvent$EntityInteract evt]
@@ -103,5 +100,4 @@
                   #(event-handlers/handle-entity-interact {:player player})))
           (event-apply/cancel-player-interact-fail! evt))))
     (catch Throwable t
-      (log/error "[FORGE-ENTITY-INTERACT-EVENT] EXCEPTION:" (ex-message t))
-      (log/error "[FORGE-ENTITY-INTERACT-EVENT] Stack trace:" t))))
+      (log/stacktrace "[FORGE-ENTITY-INTERACT-EVENT] EXCEPTION:" t))))

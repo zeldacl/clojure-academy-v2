@@ -91,7 +91,7 @@
          :output output-spec
          :energy (double energy)}))
     (catch Exception e
-      (log/error "Failed to convert CraftTweaker Fusor recipe:" (ex-message e))
+      (log/stacktrace "Failed to convert CraftTweaker Fusor recipe" e)
       nil)))
 
 (defn crafttweaker-to-former-recipe
@@ -117,7 +117,7 @@
          :mode mode
          :energy (double energy)}))
     (catch Exception e
-      (log/error "Failed to convert CraftTweaker Former recipe:" (ex-message e))
+      (log/stacktrace "Failed to convert CraftTweaker Former recipe" e)
       nil)))
 
 ;; Validation helpers

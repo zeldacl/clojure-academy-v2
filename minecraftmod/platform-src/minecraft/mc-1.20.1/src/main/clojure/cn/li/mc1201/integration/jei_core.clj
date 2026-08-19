@@ -79,7 +79,7 @@
          (filter identity)
          vec)
     (catch Exception e
-      (log/error "Failed to get JEI categories:" (ex-message e))
+      (log/stacktrace "Failed to get JEI categories:" e)
       [])))
 
 (defn get-recipes-for-category
@@ -96,7 +96,7 @@
           formatted (mapv integration-hooks/jei-format-recipe recipes)]
       (vec formatted))
     (catch Exception e
-      (log/error "Failed to get recipes for category" (:id category-meta) ":" (ex-message e))
+      (log/stacktrace (str "Failed to get recipes for category " (:id category-meta)) e)
       [])))
 
 ;; ============================================================================
@@ -127,7 +127,7 @@
        :recipes-by-category recipes-by-category
        :catalysts catalysts})
     (catch Exception e
-      (log/error "Failed to build JEI registration data:" (ex-message e))
+      (log/stacktrace "Failed to build JEI registration data:" e)
       {:categories [] :recipes-by-category {} :catalysts {}})))
 
 (defn validate-category-for-registration

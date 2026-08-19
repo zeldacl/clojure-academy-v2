@@ -29,8 +29,7 @@
 
 (defn log-open-error!
   [prefix e]
-  (log/error prefix "Failed to open GUI:" (.getMessage ^Throwable e))
-  (log/error prefix "Exception:" e))
+  (log/stacktrace (str prefix "Failed to open GUI") e))
 
 (defn open-player-menu!
   "Open a player menu via the platform-injected loader-specific implementation."

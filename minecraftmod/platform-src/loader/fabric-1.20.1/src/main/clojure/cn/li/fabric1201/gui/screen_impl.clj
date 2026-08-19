@@ -30,7 +30,7 @@
        :register-menu-screen! register-one-screen!})
     (log/info "Screen factories registered successfully (Fabric)")
     (catch Exception e
-      (log/error "Failed to register screen factories:" (.getMessage e))
+      (log/stacktrace "Failed to register screen factories:" e)
       (.printStackTrace e))))
 
 (defn init-client! []

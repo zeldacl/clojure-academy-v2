@@ -184,7 +184,7 @@
                (ctx/terminate-context! ctx-id terminate-fn)
                false)
              (let [new-ctx (set-input-state! owner ctx-id INPUT-ACTIVE)]
-               (log/info "Context key-down dispatched"
+               (log/debug "Context key-down dispatched"
                          {:ctx-id ctx-id
                           :skill-id (:skill-id ctx-map)
                           :input-state (get-in new-ctx [:input-state])})
@@ -218,7 +218,7 @@
                     (= (:input-state ctx-map) INPUT-ACTIVE))
            (let [released-ctx (set-input-state! owner ctx-id INPUT-RELEASED)
                  spec (skill/get-skill (:skill-id released-ctx))]
-             (log/info "Context key-up dispatched"
+             (log/debug "Context key-up dispatched"
                        {:ctx-id ctx-id
                         :skill-id (:skill-id released-ctx)
                         :input-state (get-in released-ctx [:input-state])})

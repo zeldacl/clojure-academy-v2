@@ -115,7 +115,7 @@
           (.addRecipeCategories registration (into-array IRecipeCategory [recipe-category]))
           (log/info (str "Registered JEI category: " (:id category-meta))))))
     (catch Exception e
-      (log/error "Failed to register JEI categories:" (ex-message e)))))
+      (log/stacktrace "Failed to register JEI categories:" e))))
 
 (defn- register-recipes
   "Register all AC recipes with JEI."
@@ -132,7 +132,7 @@
           (.addRecipes registration recipe-type (ArrayList. ^java.util.Collection formatted-recipes))
           (log/info (str "Registered " (count formatted-recipes) " recipes for " (:id category-meta))))))
     (catch Exception e
-      (log/error "Failed to register JEI recipes:" (ex-message e)))))
+      (log/stacktrace "Failed to register JEI recipes:" e))))
 
 (defn- register-catalysts
   "Register recipe catalysts (the blocks that perform the recipes)."
@@ -150,7 +150,7 @@
           (.addRecipeCatalyst registration item-stack recipe-types)
           (log/info (str "Registered JEI catalyst: " block-id " for " (:id category-meta))))))
     (catch Exception e
-      (log/error "Failed to register JEI catalysts:" (ex-message e)))))
+      (log/stacktrace "Failed to register JEI catalysts:" e))))
 
 (defn- recipe-type-for-category
   "RecipeType for a category metadata map (Clojure recipe maps are
@@ -193,7 +193,7 @@
                                (create-gui-handler))
       (log/info "Registered JEI gui click areas for machine screens"))
     (catch Exception e
-      (log/error "Failed to register JEI gui handlers:" (ex-message e)))))
+      (log/stacktrace "Failed to register JEI gui handlers:" e))))
 
 (defn- register-item-subtypes
   "Register subtype handling for items that use NBT/stateful variants in creative tab.
@@ -214,7 +214,7 @@
           (.useNbtForSubtypes ^ISubtypeRegistration registration item-array))
         (log/info "Registered JEI NBT subtypes for" (count items) "creative-tab variant items.")))
     (catch Exception e
-      (log/error "Failed to register JEI item subtypes:" (ex-message e)))))
+      (log/stacktrace "Failed to register JEI item subtypes:" e))))
 
 ;; ============================================================================
 ;; JEI Plugin Interface (Forge-Specific)

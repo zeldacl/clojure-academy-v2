@@ -65,7 +65,7 @@
          :error "Target block is not a wireless device"})
       {:success false :reason :not-found :error "No block targeted"})
     (catch Throwable e
-      (log/error "Error in frequency transmitter scan:" (ex-message e))
+      (log/stacktrace "Error in frequency transmitter scan" e)
       {:success false :error (ex-message e)})))
 
 (defn- authorize-source
@@ -144,7 +144,7 @@
       {:success false :reason :unsupported
        :error "Unknown transmitter operation"})
     (catch Throwable e
-      (log/error "Error in frequency transmitter command:" (ex-message e))
+      (log/stacktrace "Error in frequency transmitter command" e)
       {:success false :error (ex-message e)})))
 
 (defn register-handlers! []

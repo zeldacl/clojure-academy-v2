@@ -83,7 +83,7 @@
                       (.getTransforms model)
                       particle)
       (catch Exception e
-        (log/error "[obj-model-registration] could not build OBJ mesh from" obj-path "-" (.getMessage e))
+        (log/stacktrace (str "[obj-model-registration] could not build OBJ mesh from" obj-path "-" ) e)
         model))))
 
 (defn- after-bake

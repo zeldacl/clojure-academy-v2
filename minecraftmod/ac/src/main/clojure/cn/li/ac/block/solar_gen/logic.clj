@@ -90,8 +90,8 @@
                          nil))]
         node
         (do
-          (log/info "[get-linked-node] connection found but node tile not resolved for gen at" pos-str)
+          (log/debug "[get-linked-node] connection found but node tile not resolved for gen at" pos-str)
           nil))
       (do
-        (log/info "[get-linked-node] no connection found for generator at" pos-str)
+        (log/debug "[get-linked-node] no connection found for generator at" pos-str)
         nil))))

@@ -302,7 +302,7 @@
         _diag (when owner
                 (try
                   (when-let [snapshot (logic/selector-debug-snapshot owner)]
-                    (log/info "Preset selector snapshot" snapshot))
+                    (log/debug "Preset selector snapshot" snapshot))
                   (catch Throwable t
                     (log/warn "Preset selector snapshot failed" t))))
         rd (when owner (logic/build-preset-editor-render-data owner))

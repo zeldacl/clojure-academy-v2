@@ -193,7 +193,7 @@
 (defn- apply-client-runtime-v2!
   [{:keys [version opcode uuid revision dirty-mask] :as payload}]
   (when (= 1 opcode)
-    (log/info "[SYNC-TRACE][CLIENT] full sync recv"
+    (log/debug "[SYNC-TRACE][CLIENT] full sync recv"
               {:uuid uuid
                :revision revision
                :dirty-mask dirty-mask
@@ -205,13 +205,13 @@
           old-revision (long (get old-state :sync-revision -1))
           mask (long dirty-mask)]
       (when (<= (long revision) old-revision)
-        (log/info "[SYNC-TRACE][CLIENT] skip stale sync"
+        (log/debug "[SYNC-TRACE][CLIENT] skip stale sync"
                   {:opcode opcode :revision revision :old-revision old-revision}))
       (when (> (long revision) old-revision)
         (when (and (not (zero? (bit-and mask store/resource-data-mask)))
                    (not= (boolean (get-in old-state [:resource-data :activated]))
                          (boolean (get-in payload [:resource-data :activated]))))
-          (log/info "[SYNC-TRACE][CLIENT] activated sync"
+          (log/debug "[SYNC-TRACE][CLIENT] activated sync"
                     {:from (boolean (get-in old-state [:resource-data :activated]))
                      :to (boolean (get-in payload [:resource-data :activated]))
                      :revision revision}))
@@ -608,13 +608,13 @@
   [msg-id player-uuid key-idx]
   (if-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
     (when-let [ctx-id (context-id-for-slot! player-uuid key-idx skill-id)]
-      (log/info "Slot key message sent"
+      (log/debug "Slot key message sent"
                 {:msg-id msg-id :key-idx key-idx :skill-id skill-id :ctx-id ctx-id})
       (send-with-client-owner! player-uuid msg-id {:ctx-id ctx-id
                                                    :skill-id skill-id
                                                    :key-idx key-idx})
       ctx-id)
-    (log/info "Slot key pressed but no skill bound to slot"
+    (log/debug "Slot key pressed but no skill bound to slot"
               {:msg-id msg-id :key-idx key-idx :player-uuid player-uuid})))
 
 (defn- send-slot-keepalive!

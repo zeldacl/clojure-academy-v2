@@ -19,12 +19,11 @@
      menu-type
      (reify MenuScreens$ScreenConstructor
        (create [_ menu player-inventory title]
-         (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
+         (log/debug "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
          (try
            (let [screen (screen-creator menu player-inventory title)]
              screen)
            (catch Throwable e
-             (log/error "[SCREEN-FACTORY] Screen creation failed:" (.getMessage e))
              (log/stacktrace "[SCREEN-FACTORY] Exception:" e)
              (throw e))))))
   (log/info "Registered screen for GUI ID" gui-id)))
@@ -43,7 +42,7 @@
       :register-menu-screen! register-one-screen!})
     (log/info "Screen factories registered successfully")
     (catch Exception e
-      (log/error "Failed to register screen factories:" (.getMessage e))
+      (log/stacktrace "Failed to register screen factories:" e)
       (.printStackTrace e))))
 
 (defn init-client!

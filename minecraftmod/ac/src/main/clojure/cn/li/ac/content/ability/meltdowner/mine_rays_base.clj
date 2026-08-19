@@ -158,7 +158,7 @@
                                                        ctx-data))))))))
         (ctx-skill/replace-skill-state! ctx-id (with-floor (empty-skill-state) ctx-data))))
     (catch Exception e
-      (log/warn "MiningRay tick! failed:" (ex-message e)))))
+      (log/debug "MiningRay tick! failed:" (ex-message e)))))
 
 (defn- send-ray-end!
   [ctx-id player-id]

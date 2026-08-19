@@ -214,4 +214,4 @@
     (doseq [element elements]
       (render-element! graphics element screen-width screen-height))
     (catch Exception e
-      (log/error "Error rendering overlay elements" e))))
+      (log/debug "Error rendering overlay elements:" (ex-message e)))))

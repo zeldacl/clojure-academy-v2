@@ -51,8 +51,7 @@
   (try
     (render-level-plan! evt)
     (catch Exception e
-      (log/error "Level effect render failed" e)
-      (log/stacktrace "Level effect render failed" e))))
+      (log/debug "Level effect render failed:" (ex-message e)))))
 
 (defn init! []
   (install/process-once! ::tick-listener-registered

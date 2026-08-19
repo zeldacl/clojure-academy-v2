@@ -72,14 +72,14 @@
   "Handle terminal toggle (Left Alt / GLFW_KEY_LEFT_ALT).
    Matching original AcademyCraft TerminalUI.keyHandler (KEY_LMENU)."
   [_context]
-  (log/info "[AC-Terminal] toggle key pressed")
+  (log/debug "[AC-Terminal] toggle key pressed")
   (if (content-key-allowed?)
     (if-let [player (client-bridge/get-client-player)]
       (do
-        (log/info "[AC-Terminal] got player, toggling terminal")
+        (log/debug "[AC-Terminal] got player, toggling terminal")
         (terminal-actions/toggle-terminal! player))
       (log/warn "[AC-Terminal] get-client-player returned nil — bridge not installed?"))
-    (log/info "[AC-Terminal] toggle suppressed — GUI open (upstream isPlayerInGame)")))
+    (log/debug "[AC-Terminal] toggle suppressed — GUI open (upstream isPlayerInGame)")))
 
 ;; ==== Input ID Configuration Registry ====
 
@@ -172,5 +172,5 @@
     nil
     
     (catch Exception e
-      (log/error e "Failed to bootstrap AC keybindings")
+      (log/stacktrace "Failed to bootstrap AC keybindings" e)
       (throw e))))

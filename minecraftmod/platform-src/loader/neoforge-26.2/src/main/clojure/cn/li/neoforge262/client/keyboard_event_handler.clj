@@ -146,4 +146,4 @@
          (log/info "Forge keyboard event handler installed")))
 
     (catch Exception e
-      (log/error e "Failed to install Forge keyboard event handler"))))
+      (log/stacktrace "Failed to install Forge keyboard event handler" e))))

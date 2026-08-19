@@ -254,7 +254,7 @@
   ;; terminate-context! with nil leaves the client-side context registered
   ;; forever.
   (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
-  (log/info "VecReflection: Deactivated" reason)
+  (log/debug "VecReflection: Deactivated" reason)
   nil)
 
 (defn- add-exp! [player-id amount]
@@ -447,7 +447,7 @@
               (set-skill-state-key! ctx-id :vec-reflection-overload-keep overload-keep)
               (enforce-overload-floor! player-id overload-keep)))
           (fx/send! ctx-id {:topic :vec-reflection/fx-start :mode :start})
-          (log/info "VecReflection: Activated"))))
+          (log/debug "VecReflection: Activated"))))
     (catch Exception e
       (log/warn "VecReflection key-down failed:" (ex-message e)))))
 
@@ -562,7 +562,7 @@
   (try
     (vec-reflection-on-key-tick-body player-id ctx-id exp cost-ok?)
     (catch Exception e
-      (log/warn "VecReflection key-tick failed:" (ex-message e)))))
+      (log/debug "VecReflection key-tick failed:" (ex-message e)))))
 
 (defn vec-reflection-on-key-up
   "No-op for toggle skills."

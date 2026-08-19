@@ -77,7 +77,7 @@
                                                (assoc-in [:inventory slot-index] item-stack)
                                                post-write)))
       (catch Exception e
-        (log/error "set-slot-item-be! failed:" (ex-message e))))))
+        (log/stacktrace "set-slot-item-be! failed" e)))))
 
 (defn get-tile-state
   "Get the current Clojure state map from a tile entity.

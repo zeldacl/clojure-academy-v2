@@ -26,7 +26,7 @@
                           [advancement-id (AdvancementAccess/playerName player)] false)
         {:success? true}))
     (catch Exception e
-      (log/error "Failed to grant advancement:" (ex-message e))
+      (log/stacktrace "Failed to grant advancement:" e)
       (send-feedback-fn (str "Error: " (ex-message e)) false [] true)
       {:success? false :message (ex-message e)})))
 

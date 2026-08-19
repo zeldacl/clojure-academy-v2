@@ -92,12 +92,12 @@
 (defn- create-client-menu-from-packet!
   "Client-side menu factory invoked by NeoForge when recreating menu from open-screen packet."
   [gui-id window-id player-inventory buf]
-  (log/info "[CLIENT-MENU-FACTORY] IContainerFactory.create called! window-id=" window-id)
+  (log/debug "[CLIENT-MENU-FACTORY] IContainerFactory.create called! window-id=" window-id)
   (try
     (let [handler (gui-handler/get-gui-handler)
           {:keys [gui-id buf-gui-id pos]} (registry-common/read-extended-open-payload buf)
           resolved-gui-id (or buf-gui-id gui-id)]
-      (log/info "[CLIENT-MENU-FACTORY] gui-id from buf=" gui-id "resolved=" resolved-gui-id "pos=" pos)
+      (log/debug "[CLIENT-MENU-FACTORY] gui-id from buf=" gui-id "resolved=" resolved-gui-id "pos=" pos)
       (let [result (registry-common/create-client-menu!
                      {:gui-id resolved-gui-id
                       :window-id window-id
@@ -105,21 +105,21 @@
                       :pos pos
                       :handler handler
                       :create-container-fn (fn [h gid p world block-pos]
-                                             (log/info "[CLIENT-MENU-FACTORY] Creating clj-container for gui-id=" gid)
+                                             (log/debug "[CLIENT-MENU-FACTORY] Creating clj-container for gui-id=" gid)
                                              (gui-handler/get-server-container h gid p world block-pos))
                       :create-menu-proxy-fn (fn [wid menu-type clj-container opts]
-                                              (log/info "[CLIENT-MENU-FACTORY] Creating menu proxy wid=" wid "menu-type=" menu-type)
+                                              (log/debug "[CLIENT-MENU-FACTORY] Creating menu proxy wid=" wid "menu-type=" menu-type)
                                               (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
                       :resolve-menu-type-fn get-menu-type
                       :bridge-opts (menu-proxy/menu-proxy-opts
                                                       {:call-super-removed? true})
                       :error-prefix "Failed to create container for GUI"
                       :with-owner! #(@client-owner-wrapper %)})]
-        (log/info "[CLIENT-MENU-FACTORY] Menu created successfully, returning to NeoForge. menu=" (type result))
+        (log/debug "[CLIENT-MENU-FACTORY] Menu created successfully, returning to NeoForge. menu=" (type result))
         result))
     (catch Throwable e
-      (log/error "[CLIENT-MENU-FACTORY] Failed to create client menu:" (ex-message e))
-      (log/error "[CLIENT-MENU-FACTORY] Stack trace:" (with-out-str (.printStackTrace e)))
+      (log/stacktrace "[CLIENT-MENU-FACTORY] Failed to create client menu:" e)
+      (log/stacktrace "[CLIENT-MENU-FACTORY] Stack trace:" e)
       (throw e))))
 
 (defn create-menu-type
@@ -172,22 +172,22 @@
   [^ServerPlayer player gui-id tile-entity]
   (open-core/log-open-start! "[OPEN-GUI-FOR-PLAYER]" player gui-id tile-entity)
   (try
-    (log/info "[OPEN-GUI-FOR-PLAYER] Creating MenuProvider...")
+    (log/debug "[OPEN-GUI-FOR-PLAYER] Creating MenuProvider...")
     (let [^MenuProvider provider (provider-bridge/create-menu-provider gui-id tile-entity)
           ^BlockPos pos (open-core/resolve-optional-block-pos tile-entity)]
-      (log/info "[OPEN-GUI-FOR-PLAYER] MenuProvider created, pos=" pos "calling openMenu...")
+      (log/debug "[OPEN-GUI-FOR-PLAYER] MenuProvider created, pos=" pos "calling openMenu...")
       (if pos
         (do
-          (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen with position data to client...")
+          (log/debug "[OPEN-GUI-FOR-PLAYER] Opening screen with position data to client...")
           (.openMenu player
             provider
             (reify java.util.function.Consumer
               (accept [_ buf]
                 (registry-common/write-extended-open-payload! buf gui-id pos)))))
         (do
-          (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen without position data...")
+          (log/debug "[OPEN-GUI-FOR-PLAYER] Opening screen without position data...")
           (.openMenu player provider)))
-      (log/info "[OPEN-GUI-FOR-PLAYER] openMenu called, GUI open request queued"))
+      (log/debug "[OPEN-GUI-FOR-PLAYER] openMenu called, GUI open request queued"))
     (catch Exception e
       (open-core/log-open-error! "[OPEN-GUI-FOR-PLAYER]" e))))
 

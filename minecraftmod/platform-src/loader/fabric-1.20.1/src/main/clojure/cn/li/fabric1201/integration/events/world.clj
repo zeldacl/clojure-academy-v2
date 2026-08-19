@@ -43,7 +43,7 @@
           saved (or from-storage from-cache)]
       (world-lifecycle/dispatch-world-load world saved))
     (catch Throwable t
-      (log/error "Error handling Fabric world load:" (.getMessage t))
+      (log/stacktrace "Error handling Fabric world load:" t)
       (.printStackTrace t))))
 
 (defn handle-world-unload
@@ -56,7 +56,7 @@
     (world-save-cache/clear-world-saved-data! world)
     (world-lifecycle/dispatch-world-unload world)
     (catch Throwable t
-      (log/error "Error handling Fabric world unload:" (.getMessage t))
+      (log/stacktrace "Error handling Fabric world unload:" t)
       (.printStackTrace t))))
 
 (defn register-on-world-state-changed!

@@ -20,7 +20,7 @@
 																	 :activated requested}))
 				next-state (get result :state state)
 				after (boolean (get-in next-state [:resource-data :activated]))]
-		(log/info "[V-TRACE][AC][SERVER][REQ-SET-ACTIVATED]"
+		(log/debug "[V-TRACE][AC][SERVER][REQ-SET-ACTIVATED]"
 							{:uuid uuid
 							 :requested requested
 							 :before before

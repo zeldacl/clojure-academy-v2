@@ -97,7 +97,7 @@
     ;; Scripted BER: `ModClientRenderSetup` (Java @Mod.EventBusSubscriber) on mod bus.
     
     (catch Exception e
-      (log/error "Failed to register block renderers" (.printStackTrace e)))))
+      (log/stacktrace "Failed to register block renderers" e)))))
 
 (defn- register-fluid-render-layers!
   []
@@ -394,20 +394,20 @@
   (try
     ((platform-bootstrap/post-spi-client-init-callback!))
     (catch Exception e
-      (log/error e "Failed to run post-SPI content keybinding init")
+      (log/stacktrace "Failed to run post-SPI content keybinding init" e)
       (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
 
   (try
     (key-mapping-adapter/register-all-keybindings-from-ac!)
     (key-mapping-adapter/register-into-system-menu!)
     (key-mapping-adapter/install-bound-key-resolver!)(catch Exception e
-      (log/error e "Failed to register Forge KeyMappings")
+      (log/stacktrace "Failed to register Forge KeyMappings" e)
       (log/stacktrace "Failed to register Forge KeyMappings" e)))
 
   (try
     (keyboard-event-handler/install-forge-event-handler!)
     (catch Exception e
-      (log/error e "Failed to install Forge keyboard event handler")
+      (log/stacktrace "Failed to install Forge keyboard event handler" e)
       (log/stacktrace "Failed to install Forge keyboard event handler" e))))
 
 (defn init-client

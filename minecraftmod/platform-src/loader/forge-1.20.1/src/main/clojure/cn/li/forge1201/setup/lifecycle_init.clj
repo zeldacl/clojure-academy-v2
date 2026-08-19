@@ -34,7 +34,7 @@
     (try
       (body!)
       (catch Exception e
-        (log/error "Forge initialization lifecycle failed" e)
+        (log/stacktrace "Forge initialization lifecycle failed" e)
         (throw (Error. "Critical mod initialization failure" e))))))
 
 (defn init-lifecycle!

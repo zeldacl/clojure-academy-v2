@@ -148,7 +148,7 @@
                 moved))))
         ItemStack/EMPTY))
     (catch Exception e
-      (log/error error-prefix (.getMessage e))
+      (log/stacktrace error-prefix e)
       ItemStack/EMPTY)))
 
 (defn- finalize-menu-registration!

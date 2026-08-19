@@ -54,7 +54,7 @@
           (.setVisible input-pass false)))
     (rt/register-event! rt (.getIdx icon-connect) :left-click
       (fn [_ _ _]
-        (log/info "[wireless-reactive] connect icon clicked for" name)
+        (log/debug "[wireless-reactive] connect icon clicked for" name)
         (let [pwd (if encrypted?
                     (str (or (.getOSlot input-pass 0) ""))
                     "")]

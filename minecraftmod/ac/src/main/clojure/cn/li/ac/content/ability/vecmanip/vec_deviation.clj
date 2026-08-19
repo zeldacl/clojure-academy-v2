@@ -163,7 +163,7 @@
   ;; cleaned up — plain terminate-context! with nil leaves the client-side
   ;; context registered forever.
   (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
-  (log/info "VecDeviation: Deactivated" reason)
+  (log/debug "VecDeviation: Deactivated" reason)
   nil)
 
 (defn vec-deviation-on-key-down
@@ -197,7 +197,7 @@
              ctx-id :vec-deviation-overload-floor overload-floor)
             (skill-effects/enforce-overload-floor! player-id overload-floor))
           (fx/send! ctx-id {:topic :vec-deviation/fx-start :mode :start})
-          (log/info "VecDeviation: Activated"))))
+          (log/debug "VecDeviation: Activated"))))
     (catch Exception e
       (log/warn "VecDeviation key-down failed:" (ex-message e)))))
 
@@ -336,7 +336,7 @@
                                 visited-ids))))))
               (consume-normal-tick-cost! player-id exp))))))
     (catch Exception e
-      (log/warn "VecDeviation tick! failed:" (ex-message e)))))
+      (log/debug "VecDeviation tick! failed:" (ex-message e)))))
 
 (defn vec-deviation-on-key-up
   [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]

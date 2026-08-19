@@ -29,5 +29,5 @@
       (launcher player)
       true)
     (do
-      (log/error "No client launcher for app:" app-id)
+      (log/debug "No client launcher for app:" app-id)
       false)))

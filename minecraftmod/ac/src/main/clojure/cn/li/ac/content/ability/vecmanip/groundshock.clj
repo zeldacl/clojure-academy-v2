@@ -197,7 +197,7 @@
         (fx/send! ctx-id {:topic :groundshock/fx-update :mode :update} nil
                   {:charge-ticks (long (max 0 next-charge))})))
     (catch Exception e
-      (log/warn "Groundshock key-tick failed:" (ex-message e)))))
+      (log/debug "Groundshock key-tick failed:" (ex-message e)))))
 
 (defn- affect-entities!
   [player-id world-id bx by bz damage y-speed candidate-entities affected-entities*]
@@ -481,7 +481,7 @@
                   (fx/send-local-and-nearby! ctx-id {:topic :groundshock/fx-perform :mode :perform} nil
                             {:affected-blocks (:affected-blocks result)
                              :broken-blocks (finalize-broken-blocks broken-blocks*)})
-                  (log/info "Groundshock: Affected" affected-count "blocks/entities"))
+                  (log/debug "Groundshock: Affected" affected-count "blocks/entities"))
                 (do
                   (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
                   (log/debug "Groundshock: Missing horizontal look vector")))

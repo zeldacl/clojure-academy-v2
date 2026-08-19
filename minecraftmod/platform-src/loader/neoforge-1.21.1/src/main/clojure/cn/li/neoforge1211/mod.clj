@@ -190,7 +190,7 @@
 ;; AcademyCraft1211 injects the mod event bus + ModContainer (no FMLJavaModLoadingContext).
 (defn start-neoforge-mod!
   [mod-bus mod-container]
-  (log/info "[BOOTSTRAP_TRACE] start-neoforge-mod! enter"
+  (log/debug "[BOOTSTRAP_TRACE] start-neoforge-mod! enter"
             {:compile-context (aot/compile-context)
              :mod-bus (some? mod-bus)
              :mod-container (some? mod-container)})

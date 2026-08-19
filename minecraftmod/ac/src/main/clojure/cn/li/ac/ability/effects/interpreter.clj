@@ -75,7 +75,7 @@
     (try
       (execute-effect! session-id effect)
       (catch Exception e
-        (log/error "Effect execution failed" (:effect/type effect) e))))
+        (log/stacktrace (str "Effect execution failed " (:effect/type effect)) e))))
    nil))
 
 ;; ============================================================================

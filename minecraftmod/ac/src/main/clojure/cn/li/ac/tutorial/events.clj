@@ -50,7 +50,7 @@
     (when (seq acts)
       (let [uuid-str (uuid/player-uuid player)]
         (doseq [tut-id acts]
-          (log/info "Tutorial activated by condition (batched)"
+          (log/debug "Tutorial activated by condition (batched)"
                     {:player uuid-str :tutorial (name tut-id)})
           (try (tutorial-hooks/notify-tutorial-activated! uuid-str tut-id)
                (catch Throwable e (log/warn "Tutorial activation processing failed:" (ex-message e)))))))))

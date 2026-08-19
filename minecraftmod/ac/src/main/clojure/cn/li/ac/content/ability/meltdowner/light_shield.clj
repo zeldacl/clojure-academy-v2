@@ -160,7 +160,7 @@
                                0.0
                                (+ (long (second (cfg-double-list :timing.max-active-ticks))) 20))]
         (set-shield-state-path! ctx-id [:shield-uuid] shield-uuid)))
-  (log/info "LightShield: Activated")))
+  (log/debug "LightShield: Activated")))
 
 ;; Matches original getCooldown(ct) = lerp(2*ct, ct, exp): cooldown scales
 ;; with how long the shield was actually held (ticks), not a flat exp range.
@@ -196,7 +196,7 @@
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (end-shield! ctx-id player-id exp)
   (update-skill-state-root! ctx-id #(dissoc % light-shield-state-key))
-  (log/info "LightShield: Deactivated"))
+  (log/debug "LightShield: Deactivated"))
 
 ;; Matches original's per-tick attempt (no interval throttle) — the only
 ;; original gate is target invulnerability (e.hurtResistantTime<=0), which

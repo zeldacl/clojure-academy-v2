@@ -15,7 +15,7 @@
   (if-let [fw-atom (fw/fw-atom)]
     (let [missing (seq (remove (set (keys ops-map)) buffer-ops-keys))]
       (swap! fw-atom assoc-in [:platform :render-buffer-ops] ops-map)
-      (log/info "Buffer ops installed:" (pr-str (keys ops-map)))
+      (log/debug "Buffer ops installed:" (pr-str (keys ops-map)))
       (when missing
         (log/error "Buffer ops MISSING required keys:" (pr-str missing))))
     (log/error "Buffer ops install FAILED: Framework atom nil")))

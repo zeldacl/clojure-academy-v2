@@ -38,7 +38,6 @@
 									(accept [_ msg]
 										(handle-imc-message! msg)))))
 		(catch Throwable t
-			(log/error "Failed to process IMC registrations" t)
 			(log/stacktrace "handle-imc-process-event! caught exception" t))))
 
 (defn register-imc-listener!

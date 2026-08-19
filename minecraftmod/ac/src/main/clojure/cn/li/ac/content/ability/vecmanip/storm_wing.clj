@@ -320,7 +320,7 @@
            nil
            {:charge-ticks (long charge-time)}))))
     (catch Exception e
-      (log/error "StormWing key-down failed:" e)
+      (log/stacktrace "StormWing key-down failed" e)
       (ctx-skill/clear-skill-state! ctx-id))))
 
 (defn- transition-to-flying! [ctx-id player-id exp pos]
@@ -398,7 +398,7 @@
                        ctx-id player-id exp true :insufficient-resource))))))
             (finish! ctx-id player-id exp true :position-unavailable)))))
     (catch Exception e
-      (log/error "StormWing key-tick failed:" e)
+      (log/debug "StormWing key-tick failed:" e)
       (finish!
        ctx-id
        player-id
@@ -415,7 +415,7 @@
   (try
     (finish! ctx-id player-id (double (or exp 0.0)) false :abort)
     (catch Exception e
-      (log/error "StormWing key-abort failed:" e)
+      (log/stacktrace "StormWing key-abort failed" e)
       (ctx-skill/clear-skill-state! ctx-id))))
 
 (defskill storm-wing

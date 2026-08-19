@@ -97,10 +97,10 @@
                                                   (get response :ssid)))})]
               (callback data))
             (catch Exception e
-              (log/error "Error processing gather-info response:"(ex-message e))))))
-      (log/info "[send-gather-info] Skip: current-client-owner returned nil"))
+              (log/stacktrace "Error processing gather-info response" e)))))
+      (log/debug "[send-gather-info] Skip: current-client-owner returned nil"))
     (catch Exception e
-      (log/error "Error sending gather-info:"(ex-message e)))))
+      (log/stacktrace "Error sending gather-info" e))))
 
 (defn send-init-network
   [container ssid password callback]
@@ -113,10 +113,10 @@
           (try
             (callback (get response :success false))
             (catch Exception e
-              (log/error "Error processing init response:"(ex-message e))))))
-      (log/info "[send-init-network] Skip: current-client-owner returned nil"))
+              (log/stacktrace "Error processing init response" e)))))
+      (log/debug "[send-init-network] Skip: current-client-owner returned nil"))
     (catch Exception e
-      (log/error "Error sending init:"(ex-message e)))))
+      (log/stacktrace "Error sending init" e))))
 
 (defn send-change-ssid
   [container new-ssid]
@@ -126,9 +126,9 @@
         (msg :change-ssid)
         (action-payload/action-payload container {:new-ssid new-ssid})
         nil)
-      (log/warn "Skip change-ssid: no client session bound"))
+      (log/debug "Skip change-ssid: no client session bound"))
     (catch Exception e
-      (log/error "Error sending change-ssid:"(ex-message e)))))
+      (log/stacktrace "Error sending change-ssid" e))))
 
 (defn send-change-password
   [container new-password]
@@ -138,9 +138,9 @@
         (msg :change-password)
         (action-payload/action-payload container {:new-password new-password})
         nil)
-      (log/warn "Skip change-password: no client session bound"))
+      (log/debug "Skip change-password: no client session bound"))
     (catch Exception e
-      (log/error "Error sending change-password:"(ex-message e)))))
+      (log/stacktrace "Error sending change-password" e))))
 
 ;; rebuild! is referenced by INIT response helpers defined above it.
 (declare rebuild!)
@@ -157,7 +157,7 @@
   (fn []
     (let [ssid (str (or (.getOSlot ssid-n 0) ""))
           pass (str (or (.getOSlot pass-n 0) ""))]
-      (log/info "Matrix INIT ssid=" ssid)
+      (log/debug "Matrix INIT ssid=" ssid)
       (send-init-network container ssid pass
         (refresh-after-init! rt container player)))))
 
@@ -224,7 +224,7 @@
         (info-area/add-sepline! ctx "wireless_noinit")
         :else nil))
     (catch Exception e
-      (log/error "matrix-info-reactive rebuild failed:" (ex-message e))
+      (log/stacktrace "matrix-info-reactive rebuild failed" e)
       nil)))
 
 (defn attach!

@@ -148,7 +148,7 @@
 
         false))
     (catch Exception e
-      (log/error "Failed to link converter to wireless node:" (ex-message e))
+      (log/stacktrace "Failed to link converter to wireless node" e)
       false)))
 
 (defn unlink-from-node!
@@ -172,7 +172,7 @@
 
         false))
     (catch Exception e
-      (log/error "Failed to unlink converter from wireless node:" (ex-message e))
+      (log/stacktrace "Failed to unlink converter from wireless node" e)
       false)))
 
 (defn is-linked?

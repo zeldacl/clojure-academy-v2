@@ -61,7 +61,7 @@
     (try (node-conn/get-node conn (platform-be/be-get-world-safe tile)) (catch Exception _ nil))))
 
 (defn handle-start-development [payload player]
-  (log/info "[handle-start-development] received payload=" (pr-str payload)
+  (log/debug "[handle-start-development] received payload=" (pr-str payload)
             "player=" (pr-str (some-> player entity/player-get-name)))
   (let [tile (open-tile payload player)
         world (net-helpers/get-world player)]
@@ -75,7 +75,7 @@
             structure-valid? (boolean (dev-logic/check-structure-valid? world tile))
             state (assoc state :structure-valid structure-valid?)
             result (dev-session/validate-and-start state player payload)]
-        (log/info "[handle-start-development] result ok?=" (:ok? result)
+        (log/debug "[handle-start-development] result ok?=" (:ok? result)
                   "reason=" (:reason result "none")
                   "structure-valid-now=" structure-valid?)
         (if (:ok? result)
@@ -85,7 +85,7 @@
                                      :user-name (entity/player-get-name player)
                                      :player-state-session-id session-id))]
             (machine-runtime/commit-state! tile world nil state new-state)
-            (log/info "[handle-start-development] committed, is-developing=" (:is-developing new-state)
+            (log/debug "[handle-start-development] committed, is-developing=" (:is-developing new-state)
                       "progress=" (:development-progress new-state))
             {:success true})
           {:success false :reason (:reason result "rejected")})))))

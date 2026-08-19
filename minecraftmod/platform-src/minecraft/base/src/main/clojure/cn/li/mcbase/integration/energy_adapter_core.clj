@@ -205,7 +205,7 @@
   (try
     (or (receive-energy state max-receive simulate) 0)
     (catch Exception e
-      (log/error "Error receiving energy:" (ex-message e))
+      (log/stacktrace "Error receiving energy:" e)
       0)))
 
 (defn safe-extract-energy
@@ -224,5 +224,5 @@
   (try
     (or (extract-energy state max-extract simulate) 0)
     (catch Exception e
-      (log/error "Error extracting energy:" (ex-message e))
+      (log/stacktrace "Error extracting energy:" e)
       0)))

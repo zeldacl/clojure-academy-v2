@@ -52,7 +52,7 @@
         (interaction-result/interaction-consumed? ret) InteractionResult/SUCCESS
         :else InteractionResult/PASS))
     (catch Throwable t
-      (log/info "Error handling use block event:" (.getMessage t))
+      (log/stacktrace "Error handling use block event" t)
       (.printStackTrace t)
       InteractionResult/PASS)))
 
@@ -64,7 +64,7 @@
       InteractionResult/FAIL
       InteractionResult/PASS)
     (catch Throwable t
-      (log/error "Error handling fabric attack block:" (.getMessage t))
+      (log/stacktrace "Error handling fabric attack block:" t)
       InteractionResult/PASS)))
 
 (defn handle-attack-entity
@@ -75,7 +75,7 @@
       InteractionResult/FAIL
       InteractionResult/PASS)
     (catch Throwable t
-      (log/error "Error handling fabric attack entity:" (.getMessage t))
+      (log/stacktrace "Error handling fabric attack entity:" t)
       InteractionResult/PASS)))
 
 (defn handle-use-entity
@@ -86,5 +86,5 @@
       InteractionResult/FAIL
       InteractionResult/PASS)
     (catch Throwable t
-      (log/error "Error handling fabric use entity:" (.getMessage t))
+      (log/stacktrace "Error handling fabric use entity:" t)
       InteractionResult/PASS)))

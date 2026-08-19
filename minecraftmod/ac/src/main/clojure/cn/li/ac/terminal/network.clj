@@ -27,7 +27,6 @@
             (log/stacktrace "Failed to send terminal install effect" e))))
       {:success true}
       (catch Exception e
-        (log/error "Error installing terminal:" (ex-message e))
         (log/stacktrace "Error installing terminal" e)
         {:success false :error (ex-message e)}))))
 
@@ -41,7 +40,6 @@
           {:success true :app-id app-id})
         {:success false :error "App not found"}))
     (catch Exception e
-      (log/error "Error installing app:" (ex-message e))
       (log/stacktrace "Error installing app" e)
       {:success false :error (ex-message e)})))
 
@@ -52,7 +50,6 @@
       (player/uninstall-app! player app-id)
       {:success true :app-id app-id})
     (catch Exception e
-      (log/error "Error uninstalling app:" (ex-message e))
       (log/stacktrace "Error uninstalling app" e)
       {:success false :error (ex-message e)})))
 
@@ -74,7 +71,6 @@
        :available-apps (catalog/app-ids)
        :app-count (catalog/app-count)})
     (catch Exception e
-      (log/error "Error getting terminal state:" (ex-message e))
       (log/stacktrace "Error getting terminal state" e)
       {:error (ex-message e)})))
 

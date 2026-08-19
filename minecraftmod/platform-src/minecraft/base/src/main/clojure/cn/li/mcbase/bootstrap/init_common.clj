@@ -30,11 +30,11 @@
 (defn init-from-java!
   [platform-key on-runtime-init]
   (let [ctx (aot/compile-context)]
-    (log/info "[BOOTSTRAP_TRACE_INIT] init-from-java enter"
+    (log/debug "[BOOTSTRAP_TRACE_INIT] init-from-java enter"
               {:platform platform-key
                :compile-context ctx})
     (if (aot/compiling?)
-      (log/info "[BOOTSTRAP_TRACE_INIT] skip content init during compilation/check" {:platform platform-key})
+      (log/debug "[BOOTSTRAP_TRACE_INIT] skip content init during compilation/check" {:platform platform-key})
       (do
         (assert-platform-ready! platform-key)
         (set-platform-version! platform-key)

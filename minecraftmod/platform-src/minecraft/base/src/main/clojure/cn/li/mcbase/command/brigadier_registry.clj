@@ -23,7 +23,7 @@
         (.register dispatcher node)
         (log/info "Successfully registered command:" command-id)))
     (catch Exception e
-      (log/error "Failed to register command" command-id ":" (ex-message e)))))
+      (log/stacktrace (str "Failed to register command" command-id ":" ) e))))
 
 (defn register-all-commands!
   "Register all commands from metadata with Brigadier.
@@ -44,7 +44,7 @@
      (try
        (command-hooks/init-commands!)
        (catch Exception e
-         (log/error "Failed to load command definitions:" (ex-message e))))
+         (log/stacktrace "Failed to load command definitions:" e)))
 
      (doseq [command-id (cmd-meta/get-all-command-ids)]
        (register-command! dispatcher command-id))

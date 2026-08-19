@@ -340,7 +340,7 @@
               (when (or (not server-before-open!) (server-before-open! player world open-pos))
                 (gui-open/open-gui-by-type player gui-type world open-pos)))))
         (catch Exception e
-          (log/error "Failed to open GUI" gui-type ":" (ex-message e))
+          (log/stacktrace (str "Failed to open GUI " gui-type) e)
           nil)))))
 
 (defn make-open-gui-handler

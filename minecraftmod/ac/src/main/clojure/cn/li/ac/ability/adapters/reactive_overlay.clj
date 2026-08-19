@@ -1192,7 +1192,7 @@
             prev (aget ^objects hud-trace-state 0)]
         (when (not= act prev)
           (aset ^objects hud-trace-state 0 (Boolean/valueOf act))
-          (log/info "[HUD-TRACE] activated?"
+          (log/debug "[HUD-TRACE] activated?"
                     {:to act
                      :session-id (runtime-hooks/client-session-id)
                      :uuid player-uuid})))

@@ -19,5 +19,5 @@
             (float (or (:min-count spec) 1.0))
             (float (or (:max-count spec) 1.0))))))
     (catch Throwable t
-      (log/error "Error handling loot table modify event:" (.getMessage t))
+      (log/stacktrace "Error handling loot table modify event:" t)
       (.printStackTrace t))))

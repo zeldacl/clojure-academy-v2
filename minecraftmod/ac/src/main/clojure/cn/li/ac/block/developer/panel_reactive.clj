@@ -82,18 +82,18 @@
     ;; Block dev path — send network message for timed session
     (let [owner (try (container-state/owner-from-container container)
                      (catch Exception e
-                       (log/error "[req-start-development!] owner error:" (ex-message e))
+                       (log/stacktrace "[req-start-development!] owner error" e)
                        nil))
           msg-id (dev-msg :start-development)
           payload (action-payload/action-payload container (merge {:action action} extra))]
-      (log/info "[req-start-development!] sending" msg-id "action=" action
+      (log/debug "[req-start-development!] sending" msg-id "action=" action
                 "owner=" (pr-str owner) "payload=" (pr-str payload))
       (net-client/send-to-server
         owner
         msg-id
         payload
         (fn [resp]
-          (log/info "[req-start-development!] response:" (pr-str resp))
+          (log/debug "[req-start-development!] response:" (pr-str resp))
           (when callback (callback resp)))))))
 
 (defn- texture-path-from-category-icon
@@ -385,7 +385,7 @@
   (when (:tile-entity container)
     (let [payload (action-payload/action-payload container {})
           owner (try (container-state/owner-from-container container)
-                     (catch Exception e (log/error "[dev-panel] owner error:" (ex-message e)) nil))]
+                     (catch Exception e (log/stacktrace "[dev-panel] owner error" e) nil))]
       (net-client/send-to-server
         owner (dev-msg :list-nodes) payload
         (fn [resp]

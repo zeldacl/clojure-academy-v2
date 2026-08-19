@@ -51,4 +51,4 @@
           (finally
             (pose/pop-pose pose-stack))))
       (catch Exception e
-        (log/error "Error in silbarn renderer:" (ex-message e))))))
+        (log/debug "Error in silbarn renderer:" (ex-message e))))))

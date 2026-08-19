@@ -32,7 +32,7 @@
               :camera-pos cam-pos
               :tick tick})))))
     (catch Exception e
-      (log/error "Fabric level effect render failed" e))))
+      (log/debug "Fabric level effect render failed:" (ex-message e)))))
 
 (defn init!
   []

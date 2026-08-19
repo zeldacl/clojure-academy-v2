@@ -267,7 +267,7 @@
              player-id :directed-blastwave (if (seq entities)
                                              (cfg-double :progression.exp-hit)
                                              (cfg-double :progression.exp-miss)))
-            (log/info "DirectedBlastwave executed" "charge" charge-ticks
+            (log/debug "DirectedBlastwave executed" "charge" charge-ticks
                       "entities" (count entities))))
         (terminate-with-end! ctx-id false)))))
 

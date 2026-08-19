@@ -106,11 +106,11 @@
           (when (and respond-fn (>= request-id 0))
             (respond-fn request-id (or response {}))))
         (catch Exception e
-          (log/error "Error handling request" msg-id ":" (ex-message e))
+          (log/stacktrace (str "Error handling request " msg-id) e)
           (log/stacktrace "Error handling request" e)
           (when (and respond-fn (>= request-id 0))
             (respond-fn request-id {:success false :error (ex-message e)})))))
     (do
-      (log/warn "No handler registered for" msg-id)
+      (log/debug "No handler registered for" msg-id)
       (when (and respond-fn (>= request-id 0))
         (respond-fn request-id {:success false :error "no-handler"})))))

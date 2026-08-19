@@ -48,7 +48,7 @@
 (defn- handle-list-response!
   [rt owner cfg routing-payload rebuild! connected-row-logo-path resp]
   (let [{:keys [disconnect-msg connect-msg name-fn connect-payload-fn]} cfg]
-    (log/info "[wireless-reactive] list response" (pr-str (select-keys resp [:linked :avail])))
+    (log/debug "[wireless-reactive] list response" (pr-str (select-keys resp [:linked :avail])))
     (view/rebuild-page!
       rt
       {:linked (:linked resp)
@@ -85,7 +85,7 @@
         ;; Atom breaks self-reference without nesting rebuild! inside response callbacks.
         rebuild!* (atom nil)
         rebuild! (fn []
-                   (log/info "[wireless-reactive] list request" (list-msg) routing-payload)
+                   (log/debug "[wireless-reactive] list request" (list-msg) routing-payload)
                    (net-client/send-to-server
                      owner
                      (list-msg)

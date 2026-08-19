@@ -15,6 +15,6 @@
 (defn open-gui-for-result
   [gui-id player world _pos tile-entity]
   (when (and tile-entity (not (.isClientSide ^Level world)))
-    (log/info "[RIGHT-CLICK] Opening GUI on server side...")
+    (log/debug "[RIGHT-CLICK] Opening GUI on server side...")
     (when-let [f @open-gui-fn*]
       (f player gui-id tile-entity))))

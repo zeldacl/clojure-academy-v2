@@ -16,7 +16,7 @@
     (init-fn)
     true
     (catch Exception e
-      (log/error error-prefix (.getMessage e))
+      (log/stacktrace error-prefix e)
       (.printStackTrace e)
       false)))
 

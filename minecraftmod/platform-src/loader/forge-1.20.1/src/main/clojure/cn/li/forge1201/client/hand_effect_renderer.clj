@@ -45,7 +45,6 @@
                   (float rot-z))
             (.setCanceled evt true))))
       (catch Exception e
-        (log/error "Transformed hand render failed" e)
         (log/stacktrace "Transformed hand render failed" e)))))
 
 (defn init! []

@@ -166,7 +166,7 @@
       (executor-fn action-map context)
       (execute-action-impl action-map context))
     (catch Exception e
-      (log/error "Error executing action:" (ex-message e))
+      (log/stacktrace "Error executing action" e)
       {:success? false
        :message (str "Error: " (ex-message e))})))
 

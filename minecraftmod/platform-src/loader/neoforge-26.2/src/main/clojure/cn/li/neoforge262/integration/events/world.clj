@@ -25,7 +25,7 @@
               saved (or from-storage from-cache)]
           (world-lifecycle/dispatch-world-load level saved))))
     (catch Throwable t
-      (log/error "Error handling world load event:" (.getMessage t))
+      (log/stacktrace "Error handling world load event:" t)
       (.printStackTrace t))))
 
 (defn handle-world-save
@@ -37,7 +37,7 @@
           (wl-saved/save-world-lifecycle-saved-data! level saved)
           (world-save-cache/remember-saved-data! level saved))))
     (catch Throwable t
-      (log/error "Error handling world save event:" (.getMessage t))
+      (log/stacktrace "Error handling world save event:" t)
       (.printStackTrace t))))
 
 (defn handle-world-unload
@@ -50,7 +50,7 @@
         (world-save-cache/clear-world-saved-data! level)
         (world-lifecycle/dispatch-world-unload level)))
     (catch Throwable t
-      (log/error "Error handling world unload event:" (.getMessage t))
+      (log/stacktrace "Error handling world unload event:" t)
       (.printStackTrace t))))
 
 (defn handle-world-tick
@@ -61,7 +61,7 @@
                  (not (.isClientSide level)))
         (world-lifecycle/dispatch-world-tick level)))
     (catch Throwable t
-      (log/error "Error handling world tick event:" (.getMessage t))
+      (log/debug "Error handling world tick event:" (.getMessage t))
       (.printStackTrace t))))
 
 ;; Per-world-key → Forge SavedData mapping. Populated on world load, cleared

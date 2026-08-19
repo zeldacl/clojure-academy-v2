@@ -332,7 +332,7 @@
       (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
             below-be (world/get-tile-entity world below-pos)
             below-id (when below-be (platform-be/get-block-id below-be))]
-        (log/info "wind-gen pillar place rejected:"
+        (log/debug "wind-gen pillar place rejected:"
                   {:pos [(pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)]
                    :below-pos [(pos/pos-x below-pos) (pos/pos-y below-pos) (pos/pos-z below-pos)]
                    :below-id below-id
@@ -350,7 +350,7 @@
           below-be (world/get-tile-entity world below-pos)
           below-id (when below-be (platform-be/get-block-id below-be))]
       (when-not (wind-pillar-id? below-id)
-        (log/info "wind-gen-main place rejected: no pillar directly below"
+        (log/debug "wind-gen-main place rejected: no pillar directly below"
                   {:pos [(pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)]
                    :below-pos [(pos/pos-x below-pos) (pos/pos-y below-pos) (pos/pos-z below-pos)]
                    :below-id below-id
@@ -384,10 +384,10 @@
                          nil))]
         node
         (do
-          (log/info "[wind-gen get-linked-node] connection found but node tile not resolved for gen at" pos-str)
+          (log/debug "[wind-gen get-linked-node] connection found but node tile not resolved for gen at" pos-str)
           nil))
       (do
-        (log/info "[wind-gen get-linked-node] no connection found for generator at" pos-str)
+        (log/debug "[wind-gen get-linked-node] no connection found for generator at" pos-str)
         nil))))
 
 ;; ============================================================================

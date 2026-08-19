@@ -33,8 +33,8 @@
         ^Player player player
         world (.level player)
         pos (provider-common/tile->pos tile-entity player)]
-    (log/info log-prefix "createMenu called: gui-id=" gui-id "window-id=" window-id "player=" (.getGameProfile player))
-    (log/info log-prefix "Creating server-side container...")
+    (log/debug log-prefix "createMenu called: gui-id=" gui-id "window-id=" window-id "player=" (.getGameProfile player))
+    (log/debug log-prefix "Creating server-side container...")
     (let [clj-container (create-container-fn handler gui-id player world pos)]
       (when-not clj-container
         (throw (ex-info "Failed to create Clojure container"
@@ -43,5 +43,5 @@
         (when-not menu-type
           (throw (ex-info "MenuType not registered"
                           {:gui-id gui-id :platform platform-key})))
-        (log/info log-prefix "MenuType found, creating menu proxy...")
+        (log/debug log-prefix "MenuType found, creating menu proxy...")
         (create-menu-proxy-fn window-id menu-type clj-container {:player player})))))
