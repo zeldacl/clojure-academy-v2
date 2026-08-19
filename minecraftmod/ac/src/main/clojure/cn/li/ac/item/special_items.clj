@@ -111,6 +111,11 @@
   (if (<= (int (pitem/stack-count item-stack)) 1)
     (set-matter-kind! item-stack target-kind)
     (do
+      ;; Upstream ItemMatterUnit.onItemRightClick: `if(!isCreativeMode)
+      ;; stack.shrink(1)` — the held stack shrinks in survival, but creative
+      ;; players keep their stack while the filled unit is merged into the
+      ;; inventory. player-consume-main-hand-item! mirrors exactly that
+      ;; (creative → no-op, true).
       (entity/player-consume-main-hand-item! player 1)
       (when-let [converted (make-matter-unit-stack target-kind)]
         (entity/player-give-item-stack! player converted)))))
