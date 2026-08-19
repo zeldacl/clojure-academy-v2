@@ -20,8 +20,10 @@ dependencies {
 
     // Loom's include() embeds the Clojure runtime in the normal jar for
     // non-remapping builds.  Keep these coordinates in one catalog-derived
-    // list so the platform and Fabric metadata cannot drift apart.
-    clojureRuntimeLibraries.each { dependencyNotation ->
+    // list so the platform and Fabric metadata cannot drift apart. The
+    // packaged set embeds the slim clojure variant; the implementation
+    // classpath above keeps the full jar for dev runs.
+    packagedRuntimeLibraries.each { dependencyNotation ->
         include(dependencyNotation)
     }
 
