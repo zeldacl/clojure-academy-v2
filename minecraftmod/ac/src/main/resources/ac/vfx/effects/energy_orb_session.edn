@@ -4,7 +4,8 @@
  :revision 1
  :lifecycle :session
  ;; Generic moving energy body.  The effect deliberately has no skill name:
- ;; a caller supplies geometry, material, palette, audio and lifetime.
+ ;; a caller supplies geometry, material, palette and lifetime; audio is a
+ ;; separate composable effect.
  :inputs
  {:spawn {:position :vec3
           :radius :double

@@ -13,5 +13,7 @@
          :children [{:at 0
                      :node {:component :vfx/audio-loop
                             :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :volume]}
+                            :pitch {:ref [:input :pitch]}
                             :instance-key [:effect-instance :audio-loop]
                             :stop-on-destroy? true}}]}}

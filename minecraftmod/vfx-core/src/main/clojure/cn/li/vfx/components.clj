@@ -62,7 +62,8 @@
            [:vfx/first-person-transform #{:offset :child}]
            [:vfx/camera #{:operation :value :duration-ticks}]
            [:vfx/audio-one-shot #{:sound-id :position}]
-           [:vfx/audio-loop #{:sound-id :instance-key :stop-on-destroy?}]]]
+           [:vfx/audio-loop #{:sound-id :volume :pitch :instance-key
+                              :stop-on-destroy?}]]]
     (when-not (descriptor id)
       (register! {:id id
                   :revision 1

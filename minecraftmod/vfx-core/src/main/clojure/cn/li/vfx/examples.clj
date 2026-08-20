@@ -63,4 +63,6 @@
                                 :child ring-example}
    :vfx/camera {:component :vfx/camera :operation :pitch-impulse :value 0.0 :duration-ticks 1}
    :vfx/audio-one-shot {:component :vfx/audio-one-shot :sound-id "generic" :position point-example}
-   :vfx/audio-loop {:component :vfx/audio-loop :sound-id "generic" :instance-key [:effect-instance :generic] :stop-on-destroy? true}})
+   :vfx/audio-loop {:component :vfx/audio-loop :sound-id "generic"
+                    :volume 1.0 :pitch 1.0
+                    :instance-key [:effect-instance :generic] :stop-on-destroy? true}})
