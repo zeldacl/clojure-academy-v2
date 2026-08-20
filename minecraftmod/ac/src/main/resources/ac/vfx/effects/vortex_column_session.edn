@@ -9,8 +9,10 @@
  :inputs
  {:spawn {:base :vec3 :axis :vec3 :height :double :spacing :object
           :radius :object :count-limit :long :life-ticks :long
-          :seed :long :orientation {:type :object :default nil}}
-  :update {:base :vec3 :orientation {:type :object :default nil}}
+          :seed :long :alpha {:type :double :default 1.0}
+          :orientation {:type :object :default nil}}
+  :update {:base :vec3 :alpha {:type :double :default 1.0}
+           :orientation {:type :object :default nil}}
   :destroy {:fade-ticks :long}}
  :state-slots {:age :double :seed :long}
  :graph {:component :vfx/timeline
@@ -19,6 +21,7 @@
                      :node {:component :vfx/vortex-column
                             :base {:ref [:input :base]}
                             :axis {:ref [:input :axis]}
+                            :alpha {:ref [:input :alpha]}
                             :orientation {:ref [:input :orientation]}
                             :height {:ref [:input :height]}
                             :spacing {:ref [:input :spacing]}

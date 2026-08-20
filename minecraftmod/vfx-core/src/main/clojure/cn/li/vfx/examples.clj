@@ -18,7 +18,7 @@
                    :spacing {:min 1.0 :max 1.0} :radius {:min 0.1 :max 0.1}
                    :count-limit 1 :life-ticks 1 :seed {:ref [:state :seed]}}
    :vfx/vortex-column {:component :vfx/vortex-column :base point-example
-                       :axis {:vec3 [0.0 1.0 0.0]} :orientation nil :height 1.0
+                       :axis {:vec3 [0.0 1.0 0.0]} :alpha 1.0 :orientation nil :height 1.0
                        :spacing {:min 1.0 :max 1.0}
                        :radius {:min 0.1 :max 0.1}
                        :count-limit 1 :life-ticks 1

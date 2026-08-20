@@ -35,18 +35,28 @@
    :body {:component :flow/sequence
           :steps [{:component :effect/vfx :effect-id :vortex-column-session :operation :spawn
                    :instance-key [:activation :storm-wing-vortex-0] :audience {:type :nearby :radius 64.0}
-                   :payload {:base {:expr :vec3/add :args [{:from :caster/body} {:vec3 [-0.1 -0.3 0.1]}]}
+                   :payload {:base {:from :caster/body}
                              :axis {:vec3 [0.0 1.0 0.0]}
-                             :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                             :alpha 0.0
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                           :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                           :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                           :local-offset {:vec3 [-0.1 -0.3 0.1]}
+                                           :forward {:from :movement/forward} :right {:from :movement/right}
                                            :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                            :separation-y-degrees 45.0 :separation-z-degrees 45.0}
                              :height 2.0 :spacing {:min 0.18 :max 0.32}
                              :radius {:min 0.1 :max 0.16} :count-limit 64 :life-ticks 30 :seed {:from :rng/seed}}}
                   {:component :effect/vfx :effect-id :vortex-column-session :operation :spawn
                    :instance-key [:activation :storm-wing-vortex-1] :audience {:type :nearby :radius 64.0}
-                   :payload {:base {:expr :vec3/add :args [{:from :caster/body} {:vec3 [0.1 -0.3 0.1]}]}
+                   :payload {:base {:from :caster/body}
                              :axis {:vec3 [0.0 1.0 0.0]}
-                             :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                             :alpha 0.0
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                           :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                           :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                           :local-offset {:vec3 [0.1 -0.3 0.1]}
+                                           :forward {:from :movement/forward} :right {:from :movement/right}
                                            :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                            :separation-y-degrees -45.0 :separation-z-degrees -45.0}
                              :height 2.0 :spacing {:min 0.18 :max 0.32}
@@ -54,9 +64,14 @@
                              :seed {:expr :math/add :args [{:from :rng/seed} 1]}}}
                   {:component :effect/vfx :effect-id :vortex-column-session :operation :spawn
                    :instance-key [:activation :storm-wing-vortex-2] :audience {:type :nearby :radius 64.0}
-                   :payload {:base {:expr :vec3/add :args [{:from :caster/body} {:vec3 [-0.1 -0.5 -0.1]}]}
+                   :payload {:base {:from :caster/body}
                              :axis {:vec3 [0.0 1.0 0.0]}
-                             :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                             :alpha 0.0
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                           :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                           :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                           :local-offset {:vec3 [-0.1 -0.5 -0.1]}
+                                           :forward {:from :movement/forward} :right {:from :movement/right}
                                            :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                            :separation-y-degrees -45.0 :separation-z-degrees 45.0}
                              :height 2.0 :spacing {:min 0.18 :max 0.32}
@@ -64,9 +79,14 @@
                              :seed {:expr :math/add :args [{:from :rng/seed} 2]}}}
                   {:component :effect/vfx :effect-id :vortex-column-session :operation :spawn
                    :instance-key [:activation :storm-wing-vortex-3] :audience {:type :nearby :radius 64.0}
-                   :payload {:base {:expr :vec3/add :args [{:from :caster/body} {:vec3 [0.1 -0.5 -0.1]}]}
+                   :payload {:base {:from :caster/body}
                              :axis {:vec3 [0.0 1.0 0.0]}
-                             :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                             :alpha 0.0
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                           :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                           :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                           :local-offset {:vec3 [0.1 -0.5 -0.1]}
+                                           :forward {:from :movement/forward} :right {:from :movement/right}
                                            :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                            :separation-y-degrees 45.0 :separation-z-degrees -45.0}
                              :height 2.0 :spacing {:min 0.18 :max 0.32}
@@ -76,7 +96,10 @@
                    :instance-key [:activation :storm-wing-particles] :audience {:type :nearby :radius 64.0}
                    :payload {:position {:from :caster/body} :rate-per-tick 12 :limit 256
                              :particle {:material :block-crack :block-id "minecraft:dirt" :life-ticks 12
-                                        :speed 1.0 :spread {:x 8.0 :y 8.0 :z 8.0}}}}
+                                        :speed 1.0 :spawn-region {:type :sphere-shell :radius {:min 3.0 :max 8.0}}
+                                        :velocity {:type :tangent-swirl :axis {:vec3 [0.0 1.0 0.0]}
+                                                   :radial-scale 0.7 :vertical-jitter 0.06}
+                                        :spread {:x 8.0 :y 8.0 :z 8.0}}}}
                   {:component :effect/vfx :effect-id :audio-loop-session :operation :spawn
                    :instance-key [:activation :storm-wing-audio] :audience {:type :nearby :radius 64.0}
                    :payload {:position {:from :caster/body} :sound-id "academy:vecmanip.storm_wing"
@@ -85,19 +108,51 @@
   {:inputs {}
    :body {:component :flow/sequence
           :steps [{:component :effect/vfx :effect-id :vortex-column-session :operation :update :instance-key [:activation :storm-wing-vortex-0]
-                   :payload {:base {:from :caster/body} :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                   :payload {:base {:from :caster/body} :alpha {:expr :math/select
+                                                                 :args [{:expr :math/eq :args [{:ref [:session :phase]} 0]}
+                                                                        {:expr :math/mul :args [0.7 {:expr :math/clamp
+                                                                                                     :args [{:expr :math/div :args [{:ref [:session :charge-ticks]} {:tunable :charge-time}]} 0.0 1.0]}]}
+                                                                        0.7]}
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                                                       :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                                                       :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                                                       :forward {:from :movement/forward} :right {:from :movement/right}
                                                                        :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                                                        :separation-y-degrees 45.0 :separation-z-degrees 45.0}}}
                   {:component :effect/vfx :effect-id :vortex-column-session :operation :update :instance-key [:activation :storm-wing-vortex-1]
-                   :payload {:base {:from :caster/body} :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                   :payload {:base {:from :caster/body} :alpha {:expr :math/select
+                                                                 :args [{:expr :math/eq :args [{:ref [:session :phase]} 0]}
+                                                                        {:expr :math/mul :args [0.7 {:expr :math/clamp
+                                                                                                     :args [{:expr :math/div :args [{:ref [:session :charge-ticks]} {:tunable :charge-time}]} 0.0 1.0]}]}
+                                                                        0.7]}
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                                                       :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                                                       :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                                                       :forward {:from :movement/forward} :right {:from :movement/right}
                                                                        :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                                                        :separation-y-degrees -45.0 :separation-z-degrees -45.0}}}
                   {:component :effect/vfx :effect-id :vortex-column-session :operation :update :instance-key [:activation :storm-wing-vortex-2]
-                   :payload {:base {:from :caster/body} :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                   :payload {:base {:from :caster/body} :alpha {:expr :math/select
+                                                                 :args [{:expr :math/eq :args [{:ref [:session :phase]} 0]}
+                                                                        {:expr :math/mul :args [0.7 {:expr :math/clamp
+                                                                                                     :args [{:expr :math/div :args [{:ref [:session :charge-ticks]} {:tunable :charge-time}]} 0.0 1.0]}]}
+                                                                        0.7]}
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                                                       :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                                                       :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                                                       :forward {:from :movement/forward} :right {:from :movement/right}
                                                                        :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                                                        :separation-y-degrees -45.0 :separation-z-degrees 45.0}}}
                   {:component :effect/vfx :effect-id :vortex-column-session :operation :update :instance-key [:activation :storm-wing-vortex-3]
-                   :payload {:base {:from :caster/body} :orientation {:forward {:from :movement/forward} :right {:from :movement/right}
+                   :payload {:base {:from :caster/body} :alpha {:expr :math/select
+                                                                 :args [{:expr :math/eq :args [{:ref [:session :phase]} 0]}
+                                                                        {:expr :math/mul :args [0.7 {:expr :math/clamp
+                                                                                                     :args [{:expr :math/div :args [{:ref [:session :charge-ticks]} {:tunable :charge-time}]} 0.0 1.0]}]}
+                                                                        0.7]}
+                             :orientation {:source :owner-body :pitch-scale 0.2
+                                                                       :anchor-offset {:vec3 [0.0 1.6 0.0]}
+                                                                       :pre-translation {:vec3 [0.0 0.2 -0.5]}
+                                                                       :forward {:from :movement/forward} :right {:from :movement/right}
                                                                        :up {:vec3 [0.0 1.0 0.0]} :back-tilt-degrees 70.0
                                                                        :separation-y-degrees 45.0 :separation-z-degrees -45.0}}}
                   {:component :effect/vfx :effect-id :particle-session :operation :update :instance-key [:activation :storm-wing-particles] :payload {:position {:from :caster/body}}}
@@ -143,39 +198,49 @@
                                   {:component :flow/branch
                                    :when {:expr :math/gt :args [{:ref [:session :charge-ticks]} {:tunable :charge-time}]}
                                    :then {:component :flow/sequence
-                                          :steps [{:component :session/patch :entries [{:path [:phase] :mode :assign :value 1}]}
+                                          :steps [{:component :session/patch :entries [{:path [:phase] :mode :assign :value 1}
+                                                                                         {:path [:charge-ticks] :mode :assign :value 0}]}
                                                   {:component :flow/branch
                                                    :when {:expr :math/gte :args [{:from :progression/mastery} 1.0]}
                                                    :then {:component :entity/radial-impulse :owner {:from :caster/id} :world-id {:from :world/id}
                                                           :center {:from :caster/body} :radius {:tunable :mastery-knockback-radius}
                                                           :speed-min {:tunable :mastery-knockback-speed :path [0]}
                                                           :speed-max {:tunable :mastery-knockback-speed :path [1]} :seed {:from :rng/seed}}
-                                                   :else nil}]}
+                                                   :else nil}
+                                                  {:component :vfx-update}]}
                                    :else nil}]}
                    :else {:component :flow/sequence
                           :steps [{:component :score/mark :tag :flight-tick}
+                                  {:component :vfx-update}
                                   {:component :cost/spend :budget :flight
                                    :on-insufficient {:component :flow/sequence
                                                      :steps [{:component :owner/can-fly :enabled? {:ref [:session :previous-can-fly?]}}
                                                              {:component :cooldown/start :name :main}
                                                              {:component :vfx-destroy}
                                                              {:component :flow/finish :outcome :insufficient-resource :finish-session? true}]}}]}}
-                  {:component :vfx-update}
                   {:component :flow/finish :outcome :continue}]}
   :release {:component :flow/finish :outcome :continue}
   :abort {:component :flow/sequence
           :steps [{:component :owner/can-fly :enabled? {:ref [:session :previous-can-fly?]}}
                   {:component :cooldown/start :name :main} {:component :vfx-destroy}
                   {:component :flow/finish :outcome :aborted :finish-session? true}]}
-  :events {:movement/forward-press {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/forward}}]}
-           :movement/forward-tick {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/forward}}]}
+  :events {:movement/forward-press {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                    :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/forward}}]}}
+           :movement/forward-tick {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                   :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/forward}}]}}
            :movement/forward-release {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value nil}]}
-           :movement/back-press {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/back}}]}
-           :movement/back-tick {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/back}}]}
+           :movement/back-press {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                 :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/back}}]}}
+           :movement/back-tick {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/back}}]}}
            :movement/back-release {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value nil}]}
-           :movement/left-press {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/left}}]}
-           :movement/left-tick {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/left}}]}
+           :movement/left-press {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                 :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/left}}]}}
+           :movement/left-tick {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/left}}]}}
            :movement/left-release {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value nil}]}
-           :movement/right-press {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/right}}]}
-           :movement/right-tick {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/right}}]}
+           :movement/right-press {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                  :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/right}}]}}
+           :movement/right-tick {:component :flow/branch :when {:expr :math/eq :args [{:ref [:session :phase]} 1]}
+                                 :then {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value {:from :movement/right}}]}}
            :movement/right-release {:component :session/patch :entries [{:path [:move-direction] :mode :assign :value nil}]}}}}

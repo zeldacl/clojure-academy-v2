@@ -45,7 +45,8 @@
            [:vfx/beam-bounds #{:start :end :radius}]
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
            [:vfx/vortex-column #{:base :axis :height :spacing :radius
-                                 :count-limit :life-ticks :seed :orientation}]
+                                 :count-limit :life-ticks :seed :alpha
+                                 :orientation}]
            [:vfx/ring #{:center :radius :segments}]
            [:vfx/billboard-sequence #{:anchor :texture-pattern :frame-count}]
            ;; A model marker is deliberately geometry/asset agnostic.  The
