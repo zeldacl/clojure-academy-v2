@@ -5,4 +5,5 @@
           :scatter-bomb :migrated
           :thunder-bolt :pending
           :vec-reflection :migrated
-          :groundshock :pending}}
+          :groundshock :pending
+          :mark-teleport :migrated}}

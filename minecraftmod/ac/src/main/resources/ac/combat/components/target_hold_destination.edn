@@ -1,0 +1,39 @@
+{:schema-version 2
+ :kind :composite
+ :id :target/hold-destination
+ :revision 1
+ ;; Generic charged/held target selection.  It combines a linear hold-range
+ ;; growth, a configured maximum range, and an available-resource ceiling;
+ ;; none of these inputs identify a skill or a resource type.
+ :inputs
+ {:origin {:type :object}
+  :direction {:type :object}
+  :hold-ticks {:type :object}
+  :range-per-hold-tick {:type :object}
+  :maximum-range {:type :object}
+  :available-resource {:type :object}
+  :resource-per-distance {:type :object}
+  :policy {:type :object}
+  :include-entities? {:type :object :default true}
+  :include-blocks? {:type :object :default true}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :data/bind
+           :to :hold-distance
+           :value {:expr :math/min
+                   :args [{:expr :math/min
+                           :args [{:expr :math/mul
+                                   :args [{:ref [:input :range-per-hold-tick]}
+                                          {:expr :math/add
+                                           :args [{:ref [:input :hold-ticks]} 1.0]}]}
+                                  {:ref [:input :maximum-range]}]}
+                          {:expr :math/div
+                           :args [{:ref [:input :available-resource]}
+                                  {:ref [:input :resource-per-distance]}]}]}}
+          {:component :target/raycast-destination
+           :origin {:ref [:input :origin]}
+           :direction {:ref [:input :direction]}
+           :distance {:ref [:slot :hold-distance]}
+           :policy {:ref [:input :policy]}
+           :include-entities? {:ref [:input :include-entities?]}
+           :include-blocks? {:ref [:input :include-blocks?]}}]}}

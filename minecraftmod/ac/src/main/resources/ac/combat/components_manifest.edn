@@ -10,4 +10,10 @@
               :resource "ac/combat/components/charged_area_damage.edn"}
              {:kind :composite
               :id :combat/projectile-reflection-scan
-              :resource "ac/combat/components/projectile_reflection_scan.edn"}]}
+              :resource "ac/combat/components/projectile_reflection_scan.edn"}
+             {:kind :composite
+              :id :target/raycast-destination
+              :resource "ac/combat/components/target_raycast_destination.edn"}
+             {:kind :composite
+              :id :target/hold-destination
+              :resource "ac/combat/components/target_hold_destination.edn"}]}

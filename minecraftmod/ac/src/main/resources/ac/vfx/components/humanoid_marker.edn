@@ -1,0 +1,54 @@
+{:schema-version 1
+ :kind :composite
+ :id :vfx/humanoid-marker
+ :revision 1
+ :inputs
+ {:anchor {:type :vec3}
+  :owner {:type :object :default nil}
+  :texture-pattern {:type :string}
+  :frame-count {:type :long}
+  :frame-period-ticks {:type :double :default 2.5}
+  :color {:type :object :default [255 255 255 255]}
+  :facing {:type :keyword :default :owner}}
+ :body
+ {:component :vfx/model-marker
+  :anchor {:ref [:input :anchor]}
+  :texture-pattern {:ref [:input :texture-pattern]}
+  :frame-count {:ref [:input :frame-count]}
+  :frame-period-ticks {:ref [:input :frame-period-ticks]}
+  :color {:ref [:input :color]}
+  :facing {:ref [:input :facing]}
+  :owner {:ref [:input :owner]}
+  :no-depth-test? true
+  :no-cull? true
+  ;; Standard ModelBiped proportions.  These are neutral reusable geometry,
+  ;; not a skill rule. UV rectangles are normalized to a 256x128 atlas.
+  :parts
+  [{:hw 0.25 :hh 0.25 :hd 0.25 :cx 0.0 :cy 0.25
+    :front [0.125 0.25 0.25 0.5] :back [0.375 0.5 0.25 0.5]
+    :right [0.0 0.125 0.25 0.5] :left [0.25 0.375 0.25 0.5]
+    :top [0.125 0.25 0.0 0.25] :bottom [0.25 0.375 0.0 0.25]}
+   {:hw 0.28125 :hh 0.28125 :hd 0.28125 :cx 0.0 :cy 0.25
+    :front [0.625 0.75 0.25 0.5] :back [0.875 1.0 0.25 0.5]
+    :right [0.5 0.625 0.25 0.5] :left [0.75 0.875 0.25 0.5]
+    :top [0.625 0.75 0.0 0.25] :bottom [0.75 0.875 0.0 0.25]}
+   {:hw 0.25 :hh 0.375 :hd 0.125 :cx 0.0 :cy -0.375
+    :front [0.3125 0.4375 0.5 0.875] :back [0.5 0.625 0.5 0.875]
+    :right [0.25 0.3125 0.5 0.875] :left [0.4375 0.5 0.5 0.875]
+    :top [0.3125 0.4375 0.5 0.625] :bottom [0.3125 0.4375 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx 0.375 :cy -0.375
+    :front [0.6875 0.75 0.5 0.875] :back [0.75 0.8125 0.5 0.875]
+    :right [0.625 0.6875 0.5 0.875] :left [0.8125 0.875 0.5 0.875]
+    :top [0.6875 0.75 0.5 0.625] :bottom [0.6875 0.75 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx -0.375 :cy -0.375
+    :front [0.5625 0.625 0.5 0.875] :back [0.5 0.5625 0.5 0.875]
+    :right [0.5 0.5625 0.5 0.875] :left [0.5625 0.625 0.5 0.875]
+    :top [0.5625 0.625 0.5 0.625] :bottom [0.5625 0.625 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx 0.125 :cy -1.125
+    :front [0.0625 0.125 0.5 0.875] :back [0.0 0.0625 0.5 0.875]
+    :right [0.0 0.0625 0.5 0.875] :left [0.0625 0.125 0.5 0.875]
+    :top [0.0625 0.125 0.5 0.625] :bottom [0.0625 0.125 0.75 0.875]}
+   {:hw 0.125 :hh 0.375 :hd 0.125 :cx -0.125 :cy -1.125
+    :front [0.1875 0.25 0.5 0.875] :back [0.125 0.1875 0.5 0.875]
+    :right [0.125 0.1875 0.5 0.875] :left [0.1875 0.25 0.5 0.875]
+    :top [0.1875 0.25 0.5 0.625] :bottom [0.1875 0.25 0.75 0.875]}]}}

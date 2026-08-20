@@ -53,7 +53,6 @@
    cn.li.ac.content.ability.teleporter.flesh-ripping
    cn.li.ac.content.ability.teleporter.location-teleport
    cn.li.ac.content.ability.teleporter.location-teleport-reactive
-   cn.li.ac.content.ability.teleporter.mark-teleport
    cn.li.ac.content.ability.teleporter.passive-hooks
    cn.li.ac.content.ability.teleporter.penetrate-teleport
    cn.li.ac.content.ability.teleporter.release-cast-base
@@ -65,7 +64,6 @@
   [cn.li.ac.content.ability.teleporter.flashing-fx
    cn.li.ac.content.ability.teleporter.flesh-ripping-fx
    cn.li.ac.content.ability.teleporter.location-teleport-fx
-   cn.li.ac.content.ability.teleporter.mark-teleport-fx
    cn.li.ac.content.ability.teleporter.penetrate-teleport-fx
    cn.li.ac.content.ability.teleporter.shift-teleport-fx
    cn.li.ac.content.ability.teleporter.teleporter-crit-fx

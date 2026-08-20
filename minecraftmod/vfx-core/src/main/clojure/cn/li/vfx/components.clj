@@ -46,6 +46,11 @@
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
            [:vfx/ring #{:center :radius :segments}]
            [:vfx/billboard-sequence #{:anchor :texture-pattern :frame-count}]
+           ;; A model marker is deliberately geometry/asset agnostic.  The
+           ;; reusable humanoid shape lives in an AC VFX composite EDN; core
+           ;; only validates and lowers the generic model/UV contract.
+           [:vfx/model-marker #{:anchor :texture-pattern :frame-count
+                                :frame-period-ticks :parts :color :facing}]
            [:vfx/emitter #{:anchor :rate-per-tick :limit}]
            [:vfx/ribbon #{:points :max-points}]
            [:vfx/fade #{:from-tick :to-tick :child}]

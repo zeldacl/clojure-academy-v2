@@ -20,7 +20,6 @@
     cn.li.ac.content.ability.teleporter.flashing-fx/init!
     cn.li.ac.content.ability.teleporter.flesh-ripping-fx/init!
     cn.li.ac.content.ability.teleporter.location-teleport-fx/init!
-    cn.li.ac.content.ability.teleporter.mark-teleport-fx/init!
     cn.li.ac.content.ability.teleporter.penetrate-teleport-fx/init!
     cn.li.ac.content.ability.teleporter.shift-teleport-fx/init!
     cn.li.ac.content.ability.teleporter.teleporter-crit-fx/init!
@@ -35,7 +34,7 @@
     cn.li.ac.content.ability.vecmanip.vec-deviation-fx/init!])
 
 (deftest all-content-ability-fx-inits-register-via-fx-spec-test
-  (is (= 30 (count fx-init-symbols)))
+  (is (= 29 (count fx-init-symbols)))
   (doseq [init-sym fx-init-symbols]
     (let [register-calls* (atom [])]
       (with-redefs [fx-spec/register! (fn [spec] (swap! register-calls* conj spec))]

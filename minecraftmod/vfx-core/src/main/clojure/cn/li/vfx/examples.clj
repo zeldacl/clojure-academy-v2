@@ -21,6 +21,24 @@
    :vfx/billboard-sequence {:component :vfx/billboard-sequence
                             :anchor point-example :texture-pattern "generic/%d.png"
                             :frame-count 1 :frame-duration-ms 40 :half-size 0.1}
+   :vfx/model-marker {:component :vfx/model-marker
+                      :anchor point-example
+                      :owner {:ref [:input :owner]}
+                      :texture-pattern "generic/%d.png"
+                      :frame-count 1
+                      :frame-period-ticks 1.0
+                      :parts [{:hw 0.25 :hh 0.25 :hd 0.25
+                               :cx 0.0 :cy 0.25
+                               :front [0.0 0.25 0.0 0.25]
+                               :back [0.25 0.5 0.0 0.25]
+                               :right [0.5 0.75 0.0 0.25]
+                               :left [0.75 1.0 0.0 0.25]
+                               :top [0.0 0.25 0.25 0.5]
+                               :bottom [0.25 0.5 0.25 0.5]}]
+                      :color [255 255 255 255]
+                      :facing :camera
+                      :no-depth-test? false
+                      :no-cull? false}
    :vfx/emitter {:component :vfx/emitter :anchor point-example :rate-per-tick 1
                  :limit 1 :particle {:material :additive :life-ticks 1 :speed 0.01}}
    :vfx/ribbon {:component :vfx/ribbon :points {:ref [:state :trail-points]}

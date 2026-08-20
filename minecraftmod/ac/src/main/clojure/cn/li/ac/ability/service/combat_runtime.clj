@@ -33,7 +33,6 @@
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
-            [cn.li.ac.content.ability.teleporter.mark-teleport-dest :as mark-teleport-dest]
             [cn.li.ac.content.ability.teleporter.penetrate-dest :as penetrate-dest]
             [cn.li.ac.content.ability.teleporter.flashing-dest :as flashing-dest]
             [cn.li.ac.energy.operations :as energy]
@@ -787,23 +786,6 @@
                                         (block-manipulation/block-collidable?
                                          world-id x (inc (long y)) z))]
                     (case (:mode node)
-                      :mark
-                      (let [eye (geom/eye-pos owner)
-                            look (when (raycast/available?) (raycast/player-look-vector owner))
-                            dist (mark-teleport-dest/max-distance exp cp hold-ticks)
-                            hit (when (and look (raycast/available?))
-                                  (raycast/raycast-from-player owner dist true))
-                            dest (when look
-                                   (mark-teleport-dest/destination
-                                    {:hit hit :head-blocked? head-blocked?
-                                     :x (:x eye) :eye-y (:y eye) :z (:z eye)
-                                     :look-vec look :dist dist}))]
-                        (when (and dest
-                                   (>= (mark-teleport-dest/distance-from
-                                        (:x eye) (:y eye) (:z eye) dest)
-                                       (mark-teleport-dest/min-distance)))
-                          {:x (:target-x dest) :y (:target-y dest) :z (:target-z dest)}))
-
                       :penetrate
                       (let [eye (geom/eye-pos owner)
                             look (when (raycast/available?) (raycast/player-look-vector owner))
@@ -1641,8 +1623,8 @@
                              (let [valid-dest? (and (map? destination)
                                                      (every? #(number? (get destination %)) [:x :y :z]))
                                    valid? (and world-id valid-dest?
-                                                (#{:mark-teleport :penetrate-teleport :flashing} ability-id)
-                                                (#{:mark :penetrate :flashing} mode)
+                                                (#{:penetrate-teleport :flashing} ability-id)
+                                                (#{:penetrate :flashing} mode)
                                                 (teleportation/available?))
                                    token (when valid?
                                            (teleportation/mint-approval-token!
@@ -1903,6 +1885,84 @@
     {}
     (or (:tunables ability) {})))
 
+(defn- raycast-point
+  [hit key fallback]
+  (double (or (get hit key) fallback 0.0)))
+
+(defn- resolve-raycast-destination
+  "Resolve a neutral raycast hit into a safe landing point.
+
+   This is deliberately a generic host operation: EDN supplies the offsets
+   and minimum-distance policy, while AC supplies only the platform reads
+   needed to test the block above a side-face landing spot.  No ability id or
+   skill-specific branch belongs here."
+  [owner {:keys [hit origin distance policy world-id]}]
+  (let [hit (when (map? hit) hit)
+        origin (or origin {})
+        [ox oy oz] (if (vector? (:vec3 origin))
+                     (:vec3 origin)
+                     [(double (or (:x origin) 0.0))
+                      (double (or (:y origin) 0.0))
+                      (double (or (:z origin) 0.0))])
+        distance (double (or distance 0.0))
+        look (or (:direction policy) {})
+        [dx dy dz] (if (vector? (:vec3 look))
+                     (:vec3 look)
+                     [(double (or (:x look) 0.0))
+                      (double (or (:y look) 0.0))
+                      (double (or (:z look) 0.0))])
+        entity-eye-height (double (or (:eye-height hit)
+                                      (:entity-eye-height policy)
+                                      1.6))
+        block-y (raycast-point hit :y 0.0)
+        hx (raycast-point hit :hit-x (:x hit))
+        hy (raycast-point hit :hit-y (:y hit))
+        hz (raycast-point hit :hit-z (:z hit))
+        kind (:hit-type hit)
+        face (:face hit)
+        head-blocked?
+        (fn [x y z]
+          (let [world-id (or world-id (geom/world-id-of (str owner)))]
+            (and world-id
+                 (block-manipulation/block-collidable?
+                  world-id (int (Math/floor (double x)))
+                  (int (Math/floor (+ (double y) 1.0)))
+                  (int (Math/floor (double z)))))))
+        destination
+        (if (= :entity kind)
+          {:x (raycast-point hit :x hx)
+           :y (+ (raycast-point hit :y hy) entity-eye-height)
+           :z (raycast-point hit :z hz)}
+          (case face
+            :down  {:x hx :y (- hy 1.0) :z hz}
+            :up    {:x hx :y (+ hy 1.8) :z hz}
+            :north {:x hx :y (+ block-y 1.7) :z (- hz 0.6)}
+            :south {:x hx :y (+ block-y 1.7) :z (+ hz 0.6)}
+            :west  {:x (- hx 0.6) :y (+ block-y 1.7) :z hz}
+            :east  {:x (+ hx 0.6) :y (+ block-y 1.7) :z hz}
+            {:x hx :y hy :z hz}))
+        destination
+        (if (and (#{:north :south :west :east} face)
+                 (:head-clearance? policy)
+                 (head-blocked? (:x destination) (:y destination) (:z destination)))
+          (update destination :y - 1.25)
+          destination)
+        miss? (or (nil? hit) (= :miss kind))
+        destination (if miss?
+                      {:x (+ ox (* dx distance))
+                       :y (+ oy (* dy distance))
+                       :z (+ oz (* dz distance))}
+                      destination)
+        ddx (- (double (:x destination)) ox)
+        ddy (- (double (:y destination)) oy)
+        ddz (- (double (:z destination)) oz)
+        resolved-distance (Math/sqrt (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)))
+        minimum-distance (double (or (:minimum-distance policy) 0.0))]
+    {:position destination
+     :distance resolved-distance
+     :hit? (not miss?)
+     :valid? (>= resolved-distance minimum-distance)}))
+
 (defn install-edn-host-capabilities!
   "Link the generic EDN host table to neutral AC platform ports once.
 
@@ -1921,8 +1981,14 @@
       (when-not (contains? (:queries (capabilities/snapshot)) :raycast)
         (capabilities/register-query!
          :raycast
-         (fn [{:keys [owner distance include-entities? include-blocks?]} _frame]
-           (let [owner (str owner)
+         (fn [{:keys [owner distance include-entities? include-blocks? hit origin policy]
+              :as request} _frame]
+           (if (contains? request :hit)
+             (resolve-raycast-destination owner
+                                          {:hit hit :origin origin
+                                           :distance distance :policy policy
+                                           :world-id (:world-id request)})
+             (let [owner (str owner)
                  distance (max 0.0 (min 128.0 (double (or distance 0.0))))
                  world-id (geom/world-id-of owner)
                  eye (geom/eye-pos owner)
@@ -1962,6 +2028,11 @@
                  block-id (:block-id hit)]
              {:hit-type kind
               :entity-id (or (:entity-id hit) (:uuid hit))
+               :hit-x (:hit-x hit) :hit-y (:hit-y hit) :hit-z (:hit-z hit)
+               :x (:x hit) :y (:y hit) :z (:z hit)
+               :face (:face hit)
+               :eye-height (:eye-height hit)
+               :entity-type (or (:entity-type hit) (:type hit))
                :creeper? (contains? #{"minecraft:creeper" "entity.minecraft.creeper"}
                                      (or (:entity-type hit) (:type hit)))
               :position position
@@ -1970,7 +2041,7 @@
                                :z (Math/floor (double (:z position)))}
               :block-id block-id
               :water? (= "minecraft:water" block-id)
-              :world-id world-id}))))
+              :world-id world-id})))))
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
         (capabilities/register-query!
          :entity/select
@@ -2083,6 +2154,34 @@
              (entity-damage/apply-direct-damage!
               world-id target (double amount) (or damage-type :generic)
               {:attacker-uuid owner})))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/teleport)
+        (capabilities/register-action!
+         :entity/teleport
+         (fn [{:keys [owner world-id target position dismount? reset-fall-damage?]}]
+           (let [point (or position target)
+                 [x y z] (if (and (map? point) (vector? (:vec3 point)))
+                           (:vec3 point)
+                           [(when (map? point) (:x point))
+                            (when (map? point) (:y point))
+                            (when (map? point) (:z point))])
+                 finite? (fn [value]
+                           (and (number? value)
+                                (Double/isFinite (double value))))
+                 valid? (and owner world-id
+                             (every? finite? [x y z])
+                             (teleportation/available?))]
+             (if-not valid?
+               {:status :rejected :reason :invalid-teleport-request}
+               (do
+                 (when dismount?
+                   (motion-effects/dismount-riding! (str owner)))
+                 (let [success (teleportation/teleport-player!
+                                (str owner) (str world-id)
+                                (double x) (double y) (double z))]
+                   (when (and success reset-fall-damage?)
+                     (motion-effects/reset-fall-damage! (str owner)))
+                   {:status (if success :applied :failed)
+                    :position {:x (double x) :y (double y) :z (double z)}})))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/status)
         (capabilities/register-action!
          :entity/status

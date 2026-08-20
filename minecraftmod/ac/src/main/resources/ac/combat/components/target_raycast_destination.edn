@@ -1,0 +1,32 @@
+{:schema-version 2
+ :kind :composite
+ :id :target/raycast-destination
+ :revision 1
+ ;; Generic two-stage target query.  The host performs only neutral raycast
+ ;; and landing-point resolution; callers decide the policy and distance.
+ ;; The intermediate :hit and :destination slots are intentionally stable so
+ ;; multiple phases can share the same compiled dataflow without result-name
+ ;; indirection.
+ :inputs
+ {:origin {:type :object}
+  :direction {:type :object}
+  :distance {:type :object}
+  :policy {:type :object}
+  :include-entities? {:type :object :default true}
+  :include-blocks? {:type :object :default true}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :target/raycast
+           :origin {:ref [:input :origin]}
+           :direction {:ref [:input :direction]}
+           :distance {:ref [:input :distance]}
+           :include-entities? {:ref [:input :include-entities?]}
+           :include-blocks? {:ref [:input :include-blocks?]}
+           :result :hit}
+          {:component :target/resolve-destination
+           :hit {:ref [:slot :hit]}
+           :origin {:ref [:input :origin]}
+           :direction {:ref [:input :direction]}
+           :distance {:ref [:input :distance]}
+           :policy {:ref [:input :policy]}
+           :result :destination}]}}

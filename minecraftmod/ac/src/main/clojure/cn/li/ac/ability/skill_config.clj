@@ -220,7 +220,16 @@
     :anti-afk-damage :effect.anti-afk-damage
     :cost-down-overload :cost.down.overload
     :cost-tick-cp :cost.tick.cp
-    :exp-per-ball :progression.exp-per-ball}})
+    :exp-per-ball :progression.exp-per-ball}
+   :mark-teleport
+   {:minimum-distance :targeting.min-distance
+    :maximum-range :targeting.range
+    :range-per-hold-tick :targeting.range-per-hold-tick
+    :cp-per-block :cost.up.cp-per-block
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-per-distance :progression.exp-per-distance
+    :entity-eye-height :targeting.eye-height}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

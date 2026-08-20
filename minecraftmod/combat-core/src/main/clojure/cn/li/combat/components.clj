@@ -154,6 +154,15 @@
             :effects #{:query}
             :produces {:hit {:name-field :result :type :hit-result}}}
 
+           ;; A raycast may ask the host to resolve the neutral landing point
+           ;; (entity feet/eye offset, block-face offset and head clearance)
+           ;; in the same bounded query.  The policy is supplied by EDN; the
+           ;; host only performs platform collision/raycast reads.
+           :target/resolve-destination
+           {:schema {:required #{:hit :origin :direction :distance :result}}
+            :effects #{:query}
+            :produces {:destination {:name-field :result :type :destination}}}
+
            :target/entities
            {:schema {:required #{:shape :projection :limit :result}}
             :effects #{:query}
@@ -182,6 +191,10 @@
 
            :combat/status
            {:schema {:required #{:target :status-id :duration-ticks}}
+            :effects #{:mutate}}
+
+           :entity/teleport
+           {:schema {:required #{:target :position}}
             :effects #{:mutate}}
 
            :interaction/dispatch

@@ -140,6 +140,7 @@
 
 (def ^:private query-capability-by-component
   {:target/raycast :raycast
+   :target/resolve-destination :raycast
    :target/entities :entity/select
    :target/blocks :block/select
    ;; Beam traversal is a host primitive.  Its neutral request shape is still
@@ -152,6 +153,7 @@
    :combat/damage :entity/damage
    :combat/impulse :entity/impulse
    :combat/status :entity/status
+   :entity/teleport :entity/teleport
    :entity/spawn :entity/spawn
     :entity/discard :entity/discard
    :projectile/schedule-beam :projectile/schedule-beam
@@ -308,6 +310,7 @@
   [^ExecutionFrame frame ^HostTable host component data context]
   (case component
     :target/raycast (invoke-query-component! frame host component data context)
+    :target/resolve-destination (invoke-query-component! frame host component data context)
     :target/entities (invoke-query-component! frame host component data context)
     :target/blocks (invoke-query-component! frame host component data context)
     :host/beam-trace (invoke-query-component! frame host component data context)

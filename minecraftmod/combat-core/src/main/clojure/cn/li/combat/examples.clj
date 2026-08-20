@@ -43,6 +43,15 @@
    :target/raycast {:component :target/raycast :origin vec3-example
                     :direction {:vec3 [0.0 0.0 1.0]} :distance 1.0
                     :result :hit}
+   :target/resolve-destination {:component :target/resolve-destination
+                                :hit {:ref [:slot :hit]}
+                                :origin vec3-example
+                                :direction {:vec3 [0.0 0.0 1.0]}
+                                :distance 1.0
+                                :policy {:minimum-distance 1.0
+                                         :entity-eye-height 1.6
+                                         :head-clearance? true}
+                                :result :destination}
    :target/entities {:component :target/entities
                      :shape {:type :sphere :center vec3-example :radius 1.0}
                      :projection [:id :type :position] :limit 1 :result :entities}
@@ -62,6 +71,11 @@
                     :vector vec3-example}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}
                    :status-id :generic :duration-ticks 1 :amplifier 0}
+   :entity/teleport {:component :entity/teleport
+                     :target {:ref [:context :owner]}
+                     :position vec3-example
+                     :dismount? true
+                     :reset-fall-damage? true}
    :interaction/dispatch {:component :interaction/dispatch :kind :generic
                            :target {:ref [:slot :target-id]} :payload {} :result :interaction}
    :inventory/consume {:component :inventory/consume :source :main-hand :count 1}
@@ -90,6 +104,33 @@
    :effect/vfx {:component :effect/vfx :effect-id :generic :operation :spawn
                 :payload {:position vec3-example}}
    :domain/event {:component :domain/event :event-type :generic :payload {}}})
+
+;; Examples for EDN composite middle-layer components.  These are intentionally
+;; parameterized with neutral inputs; concrete skill EDN supplies tunables and
+;; policies at the call site.
+(def combat-composite-examples
+  {:target/raycast-destination
+   {:component :target/raycast-destination
+    :origin {:ref [:context :eye]}
+    :direction {:ref [:context :look]}
+    :distance 32.0
+    :policy {:direction {:ref [:context :look]}
+             :minimum-distance 1.0
+             :entity-eye-height 1.6
+             :head-clearance? true}}
+   :target/hold-destination
+   {:component :target/hold-destination
+    :origin {:ref [:context :eye]}
+    :direction {:ref [:context :look]}
+    :hold-ticks {:ref [:session :hold-ticks]}
+    :range-per-hold-tick 2.0
+    :maximum-range 64.0
+    :available-resource {:ref [:context :resources :energy]}
+    :resource-per-distance 4.0
+    :policy {:direction {:ref [:context :look]}
+             :minimum-distance 1.0
+             :entity-eye-height 1.6
+             :head-clearance? true}}})
 
 (def ir-node-examples
   [{:ir/op :const-double :dst 0 :value 1.0}

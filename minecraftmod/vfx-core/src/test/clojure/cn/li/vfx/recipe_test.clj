@@ -46,3 +46,27 @@
     (is (= :vfx/timeline (get-in compiled [:graph :component])))
     (is (= :vfx/beam (get-in compiled [:graph :children 0 :node :component])))
     (is (= 1 (count (:compiled-ir compiled))))))
+
+(deftest model-marker-contract-is-compiled-as-a-generic-node
+  (components/reset-for-test!)
+  (let [part {:hw 0.25 :hh 0.25 :hd 0.25 :cx 0.0 :cy 0.25
+              :front [0.0 0.25 0.0 0.25]
+              :back [0.25 0.5 0.0 0.25]
+              :right [0.5 0.75 0.0 0.25]
+              :left [0.75 1.0 0.0 0.25]
+              :top [0.0 0.25 0.25 0.5]
+              :bottom [0.25 0.5 0.25 0.5]}
+        effect {:schema-version 1 :kind :vfx-effect :id :model-marker-test
+                :revision 1 :lifecycle :session
+                :graph {:component :vfx/model-marker
+                        :anchor {:vec3 [0.0 0.0 0.0]}
+                        :texture-pattern "generic/%d.png"
+                        :frame-count 1
+                        :frame-period-ticks 2.5
+                        :parts [part]
+                        :color [188 252 238 255]
+                        :facing :camera}}
+        compiled (recipe/compile-effect effect)]
+    (is (:compiled? compiled))
+    (is (= :vfx/model-marker (get-in compiled [:graph :component])))
+    (is (= 1 (count (:compiled-ir compiled))))))
