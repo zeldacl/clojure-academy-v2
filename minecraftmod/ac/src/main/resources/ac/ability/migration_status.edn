@@ -9,4 +9,5 @@
           :mark-teleport :migrated
           :penetrate-teleport :migrated
           :flashing :migrated
-          :plasma-cannon :migrated}}
+          :plasma-cannon :migrated
+          :storm-wing :migrated}}

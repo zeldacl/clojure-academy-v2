@@ -665,18 +665,6 @@
                                                          (double (or (:z look) 1.0))
                                                          distance))]
                                     (assoc hit :world-id world-id))))))
-              :storm-wing (fn [context node]
-                            (if-let [host-query (contract/host-port :query)]
-                              (host-query :storm-wing context node)
-                              ;; execute-storm-wing! only requires query-result
-                              ;; to be a non-nil map (see combat_runtime.clj's
-                              ;; :storm-wing world-effect valid? check, which
-                              ;; never reads any field out of it) and reads
-                              ;; on-ground status itself, directly, since
-                              ;; that's a live entity property the platform
-                              ;; layer already has a primitive for -- no query
-                              ;; round-trip needed.
-                              {}))
               :attack (fn [context node]
                         (if-let [host-query (contract/host-port :query)]
                           (host-query :attack context node)
@@ -1388,36 +1376,6 @@
                                       :applied
                                       :failed)
                             :effect effect})
-                         :storm-wing
-                         (let [{:keys [world-id query-result charge-ticks charge-time
-                                       acceleration hover-near-ground-velocity hover-air-velocity
-                                       speed-scale speed-threshold]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :charge-ticks (long (or charge-ticks 0))
-                                     :charge-time (double (or charge-time 30.0))
-                                     :acceleration (double (or acceleration 0.16))
-                                     :hover-near-ground-velocity (double (or hover-near-ground-velocity 0.1))
-                                     :hover-air-velocity (double (or hover-air-velocity 0.078))
-                                     :speed-scale (double (or speed-scale 2.0))
-                                     :speed-threshold (double (or speed-threshold 0.45))}
-                               valid? (and world-id (map? query-result)
-                                            (<= 0 (:charge-ticks plan) 240)
-                                            (finite? charge-time) (<= 1.0 (:charge-time plan) 120.0)
-                                            (finite? acceleration) (<= 0.0 (:acceleration plan) 1.0)
-                                            (finite? hover-near-ground-velocity)
-                                            (<= 0.0 (:hover-near-ground-velocity plan) 1.0)
-                                            (finite? hover-air-velocity) (<= 0.0 (:hover-air-velocity plan) 1.0)
-                                            (finite? speed-scale) (<= 0.0 (:speed-scale plan) 8.0)
-                                            (finite? speed-threshold) (<= 0.0 (:speed-threshold plan) 1.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-storm-wing!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
                          ;; Conservative: query-result is {:block-id
                          ;; :target-uuid} from the release-phase query above,
                          ;; not the entity-uuid/position/throw-target fields
@@ -1761,21 +1719,32 @@
   than silently resolving to nil; both get added in Phase 5 alongside the
   abilities that actually need them."
   [owner context]
-  {:caster/eye (:eye-pos context)
-   :caster/body (geom/body-pos (str owner))
-   :caster/eye-y (double (or (:y (:eye-pos context)) 0.0))
-   :caster/aim (:look context)
-   :caster/id owner
-   :world/id (:world-id context)
-   :caster/creative? (boolean (:creative? context))
-   :charge/ticks (long (or (:hold-ticks context) 0))
+  (let [look (or (:look context) {:x 0.0 :y 0.0 :z 1.0})
+        lx (double (or (:x look) 0.0))
+        ly (double (or (:y look) 0.0))
+        lz (double (or (:z look) 1.0))
+        length (max 1.0e-9 (Math/sqrt (+ (* lx lx) (* ly ly) (* lz lz))))
+        forward {:x (/ lx length) :y (/ ly length) :z (/ lz length)}
+        left-length (max 1.0e-9 (Math/sqrt (+ (* lz lz) (* lx lx))))]
+    {:caster/eye (:eye-pos context)
+     :caster/body (geom/body-pos (str owner))
+     :caster/eye-y (double (or (:y (:eye-pos context)) 0.0))
+     :caster/aim look
+     :caster/id owner
+     :world/id (:world-id context)
+     :caster/creative? (boolean (:creative? context))
+     :movement/forward forward
+     :movement/back {:x (- (:x forward)) :y (- (:y forward)) :z (- (:z forward))}
+     :movement/left {:x (/ lz left-length) :y 0.0 :z (- (/ lx left-length))}
+     :movement/right {:x (- (/ lz left-length)) :y 0.0 :z (/ lx left-length)}
+     :charge/ticks (long (or (:hold-ticks context) 0))
    ;; Raw (pre-curve) mastery and RNG seed: legitimate exceptions to design
    ;; B/E folding skill-exp/seed away. Some content hands both to an AC-side
    ;; domain-event handler that isn't itself an EDN node (arc-gen's ignite/
    ;; fishing resolution) -- that handler needs the same inputs the VM's own
    ;; :expr evaluator would have used, just not through a lerp/random/* node.
    :progression/mastery (double (or (:skill-exp context) 0.0))
-   :rng/seed (long (or (:activation-seed context) 0))})
+     :rng/seed (long (or (:activation-seed context) 0))}))
 
 (defn- lerp [lo hi t]
   (let [bounded (max 0.0 (min 1.0 (double t)))]
@@ -2060,7 +2029,20 @@
                                :z (Math/floor (double (:z position)))}
               :block-id block-id
               :water? (= "minecraft:water" block-id)
-               :world-id world-id})))))))
+              :world-id world-id})))))))
+      (when-not (contains? (:queries (capabilities/snapshot)) :owner/snapshot)
+        (capabilities/register-query!
+         :owner/snapshot
+         (fn [{:keys [owner]} _frame]
+           (let [owner (str owner)
+                 position (when (raycast/available?)
+                            (raycast/player-position owner))
+                 velocity (when (motion-effects/player-motion-available?)
+                            (motion-effects/player-velocity owner))]
+             {:position (when (map? position)
+                          (select-keys position [:x :y :z :eye-y :world-id]))
+              :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
+              :can-fly? (motion-effects/player-can-fly? owner)}))))
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
         (capabilities/register-query!
          :entity/select
@@ -2205,6 +2187,171 @@
              (entity-damage/apply-direct-damage!
               world-id target (double amount) (or damage-type :generic)
               {:attacker-uuid owner})))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :owner/can-fly)
+        (capabilities/register-action!
+         :owner/can-fly
+         (fn [{:keys [owner enabled?]}]
+           (let [valid? (and owner (motion-effects/player-motion-available?))
+                 applied? (and valid?
+                               (motion-effects/set-player-can-fly!
+                                (str owner) (boolean enabled?)))]
+             {:status (if applied? :applied :failed)}))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :motion/flight)
+        (capabilities/register-action!
+         :motion/flight
+         (fn [{:keys [owner world-id direction speed acceleration
+                      hover-near-ground-velocity hover-air-velocity
+                      near-ground-distance near-ground-eye-height
+                      reset-fall-damage?]}]
+           (let [owner (some-> owner str)
+                 position (when (and owner (raycast/available?))
+                            (raycast/player-position owner))
+                 current (or (when (and owner (motion-effects/player-motion-available?))
+                               (motion-effects/player-velocity owner))
+                             {:x 0.0 :y 0.0 :z 0.0})
+                 point (cond
+                         (and (map? direction) (vector? (:vec3 direction))) (:vec3 direction)
+                         (map? direction) [(:x direction) (:y direction) (:z direction)]
+                         :else nil)
+                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
+                 [dx dy dz] (mapv #(double (or % 0.0)) (or point [0.0 0.0 0.0]))
+                 len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+                 moving? (> len 1.0e-6)
+                 nx (if moving? (/ dx len) 0.0)
+                 ny (if moving? (/ dy len) 0.0)
+                 nz (if moving? (/ dz len) 0.0)
+                 speed (double (or speed 0.0))
+                 acceleration (double (or acceleration 0.0))
+                 near-ground-distance (double (or near-ground-distance 0.8))
+                 eye-height (double (or near-ground-eye-height 0.5))
+                 hover-near (double (or hover-near-ground-velocity 0.1))
+                 hover-air (double (or hover-air-velocity 0.078))
+                 cx (double (or (:x current) 0.0))
+                 cy (double (or (:y current) 0.0))
+                 cz (double (or (:z current) 0.0))
+                 approach (fn [from to]
+                           (let [delta (- to from)
+                                 step (min (Math/abs (double delta)) acceleration)]
+                             (+ from (if (neg? delta) (- step) step))))
+                 valid? (and owner position (motion-effects/player-motion-available?)
+                             (every? finite? [dx dy dz speed acceleration
+                                              near-ground-distance eye-height hover-near hover-air])
+                             (<= 0.0 speed 32.0) (<= 0.0 acceleration 4.0)
+                             (pos? near-ground-distance) (<= near-ground-distance 8.0))]
+             (if-not valid?
+               {:status :rejected :reason :invalid-flight-request}
+               (let [near-ground? (and (raycast/available?)
+                                       (raycast/raycast-blocks
+                                        (str world-id)
+                                        (double (:x position))
+                                        (+ (double (:y position)) eye-height)
+                                        (double (:z position))
+                                        0.0 -1.0 0.0 near-ground-distance))
+                     tx (if moving? (approach cx (* nx speed)) cx)
+                     ty (if moving? (approach cy (* ny speed))
+                          (if near-ground? hover-near (+ cy hover-air)))
+                     tz (if moving? (approach cz (* nz speed)) cz)
+                     dismounted? (or (not moving?)
+                                     (motion-effects/dismount-riding! owner))
+                     applied? (and dismounted?
+                                   (motion-effects/set-player-velocity! owner tx ty tz))]
+                 (when (and applied? (not= false reset-fall-damage?))
+                   (motion-effects/reset-fall-damage! owner))
+                 {:status (if applied? :applied :failed)
+                  :velocity {:x tx :y ty :z tz}}))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/radial-impulse)
+        (capabilities/register-action!
+         :entity/radial-impulse
+         (fn [{:keys [owner world-id center radius speed-min speed-max seed]}]
+           (let [point (cond
+                         (and (map? center) (vector? (:vec3 center))) (:vec3 center)
+                         (map? center) [(:x center) (:y center) (:z center)]
+                         :else nil)
+                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
+                 [x y z] (mapv #(double (or % 0.0)) (or point [0.0 0.0 0.0]))
+                 radius (double (or radius 0.0))
+                 speed-min (double (or speed-min 0.0))
+                 speed-max (double (or speed-max speed-min))
+                 valid? (and owner world-id point (world-effects/available?)
+                             (motion-effects/entity-motion-available?)
+                             (every? finite? [x y z radius speed-min speed-max])
+                             (<= 0.0 radius 32.0) (<= 0.0 speed-min speed-max 32.0))]
+             (if-not valid?
+               {:status :rejected :reason :invalid-radial-impulse-request}
+               (let [entities (take 256 (world-effects/find-entities-in-radius
+                                         (str world-id) x y z radius))
+                     seed (long (or seed 0))
+                     result (loop [xs (seq entities) index 0 hits 0]
+                              (if-let [entity (first xs)]
+                                (let [id (or (:id entity) (:uuid entity))
+                                      ex (double (or (:x entity) x))
+                                      ey (+ (double (or (:y entity) y))
+                                            (double (or (:eye-height entity) 0.0)))
+                                      ez (double (or (:z entity) z))
+                                      vx (- ex x) vy (- ey y) vz (- ez z)
+                                      length (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))
+                                      ^long next-rng (seeded-rng/next-long
+                                                      (unchecked-add seed index))]
+                                  (if (or (nil? id) (= (str id) (str owner))
+                                          (<= length 1.0e-6))
+                                    (recur (next xs) (inc index) hits)
+                                    (let [magnitude (seeded-rng/uniform next-rng speed-min speed-max)
+                                          applied? (motion-effects/set-entity-velocity!
+                                                    (str world-id) (str id)
+                                                    (* (/ vx length) magnitude)
+                                                    (* (/ vy length) magnitude)
+                                                    (* (/ vz length) magnitude))]
+                                      (recur (next xs) (inc index)
+                                             (if applied? (inc hits) hits)))))
+                                hits))]
+                 {:status :applied :hits result}))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :block/random-break)
+        (capabilities/register-action!
+         :block/random-break
+         (fn [{:keys [owner world-id origin attempts radius hardness-max seed drop?]}]
+           (let [point (cond
+                         (and (map? origin) (vector? (:vec3 origin))) (:vec3 origin)
+                         (map? origin) [(:x origin) (:y origin) (:z origin)]
+                         :else nil)
+                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
+                 [x y z] (mapv #(double (or % 0.0)) (or point [0.0 0.0 0.0]))
+                 attempts (long (or attempts 0))
+                 radius (double (or radius 0.0))
+                 hardness-max (double (or hardness-max 0.0))
+                 valid? (and owner world-id point (block-manipulation/available?)
+                             (every? finite? [x y z radius hardness-max])
+                             (<= 0 attempts 256) (<= 0.0 radius 32.0)
+                             (<= 0.0 hardness-max 64.0))]
+             (if-not valid?
+               {:status :rejected :reason :invalid-random-break-request}
+               (let [seed (long (or seed 0))
+                 broken (loop [index 0 total 0]
+                          (if (>= index attempts)
+                            total
+                                (let [rng (seeded-rng/next-long (unchecked-add seed index))
+                                      rx (long (Math/floor (seeded-rng/uniform rng (- radius) radius)))
+                                      ry (long (Math/floor (seeded-rng/uniform (seeded-rng/next-long rng)
+                                                                              (- radius) radius)))
+                                      rz (long (Math/floor (seeded-rng/uniform (seeded-rng/next-long
+                                                                                (seeded-rng/next-long rng))
+                                                                              (- radius) radius)))
+                                      bx (long (Math/floor (+ x rx)))
+                                      by (long (Math/floor (+ y ry)))
+                                      bz (long (Math/floor (+ z rz)))
+                                      hardness (double (or (block-manipulation/get-block-hardness
+                                                           (str world-id) bx by bz)
+                                                          -1.0))
+                                      allowed? (and (>= hardness 0.0) (<= hardness hardness-max)
+                                                    (block-manipulation/can-break-block?
+                                                     (str owner) (str world-id) bx by bz))
+                                      did-break? (and allowed?
+                                                       (not= false
+                                                             (block-manipulation/break-block!
+                                                              (str owner) (str world-id) bx by bz
+                                                              (not= false drop?))))]
+                                  (recur (inc index)
+                                         (if did-break? (inc total) total)))))]
+                 {:status :applied :broken broken}))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/teleport)
         (capabilities/register-action!
          :entity/teleport
@@ -2439,6 +2586,7 @@
                 ;; author forgets :finish-session? true on a failure branch.
                 (= :instant (:activation ability))
                 (and (#{:release :abort} op)
+                     (not= true (:release-keeps-session? ability))
                  (or (= :accepted (:status result))
                      (= :rejected (:status result)))))
         (edn-sessions/remove! owner))

@@ -72,7 +72,6 @@
    cn.li.ac.content.ability.vecmanip.directed-blastwave
    cn.li.ac.content.ability.vecmanip.directed-shock
    cn.li.ac.content.ability.vecmanip.groundshock
-   cn.li.ac.content.ability.vecmanip.storm-wing
    cn.li.ac.content.ability.vecmanip.vec-accel
    cn.li.ac.content.ability.vecmanip.vec-deviation
    ]
@@ -81,6 +80,5 @@
    cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
    cn.li.ac.content.ability.vecmanip.directed-shock-fx
    cn.li.ac.content.ability.vecmanip.groundshock-fx
-   cn.li.ac.content.ability.vecmanip.storm-wing-fx
    cn.li.ac.content.ability.vecmanip.vec-accel-fx
    cn.li.ac.content.ability.vecmanip.vec-deviation-fx]}]

@@ -2,9 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.client.effect-controller :as vfx-level]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as storm-wing-fx]
             [cn.li.ac.content.ability.vecmanip.vec-accel-fx :as vec-accel-fx]
             [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vec-deviation-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
@@ -12,16 +10,13 @@
 (defn- reset-fixture [f]
   (vec-deviation-fx/init!)
       (vec-accel-fx/init!)
-      (storm-wing-fx/init!)
       (vec-deviation-fx/reset-fx-for-test!)
       (vec-accel-fx/reset-fx-for-test!)
-      (storm-wing-fx/reset-storm-wing-fx-for-test!)
       (try
         (f)
         (finally
           (vec-deviation-fx/reset-fx-for-test!)
           (vec-accel-fx/reset-fx-for-test!)
-          (storm-wing-fx/reset-storm-wing-fx-for-test!)
           )))
 
 (use-fixtures :each reset-fixture)
@@ -73,21 +68,3 @@
       (let [after-clear (vec-accel-fx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"]))))))
-
-(deftest storm-wing-keeps-state-per-owner-test
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "storm-wing-owner"})
-                client-sounds/queue-sound-effect! (fn [& _] nil)
-                client-bridge/run-client-effect! (fn [& _] nil)]
-    (dispatch! :storm-wing (event "ctx-a" :storm-wing/fx-start {:mode :start :charge-ticks 70}))
-    (dispatch! :storm-wing (event "ctx-b" :storm-wing/fx-start {:mode :start :charge-ticks 40}))
-    (dispatch! :storm-wing (event "ctx-a" :storm-wing/fx-update
-                                 {:mode :update :phase :charging :charge-ticks 35 :charge-ratio 0.5}))
-    (dispatch! :storm-wing (event "ctx-b" :storm-wing/fx-update
-                                 {:mode :update :phase :flying :charge-ticks 40 :charge-ratio 1.0}))
-    (let [snapshot (storm-wing-fx/storm-wing-fx-snapshot)]
-      (is (= :charging (:phase (get (:effect-state snapshot) [:ctx "ctx-a"]))))
-      (is (= :flying (:phase (get (:effect-state snapshot) [:ctx "ctx-b"]))))
-      (storm-wing-fx/clear-storm-wing-owner! [:ctx "ctx-a"])
-      (let [after-clear (storm-wing-fx/storm-wing-fx-snapshot)]
-        (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
-        (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))

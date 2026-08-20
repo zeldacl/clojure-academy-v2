@@ -24,5 +24,8 @@
              :id :flashing
               :resource "ac/combat/abilities/flashing.edn"}
              {:kind :ability
-              :id :plasma-cannon
-              :resource "ac/combat/abilities/plasma_cannon.edn"}]}
+             :id :plasma-cannon
+              :resource "ac/combat/abilities/plasma_cannon.edn"}
+             {:kind :ability
+              :id :storm-wing
+              :resource "ac/combat/abilities/storm_wing.edn"}]}

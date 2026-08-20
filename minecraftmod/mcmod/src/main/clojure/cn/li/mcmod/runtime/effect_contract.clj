@@ -8,9 +8,10 @@
 
 (def action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
-    :entity/reset-fall-damage
+    :entity/reset-fall-damage :entity/radial-impulse :motion/flight
+    :owner/can-fly
     :entity/status :entity/spawn :entity/discard :block/break :block/set
-    :world/lightning :world/explosion :world/sound
+    :world/lightning :world/explosion :world/sound :block/random-break
     :projectile/redirect :resource/enforce-floor :resource/add})
 
 (defn- require-map! [value message]

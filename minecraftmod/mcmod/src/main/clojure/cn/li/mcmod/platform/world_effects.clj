@@ -118,11 +118,6 @@
   [world-id owner plan]
   (call :execute-light-shield! world-id owner plan))
 
-(defn execute-storm-wing!
-  "Execute Storm Wing flight/hover physics behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-storm-wing! world-id owner plan))
-
 (defn execute-knockback!
   "Apply a directional velocity impulse to a target entity behind a neutral
    Host Port (e.g. Directed Shock)."

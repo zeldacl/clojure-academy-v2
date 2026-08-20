@@ -59,6 +59,9 @@
    :target/entities {:component :target/entities
                      :shape {:type :sphere :center vec3-example :radius 1.0}
                      :projection [:id :type :position] :limit 1 :result :entities}
+   :owner/snapshot {:component :owner/snapshot
+                    :projection [:position :velocity :can-fly?]
+                    :result :owner-snapshot}
    :target/blocks {:component :target/blocks
                    :shape {:type :cylinder :start vec3-example
                            :direction {:vec3 [0.0 0.0 1.0]}
@@ -73,6 +76,14 @@
                     :minimum 1.0 :max-depth 6}
    :combat/impulse {:component :combat/impulse :target {:ref [:slot :target-id]}
                     :vector vec3-example}
+   :entity/radial-impulse {:component :entity/radial-impulse
+                           :center vec3-example :radius 1.0
+                           :speed-min 0.5 :speed-max 1.0 :seed 0}
+   :motion/flight {:component :motion/flight :direction nil :speed 1.0
+                   :acceleration 0.16 :hover-near-ground-velocity 0.1
+                   :hover-air-velocity 0.078 :near-ground-distance 0.8
+                   :near-ground-eye-height 0.5}
+   :owner/can-fly {:component :owner/can-fly :enabled? true}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}
                    :status-id :generic :duration-ticks 1 :amplifier 0}
    :entity/teleport {:component :entity/teleport
@@ -97,6 +108,8 @@
                               :damage 1.0 :damage-type :generic :delay-ticks 1}
    :block/break-budget {:component :block/break-budget :blocks {:ref [:slot :blocks]}
                         :energy 1.0 :order :beam-forward :limit 1}
+   :block/random-break {:component :block/random-break :origin vec3-example
+                        :attempts 1 :radius 1.0 :hardness-max 0.3 :seed 0}
    :world/sound {:component :world/sound :sound-id "generic" :position vec3-example
                  :category :ambient :volume 1.0 :pitch 1.0}
    :world/explosion {:component :world/explosion :position vec3-example

@@ -145,6 +145,7 @@
    :target/directional-destination-query :raycast
    :target/entities :entity/select
    :target/blocks :block/select
+   :owner/snapshot :owner/snapshot
    ;; Beam traversal is a host primitive.  Its neutral request shape is still
    ;; handled by the existing raycast capability; the EDN composite owns the
    ;; reusable beam pipeline and supplies all policy values.
@@ -154,6 +155,9 @@
   {:inventory/consume :inventory/consume
    :combat/damage :entity/damage
    :combat/impulse :entity/impulse
+   :entity/radial-impulse :entity/radial-impulse
+   :motion/flight :motion/flight
+   :owner/can-fly :owner/can-fly
    :combat/status :entity/status
    :entity/teleport :entity/teleport
    :entity/reset-fall-damage :entity/reset-fall-damage
@@ -161,6 +165,7 @@
     :entity/discard :entity/discard
    :projectile/schedule-beam :projectile/schedule-beam
    :block/break-budget :block/break
+   :block/random-break :block/random-break
    :world/sound :world/sound
    :world/lightning :world/lightning
    :world/explosion :world/explosion
@@ -320,6 +325,7 @@
     :target/resolve-destination (invoke-query-component! frame host component data context)
     :target/directional-destination-query (invoke-query-component! frame host component data context)
     :target/entities (invoke-query-component! frame host component data context)
+    :owner/snapshot (invoke-query-component! frame host component data context)
     :target/blocks (invoke-query-component! frame host component data context)
     :host/beam-trace (invoke-query-component! frame host component data context)
     :flow/phases

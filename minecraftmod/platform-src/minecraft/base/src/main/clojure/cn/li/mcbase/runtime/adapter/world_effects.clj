@@ -299,41 +299,6 @@
                               (catch Exception e
                                 (log/warn "Failed to apply mine-ray:" (ex-message e))
                                 false)))
-        ;; storm-wing is personal flight: thrust in the caster's look
-        ;; direction, boosted by speed-scale while below speed-threshold
-        ;; (a "kick to get moving, then cruise" feel common to flight
-        ;; abilities), plus a hover assist that differs near ground vs.
-        ;; airborne so the ability can both lift off and sustain altitude.
-        execute-storm-wing! (fn [world-id owner plan]
-                             (try
-                               (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
-                                 (let [{:keys [hover-near-ground-velocity hover-air-velocity
-                                               acceleration speed-scale speed-threshold]} plan
-                                       on-ground? (player-motion/is-on-ground-for-player? player)
-                                       current (or (player-motion/get-velocity-for-player player)
-                                                   {:x 0.0 :y 0.0 :z 0.0})
-                                       look (when (raycast/available?)
-                                              (raycast/player-look-vector owner))
-                                       lx (double (or (:x look) 0.0))
-                                       ly (double (or (:y look) 0.0))
-                                       lz (double (or (:z look) 1.0))
-                                       horizontal-speed (Math/sqrt (+ (Math/pow (double (:x current)) 2)
-                                                                       (Math/pow (double (:z current)) 2)))
-                                       boosted? (< horizontal-speed (double speed-threshold))
-                                       thrust (* (double acceleration)
-                                                 (if boosted? (double speed-scale) 1.0))
-                                       vy (if on-ground?
-                                            (double hover-near-ground-velocity)
-                                            (max (double (:y current)) (double hover-air-velocity)))]
-                                   (boolean
-                                    (player-motion/set-velocity-for-player!
-                                     player
-                                     (+ (double (:x current)) (* thrust lx))
-                                     (+ vy (* thrust ly 0.2))
-                                     (+ (double (:z current)) (* thrust lz))))))
-                               (catch Exception e
-                                 (log/warn "Failed to apply storm-wing:" (ex-message e))
-                                 false)))
         ;; Conservative implementations (2026-08-17 追加会话, see
         ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md 节 C-2): each only
         ;; implements the well-defined "deal damage to nearby/targeted
@@ -784,7 +749,6 @@
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-meltdowner! execute-meltdowner!
      :execute-mine-ray! execute-mine-ray!
-     :execute-storm-wing! execute-storm-wing!
      :execute-light-shield! execute-light-shield!
      :execute-electron-missile! execute-electron-missile!
      :execute-knockback! execute-knockback!

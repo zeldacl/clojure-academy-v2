@@ -12,6 +12,7 @@
          :duration-ticks 4096
          :children [{:at 0
                      :node {:component :vfx/audio-loop
+                            :position {:ref [:input :position]}
                             :sound-id {:ref [:input :sound-id]}
                             :volume {:ref [:input :volume]}
                             :pitch {:ref [:input :pitch]}

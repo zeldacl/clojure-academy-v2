@@ -18,7 +18,7 @@
                    :spacing {:min 1.0 :max 1.0} :radius {:min 0.1 :max 0.1}
                    :count-limit 1 :life-ticks 1 :seed {:ref [:state :seed]}}
    :vfx/vortex-column {:component :vfx/vortex-column :base point-example
-                       :axis {:vec3 [0.0 1.0 0.0]} :height 1.0
+                       :axis {:vec3 [0.0 1.0 0.0]} :orientation nil :height 1.0
                        :spacing {:min 1.0 :max 1.0}
                        :radius {:min 0.1 :max 0.1}
                        :count-limit 1 :life-ticks 1
@@ -64,5 +64,6 @@
    :vfx/camera {:component :vfx/camera :operation :pitch-impulse :value 0.0 :duration-ticks 1}
    :vfx/audio-one-shot {:component :vfx/audio-one-shot :sound-id "generic" :position point-example}
    :vfx/audio-loop {:component :vfx/audio-loop :sound-id "generic"
+                    :position point-example
                     :volume 1.0 :pitch 1.0
                     :instance-key [:effect-instance :generic] :stop-on-destroy? true}})

@@ -264,7 +264,27 @@
     :spawn-y-offset :projectile.spawn-y-offset
     :destination-epsilon :projectile.destination-epsilon
     :sync-interval-ticks :projectile.sync-interval-ticks
-    :ground-search-distance :effect.tornado-ground-search-distance}})
+    :ground-search-distance :effect.tornado-ground-search-distance}
+   :storm-wing
+   {:charge-time :charge.time
+    :movement-acceleration :movement.acceleration
+    :movement-speed-exp-threshold :movement.speed-exp-threshold
+    :movement-speed-multipliers :movement.speed-multipliers
+    :movement-speed-scale :movement.speed-scale
+    :hover-near-ground-velocity :movement.hover-near-ground-velocity
+    :hover-air-velocity :movement.hover-air-velocity
+    :near-ground-distance :targeting.near-ground-distance
+    :near-ground-eye-height :targeting.near-ground-eye-height
+    :low-exp-threshold :breaking.low-exp-threshold
+    :soft-block-tries :breaking.soft-block-tries
+    :soft-block-search-radius :breaking.soft-block-search-radius
+    :soft-hardness-max :breaking.soft-hardness-max
+    :mastery-knockback-radius :combat.mastery-knockback-radius
+    :mastery-knockback-speed :combat.mastery-knockback-speed
+    :cost-tick-cp :cost.tick.cp
+    :cost-tick-overload :cost.tick.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-tick :progression.exp-tick}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

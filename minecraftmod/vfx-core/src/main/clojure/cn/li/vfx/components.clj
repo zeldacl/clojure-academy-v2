@@ -45,7 +45,7 @@
            [:vfx/beam-bounds #{:start :end :radius}]
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
            [:vfx/vortex-column #{:base :axis :height :spacing :radius
-                                 :count-limit :life-ticks :seed}]
+                                 :count-limit :life-ticks :seed :orientation}]
            [:vfx/ring #{:center :radius :segments}]
            [:vfx/billboard-sequence #{:anchor :texture-pattern :frame-count}]
            ;; A model marker is deliberately geometry/asset agnostic.  The
@@ -62,7 +62,7 @@
            [:vfx/first-person-transform #{:offset :child}]
            [:vfx/camera #{:operation :value :duration-ticks}]
            [:vfx/audio-one-shot #{:sound-id :position}]
-           [:vfx/audio-loop #{:sound-id :volume :pitch :instance-key
+           [:vfx/audio-loop #{:sound-id :position :volume :pitch :instance-key
                               :stop-on-destroy?}]]]
     (when-not (descriptor id)
       (register! {:id id

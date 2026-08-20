@@ -178,6 +178,11 @@
             :effects #{:query}
             :produces {:entities {:name-field :result :type :entity-list}}}
 
+           :owner/snapshot
+           {:schema {:required #{:projection :result}}
+            :effects #{:query}
+            :produces {:snapshot {:name-field :result :type :owner-snapshot}}}
+
            :target/blocks
            {:schema {:required #{:shape :projection :limit :result}}
             :effects #{:query}
@@ -198,6 +203,21 @@
 
            :combat/impulse
            {:schema {:required #{:target :vector}} :effects #{:mutate}}
+
+           :entity/radial-impulse
+           {:schema {:required #{:center :radius :speed-min :speed-max :seed}}
+            :effects #{:mutate}}
+
+           :motion/flight
+           {:schema {:required #{:direction :speed :acceleration
+                                 :hover-near-ground-velocity
+                                 :hover-air-velocity
+                                 :near-ground-distance
+                                 :near-ground-eye-height}}
+            :effects #{:mutate}}
+
+           :owner/can-fly
+           {:schema {:required #{:enabled?}} :effects #{:mutate}}
 
            :combat/status
            {:schema {:required #{:target :status-id :duration-ticks}}
@@ -231,6 +251,10 @@
 
            :block/break-budget
            {:schema {:required #{:blocks :energy :limit}} :effects #{:mutate}}
+
+           :block/random-break
+           {:schema {:required #{:origin :attempts :radius :hardness-max :seed}}
+            :effects #{:mutate}}
 
            :world/sound
            {:schema {:required #{:sound-id :position}} :effects #{:emit}}
