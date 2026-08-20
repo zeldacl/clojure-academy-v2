@@ -19,6 +19,9 @@
             [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
             [cn.li.ac.ability.service.edn-execution :as edn-execution]
             [cn.li.ac.ability.service.edn-sessions :as edn-sessions]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.util.attack :as attack]
@@ -1919,6 +1922,11 @@
                        :multipart? (boolean (:multipart? entity))
                        :eye-height (double (or (:eye-height entity)
                                                (:height entity) 0.0))
+                       :eye-position {:x (double (or (:x entity) 0.0))
+                                      :y (+ (double (or (:y entity) 0.0))
+                                            (double (or (:eye-height entity)
+                                                        (:height entity) 0.0)))
+                                      :z (double (or (:z entity) 0.0))}
                        :behavior-hit? (boolean (:behavior-hit? entity))
                        :explosion-power (:explosion-power entity)
                        nil)))
@@ -2239,13 +2247,26 @@
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/damage)
         (capabilities/register-action!
          :entity/damage
-         (fn [{:keys [world-id target amount damage-type owner]}]
-           (when (and target (entity-damage/available?)
-                      (Double/isFinite (double amount))
-                      (pos? (double amount)))
-             (entity-damage/apply-direct-damage!
-              world-id target (double amount) (or damage-type :generic)
-              {:attacker-uuid owner})))))
+         (fn [{:keys [world-id target amount damage-type owner
+                      damage-pipeline ability-id]}]
+           (let [raw (double (or amount 0.0))
+                 scaled (if (and (= :skill damage-pipeline) ability-id)
+                          (skill-effects/scale-damage
+                           (skill-registry/get-skill ability-id)
+                           (ability-event/fire-calc-event!
+                            ability-event/CALC-SKILL-ATTACK
+                            raw
+                            {:player-id owner
+                             :target-id target
+                             :skill-id ability-id}))
+                          raw)]
+             (when (and target (entity-damage/available?)
+                        (Double/isFinite scaled)
+                        (pos? scaled))
+               (entity-damage/apply-direct-damage!
+                world-id target scaled (or damage-type :generic)
+                (cond-> {:attacker-uuid owner}
+                  ability-id (assoc :skill-id ability-id))))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/trigger-behavior)
         (capabilities/register-action!
          :entity/trigger-behavior

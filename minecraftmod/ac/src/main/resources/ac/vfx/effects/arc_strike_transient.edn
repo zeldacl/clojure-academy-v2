@@ -1,0 +1,31 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :arc-strike-transient
+ :revision 1
+ :lifecycle :transient
+ ;; Generic electric/energy strike: a caster ray and zero or more
+ ;; impact-to-target arcs. The effect has no ability-specific constants.
+ :inputs
+ {:spawn {:start :vec3 :end :vec3 :aoe-origin :vec3 :aoe-points :object
+          :arc-life-ticks :long :pattern :keyword :hand-origin? :boolean
+          :sound-id :string :sound-volume :double :sound-pitch :double
+          :sound-position :vec3 :bounds-radius :double}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/arc-strike
+         :start {:ref [:input :start]}
+         :end {:ref [:input :end]}
+         :aoe-origin {:ref [:input :aoe-origin]}
+         :aoe-points {:ref [:input :aoe-points]}
+         :arc-life-ticks {:ref [:input :arc-life-ticks]}
+         :pattern {:ref [:input :pattern]}
+         :hand-origin? {:ref [:input :hand-origin?]}
+         :sound-id {:ref [:input :sound-id]}
+         :sound-volume {:ref [:input :sound-volume]}
+         :sound-pitch {:ref [:input :sound-pitch]}
+         :sound-position {:ref [:input :sound-position]}
+         :bounds-radius {:ref [:input :bounds-radius]}
+         :seed {:ref [:state :seed]}}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius {:ref [:input :bounds-radius]}}}

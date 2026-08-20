@@ -19,6 +19,14 @@
                  :yaw-range-degrees 55.0 :pitch-range-degrees 30.0
                  :life-ticks 50 :grow-ticks 4 :style {}
                  :seed {:ref [:state :seed]}}
+   :vfx/arc-strike {:component :vfx/arc-strike
+                    :start point-example :end point-example
+                    :aoe-origin point-example :aoe-points []
+                    :arc-life-ticks 20 :pattern :strong
+                    :hand-origin? true :sound-id "generic"
+                    :sound-volume 0.6 :sound-pitch 1.0
+                    :sound-position point-example :bounds-radius 2.0
+                    :seed {:ref [:state :seed]}}
    :vfx/channel-arc {:component :vfx/channel-arc :mode :block
                      :caster point-example :target point-example
                      :block-pos [0 64 0] :block-bounds nil

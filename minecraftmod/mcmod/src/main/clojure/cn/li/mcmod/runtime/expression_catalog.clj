@@ -17,6 +17,7 @@
    :math/lt {:expr :math/lt :args [1.0 2.0]}
    :math/lte {:expr :math/lte :args [1.0 1.0]}
    :math/eq {:expr :math/eq :args [1.0 1.0]}
+   :value/eq {:expr :value/eq :args ["minecraft:creeper" "minecraft:creeper"]}
    :math/gte {:expr :math/gte :args [2.0 1.0]}
    :math/gt {:expr :math/gt :args [2.0 1.0]}
    :math/select {:expr :math/select :args [true 1.0 0.0]}

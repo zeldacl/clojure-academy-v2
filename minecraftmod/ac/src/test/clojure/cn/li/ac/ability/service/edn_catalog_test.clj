@@ -17,8 +17,8 @@
     (is (catalog/available? :flashing))
     (is (catalog/available? :plasma-cannon))
     (is (catalog/available? :storm-wing))
-    (is (not (catalog/available? :thunder-bolt)))
-    (is (= :pending (catalog/migration-status :thunder-bolt)))
+    (is (catalog/available? :thunder-bolt))
+    (is (= :migrated (catalog/migration-status :thunder-bolt)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -34,6 +34,8 @@
     (is (contains? (get-in state [:vfx :composites]) :vfx/beam-arc-fade))
     (is (contains? (get-in state [:vfx :composites]) :vfx/humanoid-marker))
     (is (= :beam-arc-fade (get-in state [:vfx :effects :beam-arc-fade :id])))
+    (is (= :arc-strike-transient
+           (get-in state [:vfx :effects :arc-strike-transient :id])))
     (is (= :endpoint-burst (get-in state [:vfx :effects :endpoint-burst :id])))
     (is (= :thunder-clap (get-in state [:combat :abilities :thunder-clap :id])))
     (is (= :mark-teleport (get-in state [:combat :abilities :mark-teleport :id])))

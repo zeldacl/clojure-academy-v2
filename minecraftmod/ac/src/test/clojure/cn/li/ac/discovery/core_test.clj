@@ -22,7 +22,7 @@
 
 (deftest base-family-and-fx-namespace-landscan-test
   (is (= :electromaster
-         (core/base-family 'cn.li.ac.content.ability.electromaster/thunder-bolt))
+         (core/base-family 'cn.li.ac.content.ability.electromaster/body-intensify))
       "family segment follows the ability path segment")
-  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/thunder-bolt-fx)))
-  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/thunder-bolt))))
+  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/body-intensify-fx)))
+  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/body-intensify))))

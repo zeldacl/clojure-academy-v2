@@ -1,0 +1,216 @@
+{:schema-version 2
+ :kind :ability
+ :id :thunder-bolt
+ :revision 1
+ :activation :instant
+ :status :migrated
+ :requires [:caster/id :caster/eye :caster/aim :world/id :rng/seed]
+ :prerequisites [{:skill-id :arc-gen :min-exp 0.0}
+                 {:skill-id :current-charging :min-exp 0.7}]
+ :tunables
+ {:targeting-range {:curve :const}
+  :direct-damage {:curve :mastery-lerp}
+  :aoe-radius {:curve :const}
+  :aoe-damage {:curve :mastery-lerp}
+  :slowness-chance {:curve :const}
+  :slowness-exp-threshold {:curve :const}
+  :slowness-duration-ticks {:curve :const :type :long}
+  :slowness-aoe-retry-duration-ticks {:curve :const :type :long}
+  :slowness-amplifier {:curve :const :type :long}
+  :creeper-charge-chance {:curve :const}
+  :cost-down-cp {:curve :mastery-lerp}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-effective {:curve :const}
+  :exp-ineffective {:curve :const}}
+ :costs
+ {:fire {:resources {:cp {:tunable :cost-down-cp}
+                     :overload {:tunable :cost-down-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:effective {:per-mark {:tunable :exp-effective}}
+               :ineffective {:per-mark {:tunable :exp-ineffective}}}
+ :vfx
+ {:strike {:effect-id :arc-strike-transient
+           :op :spawn
+           :payload {:start :vec3 :end :vec3 :aoe-origin :vec3
+                     :aoe-points :object :arc-life-ticks :long
+                     :pattern :keyword :hand-origin? :boolean
+                     :sound-id :string :sound-volume :double
+                     :sound-pitch :double :sound-position :vec3
+                     :bounds-radius :double}}}
+ :fragments
+  {:creeper-charge
+  {:inputs {:target-id {:type :object}
+            :target-type {:type :object}}
+   :body {:component :flow/branch
+          :when {:expr :bool/and
+                 :args [{:expr :bool/or
+                         :args [{:expr :value/eq
+                                 :args [{:ref [:input :target-type]}
+                                        "minecraft:creeper"]}
+                                {:expr :value/eq
+                                 :args [{:ref [:input :target-type]}
+                                        "entity.minecraft.creeper"]}]}
+                        {:expr :random/chance
+                         :args [{:tunable :creeper-charge-chance}]}]}
+          :then {:component :combat/status
+                 :target {:ref [:input :target-id]}
+                 :status-id :powered-creeper
+                 :duration-ticks 1
+                 :amplifier 0}}}
+  :direct-effects
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :flow/branch
+                   :when {:ref [:slot :aim-hit :creeper?]}
+                   :then {:component :flow/branch
+                          :when {:expr :random/chance
+                                 :args [{:tunable :creeper-charge-chance}]}
+                          :then {:component :combat/status
+                                 :target {:ref [:slot :direct-target :id]}
+                                 :status-id :powered-creeper
+                                 :duration-ticks 1
+                                 :amplifier 0}}}
+                  {:component :flow/branch
+                   :when {:expr :bool/and
+                          :args [{:expr :math/gt
+                                  :args [{:from :progression/mastery}
+                                         {:tunable :slowness-exp-threshold}]}
+                                 {:expr :random/chance
+                                  :args [{:tunable :slowness-chance}]}]}
+                   :then {:component :combat/status
+                          :target {:ref [:slot :direct-target :id]}
+                          :status-id :slowness
+                          :duration-ticks {:tunable :slowness-duration-ticks}
+                          :amplifier {:tunable :slowness-amplifier}}}]}}
+  :aoe-effects
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :creeper-charge
+                   :target-id {:ref [:slot :target :id]}
+                   :target-type {:ref [:slot :target :type]}}
+                  ;; The original rerolls the direct target's short
+                  ;; slowness once for every AOE victim.
+                  {:component :flow/branch
+                   :when {:expr :bool/and
+                          :args [{:ref [:slot :direct-target :id]}
+                                 {:expr :math/gt
+                                  :args [{:from :progression/mastery}
+                                         {:tunable :slowness-exp-threshold}]}
+                                 {:expr :random/chance
+                                  :args [{:tunable :slowness-chance}]}]}
+                   :then {:component :combat/status
+                          :target {:ref [:slot :direct-target :id]}
+                          :status-id :slowness
+                          :duration-ticks
+                          {:tunable :slowness-aoe-retry-duration-ticks}
+                          :amplifier {:tunable :slowness-amplifier}}}]}}
+  :strike-vfx
+  {:inputs {}
+   :body {:component :effect/vfx
+          :effect-id :arc-strike-transient
+          :operation :spawn
+          :instance-key [:activation :strike]
+          :audience {:type :nearby :radius 64.0}
+          :payload {:start {:from :caster/eye}
+                    :end {:ref [:slot :main-end]}
+                    :aoe-origin {:ref [:slot :aim-hit :position]}
+                    :aoe-points {:ref [:slot :aoe-targets]}
+                    :arc-life-ticks 20
+                    :pattern :strong
+                    :hand-origin? true
+                    :sound-id "academy:em.arc_strong"
+                    :sound-volume 0.6
+                    :sound-pitch 1.0
+                    :sound-position {:from :caster/eye}
+                    :bounds-radius 2.0}}}}
+ :program
+ {:component :flow/sequence
+  :steps [{:component :cost/spend
+           :budget :fire
+           :on-insufficient {:component :flow/finish
+                             :outcome :insufficient-resource}}
+          {:component :target/raycast
+           :origin {:from :caster/eye}
+           :direction {:from :caster/aim}
+           :distance {:tunable :targeting-range}
+           :include-entities? true
+           :include-blocks? true
+           :living-only? true
+           :result :aim-hit}
+          ;; Main arcs always travel the complete configured range, including
+          ;; when the authoritative raycast hits an entity early.
+          {:component :data/bind
+           :to :main-end
+           :value {:expr :vec3/add
+                   :args [{:from :caster/eye}
+                          {:expr :vec3/scale
+                           :args [{:from :caster/aim}
+                                  {:tunable :targeting-range}]}]}}
+          ;; Resolve the authoritative direct living target around the raycast
+          ;; hit. A miss uses radius zero, so an unrelated endpoint entity is
+          ;; never promoted to a direct hit.
+          {:component :target/entities
+           :shape {:type :sphere
+                   :center {:ref [:slot :aim-hit :position]}
+                   :radius {:expr :math/select
+                            :args [{:ref [:slot :aim-hit :entity-id]}
+                                   1.5 0.0]}}
+           :filter {:living? true
+                    :entity-ids [{:ref [:slot :aim-hit :entity-id]}]}
+           :projection [:id :type :eye-position :living?]
+           :limit 1
+           :result :direct-targets}
+          {:component :data/bind
+           :to :direct-target
+           :value {:expr :collection/first
+                   :args [{:ref [:slot :direct-targets]}]}}
+          ;; AOE is centered on the exact trace impact and excludes the direct
+          ;; target, matching the original no-double-hit behavior.
+          {:component :target/entities
+           :shape {:type :sphere
+                   :center {:ref [:slot :aim-hit :position]}
+                   :radius {:tunable :aoe-radius}}
+           :filter {:living? true
+                    :excluded-entity-ids [{:ref [:slot :aim-hit :entity-id]}]}
+           :projection [:id :type :eye-position :living?]
+           :limit 256
+           :result :aoe-targets}
+          {:component :flow/branch
+           :when {:ref [:slot :direct-target :id]}
+           :then {:component :flow/sequence
+                  :steps [{:component :combat/damage
+                           :target {:ref [:slot :direct-target :id]}
+                           :amount {:tunable :direct-damage}
+                           :damage-type :skill
+                           :damage-pipeline :skill}
+                          {:component :direct-effects}
+                          {:component :domain/event
+                           :event-type :achievement/trigger
+                           :payload {:id "electromaster.thunder_bolt"}}]}}
+          {:component :flow/foreach
+           :items {:ref [:slot :aoe-targets]}
+           :as :target
+           :limit 256
+           :body {:component :flow/sequence
+                  :steps [{:component :combat/damage
+                           :target {:ref [:slot :target :id]}
+                           :amount {:tunable :aoe-damage}
+                           :damage-type :skill
+                           :damage-pipeline :skill}
+                          {:component :aoe-effects}]}}
+          {:component :world/lightning
+           :world-id {:from :world/id}
+           :position {:ref [:slot :aim-hit :position]}
+           :visual-only? true}
+          {:component :strike-vfx}
+          {:component :flow/branch
+           :when {:expr :bool/or
+                  :args [{:ref [:slot :direct-target :id]}
+                         {:expr :collection/nonempty
+                          :args [{:ref [:slot :aoe-targets]}]}]}
+           :then {:component :score/mark :tag :effective}
+           :else {:component :score/mark :tag :ineffective}}
+          {:component :cooldown/start :name :main}
+          {:component :flow/finish :outcome :performed
+           :finish-session? true}]}}

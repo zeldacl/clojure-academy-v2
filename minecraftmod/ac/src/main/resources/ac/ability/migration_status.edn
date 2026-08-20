@@ -3,7 +3,7 @@
           :arc-gen :migrated
           :thunder-clap :migrated
           :scatter-bomb :migrated
-          :thunder-bolt :pending
+          :thunder-bolt :migrated
           :vec-reflection :migrated
           :groundshock :pending
           :mark-teleport :migrated

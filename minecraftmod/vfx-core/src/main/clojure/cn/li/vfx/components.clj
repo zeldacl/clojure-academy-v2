@@ -46,6 +46,13 @@
            [:vfx/ray-fan #{:origin :direction :length :count
                            :yaw-range-degrees :pitch-range-degrees
                            :life-ticks :grow-ticks :style :seed}]
+           ;; Generic chained arc burst: one caster ray plus a bounded list of
+           ;; impact-to-target arcs. Geometry, palette, lifetime and sound are
+           ;; supplied by the effect document; no skill is encoded.
+           [:vfx/arc-strike #{:start :end :aoe-origin :aoe-points
+                              :arc-life-ticks :pattern :hand-origin?
+                              :sound-id :sound-volume :sound-pitch
+                              :sound-position :bounds-radius :seed}]
            [:vfx/channel-arc #{:mode :caster :target :block-pos :block-bounds
                               :good? :charge-ticks :visual-max-ticks :style :seed}]
            [:vfx/beam-bounds #{:start :end :radius}]

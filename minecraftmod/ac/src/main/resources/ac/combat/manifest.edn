@@ -34,4 +34,7 @@
               :resource "ac/combat/abilities/ray_barrage.edn"}
              {:kind :ability
               :id :current-charging
-              :resource "ac/combat/abilities/current_charging.edn"}]}
+              :resource "ac/combat/abilities/current_charging.edn"}
+             {:kind :ability
+              :id :thunder-bolt
+              :resource "ac/combat/abilities/thunder_bolt.edn"}]}

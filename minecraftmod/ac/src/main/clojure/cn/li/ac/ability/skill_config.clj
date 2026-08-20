@@ -301,6 +301,22 @@
     :cost-down-overload :cost.down.overload
     :cost-tick-cp :cost.tick.cp
     :exp-effective :progression.exp-effective
+    :exp-ineffective :progression.exp-ineffective}
+   :thunder-bolt
+   {:targeting-range :targeting.range
+    :direct-damage :combat.direct-damage
+    :aoe-radius :combat.aoe-radius
+    :aoe-damage :combat.aoe-damage
+    :slowness-chance :effect.slowness-chance
+    :slowness-exp-threshold :effect.slowness-exp-threshold
+    :slowness-duration-ticks :effect.slowness-duration-ticks
+    :slowness-aoe-retry-duration-ticks :effect.slowness-aoe-retry-duration-ticks
+    :slowness-amplifier :effect.slowness-amplifier
+    :creeper-charge-chance :effect.creeper-charge-chance
+    :cost-down-cp :cost.down.cp
+    :cost-down-overload :cost.down.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-effective :progression.exp-effective
     :exp-ineffective :progression.exp-ineffective}})
 
 (defn- read-tunable-materialization

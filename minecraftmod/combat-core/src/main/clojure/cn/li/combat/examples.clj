@@ -135,6 +135,7 @@
 
 (def expression-examples
   {:math/select {:expr :math/select :args [true 1.0 0.0]}
+   :value/eq {:expr :value/eq :args ["minecraft:creeper" "minecraft:creeper"]}
    :collection/first {:expr :collection/first :args [[{:id "x"}]]}
    :collection/nonempty {:expr :collection/nonempty :args [[]]}})
 

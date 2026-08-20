@@ -70,6 +70,9 @@
     :math/lt (< (double (nth args 0)) (double (nth args 1)))
     :math/lte (<= (double (nth args 0)) (double (nth args 1)))
     :math/eq (= (double (nth args 0)) (double (nth args 1)))
+    ;; Generic value equality for data predicates (entity types, ids, modes).
+    ;; Numeric equality remains :math/eq so its primitive fast path is kept.
+    :value/eq (= (nth args 0) (nth args 1))
     :math/gte (>= (double (nth args 0)) (double (nth args 1)))
     :math/gt (> (double (nth args 0)) (double (nth args 1)))
     :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))
@@ -184,7 +187,10 @@
   (.add output value)
   nil)
 
-(defn- emit-component! [^ExecutionFrame frame component data]
+(defn- emit-component!
+  ([^ExecutionFrame frame component data]
+   (emit-component! frame component data nil))
+  ([^ExecutionFrame frame component data context]
   (case component
     :effect/vfx (append-object! (.-vfx frame)
                                 (effect-contract/vfx-signal
@@ -209,7 +215,11 @@
                       (effect-contract/action-request
                         (assoc (dissoc data :component)
                                :capability capability
-                               :world-id (str (or (:world-id data) "unknown"))))))))
+                               :world-id (str (or (:world-id data) "unknown"))
+                               ;; Neutral provenance metadata lets a host apply
+                               ;; its generic damage pipeline without making
+                               ;; Combat Core know any skill id.
+                               :ability-id (:ability-id context))))))))
 
 (defn- resolve-data [value context]
   (cond
@@ -535,7 +545,7 @@
         (when-let [on-fail (:on-fail data)]
           (execute-component! frame host (:component on-fail)
                               (dissoc on-fail :component) context))))
-    (emit-component! frame component (resolve-data data context))))
+    (emit-component! frame component (resolve-data data context) context)))
 
 (defn- query! [^CompiledProgram program ^ExecutionFrame frame ^HostTable host
               capability-id request-index result-slot]

@@ -159,10 +159,10 @@
                    :mine-ray-luck :plasma-cannon
                    :rad-intensify :railgun :scatter-bomb
                    :shift-teleport :space-fluct :storm-wing
-                   :threatening-teleport :thunder-bolt :thunder-clap
+                   :threatening-teleport :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
-    (is (= 35 (count content/ability-ids)))))
+    (is (= 34 (count content/ability-ids)))))
 
 (deftest combat-catalog-provides-player-registry-specs
   (is (true? (content/assert-complete-skill-catalog!)))

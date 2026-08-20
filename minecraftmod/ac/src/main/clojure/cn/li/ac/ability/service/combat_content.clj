@@ -100,42 +100,6 @@
                         :blindness-ticks 100 :blindness-amplifier 0}
                        {:op :vfx :effect-id :mine-detect
                         :event :release :params {:range 30.0}}]}}
-    {:id :thunder-bolt
-     :revision 1
-     :activation :instant
-     :cost {:cp (scale 280.0 420.0)
-            :overload (scale 50.0 27.0)}
-     :cooldown {:ticks (scale 120.0 50.0)}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :attack
-                        :range 20.0
-                        :aoe-radius 8.0
-                        :result-ref :attack
-                        :result-paths {:target [:target-uuid]
-                                       :impact [:impact]
-                                       :victims [:victims]}
-                        :result-flags {:hit [:target-uuid]}}
-                       {:op :branch
-                        :predicate-ref :hit
-                        :then {:op :damage
-                               :amount (scale 10.0 25.0)
-                               :type :electric
-                               :target-ref :target}
-                        :else {:op :patch :entries []}}
-                       {:op :world-effect
-                        :effect-type :damage-targets
-                        :targets-ref :attack
-                        :targets-path [:victims]
-                        :amount (scale 6.0 15.0)
-                        :damage-type :electric}
-                       {:op :world-effect
-                        :effect-type :lightning
-                        :origin-ref :attack
-                        :origin-path [:impact]
-                        :visual-only? true}
-                       {:op :vfx :effect-id :thunder-bolt-strike
-                       :event :perform
-                        :params {:range 20.0 :aoe-radius 8.0}}]}}
     {:id :electron-bomb
      :revision 1
      :activation :instant
