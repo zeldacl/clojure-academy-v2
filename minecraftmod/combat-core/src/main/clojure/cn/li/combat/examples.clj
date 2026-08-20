@@ -127,10 +127,20 @@
     :maximum-range 64.0
     :available-resource {:ref [:context :resources :energy]}
     :resource-per-distance 4.0
-    :policy {:direction {:ref [:context :look]}
+             :policy {:direction {:ref [:context :look]}
              :minimum-distance 1.0
              :entity-eye-height 1.6
-             :head-clearance? true}}})
+             :head-clearance? true}}
+   :target/penetration-destination
+   {:component :target/penetration-destination
+    :origin {:ref [:context :eye]}
+    :direction {:ref [:context :look]}
+    :distance 32.0
+    :scan-step 0.8
+    :clearance-steps 4
+    :available-resource {:ref [:context :resources :energy]}
+    :resource-per-distance 4.0
+    :marker-offset-y 1.6}})
 
 (def ir-node-examples
   [{:ir/op :const-double :dst 0 :value 1.0}

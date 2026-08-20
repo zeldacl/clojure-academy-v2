@@ -1,0 +1,189 @@
+{:schema-version 2
+ :kind :ability
+ :id :penetrate-teleport
+ :revision 1
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]
+ :tunables
+ {:max-distance {:curve :mastery-lerp}
+  :cp-per-block {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp}
+  :exp-per-distance {:curve :const}
+  :scan-step {:curve :const}}
+ :costs
+ {:release-cp
+  {:resources
+   {:cp {:expr :math/mul
+         :args [{:ref [:slot :destination :distance]}
+                {:tunable :cp-per-block}]}}}
+  :release-overload
+  {:resources {:overload {:tunable :release-overload}}}}
+ :progression
+ {:teleport {:per-mark {:tunable :exp-per-distance}}}
+ :cooldown
+ {:main {:ticks {:tunable :cooldown-ticks}}}
+ :vfx
+ {:marker-started {:effect-id :penetrate-teleport-marker
+                   :op :spawn
+                   :payload {:owner :owner-id
+                             :position :vec3
+                             :available? :bool
+                             :distance :double
+                             :color :object
+                             :particle-chance :double}}
+  :marker-updated {:effect-id :penetrate-teleport-marker
+                   :op :update
+                   :payload {:position :vec3
+                             :available? :bool
+                             :distance :double
+                             :color :object
+                             :particle-chance :double}}
+  :marker-ended {:effect-id :penetrate-teleport-marker
+                 :op :destroy
+                 :payload {}}
+  :teleported {:effect-id :penetrate-teleport-release
+               :op :spawn
+               :payload {:position :vec3
+                         :distance :double}}}
+ ;; These fragments are ability-local wiring only.  The actual target march,
+ ;; resource clamp, transaction, and marker geometry are shared components.
+ :fragments
+ {:refresh-destination
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :target/penetration-destination
+                   :origin {:from :caster/eye}
+                   :direction {:from :caster/aim}
+                   :distance {:tunable :max-distance}
+                   :scan-step {:tunable :scan-step}
+                   :clearance-steps 4
+                   :available-resource {:ref [:context :resources :cp]}
+                   :resource-per-distance {:tunable :cp-per-block}
+                   :marker-offset-y 1.62}
+                  {:component :data/bind
+                   :to :can-teleport?
+                   :value {:expr :bool/and
+                           :args [{:ref [:slot :destination :available?]}
+                                  {:expr :math/gte
+                                   :args [{:ref [:slot :destination :distance]}
+                                          0.5]}]}}
+                  {:component :session/patch
+                   :entries [{:path [:destination] :mode :assign
+                              :value {:ref [:slot :destination]}}]}]}}
+  :marker-signal
+  {:inputs {:operation {:type :keyword}
+            :color {:type :object}
+            :particle-chance {:type :object}}
+   :body {:component :effect/vfx
+          :effect-id :penetrate-teleport-marker
+          :operation {:ref [:input :operation]}
+          :instance-key [:activation :penetrate-teleport]
+          :audience {:type :nearby :radius 64.0}
+          :payload {:owner {:from :caster/id}
+                    :position {:ref [:slot :destination :marker-position]}
+                    :available? {:ref [:slot :destination :available?]}
+                    :distance {:ref [:slot :destination :distance]}
+                    :color {:ref [:input :color]}
+                    :particle-chance {:ref [:input :particle-chance]}}}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps [{:component :refresh-destination}
+           {:component :flow/branch
+            :when {:ref [:slot :can-teleport?]}
+            :then {:component :marker-signal
+                   :operation :spawn
+                   :color [255 255 255 255]
+                   :particle-chance 0.4}
+            :else {:component :marker-signal
+                   :operation :spawn
+                   :color [255 51 51 255]
+                   :particle-chance 0.0}}
+           {:component :flow/finish :outcome :started}]}
+  :pulse
+  {:component :flow/sequence
+   :steps [{:component :refresh-destination}
+           {:component :flow/branch
+            :when {:ref [:slot :can-teleport?]}
+            :then {:component :marker-signal
+                   :operation :update
+                   :color [255 255 255 255]
+                   :particle-chance 0.4}
+            :else {:component :marker-signal
+                   :operation :update
+                   :color [255 51 51 255]
+                   :particle-chance 0.0}}
+           {:component :flow/finish :outcome :continue}]}
+  :release
+  {:component :flow/sequence
+   :steps [{:component :refresh-destination}
+           ;; The original client plays the local release sound on key-up,
+           ;; before resource validation.  Keep that observable behavior
+           ;; declarative and emit it exactly once for every release.
+           {:component :effect/vfx
+            :effect-id :penetrate-teleport-release
+            :operation :spawn
+            :audience {:type :nearby :radius 64.0}
+            :payload {:position {:ref [:slot :destination :position]}
+                      :distance {:ref [:slot :destination :distance]}}}
+           {:component :flow/branch
+            :when {:ref [:slot :can-teleport?]}
+            :then {:component :txn/atomic
+                   :guards [{:component :guard/resource
+                             :cost {:cp {:expr :math/mul
+                                          :args [{:ref [:slot :destination :distance]}
+                                                 {:tunable :cp-per-block}]}
+                                    :overload {:tunable :release-overload}}}]
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :cost/spend :budget :release-cp}
+                                  {:component :cost/spend :budget :release-overload}
+                                  {:component :entity/teleport
+                                   :target {:from :caster/id}
+                                   :world-id {:from :world/id}
+                                   :position {:ref [:slot :destination :position]}
+                                   :dismount? true
+                                   :reset-fall-damage? true}
+                                  {:component :score/mark
+                                   :tag :teleport
+                                   :weight {:ref [:slot :destination :distance]}}
+                                  {:component :cooldown/start :name :main}
+                                  {:component :effect/vfx
+                                   :effect-id :penetrate-teleport-marker
+                                   :operation :destroy
+                                   :instance-key [:activation :penetrate-teleport]
+                                   :payload {}}
+                                  {:component :flow/finish
+                                   :outcome :teleported
+                                   :finish-session? true}]}
+                   :on-fail {:component :flow/sequence
+                             :steps [{:component :effect/vfx
+                                      :effect-id :penetrate-teleport-marker
+                                      :operation :destroy
+                                      :instance-key [:activation :penetrate-teleport]
+                                      :payload {}}
+                                      {:component :flow/finish
+                                       :outcome :insufficient-resource
+                                       :finish-session? true}]}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :penetrate-teleport-marker
+                            :operation :destroy
+                            :instance-key [:activation :penetrate-teleport]
+                            :payload {}}
+                           {:component :flow/finish
+                            :outcome :unavailable
+                             :finish-session? true}]}}]}
+  :abort
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :penetrate-teleport-marker
+            :operation :destroy
+            :instance-key [:activation :penetrate-teleport]
+            :payload {}}
+           {:component :flow/finish
+            :outcome :aborted
+            :finish-session? true}]}}}

@@ -505,31 +505,6 @@
                         :break-speed (scale 0.5 1.0) :fortune 3}
                        {:op :vfx :effect-id :mine-ray
                        :event :pulse :params {:range 20.0 :fortune 3 :variant :luck}}]}}
-    {:id :penetrate-teleport
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 60
-     :cost-phase :release
-     :cost {:cp (scale 40.0 20.0)
-            :overload (scale 30.0 15.0)}
-     :cooldown {:ticks (scale 30.0 0.0)}
-     :program {:op :phase
-               :pulse {:op :session-patch
-                       :entries [[[:hold-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :query :query-type :teleport-target
-                                  :mode :penetrate
-                                  :max-range (scale 16.0 32.0)
-                                  :result-ref :destination}
-                                 {:op :require :predicate :destination}
-                                 {:op :world-effect
-                                  :effect-type :teleport-approved-target
-                                  :target-ref :destination
-                                  :mode :penetrate}
-                                 {:op :vfx :effect-id :penetrate-teleport
-                                  :event :release :params {:max-range 32.0}}]}}}
     ;; Not a player teleport -- place/drop the held item at a raycasted
     ;; point, then damage whatever intersects the line from caster to that
     ;; point. Own :shift-teleport query-type/effect-type; previously

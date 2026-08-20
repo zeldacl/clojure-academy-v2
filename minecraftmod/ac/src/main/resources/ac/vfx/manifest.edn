@@ -28,4 +28,10 @@
               :resource "ac/vfx/effects/mark_teleport_marker.edn"}
              {:kind :vfx-effect
               :id :mark-teleport-perform
-              :resource "ac/vfx/effects/mark_teleport_perform.edn"}]}
+              :resource "ac/vfx/effects/mark_teleport_perform.edn"}
+             {:kind :vfx-effect
+              :id :penetrate-teleport-marker
+              :resource "ac/vfx/effects/penetrate_teleport_marker.edn"}
+             {:kind :vfx-effect
+              :id :penetrate-teleport-release
+              :resource "ac/vfx/effects/penetrate_teleport_release.edn"}]}

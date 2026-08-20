@@ -1,0 +1,40 @@
+{:schema-version 2
+ :kind :composite
+ :id :target/penetration-destination
+ :revision 1
+ ;; Generic wall-through destination selection.  The host supplies only a
+ ;; neutral ray/collision capability; distance/resource policy remains an
+ ;; input so this component is reusable by any ability that needs it.
+ :inputs
+ {:origin {:type :object}
+  :direction {:type :object}
+  :distance {:type :object}
+  :scan-step {:type :object}
+  :clearance-steps {:type :object}
+  :available-resource {:type :object}
+  :resource-per-distance {:type :object}
+  :marker-offset-y {:type :object :default 0.0}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :data/bind
+           :to :effective-distance
+           :value {:expr :math/min
+                   :args [{:ref [:input :distance]}
+                          {:expr :math/div
+                           :args [{:ref [:input :available-resource]}
+                                  {:expr :math/max
+                                   :args [1.0e-6
+                                          {:ref [:input :resource-per-distance]}]}]}]}}
+          {:component :target/raycast
+           :origin {:ref [:input :origin]}
+           :direction {:ref [:input :direction]}
+           :distance {:ref [:slot :effective-distance]}
+           :include-entities? false
+           :include-blocks? true
+           :policy {:type :penetration
+                    :direction {:ref [:input :direction]}
+                    :scan-step {:ref [:input :scan-step]}
+                    :clearance-steps {:ref [:input :clearance-steps]}
+                    :marker-offset-y {:ref [:input :marker-offset-y]}}
+           :result :destination}]}}
+

@@ -229,7 +229,14 @@
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
     :exp-per-distance :progression.exp-per-distance
-    :entity-eye-height :targeting.eye-height}})
+    :entity-eye-height :targeting.eye-height}
+   :penetrate-teleport
+   {:max-distance :targeting.max-distance
+    :cp-per-block :cost.up.cp-per-block
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-per-distance :progression.exp-per-distance
+    :scan-step :targeting.scan-step}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

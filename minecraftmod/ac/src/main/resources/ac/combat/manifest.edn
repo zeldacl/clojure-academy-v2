@@ -16,4 +16,7 @@
               :resource "ac/combat/abilities/scatter_bomb.edn"}
              {:kind :ability
               :id :mark-teleport
-              :resource "ac/combat/abilities/mark_teleport.edn"}]}
+              :resource "ac/combat/abilities/mark_teleport.edn"}
+             {:kind :ability
+              :id :penetrate-teleport
+              :resource "ac/combat/abilities/penetrate_teleport.edn"}]}

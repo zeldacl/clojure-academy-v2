@@ -117,7 +117,11 @@
              :ctrl-id ability-id
              :pattern :hold-channel
              :actions {}
-             :cooldown {:mode :combat-core}
+             ;; The registry field is metadata only; execution and cooldown
+             ;; settlement remain in the EDN VM.  `:manual` keeps the
+             ;; existing player-facing schema valid without installing a
+             ;; legacy callback path.
+             :cooldown {:mode :manual}
              :execution :edn}) )
         (sort (for [[ability-id status] (:migration @state*)
                     :when (and (= :migrated status) (available? ability-id))]

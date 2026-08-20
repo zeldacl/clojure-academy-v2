@@ -6,4 +6,5 @@
           :thunder-bolt :pending
           :vec-reflection :migrated
           :groundshock :pending
-          :mark-teleport :migrated}}
+          :mark-teleport :migrated
+          :penetrate-teleport :migrated}}

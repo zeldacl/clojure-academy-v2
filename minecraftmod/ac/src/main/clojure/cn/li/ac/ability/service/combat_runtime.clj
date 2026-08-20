@@ -5,6 +5,7 @@
   (:require [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
             [cn.li.combat.runtime :as combat]
+            [cn.li.combat.targeting :as targeting]
             [cn.li.combat.vm :as combat-vm]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -33,7 +34,6 @@
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
-            [cn.li.ac.content.ability.teleporter.penetrate-dest :as penetrate-dest]
             [cn.li.ac.content.ability.teleporter.flashing-dest :as flashing-dest]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.framework :as fw]
@@ -786,24 +786,6 @@
                                         (block-manipulation/block-collidable?
                                          world-id x (inc (long y)) z))]
                     (case (:mode node)
-                      :penetrate
-                      (let [eye (geom/eye-pos owner)
-                            look (when (raycast/available?) (raycast/player-look-vector owner))
-                            dist (penetrate-dest/clamp-distance-by-cp
-                                  (penetrate-dest/max-distance exp) cp exp)
-                            collidable? (fn [x y z] (block-manipulation/block-collidable? world-id x y z))
-                            result (when look
-                                     (penetrate-dest/destination
-                                      {:x (:x eye) :y (:y eye) :z (:z eye)
-                                       :look-vec look :distance dist :collidable? collidable?}))]
-                        ;; :available? false means the march ended still
-                        ;; inside the wall it was penetrating -- teleporting
-                        ;; there would bury the player in a block, so this
-                        ;; must read as "no destination", not "destination
-                        ;; found, deal with it later".
-                        (when (and result (:available? result))
-                          {:x (:x result) :y (:y result) :z (:z result)}))
-
                       :flashing
                       (let [body (geom/body-pos owner)
                             eye (geom/eye-pos owner)
@@ -1611,20 +1593,19 @@
                                                {:attacker-uuid owner}))]
                                {:status (if applied? :applied :failed)
                                 :effect effect})
-                             ;; :mark / :penetrate / :flashing -- a genuine
-                             ;; player teleport. The destination is always
+                             ;; The remaining legacy flashing teleport is a
+                             ;; genuine player teleport. Its destination is
                              ;; server-computed (raycast/eye-position/
                              ;; collision checks in the query, never trusts
                              ;; client input), so the token here isn't a
                              ;; security boundary -- it's just filling the
                              ;; existing teleport-approved-target! contract
-                             ;; shape (owner ability-id approval-token mode)
-                             ;; uniformly across every mode.
+                             ;; shape (owner ability-id approval-token mode).
                              (let [valid-dest? (and (map? destination)
                                                      (every? #(number? (get destination %)) [:x :y :z]))
                                    valid? (and world-id valid-dest?
-                                                (#{:penetrate-teleport :flashing} ability-id)
-                                                (#{:penetrate :flashing} mode)
+                                                (= :flashing ability-id)
+                                                (= :flashing mode)
                                                 (teleportation/available?))
                                    token (when valid?
                                            (teleportation/mint-approval-token!
@@ -1889,6 +1870,32 @@
   [hit key fallback]
   (double (or (get hit key) fallback 0.0)))
 
+(defn- penetration-destination
+  "Resolve the generic wall-through march against AC's neutral block port.
+
+   The component and marcher carry no skill id or config lookup.  This host
+   adapter only translates the platform collision predicate into the generic
+   targeting function and adds the requested visual anchor offset."
+  [owner {:keys [origin direction distance policy world-id]}]
+  (let [world-id (or (when (and world-id (not= "unknown" (str world-id)))
+                      (str world-id))
+                    (geom/world-id-of (str owner)))
+        result (targeting/march-through-collision
+                origin direction distance
+                (:scan-step policy)
+                (:clearance-steps policy)
+                (fn [x y z]
+                  (or (nil? world-id)
+                      (not (block-manipulation/available?))
+                      (block-manipulation/block-collidable?
+                       world-id (int x) (int y) (int z)))))]
+    (when result
+      (let [position (:position result)
+            offset (double (or (:marker-offset-y policy) 0.0))]
+        (assoc result
+               :marker-position (update position :y + offset)
+               :hit? false)))))
+
 (defn- resolve-raycast-destination
   "Resolve a neutral raycast hit into a safe landing point.
 
@@ -1983,12 +1990,19 @@
          :raycast
          (fn [{:keys [owner distance include-entities? include-blocks? hit origin policy]
               :as request} _frame]
-           (if (contains? request :hit)
-             (resolve-raycast-destination owner
-                                          {:hit hit :origin origin
-                                           :distance distance :policy policy
-                                           :world-id (:world-id request)})
-             (let [owner (str owner)
+           (if (= :penetration (:type policy))
+             (penetration-destination owner
+                                      {:origin origin
+                                       :direction (:direction policy)
+                                       :distance distance
+                                       :policy policy
+                                       :world-id (:world-id request)})
+             (if (contains? request :hit)
+               (resolve-raycast-destination owner
+                                            {:hit hit :origin origin
+                                             :distance distance :policy policy
+                                             :world-id (:world-id request)})
+               (let [owner (str owner)
                  distance (max 0.0 (min 128.0 (double (or distance 0.0))))
                  world-id (geom/world-id-of owner)
                  eye (geom/eye-pos owner)
@@ -2041,7 +2055,7 @@
                                :z (Math/floor (double (:z position)))}
               :block-id block-id
               :water? (= "minecraft:water" block-id)
-              :world-id world-id})))))
+              :world-id world-id}))))))
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
         (capabilities/register-query!
          :entity/select

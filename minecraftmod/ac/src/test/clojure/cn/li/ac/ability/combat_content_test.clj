@@ -156,18 +156,18 @@
                    :flesh-ripping :groundshock :jet-engine :light-shield
                    :location-teleport :mag-manip :mag-movement :mark-teleport
                    :meltdowner :mine-detect :mine-ray-basic :mine-ray-expert
-                   :mine-ray-luck :penetrate-teleport :plasma-cannon
+                   :mine-ray-luck :plasma-cannon
                    :rad-intensify :railgun :ray-barrage :scatter-bomb
                    :shift-teleport :space-fluct :storm-wing
                    :threatening-teleport :thunder-bolt :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
-    (is (= 38 (count content/ability-ids)))))
+    (is (= 37 (count content/ability-ids)))))
 
 (deftest combat-catalog-provides-player-registry-specs
   (is (true? (content/assert-complete-skill-catalog!)))
   (let [specs (content/skill-specs)]
-    (is (= 38 (count specs)))
+    (is (= 37 (count specs)))
     (is (= content/ability-ids (set (map :id specs))))
     (is (every? #(and (:category-id %) (:level %) (:pattern %)) specs))))
 
