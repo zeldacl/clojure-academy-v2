@@ -82,7 +82,7 @@
                                 :end {:ref [:slot :aim-hit :position]}
                                 :life-ticks 50 :grow-ticks 0
                                 :bounds-radius 0.8
-                                :style {:texture "academy:effects/mdray_small"
+                                :style {:texture "academy:textures/effects/mdray_small"
                                         :outer-radius 0.052
                                         :inner-radius 0.045
                                         :glow-width 0.4 :glow-alpha 127
@@ -137,7 +137,7 @@
                                 :life-ticks 50 :grow-ticks 4
                                 :seed {:from :rng/seed}
                                 :bounds-radius 15.0
-                                :style {:texture "academy:effects/mdray_small"
+                                :style {:texture "academy:textures/effects/mdray_small"
                                         :outer-radius 0.045
                                         :inner-radius 0.03
                                         :glow-width 0.3 :glow-alpha 127
@@ -170,7 +170,7 @@
                                 :end {:ref [:slot :aim-hit :position]}
                                 :life-ticks 30 :grow-ticks 0
                                 :bounds-radius 0.8
-                                :style {:texture "academy:effects/mdray_small"
+                                :style {:texture "academy:textures/effects/mdray_small"
                                         :outer-radius 0.052
                                         :inner-radius 0.045
                                         :glow-width 0.4 :glow-alpha 127
