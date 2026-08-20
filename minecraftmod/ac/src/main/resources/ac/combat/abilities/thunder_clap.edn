@@ -27,11 +27,19 @@
                           :args [{:from :charge/ticks} {:tunable :cooldown-per-hold}]}}}
  :progression {:cast {:per-mark {:tunable :exp-use}}}
  :vfx
- {:charge-started {:effect-id :thunder-clap :op :spawn
-                   :payload {:caster :owner-id :caster-position :vec3
-                             :target :vec3 :ticks :long}}
-  :charge-updated {:effect-id :thunder-clap :op :update
-                   :payload {:target :vec3 :ticks :long :ratio :double}}}
+ {:charge-started {:effect-id :arc-ring-session :op :spawn
+                   :payload {:start :vec3 :end :vec3 :duration-ticks :long
+                             :arc-spacing :object :arc-radius :object
+                             :arc-count-limit :long :arc-life-ticks :long
+                             :ring-from :double :ring-to :double
+                             :ring-segments :long :ring-color :object
+                             :sound-id :string :sound-volume :double
+                             :sound-pitch :double :sound-position :vec3
+                             :fade-at :long :fade-to-tick :long
+                             :fade-ring-from :double :fade-ring-to :double
+                             :fade-segments :long :fade-color :object}}
+  :charge-updated {:effect-id :arc-ring-session :op :update
+                   :payload {:end :vec3}}}
  :fragments
  {:aim {:inputs {}
         :body {:component :target/raycast
@@ -83,12 +91,10 @@
              :visual-only? true}
             {:component :score/mark :tag :cast}
             {:component :cooldown/start :name :main}
-            {:component :effect/vfx :effect-id :thunder-clap :operation :update
+            {:component :effect/vfx :effect-id :arc-ring-session :operation :update
              :instance-key [:activation :thunder-clap]
-             :payload {:target {:ref [:slot :aim-hit :position]}
-                       :ticks {:from :charge/ticks}
-                       :ratio {:ref [:slot :overcharge-ratio]}}}
-            {:component :effect/vfx :effect-id :thunder-clap :operation :destroy
+             :payload {:end {:ref [:slot :aim-hit :position]}}}
+            {:component :effect/vfx :effect-id :arc-ring-session :operation :destroy
              :instance-key [:activation :thunder-clap] :payload {}}
             {:component :domain/event :event-type :achievement/trigger
              :payload {:id "electromaster.thunder_clap"}}
@@ -103,13 +109,23 @@
             :on-insufficient {:component :flow/finish
                               :outcome :insufficient-resource
                               :finish-session? true}}
-           {:component :effect/vfx :effect-id :thunder-clap :operation :spawn
+           {:component :effect/vfx :effect-id :arc-ring-session :operation :spawn
             :instance-key [:activation :thunder-clap]
             :audience {:type :nearby :radius 64.0}
-            :payload {:caster {:from :caster/id}
-                      :caster-position {:from :caster/eye}
-                      :target {:ref [:slot :aim-hit :position]}
-                      :ticks 0}}
+             :payload {:start {:from :caster/eye}
+                       :end {:ref [:slot :aim-hit :position]}
+                       :duration-ticks 64
+                       :arc-spacing {:min 1.0 :max 2.0}
+                       :arc-radius {:min 0.08 :max 0.22}
+                       :arc-count-limit 64 :arc-life-ticks 60
+                       :ring-from 0.25 :ring-to 1.5 :ring-segments 24
+                       :ring-color [188 252 238 210]
+                       :sound-id "minecraft:entity.lightning_bolt.thunder"
+                       :sound-volume 0.7 :sound-pitch 1.0
+                       :sound-position {:ref [:slot :aim-hit :position]}
+                       :fade-at 40 :fade-to-tick 64
+                       :fade-ring-from 1.5 :fade-ring-to 2.0
+                       :fade-segments 24 :fade-color [236 170 93 150]}}
            {:component :flow/finish :outcome :started}]}
   :pulse
   {:component :flow/branch
@@ -117,12 +133,9 @@
    :then {:component :flow/sequence :steps [{:component :aim} {:component :detonate}]}
    :else {:component :flow/sequence
           :steps [{:component :aim}
-                  {:component :effect/vfx :effect-id :thunder-clap :operation :update
+                  {:component :effect/vfx :effect-id :arc-ring-session :operation :update
                    :instance-key [:activation :thunder-clap]
-                   :payload {:target {:ref [:slot :aim-hit :position]}
-                             :ticks {:from :charge/ticks}
-                             :ratio {:expr :math/div
-                                     :args [{:from :charge/ticks} {:tunable :charge-max}]}}}
+                    :payload {:end {:ref [:slot :aim-hit :position]}}}
                   {:component :flow/branch
                    :when {:expr :math/lte :args [{:from :charge/ticks} {:tunable :charge-min}]}
                    ;; :cost/spend's affordable path returns nil (continue),
@@ -135,7 +148,7 @@
                                    :budget :charging
                                    :on-insufficient
                                    {:component :flow/sequence
-                                    :steps [{:component :effect/vfx :effect-id :thunder-clap
+                                     :steps [{:component :effect/vfx :effect-id :arc-ring-session
                                              :operation :destroy
                                              :instance-key [:activation :thunder-clap] :payload {}}
                                             {:component :flow/finish :outcome :insufficient-resource
@@ -149,12 +162,12 @@
             :when {:expr :math/gte :args [{:from :charge/ticks} {:tunable :charge-min}]}
             :then {:component :detonate}
             :else {:component :flow/sequence
-                   :steps [{:component :effect/vfx :effect-id :thunder-clap :operation :destroy
+                    :steps [{:component :effect/vfx :effect-id :arc-ring-session :operation :destroy
                             :instance-key [:activation :thunder-clap] :payload {}}
                            {:component :flow/finish :outcome :undercharged
                             :finish-session? true}]}}]}
   :abort
   {:component :flow/sequence
-   :steps [{:component :effect/vfx :effect-id :thunder-clap :operation :destroy
+    :steps [{:component :effect/vfx :effect-id :arc-ring-session :operation :destroy
             :instance-key [:activation :thunder-clap] :payload {}}
            {:component :flow/finish :outcome :aborted :finish-session? true}]}}}

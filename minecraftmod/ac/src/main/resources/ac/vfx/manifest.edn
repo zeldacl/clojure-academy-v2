@@ -1,37 +1,34 @@
 {:schema-version 1
  :documents [{:kind :vfx-effect
-              :id :railgun-beam
-              :resource "ac/vfx/effects/railgun_beam.edn"}
+              :id :beam-arc-fade
+              :resource "ac/vfx/effects/beam_arc_fade.edn"}
              {:kind :vfx-effect
-              :id :railgun-charge
-              :resource "ac/vfx/effects/railgun_charge.edn"}
+              :id :beam-fade-audio
+              :resource "ac/vfx/effects/beam_fade_audio.edn"}
              {:kind :vfx-effect
-              :id :arc-gen
-              :resource "ac/vfx/effects/arc_gen.edn"}
+              :id :endpoint-burst
+              :resource "ac/vfx/effects/endpoint_burst.edn"}
              {:kind :vfx-effect
-              :id :thunder-clap
-              :resource "ac/vfx/effects/thunder_clap.edn"}
+              :id :arc-ring-fade-audio
+              :resource "ac/vfx/effects/arc_ring_fade_audio.edn"}
              {:kind :vfx-effect
-              :id :vec-reflection-field
-              :resource "ac/vfx/effects/vec_reflection_field.edn"}
+              :id :ring-fade-audio
+              :resource "ac/vfx/effects/ring_fade_audio.edn"}
              {:kind :vfx-effect
-              :id :vec-reflection-wave
-              :resource "ac/vfx/effects/vec_reflection_wave.edn"}
+              :id :arc-ring-session
+              :resource "ac/vfx/effects/arc_ring_session.edn"}
              {:kind :vfx-effect
-              :id :scatter-bomb-charge
-              :resource "ac/vfx/effects/scatter_bomb_charge.edn"}
+              :id :billboard-session
+              :resource "ac/vfx/effects/billboard_session.edn"}
              {:kind :vfx-effect
-              :id :scatter-bomb-beam
-              :resource "ac/vfx/effects/scatter_bomb_beam.edn"}
+              :id :particle-audio-session
+              :resource "ac/vfx/effects/particle_audio_session.edn"}
+             {:kind :vfx-effect
+              :id :audio-one-shot
+              :resource "ac/vfx/effects/audio_one_shot.edn"}
+             {:kind :vfx-effect
+              :id :ring-particle-field
+              :resource "ac/vfx/effects/ring_particle_field.edn"}
              {:kind :vfx-effect
               :id :teleport-marker
-              :resource "ac/vfx/effects/teleport_marker.edn"}
-             {:kind :vfx-effect
-              :id :mark-teleport-perform
-              :resource "ac/vfx/effects/mark_teleport_perform.edn"}
-             {:kind :vfx-effect
-             :id :penetrate-teleport-release
-              :resource "ac/vfx/effects/penetrate_teleport_release.edn"}
-             {:kind :vfx-effect
-              :id :flashing-perform
-              :resource "ac/vfx/effects/flashing_perform.edn"}]}
+              :resource "ac/vfx/effects/teleport_marker.edn"}]}

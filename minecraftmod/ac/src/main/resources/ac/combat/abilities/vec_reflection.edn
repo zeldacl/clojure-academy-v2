@@ -50,13 +50,29 @@
              :max-depth {:ref [:param :max-reflections]}
              :exp-scale {:ref [:param :exp-damage-scale]}}}]
  :vfx
- {:reflection-start {:effect-id :vec-reflection-field :op :spawn
-                     :payload {:owner :owner-id}}
-  :projectile-reflected {:effect-id :vec-reflection-wave :op :spawn
-                         :payload {:position :vec3 :velocity :vec3
-                                   :mode :reflect-entity}}
-  :damage-reflected {:effect-id :vec-reflection-wave :op :spawn
-                     :payload {:position :vec3 :mode :damage}}}
+ {:reflection-start {:effect-id :ring-particle-field :op :spawn
+                     :payload {:position :vec3 :ring-from :double
+                               :ring-to :double :segments :long
+                               :ring-color :object :rate-per-tick :long
+                               :limit :long :particle :object}}
+  :projectile-reflected {:effect-id :ring-fade-audio :op :spawn
+                         :payload {:position :vec3 :duration-ticks :long
+                                   :ring-from :double :ring-to :double
+                                   :ring-segments :long :ring-color :object
+                                   :fade-at :long :fade-to-tick :long
+                                   :fade-ring-from :double :fade-ring-to :double
+                                   :fade-segments :long :fade-color :object
+                                   :sound-id :string :sound-volume :double
+                                   :sound-pitch :double}}
+  :damage-reflected {:effect-id :ring-fade-audio :op :spawn
+                     :payload {:position :vec3 :duration-ticks :long
+                               :ring-from :double :ring-to :double
+                               :ring-segments :long :ring-color :object
+                               :fade-at :long :fade-to-tick :long
+                               :fade-ring-from :double :fade-ring-to :double
+                               :fade-segments :long :fade-color :object
+                               :sound-id :string :sound-volume :double
+                               :sound-pitch :double}}}
  :program
  {:component :flow/phases
   :start
@@ -66,11 +82,16 @@
             :on-insufficient {:component :flow/finish :outcome :insufficient-resource
                               :finish-session? true}}
            {:component :effect/vfx
-            :effect-id :vec-reflection-field
+            :effect-id :ring-particle-field
             :operation :spawn
             :instance-key [:activation :vec-reflection]
             :audience {:type :nearby :radius 64.0}
-            :payload {:mode :start :position {:from :caster/eye}}}
+            :payload {:position {:from :caster/eye}
+                      :ring-from 0.45 :ring-to 0.9 :segments 20
+                      :ring-color [188 252 238 150]
+                      :rate-per-tick 2 :limit 128
+                      :particle {:material :additive
+                                 :life-ticks 12 :speed 0.04}}}
            {:component :flow/finish :outcome :started}]}
   :pulse
   {:component :flow/sequence
@@ -78,7 +99,7 @@
             :budget :per-tick
             :on-insufficient {:component :flow/sequence
                               :steps [{:component :effect/vfx
-                                       :effect-id :vec-reflection-field
+                                       :effect-id :ring-particle-field
                                        :operation :destroy
                                        :instance-key [:activation :vec-reflection]
                                        :payload {}}
@@ -128,17 +149,23 @@
                                               :tag :reflect-entity
                                               :weight {:ref [:slot :projectile :difficulty]}}
                                              {:component :effect/vfx
-                                              :effect-id :vec-reflection-wave
+                                              :effect-id :ring-fade-audio
                                               :operation :spawn
                                               :instance-key [:projectile {:ref [:slot :projectile :id]}]
-                                              :payload {:mode :reflect-entity
-                                                        :position {:ref [:slot :projectile :position]}
-                                                        :velocity {:ref [:slot :projectile :velocity]}}}]}}}}
+                                              :payload {:position {:ref [:slot :projectile :position]}
+                                                        :duration-ticks 12 :ring-from 0.15 :ring-to 1.1
+                                                        :ring-segments 16 :ring-color [236 170 93 180]
+                                                        :fade-at 6 :fade-to-tick 12
+                                                        :fade-ring-from 1.1 :fade-ring-to 1.3
+                                                        :fade-segments 16
+                                                        :fade-color [188 252 238 130]
+                                                        :sound-id "academy:vecmanip.vec_reflection"
+                                                        :sound-volume 0.5 :sound-pitch 1.0}}]}}}}
            {:component :flow/finish :outcome :continue}]}
   :release
   {:component :flow/sequence
    :steps [{:component :effect/vfx
-            :effect-id :vec-reflection-field
+            :effect-id :ring-particle-field
             :operation :destroy
             :instance-key [:activation :vec-reflection]
             :payload {}}
@@ -147,7 +174,7 @@
   :abort
   {:component :flow/sequence
    :steps [{:component :effect/vfx
-            :effect-id :vec-reflection-field
+            :effect-id :ring-particle-field
             :operation :destroy
             :instance-key [:activation :vec-reflection]
             :payload {}}

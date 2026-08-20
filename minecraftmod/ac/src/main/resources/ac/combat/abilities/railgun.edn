@@ -25,14 +25,22 @@
                                :ability-mode? true}
                       :dispatch {:ability :railgun :event :coin-thrown}}]
  :vfx
- {:beam-fired {:effect-id :railgun-beam
+ {:beam-fired {:effect-id :beam-arc-fade
               :op :spawn
-              :payload {:start :vec3 :end :vec3
-                        :mode [:enum :main :reflected]
-                        :life-ticks :long}}
-  :charge-started {:effect-id :railgun-charge
+              :payload {:start :vec3 :end :vec3 :duration-ticks :long
+                        :beam-at :long :grow-ticks :long :layers :object
+                        :arc-at :long :arc-spacing :object :arc-radius :object
+                        :arc-count-limit :long :arc-life-ticks :long
+                        :fade-at :long :fade-from-tick :long :fade-to-tick :long
+                        :fade-from-alpha :double :fade-to-alpha :double
+                        :ring-radius :object :ring-segments :long
+                        :ring-color :object}}
+  :charge-started {:effect-id :billboard-session
                    :op :spawn
-                   :payload {:source-owner :owner-id :charge-ticks :long}}}
+                   :payload {:anchor :object :duration-ticks :long
+                             :texture-pattern :string
+                             :frame-count :long :frame-duration-ms :long
+                             :half-size :double}}}
  :program
  {:component :flow/phases
   :start
@@ -44,12 +52,13 @@
             :limit 8
             :result :coins}
            {:component :effect/vfx
-            :effect-id :railgun-charge
+            :effect-id :billboard-session
             :operation :spawn
             :instance-key [:activation :railgun-charge]
             :audience {:type :nearby :radius 32.0}
-            :payload {:source-owner {:from :caster/id}
-                      :charge-ticks {:tunable :charge-ticks}}}
+            :payload {:anchor :owner-hand :duration-ticks 64
+                      :texture-pattern "academy:textures/effects/arc_burst/%d.png"
+                      :frame-count 40 :frame-duration-ms 40 :half-size 0.4}}
            {:component :flow/finish :outcome :started}]}
   :pulse
   {:component :flow/sequence
@@ -84,17 +93,26 @@
                            :limit 4096}
             :result :beam-result}
            {:component :effect/vfx
-            :effect-id :railgun-beam
+            :effect-id :beam-arc-fade
             :operation :spawn
             :payload {:start {:ref [:slot :beam-result :start]}
                       :end {:ref [:slot :beam-result :end]}
-                      :mode :main
-                      :life-ticks 50}}
+                      :duration-ticks 50 :beam-at 0 :grow-ticks 3
+                      :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
+                               {:shape :tube :radius 0.09 :color [241 240 222 200]}
+                               {:shape :line :width 0.02 :color [165 230 255 160]}]
+                      :arc-at 3 :arc-spacing {:min 1.0 :max 2.0}
+                      :arc-radius {:min 0.1 :max 0.25}
+                      :arc-count-limit 64 :arc-life-ticks 30
+                      :fade-at 30 :fade-from-tick 30 :fade-to-tick 50
+                      :fade-from-alpha 1.0 :fade-to-alpha 0.0
+                      :ring-radius 0.34 :ring-segments 12
+                      :ring-color [188 252 238 180]}}
            {:component :flow/finish :outcome :continue}]}
   :release
   {:component :flow/sequence
    :steps [{:component :effect/vfx
-            :effect-id :railgun-charge
+            :effect-id :billboard-session
             :operation :destroy
             :instance-key [:activation :railgun-charge]
             :payload {}}
@@ -119,7 +137,7 @@
   :abort
   {:component :flow/sequence
    :steps [{:component :effect/vfx
-            :effect-id :railgun-charge
+            :effect-id :billboard-session
             :operation :destroy
             :instance-key [:activation :railgun-charge]
             :payload {}}

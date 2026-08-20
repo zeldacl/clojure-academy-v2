@@ -29,15 +29,23 @@
  :vfx
  {:mark-started {:effect-id :teleport-marker :op :spawn
                  :payload {:owner :owner-id :position :vec3
-                           :distance :double :color :object
-                           :particle-chance :double}}
-  :mark-updated {:effect-id :teleport-marker :op :update
-                 :payload {:position :vec3 :distance :double
                            :color :object :particle-chance :double}}
+  :mark-updated {:effect-id :teleport-marker :op :update
+                 :payload {:position :vec3 :color :object
+                           :particle-chance :double}}
   :mark-ended {:effect-id :teleport-marker :op :destroy
                :payload {}}
-  :teleported {:effect-id :mark-teleport-perform :op :spawn
-               :payload {:position :vec3 :distance :double}}}
+   :teleported {:effect-id :arc-ring-fade-audio :op :spawn
+                :payload {:start :vec3 :end :vec3 :ring-center :vec3
+                          :duration-ticks :long :ring-from :double :ring-to :double
+                          :ring-segments :long :ring-color :object
+                          :arc-spacing :object :arc-radius :object
+                          :arc-count-limit :long :arc-life-ticks :long
+                          :fade-at :long :fade-to-tick :long
+                          :fade-ring-from :double :fade-ring-to :double
+                          :fade-segments :long :fade-color :object
+                          :sound-id :string :sound-volume :double
+                          :sound-pitch :double :sound-position :vec3}}}
  ;; Ability-local wiring only.  The behavior remains in the generic target
  ;; composites; this fragment prevents three phases from repeating the same
  ;; tunable/resource/policy binding map.
@@ -82,7 +90,6 @@
             :audience {:type :nearby :radius 64.0}
              :payload {:owner {:from :caster/id}
                        :position {:ref [:slot :destination :position]}
-                       :distance {:ref [:slot :destination :distance]}
                        :color [188 252 238 255]
                        :particle-chance 0.4}}
      :else nil}
@@ -99,7 +106,6 @@
             :instance-key [:activation :mark-teleport]
             :audience {:type :nearby :radius 64.0}
              :payload {:position {:ref [:slot :destination :position]}
-                       :distance {:ref [:slot :destination :distance]}
                        :color [188 252 238 255]
                        :particle-chance 0.4}}
      :else nil}
@@ -131,11 +137,25 @@
                             :weight {:ref [:slot :destination :distance]}}
                            {:component :cooldown/start :name :main}
                            {:component :effect/vfx
-                            :effect-id :mark-teleport-perform
+                             :effect-id :arc-ring-fade-audio
                             :operation :spawn
                             :audience {:type :nearby :radius 64.0}
-                            :payload {:position {:ref [:slot :destination :position]}
-                                      :distance {:ref [:slot :destination :distance]}}}
+                             :payload {:start {:ref [:slot :destination :position]}
+                                       :end {:ref [:slot :destination :position]}
+                                       :ring-center {:ref [:slot :destination :position]}
+                                       :duration-ticks 20 :ring-from 0.25 :ring-to 1.4
+                                       :ring-segments 24
+                                       :ring-color [188 252 238 220]
+                                       :arc-spacing {:min 0.6 :max 1.2}
+                                       :arc-radius {:min 0.08 :max 0.18}
+                                       :arc-count-limit 32 :arc-life-ticks 12
+                                       :fade-at 8 :fade-to-tick 20
+                                       :fade-ring-from 1.4 :fade-ring-to 2.0
+                                       :fade-segments 24
+                                       :fade-color [236 170 93 180]
+                                       :sound-id "academy:em.teleport"
+                                       :sound-volume 0.6 :sound-pitch 1.0
+                                       :sound-position {:ref [:slot :destination :position]}}}
                            {:component :effect/vfx
             :effect-id :teleport-marker
                             :operation :destroy

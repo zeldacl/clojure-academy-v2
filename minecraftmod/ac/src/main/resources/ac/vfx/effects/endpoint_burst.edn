@@ -1,0 +1,34 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :endpoint-burst
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:from :vec3 :to :vec3 :duration-ticks :long :rate-per-tick :long
+          :limit :long :particle :object :sound-id :string
+          :sound-volume :double :sound-pitch :double}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks {:ref [:input :duration-ticks]}
+         :children [{:at 0
+                     :node {:component :vfx/emitter
+                            :anchor {:ref [:input :from]}
+                            :rate-per-tick {:ref [:input :rate-per-tick]}
+                            :limit {:ref [:input :limit]}
+                            :particle {:ref [:input :particle]}}}
+                    {:at 0
+                     :node {:component :vfx/emitter
+                            :anchor {:ref [:input :to]}
+                            :rate-per-tick {:ref [:input :rate-per-tick]}
+                            :limit {:ref [:input :limit]}
+                            :particle {:ref [:input :particle]}}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :sound-volume]}
+                            :pitch {:ref [:input :sound-pitch]}
+                            :position {:ref [:input :to]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :from]}
+          :end {:ref [:input :to]}
+          :radius 1.2}}

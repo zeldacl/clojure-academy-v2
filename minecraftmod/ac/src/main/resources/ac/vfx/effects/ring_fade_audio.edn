@@ -1,0 +1,42 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :ring-fade-audio
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:position :vec3 :duration-ticks :long :ring-from :double
+          :ring-to :double :ring-segments :long :ring-color :object
+          :fade-at :long :fade-to-tick :long :fade-ring-from :double
+          :fade-ring-to :double :fade-segments :long :fade-color :object
+          :sound-id :string :sound-volume :double :sound-pitch :double}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks {:ref [:input :duration-ticks]}
+         :children [{:at 0
+                     :node {:component :vfx/ring
+                            :center {:ref [:input :position]}
+                            :radius {:from {:ref [:input :ring-from]}
+                                     :to {:ref [:input :ring-to]}}
+                            :segments {:ref [:input :ring-segments]}
+                            :color {:ref [:input :ring-color]}}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :sound-volume]}
+                            :pitch {:ref [:input :sound-pitch]}
+                            :position {:ref [:input :position]}}}
+                    {:at {:ref [:input :fade-at]}
+                     :node {:component :vfx/fade
+                            :from-tick {:ref [:input :fade-at]}
+                            :to-tick {:ref [:input :fade-to-tick]}
+                            :from-alpha 1.0 :to-alpha 0.0
+                            :child {:component :vfx/ring
+                                    :center {:ref [:input :position]}
+                                    :radius {:from {:ref [:input :fade-ring-from]}
+                                             :to {:ref [:input :fade-ring-to]}}
+                                    :segments {:ref [:input :fade-segments]}
+                                    :color {:ref [:input :fade-color]}}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :position]}
+          :end {:ref [:input :position]}
+          :radius 1.4}}

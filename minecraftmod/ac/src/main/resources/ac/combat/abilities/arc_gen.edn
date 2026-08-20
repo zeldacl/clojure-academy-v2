@@ -24,10 +24,15 @@
  :progression {:hit-entity {:per-mark {:tunable :exp-entity}}
                :hit-block {:per-mark {:tunable :exp-block}}}
  :vfx
- {:arc-fired {:effect-id :arc-gen :op :spawn
-              :payload {:start :vec3 :end :vec3
-                        :hit-type [:enum :entity :block :miss]
-                        :life-ticks :long}}}
+ {:arc-fired {:effect-id :beam-arc-fade :op :spawn
+              :payload {:start :vec3 :end :vec3 :duration-ticks :long
+                        :beam-at :long :grow-ticks :long :layers :object
+                        :arc-at :long :arc-spacing :object :arc-radius :object
+                        :arc-count-limit :long :arc-life-ticks :long
+                        :fade-at :long :fade-from-tick :long :fade-to-tick :long
+                        :fade-from-alpha :double :fade-to-alpha :double
+                        :ring-radius :object :ring-segments :long
+                        :ring-color :object}}}
  :program
  {:component :flow/sequence
   :steps
@@ -43,13 +48,22 @@
     :include-entities? true :include-blocks? true
     :result :aim-hit}
    {:component :effect/vfx
-    :effect-id :arc-gen :operation :spawn
+    :effect-id :beam-arc-fade :operation :spawn
     :instance-key [:activation :arc-fired]
     :audience {:type :nearby :radius 32.0}
     :payload {:start {:from :caster/eye}
               :end {:ref [:slot :aim-hit :position]}
-              :hit-type {:ref [:slot :aim-hit :hit-type]}
-              :life-ticks 10}}
+              :duration-ticks 10 :beam-at 0 :grow-ticks 2
+              :layers [{:shape :tube :radius 0.08 :color [236 170 93 60]}
+                       {:shape :tube :radius 0.05 :color [241 240 222 200]}
+                       {:shape :line :width 0.015 :color [165 230 255 160]}]
+              :arc-at 0 :arc-spacing {:min 1.0 :max 2.0}
+              :arc-radius {:min 0.06 :max 0.14}
+              :arc-count-limit 32 :arc-life-ticks 8
+              :fade-at 3 :fade-from-tick 3 :fade-to-tick 10
+              :fade-from-alpha 1.0 :fade-to-alpha 0.0
+              :ring-radius {:from 0.12 :to 0.28}
+              :ring-segments 10 :ring-color [188 252 238 180]}}
    {:component :flow/branch
     :when {:ref [:slot :aim-hit :entity-id]}
     :then {:component :flow/sequence

@@ -1,0 +1,20 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :audio-one-shot
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:position :vec3 :sound-id :string
+                  :volume :double :pitch :double}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 1
+         :children [{:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :volume]}
+                            :pitch {:ref [:input :pitch]}
+                            :position {:ref [:input :position]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :position]}
+          :end {:ref [:input :position]}
+          :radius 0.0}}

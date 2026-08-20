@@ -1,0 +1,54 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :arc-ring-fade-audio
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3 :ring-center :vec3
+          :duration-ticks :long :ring-from :double :ring-to :double
+          :ring-segments :long :ring-color :object
+          :arc-spacing :object :arc-radius :object :arc-count-limit :long
+          :arc-life-ticks :long :fade-at :long :fade-to-tick :long
+          :fade-ring-from :double :fade-ring-to :double :fade-segments :long
+          :fade-color :object :sound-id :string :sound-volume :double
+          :sound-pitch :double :sound-position :vec3}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks {:ref [:input :duration-ticks]}
+         :children [{:at 0
+                     :node {:component :vfx/ring
+                            :center {:ref [:input :ring-center]}
+                            :radius {:from {:ref [:input :ring-from]}
+                                     :to {:ref [:input :ring-to]}}
+                            :segments {:ref [:input :ring-segments]}
+                            :color {:ref [:input :ring-color]}}}
+                    {:at 0
+                     :node {:component :vfx/arc-field
+                            :start {:ref [:input :start]}
+                            :end {:ref [:input :end]}
+                            :spacing {:ref [:input :arc-spacing]}
+                            :radius {:ref [:input :arc-radius]}
+                            :count-limit {:ref [:input :arc-count-limit]}
+                            :life-ticks {:ref [:input :arc-life-ticks]}
+                            :seed {:ref [:state :seed]}}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :sound-volume]}
+                            :pitch {:ref [:input :sound-pitch]}
+                            :position {:ref [:input :sound-position]}}}
+                    {:at {:ref [:input :fade-at]}
+                     :node {:component :vfx/fade
+                            :from-tick {:ref [:input :fade-at]}
+                            :to-tick {:ref [:input :fade-to-tick]}
+                            :from-alpha 1.0 :to-alpha 0.0
+                            :child {:component :vfx/ring
+                                    :center {:ref [:input :ring-center]}
+                                    :radius {:from {:ref [:input :fade-ring-from]}
+                                             :to {:ref [:input :fade-ring-to]}}
+                                    :segments {:ref [:input :fade-segments]}
+                                    :color {:ref [:input :fade-color]}}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius 2.0}}

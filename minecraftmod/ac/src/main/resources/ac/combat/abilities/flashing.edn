@@ -30,14 +30,17 @@
  :cooldown {:deactivate {:ticks {:tunable :deactivate-cooldown-ticks}}}
  :vfx
  {:preview-start {:effect-id :teleport-marker :op :spawn
-                   :payload {:owner :owner-id :position :vec3 :distance :double
+                    :payload {:owner :owner-id :position :vec3
                              :color :object :particle-chance :double}}
   :preview-update {:effect-id :teleport-marker :op :update
-                   :payload {:position :vec3 :distance :double
+                    :payload {:position :vec3
                              :color :object :particle-chance :double}}
   :preview-end {:effect-id :teleport-marker :op :destroy :payload {}}
-  :perform {:effect-id :flashing-perform :op :spawn
-            :payload {:from :vec3 :to :vec3 :distance :double}}}
+  :perform {:effect-id :endpoint-burst :op :spawn
+            :payload {:from :vec3 :to :vec3 :duration-ticks :long
+                      :rate-per-tick :long :limit :long :particle :object
+                      :sound-id :string :sound-volume :double
+                      :sound-pitch :double}}}
  ;; These fragments keep all repeated movement wiring declarative while the
  ;; target query, resource transaction and VFX geometry remain reusable.
  :fragments
@@ -72,8 +75,7 @@
                          :instance-key [:activation :teleport-marker]
                          :audience {:type :nearby :radius 64.0}
                           :payload {:owner {:from :caster/id}
-                                    :position {:ref [:slot :destination :position]}
-                                    :distance {:ref [:slot :destination :distance]}
+                                     :position {:ref [:slot :destination :position]}
                                     :color [188 252 238 255]
                                     :particle-chance 0.0}}
                   :else {:component :effect/vfx
@@ -117,12 +119,20 @@
                                          :event-type :achievement/trigger
                                          :payload {:id "teleporter.flashing"}}
                                         {:component :effect/vfx
-                                         :effect-id :flashing-perform
+                                         :effect-id :endpoint-burst
                                          :operation :spawn
                                          :audience {:type :nearby :radius 64.0}
                                          :payload {:from {:ref [:slot :destination :from]}
                                                    :to {:ref [:slot :destination :position]}
-                                                   :distance {:ref [:slot :destination :distance]}}}
+                                                   :duration-ticks 8
+                                                   :rate-per-tick 2 :limit 64
+                                                   :particle {:material :additive
+                                                              :life-ticks 8
+                                                              :speed 0.04
+                                                              :color [188 252 238 220]}
+                                                   :sound-id "academy:tp.tp_flashing"
+                                                   :sound-volume 1.0
+                                                   :sound-pitch 1.0}}
                                         {:component :effect/vfx
                                           :effect-id :teleport-marker
                                          :operation :destroy

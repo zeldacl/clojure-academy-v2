@@ -1,0 +1,40 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :beam-fade-audio
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3 :duration-ticks :long :beam-at :long
+          :grow-ticks :long :layers :object :sound-id :string
+          :sound-volume :double :sound-pitch :double :sound-position :vec3
+          :fade-at :long :fade-from-tick :long :fade-to-tick :long
+          :fade-from-alpha :double :fade-to-alpha :double :fade-layers :object}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks {:ref [:input :duration-ticks]}
+         :children [{:at {:ref [:input :beam-at]}
+                     :node {:component :vfx/beam
+                            :start {:ref [:input :start]}
+                            :end {:ref [:input :end]}
+                            :grow-ticks {:ref [:input :grow-ticks]}
+                            :layers {:ref [:input :layers]}}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :sound-volume]}
+                            :pitch {:ref [:input :sound-pitch]}
+                            :position {:ref [:input :sound-position]}}}
+                    {:at {:ref [:input :fade-at]}
+                     :node {:component :vfx/fade
+                            :from-tick {:ref [:input :fade-from-tick]}
+                            :to-tick {:ref [:input :fade-to-tick]}
+                            :from-alpha {:ref [:input :fade-from-alpha]}
+                            :to-alpha {:ref [:input :fade-to-alpha]}
+                            :child {:component :vfx/beam
+                                    :start {:ref [:input :start]}
+                                    :end {:ref [:input :end]}
+                                    :layers {:ref [:input :fade-layers]}}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius 0.8}}
