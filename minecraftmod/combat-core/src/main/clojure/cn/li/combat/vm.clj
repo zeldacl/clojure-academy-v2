@@ -72,6 +72,7 @@
     :math/eq (= (double (nth args 0)) (double (nth args 1)))
     :math/gte (>= (double (nth args 0)) (double (nth args 1)))
     :math/gt (> (double (nth args 0)) (double (nth args 1)))
+    :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))
     :bool/and (and (boolean (nth args 0)) (boolean (nth args 1)))
     :bool/or (or (boolean (nth args 0)) (boolean (nth args 1)))
     :bool/not (not (boolean (nth args 0)))
@@ -141,6 +142,7 @@
 (def ^:private query-capability-by-component
   {:target/raycast :raycast
    :target/resolve-destination :raycast
+   :target/directional-destination-query :raycast
    :target/entities :entity/select
    :target/blocks :block/select
    ;; Beam traversal is a host primitive.  Its neutral request shape is still
@@ -154,6 +156,7 @@
    :combat/impulse :entity/impulse
    :combat/status :entity/status
    :entity/teleport :entity/teleport
+   :entity/reset-fall-damage :entity/reset-fall-damage
    :entity/spawn :entity/spawn
     :entity/discard :entity/discard
    :projectile/schedule-beam :projectile/schedule-beam
@@ -228,6 +231,8 @@
                             :world-id (str (or (get-in context [:context :world-id]) "unknown"))}
                            (when (= component :host/beam-trace)
                              {:query-kind :beam})
+                           (when (= component :target/directional-destination-query)
+                             {:query-kind :directional-destination})
                            (dissoc data :result :component))
                     context))
         result (when handler (.invoke handler request frame))]
@@ -311,6 +316,7 @@
   (case component
     :target/raycast (invoke-query-component! frame host component data context)
     :target/resolve-destination (invoke-query-component! frame host component data context)
+    :target/directional-destination-query (invoke-query-component! frame host component data context)
     :target/entities (invoke-query-component! frame host component data context)
     :target/blocks (invoke-query-component! frame host component data context)
     :host/beam-trace (invoke-query-component! frame host component data context)

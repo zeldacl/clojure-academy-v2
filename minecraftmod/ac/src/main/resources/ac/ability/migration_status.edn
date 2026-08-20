@@ -7,4 +7,5 @@
           :vec-reflection :migrated
           :groundshock :pending
           :mark-teleport :migrated
-          :penetrate-teleport :migrated}}
+          :penetrate-teleport :migrated
+          :flashing :migrated}}

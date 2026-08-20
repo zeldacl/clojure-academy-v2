@@ -9,6 +9,7 @@
   #{:owner/snapshot :item/held :raycast :entity/select :block/select :state/read})
 (def ^:private action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
+    :entity/reset-fall-damage
     :entity/status :entity/spawn :entity/discard :block/break :block/set
     :world/lightning :world/explosion :world/sound
     :projectile/redirect :projectile/schedule-beam :resource/enforce-floor})

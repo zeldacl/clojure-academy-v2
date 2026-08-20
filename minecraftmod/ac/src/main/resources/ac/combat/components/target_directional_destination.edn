@@ -1,0 +1,23 @@
+{:schema-version 2
+ :kind :composite
+ :id :target/directional-destination
+ :revision 1
+ ;; Generic directional landing query.  Direction is a neutral movement
+ ;; keyword (forward/back/left/right); the host owns only raycast and block
+ ;; reads and applies the EDN-supplied landing policy.
+ :inputs
+ {:origin {:type :object}
+  :look {:type :object}
+  :eye-y {:type :double}
+  :direction {:type :keyword}
+  :distance {:type :double}
+  :policy {:type :object :default {}}}
+ :body
+ {:component :target/directional-destination-query
+  :origin {:ref [:input :origin]}
+  :look {:ref [:input :look]}
+  :eye-y {:ref [:input :eye-y]}
+  :direction {:ref [:input :direction]}
+  :distance {:ref [:input :distance]}
+  :policy {:ref [:input :policy]}
+  :result :destination}}

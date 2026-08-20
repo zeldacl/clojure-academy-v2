@@ -152,7 +152,7 @@
   ;; are removed.
   (let [expected #{:arc-gen :blood-retrograde :body-intensify
                    :current-charging :dim-folding-theorem :directed-blastwave
-                   :directed-shock :electron-bomb :electron-missile :flashing
+                   :directed-shock :electron-bomb :electron-missile
                    :flesh-ripping :groundshock :jet-engine :light-shield
                    :location-teleport :mag-manip :mag-movement :mark-teleport
                    :meltdowner :mine-detect :mine-ray-basic :mine-ray-expert
@@ -162,7 +162,7 @@
                    :threatening-teleport :thunder-bolt :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
-    (is (= 37 (count content/ability-ids)))))
+    (is (= 36 (count content/ability-ids)))))
 
 (deftest combat-catalog-provides-player-registry-specs
   (is (true? (content/assert-complete-skill-catalog!)))

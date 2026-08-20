@@ -8,6 +8,7 @@
 
 (def action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
+    :entity/reset-fall-damage
     :entity/status :entity/spawn :entity/discard :block/break :block/set
     :world/lightning :world/explosion :world/sound
     :projectile/redirect :resource/enforce-floor})

@@ -17,6 +17,9 @@
              {:kind :composite
               :id :target/hold-destination
               :resource "ac/combat/components/target_hold_destination.edn"}
-             {:kind :composite
-              :id :target/penetration-destination
-              :resource "ac/combat/components/target_penetration_destination.edn"}]}
+              {:kind :composite
+               :id :target/penetration-destination
+               :resource "ac/combat/components/target_penetration_destination.edn"}
+              {:kind :composite
+               :id :target/directional-destination
+               :resource "ac/combat/components/target_directional_destination.edn"}]}

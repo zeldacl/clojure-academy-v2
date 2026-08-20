@@ -57,6 +57,25 @@
      (fn [result] (when (map? result) (combat-vfx/dispatch-result! result))))
     intent-id))
 
+(defn- active-slot-for-owner [player-uuid]
+  (some (fn [[session owner slot]]
+          (when (and (= session (current-session))
+                     (= owner (str player-uuid)))
+            slot))
+        @active-slots*))
+
+(defn- send-movement-intent! [player-uuid movement-key transition]
+  (when-let [slot (active-slot-for-owner player-uuid)]
+    (let [intent-id (swap! intent-seq* inc)]
+      (net-client/send-to-server
+       (client-owner player-uuid) messages/MSG-COMBAT-INTENT
+       {:schema-version 1 :intent-id intent-id :op :movement
+        :slot (long slot) :movement-key movement-key
+        :movement-transition transition
+        :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))}
+       (fn [result] (when (map? result) (combat-vfx/dispatch-result! result))))
+      intent-id)))
+
 (defn- combat-slot? [player-uuid slot]
   (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
     (boolean (and ability-id (edn-catalog/available? ability-id)))))
@@ -167,12 +186,15 @@
        (send-combat-intent! player-uuid slot :release)))
    :client-on-slot-key-abort!
    (fn [player-uuid slot] (send-combat-intent! player-uuid slot :abort))
-   ;; v1 intentionally has no client movement/channel/wheel protocol.  These
-   ;; hooks stay inert so loader input code cannot recreate the removed slot
-   ;; network; server sessions are driven by Combat Core deadlines.
-   :client-on-movement-key-down! (fn [_ _] nil)
-   :client-on-movement-key-tick! (fn [_ _] nil)
-   :client-on-movement-key-up! (fn [_ _] nil)
+   :client-on-movement-key-down!
+   (fn [player-uuid movement-key]
+     (send-movement-intent! player-uuid movement-key :press))
+   :client-on-movement-key-tick!
+   (fn [player-uuid movement-key]
+     (send-movement-intent! player-uuid movement-key :tick))
+   :client-on-movement-key-up!
+   (fn [player-uuid movement-key]
+     (send-movement-intent! player-uuid movement-key :release))
    :client-on-slot-wheel! (fn [_ _ _] nil)
    :client-slot-visual-state slot-visual-state
    :client-visual-state (fn [_ _] nil)

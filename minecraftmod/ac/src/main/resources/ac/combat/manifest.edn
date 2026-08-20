@@ -18,5 +18,8 @@
               :id :mark-teleport
               :resource "ac/combat/abilities/mark_teleport.edn"}
              {:kind :ability
-              :id :penetrate-teleport
-              :resource "ac/combat/abilities/penetrate_teleport.edn"}]}
+             :id :penetrate-teleport
+              :resource "ac/combat/abilities/penetrate_teleport.edn"}
+             {:kind :ability
+              :id :flashing
+              :resource "ac/combat/abilities/flashing.edn"}]}

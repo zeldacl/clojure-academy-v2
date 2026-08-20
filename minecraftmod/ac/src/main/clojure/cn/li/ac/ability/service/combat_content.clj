@@ -630,37 +630,6 @@
                                {:op :vfx :effect-id :mag-movement
                                 :event :update
                                 :params {:acceleration 0.08 :range 25.0}}]}}}
-    {:id :flashing
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 150
-     :cost-phase :start
-     :cost {:cp (scale 80.0 60.0)
-            :overload (scale 250.0 180.0)}
-     :cooldown-phase :release
-     :cooldown {:ticks (scale 900.0 400.0)}
-     :program {:op :phase
-               :pulse {:op :session-patch
-                       :entries [[[:active-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :patch
-                                  :entries [[:resource :cp
-                                             {:op :multiply
-                                              :values [-1.0 (scale 13.0 6.0)]}]]}
-                                 {:op :query :query-type :teleport-target
-                                  :mode :flashing
-                                  :max-range (scale 12.0 18.0)
-                                  :result-ref :destination}
-                                 {:op :require :predicate :destination}
-                                 {:op :world-effect
-                                  :effect-type :teleport-approved-target
-                                  :target-ref :destination
-                                  :mode :flashing}
-                                 {:op :vfx :effect-id :flashing
-                                  :event :release
-                                  :params {:blink-distance (scale 12.0 18.0)}}]}}}
     {:id :vec-accel
      :revision 1
      :activation :session

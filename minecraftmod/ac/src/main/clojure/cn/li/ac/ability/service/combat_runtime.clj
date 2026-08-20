@@ -34,7 +34,6 @@
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
-            [cn.li.ac.content.ability.teleporter.flashing-dest :as flashing-dest]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
@@ -786,22 +785,6 @@
                                         (block-manipulation/block-collidable?
                                          world-id x (inc (long y)) z))]
                     (case (:mode node)
-                      :flashing
-                      (let [body (geom/body-pos owner)
-                            eye (geom/eye-pos owner)
-                            look (when (raycast/available?) (raycast/player-look-vector owner))
-                            dist (flashing-dest/blink-distance exp)
-                            raycast-fn (fn [sx sy sz dx dy dz max-dist]
-                                         (when (raycast/available?)
-                                           (raycast/raycast-combined world-id sx sy sz dx dy dz max-dist)))
-                            dest (when look
-                                   (flashing-dest/destination
-                                    {:x (:x body) :y (:y body) :z (:z body) :eye-y (:y eye)
-                                     :look-vec look :direction :forward :dist dist
-                                     :raycast raycast-fn :head-blocked? head-blocked?}))]
-                        (when dest
-                          {:x (:to-x dest) :y (:to-y dest) :z (:to-z dest)}))
-
                       :threatening
                       (let [range (resolve-scale (:max-range node) exp)
                             eye (geom/eye-pos owner)
@@ -941,9 +924,6 @@
                            (if-let [host-query (contract/host-port :query)]
                              (host-query :vec-accel context node)
                              (vec-accel-query context node)))
-              :flashing (fn [context node]
-                          (when-let [host-query (contract/host-port :query)]
-                            (host-query :flashing context node)))
               :vec-deviation (fn [context node]
                                (if-let [host-query (contract/host-port :query)]
                                  (host-query :vec-deviation context node)
@@ -1593,29 +1573,9 @@
                                                {:attacker-uuid owner}))]
                                {:status (if applied? :applied :failed)
                                 :effect effect})
-                             ;; The remaining legacy flashing teleport is a
-                             ;; genuine player teleport. Its destination is
-                             ;; server-computed (raycast/eye-position/
-                             ;; collision checks in the query, never trusts
-                             ;; client input), so the token here isn't a
-                             ;; security boundary -- it's just filling the
-                             ;; existing teleport-approved-target! contract
-                             ;; shape (owner ability-id approval-token mode).
-                             (let [valid-dest? (and (map? destination)
-                                                     (every? #(number? (get destination %)) [:x :y :z]))
-                                   valid? (and world-id valid-dest?
-                                                (= :flashing ability-id)
-                                                (= :flashing mode)
-                                                (teleportation/available?))
-                                   token (when valid?
-                                           (teleportation/mint-approval-token!
-                                            {:world-id world-id
-                                             :x (:x destination) :y (:y destination) :z (:z destination)}))
-                                   applied? (when token
-                                              (teleportation/teleport-approved-target!
-                                               owner ability-id token mode))]
-                               {:status (if applied? :applied :failed)
-                                :effect effect})))
+                             {:status :unhandled
+                              :reason :unsupported-teleport-mode
+                              :effect effect}))
                          :knockback
                          (let [{:keys [world-id target movement]} effect
                                {:keys [impulse knockback-y-adjust knockback-scale]} movement
@@ -1804,7 +1764,7 @@
                                    0.0))
             :resources {:cp (double (or (:cur-cp resource-data) 0.0))
                         :overload (double (or (:cur-overload resource-data) 0.0))}
-            :creative? false}
+            :creative? (boolean (:creative? intent))}
            (:context intent))))
 
 (defn- caster-facade
@@ -1823,9 +1783,12 @@
   abilities that actually need them."
   [owner context]
   {:caster/eye (:eye-pos context)
+   :caster/body (geom/body-pos (str owner))
+   :caster/eye-y (double (or (:y (:eye-pos context)) 0.0))
    :caster/aim (:look context)
    :caster/id owner
    :world/id (:world-id context)
+   :caster/creative? (boolean (:creative? context))
    :charge/ticks (long (or (:hold-ticks context) 0))
    ;; Raw (pre-curve) mastery and RNG seed: legitimate exceptions to design
    ;; B/E folding skill-exp/seed away. Some content hands both to an AC-side
@@ -1895,6 +1858,29 @@
         (assoc result
                :marker-position (update position :y + offset)
                :hit? false)))))
+
+(defn- directional-destination
+  "Adapt the neutral directional landing query to AC raycast/block ports."
+  [owner {:keys [origin look eye-y direction distance policy world-id]}]
+  (let [owner (str owner)
+        world-id (or (when (and world-id (not= "unknown" (str world-id)))
+                       (str world-id))
+                     (geom/world-id-of owner))
+        raycast-fn (fn [sx sy sz dx dy dz max-distance]
+                     (when (and world-id (raycast/available?))
+                       (raycast/raycast-combined-excluding
+                        world-id sx sy sz dx dy dz max-distance owner)))
+        head-blocked? (fn [x y z]
+                        (and world-id
+                             (block-manipulation/available?)
+                             (block-manipulation/block-collidable?
+                              world-id (int (Math/floor (double x)))
+                              (int (Math/floor (+ (double y) 1.0)))
+                              (int (Math/floor (double z))))))]
+    (targeting/directional-destination
+     {:origin origin :look look :eye-y eye-y :direction direction
+      :distance distance :policy policy :raycast raycast-fn
+      :head-blocked? head-blocked?})))
 
 (defn- resolve-raycast-destination
   "Resolve a neutral raycast hit into a safe landing point.
@@ -1990,14 +1976,16 @@
          :raycast
          (fn [{:keys [owner distance include-entities? include-blocks? hit origin policy]
               :as request} _frame]
-           (if (= :penetration (:type policy))
-             (penetration-destination owner
-                                      {:origin origin
-                                       :direction (:direction policy)
-                                       :distance distance
-                                       :policy policy
-                                       :world-id (:world-id request)})
-             (if (contains? request :hit)
+           (if (= :directional-destination (:query-kind request))
+             (directional-destination owner request)
+             (if (= :penetration (:type policy))
+               (penetration-destination owner
+                                        {:origin origin
+                                         :direction (:direction policy)
+                                         :distance distance
+                                         :policy policy
+                                         :world-id (:world-id request)})
+               (if (contains? request :hit)
                (resolve-raycast-destination owner
                                             {:hit hit :origin origin
                                              :distance distance :policy policy
@@ -2055,7 +2043,7 @@
                                :z (Math/floor (double (:z position)))}
               :block-id block-id
               :water? (= "minecraft:water" block-id)
-              :world-id world-id}))))))
+               :world-id world-id})))))))
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
         (capabilities/register-query!
          :entity/select
@@ -2196,6 +2184,15 @@
                      (motion-effects/reset-fall-damage! (str owner)))
                    {:status (if success :applied :failed)
                     :position {:x (double x) :y (double y) :z (double z)}})))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/reset-fall-damage)
+        (capabilities/register-action!
+         :entity/reset-fall-damage
+         (fn [{:keys [owner target]}]
+           (let [entity-id (str (or target owner))]
+             (if (and (seq entity-id) (motion-effects/entity-motion-available?))
+               (do (motion-effects/reset-fall-damage! entity-id)
+                   {:status :applied})
+               {:status :rejected :reason :entity-motion-port-missing})))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/status)
         (capabilities/register-action!
          :entity/status

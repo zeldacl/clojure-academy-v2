@@ -14,6 +14,7 @@
     (is (catalog/available? :scatter-bomb))
     (is (catalog/available? :mark-teleport))
     (is (catalog/available? :penetrate-teleport))
+    (is (catalog/available? :flashing))
     (is (not (catalog/available? :thunder-bolt)))
     (is (= :pending (catalog/migration-status :thunder-bolt)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
@@ -27,6 +28,7 @@
     (is (contains? (get-in state [:combat :composites]) :target/raycast-destination))
     (is (contains? (get-in state [:combat :composites]) :target/hold-destination))
     (is (contains? (get-in state [:combat :composites]) :target/penetration-destination))
+    (is (contains? (get-in state [:combat :composites]) :target/directional-destination))
     (is (contains? (get-in state [:vfx :composites]) :vfx/beam-arc-fade))
     (is (contains? (get-in state [:vfx :composites]) :vfx/humanoid-marker))
     (is (= :railgun-beam (get-in state [:vfx :effects :railgun-beam :id])))
@@ -34,11 +36,15 @@
     (is (= :thunder-clap (get-in state [:combat :abilities :thunder-clap :id])))
     (is (= :mark-teleport (get-in state [:combat :abilities :mark-teleport :id])))
     (is (= :penetrate-teleport (get-in state [:combat :abilities :penetrate-teleport :id])))
+    (is (= :flashing (get-in state [:combat :abilities :flashing :id])))
+    (is (pos? (count (get-in state [:combat :abilities :flashing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
     (is (= :penetrate-teleport-marker
            (get-in state [:vfx :effects :penetrate-teleport-marker :id])))
     (is (= :penetrate-teleport-release
            (get-in state [:vfx :effects :penetrate-teleport-release :id])))
+    (is (= :flashing-marker (get-in state [:vfx :effects :flashing-marker :id])))
+    (is (= :flashing-perform (get-in state [:vfx :effects :flashing-perform :id])))
     (is (= :thunder-clap (get-in state [:vfx :effects :thunder-clap :id])))
     (let [marker (get-in state [:vfx :effects :mark-teleport-marker])
           model-node (some (fn [{:keys [node]}]

@@ -52,6 +52,10 @@
                                          :entity-eye-height 1.6
                                          :head-clearance? true}
                                 :result :destination}
+   :target/directional-destination-query
+   {:component :target/directional-destination-query
+    :origin vec3-example :look {:vec3 [0.0 0.0 1.0]} :eye-y 1.62
+    :direction :forward :distance 16.0 :policy {} :result :destination}
    :target/entities {:component :target/entities
                      :shape {:type :sphere :center vec3-example :radius 1.0}
                      :projection [:id :type :position] :limit 1 :result :entities}
@@ -76,6 +80,8 @@
                      :position vec3-example
                      :dismount? true
                      :reset-fall-damage? true}
+   :entity/reset-fall-damage {:component :entity/reset-fall-damage
+                              :target {:ref [:context :owner]}}
    :interaction/dispatch {:component :interaction/dispatch :kind :generic
                            :target {:ref [:slot :target-id]} :payload {} :result :interaction}
    :inventory/consume {:component :inventory/consume :source :main-hand :count 1}
@@ -105,6 +111,9 @@
                 :payload {:position vec3-example}}
    :domain/event {:component :domain/event :event-type :generic :payload {}}})
 
+(def expression-examples
+  {:math/select {:expr :math/select :args [true 1.0 0.0]}})
+
 ;; Examples for EDN composite middle-layer components.  These are intentionally
 ;; parameterized with neutral inputs; concrete skill EDN supplies tunables and
 ;; policies at the call site.
@@ -118,6 +127,12 @@
              :minimum-distance 1.0
              :entity-eye-height 1.6
              :head-clearance? true}}
+   :target/directional-destination
+   {:component :target/directional-destination
+    :origin {:ref [:context :body-pos]}
+    :look {:ref [:context :look]}
+    :eye-y {:ref [:context :eye-y]}
+    :direction :forward :distance 16.0 :policy {}}
    :target/hold-destination
    {:component :target/hold-destination
     :origin {:ref [:context :eye]}

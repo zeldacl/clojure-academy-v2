@@ -19,6 +19,7 @@
    :math/eq {:expr :math/eq :args [1.0 1.0]}
    :math/gte {:expr :math/gte :args [2.0 1.0]}
    :math/gt {:expr :math/gt :args [2.0 1.0]}
+   :math/select {:expr :math/select :args [true 1.0 0.0]}
    :bool/and {:expr :bool/and :args [true true]}
    :bool/or {:expr :bool/or :args [false true]}
    :bool/not {:expr :bool/not :args [false]}

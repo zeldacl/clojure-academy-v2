@@ -236,7 +236,18 @@
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
     :exp-per-distance :progression.exp-per-distance
-    :scan-step :targeting.scan-step}})
+    :scan-step :targeting.scan-step}
+   :flashing
+   {:blink-distance :movement.blink-distance
+    :blink-interval-ticks :timing.blink-interval-ticks
+    :max-active-ticks :timing.max-active-ticks
+    :post-blink-fall-protect-ticks :timing.post-blink-fall-protect-ticks
+    :activate-overload :cost.down.overload
+    :activate-cp :cost.down.cp
+    :blink-cp :cost.blink.cp
+    :blink-overload :cost.blink.overload
+    :deactivate-cooldown-ticks :cooldown.deactivate-ticks
+    :exp-per-blink :progression.exp-blink}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

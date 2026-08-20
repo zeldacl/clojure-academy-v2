@@ -554,7 +554,15 @@
                                   (str (:source-player-id st)))))
                   :storm-wing))
               (fx-state :storm-wing))
-        flashing-active? (boolean (seq (fx-state :flashing)))
+        flashing-active? (boolean
+                          (some (fn [slot]
+                                  (and (= :active
+                                          (runtime-hooks/client-slot-visual-state
+                                           player-uuid slot))
+                                       (= :flashing
+                                          (keybinds/get-skill-id-for-slot-public
+                                           player-uuid slot))))
+                                (range 4)))
         key-state (keybinds/key-state-snapshot player-uuid)
         hint-item (fn [[movement-key key-label dir-label] icon-src]
                     {:key-label key-label

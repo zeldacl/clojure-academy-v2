@@ -1,0 +1,208 @@
+{:schema-version 2
+ :kind :ability
+ :id :flashing
+ :revision 1
+ :activation :toggle
+ :status :migrated
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :caster/creative?
+            :world/id]
+ :tunables
+ {:blink-distance {:curve :mastery-lerp}
+  :blink-interval-ticks {:curve :mastery-lerp}
+  :max-active-ticks {:curve :mastery-lerp}
+  :post-blink-fall-protect-ticks {:curve :mastery-lerp}
+  :activate-overload {:curve :mastery-lerp}
+  :activate-cp {:curve :mastery-lerp}
+  :blink-cp {:curve :mastery-lerp}
+  :blink-overload {:curve :mastery-lerp}
+  :deactivate-cooldown-ticks {:curve :mastery-lerp}
+  :exp-per-blink {:curve :const}}
+ :costs
+ {:activate-cp {:resources {:cp {:expr :math/select
+                                  :args [{:from :caster/creative?}
+                                         0.0 {:tunable :activate-cp}]}}}
+  :activate-overload {:resources {:overload {:tunable :activate-overload}}}
+  :blink-cp {:resources {:cp {:expr :math/select
+                              :args [{:from :caster/creative?}
+                                     0.0 {:tunable :blink-cp}]}}}
+  :blink-overload {:resources {:overload {:tunable :blink-overload}}}}
+ :progression {:blink {:per-mark {:tunable :exp-per-blink}}}
+ :cooldown {:deactivate {:ticks {:tunable :deactivate-cooldown-ticks}}}
+ :vfx
+ {:preview-start {:effect-id :flashing-marker :op :spawn
+                   :payload {:owner :owner-id :position :vec3 :distance :double}}
+  :preview-update {:effect-id :flashing-marker :op :update
+                   :payload {:position :vec3 :distance :double}}
+  :preview-end {:effect-id :flashing-marker :op :destroy :payload {}}
+  :perform {:effect-id :flashing-perform :op :spawn
+            :payload {:from :vec3 :to :vec3 :distance :double}}}
+ ;; These fragments keep all repeated movement wiring declarative while the
+ ;; target query, resource transaction and VFX geometry remain reusable.
+ :fragments
+ {:refresh-destination
+  {:inputs {:direction {:type :keyword}}
+   :body {:component :flow/sequence
+          :steps [{:component :target/directional-destination
+                   :origin {:from :caster/body}
+                   :look {:from :caster/aim}
+                   :eye-y {:from :caster/eye-y}
+                   :direction {:ref [:input :direction]}
+                   :distance {:tunable :blink-distance}
+                   :policy {}}
+                 {:component :session/patch
+                  :entries [{:path [:destination] :mode :assign
+                             :value {:ref [:slot :destination]}}]}]}}
+  :preview
+  {:inputs {:direction {:type :keyword}
+            :operation {:type :keyword}}
+   :body {:component :flow/sequence
+          :steps [{:component :refresh-destination
+                   :direction {:ref [:input :direction]}}
+                 {:component :flow/branch
+                  :when {:expr :math/gte
+                         :args [{:ref [:context :resources :cp]}
+                                {:expr :math/select
+                                 :args [{:from :caster/creative?}
+                                        0.0 {:tunable :blink-cp}]}]}
+                  :then {:component :effect/vfx
+                         :effect-id :flashing-marker
+                         :operation {:ref [:input :operation]}
+                         :instance-key [:activation :flashing-marker]
+                         :audience {:type :nearby :radius 64.0}
+                         :payload {:owner {:from :caster/id}
+                                   :position {:ref [:slot :destination :position]}
+                                   :distance {:ref [:slot :destination :distance]}}}
+                  :else {:component :effect/vfx
+                         :effect-id :flashing-marker
+                         :operation :destroy
+                         :instance-key [:activation :flashing-marker]
+                         :payload {}}}]}}
+  :perform
+  {:inputs {:direction {:type :keyword}}
+   :body {:component :flow/sequence
+          :steps [{:component :refresh-destination
+                   :direction {:ref [:input :direction]}}
+                 {:component :flow/branch
+                  :when {:expr :math/gte
+                         :args [{:ref [:context :resources :cp]}
+                                {:expr :math/select
+                                 :args [{:from :caster/creative?}
+                                        0.0 {:tunable :blink-cp}]}]}
+                  :then {:component :txn/atomic
+                         :guards [{:component :guard/resource
+                                   :cost {:cp {:expr :math/select
+                                               :args [{:from :caster/creative?}
+                                                      0.0 {:tunable :blink-cp}]}
+                                            :overload {:tunable :blink-overload}}}]
+                         :reservations []
+                         :body {:component :flow/sequence
+                                :steps [{:component :cost/spend :budget :blink-cp}
+                                        {:component :cost/spend :budget :blink-overload}
+                                        {:component :entity/teleport
+                                         :target {:from :caster/id}
+                                         :world-id {:from :world/id}
+                                         :position {:ref [:slot :destination :position]}
+                                         :dismount? true
+                                         :reset-fall-damage? true}
+                                        {:component :session/patch
+                                         :entries [{:path [:fall-protect-ticks]
+                                                    :mode :assign
+                                                    :value {:tunable :post-blink-fall-protect-ticks}}]}
+                                        {:component :score/mark :tag :blink}
+                                        {:component :domain/event
+                                         :event-type :achievement/trigger
+                                         :payload {:id "teleporter.flashing"}}
+                                        {:component :effect/vfx
+                                         :effect-id :flashing-perform
+                                         :operation :spawn
+                                         :audience {:type :nearby :radius 64.0}
+                                         :payload {:from {:ref [:slot :destination :from]}
+                                                   :to {:ref [:slot :destination :position]}
+                                                   :distance {:ref [:slot :destination :distance]}}}
+                                        {:component :effect/vfx
+                                         :effect-id :flashing-marker
+                                         :operation :destroy
+                                         :instance-key [:activation :flashing-marker]
+                                         :payload {}}
+                                        {:component :flow/finish :outcome :teleported}]}
+                         :on-fail {:component :effect/vfx
+                                   :effect-id :flashing-marker
+                                   :operation :destroy
+                                   :instance-key [:activation :flashing-marker]
+                                   :payload {}}}
+                  :else {:component :effect/vfx
+                         :effect-id :flashing-marker
+                         :operation :destroy
+                         :instance-key [:activation :flashing-marker]
+                         :payload {}}}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :txn/atomic
+          :guards [{:component :guard/resource
+                    :cost {:cp {:expr :math/select
+                                 :args [{:from :caster/creative?}
+                                        0.0 {:tunable :activate-cp}]}
+                           :overload {:tunable :activate-overload}}}]
+          :reservations []
+          :body {:component :flow/sequence
+                 :steps [{:component :cost/spend :budget :activate-cp}
+                         {:component :cost/spend :budget :activate-overload}
+                         {:component :session/patch
+                          :entries [{:path [:active-ticks] :mode :assign :value 0}
+                                    {:path [:fall-protect-ticks] :mode :assign :value 0}
+                                    {:path [:overload-floor] :mode :assign
+                                     :value {:ref [:context :resources :overload]}}]}
+                         {:component :flow/finish :outcome :started}]}
+          :on-fail {:component :flow/finish :outcome :insufficient-resource
+                    :finish-session? true}}
+  :pulse {:component :flow/branch
+          :when {:expr :math/gt
+                 :args [{:ref [:session :active-ticks]}
+                        {:tunable :max-active-ticks}]}
+          :then {:component :flow/sequence
+                 :steps [{:component :effect/vfx :effect-id :flashing-marker
+                          :operation :destroy
+                          :instance-key [:activation :flashing-marker]
+                          :payload {}}
+                         {:component :cooldown/start :name :deactivate}
+                         {:component :flow/finish :outcome :expired
+                          :finish-session? true}]}
+          :else {:component :flow/sequence
+                 :steps [{:component :resource/enforce-floor
+                          :resource :overload
+                          :minimum {:ref [:session :overload-floor]}}
+                         {:component :flow/branch
+                          :when {:expr :math/gt
+                                 :args [{:ref [:session :fall-protect-ticks]} 0]}
+                          :then {:component :entity/reset-fall-damage
+                                 :target {:from :caster/id}}
+                          :else nil}
+                         {:component :session/patch
+                          :entries [{:path [:active-ticks] :mode :increment :value 1}
+                                    {:path [:fall-protect-ticks] :mode :assign
+                                     :value {:expr :math/max
+                                             :args [0 {:expr :math/sub
+                                                       :args [{:ref [:session :fall-protect-ticks]} 1]}]}}]}
+                         {:component :flow/finish :outcome :continue}]}}
+  :release {:component :flow/finish :outcome :continue}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx :effect-id :flashing-marker
+                   :operation :destroy
+                   :instance-key [:activation :flashing-marker]
+                   :payload {}}
+                  {:component :cooldown/start :name :deactivate}
+                  {:component :flow/finish :outcome :aborted
+                   :finish-session? true}]}
+  :events
+  {:movement/forward-press {:component :preview :direction :forward :operation :spawn}
+   :movement/forward-tick {:component :preview :direction :forward :operation :update}
+   :movement/forward-release {:component :perform :direction :forward}
+   :movement/back-press {:component :preview :direction :back :operation :spawn}
+   :movement/back-tick {:component :preview :direction :back :operation :update}
+   :movement/back-release {:component :perform :direction :back}
+   :movement/left-press {:component :preview :direction :left :operation :spawn}
+   :movement/left-tick {:component :preview :direction :left :operation :update}
+   :movement/left-release {:component :perform :direction :left}
+   :movement/right-press {:component :preview :direction :right :operation :spawn}
+   :movement/right-tick {:component :preview :direction :right :operation :update}
+   :movement/right-release {:component :perform :direction :right}}}}

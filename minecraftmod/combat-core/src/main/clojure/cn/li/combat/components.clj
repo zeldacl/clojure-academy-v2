@@ -163,6 +163,16 @@
             :effects #{:query}
             :produces {:destination {:name-field :result :type :destination}}}
 
+           ;; Directional movement landing is a neutral query: the host owns
+           ;; raycast/collision reads while the EDN supplies the direction and
+           ;; landing policy.  It is deliberately separate from the generic
+           ;; hit resolver because feet-to-eye rays and strafe directions are
+           ;; useful to more than one movement ability.
+           :target/directional-destination-query
+           {:schema {:required #{:origin :look :eye-y :direction :distance :result}}
+            :effects #{:query}
+            :produces {:destination {:name-field :result :type :destination}}}
+
            :target/entities
            {:schema {:required #{:shape :projection :limit :result}}
             :effects #{:query}
@@ -195,6 +205,10 @@
 
            :entity/teleport
            {:schema {:required #{:target :position}}
+            :effects #{:mutate}}
+
+           :entity/reset-fall-damage
+           {:schema {:required #{:target}}
             :effects #{:mutate}}
 
            :interaction/dispatch

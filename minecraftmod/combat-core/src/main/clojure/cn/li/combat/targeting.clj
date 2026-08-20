@@ -11,6 +11,94 @@
 
 (def ^:const default-clearance-steps 4)
 
+(declare xyz)
+
+(defn- normalize-direction
+  [x y z]
+  (let [length (Math/sqrt (+ (* x x) (* y y) (* z z)))]
+    (if (< length 1.0e-9)
+      [0.0 0.0 1.0]
+      [(/ x length) (/ y length) (/ z length)])))
+
+(defn movement-direction
+  "Resolve a neutral forward/back/strafe direction from the caster look.
+
+   Strafes are normalized independently so their length does not collapse
+   when the caster looks up or down.  The keyword is an input fact, never a
+   skill identifier, and unknown values safely fall back to forward."
+  [look direction]
+  (let [[fx fy fz] (normalize-direction
+                    (double (or (:x (when (map? look) look)) 0.0))
+                    (double (or (:y (when (map? look) look)) 0.0))
+                    (double (or (:z (when (map? look) look)) 1.0)))]
+    (case direction
+      :back [(- fx) (- fy) (- fz)]
+      :left (normalize-direction fz 0.0 (- fx))
+      :right (normalize-direction (- fz) 0.0 fx)
+      [fx fy fz])))
+
+(defn directional-destination
+  "Resolve a directional blink from feet `origin` toward `look`.
+
+   `raycast` receives feet origin, a normalized feet-to-end direction, and
+   the exact segment length.  It returns a neutral hit map or nil.  The
+   policy matches the platform-independent six-face landing rules used by
+   directional movement abilities; `head-blocked?` is consulted only for
+   horizontal block faces."
+  [{:keys [origin look eye-y direction distance raycast head-blocked?
+           entity-eye-height]}]
+  (let [[ox oy oz] (xyz origin)
+        eye-y (double (or eye-y (+ (double oy) 1.62)))
+        distance (max 0.0 (min 128.0 (double (or distance 0.0))))
+        [dx dy dz] (movement-direction look direction)
+        end-x (+ (double ox) (* distance dx))
+        end-y (+ eye-y (* distance dy))
+        end-z (+ (double oz) (* distance dz))
+        ray-dx (- end-x (double ox))
+        ray-dy (- end-y (double oy))
+        ray-dz (- end-z (double oz))
+        ray-distance (Math/sqrt (+ (* ray-dx ray-dx)
+                                   (* ray-dy ray-dy)
+                                   (* ray-dz ray-dz)))
+        [rdx rdy rdz] (normalize-direction ray-dx ray-dy ray-dz)
+        hit (when (ifn? raycast)
+              (raycast (double ox) (double oy) (double oz)
+                       rdx rdy rdz ray-distance))
+        hit-x (double (or (:hit-x hit) (:x hit) end-x))
+        hit-y (double (or (:hit-y hit) (:y hit) end-y))
+        hit-z (double (or (:hit-z hit) (:z hit) end-z))
+        destination
+        (if (nil? hit)
+          {:x end-x :y end-y :z end-z}
+          (if (= :entity (:hit-type hit))
+            {:x hit-x
+             :y (+ hit-y (double (or (:eye-height hit)
+                                     entity-eye-height
+                                     1.6)))
+             :z hit-z}
+            (let [resolved
+                  (case (:face hit)
+                    :down  {:x hit-x :y (- hit-y 1.0) :z hit-z}
+                    :up    {:x hit-x :y (+ hit-y 1.8) :z hit-z}
+                    :north {:x hit-x :y (+ hit-y 1.7) :z (- hit-z 0.6)}
+                    :south {:x hit-x :y (+ hit-y 1.7) :z (+ hit-z 0.6)}
+                    :west  {:x (- hit-x 0.6) :y (+ hit-y 1.7) :z hit-z}
+                    :east  {:x (+ hit-x 0.6) :y (+ hit-y 1.7) :z hit-z}
+                    {:x hit-x :y hit-y :z hit-z})]
+              (if (and (#{:north :south :west :east} (:face hit))
+                       (ifn? head-blocked?)
+                       (head-blocked? (:x resolved) (:y resolved) (:z resolved)))
+                (update resolved :y - 1.25)
+                resolved))))]
+    {:position destination
+     :from {:x (double ox) :y (double oy) :z (double oz)}
+     :distance (Math/sqrt (+ (let [dx (- (double (:x destination)) (double ox))] (* dx dx))
+                             (let [dy (- (double (:y destination)) (double oy))] (* dy dy))
+                             (let [dz (- (double (:z destination)) (double oz))] (* dz dz))))
+     :hit? (some? hit)
+     :valid? true
+     :direction direction}))
+
 (defn- xyz
   [value]
   (if (and (map? value) (vector? (:vec3 value)))

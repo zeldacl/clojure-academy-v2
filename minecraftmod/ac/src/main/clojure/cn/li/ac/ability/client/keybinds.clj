@@ -13,7 +13,6 @@
             [cn.li.ac.ability.client.input-state-machine :as sm]
             [cn.li.ac.ability.client.input-command-builder :as cmd-builder]
             [cn.li.ac.ability.client.input-processor :as processor]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.config.gameplay :as gameplay-config]
@@ -438,13 +437,13 @@
   [87 65 83 68])
 
 (defn- flashing-active?
+  "Movement ownership is derived from the generic slot visual state; no
+   legacy context or skill callback is consulted."
   [player-uuid]
-  (boolean
-   (some (fn [[_ ctx-data]]
-           (and (= :flashing (:skill-id ctx-data))
-                (= (str player-uuid) (:player-uuid ctx-data))
-                (ctx/active-context? ctx-data)))
-         (ctx/get-all-contexts))))
+  (boolean (some #(and (= :active (runtime-hooks/client-slot-visual-state
+                                   player-uuid %))
+                       (= :flashing (get-skill-id-for-slot-public player-uuid %)))
+                 (range 4))))
 
 (defn vanilla-override-key-codes
   "AC key ids that must suppress matching vanilla KeyMappings this frame.

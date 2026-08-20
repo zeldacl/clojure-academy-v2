@@ -116,8 +116,26 @@
 (defn- handle-combat-intent-request
   [payload player]
   (let [owner (uuid/player-uuid player)
-        intent (select-keys payload [:schema-version :intent-id :op :slot :client-tick])
-        result (combat-runtime/dispatch-intent! owner intent)
+        movement-keys #{:forward :back :left :right}
+        movement-transitions #{:press :tick :release}
+        raw-key (:movement-key payload)
+        raw-transition (:movement-transition payload)
+        movement? (= :movement (:op payload))
+        valid-movement? (and movement?
+                             (contains? movement-keys raw-key)
+                             (contains? movement-transitions raw-transition))
+        event (when valid-movement?
+                (keyword "movement"
+                         (str (name raw-key) "-" (name raw-transition))))
+        ;; The client submits only a neutral movement fact.  The server owns
+        ;; the event vocabulary and creative-mode truth.
+        intent (cond-> (select-keys payload [:schema-version :intent-id :slot :client-tick])
+                 (not movement?) (assoc :op (:op payload))
+                 valid-movement? (assoc :op :event :action :event :event event)
+                 true (assoc :creative? (boolean (entity/player-creative? player))))
+        result (if (and movement? (not valid-movement?))
+                 {:status :rejected :feedback [{:type :invalid-movement}]}
+                 (combat-runtime/dispatch-intent! owner intent))
         result (if (= :accepted (:status result))
                  (combat-runtime/finalize-result! owner result)
                  result)]
