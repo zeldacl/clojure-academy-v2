@@ -30,5 +30,8 @@
              :id :storm-wing
               :resource "ac/combat/abilities/storm_wing.edn"}
              {:kind :ability
-              :id :ray-barrage
-              :resource "ac/combat/abilities/ray_barrage.edn"}]}
+             :id :ray-barrage
+              :resource "ac/combat/abilities/ray_barrage.edn"}
+             {:kind :ability
+              :id :current-charging
+              :resource "ac/combat/abilities/current_charging.edn"}]}

@@ -1,0 +1,291 @@
+{:schema-version 2
+ :kind :ability
+ :id :current-charging
+ :revision 1
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/aim :caster/id :caster/creative?
+            :world/id :charge/ticks :rng/seed]
+ :prerequisites [{:skill-id :arc-gen :min-exp 0.3}]
+ :tunables
+ {:visual-max-ticks {:curve :const :type :long}
+  :targeting-range {:curve :const}
+  :charge-amount {:curve :mastery-lerp}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :exp-effective {:curve :const}
+  :exp-ineffective {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :progression
+ {:effective {:per-mark {:tunable :exp-effective}}
+  :ineffective {:per-mark {:tunable :exp-ineffective}}}
+ :vfx
+ {:channel-started
+  {:effect-id :arc-channel-session :op :spawn
+   :payload {:mode :keyword :caster :vec3 :target :vec3
+             :block-pos :object :block-bounds :object :good? :boolean
+             :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :channel-updated
+  {:effect-id :arc-channel-session :op :update
+   :payload {:mode :keyword :caster :vec3 :target :vec3
+             :block-pos :object :block-bounds :object :good? :boolean
+             :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :channel-destroyed
+  {:effect-id :arc-channel-session :op :destroy
+   :payload {:fade-ticks :long}}
+  :audio-started
+  {:effect-id :audio-loop-session :op :spawn
+   :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
+  :audio-updated
+  {:effect-id :audio-loop-session :op :update
+   :payload {:position :vec3}}
+  :audio-destroyed
+  {:effect-id :audio-loop-session :op :destroy
+   :payload {:fade-ticks :long}}}
+ :fragments
+ {:stop-channel
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :destroy
+                   :instance-key [:activation :current-charging-channel]
+                   :payload {:fade-ticks 0}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session :operation :destroy
+                   :instance-key [:activation :current-charging-audio]
+                   :payload {:fade-ticks 0}}]}}
+  :insufficient
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :stop-channel}
+                  {:component :flow/finish
+                   :outcome :insufficient-resource
+                   :finish-session? true}]}}
+  :update-audio
+  {:inputs {:position {}}
+   :body {:component :effect/vfx
+          :effect-id :audio-loop-session :operation :update
+          :instance-key [:activation :current-charging-audio]
+          :payload {:position {:ref [:input :position]}}}}
+  :update-channel
+  {:inputs {:mode {} :caster {} :target {} :block-pos {}
+            :block-bounds {} :good? {} :charge-ticks {}
+            :visual-max-ticks {} :style {}}
+   :body {:component :effect/vfx
+          :effect-id :arc-channel-session :operation :update
+          :instance-key [:activation :current-charging-channel]
+          :payload {:mode {:ref [:input :mode]}
+                    :caster {:ref [:input :caster]}
+                    :target {:ref [:input :target]}
+                    :block-pos {:ref [:input :block-pos]}
+                    :block-bounds {:ref [:input :block-bounds]}
+                    :good? {:ref [:input :good?]}
+                    :charge-ticks {:ref [:input :charge-ticks]}
+                    :visual-max-ticks {:ref [:input :visual-max-ticks]}
+                    :style {:ref [:input :style]}}}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps
+   [{:component :target/item-held
+     :source :main-hand
+     :result :held-item}
+    {:component :cost/spend
+     :budget :activate
+     :on-insufficient {:component :flow/finish
+                       :outcome :insufficient-resource
+                       :finish-session? true}}
+    {:component :session/patch
+     :entries [{:path [:is-item] :mode :assign
+                :value {:ref [:slot :held-item :present?]}}
+               {:path [:charge-ticks] :mode :assign :value 0}
+               {:path [:style] :mode :assign
+                :value {:beam {:branch-factor 0.3 :passes 5 :width 0.1
+                               :amplitude 0.06 :segments 20 :fork-count 2
+                               :fork-length 0.08 :fork-angle 0.17}
+                        :sparks {:block-count 6 :item-count 4 :life-ticks 30
+                                 :block-width 0.09 :item-width 0.06
+                                 :block-amplitude 0.23 :item-amplitude 0.46
+                                 :segments 6 :shape-swap-chance 0.3
+                                 :visible-chance 0.43
+                                 :outer-color [150 232 255 255]
+                                 :inner-color [235 252 255 255]
+                                   :line-color [190 244 255 255]}}}
+                {:path [:overload-floor] :mode :assign
+                :value {:expr :math/max
+                        :args [0.0
+                               {:expr :math/sub
+                                :args [{:ref [:context :resources :overload]}
+                                        {:tunable :cost-down-overload}]}]}}
+     ]}
+    {:component :effect/vfx
+     :effect-id :arc-channel-session :operation :spawn
+     :instance-key [:activation :current-charging-channel]
+     :audience {:expr :math/select
+                :args [{:ref [:slot :held-item :present?]}
+                       {:type :owner}
+                       {:type :nearby :radius 64.0}]}
+     :payload {:mode {:expr :math/select
+                      :args [{:ref [:slot :held-item :present?]} :item :block]}
+               :caster {:from :caster/eye}
+               :target {:expr :math/select
+                        :args [{:ref [:slot :held-item :present?]}
+                               nil
+                               {:expr :vec3/add
+                                :args [{:from :caster/eye}
+                                       {:expr :vec3/scale
+                                        :args [{:from :caster/aim}
+                                               {:tunable :targeting-range}]}]}]}
+               :block-pos nil :block-bounds nil :good? false
+               :charge-ticks 0
+               :visual-max-ticks {:tunable :visual-max-ticks}
+               :style {:beam {:branch-factor 0.3 :passes 5 :width 0.1
+                              :amplitude 0.06 :segments 20 :fork-count 2
+                              :fork-length 0.08 :fork-angle 0.17}
+                       :sparks {:block-count 6 :item-count 4 :life-ticks 30
+                                :block-width 0.09 :item-width 0.06
+                                :block-amplitude 0.23 :item-amplitude 0.46
+                                :segments 6 :shape-swap-chance 0.3
+                                :visible-chance 0.43
+                                :outer-color [150 232 255 255]
+                                :inner-color [235 252 255 255]
+                                :line-color [190 244 255 255]}}}}
+    {:component :effect/vfx
+     :effect-id :audio-loop-session :operation :spawn
+     :instance-key [:activation :current-charging-audio]
+     :audience {:expr :math/select
+                :args [{:ref [:slot :held-item :present?]}
+                       {:type :owner}
+                       {:type :nearby :radius 32.0}]}
+     :payload {:position {:from :caster/eye}
+               :sound-id "academy:em.charge_loop"
+               :volume 0.3 :pitch 1.0}}
+    {:component :flow/finish :outcome :started}]}
+  :pulse
+  {:component :flow/sequence
+   :steps
+   [{:component :resource/enforce-floor
+     :resource :overload
+     :minimum {:ref [:session :overload-floor]}}
+    {:component :session/patch
+     :entries [{:path [:charge-ticks] :mode :increment :value 1}]}
+    {:component :flow/branch
+     :when {:ref [:session :is-item]}
+     :then
+     {:component :flow/sequence
+      :steps
+      [{:component :target/item-held :source :main-hand :result :held-item}
+       {:component :flow/branch
+        :when {:expr :bool/not
+               :args [{:ref [:slot :held-item :present?]}]}
+        :then {:component :stop-channel}
+        :else {:component :flow/sequence
+               :steps
+               [{:component :cost/spend
+                 :budget :charging
+                 :on-insufficient {:component :insufficient}}
+                {:component :flow/branch
+                 :when {:ref [:slot :held-item :supported?]}
+                 :then {:component :flow/sequence
+                        :steps [{:component :energy/charge
+                        :mode :item
+                                 :world-id {:from :world/id}
+                                 :target {:ref [:slot :held-item]}
+                                 :amount {:expr :math/floor
+                                          :args [{:tunable :charge-amount}]}}
+                                {:component :score/mark :tag :effective}
+                                {:component :update-channel
+                                 :mode :item
+                                 :caster {:from :caster/eye}
+                                 :target nil :block-pos nil :block-bounds nil
+                                 :good? true
+                                 :charge-ticks {:expr :math/add
+                                                :args [{:ref [:session :charge-ticks]} 1]}
+                                 :visual-max-ticks {:tunable :visual-max-ticks}
+                                 :style {:ref [:session :style]}}
+                                {:component :update-audio
+                                 :position {:from :caster/eye}}
+                                {:component :flow/finish :outcome :continue}]}
+                 :else {:component :flow/sequence
+                        :steps [{:component :score/mark :tag :ineffective}
+                                {:component :update-channel
+                                 :mode :item
+                                 :caster {:from :caster/eye}
+                                 :target nil :block-pos nil :block-bounds nil
+                                 :good? false
+                                 :charge-ticks {:expr :math/add
+                                                :args [{:ref [:session :charge-ticks]} 1]}
+                                 :visual-max-ticks {:tunable :visual-max-ticks}
+                                 :style {:ref [:session :style]}}
+                                {:component :update-audio
+                                 :position {:from :caster/eye}}
+                                {:component :flow/finish :outcome :continue}]}}]}}]}
+     :else
+     {:component :flow/sequence
+      :steps
+      [{:component :target/raycast
+        :origin {:from :caster/eye}
+        :direction {:from :caster/aim}
+        :distance {:tunable :targeting-range}
+        :include-entities? true :include-blocks? true
+        :result :aim-hit}
+       {:component :energy/target
+        :hit {:ref [:slot :aim-hit]}
+        :result :energy-target}
+       {:component :flow/branch
+        :when {:ref [:slot :energy-target :chargeable?]}
+        :then {:component :flow/sequence
+               :steps [{:component :energy/charge
+                        :mode :block
+                        :world-id {:from :world/id}
+                        :target {:ref [:slot :energy-target]}
+                        :amount {:expr :math/floor
+                                 :args [{:tunable :charge-amount}]}}
+                       {:component :score/mark :tag :effective}
+                       {:component :update-channel
+                        :mode :block
+                        :caster {:from :caster/eye}
+                        :target {:ref [:slot :aim-hit :position]}
+                        :block-pos {:ref [:slot :energy-target :block-pos]}
+                        :block-bounds {:ref [:slot :energy-target :block-bounds]}
+                        :good? true
+                        :charge-ticks {:expr :math/add
+                                       :args [{:ref [:session :charge-ticks]} 1]}
+                        :visual-max-ticks {:tunable :visual-max-ticks}
+                        :style {:ref [:session :style]}}
+                       {:component :update-audio
+                        :position {:from :caster/eye}}
+                       {:component :cost/spend
+                        :budget :charging
+                        :on-insufficient {:component :insufficient}}
+                       {:component :flow/finish :outcome :continue}]}
+        :else {:component :flow/sequence
+               :steps [{:component :score/mark :tag :ineffective}
+                       {:component :update-channel
+                        :mode :block
+                        :caster {:from :caster/eye}
+                        :target {:ref [:slot :aim-hit :position]}
+                        :block-pos {:ref [:slot :energy-target :block-pos]}
+                        :block-bounds {:ref [:slot :energy-target :block-bounds]}
+                        :good? false
+                        :charge-ticks {:expr :math/add
+                                       :args [{:ref [:session :charge-ticks]} 1]}
+                        :visual-max-ticks {:tunable :visual-max-ticks}
+                        :style {:ref [:session :style]}}
+                       {:component :update-audio
+                        :position {:from :caster/eye}}
+                       {:component :cost/spend
+                        :budget :charging
+                        :on-insufficient {:component :insufficient}}
+                         {:component :flow/finish :outcome :continue}]}}]}}]}
+  :release {:component :flow/sequence
+            :steps [{:component :stop-channel}
+                    {:component :flow/finish :outcome :released
+                     :finish-session? true}]}
+  :abort {:component :flow/sequence
+          :steps [{:component :stop-channel}
+                  {:component :flow/finish :outcome :aborted
+                   :finish-session? true}]}}}

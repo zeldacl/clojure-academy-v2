@@ -19,6 +19,11 @@
                  :yaw-range-degrees 55.0 :pitch-range-degrees 30.0
                  :life-ticks 50 :grow-ticks 4 :style {}
                  :seed {:ref [:state :seed]}}
+   :vfx/channel-arc {:component :vfx/channel-arc :mode :block
+                     :caster point-example :target point-example
+                     :block-pos [0 64 0] :block-bounds nil
+                     :good? true :charge-ticks 10 :visual-max-ticks 40
+                     :style {} :seed {:ref [:state :seed]}}
    :vfx/beam-bounds {:component :vfx/beam-bounds :start point-example
                      :end point-example :radius 0.1}
    :vfx/arc-field {:component :vfx/arc-field :start point-example :end point-example

@@ -35,31 +35,7 @@
   {:provider-id :academy/base
    :revision 1
    :abilities
-   [;; Block-charging only -- see combat_runtime.clj's :charge-target/
-    ;; :charge-energy comments. :cost {:cp 2} and :amount 1.0 were
-    ;; placeholders that never matched skill_config/electromaster.clj's
-    ;; recovered schema (effect.charge-amount [15,35], cost.tick.cp [3,7],
-    ;; cost.down.overload [65,48]); :target-ref never matched the
-    ;; :charge-energy case's :query-result read either (needed :query-ref).
-    {:id :current-charging
-     :revision 1
-     :activation :session
-     :period-ticks 5
-     :max-session-ticks 1200
-     :cost-phase :start
-     :cost {:overload (scale 65.0 48.0)}
-     :program {:op :sequence
-               :steps [{:op :patch
-                        :entries [[:resource :cp
-                                   {:op :multiply :values [-1.0 (scale 3.0 7.0)]}]]}
-                       {:op :query :query-type :charge-target
-                        :distance 15.0 :result-ref :charge-target}
-                       {:op :require :predicate :charge-target}
-                       {:op :world-effect :effect-type :charge-energy
-                        :query-ref :charge-target :amount (scale 15.0 35.0)}
-                       {:op :vfx :effect-id :current-charging
-                        :event :pulse :params {:strength 0.6}}]}}
-    {:id :body-intensify
+   [{:id :body-intensify
      :revision 1
      :activation :toggle
      :period-ticks 10

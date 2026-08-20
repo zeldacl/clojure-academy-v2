@@ -62,6 +62,10 @@
    :owner/snapshot {:component :owner/snapshot
                     :projection [:position :velocity :can-fly?]
                     :result :owner-snapshot}
+   :target/item-held {:component :target/item-held
+                      :source :main-hand :result :held-item}
+   :energy/target {:component :energy/target
+                   :hit {:ref [:slot :aim-hit]} :result :energy-target}
    :target/blocks {:component :target/blocks
                    :shape {:type :cylinder :start vec3-example
                            :direction {:vec3 [0.0 0.0 1.0]}
@@ -71,6 +75,8 @@
                      :direction {:vec3 [0.0 0.0 1.0]} :length 1.0 :radius 0.1
                      :damage 1.0 :entity-limit 1 :result :beam}
    :combat/damage {:component :combat/damage :target {:ref [:slot :target-id]} :amount 1.0}
+   :energy/charge {:component :energy/charge :mode :block
+                   :target {:ref [:slot :energy-target]} :amount 1.0}
    :damage/reflect {:component :damage/reflect
                     :multiplier 1.0 :cost-per-damage 1.0
                     :minimum 1.0 :max-depth 6}

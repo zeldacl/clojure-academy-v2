@@ -9,6 +9,9 @@
               :id :ray-fan-transient
               :resource "ac/vfx/effects/ray_fan_transient.edn"}
              {:kind :vfx-effect
+              :id :arc-channel-session
+              :resource "ac/vfx/effects/arc_channel_session.edn"}
+             {:kind :vfx-effect
               :id :beam-fade-audio
               :resource "ac/vfx/effects/beam_fade_audio.edn"}
              {:kind :vfx-effect

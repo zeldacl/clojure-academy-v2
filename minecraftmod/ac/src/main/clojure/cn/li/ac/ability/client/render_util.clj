@@ -269,8 +269,7 @@
         to-cam (vec3/vnorm (vec3/v- cam-pos mid))
         raw (vec3/vcross dir to-cam)]
     ;; Camera at/near start → to-cam ~parallel dir → cross magnitude tiny.
-    ;; A first-person self-targeted beam (e.g. current-charging: caster's own
-    ;; eye to their own crosshair target) sits on-axis with the camera EVERY
+    ;; A first-person self-targeted beam sits on-axis with the camera EVERY
     ;; frame, not just as a rare edge case — and the synced start position
     ;; lags the live camera by a frame or two, so `raw`'s magnitude is small
     ;; but noise-dominated rather than exactly zero. The old 1.0e-5 threshold

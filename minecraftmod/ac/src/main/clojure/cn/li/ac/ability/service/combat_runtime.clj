@@ -31,10 +31,14 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as position]
+            [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
@@ -453,18 +457,72 @@
                    {:seen #{} :entities []})
            :entities))))
 
-;; :runtime-interop's :get-block-entity-at is a still-installed, still-used
-;; neutral op (cn.li.ac.item.developer-portable-energy calls the same
-;; adapter for its own energy access) -- world-id/x/y/z in, no live level
-;; object required. cn.li.ac.energy.operations (this file's `energy` alias)
-;; is AC-layer, so charge-energy's world-effect case below has to stay in
-;; this file rather than delegating to a platform-src execute-*! like every
-;; other world-effect this session: platform code must never require AC
-;; namespaces, and ac.energy.operations is squarely AC.
+;; `:runtime-interop :get-block-entity-at` is a neutral AC host adapter used
+;; by the generic energy query/action ports below. It returns an opaque tile
+;; only inside this composition root; no tile or Minecraft object crosses the
+;; Combat Core contract.
 (defn- block-entity-at
   [world-id x y z]
   (when-let [fw-atom (fw/fw-atom)]
     (platform/call-adapter fw-atom :runtime-interop :get-block-entity-at world-id x y z)))
+
+(defn- held-item-at
+  [owner]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :runtime-interop
+                           :get-player-main-hand-item (str owner))))
+
+(defn- resolve-energy-tile
+  "Resolve a neutral block position to the controller tile when the platform
+  exposes a multiblock controller.  The query/action boundary never returns
+  this tile object; it is used only inside the AC host function."
+  [world-id block-pos]
+  (when (and world-id (vector? block-pos) (= 3 (count block-pos)))
+    (let [[x y z] (map long block-pos)
+          tile (block-entity-at world-id x y z)]
+      (or
+       (try
+         (when-let [level (platform-be/be-get-world-safe tile)]
+           (let [block-id (platform-be/get-block-id tile)
+                 controller (when (and block-id)
+                              (multiblock/resolve-controller-pos
+                               {:world level :pos (position/create-block-pos x y z)
+                                :block-id block-id}))]
+             (when controller
+               (world/get-tile-entity level controller))))
+         (catch Throwable _ nil))
+       tile))))
+
+(defn- energy-target-result
+  [world-id hit]
+  (let [block-pos (or (when (map? (:block-position hit))
+                        (let [{:keys [x y z]} (:block-position hit)]
+                          (when (every? number? [x y z])
+                            [(long (Math/floor (double x)))
+                             (long (Math/floor (double y)))
+                             (long (Math/floor (double z)))])))
+                      (:block-position hit)
+                      (when (and (= :block (:hit-type hit))
+                                 (every? number? [(:x hit) (:y hit) (:z hit)]))
+                        [(long (Math/floor (double (:x hit))))
+                         (long (Math/floor (double (:y hit))))
+                         (long (Math/floor (double (:z hit))))]))
+        tile (resolve-energy-tile world-id block-pos)
+        supported? (boolean (and tile
+                                 (or (energy/is-node-supported? tile)
+                                     (energy/is-receiver-supported? tile))))]
+    {:chargeable? supported?
+     :block-pos block-pos
+     :block-bounds (when (and tile block-pos)
+                     (try
+                       (let [level (platform-be/be-get-world-safe tile)
+                             block-id (platform-be/get-block-id tile)]
+                         (when (and level block-id)
+                           (multiblock/structure-bounds
+                            {:world level
+                             :pos (apply position/create-block-pos block-pos)
+                             :block-id block-id})))
+                       (catch Throwable _ nil)))}))
 
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
@@ -623,32 +681,7 @@
               :entities (fn [context node]
                           (when-let [host-query (contract/host-port :query)]
                             (host-query :entities context node)))
-              ;; Conservative: block-charging only (current-charging's own
-              ;; ActMoveTo item-charging branch needs a resolved Player
-              ;; object for hand-item access, which query-port fns can't
-              ;; get -- same constraint documented on :shift-teleport/
-              ;; :mag-manip). Raycast reuses the plain block trace, not the
-              ;; deleted version's entity-priority nearestViewHit (an
-              ;; entity blocking the beam without taking the charge itself).
-              :charge-target (fn [context node]
-                               (if-let [host-query (contract/host-port :query)]
-                                 (host-query :charge-target context node)
-                                 (let [owner (:owner context)
-                                       world-id (geom/world-id-of owner)
-                                       eye (geom/eye-pos owner)
-                                       look (when (raycast/available?)
-                                              (raycast/player-look-vector owner))
-                                       distance (double (or (:distance node) 15.0))]
-                                   (when (and world-id look)
-                                     (when-let [hit (raycast/raycast-blocks
-                                                     world-id (:x eye) (:y eye) (:z eye)
-                                                     (double (or (:x look) 0.0))
-                                                     (double (or (:y look) 0.0))
-                                                     (double (or (:z look) 1.0))
-                                                     distance)]
-                                       {:world-id world-id
-                                        :x (long (:x hit)) :y (long (:y hit)) :z (long (:z hit))})))))
-              :block-scan (fn [context node]
+               :block-scan (fn [context node]
                             (if-let [host-query (contract/host-port :query)]
                               (host-query :block-scan context node)
                               (let [owner (:owner context)
@@ -1112,46 +1145,6 @@
                                                world-id owner effect))
                                       :applied
                                       :failed)
-                            :effect effect})
-                         ;; Block-charging only -- see :charge-target's
-                         ;; comment above. Doesn't route through
-                         ;; world-effects/execute-*! (platform-src) like
-                         ;; every other case here: ac.energy.operations is
-                         ;; AC-layer, and platform code must never require
-                         ;; AC namespaces, so this mutation has to happen
-                         ;; right here instead. No multiblock controller
-                         ;; resolution (deleted version's
-                         ;; resolve-energy-target-tile) -- charges whatever
-                         ;; tile is at the hit position directly, so aiming
-                         ;; at a non-controller cell of a multiblock machine
-                         ;; won't charge it. No overload-floor enforcement
-                         ;; or effective/ineffective exp tracking either.
-                         :charge-energy
-                         (let [{:keys [world-id query-result amount]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               valid? (and world-id (map? query-result)
-                                            (every? #(number? (get query-result %)) [:x :y :z])
-                                            (finite? amount) (pos? (double amount))
-                                            (<= (double amount) 1000.0))
-                               tile (when valid?
-                                      (block-entity-at world-id
-                                                        (:x query-result)
-                                                        (:y query-result)
-                                                        (:z query-result)))
-                               charged? (when tile
-                                          (try
-                                            (cond
-                                              (energy/is-node-supported? tile)
-                                              (< (double (energy/charge-node tile (double amount) false))
-                                                 (double amount))
-
-                                              (energy/is-receiver-supported? tile)
-                                              (< (double (energy/charge-receiver tile (double amount)))
-                                                 (double amount))
-
-                                              :else false)
-                                            (catch Exception _ false)))]
-                           {:status (if charged? :applied :failed)
                             :effect effect})
                          ;; Unconditional self-effect + a client-facing FX
                          ;; event -- the deleted version never actually
@@ -2170,6 +2163,20 @@
                           (select-keys position [:x :y :z :eye-y :world-id]))
               :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
               :can-fly? (motion-effects/player-can-fly? owner)}))))
+      (when-not (contains? (:queries (capabilities/snapshot)) :item/held)
+        (capabilities/register-query!
+         :item/held
+         (fn [{:keys [owner source]} _frame]
+           (let [stack (when (= :main-hand source) (held-item-at owner))]
+             {:present? (boolean stack)
+              :supported? (boolean (and stack
+                                        (energy/is-energy-item-supported? stack)))
+              :source source}))))
+      (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
+        (capabilities/register-query!
+         :energy/target
+         (fn [{:keys [world-id hit]} _frame]
+           (energy-target-result world-id hit))))
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
         (capabilities/register-query!
          :entity/select
@@ -2260,6 +2267,31 @@
                                       'cn.li.ac.content.ability.meltdowner.damage-helper/mark-target!)]
                (mark-target! owner target)
                 {:status :applied})))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :energy/charge)
+        (capabilities/register-action!
+         :energy/charge
+         (fn [{:keys [owner world-id mode target amount]}]
+           (let [amount (double (or amount 0.0))
+                 applied? (and (pos? amount)
+                               (Double/isFinite amount)
+                               (case mode
+                                 :item (let [stack (held-item-at owner)]
+                                         (when (and stack
+                                                    (energy/is-energy-item-supported? stack))
+                                           (< (double (energy/charge-energy-to-item
+                                                       stack amount false)) amount)))
+                                 :block (let [tile (resolve-energy-tile
+                                                    world-id (:block-pos target))]
+                                          (boolean
+                                           (when tile
+                                             (cond
+                                               (energy/is-node-supported? tile)
+                                               (< (double (energy/charge-node tile amount true)) amount)
+                                               (energy/is-receiver-supported? tile)
+                                               (< (double (energy/charge-receiver tile amount)) amount)
+                                               :else false))))
+                                 false))]
+             {:status (if applied? :applied :failed)}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :owner/can-fly)
         (capabilities/register-action!
          :owner/can-fly

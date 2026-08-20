@@ -11,4 +11,5 @@
           :flashing :migrated
           :plasma-cannon :migrated
           :storm-wing :migrated
-          :ray-barrage :migrated}}
+          :ray-barrage :migrated
+          :current-charging :migrated}}

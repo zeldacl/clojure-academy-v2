@@ -183,6 +183,16 @@
             :effects #{:query}
             :produces {:snapshot {:name-field :result :type :owner-snapshot}}}
 
+           :target/item-held
+           {:schema {:required #{:source :result}}
+            :effects #{:query}
+            :produces {:held-item {:name-field :result :type :item-snapshot}}}
+
+           :energy/target
+           {:schema {:required #{:hit :result}}
+            :effects #{:query}
+            :produces {:energy-target {:name-field :result :type :energy-target}}}
+
            :target/blocks
            {:schema {:required #{:shape :projection :limit :result}}
             :effects #{:query}
@@ -200,6 +210,9 @@
 
            :entity/mark
            {:schema {:required #{:target :mark-type}} :effects #{:mutate}}
+
+           :energy/charge
+           {:schema {:required #{:mode :target :amount}} :effects #{:mutate}}
 
            :damage/reflect
            {:schema {:required #{:multiplier :cost-per-damage :minimum :max-depth}}

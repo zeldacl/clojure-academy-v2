@@ -46,6 +46,8 @@
            [:vfx/ray-fan #{:origin :direction :length :count
                            :yaw-range-degrees :pitch-range-degrees
                            :life-ticks :grow-ticks :style :seed}]
+           [:vfx/channel-arc #{:mode :caster :target :block-pos :block-bounds
+                              :good? :charge-ticks :visual-max-ticks :style :seed}]
            [:vfx/beam-bounds #{:start :end :radius}]
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
            [:vfx/vortex-column #{:base :axis :height :spacing :radius

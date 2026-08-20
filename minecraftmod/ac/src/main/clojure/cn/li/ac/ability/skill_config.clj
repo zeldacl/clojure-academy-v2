@@ -293,7 +293,15 @@
     :cost-down-cp :cost.down.cp
     :cost-down-overload :cost.down.overload
     :cooldown-ticks :cooldown.ticks
-    :exp-hit :progression.exp-hit}})
+    :exp-hit :progression.exp-hit}
+   :current-charging
+   {:visual-max-ticks :charge.visual-max-ticks
+    :targeting-range :targeting.range
+    :charge-amount :effect.charge-amount
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :exp-effective :progression.exp-effective
+    :exp-ineffective :progression.exp-ineffective}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

@@ -2,14 +2,12 @@
   :priority 20
   :skill-namespaces
   [cn.li.ac.content.ability.electromaster.body-intensify
-   cn.li.ac.content.ability.electromaster.current-charging
    cn.li.ac.content.ability.electromaster.mag-manip
    cn.li.ac.content.ability.electromaster.mag-movement
    cn.li.ac.content.ability.electromaster.mine-detect
    cn.li.ac.content.ability.electromaster.thunder-bolt]
   :fx-namespaces
   [cn.li.ac.content.ability.electromaster.body-intensify-fx
-   cn.li.ac.content.ability.electromaster.current-charging-fx
    cn.li.ac.content.ability.electromaster.mag-manip-fx
    cn.li.ac.content.ability.electromaster.mag-movement-fx
    cn.li.ac.content.ability.electromaster.mine-detect-fx

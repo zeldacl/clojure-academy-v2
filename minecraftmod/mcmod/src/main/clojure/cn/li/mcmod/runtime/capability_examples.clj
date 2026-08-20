@@ -4,6 +4,8 @@
 (def query-examples
   {:owner/snapshot {:capability :owner/snapshot :world-id "world-id" :owner "owner-id"}
    :item/held {:capability :item/held :world-id "world-id" :source :main-hand}
+   :energy/target {:capability :energy/target :world-id "world-id"
+                   :hit {:hit-type :block :block-position [0 64 0]}}
    :raycast {:capability :raycast :world-id "world-id"
              :origin [0.0 64.0 0.0] :direction [0.0 0.0 1.0] :distance 50.0}
    :entity/select {:capability :entity/select :world-id "world-id"
@@ -24,5 +26,7 @@
                     :entries [{:target "entity-id" :vector [0.0 0.5 0.0]}]}
    :entity/spawn {:capability :entity/spawn :world-id "world-id"
                   :entity-type "generic" :position [0.0 64.0 0.0]}
+   :energy/charge {:capability :energy/charge :world-id "world-id"
+                   :mode :block :target {:block-position [0 64 0]} :amount 15.0}
    :world/sound {:capability :world/sound :world-id "world-id"
                  :sound-id "generic" :position [0.0 64.0 0.0]}})
