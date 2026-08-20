@@ -86,6 +86,7 @@
                                         :outer-radius 0.052
                                         :inner-radius 0.045
                                         :glow-width 0.4 :glow-alpha 127
+                                        :fade-in-ticks 4 :fade-out-ticks 8
                                         :outer-color [106 242 106 50]
                                         :inner-color [216 248 216 230]}}}
                      {:component :effect/vfx
@@ -140,8 +141,16 @@
                                         :outer-radius 0.045
                                         :inner-radius 0.03
                                         :glow-width 0.3 :glow-alpha 127
+                                        :fade-in-ticks 4 :fade-out-ticks 8
                                         :outer-color [106 242 106 50]
-                                        :inner-color [216 248 216 230]}}}]}
+                                        :inner-color [216 248 216 230]}}}
+                     {:component :effect/vfx
+                      :effect-id :audio-one-shot
+                      :operation :spawn
+                      :audience {:type :nearby :radius 64.0}
+                      :payload {:position {:ref [:slot :aim-hit :position]}
+                                :sound-id "academy:md.ray_small"
+                                :volume 0.5 :pitch 1.0}}]}
             :else
             {:component :flow/sequence
              :steps [{:component :combat/damage
@@ -165,6 +174,7 @@
                                         :outer-radius 0.052
                                         :inner-radius 0.045
                                         :glow-width 0.4 :glow-alpha 127
+                                        :fade-in-ticks 4 :fade-out-ticks 8
                                         :outer-color [106 242 106 50]
                                         :inner-color [216 248 216 230]}}}
                      {:component :effect/vfx
