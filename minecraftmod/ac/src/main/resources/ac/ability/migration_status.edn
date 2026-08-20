@@ -14,4 +14,5 @@
           :plasma-cannon :migrated
           :storm-wing :migrated
           :ray-barrage :migrated
-          :current-charging :migrated}}
+          :current-charging :migrated
+          :mag-manip :migrated}}

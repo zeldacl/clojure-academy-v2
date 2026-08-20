@@ -12,7 +12,8 @@
     :entity/trigger-behavior :entity/mark :energy/charge
     :entity/reset-fall-damage :entity/radial-impulse :motion/flight :motion/velocity
     :owner/can-fly
-    :entity/status :entity/spawn :entity/discard :block/break :block/set
+    :entity/status :entity/spawn :entity/discard :entity/configure
+    :motion/entity-velocity :block/break :block/set
     :world/lightning :world/explosion :world/sound :block/random-break
     :projectile/redirect :resource/enforce-floor :resource/add})
 

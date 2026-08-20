@@ -333,7 +333,18 @@
     :cost-down-overload :cost.down.overload
     :cost-tick-cp :cost.tick.cp
     :exp-min :progression.exp-min
-    :exp-distance-scale :progression.exp-distance-scale}})
+    :exp-distance-scale :progression.exp-distance-scale}
+   :mag-manip
+   {:targeting-grab-range :targeting.grab-range
+    :targeting-throw-range :targeting.throw-range
+    :targeting-max-hold-distance :targeting.max-hold-distance
+    :movement-hold-distance :movement.hold-distance
+    :movement-hold-head-y-offset :movement.hold-head-y-offset
+    :movement-throw-speed :movement.throw-speed
+    :cost-up-cp :cost.up.cp
+    :cost-up-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :progression-exp-throw :progression.exp-throw}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

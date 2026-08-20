@@ -43,4 +43,7 @@
               :resource "ac/combat/abilities/mine_detect.edn"}
              {:kind :ability
               :id :mag-movement
-              :resource "ac/combat/abilities/mag_movement.edn"}]}
+              :resource "ac/combat/abilities/mag_movement.edn"}
+             {:kind :ability
+              :id :mag-manip
+              :resource "ac/combat/abilities/mag_manip.edn"}]}

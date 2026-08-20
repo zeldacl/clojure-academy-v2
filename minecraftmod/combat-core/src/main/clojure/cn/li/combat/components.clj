@@ -277,12 +277,21 @@
            :entity/discard
            {:schema {:required #{:entity}} :effects #{:mutate}}
 
+           :entity/configure
+           {:schema {:required #{:entity}} :effects #{:mutate}}
+
+           :motion/entity-velocity
+           {:schema {:required #{:target :velocity}} :effects #{:mutate}}
+
            :projectile/schedule-beam
            {:schema {:required #{:origin :destination :damage :damage-type :delay-ticks}}
             :effects #{:mutate :emit}}
 
            :block/break-budget
            {:schema {:required #{:blocks :energy :limit}} :effects #{:mutate}}
+
+           :block/break
+           {:schema {:required #{:position}} :effects #{:mutate}}
 
            :block/random-break
            {:schema {:required #{:origin :attempts :radius :hardness-max :seed}}

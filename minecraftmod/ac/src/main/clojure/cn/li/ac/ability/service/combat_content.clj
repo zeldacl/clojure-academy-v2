@@ -423,44 +423,6 @@
                                   :damage (scale 3.0 6.0)}
                                  {:op :vfx :effect-id :threatening-teleport
                                  :event :release :params {:max-range 15.0}}]}}}
-    {:id :mag-manip
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :release
-     :cost {:cp (scale 140.0 270.0)
-            :overload (scale 35.0 20.0)}
-     :cooldown-phase :release
-     :cooldown {:ticks (scale 60.0 40.0)}
-     ;; Conservative implementation: grabs a metal block in front of the
-     ;; caster and, on release, deals direct damage to whatever entity is
-     ;; under the crosshair within throw-range. No hold-visual/homing, no
-     ;; thrown-block flight physics or landing placement -- see
-     ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md B section.
-     :program {:op :phase
-               :start {:op :sequence
-                       :steps [{:op :query :query-type :mag-manip
-                                :grab-range 10.0
-                                :result-ref :held}
-                               {:op :require :predicate :held}]}
-               :pulse {:op :session-patch
-                       :entries [[[:hold-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :query :query-type :mag-manip
-                                  :throw-range 20.0
-                                  :result-ref :held}
-                                 {:op :require :predicate :held}
-                                 {:op :world-effect
-                                  :effect-type :mag-manip
-                                  :query-ref :held
-                                  :mode :throw
-                                  :throw-range 20.0
-                                  :damage (scale 16.0 40.0)}
-                                 {:op :vfx :effect-id :mag-manip
-                                  :event :throw
-                                  :params {:throw-range 20.0}}]}}}
     {:id :vec-accel
      :revision 1
      :activation :session

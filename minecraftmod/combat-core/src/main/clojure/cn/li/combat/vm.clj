@@ -95,6 +95,7 @@
     ;; Numeric equality remains :math/eq so its primitive fast path is kept.
     :value/eq (= (nth args 0) (nth args 1))
     :collection/contains? (collection-contains? (nth args 0) (nth args 1))
+    :collection/concat (vec (concat (or (nth args 0) []) (or (nth args 1) [])))
     :value/normalize-id
     (let [id (some-> (nth args 0) str/lower-case)]
       (cond
@@ -212,9 +213,12 @@
    :entity/teleport :entity/teleport
    :entity/reset-fall-damage :entity/reset-fall-damage
    :entity/spawn :entity/spawn
-    :entity/discard :entity/discard
+   :entity/discard :entity/discard
+   :entity/configure :entity/configure
+   :motion/entity-velocity :motion/entity-velocity
    :projectile/schedule-beam :projectile/schedule-beam
    :block/break-budget :block/break
+   :block/break :block/break
    :block/random-break :block/random-break
    :world/sound :world/sound
    :world/lightning :world/lightning

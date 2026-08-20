@@ -409,26 +409,6 @@
                               (when (and world-id (every? number? [to-x to-y to-z]))
                                 (boolean (teleportation/teleport-player!
                                           (server-fn) owner world-id to-x to-y to-z)))))
-        ;; Conservative: the grabbed block is broken at grab-time (query
-        ;; side) and simply consumed on release -- no thrown physics entity,
-        ;; no homing, no landing placement. Only a target-uuid under the
-        ;; crosshair at release-time takes damage; a whiff still consumes
-        ;; the hold (matches the old defskill's ActNothing no-rollback
-        ;; fallback: a miss doesn't return the block to the player either).
-        ;; See docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md B section.
-        execute-mag-manip! (fn [world-id owner plan]
-                             (let [q (:query-result plan)
-                                   target-uuid (:target-uuid q)
-                                   damage (double (or (:damage plan) 0.0))]
-                               (try
-                                 (boolean
-                                  (and world-id target-uuid (pos? damage)
-                                       (entity-damage/apply-direct-damage!
-                                        world-id target-uuid damage :magic
-                                        {:attacker-uuid owner})))
-                                 (catch Exception e
-                                   (log/warn "Failed to apply mag-manip damage:" (ex-message e))
-                                   false))))
         ;; groundshock: see the pure helpers above create-world-effects for
         ;; the propagation math itself. This closure only supplies the
         ;; Minecraft-touching pieces (block read/break/set, entity search,
@@ -724,7 +704,6 @@
                                     false)))
      :execute-vec-accel! execute-vec-accel!
      :execute-flashing! execute-flashing!
-     :execute-mag-manip! execute-mag-manip!
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-meltdowner! execute-meltdowner!
      :execute-mine-ray! execute-mine-ray!

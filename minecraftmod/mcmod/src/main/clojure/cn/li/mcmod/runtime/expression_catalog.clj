@@ -20,6 +20,7 @@
    :value/eq {:expr :value/eq :args ["minecraft:creeper" "minecraft:creeper"]}
    :collection/contains? {:expr :collection/contains?
                           :args [["minecraft:iron_block"] "minecraft:iron_block"]}
+   :collection/concat {:expr :collection/concat :args [[1] [2]]}
    :value/normalize-id {:expr :value/normalize-id :args ["block.minecraft.iron_block"]}
    :vec3/approach {:expr :vec3/approach :args [{:vec3 [0.0 0.0 0.0]}
                                                {:vec3 [1.0 0.0 0.0]} 0.1]}

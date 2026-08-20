@@ -94,6 +94,9 @@
                    :hover-air-velocity 0.078 :near-ground-distance 0.8
                    :near-ground-eye-height 0.5}
    :motion/velocity {:component :motion/velocity :velocity vec3-example}
+   :motion/entity-velocity {:component :motion/entity-velocity
+                            :target {:ref [:slot :entity-id]}
+                            :velocity vec3-example}
    :owner/can-fly {:component :owner/can-fly :enabled? true}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}
                    :status-id :generic :duration-ticks 1 :amplifier 0}
@@ -111,6 +114,10 @@
                   :owner {:ref [:context :owner]} :position vec3-example
                   :velocity vec3-example :result :spawn}
    :entity/discard {:component :entity/discard :entity {:ref [:slot :entity-id]}}
+   :entity/configure {:component :entity/configure
+                      :entity {:ref [:slot :entity-id]}
+                      :block-id "minecraft:iron_block"
+                      :place-when-collide? true}
    :data/random-item {:component :data/random-item
                       :items {:ref [:slot :candidates]} :result :candidate}
    :projectile/schedule-beam {:component :projectile/schedule-beam
@@ -119,6 +126,10 @@
                               :damage 1.0 :damage-type :generic :delay-ticks 1}
    :block/break-budget {:component :block/break-budget :blocks {:ref [:slot :blocks]}
                         :energy 1.0 :order :beam-forward :limit 1}
+   :block/break {:component :block/break
+                 :position {:ref [:slot :block-position]}
+                 :expected-block-id "minecraft:iron_block"
+                 :drop? false}
    :block/random-break {:component :block/random-break :origin vec3-example
                         :attempts 1 :radius 1.0 :hardness-max 0.3 :seed 0}
    :world/sound {:component :world/sound :sound-id "generic" :position vec3-example
@@ -143,6 +154,7 @@
    :value/eq {:expr :value/eq :args ["minecraft:creeper" "minecraft:creeper"]}
    :collection/contains? {:expr :collection/contains?
                           :args [["minecraft:iron_block"] "minecraft:iron_block"]}
+   :collection/concat {:expr :collection/concat :args [[1] [2]]}
    :value/normalize-id {:expr :value/normalize-id :args ["block.minecraft.iron_block"]}
    :vec3/approach {:expr :vec3/approach :args [vec3-example vec3-example 0.1]}
    :collection/first {:expr :collection/first :args [[{:id "x"}]]}

@@ -203,8 +203,7 @@
                                    ;; held and enables it only on release/abort.
                                    :place-when-collide? false
                                    :renderer-id "block-body"
-                                   :hook :magmanip-block
-                                   :behavior :mag-manip-damage}}}))
+                                   :behavior :block-body-impact}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec

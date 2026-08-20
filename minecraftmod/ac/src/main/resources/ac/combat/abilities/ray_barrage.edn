@@ -189,4 +189,4 @@
            {:component :flow/finish :outcome :performed}]}}
   :pulse {:component :flow/finish :outcome :unsupported}
   :release {:component :flow/finish :outcome :unsupported}
-  :abort {:component :flow/finish :outcome :aborted}}}
+  :abort {:component :flow/finish :outcome :aborted}}

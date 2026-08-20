@@ -20,9 +20,11 @@
     (is (catalog/available? :thunder-bolt))
     (is (catalog/available? :mine-detect))
     (is (catalog/available? :mag-movement))
+    (is (catalog/available? :mag-manip))
     (is (= :migrated (catalog/migration-status :thunder-bolt)))
     (is (= :migrated (catalog/migration-status :mine-detect)))
     (is (= :migrated (catalog/migration-status :mag-movement)))
+    (is (= :migrated (catalog/migration-status :mag-manip)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -51,6 +53,7 @@
     (is (= :storm-wing (get-in state [:combat :abilities :storm-wing :id])))
     (is (pos? (count (get-in state [:combat :abilities :storm-wing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :mag-movement :compiled-ir]))))
+    (is (pos? (count (get-in state [:combat :abilities :mag-manip :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :plasma-cannon :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :flashing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
@@ -114,6 +117,34 @@
     (is (= :accepted (:status result)))
     (is (= :no-target (:outcome result)))
     (is (some #(= :owner-patch (:type %)) (:actions result)))))
+
+(deftest mag-manip-start-executes-no-target-path
+  (catalog/initialize!)
+  (let [result (execution/execute!
+                :mag-manip "owner-mag"
+                {:action :start
+                 :context {:world-id "world"
+                           :resources {:cp 1000.0 :overload 100.0}}
+                 :from {:caster/id "owner-mag"
+                        :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                        :caster/eye {:x 0.0 :y 1.62 :z 0.0}
+                        :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                        :caster/creative? false
+                        :world/id "world"
+                        :targeting/normal-metal-blocks ["minecraft:iron_block"]
+                        :targeting/weak-metal-blocks []}
+                 :tunables {:targeting-grab-range 10.0
+                            :targeting-throw-range 20.0
+                            :targeting-max-hold-distance 5.0
+                            :movement-hold-distance 2.0
+                            :movement-hold-head-y-offset 0.1
+                            :movement-throw-speed 0.5
+                            :cost-up-cp 140.0
+                            :cost-up-overload 35.0
+                            :cooldown-ticks 60.0
+                            :progression-exp-throw 0.005}})]
+    (is (= :accepted (:status result)))
+    (is (= :no-target (:outcome result)))))
 
 (deftest session-index-is-neutral-and-tickable
   (catalog/initialize!)
