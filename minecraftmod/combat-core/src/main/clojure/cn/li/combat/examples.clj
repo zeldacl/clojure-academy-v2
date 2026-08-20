@@ -93,7 +93,8 @@
                    :acceleration 0.16 :hover-near-ground-velocity 0.1
                    :hover-air-velocity 0.078 :near-ground-distance 0.8
                    :near-ground-eye-height 0.5}
-   :motion/velocity {:component :motion/velocity :velocity vec3-example}
+   :motion/velocity {:component :motion/velocity :velocity vec3-example
+                     :dismount? true :reset-fall-damage? true}
    :motion/entity-velocity {:component :motion/entity-velocity
                             :target {:ref [:slot :entity-id]}
                             :velocity vec3-example}

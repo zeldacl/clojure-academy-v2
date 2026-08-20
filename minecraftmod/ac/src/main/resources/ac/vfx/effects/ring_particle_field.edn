@@ -5,7 +5,8 @@
  :lifecycle :session
  :inputs {:spawn {:position :vec3 :ring-from :double :ring-to :double
                   :segments :long :ring-color :object :rate-per-tick :long
-                  :limit :long :particle :object}}
+                  :limit :long :particle :object}
+          :update {:position :vec3}}
  :state-slots {:age :double :seed :long}
  :graph {:component :vfx/timeline
          :duration-ticks 4096

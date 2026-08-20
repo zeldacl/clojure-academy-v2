@@ -17,7 +17,6 @@
   [cn.li.ac.content.ability.meltdowner.damage-helper
    cn.li.ac.content.ability.meltdowner.electron-bomb
    cn.li.ac.content.ability.meltdowner.electron-missile
-   cn.li.ac.content.ability.meltdowner.jet-engine
    cn.li.ac.content.ability.meltdowner.light-shield
    cn.li.ac.content.ability.meltdowner.meltdowner
    cn.li.ac.content.ability.meltdowner.mine-ray-basic
@@ -28,7 +27,6 @@
   :fx-namespaces
   [cn.li.ac.content.ability.meltdowner.electron-bomb-fx
    cn.li.ac.content.ability.meltdowner.electron-missile-fx
-   cn.li.ac.content.ability.meltdowner.jet-engine-fx
    cn.li.ac.content.ability.meltdowner.light-shield-fx
    cn.li.ac.content.ability.meltdowner.meltdowner-fx
    cn.li.ac.content.ability.meltdowner.mine-ray-fx

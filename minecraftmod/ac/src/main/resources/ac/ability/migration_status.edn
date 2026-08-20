@@ -16,4 +16,5 @@
           :ray-barrage :migrated
           :current-charging :migrated
           :mag-manip :migrated
-          :body-intensify :migrated}}
+          :body-intensify :migrated
+          :jet-engine :migrated}}

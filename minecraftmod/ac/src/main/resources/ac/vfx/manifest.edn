@@ -55,4 +55,7 @@
               :resource "ac/vfx/effects/vortex_column_session.edn"}
              {:kind :vfx-effect
               :id :block-scan-transient
-              :resource "ac/vfx/effects/block_scan_transient.edn"}]}
+              :resource "ac/vfx/effects/block_scan_transient.edn"}
+             {:kind :vfx-effect
+              :id :screen-flash-session
+              :resource "ac/vfx/effects/screen_flash_session.edn"}]}

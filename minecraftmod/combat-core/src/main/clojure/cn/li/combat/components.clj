@@ -244,9 +244,12 @@
                                  :near-ground-eye-height}}
             :effects #{:mutate}}
 
-           :motion/velocity
-           {:schema {:required #{:velocity}}
-            :effects #{:mutate}}
+            :motion/velocity
+            {:schema {:required #{:velocity}}
+             ;; Optional flags are forwarded to the neutral host so movement
+             ;; abilities can request the same safe physics boundary without
+             ;; introducing a skill-specific movement component.
+             :effects #{:mutate}}
 
            :owner/can-fly
            {:schema {:required #{:enabled?}} :effects #{:mutate}}

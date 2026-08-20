@@ -807,10 +807,7 @@
                          :face face
                          :drop-x drop-x :drop-y drop-y :drop-z drop-z
                          :target-entities (mapv #(select-keys % [:uuid]) entities)})))))
-              :jet-engine (fn [context node]
-                            (when-let [host-query (contract/host-port :query)]
-                              (host-query :jet-engine context node)))
-              :light-shield (fn [context node]
+               :light-shield (fn [context node]
                               (if-let [host-query (contract/host-port :query)]
                                 (host-query :light-shield context node)
                                 ;; execute-light-shield! finds nearby entities
@@ -1137,30 +1134,6 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-meltdowner!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :jet-engine
-                         (let [{:keys [world-id query-result charge-ticks target-range
-                                       trigger-time-ticks trigger-lifetime-ticks damage]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :charge-ticks (long (or charge-ticks 0))
-                                     :target-range (double (or target-range 12.0))
-                                     :trigger-time-ticks (long (or trigger-time-ticks 8))
-                                     :trigger-lifetime-ticks (long (or trigger-lifetime-ticks 15))
-                                     :damage (double (or damage 0.0))}
-                               valid? (and world-id (map? query-result)
-                                            (<= 0 (:charge-ticks plan) 120)
-                                            (finite? target-range) (<= 1.0 (:target-range plan) 32.0)
-                                            (<= 1 (:trigger-time-ticks plan) 40)
-                                            (<= 1 (:trigger-lifetime-ticks plan) 40)
-                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-jet-engine!
                                                world-id owner plan))
                                       :applied
                                       :failed)
@@ -2231,7 +2204,7 @@
       (when-not (contains? (:actions (capabilities/snapshot)) :motion/velocity)
         (capabilities/register-action!
          :motion/velocity
-         (fn [{:keys [owner velocity]}]
+          (fn [{:keys [owner velocity dismount? reset-fall-damage?]}]
            (let [point (cond
                          (and (map? velocity) (vector? (:vec3 velocity)))
                          (:vec3 velocity)
@@ -2248,9 +2221,14 @@
                              (every? finite? point)
                              (motion-effects/player-motion-available?))
                  [x y z] (mapv double point)
-                 applied? (and valid?
-                               (motion-effects/set-player-velocity!
-                                (str owner) x y z))]
+                  owner-id (str owner)
+                  dismounted? (or (not (true? dismount?))
+                                  (motion-effects/dismount-riding! owner-id))
+                  applied? (and valid? dismounted?
+                                (motion-effects/set-player-velocity!
+                                 owner-id x y z))]
+              (when (and applied? (true? reset-fall-damage?))
+                (motion-effects/reset-fall-damage! owner-id))
              {:status (if applied? :applied :failed)
               :velocity {:x x :y y :z z}}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/radial-impulse)

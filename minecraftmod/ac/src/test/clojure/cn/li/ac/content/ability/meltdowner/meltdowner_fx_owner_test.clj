@@ -5,7 +5,6 @@
             [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.electron-bomb-fx :as electron-bomb-fx]
             [cn.li.ac.content.ability.meltdowner.electron-missile-fx :as electron-missile-fx]
-            [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as jet-engine-fx]
             [cn.li.ac.content.ability.meltdowner.light-shield-fx :as light-shield-fx]
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
@@ -15,13 +14,11 @@
   (vfx-level/reset-level-effect-registry-for-test!)
       (electron-bomb-fx/init!)
       (electron-missile-fx/init!)
-      (jet-engine-fx/init!)
       (light-shield-fx/init!)
       (meltdowner-fx/init!)
       (mine-ray-fx/init!)
       (electron-bomb-fx/reset-fx-for-test!)
       (electron-missile-fx/reset-electron-missile-fx-for-test!)
-      (jet-engine-fx/reset-fx-for-test!)
       (light-shield-fx/reset-fx-for-test!)
       (meltdowner-fx/reset-fx-for-test!)
       (mine-ray-fx/reset-mine-ray-fx-for-test!)
@@ -30,7 +27,6 @@
         (finally
           (electron-bomb-fx/reset-fx-for-test!)
           (electron-missile-fx/reset-electron-missile-fx-for-test!)
-          (jet-engine-fx/reset-fx-for-test!)
           (light-shield-fx/reset-fx-for-test!)
           (meltdowner-fx/reset-fx-for-test!)
           (mine-ray-fx/reset-mine-ray-fx-for-test!)
@@ -73,10 +69,6 @@
                                         :start {:x 0.0 :y 64.0 :z 0.0}
                                         :end {:x 2.0 :y 65.6 :z 2.0}}))
 
-    (dispatch! :jet-engine (event "ctx-a" :jet-engine/fx-start {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0}}))
-    (dispatch! :jet-engine (event "ctx-b" :jet-engine/fx-start {:mode :mark-start :target {:x 2.0 :y 64.0 :z 2.0}}))
-    (dispatch! :jet-engine (event "ctx-a" :jet-engine/fx-trigger-start {:mode :trigger-start :pos {:x 1.2 :y 64.0 :z 1.2}}))
-    (dispatch! :jet-engine (event "ctx-b" :jet-engine/fx-trigger-start {:mode :trigger-start :pos {:x 2.2 :y 64.0 :z 2.2}}))
 
     (dispatch! :light-shield (event "ctx-a" :light-shield/fx-start {:mode :start}))
     (dispatch! :light-shield (event "ctx-b" :light-shield/fx-start {:mode :start}))
@@ -103,8 +95,6 @@
     (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]]))))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-b"]]))))
-    (is (= :triggering (get-in (jet-engine-fx/fx-snapshot) [:fx-state [:ctx "ctx-a"] :phase])))
-    (is (= :triggering (get-in (jet-engine-fx/fx-snapshot) [:fx-state [:ctx "ctx-b"] :phase])))
     (is (:active? (get-in (light-shield-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
     (is (:active? (get-in (light-shield-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
     (is (= 12 (get-in (meltdowner-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"] :ticks])))

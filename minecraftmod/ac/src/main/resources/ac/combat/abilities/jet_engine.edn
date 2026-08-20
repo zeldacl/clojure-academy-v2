@@ -1,0 +1,380 @@
+{:schema-version 2
+ :kind :ability
+ :id :jet-engine
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative?
+            :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :meltdowner :min-exp 1.0}]
+ :tunables
+ {:target-range {:curve :const}
+  :damage {:curve :mastery-lerp}
+  :hold-required-cp {:curve :mastery-lerp}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp}
+  :progression-exp-use {:curve :const}}
+ :costs
+ {:release {:resources {:cp {:tunable :release-cp}
+                        :overload {:tunable :release-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:use {:per-mark {:tunable :progression-exp-use}}}
+ :vfx
+ {:mark-start {:effect-id :ring-particle-field :op :spawn
+               :payload {:position :vec3 :ring-from :double :ring-to :double
+                         :segments :long :ring-color :object :rate-per-tick :long
+                         :limit :long :particle :object}}
+  :mark-update {:effect-id :ring-particle-field :op :update
+                :payload {:position :vec3}}
+  :mark-end {:effect-id :ring-particle-field :op :destroy
+             :payload {}}
+  :trail-start {:effect-id :arc-channel-session :op :spawn
+                :payload {:mode :keyword :caster :vec3 :target :vec3
+                          :block-pos :object :block-bounds :object :good? :boolean
+                          :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :trail-update {:effect-id :arc-channel-session :op :update
+                 :payload {:mode :keyword :caster :vec3 :target :vec3
+                           :block-pos :object :block-bounds :object :good? :boolean
+                           :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :trail-end {:effect-id :arc-channel-session :op :destroy
+              :payload {:fade-ticks :long}}
+  :trigger-particles-start {:effect-id :particle-session :op :spawn
+                            :payload {:position :vec3 :rate-per-tick :long
+                                      :limit :long :particle :object}}
+  :trigger-particles-update {:effect-id :particle-session :op :update
+                             :payload {:position :vec3}}
+  :trigger-particles-end {:effect-id :particle-session :op :destroy
+                          :payload {}}
+  :shield-start {:effect-id :billboard-session :op :spawn
+                 :payload {:anchor :object :duration-ticks :long
+                           :texture-pattern :string :frame-count :long
+                           :frame-duration-ms :long :half-size :double}}
+  :shield-update {:effect-id :billboard-session :op :update
+                  :payload {:anchor :object}}
+  :shield-end {:effect-id :billboard-session :op :destroy
+               :payload {}}
+  :impact-start {:effect-id :ring-particle-field :op :spawn
+                 :payload {:position :vec3 :ring-from :double :ring-to :double
+                           :segments :long :ring-color :object :rate-per-tick :long
+                           :limit :long :particle :object}}
+  :impact-end {:effect-id :ring-particle-field :op :destroy
+               :payload {}}
+  :screen-flash-start {:effect-id :screen-flash-session :op :spawn
+                       :payload {:alpha :double :duration-ticks :long :color :object}}
+  :screen-flash-update {:effect-id :screen-flash-session :op :update
+                        :payload {:alpha :double}}
+  :screen-flash-end {:effect-id :screen-flash-session :op :destroy
+                     :payload {}}}
+ :fragments
+ {:stop-mark
+  {:inputs {}
+   :body {:component :effect/vfx
+          :effect-id :ring-particle-field :operation :destroy
+          :instance-key [:activation :jet-engine-mark]
+          :payload {}}}
+  :stop-trigger
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :destroy
+                   :instance-key [:activation :jet-engine-trail]
+                   :payload {:fade-ticks 0}}
+                  {:component :effect/vfx
+                   :effect-id :particle-session :operation :destroy
+                   :instance-key [:activation :jet-engine-particles]
+                   :payload {}}
+                  {:component :effect/vfx
+                   :effect-id :billboard-session :operation :destroy
+                   :instance-key [:activation :jet-engine-shield]
+                   :payload {}}
+                  {:component :effect/vfx
+                   :effect-id :ring-particle-field :operation :destroy
+                   :instance-key [:activation :jet-engine-impact]
+                   :payload {}}
+                  {:component :effect/vfx
+                   :effect-id :screen-flash-session :operation :destroy
+                   :instance-key [:activation :jet-engine-flash]
+                   :payload {}}]}}
+  :mark-pulse
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :target/raycast
+                   :origin {:from :caster/eye}
+                   :direction {:from :caster/aim}
+                   :distance {:tunable :target-range}
+                   :include-entities? true
+                   :include-blocks? true
+                   :result :aim-hit}
+                  {:component :data/bind
+                   :to :target-position
+                   :value {:ref [:slot :aim-hit :position]}}
+                  {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:ref [:context :resources :cp]}
+                                 {:tunable :hold-required-cp}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :session/patch
+                                   :entries [{:path [:hold-ticks]
+                                              :mode :increment :value 1}
+                                             {:path [:target-position]
+                                              :mode :assign
+                                              :value {:ref [:slot :target-position]}}]}
+                                  {:component :effect/vfx
+                                   :effect-id :ring-particle-field
+                                   :operation :update
+                                   :instance-key [:activation :jet-engine-mark]
+                                   :payload {:position {:ref [:slot :target-position]}}}
+                                  {:component :flow/finish :outcome :continue}]}
+                   :else {:component :flow/sequence
+                          :steps [{:component :stop-mark}
+                                  {:component :flow/finish
+                                   :outcome :insufficient-resource
+                                   :finish-session? true}]}}]}}
+  :trigger-pulse
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:ref [:session :trigger-ticks]} 15]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :stop-trigger}
+                                  {:component :flow/finish
+                                   :outcome :completed
+                                   :finish-session? true}]}
+                   :else {:component :flow/sequence
+                          :steps [{:component :owner/snapshot
+                                   :projection [:position]
+                                   :result :owner-now}
+                                  {:component :data/bind
+                                   :to :next-position
+                                   :value {:expr :vec3/add
+                                           :args [{:ref [:session :start-position]}
+                                                  {:expr :vec3/scale
+                                                   :args [{:ref [:session :velocity]}
+                                                          {:expr :math/div
+                                                           :args [{:expr :math/add
+                                                                   :args [{:ref [:session :trigger-ticks]} 1]}
+                                                                  8.0]}]}]}}
+                                  {:component :data/bind
+                                   :to :segment
+                                   :value {:expr :vec3/sub
+                                           :args [{:ref [:slot :next-position]}
+                                                  {:ref [:session :last-position]}]}}
+                                  {:component :data/bind
+                                   :to :segment-distance
+                                   :value {:expr :vec3/length
+                                           :args [{:ref [:slot :segment]}]}}
+                                  {:component :data/bind
+                                   :to :segment-direction
+                                   :value {:expr :vec3/normalize
+                                           :args [{:ref [:slot :segment]}]}}
+                                  {:component :motion/velocity
+                                   :velocity {:ref [:session :velocity]}
+                                   :dismount? true
+                                   :reset-fall-damage? true}
+                                  {:component :target/raycast
+                                   :origin {:ref [:session :last-position]}
+                                   :direction {:ref [:slot :segment-direction]}
+                                   :distance {:expr :math/max
+                                              :args [1.0e-5
+                                                     {:ref [:slot :segment-distance]}]}
+                                   :include-entities? true
+                                   :include-blocks? false
+                                   :result :segment-hit}
+                                  {:component :flow/branch
+                                   :when {:expr :bool/and
+                                          :args [{:expr :value/eq
+                                                  :args [{:ref [:slot :segment-hit :hit-type]}
+                                                         :entity]}
+                                                 {:expr :bool/not
+                                                  :args [{:expr :value/eq
+                                                          :args [{:ref [:slot :segment-hit :entity-id]}
+                                                                 {:from :caster/id}]}]}]}
+                                   :then {:component :flow/sequence
+                                          :steps [{:component :combat/damage
+                                                   :target {:ref [:slot :segment-hit :entity-id]}
+                                                   :amount {:tunable :damage}
+                                                   :damage-type :magic}
+                                                  {:component :entity/mark
+                                                   :target {:ref [:slot :segment-hit :entity-id]}
+                                                   :mark-type :radiation}]}
+                                   :else {:component :flow/sequence :steps []}}
+                                  {:component :session/patch
+                                   :entries [{:path [:trigger-ticks]
+                                              :mode :increment :value 1}
+                                             {:path [:last-position]
+                                              :mode :assign
+                                              :value {:ref [:slot :next-position]}}]}
+                                  {:component :effect/vfx
+                                   :effect-id :arc-channel-session
+                                   :operation :update
+                                   :instance-key [:activation :jet-engine-trail]
+                                   :payload {:mode :jet-engine-trigger
+                                             :caster {:ref [:session :start-position]}
+                                             :target {:ref [:slot :next-position]}
+                                             :block-pos nil :block-bounds nil
+                                             :good? true
+                                             :charge-ticks {:ref [:session :trigger-ticks]}
+                                             :visual-max-ticks 20
+                                             :style {:beam {:pattern :thin-continuous
+                                                            :wiggle 0.35
+                                                            :life-ratio 0.5
+                                                            :width 0.08
+                                                            :color [185 245 255 220]}}}}
+                                  {:component :effect/vfx
+                                   :effect-id :particle-session
+                                   :operation :update
+                                   :instance-key [:activation :jet-engine-particles]
+                                   :payload {:position {:ref [:slot :next-position]}}}
+                                  {:component :effect/vfx
+                                   :effect-id :billboard-session
+                                   :operation :update
+                                   :instance-key [:activation :jet-engine-shield]
+                                   :payload {:anchor {:ref [:slot :next-position]}}}
+                                  {:component :effect/vfx
+                                   :effect-id :screen-flash-session
+                                   :operation :update
+                                   :instance-key [:activation :jet-engine-flash]
+                                   :payload {:alpha {:expr :math/mul
+                                                     :args [85.0
+                                                            {:expr :math/clamp
+                                                             :args [{:expr :math/div
+                                                                     :args [{:expr :math/sub
+                                                                             :args [20.0
+                                                                                    {:ref [:session :trigger-ticks]}]}
+                                                                            20.0]}
+                                                                    0.0 1.0]}]}}}}
+                                  {:component :flow/finish :outcome :continue}]}}]}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :target/raycast
+                   :origin {:from :caster/eye}
+                   :direction {:from :caster/aim}
+                   :distance {:tunable :target-range}
+                   :include-entities? true
+                   :include-blocks? true
+                   :result :aim-hit}
+                  {:component :data/bind
+                   :to :target-position
+                   :value {:ref [:slot :aim-hit :position]}}
+                  {:component :session/patch
+                   :entries [{:path [:phase] :mode :assign :value :marking}
+                             {:path [:hold-ticks] :mode :assign :value 0}
+                             {:path [:target-position] :mode :assign
+                              :value {:ref [:slot :target-position]}}]}
+                  {:component :effect/vfx
+                   :effect-id :ring-particle-field
+                   :operation :spawn
+                   :instance-key [:activation :jet-engine-mark]
+                   :audience {:type :owner}
+                   :payload {:position {:ref [:slot :target-position]}
+                             :ring-from 1.9 :ring-to 1.4 :segments 24
+                             :ring-color [51 255 51 179]
+                             :rate-per-tick 1 :limit 128
+                             :particle {:material :additive
+                                        :life-ticks 12 :speed 0.08
+                                        :color [51 255 51 179]}}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/branch
+          :when {:expr :value/eq
+                 :args [{:ref [:session :phase]} :marking]}
+          :then {:component :mark-pulse}
+          :else {:component :trigger-pulse}}
+  :release {:component :flow/branch
+            :when {:expr :value/eq
+                   :args [{:ref [:session :phase]} :marking]}
+            :then {:component :flow/sequence
+                   :steps [{:component :cost/spend
+                            :budget :release
+                            :on-insufficient {:component :flow/sequence
+                                              :steps [{:component :stop-mark}
+                                                      {:component :flow/finish
+                                                       :outcome :insufficient-resource
+                                                       :finish-session? true}]}}
+                           {:component :owner/snapshot
+                            :projection [:position]
+                            :result :owner-start}
+                           {:component :data/bind
+                            :to :velocity
+                            :value {:expr :vec3/scale
+                                    :args [{:expr :vec3/sub
+                                            :args [{:ref [:session :target-position]}
+                                                   {:ref [:slot :owner-start :position]}]}
+                                           {:expr :math/div :args [1.0 8.0]}]}}
+                           {:component :session/patch
+                            :entries [{:path [:phase] :mode :assign :value :triggering}
+                                      {:path [:start-position] :mode :assign
+                                       :value {:ref [:slot :owner-start :position]}}
+                                      {:path [:last-position] :mode :assign
+                                       :value {:ref [:slot :owner-start :position]}}
+                                      {:path [:velocity] :mode :assign
+                                       :value {:ref [:slot :velocity]}}
+                                      {:path [:trigger-ticks] :mode :assign :value 0}]}
+                           {:component :stop-mark}
+                           {:component :effect/vfx
+                            :effect-id :arc-channel-session :operation :spawn
+                            :instance-key [:activation :jet-engine-trail]
+                            :audience {:type :nearby :radius 64.0}
+                            :payload {:mode :jet-engine-trigger
+                                      :caster {:ref [:slot :owner-start :position]}
+                                      :target {:ref [:session :target-position]}
+                                      :block-pos nil :block-bounds nil :good? true
+                                      :charge-ticks 0 :visual-max-ticks 20
+                                      :style {:beam {:pattern :thin-continuous
+                                                     :wiggle 0.35 :life-ratio 0.5
+                                                     :width 0.08
+                                                     :color [185 245 255 220]}}}}
+                           {:component :effect/vfx
+                            :effect-id :particle-session :operation :spawn
+                            :instance-key [:activation :jet-engine-particles]
+                            :audience {:type :nearby :radius 64.0}
+                            :payload {:position {:ref [:slot :owner-start :position]}
+                                      :rate-per-tick 11 :limit 256
+                                      :particle {:material :additive
+                                                 :texture "academy:textures/effects/md_particle.png"
+                                                 :life-ticks 10 :speed 1.0
+                                                 :spread {:x 0.3 :y 0.3 :z 0.3}
+                                                 :velocity {:x 0.02 :y 0.02 :z 0.02}}}}
+                           {:component :effect/vfx
+                            :effect-id :billboard-session :operation :spawn
+                            :instance-key [:activation :jet-engine-shield]
+                            :audience {:type :nearby :radius 64.0}
+                            :payload {:anchor {:ref [:slot :owner-start :position]}
+                                      :duration-ticks 20
+                                      :texture-pattern "academy:textures/effects/diamond_shield.png"
+                                      :frame-count 1 :frame-duration-ms 1000
+                                      :half-size 1.0}}
+                           {:component :effect/vfx
+                            :effect-id :ring-particle-field :operation :spawn
+                            :instance-key [:activation :jet-engine-impact]
+                            :audience {:type :nearby :radius 64.0}
+                            :payload {:position {:ref [:session :target-position]}
+                                      :ring-from 0.4 :ring-to 0.58 :segments 24
+                                      :ring-color [210 250 255 180]
+                                      :rate-per-tick 4 :limit 256
+                                      :particle {:material :additive
+                                                 :life-ticks 12 :speed 0.08
+                                                 :color [214 248 255 200]}}}
+                           {:component :effect/vfx
+                            :effect-id :screen-flash-session :operation :spawn
+                            :instance-key [:activation :jet-engine-flash]
+                            :audience {:type :owner}
+                            :payload {:alpha 85.0 :duration-ticks 20
+                                      :color [210 250 255 255]}}
+                           {:component :score/mark :tag :use}
+                           {:component :cooldown/start :name :main}
+                           {:component :flow/finish :outcome :triggering}]}
+            :else {:component :flow/finish :outcome :ignored}}
+  :abort {:component :flow/branch
+          :when {:expr :value/eq
+                 :args [{:ref [:session :phase]} :triggering]}
+          :then {:component :flow/sequence
+                 :steps [{:component :stop-trigger}
+                         {:component :flow/finish :outcome :aborted
+                          :finish-session? true}]}
+          :else {:component :flow/sequence
+                 :steps [{:component :stop-mark}
+                         {:component :flow/finish :outcome :aborted
+                          :finish-session? true}]}}}}}

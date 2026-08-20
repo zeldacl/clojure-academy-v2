@@ -153,7 +153,7 @@
   (let [expected #{:arc-gen :blood-retrograde
                    :dim-folding-theorem :directed-blastwave
                    :directed-shock :electron-bomb :electron-missile
-                   :flesh-ripping :groundshock :jet-engine :light-shield
+                    :flesh-ripping :groundshock :light-shield
                    :location-teleport :mark-teleport
                    :meltdowner :mine-ray-basic :mine-ray-expert
                    :mine-ray-luck :plasma-cannon
@@ -162,12 +162,12 @@
                    :threatening-teleport :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
-    (is (= 30 (count content/ability-ids)))))
+    (is (= 29 (count content/ability-ids)))))
 
 (deftest combat-catalog-provides-player-registry-specs
   (is (true? (content/assert-complete-skill-catalog!)))
   (let [specs (content/skill-specs)]
-    (is (= 37 (count specs)))
+    (is (= 36 (count specs)))
     (is (= content/ability-ids (set (map :id specs))))
     (is (every? #(and (:category-id %) (:level %) (:pattern %)) specs))))
 

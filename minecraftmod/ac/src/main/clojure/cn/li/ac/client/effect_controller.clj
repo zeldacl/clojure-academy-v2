@@ -12,6 +12,8 @@
 (defonce ^:private handlers* (atom {}))
 (defonce ^:private ^ArrayDeque camera-pitch* (ArrayDeque. 1024))
 (defonce ^:private frozen?* (atom false))
+(defonce ^:private screen-flashes* (atom {}))
+(def ^:private screen-flash-effect-id :screen-flash-session)
 (def ^:dynamic *sample-state*
   "Interpolated aggregate state for the descriptor currently being sampled."
   ::unbound)
@@ -258,6 +260,7 @@
   nil)
 
 (defn clear-owner! [owner-key]
+  (swap! screen-flashes* dissoc (str owner-key))
   (doseq [[effect-id _] @(:registry (runtime))]
     (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
       (core/update-instance-state! (runtime) instance-id
@@ -285,6 +288,14 @@
   ([] (tick! {:tick-id (quot (System/currentTimeMillis) 50)
               :delta-seconds 0.05}))
   ([context]
+   (swap! screen-flashes*
+          (fn [states]
+            (into {}
+                  (keep (fn [[owner state]]
+                          (let [remaining (dec (long (or (:remaining-ticks state) 0)))]
+                            (when (pos? remaining)
+                              [owner (assoc state :remaining-ticks remaining)])))
+                        states))))
    (core/tick! (runtime) (merge {:tick-id (quot (System/currentTimeMillis) 50)
                                  :delta-seconds 0.05}
                                 context))
@@ -302,6 +313,31 @@
   (core/release-frame! (runtime) frame-id))
 
 (defonce ^:private unmapped-signal-count* (atom 0))
+
+(defn- apply-screen-flash-signal!
+  [signal]
+  (when (= screen-flash-effect-id (:effect-id signal))
+    (let [owner (some-> (:owner signal) str)
+          payload (or (:params signal) {})]
+      (when owner
+        (case (:op signal)
+          (:spawn :signal)
+          (swap! screen-flashes* assoc owner
+                 {:alpha (double (or (:alpha payload) 0.0))
+                  :remaining-ticks (long (or (:duration-ticks payload) 1))})
+
+          :destroy
+          (swap! screen-flashes* dissoc owner)
+          nil)))
+    true))
+
+(defn screen-flash-alpha
+  "Current generic screen-flash overlay alpha for one owner.
+
+   This is a presentation read of the neutral :screen-flash-session signal;
+   it contains no skill identity or legacy FX lookup."
+  [owner]
+  (double (or (:alpha (get @screen-flashes* (str owner))) 0.0)))
 
 (defn dispatch-signal!
   "Route one combat VFX signal to its effect's registered vfx-core instance,
@@ -336,6 +372,7 @@
    tombstone rules are built to consume; no bypass needed."
   [signal]
   (let [signal (contract/signal signal)
+        _ (apply-screen-flash-signal! signal)
         lifecycle (core/effect-lifecycle (runtime) (:effect-id signal))]
     (if (= :transient lifecycle)
       (core/dispatch-signal! (runtime) signal)

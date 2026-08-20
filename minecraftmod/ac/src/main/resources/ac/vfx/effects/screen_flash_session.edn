@@ -1,0 +1,14 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :screen-flash-session
+ :revision 1
+ :lifecycle :transient
+ ;; Generic presentation side channel; intensity, duration and color are
+ ;; supplied by the signal and are not tied to any skill.
+ :inputs {:spawn {:alpha :double :duration-ticks :long :color :object}
+          :update {:alpha :double}
+          :destroy {}}
+ :state-slots {:age :double}
+ :graph {:component :vfx/timeline
+         :duration-ticks {:ref [:input :duration-ticks]}
+         :children []}}

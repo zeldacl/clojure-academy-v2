@@ -75,11 +75,6 @@
   [world-id owner plan]
   (call :execute-meltdowner! world-id owner plan))
 
-(defn execute-jet-engine!
-  "Execute the bounded Jet Engine dash/segment plan behind a Host Port."
-  [world-id owner plan]
-  (call :execute-jet-engine! world-id owner plan))
-
 (defn execute-vec-accel!
   "Execute the charged Vector Acceleration movement behind a Host Port."
   [world-id owner plan]

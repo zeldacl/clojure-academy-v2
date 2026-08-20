@@ -302,7 +302,7 @@
     :cost-tick-cp :cost.tick.cp
     :exp-effective :progression.exp-effective
     :exp-ineffective :progression.exp-ineffective}
-   :thunder-bolt
+    :thunder-bolt
    {:targeting-range :targeting.range
     :direct-damage :combat.direct-damage
     :aoe-radius :combat.aoe-radius
@@ -317,8 +317,16 @@
     :cost-down-overload :cost.down.overload
     :cooldown-ticks :cooldown.ticks
     :exp-effective :progression.exp-effective
-    :exp-ineffective :progression.exp-ineffective}
-   :body-intensify
+     :exp-ineffective :progression.exp-ineffective}
+    :jet-engine
+    {:target-range :targeting.range
+     :damage :combat.damage
+     :hold-required-cp :cost.hold.required-cp
+     :release-cp :cost.release.cp
+     :release-overload :cost.release.overload
+     :cooldown-ticks :cooldown.ticks
+     :progression-exp-use :progression.exp-use}
+    :body-intensify
    {:charge-min-ticks :charge.min-ticks
     :charge-max-ticks :charge.max-ticks
     :charge-max-tolerant-ticks :charge.max-tolerant-ticks
