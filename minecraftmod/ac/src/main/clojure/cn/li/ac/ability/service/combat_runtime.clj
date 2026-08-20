@@ -1149,32 +1149,6 @@
                                       :applied
                                       :failed)
                             :effect effect})
-                         ;; Unconditional self-effect + a client-facing FX
-                         ;; event -- the deleted version never actually
-                         ;; scanned for ore blocks server-side despite the
-                         ;; skill's name; the block detection/highlight is
-                         ;; presumably client-only rendering driven by the
-                         ;; :range/:advanced? params in the vfx step, outside
-                         ;; combat-core's authority. See combat_content.clj's
-                         ;; :mine-detect entry -- it used to gate on a
-                         ;; :block-scan query result, which the real
-                         ;; mechanic never did.
-                         :mine-detect
-                         (let [{:keys [blindness-ticks blindness-amplifier]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               valid? (and (finite? blindness-ticks)
-                                            (<= 0.0 (double blindness-ticks) 1000.0)
-                                            (finite? blindness-amplifier)
-                                            (<= 0.0 (double blindness-amplifier) 10.0)
-                                            (potion-effects/available?))]
-                           {:status (if (and valid?
-                                              (potion-effects/apply-effect!
-                                               owner :blindness
-                                               (long blindness-ticks)
-                                               (long blindness-amplifier)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
                          :blood-retrograde
                          (let [{:keys [world-id query-result amount max-charge-ticks
                                        entity-search-radius spray-angles]} effect
@@ -1656,6 +1630,10 @@
             :activation-seed (long seed)
             :skill-exp (double (or (get-in state [:ability-data :skill-exps ability-id])
                                    0.0))
+            ;; Generic progression metadata exposed through the caster
+            ;; facade.  Mine Detect uses it to select its configurable
+            ;; presentation tier; it is not a skill-specific runtime hook.
+            :ability-level (long (or (get-in state [:ability-data :level]) 0))
             :resources {:cp (double (or (:cur-cp resource-data) 0.0))
                         :overload (double (or (:cur-overload resource-data) 0.0))}
             :creative? (boolean (:creative? intent))}
@@ -1701,6 +1679,7 @@
    ;; fishing resolution) -- that handler needs the same inputs the VM's own
    ;; :expr evaluator would have used, just not through a lerp/random/* node.
    :progression/mastery (double (or (:skill-exp context) 0.0))
+     :progression/level (long (or (:ability-level context) 0))
      :rng/seed (long (or (:activation-seed context) 0))}))
 
 (defn- lerp [lo hi t]

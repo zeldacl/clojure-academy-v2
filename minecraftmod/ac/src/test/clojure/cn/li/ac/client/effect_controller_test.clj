@@ -68,7 +68,7 @@
   (is (= {:whose "mine" :mode :tag} (vfx-level/instance-for-owner :owner-probe "mine")))
   (is (nil? (vfx-level/instance-for-owner :owner-probe "nobody"))))
 
-;; Batch 5 (mine_detect): a :level build-plan-fn sometimes needs to write
+;; A level build-plan-fn sometimes needs to write
 ;; back into ITS OWN instance's state (a query-fn result only available at
 ;; sample time, never passed to tick-state-fn) without disturbing any other
 ;; concurrent caster's instance of the same effect. update-state! alone

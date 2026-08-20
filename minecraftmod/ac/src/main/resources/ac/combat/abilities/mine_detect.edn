@@ -1,0 +1,70 @@
+{:schema-version 2
+ :kind :ability
+ :id :mine-detect
+ :revision 2
+ :activation :instant
+ :status :migrated
+ :requires [:caster/id :caster/eye :world/id :progression/mastery
+            :progression/level :rng/seed]
+ :prerequisites [{:skill-id :mag-manip :min-exp 1.0}]
+ :tunables
+ {:targeting-range {:curve :mastery-lerp}
+  :blindness-duration-ticks {:curve :const :type :long}
+  :blindness-amplifier {:curve :const :type :long}
+  :cost-down-cp {:curve :mastery-lerp}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-cast {:curve :const}}
+ :costs
+ {:activate {:resources {:cp {:tunable :cost-down-cp}
+                         :overload {:tunable :cost-down-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:cast {:per-mark {:tunable :exp-cast}}}
+ :vfx
+ {:scan {:effect-id :block-scan-transient
+         :op :spawn
+         :payload {:origin :vec3 :range :double :max-range :double
+                   :filter :object :advanced? :boolean
+                   :life-ticks :long :rescan-interval :long :max-results :long
+                   :texture :string :base-color :object :tier-colors :object}}}
+ :program
+ {:component :flow/sequence
+  :steps [{:component :cost/spend
+           :budget :activate
+           :on-insufficient {:component :flow/finish
+                             :outcome :insufficient-resource}}
+          {:component :combat/status
+           :world-id {:from :world/id}
+           :target {:from :caster/id}
+           :status-id :blindness
+           :duration-ticks {:tunable :blindness-duration-ticks}
+           :amplifier {:tunable :blindness-amplifier}}
+          {:component :effect/vfx
+           :effect-id :block-scan-transient
+           :operation :spawn
+           :instance-key [:activation :scan]
+           :audience {:type :owner}
+           :payload {:origin {:from :caster/eye}
+                     :range {:tunable :targeting-range}
+                     :max-range 28.0
+                     :filter {:include-suffixes ["_ore"]
+                              :include-substrings ["ancient_debris"]
+                              :include-tags ["forge:ores"]}
+                     :advanced? {:expr :bool/and
+                                 :args [{:expr :math/gt
+                                         :args [{:from :progression/mastery} 0.5]}
+                                        {:expr :math/gte
+                                         :args [{:from :progression/level} 4]}]}
+                     :life-ticks 100
+                     :rescan-interval 5
+                     :max-results 8400
+                     :texture "academy:textures/effects/mineview.png"
+                     :base-color [220 235 255 185]
+                     :tier-colors [{:harvest-level 0 :color [161 181 188 165]}
+                                   {:harvest-level 1 :color [87 231 248 190]}
+                                   {:harvest-level 2 :color [97 204 94 210]}
+                                   {:harvest-level 3 :color [235 109 84 225]}]}}
+          {:component :score/mark :tag :cast}
+          {:component :cooldown/start :name :main}
+          {:component :flow/finish :outcome :performed
+           :finish-session? true}]}}

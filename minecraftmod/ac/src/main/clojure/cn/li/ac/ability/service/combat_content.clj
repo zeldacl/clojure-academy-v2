@@ -81,25 +81,6 @@
                         :radius 5.0}
                        {:op :vfx :effect-id :location-teleport
                         :event :release :params {:strength 1.0}}]}}
-    ;; The deleted defskill never scanned for ore blocks server-side despite
-    ;; the name -- it's an unconditional self-blindness + a client-facing FX
-    ;; event carrying :range/:advanced?, presumably driving purely
-    ;; client-side highlight rendering outside combat-core's authority. The
-    ;; :block-scan query/:require here were never faithful to that; removed
-    ;; along with the placeholder :cost {:cp 1000} (schema: CP lerp(1500,
-    ;; 1000), overload lerp(200,180)) and :cooldown {:ticks 400} (schema:
-    ;; lerp(900,400)).
-    {:id :mine-detect
-     :revision 1
-     :activation :instant
-     :cost {:cp (scale 1500.0 1000.0)
-            :overload (scale 200.0 180.0)}
-     :cooldown {:ticks (scale 900.0 400.0)}
-     :program {:op :sequence
-               :steps [{:op :world-effect :effect-type :mine-detect
-                        :blindness-ticks 100 :blindness-amplifier 0}
-                       {:op :vfx :effect-id :mine-detect
-                        :event :release :params {:range 30.0}}]}}
     {:id :electron-bomb
      :revision 1
      :activation :instant

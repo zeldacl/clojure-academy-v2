@@ -1,6 +1,5 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.load
-  (:require [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mine-detect]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-manip]
+  (:require [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-manip]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb]

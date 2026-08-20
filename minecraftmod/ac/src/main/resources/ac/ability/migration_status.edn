@@ -4,6 +4,7 @@
           :thunder-clap :migrated
           :scatter-bomb :migrated
           :thunder-bolt :migrated
+          :mine-detect :migrated
           :vec-reflection :migrated
           :groundshock :pending
           :mark-teleport :migrated

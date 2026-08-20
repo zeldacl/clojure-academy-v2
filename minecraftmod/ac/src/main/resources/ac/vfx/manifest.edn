@@ -52,4 +52,7 @@
               :resource "ac/vfx/effects/energy_orb_session.edn"}
              {:kind :vfx-effect
               :id :vortex-column-session
-              :resource "ac/vfx/effects/vortex_column_session.edn"}]}
+              :resource "ac/vfx/effects/vortex_column_session.edn"}
+             {:kind :vfx-effect
+              :id :block-scan-transient
+              :resource "ac/vfx/effects/block_scan_transient.edn"}]}

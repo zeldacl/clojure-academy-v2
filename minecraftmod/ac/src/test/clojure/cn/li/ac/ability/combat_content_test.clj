@@ -155,14 +155,14 @@
                    :directed-shock :electron-bomb :electron-missile
                    :flesh-ripping :groundshock :jet-engine :light-shield
                    :location-teleport :mag-manip :mag-movement :mark-teleport
-                   :meltdowner :mine-detect :mine-ray-basic :mine-ray-expert
+                   :meltdowner :mine-ray-basic :mine-ray-expert
                    :mine-ray-luck :plasma-cannon
                    :rad-intensify :railgun :scatter-bomb
                    :shift-teleport :space-fluct :storm-wing
                    :threatening-teleport :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
-    (is (= 34 (count content/ability-ids)))))
+    (is (= 33 (count content/ability-ids)))))
 
 (deftest combat-catalog-provides-player-registry-specs
   (is (true? (content/assert-complete-skill-catalog!)))

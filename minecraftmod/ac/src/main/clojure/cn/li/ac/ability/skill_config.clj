@@ -317,7 +317,15 @@
     :cost-down-overload :cost.down.overload
     :cooldown-ticks :cooldown.ticks
     :exp-effective :progression.exp-effective
-    :exp-ineffective :progression.exp-ineffective}})
+    :exp-ineffective :progression.exp-ineffective}
+   :mine-detect
+   {:targeting-range :targeting.range
+    :blindness-duration-ticks :effect.blindness-duration-ticks
+    :blindness-amplifier :effect.blindness-amplifier
+    :cost-down-cp :cost.down.cp
+    :cost-down-overload :cost.down.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-cast :progression.exp-cast}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

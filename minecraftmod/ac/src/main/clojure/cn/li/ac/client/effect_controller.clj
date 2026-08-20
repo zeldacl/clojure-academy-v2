@@ -232,7 +232,8 @@
    :transient instance of effect-id, same shape as update-state! but scoped
    to one owner instead of \"the first instance of this effect-id\" (which,
    for a :transient effect with more than one live caster, is an arbitrary
-   choice -- see mine_detect.clj's build-plan for why a :level build-plan-fn
+   choice -- level build-plan callbacks are reserved for generic world-space
+   presentation effects that need a bounded client query
    sometimes needs to write back into ITS OWN instance's state, not just
    read it: a rescan result computed at sample time, when a query-fn the
    tick-state-fn never receives is available)."

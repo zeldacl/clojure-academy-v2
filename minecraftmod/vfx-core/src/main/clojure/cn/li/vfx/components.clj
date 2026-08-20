@@ -55,6 +55,12 @@
                               :sound-position :bounds-radius :seed}]
            [:vfx/channel-arc #{:mode :caster :target :block-pos :block-bounds
                               :good? :charge-ticks :visual-max-ticks :style :seed}]
+           ;; Generic client-side block scan/highlight.  The filter, palette,
+           ;; texture and scan policy are all supplied by the effect document;
+           ;; this node contains no ore/skill knowledge.
+           [:vfx/block-scan #{:origin :range :max-range :filter :advanced?
+                              :life-ticks :rescan-interval :max-results
+                              :texture :base-color :tier-colors :seed}]
            [:vfx/beam-bounds #{:start :end :radius}]
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
            [:vfx/vortex-column #{:base :axis :height :spacing :radius

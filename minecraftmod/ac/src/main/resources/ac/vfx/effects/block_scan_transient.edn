@@ -1,0 +1,30 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :block-scan-transient
+ :revision 1
+ :lifecycle :transient
+ ;; Data-driven world block scan/highlight.  The component is neutral: the
+ ;; filter, texture, palette and scan limits are supplied by each effect.
+ :inputs
+ {:spawn {:origin :vec3 :range :double :max-range :double
+          :filter :object :advanced? :boolean
+          :life-ticks :long :rescan-interval :long :max-results :long
+          :texture :string :base-color :object :tier-colors :object}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/block-scan
+         :origin {:ref [:input :origin]}
+         :range {:ref [:input :range]}
+         :max-range {:ref [:input :max-range]}
+         :filter {:ref [:input :filter]}
+         :advanced? {:ref [:input :advanced?]}
+         :life-ticks {:ref [:input :life-ticks]}
+         :rescan-interval {:ref [:input :rescan-interval]}
+         :max-results {:ref [:input :max-results]}
+         :texture {:ref [:input :texture]}
+         :base-color {:ref [:input :base-color]}
+         :tier-colors {:ref [:input :tier-colors]}
+         :seed {:ref [:state :seed]}}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :origin]}
+          :end {:ref [:input :origin]}
+          :radius {:ref [:input :max-range]}}}

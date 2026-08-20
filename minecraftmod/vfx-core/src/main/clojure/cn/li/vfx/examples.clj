@@ -32,6 +32,14 @@
                      :block-pos [0 64 0] :block-bounds nil
                      :good? true :charge-ticks 10 :visual-max-ticks 40
                      :style {} :seed {:ref [:state :seed]}}
+   :vfx/block-scan {:component :vfx/block-scan :origin point-example
+                    :range 16.0 :filter {:tags ["example:blocks"]}
+                    :advanced? false :life-ticks 20
+                    :rescan-interval 5 :max-results 256
+                    :texture "generic/highlight.png"
+                    :base-color [255 255 255 160]
+                    :tier-colors {}
+                    :seed {:ref [:state :seed]}}
    :vfx/beam-bounds {:component :vfx/beam-bounds :start point-example
                      :end point-example :radius 0.1}
    :vfx/arc-field {:component :vfx/arc-field :start point-example :end point-example

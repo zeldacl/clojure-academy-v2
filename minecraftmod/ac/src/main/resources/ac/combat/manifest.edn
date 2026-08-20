@@ -37,4 +37,7 @@
               :resource "ac/combat/abilities/current_charging.edn"}
              {:kind :ability
               :id :thunder-bolt
-              :resource "ac/combat/abilities/thunder_bolt.edn"}]}
+              :resource "ac/combat/abilities/thunder_bolt.edn"}
+             {:kind :ability
+              :id :mine-detect
+              :resource "ac/combat/abilities/mine_detect.edn"}]}
