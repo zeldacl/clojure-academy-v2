@@ -3,6 +3,12 @@
               :id :beam-arc-fade
               :resource "ac/vfx/effects/beam_arc_fade.edn"}
              {:kind :vfx-effect
+              :id :ray-beam-transient
+              :resource "ac/vfx/effects/ray_beam_transient.edn"}
+             {:kind :vfx-effect
+              :id :ray-fan-transient
+              :resource "ac/vfx/effects/ray_fan_transient.edn"}
+             {:kind :vfx-effect
               :id :beam-fade-audio
               :resource "ac/vfx/effects/beam_fade_audio.edn"}
              {:kind :vfx-effect

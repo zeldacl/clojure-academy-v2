@@ -284,7 +284,16 @@
     :cost-tick-cp :cost.tick.cp
     :cost-tick-overload :cost.tick.overload
     :cooldown-ticks :cooldown.ticks
-    :exp-tick :progression.exp-tick}})
+    :exp-tick :progression.exp-tick}
+   :ray-barrage
+   {:plain-damage :combat.damage.plain
+    :scattered-damage :combat.damage.scattered
+    :targeting-range :targeting.range
+    :scatter-cone-angle :scatter.cone-angle-degrees
+    :cost-down-cp :cost.down.cp
+    :cost-down-overload :cost.down.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

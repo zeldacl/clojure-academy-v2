@@ -20,6 +20,8 @@
    :math/gte {:expr :math/gte :args [2.0 1.0]}
    :math/gt {:expr :math/gt :args [2.0 1.0]}
    :math/select {:expr :math/select :args [true 1.0 0.0]}
+   :collection/first {:expr :collection/first :args [[{:id "x"}]]}
+   :collection/nonempty {:expr :collection/nonempty :args [[]]}
    :bool/and {:expr :bool/and :args [true true]}
    :bool/or {:expr :bool/or :args [false true]}
    :bool/not {:expr :bool/not :args [false]}

@@ -5,7 +5,6 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.ray-barrage]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.jet-engine]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.light-shield]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.rad-intensify-mark]

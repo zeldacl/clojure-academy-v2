@@ -39,14 +39,6 @@
   [world-id owner entity-type position velocity life-ticks]
   (call :spawn-entity! world-id owner entity-type position velocity life-ticks))
 
-(defn execute-ray-barrage!
-  "Execute a bounded ray-barrage plan supplied by Combat Core.
-
-   The operation stays opaque to the neutral engine: each loader implements
-   the directional ray test and special-target policy behind this port."
-  [world-id owner plan]
-  (call :execute-ray-barrage! world-id owner plan))
-
 (defn execute-directed-blastwave!
   "Execute the bounded block/entity shockwave behind a neutral Host Port."
   [world-id owner plan]

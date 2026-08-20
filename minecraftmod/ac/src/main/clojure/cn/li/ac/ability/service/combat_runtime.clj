@@ -680,18 +680,6 @@
                                          (double (or (:aoe-radius node) 8.0))
                                          excluded)]
                             (assoc attack-data :victims victims))))
-              :ray-barrage (fn [context node]
-                             (if-let [host-query (contract/host-port :query)]
-                               (host-query :ray-barrage context node)
-                               (let [owner (:owner context)
-                                     range (double (or (:range node) 20.0))
-                                     attack-data (attack/resolve-attack-data owner range)
-                                     victims (attack/aoe-victims
-                                              (:world-id attack-data)
-                                              (:impact attack-data)
-                                              10.0
-                                              #{owner})]
-                                 (assoc attack-data :victims victims))))
               :directed-blastwave (fn [context node]
                                     (if-let [host-query (contract/host-port :query)]
                                       (host-query :directed-blastwave context node)
@@ -1022,33 +1010,6 @@
                            {:status (if (and valid?
                                               (world-effects/spawn-projectile!
                                                world-id (assoc spec :owner owner)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :ray-barrage
-                         (let [{:keys [world-id query-result ray-count range
-                                       cone-angle-degrees plain-damage scattered-damage
-                                       special-target-policy]} effect
-                               plan {:query-result query-result
-                                     :ray-count (long (or ray-count 0))
-                                     :range (double (or range 0.0))
-                                     :cone-angle-degrees (double (or cone-angle-degrees 0.0))
-                                     :plain-damage (double (or plain-damage 0.0))
-                                     :scattered-damage (double (or scattered-damage 0.0))
-                                     :special-target-policy special-target-policy}
-                               valid? (and world-id
-                                            (map? query-result)
-                                            (<= 1 (:ray-count plan) 8)
-                                            (pos? (:range plan))
-                                            (<= 0.0 (:cone-angle-degrees plan) 360.0)
-                                            (every? #(and (Double/isFinite %) (pos? %))
-                                                    [(:plain-damage plan)
-                                                     (:scattered-damage plan)])
-                                            (= :silbarn special-target-policy)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-ray-barrage!
-                                               world-id owner plan))
                                       :applied
                                       :failed)
                             :effect effect})
@@ -1904,6 +1865,172 @@
      :hit? (not miss?)
      :valid? (>= resolved-distance minimum-distance)}))
 
+(defn- neutral-point
+  [value]
+  (cond
+    (and (map? value) (vector? (:vec3 value))) (mapv double (:vec3 value))
+    (and (map? value) (every? #(number? (get value %)) [:x :y :z]))
+    [(double (:x value)) (double (:y value)) (double (:z value))]
+    (and (vector? value) (= 3 (count value))) (mapv double value)
+    :else nil))
+
+(defn- neutral-yaw-degrees [dx dz]
+  (- (Math/toDegrees (Math/atan2 (double dx) (double dz)))))
+
+(defn- neutral-pitch-degrees
+  [dx dy dz denominator]
+  (let [horizontal (case denominator
+                     :z-only (Math/sqrt (+ (* (double dz) (double dz))
+                                           (* (double dz) (double dz))))
+                     (Math/sqrt (+ (* (double dx) (double dx))
+                                   (* (double dz) (double dz)))))]
+    (- (Math/toDegrees (Math/atan2 (double dy) horizontal)))))
+
+(defn- neutral-angle-delta [a b]
+  (let [raw (mod (- (double a) (double b)) 360.0)]
+    (if (> raw 180.0) (- raw 360.0) raw)))
+
+(defn- neutral-cone-aabb
+  [origin direction distance yaw-span pitch-span]
+  ;; The bounded query is deliberately conservative; exact angular filtering
+  ;; below is authoritative. A cube around the origin is orientation-safe and
+  ;; still has a fixed 128-block maximum, so no candidate can be missed by an
+  ;; approximation of the cone's rotated corners.
+  (let [[ox oy oz] origin
+        radius (double distance)]
+    {:min-x (- ox radius) :min-y (- oy radius) :min-z (- oz radius)
+     :max-x (+ ox radius) :max-y (+ oy radius) :max-z (+ oz radius)}))
+
+(defn- project-neutral-entity
+  [entity projection difficulty-map]
+  (let [id (or (:uuid entity) (:entity-id entity))
+        type (or (:entity-type entity) (:type entity))
+        position {:x (double (or (:x entity) 0.0))
+                  :y (double (or (:y entity) 0.0))
+                  :z (double (or (:z entity) 0.0))}]
+    (reduce (fn [result field]
+              (assoc result field
+                     (case field
+                       :id id :type type :position position
+                       :age-ms (long (or (:age-ms entity) 0))
+                       :motion-progress (double (or (:motion-progress entity) 0.0))
+                       :difficulty (double (or (get difficulty-map type) 0.0))
+                       :velocity (or (:velocity entity)
+                                     {:x (double (or (:vx entity) 0.0))
+                                      :y (double (or (:vy entity) 0.0))
+                                      :z (double (or (:vz entity) 0.0))})
+                       :owner-id (or (:owner-id entity) (:owner-uuid entity))
+                       :item? (boolean (:item? entity))
+                       :living? (boolean (:living? entity))
+                       :mob? (boolean (:mob? entity))
+                       :multipart? (boolean (:multipart? entity))
+                       :eye-height (double (or (:eye-height entity)
+                                               (:height entity) 0.0))
+                       :behavior-hit? (boolean (:behavior-hit? entity))
+                       :explosion-power (:explosion-power entity)
+                       nil)))
+            {} (or projection [:id :type :position]))))
+
+(defn- entity-select-results
+  [{:keys [owner world-id shape filter projection limit]}]
+  (let [origin (neutral-point (or (:origin shape) (:center shape)))
+        eye-origin (neutral-point (or (:eye-origin shape) (:origin shape) (:center shape)))
+        direction (neutral-point (:direction shape))
+        radius (double (or (:radius shape) 0.0))
+        cone? (= :cone (:type shape))
+        distance (double (or (:distance shape) (:range shape) radius))
+        limit (max 0 (min 256 (long (or limit 0))))
+        owner-id (str owner)
+        type-filter (set (or (:entity-types filter) []))
+        id-filter (set (map str (or (:entity-ids filter) [])))
+        excluded-filter (set (map str (or (:excluded-entity-ids filter) [])))
+        entity-owner-filter (some-> (:owner-id filter) str)
+        living-filter (when (contains? filter :living?) (boolean (:living? filter)))
+        difficulty-map (reduce (fn [result entry]
+                                 (if (string? entry)
+                                   (let [index (.lastIndexOf ^String entry ":")]
+                                     (if (pos? index)
+                                       (try (assoc result (subs entry 0 index)
+                                                    (Double/parseDouble (subs entry (inc index))))
+                                            (catch Throwable _ result))
+                                       result))
+                                   result)) {} (or (:difficulty-entries filter) []))
+        type-match? (fn [entity-type]
+                      (or (empty? type-filter)
+                          (contains? type-filter entity-type)
+                          (some (fn [requested]
+                                  (when (and (string? requested)
+                                             (string? entity-type))
+                                    (let [colon (.lastIndexOf ^String requested ":")
+                                          suffix (if (pos? colon)
+                                                   (subs requested (inc colon))
+                                                   requested)]
+                                      (.endsWith ^String entity-type
+                                                 (str "." suffix)))))
+                                type-filter)))
+        valid? (and world-id origin eye-origin (pos? limit)
+                    (if cone?
+                      (and direction (Double/isFinite distance) (<= 0.0 distance 128.0))
+                      (and (Double/isFinite radius) (<= 0.0 radius 64.0))))]
+    (when (and valid? (world-effects/available?))
+      (let [candidates
+            (if cone?
+              (let [{:keys [min-x min-y min-z max-x max-y max-z]}
+                    (neutral-cone-aabb origin direction distance
+                                        (double (or (:yaw-span-degrees shape) 0.0))
+                                        (double (or (:pitch-span-degrees shape) 0.0)))]
+                (world-effects/find-entities-in-aabb world-id min-x min-y min-z
+                                                       max-x max-y max-z))
+              (world-effects/find-entities-in-radius world-id
+                                                     (nth origin 0) (nth origin 1)
+                                                     (nth origin 2) radius))
+            filtered (->> candidates
+                          (filter map?)
+                          (remove #(= owner-id (str (or (:uuid %) (:entity-id %)))))
+                          (filter #(let [entity-id (str (or (:uuid %) (:entity-id %)))
+                                         entity-type (or (:entity-type %) (:type %))
+                                         entity-owner (some-> (or (:owner-id %)
+                                                                  (:owner-uuid %)) str)]
+                                     (and (type-match? entity-type)
+                                          (or (empty? id-filter)
+                                              (contains? id-filter entity-id))
+                                          (not (contains? excluded-filter entity-id))
+                                          (or (nil? entity-owner-filter)
+                                              (= entity-owner-filter entity-owner))
+                                          (or (nil? living-filter)
+                                              (= living-filter (boolean (:living? %))))
+                                          (not (:item? %)))))
+                          (filter (if-not cone?
+                                    identity
+                                    (fn [entity]
+                                      (let [[ox oy oz] origin
+                                            [dx dy dz] direction
+                                            player-yaw (neutral-yaw-degrees dx dz)
+                                            player-pitch (neutral-pitch-degrees dx dy dz
+                                                                                :normal)
+                                            tx (- (double (or (:x entity) 0.0)) ox)
+                                            ty (- (+ (double (or (:y entity) 0.0))
+                                                     (double (or (:eye-height entity)
+                                                                 (:height entity) 0.0)))
+                                                  (double (second eye-origin)))
+                                            tz (- (double (or (:z entity) 0.0)) oz)
+                                            target-yaw (neutral-yaw-degrees tx tz)
+                                            target-pitch (neutral-pitch-degrees tx ty tz
+                                                                                (or (:pitch-denominator shape)
+                                                                                    :normal))]
+                                        (let [yaw-diff (neutral-angle-delta target-yaw player-yaw)
+                                              pitch-diff (- target-pitch player-pitch)
+                                              yaw-abs (if (neg? yaw-diff) (- yaw-diff) yaw-diff)
+                                              pitch-abs (if (neg? pitch-diff) (- pitch-diff) pitch-diff)]
+                                          (and (<= yaw-abs
+                                                   (/ (double (or (:yaw-span-degrees shape) 0.0)) 2.0))
+                                               (<= pitch-abs
+                                                    (double (or (:pitch-span-degrees shape) 0.0)))))))))
+                          (map #(project-neutral-entity % projection difficulty-map))
+                          (take limit)
+                          vec)]
+        filtered))))
+
 (defn install-edn-host-capabilities!
   "Link the generic EDN host table to neutral AC platform ports once.
 
@@ -2046,83 +2173,8 @@
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
         (capabilities/register-query!
          :entity/select
-         (fn [{:keys [owner world-id shape filter projection limit]} _frame]
-           (let [center (or (:center shape) {})
-                 [cx cy cz] (if (and (map? center) (vector? (:vec3 center)))
-                              (:vec3 center)
-                              [(double (or (:x center) 0.0))
-                               (double (or (:y center) 0.0))
-                               (double (or (:z center) 0.0))])
-                 radius (double (or (:radius shape) 0.0))
-                 limit (max 0 (min 256 (long (or limit 0))))
-                 owner-id (str owner)
-                 type-filter (set (or (:entity-types filter) []))
-                 excluded-filter (set (or (:excluded-entity-ids filter) []))
-                 entity-owner-filter (some-> (:owner-id filter) str)
-                 living-filter (when (contains? filter :living?)
-                                 (boolean (:living? filter)))
-                 difficulty-map (reduce
-                                  (fn [result entry]
-                                    (if (string? entry)
-                                      (let [index (.lastIndexOf ^String entry ":")]
-                                        (if (pos? index)
-                                          (try
-                                            (assoc result
-                                                   (subs entry 0 index)
-                                                   (Double/parseDouble
-                                                    (subs entry (inc index))))
-                                            (catch Throwable _ result))
-                                          result))
-                                      result))
-                                  {}
-                                  (or (:difficulty-entries filter) []))]
-             (when (and (= :sphere (:type shape)) world-id
-                        (every? #(Double/isFinite (double %)) [cx cy cz])
-                        (Double/isFinite radius) (<= 0.0 radius 64.0)
-                        (pos? limit) (world-effects/available?))
-               (let [project (fn [entity]
-                               (let [id (or (:uuid entity) (:entity-id entity))
-                                     type (or (:entity-type entity) (:type entity))
-                                     position {:x (double (or (:x entity) 0.0))
-                                               :y (double (or (:y entity) 0.0))
-                                               :z (double (or (:z entity) 0.0))}]
-                                 (reduce (fn [result field]
-                                           (assoc result field
-                                                  (case field
-                                                    :id id :type type :position position
-                                                    :age-ms (long (or (:age-ms entity) 0))
-                                     :motion-progress (double (or (:motion-progress entity) 0.0))
-                                     :difficulty (double (or (get difficulty-map type) 0.0))
-                                                    :velocity (or (:velocity entity)
-                                                                  {:x (double (or (:vx entity) 0.0))
-                                                                   :y (double (or (:vy entity) 0.0))
-                                                                   :z (double (or (:vz entity) 0.0))})
-                                                    :owner-id (or (:owner-id entity) (:owner-uuid entity))
-                                                    :item? (boolean (:item? entity))
-                                                    :living? (boolean (:living? entity))
-                                                    :mob? (boolean (:mob? entity))
-                                                    :multipart? (boolean (:multipart? entity))
-                                                    :eye-height (double (or (:eye-height entity)
-                                                                            (:height entity) 0.0))
-                                                    :explosion-power (:explosion-power entity)
-                                                    nil)))
-                                         {} (or projection [:id :type :position]))))]
-                 (->> (world-effects/find-entities-in-radius world-id cx cy cz radius)
-                      (filter map?)
-                      (remove #(= owner-id (str (or (:uuid %) (:entity-id %)))))
-                      (filter #(let [entity-type (or (:entity-type %) (:type %))
-                                     entity-owner (some-> (or (:owner-id %) (:owner-uuid %)) str)]
-                                 (and (or (empty? type-filter)
-                                          (contains? type-filter entity-type))
-                                      (not (contains? excluded-filter entity-type))
-                                      (or (nil? entity-owner-filter)
-                                          (= entity-owner-filter entity-owner))
-                                      (or (nil? living-filter)
-                                          (= living-filter (boolean (:living? %))))
-                                      (not (:item? %)))))
-                      (map project)
-                      (take limit)
-                      vec)))))))
+         (fn [request _frame]
+           (entity-select-results request))))
       (when-not (contains? (:actions (capabilities/snapshot)) :world/lightning)
         (capabilities/register-action!
          :world/lightning
@@ -2187,6 +2239,27 @@
              (entity-damage/apply-direct-damage!
               world-id target (double amount) (or damage-type :generic)
               {:attacker-uuid owner})))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/trigger-behavior)
+        (capabilities/register-action!
+         :entity/trigger-behavior
+         (fn [{:keys [world-id entity]}]
+           (let [entity-id (if (map? entity)
+                             (or (:id entity) (:uuid entity) (:entity-id entity))
+                             entity)]
+             (when (and world-id entity-id (world-effects/available?))
+               {:status (if (world-effects/trigger-behavior-hit!
+                             (str world-id) (str entity-id))
+                          :applied
+                          :failed)})))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :entity/mark)
+        (capabilities/register-action!
+         :entity/mark
+         (fn [{:keys [owner target mark-type]}]
+           (when (and owner target mark-type)
+             (when-let [mark-target! (requiring-resolve
+                                      'cn.li.ac.content.ability.meltdowner.damage-helper/mark-target!)]
+               (mark-target! owner target)
+                {:status :applied})))))
       (when-not (contains? (:actions (capabilities/snapshot)) :owner/can-fly)
         (capabilities/register-action!
          :owner/can-fly

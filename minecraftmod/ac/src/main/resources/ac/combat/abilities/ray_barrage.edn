@@ -1,0 +1,182 @@
+{:schema-version 2
+ :kind :ability
+ :id :ray-barrage
+ :revision 1
+ :activation :instant
+ :status :migrated
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :world/id :rng/seed]
+ :prerequisites [{:skill-id :meltdowner :min-exp 0.5}]
+ :tunables
+ {:plain-damage {:curve :mastery-lerp}
+  :scattered-damage {:curve :mastery-lerp}
+  :targeting-range {:curve :const}
+  :scatter-cone-angle {:curve :const}
+  :cost-down-cp {:curve :mastery-lerp}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-hit {:curve :const}}
+ :costs {:fire {:resources {:cp {:tunable :cost-down-cp}
+                            :overload {:tunable :cost-down-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:hit {:per-mark {:tunable :exp-hit}}}
+ :vfx
+ {:preray {:effect-id :ray-beam-transient :op :spawn
+           :payload {:start :vec3 :end :vec3 :life-ticks :long
+                     :grow-ticks :long :style :object :bounds-radius :double}}
+  :sound {:effect-id :audio-one-shot :op :spawn
+          :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
+  :fan {:effect-id :ray-fan-transient :op :spawn
+        :payload {:origin :vec3 :direction :vec3 :length :double :count :long
+                  :yaw-range-degrees :object :pitch-range-degrees :object
+                  :life-ticks :long :grow-ticks :long :style :object
+                  :seed :long :bounds-radius :double}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps [{:component :cost/spend
+            :budget :fire
+            :on-insufficient {:component :flow/finish
+                              :outcome :insufficient-resource}}
+           {:component :target/raycast
+            :origin {:from :caster/eye}
+            :direction {:from :caster/aim}
+            :distance {:tunable :targeting-range}
+            :include-entities? true
+            :include-blocks? true
+            :result :aim-hit}
+           ;; The second query is intentionally narrow: only a behavior-driven
+           ;; target at the authoritative front-hit UUID can enter the fan
+           ;; branch.  A miss resolves to radius 0 and therefore cannot find a
+           ;; coincidental entity at the fallback endpoint.
+           {:component :target/entities
+            :shape {:type :sphere
+                    :center {:ref [:slot :aim-hit :position]}
+                    :radius {:expr :math/select
+                             :args [{:ref [:slot :aim-hit :entity-id]} 1.5 0.0]}}
+            :filter {:entity-types ["academy:entity_silbarn"]
+                     :entity-ids [{:ref [:slot :aim-hit :entity-id]}]}
+            :projection [:id :type :position :behavior-hit?]
+            :limit 1
+            :result :silbarn-candidates}
+           {:component :data/bind
+            :to :silbarn
+            :value {:expr :collection/first
+                    :args [{:ref [:slot :silbarn-candidates]}]}}
+           {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:expr :collection/nonempty
+                           :args [{:ref [:slot :silbarn-candidates]}]}
+                          {:expr :bool/not
+                           :args [{:ref [:slot :silbarn :behavior-hit?]}]}]}
+            :then
+            {:component :flow/sequence
+             :steps [{:component :entity/trigger-behavior
+                      :world-id {:from :world/id}
+                      :entity {:ref [:slot :silbarn]}}
+                     {:component :effect/vfx
+                      :effect-id :ray-beam-transient
+                      :operation :spawn
+                      :audience {:type :nearby :radius 64.0}
+                      :payload {:start {:from :caster/eye}
+                                :end {:ref [:slot :aim-hit :position]}
+                                :life-ticks 50 :grow-ticks 0
+                                :bounds-radius 0.8
+                                :style {:texture "academy:effects/mdray_small"
+                                        :outer-radius 0.052
+                                        :inner-radius 0.045
+                                        :glow-width 0.4 :glow-alpha 127
+                                        :outer-color [106 242 106 50]
+                                        :inner-color [216 248 216 230]}}}
+                     {:component :effect/vfx
+                      :effect-id :audio-one-shot
+                      :operation :spawn
+                      :audience {:type :nearby :radius 64.0}
+                      :payload {:position {:from :caster/eye}
+                                :sound-id "academy:md.ray_small"
+                                :volume 0.8 :pitch 1.0}}
+                     {:component :target/entities
+                      :shape {:type :cone
+                              :origin {:from :caster/body}
+                              :eye-origin {:from :caster/eye}
+                              :direction {:from :caster/aim}
+                              :distance {:tunable :targeting-range}
+                              :yaw-span-degrees {:tunable :scatter-cone-angle}
+                              :pitch-span-degrees {:tunable :scatter-cone-angle}
+                              :pitch-denominator :z-only}
+                      :filter {:excluded-entity-ids [{:ref [:slot :silbarn :id]}]}
+                      :projection [:id :type :position :eye-height]
+                      :limit 256
+                      :result :scatter-targets}
+                     {:component :flow/foreach
+                      :items {:ref [:slot :scatter-targets]}
+                      :as :target
+                      :limit 256
+                      :body {:component :flow/sequence
+                             :steps [{:component :combat/damage
+                                      :world-id {:from :world/id}
+                                      :target {:ref [:slot :target :id]}
+                                      :amount {:tunable :scattered-damage}
+                                      :damage-type :magic}
+                                     {:component :entity/mark
+                                      :world-id {:from :world/id}
+                                      :target {:ref [:slot :target :id]}
+                                      :mark-type :radiation}]}}
+                     {:component :effect/vfx
+                      :effect-id :ray-fan-transient
+                      :operation :spawn
+                      :audience {:type :nearby :radius 64.0}
+                      :payload {:origin {:ref [:slot :aim-hit :position]}
+                                :direction {:from :caster/aim}
+                                :length 15.0 :count {:expr :math/add
+                                                     :args [25 {:expr :random/int
+                                                                :args [0 5]}]}
+                                :yaw-range-degrees {:min 50.0 :max 60.0}
+                                :pitch-range-degrees {:min -30.0 :max 30.0}
+                                :life-ticks 50 :grow-ticks 4
+                                :seed {:from :rng/seed}
+                                :bounds-radius 15.0
+                                :style {:texture "academy:effects/mdray_small"
+                                        :outer-radius 0.045
+                                        :inner-radius 0.03
+                                        :glow-width 0.3 :glow-alpha 127
+                                        :outer-color [106 242 106 50]
+                                        :inner-color [216 248 216 230]}}}]}
+            :else
+            {:component :flow/sequence
+             :steps [{:component :combat/damage
+                      :world-id {:from :world/id}
+                      :target {:ref [:slot :aim-hit :entity-id]}
+                      :amount {:tunable :plain-damage}
+                      :damage-type :magic}
+                     {:component :entity/mark
+                      :world-id {:from :world/id}
+                      :target {:ref [:slot :aim-hit :entity-id]}
+                      :mark-type :radiation}
+                     {:component :effect/vfx
+                      :effect-id :ray-beam-transient
+                      :operation :spawn
+                      :audience {:type :nearby :radius 64.0}
+                      :payload {:start {:from :caster/eye}
+                                :end {:ref [:slot :aim-hit :position]}
+                                :life-ticks 30 :grow-ticks 0
+                                :bounds-radius 0.8
+                                :style {:texture "academy:effects/mdray_small"
+                                        :outer-radius 0.052
+                                        :inner-radius 0.045
+                                        :glow-width 0.4 :glow-alpha 127
+                                        :outer-color [106 242 106 50]
+                                        :inner-color [216 248 216 230]}}}
+                     {:component :effect/vfx
+                      :effect-id :audio-one-shot
+                      :operation :spawn
+                      :audience {:type :nearby :radius 64.0}
+                      :payload {:position {:from :caster/eye}
+                                :sound-id "academy:md.ray_small"
+                                :volume 0.8 :pitch 1.0}}]}}
+           {:component :cooldown/start :name :main}
+           {:component :score/mark :tag :hit}
+           {:component :flow/finish :outcome :performed}]}}
+  :pulse {:component :flow/finish :outcome :unsupported}
+  :release {:component :flow/finish :outcome :unsupported}
+  :abort {:component :flow/finish :outcome :aborted}}}

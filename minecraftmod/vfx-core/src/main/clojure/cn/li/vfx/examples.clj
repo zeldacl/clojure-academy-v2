@@ -12,6 +12,13 @@
                       :cases {:default ring-example}}
    :vfx/beam {:component :vfx/beam :start point-example :end point-example
               :grow-ticks 1 :layers [{:shape :line :width 0.01 :color [255 255 255 255]}]}
+   :vfx/ray-beam {:component :vfx/ray-beam :start point-example :end point-example
+                  :life-ticks 30 :grow-ticks 4 :style {}}
+   :vfx/ray-fan {:component :vfx/ray-fan :origin point-example
+                 :direction point-example :length 15.0 :count 25
+                 :yaw-range-degrees 55.0 :pitch-range-degrees 30.0
+                 :life-ticks 50 :grow-ticks 4 :style {}
+                 :seed {:ref [:state :seed]}}
    :vfx/beam-bounds {:component :vfx/beam-bounds :start point-example
                      :end point-example :radius 0.1}
    :vfx/arc-field {:component :vfx/arc-field :start point-example :end point-example

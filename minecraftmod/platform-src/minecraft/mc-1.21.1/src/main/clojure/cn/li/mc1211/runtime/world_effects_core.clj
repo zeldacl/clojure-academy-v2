@@ -20,6 +20,7 @@
   [^Entity entity resolve-entity-id-fn multipart-entity?-fn]
   (let [^Vec3 pos (.position entity)
         scripted? (instance? ScriptedEffectEntity entity)
+        block-body? (instance? ScriptedBlockBodyEntity entity)
         ^ScriptedEffectEntity scripted-entity (when scripted? entity)
         age-ticks (when scripted? (.getAgeTicks scripted-entity))
         motion-progress (when (and scripted? (.hasMotionProgress scripted-entity))
@@ -52,7 +53,11 @@
      :owner-uuid (when owner (str (.getUUID ^Entity owner)))
      :explosion-power explosion-power
      :age-ticks age-ticks
-     :motion-progress motion-progress}))
+     :motion-progress motion-progress
+     ;; Neutral state exposed for any behavior-driven entity.  The core only
+     ;; sees a boolean and never depends on a concrete entity class.
+     :behavior-hit? (boolean (and block-body?
+                                  (.isBehaviorHit ^ScriptedBlockBodyEntity entity)))}))
 
 (defn find-blocks-in-radius-in-level
   [^Level level x y z radius block-predicate block-id-fn]

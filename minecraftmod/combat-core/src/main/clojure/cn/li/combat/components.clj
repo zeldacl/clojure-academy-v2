@@ -191,6 +191,16 @@
            :combat/damage
            {:schema {:required #{:target :amount}} :effects #{:mutate}}
 
+           ;; Generic behavior-driven entities (projectiles, scripted bodies,
+           ;; etc.) expose a neutral trigger port.  The behavior key is data
+           ;; supplied by EDN; Combat Core never knows a concrete entity or
+           ;; skill name.
+           :entity/trigger-behavior
+           {:schema {:required #{:entity}} :effects #{:mutate}}
+
+           :entity/mark
+           {:schema {:required #{:target :mark-type}} :effects #{:mutate}}
+
            :damage/reflect
            {:schema {:required #{:multiplier :cost-per-damage :minimum :max-depth}}
             :effects #{:mutate}}

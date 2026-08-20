@@ -1,0 +1,26 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :ray-fan-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:origin :vec3 :direction :vec3 :length :double
+                  :count :long :yaw-range-degrees :object
+                  :pitch-range-degrees :object :life-ticks :long
+                  :grow-ticks :long :style :object :seed :long
+                  :bounds-radius :double}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/ray-fan
+         :origin {:ref [:input :origin]}
+         :direction {:ref [:input :direction]}
+         :length {:ref [:input :length]}
+         :count {:ref [:input :count]}
+         :yaw-range-degrees {:ref [:input :yaw-range-degrees]}
+         :pitch-range-degrees {:ref [:input :pitch-range-degrees]}
+         :life-ticks {:ref [:input :life-ticks]}
+         :grow-ticks {:ref [:input :grow-ticks]}
+         :style {:ref [:input :style]}
+         :seed {:ref [:input :seed]}}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :origin]}
+          :end {:ref [:input :origin]}
+          :radius {:ref [:input :bounds-radius]}}}

@@ -1,0 +1,18 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :ray-beam-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:start :vec3 :end :vec3 :life-ticks :long
+                  :grow-ticks :long :style :object :bounds-radius :double}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/ray-beam
+         :start {:ref [:input :start]}
+         :end {:ref [:input :end]}
+         :life-ticks {:ref [:input :life-ticks]}
+         :grow-ticks {:ref [:input :grow-ticks]}
+         :style {:ref [:input :style]}}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius {:ref [:input :bounds-radius]}}}

@@ -9,7 +9,6 @@
             [cn.li.ac.content.ability.meltdowner.light-shield-fx :as light-shield-fx]
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
-            [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as ray-barrage-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
@@ -20,14 +19,12 @@
       (light-shield-fx/init!)
       (meltdowner-fx/init!)
       (mine-ray-fx/init!)
-      (ray-barrage-fx/init!)
       (electron-bomb-fx/reset-fx-for-test!)
       (electron-missile-fx/reset-electron-missile-fx-for-test!)
       (jet-engine-fx/reset-fx-for-test!)
       (light-shield-fx/reset-fx-for-test!)
       (meltdowner-fx/reset-fx-for-test!)
       (mine-ray-fx/reset-mine-ray-fx-for-test!)
-      (ray-barrage-fx/reset-fx-for-test!)
       (try
         (f)
         (finally
@@ -37,7 +34,6 @@
           (light-shield-fx/reset-fx-for-test!)
           (meltdowner-fx/reset-fx-for-test!)
           (mine-ray-fx/reset-mine-ray-fx-for-test!)
-          (ray-barrage-fx/reset-fx-for-test!)
           (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -103,16 +99,6 @@
     (dispatch! :mine-ray (event "ctx-b" :mine-ray/fx-progress
                               {:mode :progress :x 2 :y 64 :z 2 :progress 0.75}))
 
-    (dispatch! :ray-barrage (event "ctx-a" :ray-barrage/fx-preray
-                                 {:mode :preray :start p0 :end p1}))
-    (dispatch! :ray-barrage (event "ctx-b" :ray-barrage/fx-preray
-                                 {:mode :preray :start p1 :end p2}))
-    (dispatch! :ray-barrage (event "ctx-a" :ray-barrage/fx-barrage
-                                 {:mode :barrage :silbarn p0 :yaw 0.0 :pitch 0.0}))
-    (dispatch! :ray-barrage (event "ctx-b" :ray-barrage/fx-barrage
-                                 {:mode :barrage :silbarn p1 :yaw 10.0 :pitch -5.0}))
-
-
     (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
     (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]]))))
@@ -127,10 +113,4 @@
     (is (= 1 (count (get-in (meltdowner-fx/fx-snapshot) [:rays [:ctx "ctx-b"]]))))
     (is (= 0.25 (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-a"] :progress])))
     (is (= 0.75 (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-b"] :progress])))
-    (let [a-count (count (get-in (ray-barrage-fx/fx-snapshot) [:beam-queue [:ctx "ctx-a"]]))
-          b-count (count (get-in (ray-barrage-fx/fx-snapshot) [:beam-queue [:ctx "ctx-b"]]))]
-      ;; per-owner isolation, and the queue is NOT merged across owners even
-      ;; though both happen to hold 1 preray + a random 25~30 sub rays
-      (is (<= 26 a-count 31))
-      (is (<= 26 b-count 31)))
     ))

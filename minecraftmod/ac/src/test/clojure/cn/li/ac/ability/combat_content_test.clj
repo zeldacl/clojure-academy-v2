@@ -157,7 +157,7 @@
                    :location-teleport :mag-manip :mag-movement :mark-teleport
                    :meltdowner :mine-detect :mine-ray-basic :mine-ray-expert
                    :mine-ray-luck :plasma-cannon
-                   :rad-intensify :railgun :ray-barrage :scatter-bomb
+                   :rad-intensify :railgun :scatter-bomb
                    :shift-teleport :space-fluct :storm-wing
                    :threatening-teleport :thunder-bolt :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]

@@ -27,5 +27,8 @@
              :id :plasma-cannon
               :resource "ac/combat/abilities/plasma_cannon.edn"}
              {:kind :ability
-              :id :storm-wing
-              :resource "ac/combat/abilities/storm_wing.edn"}]}
+             :id :storm-wing
+              :resource "ac/combat/abilities/storm_wing.edn"}
+             {:kind :ability
+              :id :ray-barrage
+              :resource "ac/combat/abilities/ray_barrage.edn"}]}

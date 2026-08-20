@@ -128,7 +128,9 @@
    :domain/event {:component :domain/event :event-type :generic :payload {}}})
 
 (def expression-examples
-  {:math/select {:expr :math/select :args [true 1.0 0.0]}})
+  {:math/select {:expr :math/select :args [true 1.0 0.0]}
+   :collection/first {:expr :collection/first :args [[{:id "x"}]]}
+   :collection/nonempty {:expr :collection/nonempty :args [[]]}})
 
 ;; Examples for EDN composite middle-layer components.  These are intentionally
 ;; parameterized with neutral inputs; concrete skill EDN supplies tunables and

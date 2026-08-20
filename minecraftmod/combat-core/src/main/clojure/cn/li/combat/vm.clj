@@ -73,6 +73,8 @@
     :math/gte (>= (double (nth args 0)) (double (nth args 1)))
     :math/gt (> (double (nth args 0)) (double (nth args 1)))
     :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))
+    :collection/first (first (or (nth args 0) []))
+    :collection/nonempty (boolean (seq (nth args 0)))
     :bool/and (and (boolean (nth args 0)) (boolean (nth args 1)))
     :bool/or (or (boolean (nth args 0)) (boolean (nth args 1)))
     :bool/not (not (boolean (nth args 0)))
@@ -154,6 +156,8 @@
 (def ^:private action-capability-by-component
   {:inventory/consume :inventory/consume
    :combat/damage :entity/damage
+   :entity/trigger-behavior :entity/trigger-behavior
+   :entity/mark :entity/mark
    :combat/impulse :entity/impulse
    :entity/radial-impulse :entity/radial-impulse
    :motion/flight :motion/flight
@@ -187,8 +191,10 @@
                                    :instance-key (:instance-key data)
                                    :audience (:audience data)}))
     :domain/event (append-object! (.-events frame)
-                                  {:event-type (:event-type data)
-                                   :payload (:payload data)})
+                                  (merge {:type (:event-type data)
+                                          :event-type (:event-type data)}
+                                         (:payload data)
+                                         {:payload (:payload data)}))
     :session/patch (append-object! (.-actions frame)
                                    {:type :session-patch
                                     :entries (:entries data)})
