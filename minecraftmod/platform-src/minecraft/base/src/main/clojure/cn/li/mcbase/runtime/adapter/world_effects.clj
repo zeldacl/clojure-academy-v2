@@ -252,12 +252,6 @@
                                       (apply-aoe-damage-excluding-owner!
                                        world-id owner (:x point) (:y point) (:z point)
                                        entity-search-radius amount :vector)))
-        execute-plasma-cannon! (fn [world-id owner plan]
-                                 (let [{:keys [query-result damage explosion-radius]} plan
-                                       point (point-of (:impact query-result))]
-                                   (apply-aoe-damage-excluding-owner!
-                                    world-id owner (:x point) (:y point) (:z point)
-                                    explosion-radius damage :electric)))
         ;; Only the raycast-hit target takes damage. beam-radius/block-energy
         ;; (block melting along the beam path) and the :reflection field
         ;; (Vector-Reflection passive integration) are deliberately not
@@ -788,7 +782,6 @@
      :execute-flashing! execute-flashing!
      :execute-mag-manip! execute-mag-manip!
      :execute-blood-retrograde! execute-blood-retrograde!
-     :execute-plasma-cannon! execute-plasma-cannon!
      :execute-meltdowner! execute-meltdowner!
      :execute-mine-ray! execute-mine-ray!
      :execute-storm-wing! execute-storm-wing!

@@ -25,11 +25,10 @@
   :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
  :progression {:ball-fired {:per-mark {:tunable :exp-per-ball}}}
  :vfx
- {:charge-started {:effect-id :particle-audio-session :op :spawn
+ {:charge-started {:effect-id :particle-session :op :spawn
                    :payload {:position :vec3 :rate-per-tick :long :limit :long
-                             :particle :object :sound-id :string
-                             :sound-volume :double :sound-pitch :double}}
-  :charge-updated {:effect-id :particle-audio-session :op :update
+                             :particle :object}}
+  :charge-updated {:effect-id :particle-session :op :update
                    :payload {:position :vec3}}
   :beam-fired {:effect-id :beam-fade-audio :op :spawn
                :payload {:start :vec3 :end :vec3 :duration-ticks :long
@@ -59,15 +58,20 @@
                        :mode :assign
                        :value {:tunable :spawn-start-tick}}]}
            {:component :effect/vfx
-            :effect-id :particle-audio-session
+            :effect-id :particle-session
             :operation :spawn
             :instance-key [:activation :scatter-bomb]
             :audience {:type :nearby :radius 32.0}
             :payload {:position {:from :caster/eye}
                       :rate-per-tick 2 :limit 128
-                      :particle {:material :additive :life-ticks 10 :speed 0.04}
+                      :particle {:material :additive :life-ticks 10 :speed 0.04}}}
+           {:component :effect/vfx
+            :effect-id :audio-one-shot
+            :operation :spawn
+            :audience {:type :nearby :radius 32.0}
+            :payload {:position {:from :caster/eye}
                       :sound-id "academy:md.sb_charge"
-                      :sound-volume 0.5 :sound-pitch 1.0}}
+                      :volume 0.5 :pitch 1.0}}
            {:component :flow/finish :outcome :started}]}
   :pulse
   {:component :flow/branch
@@ -80,7 +84,7 @@
                    :amount {:tunable :anti-afk-damage}
                    :damage-type :generic}
                   {:component :effect/vfx
-                   :effect-id :particle-audio-session :operation :destroy
+                   :effect-id :particle-session :operation :destroy
                    :instance-key [:activation :scatter-bomb] :payload {}}
                   {:component :flow/finish :outcome :anti-afk
                    :finish-session? true}]}
@@ -89,7 +93,7 @@
                    :budget :charging
                    :on-insufficient {:component :flow/sequence
                                      :steps [{:component :effect/vfx
-                                              :effect-id :particle-audio-session
+                                              :effect-id :particle-session
                                               :operation :destroy
                                               :instance-key [:activation :scatter-bomb]
                                               :payload {}}
@@ -127,7 +131,7 @@
                                                       :args [{:from :charge/ticks}
                                                              {:tunable :spawn-interval-ticks}]}}]}
                                   {:component :effect/vfx
-                                   :effect-id :particle-audio-session
+                                   :effect-id :particle-session
                                    :operation :update
                                    :instance-key [:activation :scatter-bomb]
                                    :payload {:position {:from :caster/eye}
@@ -135,7 +139,7 @@
                                                      :args [{:ref [:session :balls]} 1]}}}]}
                    :else nil}
                   {:component :effect/vfx
-                   :effect-id :particle-audio-session
+                   :effect-id :particle-session
                    :operation :update
                    :instance-key [:activation :scatter-bomb]
                    :payload {:position {:from :caster/eye}
@@ -221,12 +225,12 @@
                                       :fade-layers []}}
                            {:component :score/mark :tag :ball-fired}]}}
            {:component :effect/vfx
-            :effect-id :particle-audio-session :operation :destroy
+            :effect-id :particle-session :operation :destroy
             :instance-key [:activation :scatter-bomb] :payload {}}
            {:component :flow/finish :outcome :released :finish-session? true}]}
   :abort
   {:component :flow/sequence
    :steps [{:component :effect/vfx
-            :effect-id :particle-audio-session :operation :destroy
+            :effect-id :particle-session :operation :destroy
             :instance-key [:activation :scatter-bomb] :payload {}}
            {:component :flow/finish :outcome :aborted :finish-session? true}]}}}

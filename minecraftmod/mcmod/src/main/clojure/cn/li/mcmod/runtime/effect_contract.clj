@@ -11,7 +11,7 @@
     :entity/reset-fall-damage
     :entity/status :entity/spawn :entity/discard :block/break :block/set
     :world/lightning :world/explosion :world/sound
-    :projectile/redirect :resource/enforce-floor})
+    :projectile/redirect :resource/enforce-floor :resource/add})
 
 (defn- require-map! [value message]
   (when-not (map? value)

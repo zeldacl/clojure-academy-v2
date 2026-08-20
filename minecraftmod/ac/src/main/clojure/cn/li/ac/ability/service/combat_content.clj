@@ -391,34 +391,6 @@
                                 :params {:max-balls 5
                                          :spawn-interval 10
                                          :fire-interval 8}}]}}}
-    {:id :plasma-cannon
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 120
-     :cost-phase :release
-     :cost {:cp (scale 180.0 120.0)
-            :overload (scale 70.0 45.0)}
-     :cooldown {:ticks (scale 100.0 60.0)}
-     :program {:op :phase
-               :pulse {:op :session-patch
-                       :entries [[[:charge-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :require-session
-                                  :path [:charge-ticks] :min 10.0 :max 120.0}
-                                 {:op :query :query-type :attack
-                                  :range 32.0 :aoe-radius 8.0
-                                  :result-ref :impact}
-                                 {:op :world-effect
-                                  :effect-type :plasma-cannon
-                                  :query-ref :impact
-                                  :charge-ticks (session-value [:charge-ticks])
-                                  :damage (scale 30.0 80.0)
-                                  :explosion-radius (scale 3.0 8.0)}
-                                 {:op :vfx :effect-id :plasma-cannon
-                                  :event :release
-                                  :params {:max-charge-ticks 120}}]}}}
     ;; Meltdowner's host port owns the beam trace, block breaking and
     ;; Vector-Reflection callback. Combat Core supplies only charge and
     ;; balance data; the 20..40 time-rate is evaluated by the port.

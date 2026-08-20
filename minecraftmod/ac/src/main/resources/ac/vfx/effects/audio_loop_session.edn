@@ -1,0 +1,17 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :audio-loop-session
+ :revision 1
+ :lifecycle :session
+ :inputs {:spawn {:position :vec3 :sound-id :string
+                  :volume :double :pitch :double}
+          :update {:position :vec3}
+          :destroy {:fade-ticks :long}}
+ :state-slots {:age :double}
+ :graph {:component :vfx/timeline
+         :duration-ticks 4096
+         :children [{:at 0
+                     :node {:component :vfx/audio-loop
+                            :sound-id {:ref [:input :sound-id]}
+                            :instance-key [:effect-instance :audio-loop]
+                            :stop-on-destroy? true}}]}}

@@ -160,11 +160,13 @@
    :entity/spawn :entity/spawn
     :entity/discard :entity/discard
    :projectile/schedule-beam :projectile/schedule-beam
-    :block/break-budget :block/break
+   :block/break-budget :block/break
    :world/sound :world/sound
    :world/lightning :world/lightning
+   :world/explosion :world/explosion
    :projectile/redirect :projectile/redirect
-   :resource/enforce-floor :resource/enforce-floor})
+   :resource/enforce-floor :resource/enforce-floor
+   :resource/add :resource/add})
 
 (defn- append-object! [^ArrayList output value]
   (.add output value)

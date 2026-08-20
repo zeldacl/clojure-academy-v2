@@ -73,11 +73,6 @@
   [world-id owner plan]
   (call :execute-electron-missile! world-id owner plan))
 
-(defn execute-plasma-cannon!
-  "Execute the charged Plasma Cannon impact behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-plasma-cannon! world-id owner plan))
-
 (defn execute-mine-ray!
   "Execute one bounded mining-ray tick behind a neutral Host Port."
   [world-id owner plan]

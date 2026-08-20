@@ -18,5 +18,4 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.groundshock]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.blood-retrograde]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-accel]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.plasma-cannon]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation]))

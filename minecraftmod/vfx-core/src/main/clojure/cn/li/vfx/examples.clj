@@ -17,6 +17,12 @@
    :vfx/arc-field {:component :vfx/arc-field :start point-example :end point-example
                    :spacing {:min 1.0 :max 1.0} :radius {:min 0.1 :max 0.1}
                    :count-limit 1 :life-ticks 1 :seed {:ref [:state :seed]}}
+   :vfx/vortex-column {:component :vfx/vortex-column :base point-example
+                       :axis {:vec3 [0.0 1.0 0.0]} :height 1.0
+                       :spacing {:min 1.0 :max 1.0}
+                       :radius {:min 0.1 :max 0.1}
+                       :count-limit 1 :life-ticks 1
+                       :seed {:ref [:state :seed]}}
    :vfx/ring ring-example
    :vfx/billboard-sequence {:component :vfx/billboard-sequence
                             :anchor point-example :texture-pattern "generic/%d.png"

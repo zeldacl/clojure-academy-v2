@@ -21,14 +21,23 @@
               :id :billboard-session
               :resource "ac/vfx/effects/billboard_session.edn"}
              {:kind :vfx-effect
-              :id :particle-audio-session
-              :resource "ac/vfx/effects/particle_audio_session.edn"}
+              :id :particle-session
+              :resource "ac/vfx/effects/particle_session.edn"}
              {:kind :vfx-effect
               :id :audio-one-shot
               :resource "ac/vfx/effects/audio_one_shot.edn"}
              {:kind :vfx-effect
+              :id :audio-loop-session
+              :resource "ac/vfx/effects/audio_loop_session.edn"}
+             {:kind :vfx-effect
               :id :ring-particle-field
               :resource "ac/vfx/effects/ring_particle_field.edn"}
              {:kind :vfx-effect
-              :id :teleport-marker
-              :resource "ac/vfx/effects/teleport_marker.edn"}]}
+             :id :teleport-marker
+              :resource "ac/vfx/effects/teleport_marker.edn"}
+             {:kind :vfx-effect
+             :id :energy-orb-session
+              :resource "ac/vfx/effects/energy_orb_session.edn"}
+             {:kind :vfx-effect
+              :id :vortex-column-session
+              :resource "ac/vfx/effects/vortex_column_session.edn"}]}

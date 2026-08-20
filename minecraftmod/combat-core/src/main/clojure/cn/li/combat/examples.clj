@@ -99,6 +99,8 @@
                         :energy 1.0 :order :beam-forward :limit 1}
    :world/sound {:component :world/sound :sound-id "generic" :position vec3-example
                  :category :ambient :volume 1.0 :pitch 1.0}
+   :world/explosion {:component :world/explosion :position vec3-example
+                     :radius 4.0 :fire? false :terrain? true}
    :projectile/redirect {:component :projectile/redirect
                          :entity {:ref [:slot :projectile]}
                          :target-position {:ref [:slot :aim-point]}
@@ -107,6 +109,7 @@
    :resource/enforce-floor {:component :resource/enforce-floor
                             :resource :overload
                             :minimum 1.0}
+   :resource/add {:component :resource/add :resource :overload :amount 1.0}
    :effect/vfx {:component :effect/vfx :effect-id :generic :operation :spawn
                 :payload {:position vec3-example}}
    :domain/event {:component :domain/event :event-type :generic :payload {}}})

@@ -238,12 +238,21 @@
            :world/lightning
            {:schema {:required #{:position}} :effects #{:mutate}}
 
+           ;; Neutral terrain/entity explosion primitive. Radius and flags are
+           ;; supplied by the ability document; the host only validates the
+           ;; bounded request and delegates the world mutation.
+           :world/explosion
+           {:schema {:required #{:position :radius}} :effects #{:mutate}}
+
            :projectile/redirect
            {:schema {:required #{:entity :target-position :velocity :difficulty}}
             :effects #{:mutate}}
 
            :resource/enforce-floor
            {:schema {:required #{:resource :minimum}} :effects #{:mutate}}
+
+           :resource/add
+           {:schema {:required #{:resource :amount}} :effects #{:mutate}}
 
            :effect/vfx
            {:schema {:required #{:effect-id :operation :payload}} :effects #{:emit}}

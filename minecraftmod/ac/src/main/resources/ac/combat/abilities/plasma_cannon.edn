@@ -1,0 +1,331 @@
+{:schema-version 2
+ :kind :ability
+ :id :plasma-cannon
+ :revision 1
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :caster/creative?
+            :world/id :charge/ticks]
+ :tunables
+ {:charge-time {:curve :mastery-lerp :type :long}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :overload-keep {:curve :mastery-lerp}
+  :targeting-distance {:curve :const}
+  :block-hit-extra-distance {:curve :const}
+  :max-flight-ticks {:curve :const :type :long}
+  :damage {:curve :mastery-lerp}
+  :damage-radius {:curve :const}
+  :explosion-radius {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-use {:curve :const}
+  :eye-height {:curve :const}
+  :spawn-y-offset {:curve :const}
+  :destination-epsilon {:curve :const}
+  :sync-interval-ticks {:curve :const :type :long}
+  :ground-search-distance {:curve :const}}
+ :costs
+ {:charging {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:fire {:per-mark {:tunable :exp-use}}}
+ :vfx
+ {:charge-spawn {:effect-id :energy-orb-session :op :spawn
+                 :payload {:position :vec3 :radius :double :segments :long
+                           :outer-color :object :inner-color :object
+                           :core-color :object :rate-per-tick :long :limit :long
+                           :particle :object}}
+  :charge-update {:effect-id :energy-orb-session :op :update
+                  :payload {:position :vec3}}
+  :charge-destroy {:effect-id :energy-orb-session :op :destroy
+                   :payload {:fade-ticks :long}}
+  :impact {:effect-id :endpoint-burst :op :spawn
+           :payload {:from :vec3 :to :vec3 :duration-ticks :long
+                     :rate-per-tick :long :limit :long :particle :object
+                     :sound-id :string :sound-volume :double
+                     :sound-pitch :double}}}
+ :fragments
+ {:charge-position
+  {:inputs {}
+   :body {:component :data/bind
+          :to :charge-position
+          :value {:expr :vec3/add
+                  :args [{:from :caster/body}
+                         {:vec3 [0.0 {:tunable :spawn-y-offset} 0.0]}]}}}
+  :charge-vfx-spawn
+  {:inputs {:position {:type :object}
+            :vortex-base {:type :object}}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :energy-orb-session
+                   :operation :spawn
+                   :instance-key [:activation :energy-orb]
+                   :audience {:type :nearby :radius 96.0}
+                   :payload {:position {:ref [:input :position]}
+                             :radius 2.2 :segments 24
+                             :outer-color [236 170 93 160]
+                             :inner-color [241 240 222 210]
+                             :core-color [165 230 255 230]
+                             :rate-per-tick 12 :limit 256
+                             :particle {:material :additive :life-ticks 12 :speed 0.06
+                                        :color [165 230 255 180]}}}
+                  {:component :effect/vfx
+                   :effect-id :vortex-column-session
+                   :operation :spawn
+                   :instance-key [:activation :vortex-column]
+                   :audience {:type :nearby :radius 96.0}
+                   :payload {:base {:ref [:input :vortex-base]}
+                             :axis {:vec3 [0.0 1.0 0.0]}
+                             :height 15.0
+                             :spacing {:min 1.0 :max 2.0}
+                             :radius {:min 0.15 :max 0.7}
+                             :count-limit 128 :life-ticks 30
+                             :seed {:ref [:context :activation-seed]}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session
+                   :operation :spawn
+                   :instance-key [:activation :charge-audio]
+                   :audience {:type :nearby :radius 96.0}
+                   :payload {:position {:ref [:input :position]}
+                             :sound-id "academy:vecmanip.plasma_cannon"
+                             :volume 0.8 :pitch 1.0}}]}}
+  :charge-vfx-update
+  {:inputs {:position {:type :object}}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :energy-orb-session
+                   :operation :update
+                   :instance-key [:activation :energy-orb]
+                   :payload {:position {:ref [:input :position]}}}
+                  {:component :effect/vfx
+                   :effect-id :vortex-column-session
+                   :operation :update
+                   :instance-key [:activation :vortex-column]
+                   :payload {:base {:ref [:input :position]}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session
+                   :operation :update
+                   :instance-key [:activation :charge-audio]
+                   :payload {:position {:ref [:input :position]}}}]}}
+  :charge-vfx-destroy
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :energy-orb-session
+                   :operation :destroy
+                   :instance-key [:activation :energy-orb]
+                   :payload {:fade-ticks 8}}
+                  {:component :effect/vfx
+                   :effect-id :vortex-column-session
+                   :operation :destroy
+                   :instance-key [:activation :vortex-column]
+                   :payload {:fade-ticks 8}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session
+                   :operation :destroy
+                   :instance-key [:activation :charge-audio]
+                   :payload {:fade-ticks 0}}]}}
+  :aim
+  {:inputs {}
+   :body {:component :target/resolve-destination
+          :hit {:ref [:slot :aim-hit]}
+          :origin {:from :caster/eye}
+          :direction {:from :caster/aim}
+          :distance {:tunable :targeting-distance}
+          :policy {:direction {:from :caster/aim}
+                   :minimum-distance 0.0
+                   :entity-eye-height {:tunable :eye-height}
+                   :head-clearance? false}
+          :result :destination}}
+  :impact
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :combat/area-damage
+                   :center {:ref [:session :destination :position]}
+                   :radius {:tunable :damage-radius}
+                   :filter {}
+                   :projection [:id :type :position]
+                   :limit 256
+                   :damage {:tunable :damage}
+                   :damage-type :skill
+                   :on-impact {:component :flow/sequence :steps []}}
+                  {:component :world/explosion
+                   :world-id {:from :world/id}
+                   :owner {:from :caster/id}
+                   :position {:ref [:session :destination :position]}
+                   :radius {:tunable :explosion-radius}
+                   :fire? false
+                   :terrain? true}
+                  {:component :score/mark :tag :fire}
+                  {:component :cooldown/start :name :main}
+                  {:component :effect/vfx
+                   :effect-id :endpoint-burst
+                   :operation :spawn
+                   :audience {:type :nearby :radius 96.0}
+                   :payload {:from {:ref [:session :destination :position]}
+                             :to {:ref [:session :destination :position]}
+                             :duration-ticks 12 :rate-per-tick 16 :limit 256
+                             :particle {:material :additive :life-ticks 16
+                                        :speed 0.12
+                                        :color [236 170 93 220]}
+                             :sound-id "minecraft:entity.generic.explode"
+                             :sound-volume 1.0 :sound-pitch 0.8}}
+                  {:component :charge-vfx-destroy}
+                  {:component :flow/finish :outcome :performed
+                   :finish-session? true}]}}
+  :advance
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :data/bind
+                   :to :delta
+                   :value {:expr :vec3/sub
+                           :args [{:ref [:session :destination :position]}
+                                  {:ref [:session :position]}]}}
+                  {:component :data/bind
+                   :to :distance
+                   :value {:expr :vec3/length
+                           :args [{:ref [:slot :delta]}]}}
+                  {:component :data/bind
+                   :to :direction
+                   :value {:expr :vec3/normalize
+                           :args [{:ref [:slot :delta]}]}}
+                  {:component :data/bind
+                   :to :next-position
+                   :value {:expr :vec3/add
+                           :args [{:ref [:session :position]}
+                                  {:expr :vec3/scale
+                                   :args [{:ref [:slot :direction]} 1.0]}]}}
+                  {:component :target/raycast
+                   :origin {:ref [:session :position]}
+                   :direction {:ref [:slot :direction]}
+                   :distance {:expr :math/add
+                              :args [1.0 {:tunable :block-hit-extra-distance}]}
+                   :include-entities? false
+                   :include-blocks? true
+                   :result :path-hit}
+                  {:component :flow/branch
+                   :when {:expr :bool/or
+                          :args [{:ref [:slot :path-hit :hit?]}
+                                 {:expr :math/lte
+                                  :args [{:expr :vec3/distance
+                                          :args [{:ref [:slot :next-position]}
+                                                 {:ref [:session :destination :position]}]}
+                                         {:tunable :destination-epsilon}]}
+                                 {:expr :math/gte
+                                  :args [{:ref [:session :flight-ticks]}
+                                         {:tunable :max-flight-ticks}]}]}
+                   :then {:component :impact}
+                   :else {:component :flow/sequence
+                          :steps [{:component :session/patch
+                                   :entries [{:path [:position] :mode :assign
+                                              :value {:ref [:slot :next-position]}}
+                                             {:path [:flight-ticks] :mode :increment
+                                              :value 1}
+                                             {:path [:sync-ticks] :mode :assign
+                                              :value {:expr :math/max
+                                                      :args [0 {:expr :math/sub
+                                                                :args [{:ref [:session :sync-ticks]} 1]}]}}]}
+                                  {:component :flow/branch
+                                   :when {:expr :math/lte
+                                          :args [{:ref [:session :sync-ticks]} 0]}
+                                   :then {:component :flow/sequence
+                                          :steps [{:component :charge-vfx-update
+                                                   :position {:ref [:slot :next-position]}}
+                                                  {:component :session/patch
+                                                   :entries [{:path [:sync-ticks]
+                                                              :mode :assign
+                                                              :value {:tunable :sync-interval-ticks}}]}]}
+                                   :else nil}
+                                  {:component :flow/finish :outcome :flight}]}}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :charge-position}
+                  {:component :target/raycast
+                   :origin {:ref [:slot :charge-position]}
+                   :direction {:vec3 [0.0 -1.0 0.0]}
+                   :distance {:tunable :ground-search-distance}
+                   :include-entities? false
+                   :include-blocks? true
+                   :result :ground-hit}
+                  {:component :txn/atomic
+                   :guards []
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :resource/add
+                                   :resource :overload
+                                   :amount {:tunable :overload-keep}}
+                                  {:component :session/patch
+                                   :entries [{:path [:mode] :mode :assign
+                                              :value 0}
+                                             {:path [:position] :mode :assign
+                                              :value {:ref [:slot :charge-position]}}
+                                             {:path [:vortex-base] :mode :assign
+                                              :value {:ref [:slot :ground-hit :position]}}
+                                             {:path [:flight-ticks] :mode :assign
+                                              :value 0}
+                                             {:path [:sync-ticks] :mode :assign
+                                              :value 0}]}
+                                  {:component :charge-vfx-spawn
+                                   :position {:ref [:slot :charge-position]}
+                                   :vortex-base {:ref [:slot :ground-hit :position]}}
+                                  {:component :flow/finish :outcome :started}]}
+                   :on-fail {:component :flow/finish
+                             :outcome :insufficient-resource
+                             :finish-session? true}}]}
+  :pulse {:component :flow/branch
+          :when {:expr :math/eq
+                 :args [{:ref [:session :mode]} 0]}
+          :then {:component :flow/branch
+                 :when {:expr :math/lt
+                        :args [{:from :charge/ticks} {:tunable :charge-time}]}
+                 :then {:component :flow/sequence
+                        :steps [{:component :cost/spend
+                                 :budget :charging
+                                 :on-insufficient {:component :flow/sequence
+                                                   :steps [{:component :charge-vfx-destroy}
+                                                           {:component :flow/finish
+                                                            :outcome :insufficient-resource
+                                                            :finish-session? true}]}}
+                                {:component :flow/finish :outcome :charging}]}
+                 :else {:component :flow/finish :outcome :charged}}
+          :else {:component :flow/branch
+                 :when {:expr :math/eq
+                        :args [{:ref [:session :mode]} 1]}
+                 :then {:component :advance}
+                 :else {:component :flow/finish :outcome :continue}}}
+  :release {:component :flow/branch
+            :when {:expr :math/eq
+                   :args [{:ref [:session :mode]} 0]}
+            :then {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:from :charge/ticks} {:tunable :charge-time}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :target/raycast
+                                   :origin {:from :caster/eye}
+                                   :direction {:from :caster/aim}
+                                   :distance {:tunable :targeting-distance}
+                                   :include-entities? true
+                                   :include-blocks? true
+                                   :living-only? true
+                                   :result :aim-hit}
+                                  {:component :aim}
+                                  {:component :session/patch
+                                   :entries [{:path [:mode] :mode :assign :value 1}
+                                             {:path [:destination] :mode :assign
+                                              :value {:ref [:slot :destination]}}
+                                             {:path [:flight-ticks] :mode :assign :value 0}
+                                             {:path [:sync-ticks] :mode :assign
+                                              :value {:tunable :sync-interval-ticks}}]}
+                                  {:component :score/mark :tag :fire}
+                                  {:component :cooldown/start :name :main}
+                                  {:component :charge-vfx-update
+                                   :position {:ref [:slot :destination :position]}}
+                                  {:component :flow/finish :outcome :released}]}
+                   :else {:component :flow/sequence
+                          :steps [{:component :charge-vfx-destroy}
+                                  {:component :flow/finish :outcome :undercharged
+                                   :finish-session? true}]}}
+            :else {:component :flow/finish :outcome :continue}}
+  :abort {:component :flow/sequence
+          :steps [{:component :charge-vfx-destroy}
+                  {:component :flow/finish :outcome :aborted
+                   :finish-session? true}]}}}

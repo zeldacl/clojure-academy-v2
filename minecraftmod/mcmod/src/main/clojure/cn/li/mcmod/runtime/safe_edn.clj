@@ -51,7 +51,7 @@
                                                     "UTF-8")]
         (read-one! reader))
       (catch Throwable throwable
-        (throw (ex-info "invalid EDN resource"
+      (throw (ex-info "invalid EDN resource"
                         {:resource resource-path}
                         throwable))))
     (throw (ex-info "EDN resource not found" {:resource resource-path}))))

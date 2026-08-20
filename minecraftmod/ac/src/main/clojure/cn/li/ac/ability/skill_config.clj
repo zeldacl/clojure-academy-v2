@@ -247,7 +247,24 @@
     :blink-cp :cost.blink.cp
     :blink-overload :cost.blink.overload
     :deactivate-cooldown-ticks :cooldown.deactivate-ticks
-    :exp-per-blink :progression.exp-blink}})
+    :exp-per-blink :progression.exp-blink}
+   :plasma-cannon
+   {:charge-time :charge.time
+    :cost-tick-cp :cost.tick.cp
+    :overload-keep :cost.overload-keep
+    :targeting-distance :targeting.raycast-distance
+    :block-hit-extra-distance :projectile.block-hit-extra-distance
+    :max-flight-ticks :projectile.max-flight-ticks
+    :damage :combat.damage
+    :damage-radius :combat.damage-radius
+    :explosion-radius :combat.explosion-radius
+    :cooldown-ticks :cooldown.ticks
+    :exp-use :progression.exp-use
+    :eye-height :targeting.eye-height
+    :spawn-y-offset :projectile.spawn-y-offset
+    :destination-epsilon :projectile.destination-epsilon
+    :sync-interval-ticks :projectile.sync-interval-ticks
+    :ground-search-distance :effect.tornado-ground-search-distance}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

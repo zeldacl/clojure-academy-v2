@@ -21,5 +21,8 @@
              :id :penetrate-teleport
               :resource "ac/combat/abilities/penetrate_teleport.edn"}
              {:kind :ability
-              :id :flashing
-              :resource "ac/combat/abilities/flashing.edn"}]}
+             :id :flashing
+              :resource "ac/combat/abilities/flashing.edn"}
+             {:kind :ability
+              :id :plasma-cannon
+              :resource "ac/combat/abilities/plasma_cannon.edn"}]}

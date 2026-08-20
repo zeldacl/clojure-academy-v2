@@ -1,0 +1,19 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :particle-session
+ :revision 1
+ :lifecycle :session
+ ;; Generic moving particle field.  Audio is deliberately a separate
+ ;; transient effect so callers can compose either output independently.
+ :inputs {:spawn {:position :vec3 :rate-per-tick :long :limit :long
+                  :particle :object}
+          :update {:position :vec3}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 4096
+         :children [{:at 0
+                     :node {:component :vfx/emitter
+                            :anchor {:ref [:input :position]}
+                            :rate-per-tick {:ref [:input :rate-per-tick]}
+                            :limit {:ref [:input :limit]}
+                            :particle {:ref [:input :particle]}}}]}}

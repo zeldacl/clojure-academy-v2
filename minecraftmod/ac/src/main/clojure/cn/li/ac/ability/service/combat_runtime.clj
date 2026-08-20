@@ -1284,27 +1284,6 @@
                                       :applied
                                       :failed)
                             :effect effect})
-                         :plasma-cannon
-                         (let [{:keys [world-id query-result charge-ticks
-                                       damage explosion-radius]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :charge-ticks (long (or charge-ticks 0))
-                                     :damage (double (or damage 0.0))
-                                     :explosion-radius (double (or explosion-radius 0.0))}
-                               valid? (and world-id (map? query-result)
-                                            (<= 1 (:charge-ticks plan) 120)
-                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
-                                            (finite? explosion-radius)
-                                            (<= 0.0 (:explosion-radius plan) 32.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-plasma-cannon!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
                          :mine-ray
                          (let [{:keys [world-id scan range break-speed fortune]} effect
                                finite? #(and (number? %) (Double/isFinite (double %)))
@@ -1991,17 +1970,54 @@
                                              :distance distance :policy policy
                                              :world-id (:world-id request)})
                (let [owner (str owner)
+                 point-of (fn [value]
+                            (cond
+                              (and (map? value) (vector? (:vec3 value)))
+                              (:vec3 value)
+                              (and (map? value)
+                                   (every? #(number? (get value %)) [:x :y :z]))
+                              [(double (:x value)) (double (:y value)) (double (:z value))]
+                              (and (vector? value) (= 3 (count value)))
+                              (mapv double value)
+                              :else nil))
                  distance (max 0.0 (min 128.0 (double (or distance 0.0))))
-                 world-id (geom/world-id-of owner)
-                 eye (geom/eye-pos owner)
-                 look (when (raycast/available?)
-                        (raycast/player-look-vector owner))
+                 world-id (or (:world-id request) (geom/world-id-of owner))
+                 origin-point (point-of origin)
+                 direction-point (point-of (:direction request))
+                 owner-eye (geom/eye-pos owner)
+                 eye (or (when origin-point
+                           {:x (nth origin-point 0)
+                            :y (nth origin-point 1)
+                            :z (nth origin-point 2)})
+                         owner-eye)
+                 look (or (when direction-point
+                            {:x (nth direction-point 0)
+                             :y (nth direction-point 1)
+                             :z (nth direction-point 2)})
+                          (when (raycast/available?)
+                            (raycast/player-look-vector owner)))
+                 player-eye-origin?
+                 (and origin-point owner-eye
+                      (every? (fn [[a b]]
+                                (<= (Math/abs (- (double a) (double b))) 1.0e-4))
+                              [[(nth origin-point 0) (:x owner-eye)]
+                               [(nth origin-point 1) (:y owner-eye)]
+                               [(nth origin-point 2) (:z owner-eye)]]))
                  hit (when (and look (raycast/available?))
                        (let [sx (:x eye) sy (:y eye) sz (:z eye)
                              dx (double (or (:x look) 0.0))
                              dy (double (or (:y look) 0.0))
                              dz (double (or (:z look) 1.0))]
                          (cond
+                           ;; Preserve the platform's living-only semantics
+                           ;; when a generic request explicitly names the
+                           ;; caster eye.  The origin/direction form is still
+                           ;; used for arbitrary projectile positions.
+                           (and (boolean (:living-only? request))
+                                player-eye-origin?
+                                (not= false include-entities?))
+                           (raycast/raycast-combined-from-player
+                            owner distance true)
                            (and (not= false include-entities?)
                                 (not= false include-blocks?))
                            (raycast/raycast-combined world-id sx sy sz dx dy dz distance)
@@ -2029,6 +2045,7 @@
                              :z (+ (:z eye) (* (double (or (:z look) 1.0)) distance))})
                  block-id (:block-id hit)]
              {:hit-type kind
+              :hit? (not= :miss kind)
               :entity-id (or (:entity-id hit) (:uuid hit))
                :hit-x (:hit-x hit) :hit-y (:hit-y hit) :hit-z (:hit-z hit)
                :x (:x hit) :y (:y hit) :z (:z hit)
@@ -2145,7 +2162,39 @@
                         (every? #(and (number? %) (Double/isFinite (double %))) point)
                         (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* 64.0 64.0))
                         (world-effects/available?))
-                (world-effects/spawn-lightning! world-id (double x) (double y) (double z) true))))))
+                        (world-effects/spawn-lightning! world-id (double x) (double y) (double z) true))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :world/explosion)
+        (capabilities/register-action!
+         :world/explosion
+         (fn [{:keys [owner world-id position radius fire? terrain?]}]
+           (let [point (if (and (map? position) (vector? (:vec3 position)))
+                         (:vec3 position)
+                         [(when (map? position) (:x position))
+                          (when (map? position) (:y position))
+                          (when (map? position) (:z position))])
+                 [x y z] point
+                 radius (double (or radius 0.0))
+                 finite? (fn [value]
+                           (and (number? value)
+                                (Double/isFinite (double value))))
+                 owner-world (geom/world-id-of (str owner))
+                 owner-pos (geom/body-pos (str owner))
+                 dx (- (double (or x 0.0)) (double (or (:x owner-pos) 0.0)))
+                 dy (- (double (or y 0.0)) (double (or (:y owner-pos) 0.0)))
+                 dz (- (double (or z 0.0)) (double (or (:z owner-pos) 0.0)))
+                 valid? (and owner world-id (= world-id owner-world) owner-pos
+                             (every? finite? [x y z radius])
+                             (pos? radius) (<= radius 32.0)
+                             (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* 128.0 128.0))
+                             (world-effects/available?))]
+             (if-not valid?
+               {:status :rejected :reason :invalid-explosion-request}
+               (let [result (world-effects/create-explosion!
+                              world-id (double x) (double y) (double z)
+                              radius (boolean fire?)
+                              {:terrain? (boolean terrain?)
+                               :attacker-uuid owner})]
+                 {:status (if (not= false result) :applied :failed)}))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/damage)
         (capabilities/register-action!
          :entity/damage
@@ -2295,6 +2344,19 @@
                              :floor-value (double minimum)}])]
                {:status (if (:success? result) :applied :failed)})
              {:status :rejected :reason :invalid-resource-floor}))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :resource/add)
+        (capabilities/register-action!
+         :resource/add
+         (fn [{:keys [owner resource amount]}]
+           (let [amount (double (or amount 0.0))]
+             (if (and owner (= :overload resource)
+                      (Double/isFinite amount) (pos? amount))
+               (let [result (command-runtime/run-command-in-session!
+                              (server-session-id) (str owner)
+                              {:command :consume-resource
+                               :overload amount :cp 0.0 :creative? false})]
+                 {:status (if (:success? result) :applied :failed)})
+               {:status :rejected :reason :invalid-resource-add})))))
       (catch Throwable _
         ;; A loader may freeze the registry before AC content boots.  Leave the
         ;; registry state authoritative; missing ports surface as :unhandled.

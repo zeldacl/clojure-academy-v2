@@ -4,7 +4,6 @@
             [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as plasma-cannon-fx]
             [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as storm-wing-fx]
             [cn.li.ac.content.ability.vecmanip.vec-accel-fx :as vec-accel-fx]
             [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vec-deviation-fx]
@@ -14,18 +13,16 @@
   (vec-deviation-fx/init!)
       (vec-accel-fx/init!)
       (storm-wing-fx/init!)
-      (plasma-cannon-fx/init!)
       (vec-deviation-fx/reset-fx-for-test!)
       (vec-accel-fx/reset-fx-for-test!)
       (storm-wing-fx/reset-storm-wing-fx-for-test!)
-      (plasma-cannon-fx/reset-fx-for-test!)
       (try
         (f)
         (finally
           (vec-deviation-fx/reset-fx-for-test!)
           (vec-accel-fx/reset-fx-for-test!)
           (storm-wing-fx/reset-storm-wing-fx-for-test!)
-          (plasma-cannon-fx/reset-fx-for-test!))))
+          )))
 
 (use-fixtures :each reset-fixture)
 
@@ -94,42 +91,3 @@
       (let [after-clear (storm-wing-fx/storm-wing-fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))
-
-(deftest plasma-cannon-keeps-charge-state-per-owner-test
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-owner"})
-                client-sounds/queue-sound-effect! (fn [& _] nil)
-                client-particles/queue-particle-effect! (fn [& _] nil)
-                client-bridge/run-client-effect! (fn [& _] nil)]
-    (dispatch! :plasma-cannon (event "ctx-a" :plasma-cannon/fx-start
-                                    {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}}))
-    (dispatch! :plasma-cannon (event "ctx-b" :plasma-cannon/fx-start
-                                    {:mode :start :charge-pos {:x 2.0 :y 64.0 :z 2.0}}))
-    (dispatch! :plasma-cannon (event "ctx-a" :plasma-cannon/fx-update
-                                    {:mode :update :charge-ticks 24 :charge-pos {:x 1.0 :y 64.0 :z 1.0}
-                                     :flight-ticks 0 :state :charging}))
-    (dispatch! :plasma-cannon (event "ctx-b" :plasma-cannon/fx-update
-                                    {:mode :update :charge-ticks 8 :charge-pos {:x 2.0 :y 64.0 :z 2.0}
-                                     :flight-ticks 2 :state :go}))
-    ;; The bodies fade in from alpha 0, so they need to have ticked before they
-    ;; contribute any ops.
-    (dotimes [_ 40]
-      (vfx-level/update-effect-state! :plasma-cannon
-        (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
-    (let [snapshot (plasma-cannon-fx/fx-snapshot)
-          plan (vfx-level/build-level-effect-plan nil nil 0 nil)]
-      (is (= 24 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
-      (is (= :go (:state (get (:effect-state snapshot) [:ctx "ctx-b"]))))
-      (is (= 2 (count (filter #(= :plasma-body (:kind %)) (:ops plan))))
-          "one plasma body per owner")
-      ;; Context termination marks the owner instead of deleting it — upstream's
-      ;; two entities outlive the context while they fade — and it is dropped
-      ;; once that fade finishes. The other owner is untouched throughout.
-      (plasma-cannon-fx/clear-fx-owner! [:ctx "ctx-a"])
-      (is (true? (:terminated? (get (:effect-state (plasma-cannon-fx/fx-snapshot)) [:ctx "ctx-a"]))))
-      (is (some? (get (:effect-state (plasma-cannon-fx/fx-snapshot)) [:ctx "ctx-b"])))
-      (dotimes [_ 40]
-        (vfx-level/update-effect-state! :plasma-cannon
-          (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
-      (let [after-fade (plasma-cannon-fx/fx-snapshot)]
-        (is (nil? (get (:effect-state after-fade) [:ctx "ctx-a"])))
-        (is (some? (get (:effect-state after-fade) [:ctx "ctx-b"])))))))
