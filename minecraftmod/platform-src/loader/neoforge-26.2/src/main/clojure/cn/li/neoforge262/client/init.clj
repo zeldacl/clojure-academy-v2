@@ -14,7 +14,7 @@
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc262.client.i18n :as i18n]
-            [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.neoforge262.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
             [cn.li.mc262.client.effects.particle :as particle]
             [cn.li.mc262.client.effects.sound :as sound]

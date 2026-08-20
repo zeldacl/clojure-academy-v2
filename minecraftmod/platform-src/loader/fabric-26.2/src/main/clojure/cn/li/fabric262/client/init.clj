@@ -18,7 +18,7 @@
             [cn.li.fabric262.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric262.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric262.client.keyboard-init :as kb-init]
-            [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.fabric262.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.fabric262.client.obj-model-registration :as obj-models]
             [cn.li.mc262.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc262.client.player-state-core :as player-state]

@@ -8,7 +8,7 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
-            [cn.li.mc1201.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.platform.neutral.client-render :as input-buttons])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]

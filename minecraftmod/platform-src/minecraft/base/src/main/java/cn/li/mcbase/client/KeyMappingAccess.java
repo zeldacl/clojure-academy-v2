@@ -1,53 +1,22 @@
 package cn.li.mcbase.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.network.chat.Component;
 
 /**
- * KeyMapping current-binding accessors. Mojang keeps the live key private;
- * Forge may expose {@code getKey()} via AT, Fabric does not. Reflective
- * lookup keeps Clojure AOT/checkClojure free of untyped interop.
+ * KeyMapping current-binding accessors. Mojang keeps the live key private and
+ * the loader access transformers (e.g. Forge's {@code getKey()}) do not exist
+ * on Fabric, so the current binding is read through the public
+ * {@code saveString()} round-trip — the same value Options > Controls
+ * persists. No reflection; works on every loader.
  */
 public final class KeyMappingAccess {
-    private static final Method GET_KEY_METHOD;
-    private static final Field KEY_FIELD;
-
-    static {
-        Method getKey = null;
-        try {
-            getKey = KeyMapping.class.getMethod("getKey");
-        } catch (NoSuchMethodException ignored) {
-            // fall through to field
-        }
-        GET_KEY_METHOD = getKey;
-
-        Field keyField = null;
-        if (getKey == null) {
-            try {
-                keyField = KeyMapping.class.getDeclaredField("key");
-                keyField.setAccessible(true);
-            } catch (ReflectiveOperationException e) {
-                throw new ExceptionInInitializerError(e);
-            }
-        }
-        KEY_FIELD = keyField;
-    }
-
     private KeyMappingAccess() {
     }
 
     public static InputConstants.Key getKey(KeyMapping mapping) {
-        try {
-            if (GET_KEY_METHOD != null) {
-                return (InputConstants.Key) GET_KEY_METHOD.invoke(mapping);
-            }
-            return (InputConstants.Key) KEY_FIELD.get(mapping);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("Unable to read KeyMapping key", e);
-        }
+        return InputConstants.getKey(mapping.saveString());
     }
 
     public static int acKeyCode(KeyMapping mapping) {
@@ -60,7 +29,7 @@ public final class KeyMappingAccess {
     }
 
     public static String boundKeyDisplayString(KeyMapping mapping) {
-        return getKey(mapping).getDisplayName().getString();
+        return mapping.getTranslatedKeyMessage().getString();
     }
 
     public static int boundKeyValue(KeyMapping mapping) {
@@ -68,6 +37,6 @@ public final class KeyMappingAccess {
     }
 
     public static Component boundKeyDisplayName(KeyMapping mapping) {
-        return getKey(mapping).getDisplayName();
+        return mapping.getTranslatedKeyMessage();
     }
 }

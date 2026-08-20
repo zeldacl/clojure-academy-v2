@@ -10,7 +10,7 @@
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.platform.neutral.client-render :as input-buttons]
-            [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter])
+            [cn.li.neoforge262.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]
            [net.neoforged.neoforge.client.event ClientTickEvent$Post ClientTickEvent$Pre]

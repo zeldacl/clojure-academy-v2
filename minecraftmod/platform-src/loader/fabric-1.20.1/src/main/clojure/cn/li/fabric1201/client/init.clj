@@ -19,7 +19,7 @@
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
-            [cn.li.mc1201.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.fabric1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.fabric1201.client.obj-model-registration :as obj-models]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.client.player-state-core :as player-state]

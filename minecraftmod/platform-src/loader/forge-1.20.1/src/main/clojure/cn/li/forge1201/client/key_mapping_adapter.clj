@@ -1,4 +1,4 @@
-(ns cn.li.mc1201.client.key-mapping-adapter
+(ns cn.li.forge1201.client.key-mapping-adapter
   "Vanilla KeyMapping registration for :alternative scheme inputs.
 
    Create and register Minecraft KeyMappings from AC configuration.
@@ -10,7 +10,7 @@
   (:import [net.minecraft.client KeyMapping Minecraft Options]
            [com.mojang.blaze3d.platform InputConstants InputConstants$Key InputConstants$Type]
            [net.minecraftforge.client.settings IKeyConflictContext KeyConflictContext]
-           [cn.li.mc1201.client KeyMappingAccess]))
+           [cn.li.mcbase.client KeyMappingAccess]))
 
 ;; ===== KeyMapping Registry =====
 ;; Stores KeyMappings created from AC configuration.

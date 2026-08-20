@@ -1,4 +1,4 @@
-(ns cn.li.mc1211.client.key-mapping-adapter
+(ns cn.li.neoforge1211.client.key-mapping-adapter
   "Vanilla KeyMapping registration for :alternative scheme inputs.
 
    Create and register Minecraft KeyMappings from AC configuration.

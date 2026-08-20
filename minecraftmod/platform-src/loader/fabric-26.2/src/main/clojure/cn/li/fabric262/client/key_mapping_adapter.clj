@@ -1,11 +1,14 @@
-(ns cn.li.mc262.client.key-mapping-adapter
-  "Vanilla KeyMapping registration for :alternative scheme inputs.
+(ns cn.li.fabric262.client.key-mapping-adapter
+  "Vanilla KeyMapping registration for :alternative scheme inputs (Fabric).
 
    Create and register Minecraft KeyMappings from AC configuration.
-   Loaders only call these helpers from their client setup / input events.
+   Fabric has no conflict-context constructor (that is a NeoForge extension),
+   so mappings are created with the plain vanilla constructor and registered
+   with Minecraft via fabric KeyBindingHelper in client/init.clj. The live
+   binding is read through the public saveString() round-trip — no reflection.
 
    26.2: KeyMapping takes KeyMapping$Category (Identifier-backed) instead of
-   a plain category string; categories are tracked for RegisterKeyMappingsEvent."
+   a plain category string."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry]
             [cn.li.mcmod.config.registry :as config-reg]
@@ -13,7 +16,6 @@
             [clojure.string :as str])
   (:import [net.minecraft.client KeyMapping KeyMapping$Category Minecraft Options]
            [com.mojang.blaze3d.platform InputConstants InputConstants$Key InputConstants$Type]
-           [net.neoforged.neoforge.client.settings IKeyConflictContext KeyConflictContext]
            [cn.li.mcver ResourceLocations]))
 
 (def ^:private registered-key-mappings (atom {}))
@@ -28,6 +30,13 @@
     (if (< code 0)
       (.getOrCreate InputConstants$Type/MOUSE (+ 100 code))
       (.getOrCreate InputConstants$Type/KEYSYM code))))
+
+(defn- current-key
+  "Read the CURRENT bound key of a mapping via the public saveString()
+   round-trip — vanilla 26.2 has no public getKey() and the NeoForge AT
+   does not exist on Fabric."
+  ^InputConstants$Key [^KeyMapping km]
+  (InputConstants/getKey (.saveString km)))
 
 (defn- category-id-of
   [category]
@@ -58,23 +67,24 @@
    - translation-key: string for i18n (e.g., 'key.content.slot.0')
    - category: string (legacy translation-style category id)
 
-   Returns: KeyMapping object"
+   Returns: KeyMapping object
+
+   Does NOT register with Minecraft — the caller registers the returned
+   mapping via fabric KeyBindingHelper (vanilla categories handle the
+   in-game-only behavior; upstream AcademyCraft aborts keys while a GUI is
+   open itself). key-code->input-key maps negative codes (mouse buttons,
+   Settings app convention) to InputConstants.Type.MOUSE instead of KEYSYM."
   [input-id key-code ^String translation-key ^String category]
   (try
-    ;; IN_GAME context: these bindings are gameplay keys — vanilla key
-    ;; processing and other mods' conflict checks treat them as ingame-only
-    ;; (upstream AcademyCraft aborts all keys while a GUI is open).
-    ;; key-code->input-key maps negative codes (mouse buttons, Settings app
-    ;; convention) to InputConstants.Type.MOUSE instead of KEYSYM.
     (let [cat (resolve-category category)
-          ^IKeyConflictContext ctx KeyConflictContext/IN_GAME
-          key-mapping (KeyMapping. translation-key ctx
-                                   (key-code->input-key key-code) cat)]
+          key (key-code->input-key key-code)
+          key-mapping (KeyMapping. translation-key
+                                   (.getType key) (.getValue key) cat)]
       (swap! registered-key-mappings assoc input-id key-mapping)
       (log/debug "Registered KeyMapping"
-                 {:input-id input-id
-                  :key-code key-code
-                  :translation-key translation-key})
+                {:input-id input-id
+                 :key-code key-code
+                 :translation-key translation-key})
       key-mapping)
     (catch Exception e
       (log/stacktrace (str "Failed to register KeyMapping " {:input-id input-id}) e)
@@ -109,13 +119,15 @@
 
 (defn get-key-code
   "Current key code for a registered KeyMapping in AC convention
-   (-100+button for mouse, GLFW KEYSYM otherwise), or nil. The polling path
-   feeds this to settings-key-id, which routes negative codes to GLFW mouse
-   queries — a bare InputConstants.Key value (0 for mouse buttons) would be
-   looked up as a GLFW key and never match."
+   (-100+button for mouse, GLFW KEYSYM otherwise), or nil. Reads the LIVE
+   binding (saveString round-trip) — getDefaultKey would return the default
+   instead of the rebound key. The polling path feeds this to
+   settings-key-id, which routes negative codes to GLFW mouse queries — a
+   bare InputConstants.Key value (0 for mouse buttons) would be looked up as
+   a GLFW key and never match."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (let [^InputConstants$Key key (InputConstants/getKey (.saveString km))]
+    (let [^InputConstants$Key key (current-key km)]
       (if (= (.getType key) InputConstants$Type/MOUSE)
         (+ -100 (.getValue key))
         (.getValue key)))))
@@ -126,7 +138,7 @@
    red. Unbound mappings can never conflict."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (let [key (.getKey km)]
+    (let [key (current-key km)]
       (when-not (.equals key InputConstants/UNKNOWN)
         (boolean
           (some (fn [^KeyMapping other]
@@ -152,7 +164,7 @@
         ;; binding is authoritative instead of two mappings fighting.
         (doseq [^KeyMapping other (.keyMappings options)]
           (when (and (not (identical? other km))
-                     (.equals key (.getKey other)))
+                     (.equals key (current-key other)))
             (.setKey other InputConstants/UNKNOWN))))
       (.setKey km key)
       (KeyMapping/resetMapping)
@@ -177,9 +189,7 @@
 (defn install-bound-key-resolver!
   "Wire the polling bound-key resolver (glfw-polling-core): [:bridge input-id],
    [:slot n] and [:screen kw] all read the KeyMapping's CURRENT binding, so
-   GLFW polling follows Settings app / Options > Controls rebinds on
-   platforms without KeyMapping events (Fabric), and fixes slot/screen keys
-   for Forge's polling key-state-fn too."
+   GLFW polling follows Settings app / Options > Controls rebinds."
   []
   (glfw-polling/install-bound-key-resolver!
     (fn [input-ref]
@@ -192,22 +202,6 @@
         nil)))
   nil)
 
-(defn register-into-system-menu!
-  "Append AC KeyMappings to Options.keyMappings so they show up in the
-   vanilla Options > Controls key-bind screen under their own category.
-
-   The mod-bus RegisterKeyMappingsEvent fires during Minecraft construction —
-   before content keybinding config is registered — so the event handler sees
-   no mappings. Registration therefore happens here, once the mappings exist,
-   using the same append the event's register() performs."
-  []
-  (let [^Options options (.options ^Minecraft (Minecraft/getInstance))
-        kms (get-all-key-mappings)]
-    (when (seq kms)
-      (set! (.-keyMappings options)
-            (into-array KeyMapping (concat (.-keyMappings options) kms))))
-    (log/info "Registered AC keybindings into Options > Controls:" (count kms))))
-
 (defn register-all-keybindings-from-ac!
   "Bootstrap function: Register all :alternative scheme keybindings from content modules.
 
@@ -218,7 +212,8 @@
    This function:
    1. Reads all registered keybinding configs from the neutral registry
    2. Extracts all :alternative scheme entries
-   3. Registers each as a vanilla KeyMapping"
+   3. Creates each as a vanilla KeyMapping (registration with Minecraft is
+      done by the caller via fabric KeyBindingHelper)"
   []
   (try
     (let [all-configs (kb-registry/get-all-keybinding-configs)]
