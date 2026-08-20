@@ -46,4 +46,7 @@
               :resource "ac/combat/abilities/mag_movement.edn"}
              {:kind :ability
               :id :mag-manip
-              :resource "ac/combat/abilities/mag_manip.edn"}]}
+              :resource "ac/combat/abilities/mag_manip.edn"}
+             {:kind :ability
+              :id :body-intensify
+              :resource "ac/combat/abilities/body_intensify.edn"}]}

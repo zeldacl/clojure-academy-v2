@@ -106,6 +106,22 @@
               (re-matches #"(?:block|item|entity)\\.([^.]+)\\.(.+)" id)]
           (str namespace ":" path))
         :else id))
+     :value/parse-status-spec
+     (let [[effect-name amp-text] (str/split (str (nth args 0)) #":" 2)
+           effect-name (str/trim (or effect-name ""))
+           amplifier (try
+                       (Long/parseLong (str/trim (or amp-text "0")))
+                       (catch NumberFormatException _ 0))]
+       {:status-id (keyword effect-name)
+        :max-amplifier (if (< (long amplifier) 0) 0 amplifier)})
+     :value/status-id
+     (keyword (str/trim (or (first (str/split (str (nth args 0)) #":" 2)) "")))
+     :value/status-max-amplifier
+     (let [[_ amp-text] (str/split (str (nth args 0)) #":" 2)
+           amplifier (try
+                       (Long/parseLong (str/trim (or amp-text "0")))
+                       (catch NumberFormatException _ 0))]
+       (if (< (long amplifier) 0) 0 amplifier))
     :math/gte (>= (double (nth args 0)) (double (nth args 1)))
     :math/gt (> (double (nth args 0)) (double (nth args 1)))
     :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))

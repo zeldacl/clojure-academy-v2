@@ -1,0 +1,246 @@
+{:schema-version 2
+ :kind :ability
+ :id :body-intensify
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/id :caster/eye :caster/creative?
+            :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                 {:skill-id :current-charging :min-exp 1.0}]
+ :tunables
+ {:charge-min-ticks {:curve :const :type :long}
+  :charge-max-ticks {:curve :const :type :long}
+  :charge-max-tolerant-ticks {:curve :const :type :long}
+  :effect-probability-offset-ticks {:curve :const}
+  :effect-probability-divisor {:curve :const}
+  :effect-duration-multiplier {:curve :mastery-lerp}
+  :effect-hunger-multiplier {:curve :const}
+  :effect-hunger-amplifier {:curve :const :type :long}
+  :effect-available-effects {:curve :const :type :string-list}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp}
+  :progression-exp-use {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:use {:per-mark {:tunable :progression-exp-use}}}
+ :vfx
+ {:charge-arc-start
+  {:effect-id :arc-channel-session :op :spawn
+   :payload {:mode :keyword :caster :vec3 :target :vec3
+             :block-pos :object :block-bounds :object :good? :boolean
+             :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :charge-arc-update
+  {:effect-id :arc-channel-session :op :update
+   :payload {:mode :keyword :caster :vec3 :target :vec3
+             :block-pos :object :block-bounds :object :good? :boolean
+             :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :charge-arc-end
+  {:effect-id :arc-channel-session :op :destroy
+   :payload {:fade-ticks :long}}
+  :charge-audio-start
+  {:effect-id :audio-loop-session :op :spawn
+   :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
+  :charge-audio-update
+  {:effect-id :audio-loop-session :op :update
+   :payload {:position :vec3}}
+  :charge-audio-end
+  {:effect-id :audio-loop-session :op :destroy
+   :payload {:fade-ticks :long}}
+  :release-burst
+  {:effect-id :endpoint-burst :op :spawn
+   :payload {:from :vec3 :to :vec3 :duration-ticks :long
+             :rate-per-tick :long :limit :long :particle :object
+             :sound-id :string :sound-volume :double :sound-pitch :double}}}
+ :fragments
+ {:stop-charge
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :destroy
+                   :instance-key [:activation :body-intensify-charge]
+                   :payload {:fade-ticks 0}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session :operation :destroy
+                   :instance-key [:activation :body-intensify-audio]
+                   :payload {:fade-ticks 0}}]}}
+  :fail
+  {:inputs {:outcome {:default :failed}}
+   :body {:component :flow/sequence
+          :steps [{:component :stop-charge}
+                  {:component :flow/finish
+                   :outcome {:ref [:input :outcome]}
+                   :finish-session? true}]}}
+  :apply-buffs
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :data/bind
+                   :to :effective-ticks
+                   :value {:expr :math/min
+                           :args [{:ref [:session :hold-ticks]}
+                                  {:tunable :charge-max-ticks}]}}
+                  {:component :data/bind
+                   :to :probability
+                   :value {:expr :math/div
+                           :args [{:expr :math/sub
+                                   :args [{:ref [:slot :effective-ticks]}
+                                          {:tunable :effect-probability-offset-ticks}]}
+                                  {:tunable :effect-probability-divisor}]}}
+                  {:component :data/bind
+                   :to :buff-level
+                   :value {:expr :math/floor
+                           :args [{:ref [:slot :probability]}]}}
+                  {:component :flow/foreach
+                   :items {:tunable :effect-available-effects}
+                   :as :effect-entry
+                   :index-as :effect-index
+                   :limit 32
+                   :body {:component :flow/branch
+                          :when {:expr :bool/and
+                                 :args [{:expr :math/gte
+                                         :args [{:ref [:slot :effect-index]} 1]}
+                                        {:expr :random/chance
+                                         :args [{:expr :math/clamp
+                                                 :args [{:expr :math/sub
+                                                         :args [{:ref [:slot :probability]}
+                                                                {:expr :math/sub
+                                                                 :args [{:ref [:slot :effect-index]} 1]}]}
+                                                        0.0 1.0]}]}]}
+                          :then {:component :flow/sequence
+                                  :steps [{:component :combat/status
+                                           :target {:from :caster/id}
+                                           :status-id {:expr :value/status-id
+                                                       :args [{:ref [:slot :effect-entry]}]}
+                                          :duration-ticks {:expr :math/floor
+                                                           :args [{:expr :math/mul
+                                                                   :args [{:expr :math/mul
+                                                                           :args [{:expr :math/add
+                                                                                   :args [1.0 {:expr :random/uniform
+                                                                                               :args [0.0 1.0]}]}
+                                                                                  {:ref [:slot :effective-ticks]}]}
+                                                                          {:tunable :effect-duration-multiplier}]}]}
+                                          :amplifier {:expr :math/min
+                                                      :args [{:ref [:slot :buff-level]}
+                                                               {:expr :value/status-max-amplifier
+                                                                :args [{:ref [:slot :effect-entry]}]}]}}]}}}
+                   {:component :combat/status
+                   :target {:from :caster/id}
+                   :status-id :hunger
+                   :duration-ticks {:expr :math/floor
+                                    :args [{:expr :math/mul
+                                            :args [{:ref [:slot :effective-ticks]}
+                                                   {:tunable :effect-hunger-multiplier}]}]}
+                   :amplifier {:tunable :effect-hunger-amplifier}}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :cost/spend
+                   :budget :activate
+                   :on-insufficient {:component :flow/finish
+                                     :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :session/patch
+                   :entries [{:path [:hold-ticks] :mode :assign :value 0}
+                             {:path [:overload-floor] :mode :assign
+                              :value {:expr :math/max
+                                      :args [0.0
+                                             {:expr :math/sub
+                                              :args [{:ref [:context :resources :overload]}
+                                                     {:tunable :cost-down-overload}]}]}}]}
+                  {:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :spawn
+                   :instance-key [:activation :body-intensify-charge]
+                   :audience {:type :owner}
+                   :payload {:mode :body-intensify
+                             :caster {:from :caster/eye}
+                             :target {:expr :vec3/add
+                                      :args [{:from :caster/eye}
+                                             {:vec3 [0.0 0.8 0.0]}]}
+                             :block-pos nil :block-bounds nil :good? true
+                             :charge-ticks 0 :visual-max-ticks 100
+                             :style {:beam {:pattern :thin-continuous
+                                            :wiggle 0.5 :life-ratio 0.5
+                                            :width 0.04
+                                            :color [165 230 255 190]}}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session :operation :spawn
+                   :instance-key [:activation :body-intensify-audio]
+                   :audience {:type :owner}
+                   :payload {:position {:from :caster/eye}
+                             :sound-id "academy:em.intensify_loop"
+                             :volume 1.0 :pitch 1.0}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :resource/enforce-floor
+                   :resource :overload
+                   :minimum {:ref [:session :overload-floor]}}
+                  {:component :flow/branch
+                   :when {:expr :math/lt
+                          :args [{:ref [:session :hold-ticks]}
+                                 {:tunable :charge-max-ticks}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :cost/spend
+                                   :budget :charging
+                                   :on-insufficient {:component :fail
+                                                     :outcome :insufficient-resource}}
+                                  {:component :session/patch
+                                   :entries [{:path [:hold-ticks]
+                                              :mode :increment :value 1}]}
+                                  {:component :effect/vfx
+                                   :effect-id :arc-channel-session :operation :update
+                                   :instance-key [:activation :body-intensify-charge]
+                                   :payload {:mode :body-intensify
+                                             :caster {:from :caster/eye}
+                                             :target {:expr :vec3/add
+                                                      :args [{:from :caster/eye}
+                                                             {:vec3 [0.0 0.8 0.0]}]}
+                                             :block-pos nil :block-bounds nil
+                                             :good? true
+                                             :charge-ticks {:ref [:session :hold-ticks]}
+                                             :visual-max-ticks 100
+                                             :style {:beam {:pattern :thin-continuous
+                                                            :wiggle 0.5 :life-ratio 0.5
+                                                            :width 0.04
+                                                            :color [165 230 255 190]}}}}
+                                  {:component :effect/vfx
+                                   :effect-id :audio-loop-session :operation :update
+                                   :instance-key [:activation :body-intensify-audio]
+                                   :payload {:position {:from :caster/eye}}}]}
+                   :else {:component :session/patch
+                          :entries [{:path [:hold-ticks]
+                                     :mode :increment :value 1}]}}
+                  {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:ref [:session :hold-ticks]}
+                                 {:tunable :charge-max-tolerant-ticks}]}
+                   :then {:component :fail :outcome :timeout}
+                   :else {:component :flow/finish :outcome :continue}}]}
+  :release {:component :flow/branch
+            :when {:expr :math/gte
+                   :args [{:ref [:session :hold-ticks]}
+                          {:tunable :charge-min-ticks}]}
+            :then {:component :flow/sequence
+                   :steps [{:component :apply-buffs}
+                           {:component :score/mark :tag :use}
+                           {:component :cooldown/start :name :main}
+                           {:component :stop-charge}
+                           {:component :effect/vfx
+                            :effect-id :endpoint-burst :operation :spawn
+                            :instance-key [:activation :body-intensify-release]
+                            :audience {:type :nearby :radius 32.0}
+                            :payload {:from {:from :caster/eye}
+                                      :to {:from :caster/eye}
+                                      :duration-ticks 25
+                                      :rate-per-tick 8 :limit 128
+                                      :particle {:material :additive
+                                                 :life-ticks 20 :speed 0.08}
+                                      :sound-id "academy:em.intensify_activate"
+                                      :sound-volume 0.5 :sound-pitch 1.0}}
+                           {:component :flow/finish
+                            :outcome :performed
+                            :finish-session? true}]}
+            :else {:component :fail :outcome :not-ready}}
+  :abort {:component :fail :outcome :aborted}}}

@@ -35,16 +35,7 @@
   {:provider-id :academy/base
    :revision 1
    :abilities
-   [{:id :body-intensify
-     :revision 1
-     :activation :toggle
-     :period-ticks 10
-     :cost {:cp 1}
-     :program {:op :sequence
-               :steps [{:op :patch :entries [[:resource :cp -1.0]]}
-                       {:op :vfx :effect-id :body-intensify
-                        :event :active :params {:strength 0.35}}]}}
-    {:id :dim-folding-theorem
+   [{:id :dim-folding-theorem
      :revision 1
      :activation :passive
      :program {:op :sequence

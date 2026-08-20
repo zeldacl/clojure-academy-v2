@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.edn-catalog :as catalog]
             [cn.li.ac.ability.service.edn-execution :as execution]
-            [cn.li.ac.ability.service.edn-sessions :as sessions])
+             [cn.li.ac.ability.service.edn-sessions :as sessions])
   (:import [cn.li.mcmod.runtime.effect CompiledProgram]))
 
 (deftest first-phase-catalog-is-authoritative
@@ -21,10 +21,12 @@
     (is (catalog/available? :mine-detect))
     (is (catalog/available? :mag-movement))
     (is (catalog/available? :mag-manip))
+    (is (catalog/available? :body-intensify))
     (is (= :migrated (catalog/migration-status :thunder-bolt)))
     (is (= :migrated (catalog/migration-status :mine-detect)))
     (is (= :migrated (catalog/migration-status :mag-movement)))
     (is (= :migrated (catalog/migration-status :mag-manip)))
+    (is (= :migrated (catalog/migration-status :body-intensify)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -54,6 +56,7 @@
     (is (pos? (count (get-in state [:combat :abilities :storm-wing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :mag-movement :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :mag-manip :compiled-ir]))))
+    (is (pos? (count (get-in state [:combat :abilities :body-intensify :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :plasma-cannon :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :flashing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
@@ -145,6 +148,35 @@
                             :progression-exp-throw 0.005}})]
     (is (= :accepted (:status result)))
     (is (= :no-target (:outcome result)))))
+
+(deftest body-intensify-start-executes-compiled-program
+  (catalog/initialize!)
+  (let [result (execution/execute!
+                :body-intensify "owner-body"
+                {:action :start
+                 :context {:world-id "world"
+                           :resources {:cp 1000.0 :overload 500.0}}
+                 :from {:caster/id "owner-body"
+                        :caster/eye {:x 0.0 :y 1.62 :z 0.0}
+                        :caster/creative? false
+                        :world/id "world"}
+                 :tunables {:charge-min-ticks 10
+                            :charge-max-ticks 40
+                            :charge-max-tolerant-ticks 100
+                            :effect-probability-offset-ticks 10.0
+                            :effect-probability-divisor 18.0
+                            :effect-duration-multiplier 1.5
+                            :effect-hunger-multiplier 1.25
+                            :effect-hunger-amplifier 2
+                            :effect-available-effects ["speed:3"]
+                            :cost-down-overload 200.0
+                            :cost-tick-cp 20.0
+                            :cooldown-ticks 900.0
+                            :progression-exp-use 0.01}})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (some #(= :owner-patch (:type %)) (:actions result)))
+    (is (= 2 (count (:vfx-signals result))))))
 
 (deftest session-index-is-neutral-and-tickable
   (catalog/initialize!)

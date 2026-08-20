@@ -15,4 +15,5 @@
           :storm-wing :migrated
           :ray-barrage :migrated
           :current-charging :migrated
-          :mag-manip :migrated}}
+          :mag-manip :migrated
+          :body-intensify :migrated}}

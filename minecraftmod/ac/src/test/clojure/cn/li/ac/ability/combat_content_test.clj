@@ -150,7 +150,7 @@
   ;; Every AC skill has one Combat Core recipe.  This is the replacement
   ;; boundary used by the composition root when legacy namespace init hooks
   ;; are removed.
-  (let [expected #{:arc-gen :blood-retrograde :body-intensify
+  (let [expected #{:arc-gen :blood-retrograde
                    :dim-folding-theorem :directed-blastwave
                    :directed-shock :electron-bomb :electron-missile
                    :flesh-ripping :groundshock :jet-engine :light-shield
@@ -162,7 +162,7 @@
                    :threatening-teleport :thunder-clap
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
-    (is (= 31 (count content/ability-ids)))))
+    (is (= 30 (count content/ability-ids)))))
 
 (deftest combat-catalog-provides-player-registry-specs
   (is (true? (content/assert-complete-skill-catalog!)))

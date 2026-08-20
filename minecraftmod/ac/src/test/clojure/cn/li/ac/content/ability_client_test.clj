@@ -14,7 +14,7 @@
         freeze-calls* (atom [])]
     (with-redefs [cn.li.ac.ability.discovery/discovered-fx-namespaces
                   (fn []
-                    '[cn.li.ac.content.ability.electromaster.body-intensify-fx])
+                    '[cn.li.ac.content.ability.meltdowner.electron-bomb-fx])
                   cn.li.ac.content.ability-client/init-fx-namespace!
                   (fn [ns-sym]
                     (swap! inited* conj ns-sym)
@@ -34,7 +34,7 @@
                   cn.li.mcmod.util.log/info (fn [& _] nil)]
       (ability-client/init-client-fx!)
       (ability-client/init-client-fx!)
-      (is (= '[cn.li.ac.content.ability.electromaster.body-intensify-fx]
+      (is (= '[cn.li.ac.content.ability.meltdowner.electron-bomb-fx]
              @inited*))
       (is (= [:fx :keybinds :level :hand]
              @freeze-calls*)))))

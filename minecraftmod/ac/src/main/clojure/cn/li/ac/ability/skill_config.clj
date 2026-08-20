@@ -318,6 +318,20 @@
     :cooldown-ticks :cooldown.ticks
     :exp-effective :progression.exp-effective
     :exp-ineffective :progression.exp-ineffective}
+   :body-intensify
+   {:charge-min-ticks :charge.min-ticks
+    :charge-max-ticks :charge.max-ticks
+    :charge-max-tolerant-ticks :charge.max-tolerant-ticks
+    :effect-probability-offset-ticks :effect.probability-offset-ticks
+    :effect-probability-divisor :effect.probability-divisor
+    :effect-duration-multiplier :effect.duration-multiplier
+    :effect-hunger-multiplier :effect.hunger-multiplier
+    :effect-hunger-amplifier :effect.hunger-amplifier
+    :effect-available-effects :effect.available-effects
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :cooldown-ticks :cooldown.ticks
+    :progression-exp-use :progression.exp-use}
    :mine-detect
    {:targeting-range :targeting.range
     :blindness-duration-ticks :effect.blindness-duration-ticks

@@ -22,7 +22,7 @@
     (let [fx-ns (set (discovery/discovered-fx-namespaces))]
       (is (not (contains? fx-ns 'cn.li.ac.content.ability.electromaster.arc-gen-fx)))
       (is (not (contains? fx-ns 'cn.li.ac.content.ability.electromaster.mag-manip-fx)))
-      (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.body-intensify-fx)))))
+      (is (not (contains? fx-ns 'cn.li.ac.content.ability.electromaster.body-intensify-fx)))))
 
 (deftest discovery-provider-registry-freeze-policy-test
   (registry/freeze-provider-registry!)

@@ -22,6 +22,9 @@
                           :args [["minecraft:iron_block"] "minecraft:iron_block"]}
    :collection/concat {:expr :collection/concat :args [[1] [2]]}
    :value/normalize-id {:expr :value/normalize-id :args ["block.minecraft.iron_block"]}
+   :value/parse-status-spec {:expr :value/parse-status-spec :args ["jump-boost:1"]}
+   :value/status-id {:expr :value/status-id :args ["jump-boost:1"]}
+   :value/status-max-amplifier {:expr :value/status-max-amplifier :args ["jump-boost:1"]}
    :vec3/approach {:expr :vec3/approach :args [{:vec3 [0.0 0.0 0.0]}
                                                {:vec3 [1.0 0.0 0.0]} 0.1]}
    :math/gte {:expr :math/gte :args [2.0 1.0]}

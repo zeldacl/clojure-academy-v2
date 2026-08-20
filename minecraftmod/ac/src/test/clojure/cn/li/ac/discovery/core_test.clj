@@ -21,8 +21,8 @@
          0)))
 
 (deftest base-family-and-fx-namespace-landscan-test
-  (is (= :electromaster
-         (core/base-family 'cn.li.ac.content.ability.electromaster/body-intensify))
+  (is (= :meltdowner
+         (core/base-family 'cn.li.ac.content.ability.meltdowner/electron-bomb))
       "family segment follows the ability path segment")
-  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/body-intensify-fx)))
-  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.electromaster/body-intensify))))
+  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-bomb-fx)))
+  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-bomb))))
