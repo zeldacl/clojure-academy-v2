@@ -29,11 +29,13 @@
  :progression {:blink {:per-mark {:tunable :exp-per-blink}}}
  :cooldown {:deactivate {:ticks {:tunable :deactivate-cooldown-ticks}}}
  :vfx
- {:preview-start {:effect-id :flashing-marker :op :spawn
-                   :payload {:owner :owner-id :position :vec3 :distance :double}}
-  :preview-update {:effect-id :flashing-marker :op :update
-                   :payload {:position :vec3 :distance :double}}
-  :preview-end {:effect-id :flashing-marker :op :destroy :payload {}}
+ {:preview-start {:effect-id :teleport-marker :op :spawn
+                   :payload {:owner :owner-id :position :vec3 :distance :double
+                             :color :object :particle-chance :double}}
+  :preview-update {:effect-id :teleport-marker :op :update
+                   :payload {:position :vec3 :distance :double
+                             :color :object :particle-chance :double}}
+  :preview-end {:effect-id :teleport-marker :op :destroy :payload {}}
   :perform {:effect-id :flashing-perform :op :spawn
             :payload {:from :vec3 :to :vec3 :distance :double}}}
  ;; These fragments keep all repeated movement wiring declarative while the
@@ -65,17 +67,19 @@
                                  :args [{:from :caster/creative?}
                                         0.0 {:tunable :blink-cp}]}]}
                   :then {:component :effect/vfx
-                         :effect-id :flashing-marker
+                          :effect-id :teleport-marker
                          :operation {:ref [:input :operation]}
-                         :instance-key [:activation :flashing-marker]
+                         :instance-key [:activation :teleport-marker]
                          :audience {:type :nearby :radius 64.0}
-                         :payload {:owner {:from :caster/id}
-                                   :position {:ref [:slot :destination :position]}
-                                   :distance {:ref [:slot :destination :distance]}}}
+                          :payload {:owner {:from :caster/id}
+                                    :position {:ref [:slot :destination :position]}
+                                    :distance {:ref [:slot :destination :distance]}
+                                    :color [188 252 238 255]
+                                    :particle-chance 0.0}}
                   :else {:component :effect/vfx
-                         :effect-id :flashing-marker
+                          :effect-id :teleport-marker
                          :operation :destroy
-                         :instance-key [:activation :flashing-marker]
+                         :instance-key [:activation :teleport-marker]
                          :payload {}}}]}}
   :perform
   {:inputs {:direction {:type :keyword}}
@@ -120,20 +124,20 @@
                                                    :to {:ref [:slot :destination :position]}
                                                    :distance {:ref [:slot :destination :distance]}}}
                                         {:component :effect/vfx
-                                         :effect-id :flashing-marker
+                                          :effect-id :teleport-marker
                                          :operation :destroy
-                                         :instance-key [:activation :flashing-marker]
+                                          :instance-key [:activation :teleport-marker]
                                          :payload {}}
                                         {:component :flow/finish :outcome :teleported}]}
                          :on-fail {:component :effect/vfx
-                                   :effect-id :flashing-marker
+                                    :effect-id :teleport-marker
                                    :operation :destroy
-                                   :instance-key [:activation :flashing-marker]
+                                   :instance-key [:activation :teleport-marker]
                                    :payload {}}}
                   :else {:component :effect/vfx
-                         :effect-id :flashing-marker
+                          :effect-id :teleport-marker
                          :operation :destroy
-                         :instance-key [:activation :flashing-marker]
+                         :instance-key [:activation :teleport-marker]
                          :payload {}}}]}}}
  :program
  {:component :flow/phases
@@ -160,9 +164,9 @@
                  :args [{:ref [:session :active-ticks]}
                         {:tunable :max-active-ticks}]}
           :then {:component :flow/sequence
-                 :steps [{:component :effect/vfx :effect-id :flashing-marker
+                 :steps [{:component :effect/vfx :effect-id :teleport-marker
                           :operation :destroy
-                          :instance-key [:activation :flashing-marker]
+                          :instance-key [:activation :teleport-marker]
                           :payload {}}
                          {:component :cooldown/start :name :deactivate}
                          {:component :flow/finish :outcome :expired
@@ -186,9 +190,9 @@
                          {:component :flow/finish :outcome :continue}]}}
   :release {:component :flow/finish :outcome :continue}
   :abort {:component :flow/sequence
-          :steps [{:component :effect/vfx :effect-id :flashing-marker
+          :steps [{:component :effect/vfx :effect-id :teleport-marker
                    :operation :destroy
-                   :instance-key [:activation :flashing-marker]
+                   :instance-key [:activation :teleport-marker]
                    :payload {}}
                   {:component :cooldown/start :name :deactivate}
                   {:component :flow/finish :outcome :aborted

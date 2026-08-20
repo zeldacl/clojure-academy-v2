@@ -24,20 +24,14 @@
               :id :scatter-bomb-beam
               :resource "ac/vfx/effects/scatter_bomb_beam.edn"}
              {:kind :vfx-effect
-              :id :mark-teleport-marker
-              :resource "ac/vfx/effects/mark_teleport_marker.edn"}
+              :id :teleport-marker
+              :resource "ac/vfx/effects/teleport_marker.edn"}
              {:kind :vfx-effect
               :id :mark-teleport-perform
               :resource "ac/vfx/effects/mark_teleport_perform.edn"}
              {:kind :vfx-effect
-              :id :penetrate-teleport-marker
-              :resource "ac/vfx/effects/penetrate_teleport_marker.edn"}
-             {:kind :vfx-effect
              :id :penetrate-teleport-release
               :resource "ac/vfx/effects/penetrate_teleport_release.edn"}
-             {:kind :vfx-effect
-              :id :flashing-marker
-              :resource "ac/vfx/effects/flashing_marker.edn"}
              {:kind :vfx-effect
               :id :flashing-perform
               :resource "ac/vfx/effects/flashing_perform.edn"}]}

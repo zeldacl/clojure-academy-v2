@@ -27,12 +27,14 @@
  :cooldown
  {:main {:ticks {:tunable :cooldown-ticks}}}
  :vfx
- {:mark-started {:effect-id :mark-teleport-marker :op :spawn
+ {:mark-started {:effect-id :teleport-marker :op :spawn
                  :payload {:owner :owner-id :position :vec3
-                           :distance :double}}
-  :mark-updated {:effect-id :mark-teleport-marker :op :update
-                 :payload {:position :vec3 :distance :double}}
-  :mark-ended {:effect-id :mark-teleport-marker :op :destroy
+                           :distance :double :color :object
+                           :particle-chance :double}}
+  :mark-updated {:effect-id :teleport-marker :op :update
+                 :payload {:position :vec3 :distance :double
+                           :color :object :particle-chance :double}}
+  :mark-ended {:effect-id :teleport-marker :op :destroy
                :payload {}}
   :teleported {:effect-id :mark-teleport-perform :op :spawn
                :payload {:position :vec3 :distance :double}}}
@@ -61,7 +63,7 @@
   :destroy-marker
   {:inputs {}
    :body {:component :effect/vfx
-          :effect-id :mark-teleport-marker
+          :effect-id :teleport-marker
           :operation :destroy
           :instance-key [:activation :mark-teleport]
           :payload {}}}}
@@ -74,12 +76,15 @@
     {:component :flow/branch
      :when {:ref [:slot :destination :valid?]}
      :then {:component :effect/vfx
-            :effect-id :mark-teleport-marker
+            :effect-id :teleport-marker
             :operation :spawn
             :instance-key [:activation :mark-teleport]
             :audience {:type :nearby :radius 64.0}
-            :payload {:position {:ref [:slot :destination :position]}
-                      :distance {:ref [:slot :destination :distance]}}}
+             :payload {:owner {:from :caster/id}
+                       :position {:ref [:slot :destination :position]}
+                       :distance {:ref [:slot :destination :distance]}
+                       :color [188 252 238 255]
+                       :particle-chance 0.4}}
      :else nil}
     {:component :flow/finish :outcome :started}]}
   :pulse
@@ -89,12 +94,14 @@
     {:component :flow/branch
      :when {:ref [:slot :destination :valid?]}
      :then {:component :effect/vfx
-            :effect-id :mark-teleport-marker
+            :effect-id :teleport-marker
             :operation :update
             :instance-key [:activation :mark-teleport]
             :audience {:type :nearby :radius 64.0}
-            :payload {:position {:ref [:slot :destination :position]}
-                      :distance {:ref [:slot :destination :distance]}}}
+             :payload {:position {:ref [:slot :destination :position]}
+                       :distance {:ref [:slot :destination :distance]}
+                       :color [188 252 238 255]
+                       :particle-chance 0.4}}
      :else nil}
     {:component :flow/finish :outcome :continue}]}
   :release
@@ -130,7 +137,7 @@
                             :payload {:position {:ref [:slot :destination :position]}
                                       :distance {:ref [:slot :destination :distance]}}}
                            {:component :effect/vfx
-                            :effect-id :mark-teleport-marker
+            :effect-id :teleport-marker
                             :operation :destroy
                             :instance-key [:activation :mark-teleport]
                             :payload {}}

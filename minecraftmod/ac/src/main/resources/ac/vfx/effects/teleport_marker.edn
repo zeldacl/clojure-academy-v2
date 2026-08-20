@@ -1,18 +1,14 @@
 {:schema-version 1
  :kind :vfx-effect
- :id :penetrate-teleport-marker
+ :id :teleport-marker
  :revision 1
  :lifecycle :session
  :inputs
  {:spawn {:owner :owner-id
           :position :vec3
-          :available? :bool
-          :distance :double
           :color :object
           :particle-chance :double}
   :update {:position :vec3
-           :available? :bool
-           :distance :double
            :color :object
            :particle-chance :double}}
  :state-slots {:age :double :seed :long}
@@ -48,4 +44,3 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius 1.2}}
-

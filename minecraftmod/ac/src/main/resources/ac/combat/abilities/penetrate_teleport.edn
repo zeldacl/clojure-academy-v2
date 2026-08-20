@@ -25,7 +25,7 @@
  :cooldown
  {:main {:ticks {:tunable :cooldown-ticks}}}
  :vfx
- {:marker-started {:effect-id :penetrate-teleport-marker
+ {:marker-started {:effect-id :teleport-marker
                    :op :spawn
                    :payload {:owner :owner-id
                              :position :vec3
@@ -33,14 +33,14 @@
                              :distance :double
                              :color :object
                              :particle-chance :double}}
-  :marker-updated {:effect-id :penetrate-teleport-marker
+  :marker-updated {:effect-id :teleport-marker
                    :op :update
                    :payload {:position :vec3
                              :available? :bool
                              :distance :double
                              :color :object
                              :particle-chance :double}}
-  :marker-ended {:effect-id :penetrate-teleport-marker
+  :marker-ended {:effect-id :teleport-marker
                  :op :destroy
                  :payload {}}
   :teleported {:effect-id :penetrate-teleport-release
@@ -77,7 +77,7 @@
             :color {:type :object}
             :particle-chance {:type :object}}
    :body {:component :effect/vfx
-          :effect-id :penetrate-teleport-marker
+          :effect-id :teleport-marker
           :operation {:ref [:input :operation]}
           :instance-key [:activation :penetrate-teleport]
           :audience {:type :nearby :radius 64.0}
@@ -152,7 +152,7 @@
                                    :weight {:ref [:slot :destination :distance]}}
                                   {:component :cooldown/start :name :main}
                                   {:component :effect/vfx
-                                   :effect-id :penetrate-teleport-marker
+                                   :effect-id :teleport-marker
                                    :operation :destroy
                                    :instance-key [:activation :penetrate-teleport]
                                    :payload {}}
@@ -161,7 +161,7 @@
                                    :finish-session? true}]}
                    :on-fail {:component :flow/sequence
                              :steps [{:component :effect/vfx
-                                      :effect-id :penetrate-teleport-marker
+                                      :effect-id :teleport-marker
                                       :operation :destroy
                                       :instance-key [:activation :penetrate-teleport]
                                       :payload {}}
@@ -170,7 +170,7 @@
                                        :finish-session? true}]}}
             :else {:component :flow/sequence
                    :steps [{:component :effect/vfx
-                            :effect-id :penetrate-teleport-marker
+                            :effect-id :teleport-marker
                             :operation :destroy
                             :instance-key [:activation :penetrate-teleport]
                             :payload {}}
@@ -180,7 +180,7 @@
   :abort
   {:component :flow/sequence
    :steps [{:component :effect/vfx
-            :effect-id :penetrate-teleport-marker
+            :effect-id :teleport-marker
             :operation :destroy
             :instance-key [:activation :penetrate-teleport]
             :payload {}}

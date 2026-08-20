@@ -39,14 +39,12 @@
     (is (= :flashing (get-in state [:combat :abilities :flashing :id])))
     (is (pos? (count (get-in state [:combat :abilities :flashing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
-    (is (= :penetrate-teleport-marker
-           (get-in state [:vfx :effects :penetrate-teleport-marker :id])))
     (is (= :penetrate-teleport-release
            (get-in state [:vfx :effects :penetrate-teleport-release :id])))
-    (is (= :flashing-marker (get-in state [:vfx :effects :flashing-marker :id])))
+    (is (= :teleport-marker (get-in state [:vfx :effects :teleport-marker :id])))
     (is (= :flashing-perform (get-in state [:vfx :effects :flashing-perform :id])))
     (is (= :thunder-clap (get-in state [:vfx :effects :thunder-clap :id])))
-    (let [marker (get-in state [:vfx :effects :mark-teleport-marker])
+    (let [marker (get-in state [:vfx :effects :teleport-marker])
           model-node (some (fn [{:keys [node]}]
                              (when (= :vfx/model-marker (:component node)) node))
                            (get-in marker [:graph :children]))]
