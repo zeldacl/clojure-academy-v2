@@ -461,42 +461,6 @@
                                  {:op :vfx :effect-id :mag-manip
                                   :event :throw
                                   :params {:throw-range 20.0}}]}}}
-    {:id :mag-movement
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :pulse
-     :cost {:cp (scale 15.0 8.0)}
-     :program {:op :phase
-               :start {:op :sequence
-                       :steps [{:op :patch
-                                :entries [[:resource :overload
-                                           {:op :multiply
-                                            :values [-1.0 (scale 60.0 30.0)]}]]}
-                               {:op :query :query-type :mag-movement
-                                :range 25.0
-                                :target-policy :normal-and-weak-metal
-                                :result-ref :target}
-                               {:op :require :predicate :target}]}
-               :pulse {:op :sequence
-                       :steps [{:op :query :query-type :mag-movement
-                                :range 25.0
-                                :target-policy :normal-and-weak-metal
-                                :result-ref :target}
-                               {:op :require :predicate :target}
-                               {:op :world-effect
-                                :effect-type :mag-movement
-                                :query-ref :target
-                                :movement-mode :target-follow
-                                :target-policy :normal-and-weak-metal
-                                :acceleration 0.08
-                                :range 25.0
-                                :reset-fall-damage? true
-                                :progression :distance}
-                               {:op :vfx :effect-id :mag-movement
-                                :event :update
-                                :params {:acceleration 0.08 :range 25.0}}]}}}
     {:id :vec-accel
      :revision 1
      :activation :session

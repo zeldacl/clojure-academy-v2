@@ -919,19 +919,6 @@
                           {:block-id (:block-id held) :target-uuid target-uuid}))
 
                       nil))))
-              ;; execute-mag-movement! already reads :target-x/:target-y/
-              ;; :target-z off the query result and pulls the player toward
-              ;; it every pulse -- only targeting was missing.
-              :mag-movement
-              (fn [context node]
-                (if-let [host-query (contract/host-port :query)]
-                  (host-query :mag-movement context node)
-                  (let [owner (:owner context)
-                        range (double (or (:range node) 25.0))]
-                    (when-let [hit (raycast-metal-block owner range)]
-                      {:target-x (+ 0.5 (double (:x hit)))
-                       :target-y (+ 0.5 (double (:y hit)))
-                       :target-z (+ 0.5 (double (:z hit)))}))))
               :vec-accel (fn [context node]
                            (if-let [host-query (contract/host-port :query)]
                              (host-query :vec-accel context node)
@@ -1334,35 +1321,6 @@
                                       :applied
                                       :failed)
                             :effect effect})
-                         :mag-movement
-                         (let [{:keys [world-id query-result acceleration range
-                                       movement-mode target-policy reset-fall-damage?
-                                       progression]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :acceleration acceleration
-                                     :range range
-                                     :movement-mode movement-mode
-                                     :target-policy target-policy
-                                     :reset-fall-damage? reset-fall-damage?
-                                     :progression progression}
-                               valid? (and world-id (map? query-result)
-                                            (= :target-follow movement-mode)
-                                            (= :normal-and-weak-metal target-policy)
-                                            (= true reset-fall-damage?)
-                                            (= :distance progression)
-                                            (finite? acceleration)
-                                            (= 0.08 (double acceleration))
-                                            (finite? range)
-                                            (= 25.0 (double range))
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-mag-movement!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
                          :vec-accel
                          (let [{:keys [world-id query-result charge-ticks max-charge-ticks]} effect
                                valid? (and world-id (map? query-result)
@@ -1668,6 +1626,11 @@
      :caster/id owner
      :world/id (:world-id context)
      :caster/creative? (boolean (:creative? context))
+     ;; Configured target registries are snapshotted at activation and exposed
+     ;; as neutral lists.  EDN never reaches back into AC config paths.
+     :targeting/normal-metal-blocks (ability-config/get-normal-metal-blocks)
+     :targeting/weak-metal-blocks (ability-config/get-weak-metal-blocks)
+     :targeting/metal-entities (ability-config/get-metal-entities)
      :movement/forward forward
      :movement/back {:x (- (:x forward)) :y (- (:y forward)) :z (- (:z forward))}
      :movement/left {:x (/ lz left-length) :y 0.0 :z (- (/ lx left-length))}
@@ -2169,6 +2132,30 @@
          :entity/select
          (fn [request _frame]
            (entity-select-results request))))
+      (when-not (contains? (:queries (capabilities/snapshot)) :entity/snapshot)
+        (capabilities/register-query!
+         :entity/snapshot
+         (fn [{:keys [world-id entity-id projection]} _frame]
+           (when (and world-id entity-id (motion-effects/entity-motion-available?))
+             (when-let [position (motion-effects/entity-position
+                                  (str world-id) (str entity-id))]
+               (let [x (double (or (:x position) 0.0))
+                     y (double (or (:y position) 0.0))
+                     z (double (or (:z position) 0.0))
+                     eye-height (double (or (:eye-height position)
+                                            (:height position) 1.62))
+                     snapshot {:id (str entity-id)
+                               :type (or (:type position) (:entity-type position))
+                               :entity-type (or (:entity-type position) (:type position))
+                               :x x :y y :z z
+                               :eye-height eye-height
+                               :eye-position {:x x :y (+ y eye-height) :z z}
+                               :alive? (not= false (:alive? position))}]
+                 (if (seq projection)
+                   (select-keys snapshot
+                                (conj (set projection) :alive? :x :y :z
+                                      :eye-height :eye-position))
+                   snapshot)))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :world/lightning)
         (capabilities/register-action!
          :world/lightning
@@ -2364,6 +2351,31 @@
                    (motion-effects/reset-fall-damage! owner))
                  {:status (if applied? :applied :failed)
                   :velocity {:x tx :y ty :z tz}}))))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :motion/velocity)
+        (capabilities/register-action!
+         :motion/velocity
+         (fn [{:keys [owner velocity]}]
+           (let [point (cond
+                         (and (map? velocity) (vector? (:vec3 velocity)))
+                         (:vec3 velocity)
+                         (map? velocity)
+                         [(:x velocity) (:y velocity) (:z velocity)]
+                         (and (vector? velocity) (= 3 (count velocity)))
+                         velocity
+                         :else nil)
+                 finite? (fn [value]
+                           (and (number? value)
+                                (Double/isFinite (double value))))
+                 valid? (and owner point
+                             (= 3 (count point))
+                             (every? finite? point)
+                             (motion-effects/player-motion-available?))
+                 [x y z] (mapv double point)
+                 applied? (and valid?
+                               (motion-effects/set-player-velocity!
+                                (str owner) x y z))]
+             {:status (if applied? :applied :failed)
+              :velocity {:x x :y y :z z}}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/radial-impulse)
         (capabilities/register-action!
          :entity/radial-impulse

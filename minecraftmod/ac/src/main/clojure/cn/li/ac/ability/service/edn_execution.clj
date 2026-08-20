@@ -112,7 +112,7 @@
            :schema-version 2
            :ability-id ability-id
            :owner owner
-           :vfx-signals (mapv #(normalize-vfx-signal owner execution-context %)
+           :vfx-signals (mapv #(normalize-vfx-signal owner ability-id execution-context %)
                               (:vfx result))
            :actions (cond-> (vec (:actions result))
                       (seq @latches*)

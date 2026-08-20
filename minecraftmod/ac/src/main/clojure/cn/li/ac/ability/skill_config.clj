@@ -325,7 +325,15 @@
     :cost-down-cp :cost.down.cp
     :cost-down-overload :cost.down.overload
     :cooldown-ticks :cooldown.ticks
-    :exp-cast :progression.exp-cast}})
+    :exp-cast :progression.exp-cast}
+   :mag-movement
+   {:targeting-range :targeting.range
+    :acceleration :movement.acceleration
+    :weak-metal-exp-threshold :targeting.weak-metal-exp-threshold
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :exp-min :progression.exp-min
+    :exp-distance-scale :progression.exp-distance-scale}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

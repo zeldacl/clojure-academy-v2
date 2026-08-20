@@ -18,6 +18,11 @@
    :math/lte {:expr :math/lte :args [1.0 1.0]}
    :math/eq {:expr :math/eq :args [1.0 1.0]}
    :value/eq {:expr :value/eq :args ["minecraft:creeper" "minecraft:creeper"]}
+   :collection/contains? {:expr :collection/contains?
+                          :args [["minecraft:iron_block"] "minecraft:iron_block"]}
+   :value/normalize-id {:expr :value/normalize-id :args ["block.minecraft.iron_block"]}
+   :vec3/approach {:expr :vec3/approach :args [{:vec3 [0.0 0.0 0.0]}
+                                               {:vec3 [1.0 0.0 0.0]} 0.1]}
    :math/gte {:expr :math/gte :args [2.0 1.0]}
    :math/gt {:expr :math/gt :args [2.0 1.0]}
    :math/select {:expr :math/select :args [true 1.0 0.0]}

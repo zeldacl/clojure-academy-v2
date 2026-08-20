@@ -2,12 +2,10 @@
   :priority 20
   :skill-namespaces
    [cn.li.ac.content.ability.electromaster.body-intensify
-   cn.li.ac.content.ability.electromaster.mag-manip
-   cn.li.ac.content.ability.electromaster.mag-movement]
+   cn.li.ac.content.ability.electromaster.mag-manip]
   :fx-namespaces
   [cn.li.ac.content.ability.electromaster.body-intensify-fx
-   cn.li.ac.content.ability.electromaster.mag-manip-fx
-   cn.li.ac.content.ability.electromaster.mag-movement-fx]}
+   cn.li.ac.content.ability.electromaster.mag-manip-fx]}
  {:id :generic
   :priority 10
   :skill-namespaces

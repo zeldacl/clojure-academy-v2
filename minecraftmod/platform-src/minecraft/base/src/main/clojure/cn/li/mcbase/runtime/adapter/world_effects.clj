@@ -403,26 +403,6 @@
                                    (and (player-motion/set-velocity-for-player!
                                          player (:x velocity) (:y velocity) (:z velocity))
                                         (when player (.resetFallDistance player)))))))
-        execute-mag-movement! (fn [world-id owner plan]
-                                (let [q (:query-result plan)
-                                      target (select-keys q [:target-x :target-y :target-z])]
-                                  (when (and world-id
-                                             (every? number? (vals target)))
-                                    (let [player (query-core/get-player-by-uuid (server-fn) owner)]
-                                      (when player
-                                        (let [current (or (player-motion/get-velocity-for-player player)
-                                                          {:x 0.0 :y 0.0 :z 0.0})
-                                              dx (- (double (:target-x target)) (.getX player))
-                                              dy (- (double (:target-y target)) (.getY player))
-                                              dz (- (double (:target-z target)) (.getZ player))
-                                          dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-                                          scale (if (> dist 1.0e-6) dist 1.0)
-                                          a (double (:acceleration plan))]
-                                          (player-motion/set-velocity-for-player!
-                                           player
-                                           (+ (double (:x current)) (* a (/ dx scale)))
-                                           (+ (double (:y current)) (* a (/ dy scale)))
-                                           (+ (double (:z current)) (* a (/ dz scale))))))))))
         execute-flashing! (fn [world-id owner plan]
                             (let [q (:query-result plan)
                                   {:keys [to-x to-y to-z]} q]
@@ -743,7 +723,6 @@
                                         (log/warn "Failed to discard entity:" (ex-message e))
                                     false)))
      :execute-vec-accel! execute-vec-accel!
-     :execute-mag-movement! execute-mag-movement!
      :execute-flashing! execute-flashing!
      :execute-mag-manip! execute-mag-manip!
      :execute-blood-retrograde! execute-blood-retrograde!

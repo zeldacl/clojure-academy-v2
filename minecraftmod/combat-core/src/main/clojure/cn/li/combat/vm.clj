@@ -2,7 +2,8 @@
   "Allocation-conscious interpreter for the private combat IR."
   (:require [cn.li.mcmod.runtime.expr :as expr]
             [cn.li.mcmod.runtime.seeded-rng :as rng]
-            [cn.li.mcmod.runtime.effect-contract :as effect-contract])
+            [cn.li.mcmod.runtime.effect-contract :as effect-contract]
+            [clojure.string :as str])
   (:import [cn.li.mcmod.runtime.effect CompiledProgram ExecutionFrame HostTable]
            [clojure.lang IFn]
            [java.util ArrayList]))
@@ -50,6 +51,26 @@
 (def ^:private ^clojure.lang.IFn rng-next-long rng/next-long)
 (def ^:private ^clojure.lang.IFn rng-unit-double rng/unit-double)
 
+(defn- collection-contains?
+  "Allocation-free linear membership for bounded EDN filter vectors."
+  [values target]
+  (let [values (if (vector? values) values (vec (or values [])))
+        length (count values)]
+    (loop [index 0]
+      (if (< index length)
+        (if (= (nth values index) target)
+          true
+          (recur (inc index)))
+        false))))
+
+(defn- approach-component
+  [^double from ^double to ^double step]
+  (let [delta (- (double to) (double from))]
+    (if (<= (Math/abs delta) step)
+      (double to)
+      (+ (double from)
+         (if (neg? delta) (- step) step)))))
+
 (defn evaluate-expression
   ([opcode args] (evaluate-expression opcode args 0))
   ([opcode args ^long rng-state]
@@ -73,6 +94,17 @@
     ;; Generic value equality for data predicates (entity types, ids, modes).
     ;; Numeric equality remains :math/eq so its primitive fast path is kept.
     :value/eq (= (nth args 0) (nth args 1))
+    :collection/contains? (collection-contains? (nth args 0) (nth args 1))
+    :value/normalize-id
+    (let [id (some-> (nth args 0) str/lower-case)]
+      (cond
+        (nil? id) nil
+        (str/includes? id ":") id
+        (re-matches #"(?:block|item|entity)\\.[^.]+\\..+" id)
+        (let [[_ namespace path]
+              (re-matches #"(?:block|item|entity)\\.([^.]+)\\.(.+)" id)]
+          (str namespace ":" path))
+        :else id))
     :math/gte (>= (double (nth args 0)) (double (nth args 1)))
     :math/gt (> (double (nth args 0)) (double (nth args 1)))
     :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))
@@ -115,6 +147,12 @@
                         {:vec3 [(/ (double x) length)
                                 (/ (double y) length)
                                 (/ (double z) length)]}))
+    :vec3/approach (let [[fx fy fz] (vec3-components (nth args 0))
+                         [tx ty tz] (vec3-components (nth args 1))
+                         step (Math/abs (double (nth args 2)))]
+                     {:vec3 [(approach-component fx tx step)
+                             (approach-component fy ty step)
+                             (approach-component fz tz step)]})
     ;; Generic deterministic scatter geometry.  The endpoint is the sum of
     ;; an exact forward range vector and a second vector rotated by an
     ;; independently sampled pitch/yaw, matching the neutral projectile
@@ -149,6 +187,7 @@
    :target/resolve-destination :raycast
    :target/directional-destination-query :raycast
    :target/entities :entity/select
+   :target/entity-snapshot :entity/snapshot
    :target/blocks :block/select
    :owner/snapshot :owner/snapshot
    :target/item-held :item/held
@@ -167,6 +206,7 @@
    :combat/impulse :entity/impulse
    :entity/radial-impulse :entity/radial-impulse
    :motion/flight :motion/flight
+   :motion/velocity :motion/velocity
    :owner/can-fly :owner/can-fly
    :combat/status :entity/status
    :entity/teleport :entity/teleport

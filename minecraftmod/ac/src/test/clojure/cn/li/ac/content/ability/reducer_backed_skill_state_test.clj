@@ -19,23 +19,6 @@
   [player-uuid]
   {:logical-side :server :server-session-id :test-session :player-uuid (str player-uuid)})
 
-(deftest execute-assoc-state-paths-skill-state-via-reducer-test
-  (testing "content skill paths should stay lean once ctx-skill only-handoffs stop assigning store paths"
-    (let [ctx-id "ctx-reducer-backed"
-          player-id "p-reducer"
-          c (ctx/new-server-context player-id :mag-movement ctx-id (runtime-owner player-id))]
-      (test-player/seed-player-state!
-        player-id
-        {:context-registry {ctx-id {:id ctx-id :skill-id :mag-movement :status :constructed}}})
-      (ctx/register-context! c)
-      (skill-ctx/with-context-owner (runtime-owner player-id)
-        (fn []
-          (state/execute-assoc-state! ctx-id player-id {:k [:charge-ticks] :v 3})
-          (is (= 3 (get-in (ctx/get-context (runtime-owner player-id) ctx-id)
-                           [:skill-state :charge-ticks])))
-          (let [store-val (store/get-player-state test-player/test-session-id player-id)]
-            (is (= 3 (get-in store-val [:context-registry ctx-id :skill-state :charge-ticks])))))))))
-
 (deftest command-runtime-context-assoc-skill-state-test
   (testing "executing reducer command updates context-registry skill-state slice"
     (let [ctx-id "ctx-cmd-backed"

@@ -178,6 +178,11 @@
             :effects #{:query}
             :produces {:entities {:name-field :result :type :entity-list}}}
 
+           :target/entity-snapshot
+           {:schema {:required #{:entity-id :projection :result}}
+            :effects #{:query}
+            :produces {:snapshot {:name-field :result :type :entity-snapshot}}}
+
            :owner/snapshot
            {:schema {:required #{:projection :result}}
             :effects #{:query}
@@ -237,6 +242,10 @@
                                  :hover-air-velocity
                                  :near-ground-distance
                                  :near-ground-eye-height}}
+            :effects #{:mutate}}
+
+           :motion/velocity
+           {:schema {:required #{:velocity}}
             :effects #{:mutate}}
 
            :owner/can-fly

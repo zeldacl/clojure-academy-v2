@@ -40,4 +40,7 @@
               :resource "ac/combat/abilities/thunder_bolt.edn"}
              {:kind :ability
               :id :mine-detect
-              :resource "ac/combat/abilities/mine_detect.edn"}]}
+              :resource "ac/combat/abilities/mine_detect.edn"}
+             {:kind :ability
+              :id :mag-movement
+              :resource "ac/combat/abilities/mag_movement.edn"}]}

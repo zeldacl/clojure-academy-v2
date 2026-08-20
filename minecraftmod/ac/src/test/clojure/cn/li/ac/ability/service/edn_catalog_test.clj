@@ -19,8 +19,10 @@
     (is (catalog/available? :storm-wing))
     (is (catalog/available? :thunder-bolt))
     (is (catalog/available? :mine-detect))
+    (is (catalog/available? :mag-movement))
     (is (= :migrated (catalog/migration-status :thunder-bolt)))
     (is (= :migrated (catalog/migration-status :mine-detect)))
+    (is (= :migrated (catalog/migration-status :mag-movement)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -48,6 +50,7 @@
     (is (= :plasma-cannon (get-in state [:combat :abilities :plasma-cannon :id])))
     (is (= :storm-wing (get-in state [:combat :abilities :storm-wing :id])))
     (is (pos? (count (get-in state [:combat :abilities :storm-wing :compiled-ir]))))
+    (is (pos? (count (get-in state [:combat :abilities :mag-movement :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :plasma-cannon :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :flashing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
@@ -84,6 +87,33 @@
     (is (= :accepted (:status result)))
     (is (= :railgun (:ability-id result)))
     (is (= :started (:outcome result)))))
+
+(deftest mag-movement-start-executes-no-target-path
+  (catalog/initialize!)
+  (let [result (execution/execute!
+                :mag-movement "owner-mag"
+                {:action :start
+                 :context {:world-id "world"
+                           :resources {:cp 100.0 :overload 100.0}}
+                 :from {:caster/id "owner-mag"
+                        :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                        :caster/eye {:x 0.0 :y 1.62 :z 0.0}
+                        :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                        :caster/creative? false
+                        :world/id "world"
+                        :targeting/normal-metal-blocks ["minecraft:iron_block"]
+                        :targeting/weak-metal-blocks []
+                        :targeting/metal-entities []}
+                 :tunables {:targeting-range 25.0
+                            :acceleration 0.08
+                            :weak-metal-exp-threshold 0.6
+                            :cost-down-overload 30.0
+                            :cost-tick-cp 8.0
+                            :exp-min 0.005
+                            :exp-distance-scale 0.0011}})]
+    (is (= :accepted (:status result)))
+    (is (= :no-target (:outcome result)))
+    (is (some #(= :owner-patch (:type %)) (:actions result)))))
 
 (deftest session-index-is-neutral-and-tickable
   (catalog/initialize!)

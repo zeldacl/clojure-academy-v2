@@ -5,6 +5,7 @@
           :scatter-bomb :migrated
           :thunder-bolt :migrated
           :mine-detect :migrated
+          :mag-movement :migrated
           :vec-reflection :migrated
           :groundshock :pending
           :mark-teleport :migrated

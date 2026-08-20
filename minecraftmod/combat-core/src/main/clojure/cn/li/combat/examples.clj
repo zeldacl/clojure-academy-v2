@@ -59,6 +59,10 @@
    :target/entities {:component :target/entities
                      :shape {:type :sphere :center vec3-example :radius 1.0}
                      :projection [:id :type :position] :limit 1 :result :entities}
+   :target/entity-snapshot {:component :target/entity-snapshot
+                            :entity-id "entity-id"
+                            :projection [:id :type :eye-position :alive?]
+                            :result :entity-snapshot}
    :owner/snapshot {:component :owner/snapshot
                     :projection [:position :velocity :can-fly?]
                     :result :owner-snapshot}
@@ -89,6 +93,7 @@
                    :acceleration 0.16 :hover-near-ground-velocity 0.1
                    :hover-air-velocity 0.078 :near-ground-distance 0.8
                    :near-ground-eye-height 0.5}
+   :motion/velocity {:component :motion/velocity :velocity vec3-example}
    :owner/can-fly {:component :owner/can-fly :enabled? true}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}
                    :status-id :generic :duration-ticks 1 :amplifier 0}
@@ -136,6 +141,10 @@
 (def expression-examples
   {:math/select {:expr :math/select :args [true 1.0 0.0]}
    :value/eq {:expr :value/eq :args ["minecraft:creeper" "minecraft:creeper"]}
+   :collection/contains? {:expr :collection/contains?
+                          :args [["minecraft:iron_block"] "minecraft:iron_block"]}
+   :value/normalize-id {:expr :value/normalize-id :args ["block.minecraft.iron_block"]}
+   :vec3/approach {:expr :vec3/approach :args [vec3-example vec3-example 0.1]}
    :collection/first {:expr :collection/first :args [[{:id "x"}]]}
    :collection/nonempty {:expr :collection/nonempty :args [[]]}})
 

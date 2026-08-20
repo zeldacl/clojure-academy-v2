@@ -1,0 +1,294 @@
+{:schema-version 2
+ :kind :ability
+ :id :mag-movement
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative?
+            :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :arc-gen :min-exp 0.0}
+                 {:skill-id :current-charging :min-exp 0.7}]
+ :tunables
+ {:targeting-range {:curve :const}
+  :acceleration {:curve :const}
+  ;; Retained as a public parameter for schema/config compatibility.  The
+  ;; original weak-metal branch called the inclusive metal predicate, so this
+  ;; threshold intentionally has no effect on target acceptance.
+  :weak-metal-exp-threshold {:curve :const}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :exp-min {:curve :const}
+  :exp-distance-scale {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  :pulse {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :progression
+ {:complete {:per-mark {:expr :math/max
+                        :args [{:tunable :exp-min}
+                               {:expr :math/mul
+                                :args [{:tunable :exp-distance-scale}
+                                       {:ref [:slot :traveled]}]}]}}}
+ :vfx
+ {:arc-start {:effect-id :arc-channel-session :op :spawn
+              :payload {:mode :keyword :caster :vec3 :target :vec3
+                        :block-pos :object :block-bounds :object :good? :boolean
+                        :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :arc-update {:effect-id :arc-channel-session :op :update
+               :payload {:mode :keyword :caster :vec3 :target :vec3
+                         :block-pos :object :block-bounds :object :good? :boolean
+                         :charge-ticks :long :visual-max-ticks :long :style :object}}
+  :arc-end {:effect-id :arc-channel-session :op :destroy
+            :payload {:fade-ticks :long}}
+  :audio-start {:effect-id :audio-loop-session :op :spawn
+                :payload {:position :vec3 :sound-id :string
+                          :volume :double :pitch :double}}
+  :audio-update {:effect-id :audio-loop-session :op :update
+                 :payload {:position :vec3}}
+  :audio-end {:effect-id :audio-loop-session :op :destroy
+              :payload {:fade-ticks :long}}}
+ :fragments
+ {:begin
+  {:inputs {:target-kind {} :target-id {:default nil} :target-position {}}
+   :body {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:has-target] :mode :assign :value true}
+                             {:path [:target-kind] :mode :assign
+                              :value {:ref [:input :target-kind]}}
+                             {:path [:target-id] :mode :assign
+                              :value {:ref [:input :target-id]}}
+                             {:path [:target-position] :mode :assign
+                              :value {:ref [:input :target-position]}}
+                             {:path [:start-position] :mode :assign
+                              :value {:ref [:slot :owner :position]}}
+                             {:path [:motion] :mode :assign
+                              :value {:ref [:slot :owner :velocity]}}
+                             {:path [:movement-ticks] :mode :assign :value 0}
+                             {:path [:overload-floor] :mode :assign
+                              :value {:expr :math/max
+                                      :args [0.0
+                                             {:expr :math/sub
+                                              :args [{:ref [:context :resources :overload]}
+                                                     {:expr :math/mul
+                                                      :args [{:tunable :cost-down-overload}
+                                                             {:expr :math/select
+                                                              :args [{:from :caster/creative?}
+                                                                     0.0 1.0]}]}]}]}}]}
+                  {:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :spawn
+                   :instance-key [:activation :mag-movement-arc]
+                   :audience {:type :nearby :radius 64.0}
+                   :payload {:mode :movement
+                             :caster {:from :caster/eye}
+                             :target {:ref [:input :target-position]}
+                             :block-pos nil :block-bounds nil :good? true
+                             :charge-ticks 0 :visual-max-ticks 4096
+                             :style {:beam {:pattern :thin-continuous
+                                            :wiggle 0.5
+                                            :life-ratio 0.5
+                                            :width 0.04
+                                            :color [165 230 255 190]}}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session :operation :spawn
+                   :instance-key [:activation :mag-movement-audio]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:position {:from :caster/eye}
+                             :sound-id "academy:em.move_loop"
+                             :volume 0.58 :pitch 1.0}}
+                  {:component :flow/finish :outcome :started}]}}
+  :move
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :resource/enforce-floor
+                   :resource :overload
+                   :minimum {:ref [:session :overload-floor]}}
+                  {:component :owner/snapshot
+                   :projection [:position :velocity]
+                   :result :owner-now}
+                  {:component :cost/spend
+                   :budget :pulse
+                   :scale {:expr :math/select
+                           :args [{:from :caster/creative?} 0.0 1.0]}
+                   :on-insufficient {:component :finalize
+                                     :outcome :insufficient-resource}}
+                  {:component :data/bind
+                   :to :target
+                   :value {:ref [:session :target-position]}}
+                  {:component :data/bind
+                   :to :desired
+                   :value {:expr :vec3/normalize
+                           :args [{:expr :vec3/sub
+                                   :args [{:ref [:slot :target]}
+                                          {:ref [:slot :owner-now :position]}]}]}}
+                  {:component :data/bind
+                   :to :speed-delta
+                   :value {:expr :math/abs
+                           :args [{:expr :math/sub
+                                   :args [{:expr :vec3/dot
+                                           :args [{:ref [:slot :owner-now :velocity]}
+                                                  {:ref [:slot :owner-now :velocity]}]}
+                                          {:expr :vec3/dot
+                                           :args [{:ref [:session :motion]}
+                                                  {:ref [:session :motion]}]}]}]}}
+                  {:component :data/bind
+                   :to :base-velocity
+                   :value {:expr :math/select
+                           :args [{:expr :math/gt
+                                   :args [{:ref [:slot :speed-delta]} 0.5]}
+                                  {:ref [:slot :owner-now :velocity]}
+                                  {:ref [:session :motion]}]}}
+                  {:component :data/bind
+                   :to :next-velocity
+                   :value {:expr :vec3/approach
+                           :args [{:ref [:slot :base-velocity]}
+                                  {:ref [:slot :desired]}
+                                  {:tunable :acceleration}]}}
+                  {:component :motion/velocity
+                   :world-id {:from :world/id}
+                   :velocity {:ref [:slot :next-velocity]}}
+                  {:component :session/patch
+                   :entries [{:path [:motion] :mode :assign
+                              :value {:ref [:slot :next-velocity]}}
+                             {:path [:movement-ticks] :mode :increment :value 1}]}
+                  {:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :update
+                   :instance-key [:activation :mag-movement-arc]
+                   :payload {:mode :movement
+                             :caster {:from :caster/eye}
+                             :target {:ref [:slot :target]}
+                             :block-pos nil :block-bounds nil :good? true
+                             :charge-ticks {:ref [:session :movement-ticks]}
+                             :visual-max-ticks 4096
+                             :style {:beam {:pattern :thin-continuous
+                                            :wiggle 0.5
+                                            :life-ratio 0.5
+                                            :width 0.04
+                                            :color [165 230 255 190]}}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session :operation :update
+                   :instance-key [:activation :mag-movement-audio]
+                   :payload {:position {:from :caster/eye}}}
+                  {:component :flow/finish :outcome :continue}]}}
+  :finalize
+  {:inputs {:outcome {:default :completed}}
+   :body {:component :flow/sequence
+          :steps [{:component :owner/snapshot
+                   :projection [:position]
+                   :result :finish-owner}
+                  {:component :data/bind
+                   :to :traveled
+                   :value {:expr :vec3/distance
+                           :args [{:ref [:slot :finish-owner :position]}
+                                  {:ref [:session :start-position]}]}}
+                  {:component :score/mark :tag :complete}
+                  {:component :entity/reset-fall-damage
+                   :target {:from :caster/id}}
+                  {:component :effect/vfx
+                   :effect-id :arc-channel-session :operation :destroy
+                   :instance-key [:activation :mag-movement-arc]
+                   :payload {:fade-ticks 0}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session :operation :destroy
+                   :instance-key [:activation :mag-movement-audio]
+                   :payload {:fade-ticks 0}}
+                  {:component :flow/finish
+                   :outcome {:ref [:input :outcome]}
+                   :finish-session? true}]}}
+  :finalize-no-target
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :data/bind :to :traveled :value 0.0}
+                  {:component :score/mark :tag :complete}
+                  {:component :entity/reset-fall-damage
+                   :target {:from :caster/id}}
+                  {:component :flow/finish :outcome :no-target
+                   :finish-session? true}]}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps [{:component :cost/spend
+            :budget :activate
+            :scale {:expr :math/select
+                    :args [{:from :caster/creative?} 0.0 1.0]}
+            :on-insufficient {:component :flow/sequence
+                              :steps [{:component :entity/reset-fall-damage
+                                       :target {:from :caster/id}}
+                                      {:component :flow/finish
+                                       :outcome :insufficient-resource
+                                       :finish-session? true}]}}
+           {:component :owner/snapshot
+            :projection [:position :velocity]
+            :result :owner}
+           {:component :target/raycast
+            :origin {:from :caster/eye}
+            :direction {:from :caster/aim}
+            :distance {:tunable :targeting-range}
+            :include-entities? true :include-blocks? true
+            :result :aim-hit}
+           {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:expr :value/eq
+                           :args [{:ref [:slot :aim-hit :hit-type]} :block]}
+                          {:expr :collection/contains?
+                           :args [{:from :targeting/normal-metal-blocks}
+                                  {:expr :value/normalize-id
+                                   :args [{:ref [:slot :aim-hit :block-id]}]}]}]}
+            :then {:component :begin
+                   :target-kind :block
+                   :target-position {:ref [:slot :aim-hit :position]}}
+            :else {:component :flow/branch
+                   :when {:expr :value/eq
+                          :args [{:ref [:slot :aim-hit :hit-type]} :block]}
+                   :then {:component :flow/branch
+                          :when {:expr :collection/contains?
+                                 :args [{:from :targeting/weak-metal-blocks}
+                                        {:expr :value/normalize-id
+                                         :args [{:ref [:slot :aim-hit :block-id]}]}]}
+                          :then {:component :begin
+                                 :target-kind :block
+                                 :target-position {:ref [:slot :aim-hit :position]}}
+                          :else {:component :finalize-no-target}}
+                   :else {:component :flow/branch
+                          :when {:expr :value/eq
+                                 :args [{:ref [:slot :aim-hit :hit-type]} :entity]}
+                          :then {:component :flow/sequence
+                                 :steps [{:component :target/entity-snapshot
+                                          :world-id {:from :world/id}
+                                          :entity-id {:ref [:slot :aim-hit :entity-id]}
+                                          :projection [:id :type :entity-type :eye-position :alive?]
+                                          :result :target-entity}
+                                         {:component :flow/branch
+                                          :when {:expr :bool/and
+                                                 :args [{:ref [:slot :target-entity :alive?]}
+                                                        {:expr :collection/contains?
+                                                         :args [{:from :targeting/metal-entities}
+                                                                {:expr :value/normalize-id
+                                                                 :args [{:ref [:slot :target-entity :entity-type]}]}]}]}
+                                          :then {:component :begin
+                                                 :target-kind :entity
+                                                 :target-id {:ref [:slot :aim-hit :entity-id]}
+                                                 :target-position {:ref [:slot :target-entity :eye-position]}}
+                                          :else {:component :finalize-no-target}}]}
+                          :else {:component :finalize-no-target}}}}]}
+  :pulse
+  {:component :flow/branch
+   :when {:expr :value/eq
+          :args [{:ref [:session :target-kind]} :entity]}
+   :then {:component :flow/sequence
+          :steps [{:component :target/entity-snapshot
+                   :world-id {:from :world/id}
+                   :entity-id {:ref [:session :target-id]}
+                   :projection [:id :type :entity-type :eye-position :alive?]
+                   :result :target-entity}
+                  {:component :flow/branch
+                   :when {:ref [:slot :target-entity :alive?]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :session/patch
+                                   :entries [{:path [:target-position] :mode :assign
+                                              :value {:ref [:slot :target-entity :eye-position]}}]}
+                                   {:component :move}]}
+                   :else {:component :finalize
+                          :outcome :target-lost}}]}
+   :else {:component :move}}
+  :release {:component :finalize :outcome :released}
+  :abort {:component :finalize :outcome :aborted}}}
