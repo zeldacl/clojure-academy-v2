@@ -20,7 +20,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.platform-bridge :as client-bridge])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
-           [cn.li.mcver McAccess]
+           [cn.li.mcver McClientAccess]
            [net.minecraft.client Minecraft]))
 
 (defn create-reactive-screen*
@@ -138,5 +138,5 @@
      ;; app etc.) must not inherit the hidden state. The terminal re-hides
      ;; right after its own open call.
      (client-bridge/terminal-cursor-show!)
-     (McAccess/setScreen mc screen)
+     (McClientAccess/setScreen mc screen)
      screen)))

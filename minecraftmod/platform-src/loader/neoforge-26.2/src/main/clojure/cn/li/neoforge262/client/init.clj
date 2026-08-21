@@ -45,7 +45,7 @@
             [cn.li.platform.neutral.client-runtime :as tesr-api]
             [cn.li.neoforgebase.registry.state :as registry-state])
   (:import [net.minecraft.client Minecraft]
-           [cn.li.mcver McAccess]
+           [cn.li.mcver McAccess McClientAccess]
            [net.minecraft.client.renderer.block FluidModel$Unbaked]
            [net.minecraft.client.resources.model.sprite Material]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -59,10 +59,10 @@
            [net.neoforged.neoforge.client.event EntityRenderersEvent$RegisterRenderers]
            [net.neoforged.bus.api EventPriority]
            [com.mojang.blaze3d.platform Window]
-           ;; Only cn.li.mcver.McAccess is imported: this ns also calls
-           ;; clientEntitySnapshot, which exists only there, and importing both
-           ;; McAccess classes is a hard name collision. cn.li.mc262.bridge's
-           ;; dayTime simply delegates to mcver's, so nothing changes.
+           ;; cn.li.mcver.McAccess (server-safe) plus McClientAccess (client-only
+           ;; methods, split out so the dedicated server can load McAccess).
+           ;; Importing the deprecated cn.li.mc262.bridge.McAccess instead would
+           ;; be a hard name collision; its dayTime simply delegates anyway.
            [cn.li.mcver ResourceLocations]
            [cn.li.neoforge262.bridge ClientTimeInterop]
            [cn.li.mc262.client GuiGraphicsHelper ClientHelper]
@@ -215,13 +215,13 @@
 
                             :mcmod/get-entity-position
                             (try
-                              (McAccess/clientEntitySnapshot
+                              (McClientAccess/clientEntitySnapshot
                                 (java.util.UUID/fromString (:entity-uuid payload)))
                               (catch Exception _ nil))
 
                             :mcmod/set-client-entity-motion
                             (try
-                              (McAccess/setClientEntityMotion
+                              (McClientAccess/setClientEntityMotion
                                 (java.util.UUID/fromString (:entity-uuid payload))
                                 (double (:vx payload)) (double (:vy payload)) (double (:vz payload)))
                               (catch Exception _ false))

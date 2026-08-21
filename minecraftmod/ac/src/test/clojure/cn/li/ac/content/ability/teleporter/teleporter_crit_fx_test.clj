@@ -82,7 +82,7 @@
       (with-redefs [client-bridge/run-client-effect!
                     (fn [effect-key _payload]
                       (when (= effect-key :mcmod/get-entity-position)
-                        ;; McAccess.clientEntitySnapshot returns String-keyed maps.
+                        ;; McClientAccess.clientEntitySnapshot returns String-keyed maps.
                         {"x" 20.0 "y" 64.0 "z" 30.0
                          "width" 1.0 "height" 2.0}))
                     runtime-hooks/client-show-combat-notice! (fn [notice-id payload]

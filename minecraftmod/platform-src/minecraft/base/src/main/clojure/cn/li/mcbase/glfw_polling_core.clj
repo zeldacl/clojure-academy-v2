@@ -11,7 +11,7 @@
             [cn.li.platform.neutral.keyboard-input :as kb-proto]
             [cn.li.mcmod.spi.key-scheme-provider :as key-provider]
             [cn.li.platform.neutral.client-render :as input-buttons])
-  (:import [cn.li.mcver McAccess]
+  (:import [cn.li.mcver McClientAccess]
            [net.minecraft.client Minecraft]
            [org.lwjgl.glfw GLFW GLFWScrollCallback GLFWScrollCallbackI]))
 
@@ -216,7 +216,7 @@
   (let [window (try (.getWindow ^Minecraft (Minecraft/getInstance))
                     (catch Throwable _ nil))]
     (when window
-      (let [handle (long (McAccess/windowHandle window))]
+      (let [handle (long (McClientAccess/windowHandle window))]
         (when-not (zero? handle)
           (let [prev (atom nil)]
             (reset! prev (GLFW/glfwSetScrollCallback

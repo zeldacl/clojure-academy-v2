@@ -1,7 +1,7 @@
 (ns cn.li.mc262.gui.reactive.host
   "Standalone reactive screen host -- thin shell over mcbase core.
 
-  26.2: GuiGraphicsExtractor draw path; McAccess.setScreen via gui."
+  26.2: GuiGraphicsExtractor draw path; McClientAccess.setScreen via gui."
   (:require [cn.li.mcbase.gui.reactive.host-core :as core]
             [cn.li.mc262.gui.reactive.render :as render])
   (:import [cn.li.mc262.shim DelegatingScreen]

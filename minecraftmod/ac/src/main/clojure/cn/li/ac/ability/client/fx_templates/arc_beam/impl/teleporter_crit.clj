@@ -48,7 +48,7 @@
    :height (double (or (:target-height payload) 1.8))})
 
 (defn- resolve-target-box
-  "Live entity box via the platform snapshot (McAccess.clientEntitySnapshot
+  "Live entity box via the platform snapshot (McClientAccess.clientEntitySnapshot
   returns a String-keyed map — keywordize before keyword reads), mirroring
   the marker impl."
   [payload]

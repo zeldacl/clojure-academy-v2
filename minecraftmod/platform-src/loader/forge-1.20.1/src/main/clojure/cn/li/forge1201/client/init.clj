@@ -52,7 +52,7 @@
   (:import [cn.li.mc1201.client ClientHelper]
            [cn.li.forge1201.shim ForgeClientHelper]
            [cn.li.mc1201.client GuiGraphicsHelper]
-           [cn.li.mcver McAccess]
+           [cn.li.mcver McClientAccess]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -236,13 +236,13 @@
 
                             :mcmod/get-entity-position
                             (try
-                              (McAccess/clientEntitySnapshot
+                              (McClientAccess/clientEntitySnapshot
                                 (java.util.UUID/fromString (:entity-uuid payload)))
                               (catch Exception _ nil))
 
                             :mcmod/set-client-entity-motion
                             (try
-                              (McAccess/setClientEntityMotion
+                              (McClientAccess/setClientEntityMotion
                                 (java.util.UUID/fromString (:entity-uuid payload))
                                 (double (:vx payload)) (double (:vy payload)) (double (:vz payload)))
                               (catch Exception _ false))

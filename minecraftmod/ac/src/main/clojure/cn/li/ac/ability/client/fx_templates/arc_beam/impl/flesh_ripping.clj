@@ -60,7 +60,7 @@
   EntityMarker follow)."
   [st tick]
   (let [color (if (:hit? st) color-threatening color-disabled)
-        ;; McAccess.clientEntitySnapshot returns a String-keyed map —
+        ;; McClientAccess.clientEntitySnapshot returns a String-keyed map —
         ;; keywordize so the keyword reads below actually resolve.
         live (when-let [uuid (:target-uuid st)]
                (when-let [raw (client-bridge/run-client-effect!

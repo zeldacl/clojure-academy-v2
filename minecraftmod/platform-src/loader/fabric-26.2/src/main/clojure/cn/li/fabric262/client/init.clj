@@ -44,7 +44,7 @@
            [net.minecraft.world.entity.player Player]
            [cn.li.mc262.client GuiGraphicsHelper]
            [cn.li.mc262.client.effect ScriptedEffectSpawner]
-           [cn.li.mcver McAccess]))
+           [cn.li.mcver McClientAccess]))
 
 (defn- bind-texture-fabric!
   "Bind a texture for rendering."
@@ -195,13 +195,13 @@
 
                             :mcmod/get-entity-position
                             (try
-                              (McAccess/clientEntitySnapshot
+                              (McClientAccess/clientEntitySnapshot
                                 (java.util.UUID/fromString (:entity-uuid payload)))
                               (catch Exception _ nil))
 
                             :mcmod/set-client-entity-motion
                             (try
-                              (McAccess/setClientEntityMotion
+                              (McClientAccess/setClientEntityMotion
                                 (java.util.UUID/fromString (:entity-uuid payload))
                                 (double (:vx payload)) (double (:vy payload)) (double (:vz payload)))
                               (catch Exception _ false))

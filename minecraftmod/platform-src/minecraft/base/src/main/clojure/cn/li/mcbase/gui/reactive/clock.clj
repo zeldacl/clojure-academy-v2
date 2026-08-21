@@ -2,7 +2,7 @@
   "Clock driver -- set the three clock signals each frame."
   (:require [cn.li.platform.neutral.ui :as rt]
             [cn.li.platform.neutral.ui :as sig])
-  (:import [cn.li.mcver McAccess]
+  (:import [cn.li.mcver McAccess McClientAccess]
            [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client Minecraft]))
 
@@ -11,7 +11,7 @@
   [^Minecraft mc partial-ticks]
   (if (some? partial-ticks)
     (double partial-ticks)
-    (McAccess/clientPartialTick mc)))
+    (McClientAccess/clientPartialTick mc)))
 
 (defn- resolve-game-ticks
   ^long

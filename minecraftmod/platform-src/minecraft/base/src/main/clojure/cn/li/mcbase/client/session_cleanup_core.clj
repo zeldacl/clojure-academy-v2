@@ -9,7 +9,7 @@
             [cn.li.platform.neutral.client-network :as net-client]
             [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcver McAccess]
+  (:import [cn.li.mcver McClientAccess]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]))
 
@@ -93,7 +93,7 @@
 
 (defn- close-current-screen!
   []
-  (McAccess/closeScreen (Minecraft/getInstance))
+  (McClientAccess/closeScreen (Minecraft/getInstance))
   nil)
 
 (defn clear-owner-state!

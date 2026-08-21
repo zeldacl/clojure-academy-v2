@@ -12,7 +12,6 @@
             [cn.li.mcbase.platform.player-ops :as player-ops]
             [cn.li.mcbase.platform.world-block-ops :as world-block-ops]
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.neoforgebase.integration.side :as side]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.adapter.minecraft-ops :as minecraft-ops]))
 
@@ -26,14 +25,10 @@
                                        sort
                                        vec)}))))
 
-(defn- resolve-local-player-class []
-  (when (side/client-side?)
-    (cn.li.neoforgebase.bridge.ClientPlatformBridge/getLocalPlayerClass)))
-
 (def ^:private forge-adapter
   (minecraft-ops/build-adapter-map
    (merge (runtime-ops/standard-runtime-ops)
-          {:local-player-class (fn [] (resolve-local-player-class))
+          {:local-player-class (fn [] nil)
            :scripted-be-class (fn [] nil)
            :world-place-block-by-id
            (fn [level block-id pos flags]
