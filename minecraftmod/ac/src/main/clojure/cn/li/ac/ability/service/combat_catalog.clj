@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.service.edn-catalog
+(ns cn.li.ac.ability.service.combat-catalog
   "Authoritative first-phase EDN catalog. Unmigrated skills have no runtime fallback."
   (:require [cn.li.combat.recipe :as combat-recipe]
             [cn.li.mcmod.runtime.safe-edn :as safe-edn]
@@ -26,13 +26,12 @@
                     index (:external-triggers ability)))
           {} abilities))
 
-(defn- load-combat-document [resource]
-  (let [document (safe-edn/read-resource! resource)]
-    (if (= :ability (:kind document))
-      (-> document
-          skill-config/overlay-edn-parameters
-          skill-config/overlay-edn-tunables)
-      document)))
+(defn- materialize-combat-document [document]
+  (if (= :ability (:kind document))
+    (-> document
+        skill-config/overlay-edn-parameters
+        skill-config/overlay-edn-tunables)
+    document))
 
 (defn initialize! []
   (let [migration (safe-edn/read-resource! "ac/ability/migration_status.edn")
@@ -40,7 +39,7 @@
                  {:manifest-resource "ac/combat/manifest.edn"
                   :composites-manifest-resource
                   "ac/combat/components_manifest.edn"
-                  :document-loader load-combat-document})
+                  :document-transform materialize-combat-document})
         vfx (vfx-recipe/load-catalog!
               {:manifest-resource "ac/vfx/manifest.edn"
                :composites-manifest-resource

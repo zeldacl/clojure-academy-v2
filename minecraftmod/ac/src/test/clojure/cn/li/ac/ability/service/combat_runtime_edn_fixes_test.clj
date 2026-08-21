@@ -4,22 +4,22 @@
    ability session leak, and per-activation RNG seed generation."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
-            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
-            [cn.li.ac.ability.service.edn-sessions :as edn-sessions]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.ac.test.support.player-state :as player-state-support]))
 
 (use-fixtures :each
   (fn [f]
-    (edn-catalog/initialize!)
+    (combat-catalog/initialize!)
     (player-state-support/clean-player-states-fixture
      (fn []
        (runtime-store/create-session! player-state-support/test-session-id)
-       (edn-sessions/reset-for-test!)
+       (combat-sessions/reset-for-test!)
        (try
          (f)
          (finally
-           (edn-sessions/reset-for-test!)))))))
+           (combat-sessions/reset-for-test!)))))))
 
 (deftest owner-patch-commands-commit-every-entry
   (testing "one owner-patch action carrying both a cp and an overload entry commits both, not just the first (bug #1)"
@@ -56,7 +56,7 @@
                   "p-instant-leak" {:action :start :ability-id :arc-gen})]
       (is (= :accepted (:status result)))
       (is (= :insufficient-resource (:outcome result)))
-      (is (not (edn-sessions/active? "p-instant-leak"))))))
+      (is (not (combat-sessions/active? "p-instant-leak"))))))
 
 (deftest caster-facade-exposes-neutral-capability-names
   (testing "the schema v2 :from table (design C) maps AC's context shape into neutral capability names"
@@ -80,8 +80,8 @@
      player-state-support/test-session-id "p-seed-b")
     (combat-runtime/dispatch-intent! "p-seed-a" {:action :start :ability-id :railgun})
     (combat-runtime/dispatch-intent! "p-seed-b" {:action :start :ability-id :railgun})
-    (let [seed-a (:activation-seed (edn-sessions/session "p-seed-a"))
-          seed-b (:activation-seed (edn-sessions/session "p-seed-b"))]
+    (let [seed-a (:activation-seed (combat-sessions/session "p-seed-a"))
+          seed-b (:activation-seed (combat-sessions/session "p-seed-b"))]
       (is (some? seed-a))
       (is (some? seed-b))
       (is (not= seed-a seed-b))

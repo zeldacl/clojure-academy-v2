@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.service.edn-catalog-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.ability.service.edn-catalog :as catalog]
-            [cn.li.ac.ability.service.edn-execution :as execution]
-             [cn.li.ac.ability.service.edn-sessions :as sessions])
+            [cn.li.ac.ability.service.combat-catalog :as catalog]
+            [cn.li.ac.ability.service.combat-runtime-bridge :as execution]
+             [cn.li.ac.ability.service.combat-sessions :as sessions])
   (:import [cn.li.mcmod.runtime.effect CompiledProgram]))
 
 (deftest first-phase-catalog-is-authoritative

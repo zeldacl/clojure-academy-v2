@@ -399,10 +399,15 @@
    :errors carries its id and failure so the caller can log it -- and every
    other ability still loads. One bad EDN file must not be able to take the
    whole mod down at boot (Design E: fail-closed per ability, not globally)."
-  [{:keys [manifest-resource composites-manifest-resource document-loader]
+  [{:keys [manifest-resource composites-manifest-resource document-loader
+           document-transform]
     :or {document-loader safe-edn/read-resource!}}]
   (components/register-builtins!)
-  (let [manifest (load-manifest! manifest-resource)
+  (let [document-loader (if document-transform
+                          (fn [resource]
+                            (document-transform (document-loader resource)))
+                          document-loader)
+        manifest (load-manifest! manifest-resource)
         composites (if composites-manifest-resource
                      (:composites (load-composites!
                                     {:manifest-resource composites-manifest-resource

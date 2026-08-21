@@ -1,10 +1,10 @@
-(ns cn.li.ac.ability.service.edn-sessions
-  "AC-owned session index for the generic EDN execution boundary.
+(ns cn.li.ac.ability.service.combat-sessions
+  "AC-owned session index for the generic combat execution boundary.
 
   The session value contains only neutral owner/ability/context data.  It
   never stores Minecraft objects or skill-specific state; all behavior is
-  still selected by the compiled EDN program."
-  (:require [cn.li.ac.ability.service.edn-catalog :as catalog]))
+  still selected by the compiled combat program."
+  (:require [cn.li.ac.ability.service.combat-catalog :as catalog]))
 
 (defonce ^:private sessions* (atom {}))
 
@@ -42,8 +42,9 @@
 (defn apply-actions!
   "Apply neutral session patches and latch claims after an accepted VM run.
 
-  The operation is deliberately generic: paths and modes come from EDN, and
-  this store contains no skill-specific keys or behavior."
+  The operation is deliberately generic: paths and modes come from the
+  compiled program, and this store contains no skill-specific keys or
+  behavior."
   [owner actions]
   (let [patches (for [{:keys [type entries]} actions
                       :when (= :session-patch type)

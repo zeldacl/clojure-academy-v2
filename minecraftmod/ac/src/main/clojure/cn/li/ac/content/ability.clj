@@ -5,7 +5,7 @@
   authoritative EDN catalog; the legacy provider is retained as metadata for
   migration/UI discovery and is never installed as an execution provider."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
-            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.item-actions :as item-actions]
@@ -87,10 +87,10 @@
 
    Pending skills remain metadata-only and are rejected by the server gate."
   []
-  (edn-catalog/initialize!)
-  (doseq [skill-spec (edn-catalog/migrated-skill-specs)]
+  (combat-catalog/initialize!)
+  (doseq [skill-spec (combat-catalog/migrated-skill-specs)]
     ;; Only migrated entries enter the executable skill registry.  Pending
-    ;; entries are represented by edn-catalog/ui-state and never receive a
+    ;; entries are represented by combat-catalog/ui-state and never receive a
     ;; legacy callback or fallback registration.
     (skill-registry/register-skill! skill-spec))
   true)

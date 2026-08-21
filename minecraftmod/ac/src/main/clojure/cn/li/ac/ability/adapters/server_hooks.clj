@@ -13,7 +13,7 @@
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
-            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -413,7 +413,7 @@
     (when-let [action (item-actions/resolve-item-action item-id)]
       (let [railgun-coin? (= action :railgun-coin-throw)
              entity-spawn (item-actions/get-item-entity-spawn item-id)
-             trigger (edn-catalog/resolve-trigger
+             trigger (combat-catalog/resolve-trigger
                        :item/use
                        {:item-id item-id :ability-mode? (boolean activated?)})
              domain-payload (if railgun-coin?

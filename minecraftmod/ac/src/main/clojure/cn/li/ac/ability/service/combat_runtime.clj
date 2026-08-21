@@ -4,6 +4,8 @@
    Combat Core itself never knows about AC, Minecraft or VFX."
   (:require [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
+            [cn.li.combat.skill-runtime :as combat-skill-runtime]
+            [cn.li.combat.reactions :as combat-reactions]
             [cn.li.combat.platform :as combat-platform]
             [cn.li.combat.runtime :as combat]
             [cn.li.combat.targeting :as targeting]
@@ -16,9 +18,8 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.radiation-marks :as radiation-marks]
-            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
-            [cn.li.ac.ability.service.edn-execution :as edn-execution]
-            [cn.li.ac.ability.service.edn-sessions :as edn-sessions]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.registry.event :as ability-event]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -67,7 +68,7 @@
 (defn- generate-activation-seed
   "Produce a fresh per-activation RNG seed. Never deterministic across
   activations for the same owner/ability -- see `dispatch-intent!`'s only
-  caller, `execute-edn-intent!`, which threads the result into both the
+  caller, `execute-combat-intent!`, which threads the result into both the
   program context and the session store so every reader of
   :activation-seed observes the same real value instead of independently
   recomputing a constant fallback."
@@ -1142,7 +1143,7 @@
         cooldown-data (:cooldown-data state)]
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
-     :active-abilities (if-let [session (edn-sessions/session (str owner))]
+     :active-abilities (if-let [session (combat-sessions/session (str owner))]
                          #{(:ability-id session)}
                          #{})
      :cooldowns (into {}
@@ -1250,23 +1251,6 @@
       (:ability intent)
       (some-> (resolve-slot owner intent) :id)))
 
-(defn- parameter-snapshot
-  "Read immutable parameter values materialized during catalog loading.
-
-  Combat-core never reads live AC configuration and the EDN document never
-  contains config paths. The catalog loader owns the one-way config overlay;
-  activation only snapshots those already-resolved values."
-  [ability-id ability intent]
-  (if (contains? intent :parameter-snapshot)
-    (:parameter-snapshot intent)
-    (into {}
-          (map (fn [[parameter-id declaration]]
-                 (when-not (contains? declaration :value)
-                   (throw (ex-info "EDN parameter was not materialized"
-                                   {:ability-id ability-id
-                                    :parameter parameter-id})))
-                 [parameter-id (:value declaration)])
-               (:parameters ability)))))
 
 (defn- activation-context
   [owner ability-id intent seed]
@@ -1346,32 +1330,6 @@
   (let [bounded (max 0.0 (min 1.0 (double t)))]
     (+ (double lo) (* (- (double hi) (double lo)) bounded))))
 
-(defn- materialize-tunables
-  "Schema v2 design B: apply each :tunables declaration's curve against the
-  owner's live skill-exp, fresh every activation.
-
-  Catalog load (skill_config.clj's overlay-edn-tunables) only resolved the
-  config-driven pieces -- a constant, or the raw (lo,hi)/(base,slope) config
-  pair. The mastery-dependent math happens here and only here: skill-exp
-  changes over a player's lifetime, the catalog loads once at boot, so
-  baking the curve in at load time would freeze it at whatever mastery the
-  server happened to have on startup."
-  [ability skill-exp]
-  (reduce-kv
-    (fn [result tunable-id {:keys [curve value range]}]
-      (assoc result tunable-id
-             (case curve
-               :const value
-               ;; No curve applied here -- the ability supplies its own
-               ;; math/lerp against something other than skill-exp.
-               :pair value
-               :mastery-lerp (lerp (first range) (second range) skill-exp)
-               :affine (+ (double (first range))
-                         (* (double (second range)) (double skill-exp)))
-               (throw (ex-info "unsupported tunable curve at activation"
-                              {:tunable tunable-id :curve curve})))))
-    {}
-    (or (:tunables ability) {})))
 
 (defn- raycast-point
   [hit key fallback]
@@ -1679,7 +1637,7 @@
   contain Arc Gen rules; those remain in EDN.
 
   Public and called from cn.li.ac.core.init/init, ahead of
-  edn-catalog/initialize!, so capabilities are registered before the catalog
+  combat-catalog/initialize!, so capabilities are registered before the catalog
   ever loads (Design E precondition R9). It also still runs lazily on first
   dispatch below (compare-and-set! below makes a second call a no-op) as a
   safety net for any other entry path, but that is no longer the only time
@@ -2282,87 +2240,29 @@
         (reset! edn-host-capabilities-installed? false)))
   (capabilities/snapshot)))
 
-(defn- execute-edn-intent!
-  "Execute a normalized EDN intent against the AC-owned session index." 
+(defn- execute-combat-intent!
+  "Delegate the complete EDN lifecycle operation to Combat Core.
+
+   AC supplies only session/state/platform callbacks; it does not inspect
+   component trees or execute the VM."
   [owner intent]
-  (let [ability-id (edn-ability-id owner intent)
-        requested-op (or (:action intent) (:op intent) :start)
-        current-tick (long (or (:server-tick intent) @last-known-tick* 0))
-        ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
-        active-session (edn-sessions/session owner)
-        toggle-close? (and (= :start requested-op)
-                           active-session
-                           (= :toggle (:activation ability))
-                           (= ability-id (:ability-id active-session)))
-        op (if toggle-close? :abort requested-op)
-        ;; Computed once per activation and threaded everywhere :activation-seed
-        ;; is read (program context, session store) so every reader agrees on
-        ;; the same real value instead of each independently falling back to
-        ;; a constant hash of [owner ability-id].
-        activation-seed (or (:activation-seed active-session)
-                            (:activation-seed intent)
-                            (generate-activation-seed owner ability-id current-tick))
-        normalized (assoc intent
-                          :action op
-                          :ability-id ability-id
-                          :activation-seed activation-seed
-                          :context (or (:context active-session)
-                                       (activation-context owner ability-id intent
-                                                            activation-seed))
-                          :parameter-snapshot
-                          (or (:parameter-snapshot intent)
-                              (:parameter-snapshot active-session)
-                              (parameter-snapshot ability-id ability intent)))]
-    (when (= :start op)
-      (edn-sessions/start! owner ability-id normalized))
-    (let [session (edn-sessions/session owner)
-          session-context (edn-sessions/context-for owner normalized)
-          owner-view (owner-state owner)
-          start-tick (long (or (:start-tick session) current-tick))
-          dynamic-context (merge (:context session-context)
-                                 {:server-tick current-tick
-                                  :session-start-tick start-tick
-                                  :resources (:resources owner-view)
-                                  :skill-exp (double (or (get-in owner-view
-                                                                 [:ability-data :skill-exps ability-id])
-                                                          0.0))
-                                  :hold-ticks (max 0 (- current-tick start-tick))})
-          execution-intent (merge normalized
-                                  (select-keys session-context
-                                               [:context :parameter-snapshot
-                                                :activation-seed])
-                                  {:context dynamic-context
-                                   :session-state (:state session-context)
-                                   :latches (:latches session-context)
-                                   :server-tick current-tick
-                                   :from (caster-facade owner dynamic-context)
-                                   :tunables (materialize-tunables
-                                              ability (:skill-exp dynamic-context))
-                                   ;; Schema v2 design A: pure passthrough of
-                                   ;; the ability's own declarative blocks.
-                                   ;; combat-core's :cost/spend, :score/mark,
-                                   ;; :cooldown/start, and {:invariant ...}
-                                   ;; resolve against these -- AC does no
-                                   ;; computation here, only hands the
-                                   ;; already-compiled EDN data through.
-                                   :costs (:costs ability)
-                                   :progression (:progression ability)
-                                   :cooldown (:cooldown ability)
-                                   :invariants (:invariants ability)})
-          result (edn-execution/execute! ability-id owner execution-intent)]
-      (when (= :accepted (:status result))
-        (edn-sessions/apply-actions! owner (:actions result)))
-      (when (or (:finish-session? result)
-                ;; Instant abilities are one-shot by definition: never leave a
-                ;; session for `tick!` to keep re-running, even if an EDN
-                ;; author forgets :finish-session? true on a failure branch.
-                (= :instant (:activation ability))
-                (and (#{:release :abort} op)
-                     (not= true (:release-keeps-session? ability))
-                 (or (= :accepted (:status result))
-                     (= :rejected (:status result)))))
-        (edn-sessions/remove! owner))
-      result)))
+  (combat-skill-runtime/dispatch!
+   {:catalog (combat-catalog/catalog)
+    :owner owner
+    :intent intent
+    :now-tick-fn #(long (or @last-known-tick* 0))
+    :seed-fn generate-activation-seed
+    :owner-view-fn owner-state
+    :activation-context-fn activation-context
+    :caster-facade-fn caster-facade
+    :session-port
+    {:current combat-sessions/session
+     :resolve-slot-fn resolve-slot
+     :start! combat-sessions/start!
+     :context combat-sessions/context-for
+     :apply-actions! (fn [owner actions]
+                       (combat-sessions/apply-actions! owner actions))
+     :remove! combat-sessions/remove!}}))
 
 (defn dispatch-intent! [owner intent]
   ;; The migration table is authoritative at the server boundary.  Pending
@@ -2373,29 +2273,29 @@
         ;; ability/event mapping.  The resolved id is then checked against the
         ;; migrated EDN catalog before execution.
         ability-id (edn-ability-id owner intent)]
-    (if-not (edn-catalog/available? ability-id)
+    (if-not (combat-catalog/available? ability-id)
       {:schema-version 2
         :status :rejected
         :reason :ability-not-migrated
         :feedback [{:type :ability-not-migrated
                     :ability-id ability-id
-                    :status (edn-catalog/migration-status ability-id)}]}
+                    :status (combat-catalog/migration-status ability-id)}]}
       (do
         (install-edn-host-capabilities!)
-        (execute-edn-intent! owner intent)))))
+        (execute-combat-intent! owner intent)))))
 
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
 
-  The trigger map is produced by `edn-catalog/resolve-trigger`; clients never
+  The trigger map is produced by `combat-catalog/resolve-trigger`; clients never
   provide ability/event mappings." 
   [owner trigger context]
   (when (and (map? trigger) (:ability trigger) (:event trigger))
     ;; An external event is a terminal interruption for the owner session.
     ;; Run the generic EDN abort phase first so session-scoped VFX and other
     ;; cleanup actions are finalized through the same commit boundary.
-    (when-let [session (edn-sessions/session owner)]
-      (let [abort-result (execute-edn-intent!
+    (when-let [session (combat-sessions/session owner)]
+      (let [abort-result (execute-combat-intent!
                           owner
                           {:op :abort
                            :action :abort
@@ -2503,182 +2403,24 @@
           []
           (:events result)))
 
-(defn- scale-damage-components
-  "Scale numeric damage components while retaining their original shape."
-  [value factor]
-  (cond
-    (number? value) (* (double value) (double factor))
-    (map? value) (reduce-kv (fn [m k v]
-                              (assoc m k (scale-damage-components v factor)))
-                            (empty value) value)
-    (vector? value) (mapv #(scale-damage-components % factor) value)
-    (seq? value) (mapv #(scale-damage-components % factor) value)
-    :else value))
-
-(defn- reaction-value
-  "Resolve the bounded expression subset used by EDN damage reactions."
-  [value context]
-  (cond
-    (and (map? value) (:expr value))
-    (combat-vm/evaluate-expression
-     (:expr value)
-     (mapv #(reaction-value % context) (:args value))
-     (long (or (:activation-seed context) 0)))
-
-    (and (map? value) (:ref value))
-    (let [[scope key & path] (:ref value)
-          root (case scope
-                 :context (:context context)
-                 :request (:request context)
-                 :param (:params context)
-                 :session (:session-state context)
-                 :state (:state context)
-                 {})]
-      (get-in root (into [key] path)))
-
-    (and (map? value) (contains? value :tunable))
-    (get (or (:tunables context) {}) (:tunable value))
-
-    (map? value) (reduce-kv (fn [m k v]
-                              (assoc m k (reaction-value v context)))
-                            (empty value) value)
-    (vector? value) (mapv #(reaction-value % context) value)
-    :else value))
-
-(defn- apply-edn-damage-reactions
-  "Run all EDN reactions for a damage request in deterministic priority order.
-
-  A reaction never reconstructs a damage type. Its reflected request is a
-  copy of the incoming request with only source/target, amount, and recursion
-  metadata changed. This keeps armor/resistance/component semantics intact."
-  [request {:keys [precheck?] :as boundary}]
-  (let [abilities (vals (get-in (edn-catalog/catalog) [:combat :abilities]))
-        reactions (->> abilities
-                       (mapcat (fn [ability]
-                                 (for [reaction (:reactions ability)
-                                       :when (= :combat/damage (:on reaction))]
-                                   (assoc reaction :ability-id (:id ability)))))
-                       (sort-by (juxt #(long (or (:priority %) 0))
-                                      #(str (:ability-id %)))))]
-    (reduce
-      (fn [current {:keys [ability-id when program]}]
-        (let [target (str (:target current))
-              session (edn-sessions/session target)
-              ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
-              params (:parameter-snapshot session)
-              state (owner-state target)
-              skill-exp (double (or (get-in state
-                                           [:ability-data :skill-exps ability-id])
-                                    0.0))
-              context {:request current
-                       :state state
-                       :session-state (:state session)
-                       :params params
-                       :tunables (materialize-tunables ability skill-exp)
-                       :activation-seed (long (or (:activation-seed session) 0))
-                       :context {:enabled? (boolean session)
-                                 :ability-id (:ability-id session)
-                                 :front? (boolean (get-in current [:metadata :attacker-front?]))
-                                 :resource (double (or (get-in state [:resources :cp]) 0.0))
-                                  :skill-exp skill-exp
-                                 :depth (long (or (get-in current [:metadata :reflection-depth]) 0))
-                                 :damage (double (:base current))}}
-              condition? (or (nil? when)
-                             (boolean (reaction-value when context)))
-              component (:component program)]
-          (if-not (and session ability condition?)
-            current
-            (if (= :damage/absorb component)
-              (let [base (double (:base current))
-                    ticks (long (or (get-in session [:state :active-ticks]) 0))
-                    last-tick (long (or (get-in session [:state (:last-tick-path program)]) -1))
-                    interval (long (or (reaction-value (:interval-ticks program) context) 0))
-                    cap (double (or (reaction-value (:cap program) context) 0.0))
-                    front? (boolean (reaction-value (:front? program) context))
-                    window? (and (pos? base)
-                                 (or (= -1 last-tick)
-                                     (> (- ticks last-tick) interval)))
-                    costs (into {}
-                                (map (fn [[resource amount]]
-                                       [resource (double (or (reaction-value amount context) 0.0))])
-                                     (:cost program)))
-                    resources (or (:resources state) {})
-                    enough? (every? (fn [[resource amount]]
-                                      (>= (double (or (get resources resource) 0.0)) amount))
-                                    costs)
-                    exp-scale (double (or (reaction-value (:exp-scale program) context) 0.0))
-                    current (if window?
-                              (update current :state-patch (fnil conj [])
-                                      [:ability-exp ability-id exp-scale])
-                              current)]
-                (if (and window? front? enough? (Double/isFinite cap) (<= 0.0 cap 100.0))
-                  (let [absorbed (min base cap)
-                        remaining (max 0.0 (- base absorbed))
-                        ;; Attack prechecks are cancellation-only.  A partial
-                        ;; absorb must be deferred to the amount modifier so
-                        ;; the same hit cannot pay the shield twice.
-                        defer-partial? (and precheck? (pos? remaining))
-                        ratio (if (pos? base) (/ remaining base) 0.0)]
-                    (if defer-partial?
-                      current
-                      (cond->
-                        (-> current
-                            (assoc :base remaining)
-                            (assoc :components (scale-damage-components (:components current) ratio))
-                            (assoc-in [:metadata :resource-cost]
-                                      (into {} (map (fn [[resource amount]]
-                                                      [resource (- amount)]) costs)))
-                            (update :state-patch (fnil into [])
-                                    (mapv (fn [[resource amount]]
-                                            [:resource resource (- amount)]) costs))
-                            (update :session-patch (fnil conj [])
-                                    {:path (:last-tick-path program)
-                                     :mode :assign :value ticks}))
-                        precheck? (assoc :cancelled? true))))
-                  current))
-              (let [multiplier (double (or (reaction-value (:multiplier program) context) 0.0))
-                  cost-rate (double (or (reaction-value (:cost-per-damage program) context) 0.0))
-                  minimum (double (or (reaction-value (:minimum program) context) 0.0))
-                  max-depth (long (or (reaction-value (:max-depth program) context) 0))
-                  exp-scale (double (or (reaction-value (:exp-scale program) context) 0.0))
-                  depth (long (or (get-in current [:metadata :reflection-depth]) 0))
-                  base (double (:base current))
-                  reflected (* base multiplier (Math/pow 0.5 (double depth)))
-                  cp (double (or (get-in state [:resources :cp]) 0.0))
-                  consumption (max 0.0 (* base cost-rate))
-                  source (:source current)
-                  eligible? (and source (not= (str source) target)
-                                 (Double/isFinite base) (pos? base)
-                                 (Double/isFinite reflected)
-                                 (>= reflected minimum)
-                                 (< depth max-depth)
-                                 (pos? consumption)
-                                 (>= cp consumption))]
-              (if-not eligible?
-                current
-                (let [ratio (if (pos? base) (/ reflected base) 0.0)
-                      reflected-request
-                      (-> current
-                          (assoc :source target :target source :base reflected)
-                          (cond-> (vector? (:direction current))
-                            (assoc :direction
-                                   (mapv #(- (double %)) (:direction current))))
-                          (assoc :components
-                                 (scale-damage-components (:components current) ratio))
-                          (update :tags (fnil conj #{}) :reflected)
-                          (update :metadata merge
-                                  {:reflection-source? true
-                                   :reflection-depth (inc depth)
-                                   :reflection-ability ability-id}))]
-                  (-> current
-                      (assoc :base (max 0.0 (- base reflected)))
-                      (assoc-in [:metadata :resource-cost] {:cp (- consumption)})
-                      (update :state-patch (fnil conj [])
-                              [:ability-exp ability-id (* base exp-scale)])
-                      (update :world-effects (fnil conj [])
-                              {:type :damage :request reflected-request})
-                      (cond-> precheck? (assoc :cancelled? true)))))))))
-      request reactions))))
+(defn- apply-combat-damage-reactions
+  "Delegate declarative damage reactions to Combat Core."
+  [request boundary]
+  (combat-reactions/apply!
+   request
+   {:reactions (vals (get-in (combat-catalog/catalog) [:combat :abilities]))
+    :session-fn #(combat-sessions/session (str %))
+    :state-fn owner-state
+    :precheck? (:precheck? boundary)
+    :tunables-fn
+    (fn [ability-id session state]
+      (let [ability (get-in (combat-catalog/catalog)
+                            [:combat :abilities ability-id])
+            skill-exp (double (or (get-in state
+                                          [:ability-data :skill-exps ability-id])
+                                  0.0))]
+                 (combat-skill-runtime/materialize-tunables ability skill-exp)))}
+   ))
 
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
@@ -2687,7 +2429,7 @@
    returns the transformed neutral request; the platform writes only the
    resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
-  (let [request (apply-edn-damage-reactions
+  (let [request (apply-combat-damage-reactions
                 (combat/process-damage-request
                  (engine)
                  {:source (or attacker-id :environment)
@@ -2713,7 +2455,7 @@
       (commit-state-patch! player-id (:state-patch request)))
     (when (and (not (:cancelled? request))
                (seq (:session-patch request)))
-      (edn-sessions/apply-actions!
+      (combat-sessions/apply-actions!
        player-id [{:type :session-patch :entries (:session-patch request)}]))
     (when (and (not (:cancelled? request))
                (damage-output? request))
@@ -2730,7 +2472,7 @@
    The removed mutable cancel/precheck registries have no replacement hook;
    combat nodes can cancel through the same deterministic request pipeline."
   [player-id attacker-id original-damage damage-source]
-  (let [request (apply-edn-damage-reactions
+  (let [request (apply-combat-damage-reactions
                 (combat/process-damage-request
                  (engine)
                  {:source (or attacker-id :environment)
@@ -2769,7 +2511,7 @@
     (when (or damage? patch?)
       (commit-state-patch! player-id (:state-patch request))
       (when (seq (:session-patch request))
-        (edn-sessions/apply-actions!
+        (combat-sessions/apply-actions!
          player-id [{:type :session-patch :entries (:session-patch request)}]))
       (when damage?
         (execute-damage-effects! player-id request)
@@ -2826,7 +2568,7 @@
                  (let [actions (vec (:actions result))
                        patch-results (commit-edn-owner-patches! owner actions)
                        action-results
-                       (edn-execution/commit-actions!
+                 (combat-skill-runtime/commit-actions!
                         owner
                         (vec (remove #(#{:owner-patch :session-patch}
                                        (:type %)) actions))
@@ -2864,13 +2606,13 @@
   (reset! last-known-tick* (long tick))
   (let [edn-results
         (mapv (fn [[owner session]]
-                (execute-edn-intent!
+                (execute-combat-intent!
                  owner
                  {:op :pulse
                   :action :pulse
                   :ability-id (:ability-id session)
                   :server-tick (long tick)}))
-              (edn-sessions/tick! tick))
+              (combat-sessions/tick! tick))
         ]
     (mapv (fn [result]
             ;; Session pulses produce authoritative patches before effects
@@ -2880,10 +2622,10 @@
             (publish-result! (finalize-result! (:owner result) result)))
           edn-results)))
 (defn abort-owner! [owner]
-  (edn-sessions/remove! owner)
+  (combat-sessions/remove! owner)
   nil)
 (defn snapshot-owner [owner]
-  {:edn-session (edn-sessions/session owner)})
+  {:combat-session (combat-sessions/session owner)})
 
 (defn reset-for-test! []
   (reset! engine* nil)
@@ -2891,5 +2633,5 @@
   (reset! world-effect-handler* nil)
   (reset! result-sink* nil)
   (reset! last-known-tick* 0)
-  (edn-sessions/reset-for-test!)
+  (combat-sessions/reset-for-test!)
   nil)

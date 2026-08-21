@@ -5,7 +5,7 @@
             [cn.li.ac.ability.runtime-container :as ability-runtime-container]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
-            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.command.platform-bridge :as command-bridge]
             [cn.li.ac.config.modid :as modid]
@@ -36,7 +36,7 @@
   (combat-runtime/install-edn-host-capabilities!)
   ;; The EDN catalog is authoritative for migrated abilities.  No legacy
   ;; catalog fallback is consulted when a skill is pending migration.
-  (edn-catalog/initialize!)
+  (combat-catalog/initialize!)
   (ability-messages/install!)
   (entity-hook-catalog/install-resolvers!)
   (block-bridge/install-blockstate-hooks!)

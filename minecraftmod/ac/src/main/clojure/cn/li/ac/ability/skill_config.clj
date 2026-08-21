@@ -93,7 +93,7 @@
   :reactions block reads (see the comment on its entry)."
   {;; vec-reflection is schema v2 (see :tunables/edn-tunable-bindings below)
    ;; except for its damage :reactions block, which is a separate subsystem
-   ;; (combat_runtime's apply-edn-damage-reactions) not yet folded into the
+   ;; (combat_runtime's apply-combat-damage-reactions) not yet folded into the
    ;; :costs/:progression policy evaluator -- deferred, see the plan's
    ;; Phase 6. Its 5 fields still go through this legacy :parameters path
    ;; unchanged.

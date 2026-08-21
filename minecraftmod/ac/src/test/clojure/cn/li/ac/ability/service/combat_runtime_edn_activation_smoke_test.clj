@@ -10,22 +10,22 @@
    next latent crash of that class is caught here, not in game."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
-            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
-            [cn.li.ac.ability.service.edn-sessions :as edn-sessions]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.ac.test.support.player-state :as player-state-support]))
 
 (use-fixtures :each
   (fn [f]
-    (edn-catalog/initialize!)
+    (combat-catalog/initialize!)
     (player-state-support/clean-player-states-fixture
      (fn []
        (runtime-store/create-session! player-state-support/test-session-id)
-       (edn-sessions/reset-for-test!)
+       (combat-sessions/reset-for-test!)
        (try
          (f)
          (finally
-           (edn-sessions/reset-for-test!)))))))
+           (combat-sessions/reset-for-test!)))))))
 
 (defn- dispatch! [owner ability-id op]
   (runtime-store/get-or-create-player-state! player-state-support/test-session-id owner)
