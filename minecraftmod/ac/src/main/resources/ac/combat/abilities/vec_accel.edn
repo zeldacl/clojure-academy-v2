@@ -1,0 +1,166 @@
+{:schema-version 2
+ :kind :ability
+ :id :vec-accel
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :charge/ticks]
+ :prerequisites [{:skill-id :directed-shock :min-exp 0.0}]
+ :tunables
+ {:max-charge-ticks {:curve :const :type :long}
+  :max-velocity {:curve :const}
+  :speed-progress {:curve :pair}
+  :pitch-offset-radians {:curve :const}
+  :ground-check-distance {:curve :const}
+  :groundless-exp-threshold {:curve :const}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-use {:curve :const}}
+ :costs
+ {:release {:resources {:cp {:tunable :release-cp}
+                        :overload {:tunable :release-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:launch {:per-mark {:tunable :exp-use}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :assign :value 0}
+                             {:path [:can-perform?] :mode :assign :value true}
+                             {:path [:look-dir] :mode :assign
+                              :value {:from :caster/aim}}
+                             {:path [:init-vel] :mode :assign
+                              :value {:vec3 [0.0 0.0 0.0]}}]}
+                  {:component :effect/vfx
+                   :effect-id :trajectory-ribbon-session
+                   :operation :spawn
+                   :instance-key [:activation :vec-accel-trajectory]
+                   :audience {:type :owner}
+                   :payload {:origin {:from :caster/eye}
+                             :look-dir {:from :caster/aim}
+                             :init-vel {:vec3 [0.0 0.0 0.0]}
+                             :can-perform? false
+                             :lateral-offset 0.08 :forward-offset 0.12
+                             :vertical-offset -0.06
+                             :drag 0.98 :gravity 1.9 :dt 0.02
+                             :segments 100 :width 0.02
+                             :style {:ready-color [255 255 255 255]
+                                     :blocked-color [255 51 51 255]
+                                     :height 0.02}}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :target/raycast
+                   :origin {:from :caster/body}
+                   :direction {:vec3 [0.0 -1.0 0.0]}
+                   :distance {:tunable :ground-check-distance}
+                   :include-entities? false
+                   :include-blocks? true
+                   :result :ground-hit}
+                  {:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :increment :value 1}
+                             {:path [:can-perform?] :mode :assign
+                              :value {:expr :bool/or
+                                      :args [{:expr :math/gte
+                                              :args [{:from :progression/mastery}
+                                                     {:tunable :groundless-exp-threshold}]}
+                                             {:expr :collection/nonempty
+                                              :args [{:ref [:slot :ground-hit]}]}]}}
+                             {:path [:look-dir] :mode :assign
+                              :value {:from :caster/aim}}
+                             {:path [:init-vel] :mode :assign
+                              :value {:expr :vec3/launch
+                                      :args [{:from :caster/aim}
+                                             {:expr :math/mul
+                                              :args [{:expr :math/sin
+                                                      :args [{:expr :math/lerp
+                                                              :args [{:tunable :speed-progress :path [0]}
+                                                                     {:tunable :speed-progress :path [1]}
+                                                                     {:expr :math/clamp
+                                                                      :args [{:expr :math/div
+                                                                              :args [{:expr :math/add
+                                                                                      :args [{:ref [:session :charge-ticks]} 1]}
+                                                                                     {:tunable :max-charge-ticks}]}
+                                                                             0.0 1.0]}]}]}
+                                                     {:tunable :max-velocity}]}
+                                             {:tunable :pitch-offset-radians}]}}]}
+                  {:component :effect/vfx
+                   :effect-id :trajectory-ribbon-session
+                   :operation :update
+                   :instance-key [:activation :vec-accel-trajectory]
+                   :audience {:type :owner}
+                   :payload {:origin {:from :caster/eye}
+                             :look-dir {:ref [:session :look-dir]}
+                             :init-vel {:ref [:session :init-vel]}
+                             :can-perform? {:ref [:session :can-perform?]}
+                             :lateral-offset 0.08 :forward-offset 0.12
+                             :vertical-offset -0.06
+                             :drag 0.98 :gravity 1.9 :dt 0.02
+                             :segments 100 :width 0.02
+                             :style {:ready-color [255 255 255 255]
+                                     :blocked-color [255 51 51 255]
+                                     :height 0.02}}}
+                  {:component :flow/finish :outcome :charging}]}
+  :release {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:ref [:session :can-perform?]}
+                          {:expr :math/gt
+                           :args [{:expr :vec3/length
+                                   :args [{:ref [:session :init-vel]}]}
+                                  0.0]}]}
+            :then {:component :txn/atomic
+                   :guards [{:component :guard/resource
+                             :cost {:cp {:tunable :release-cp}
+                                    :overload {:tunable :release-overload}}}]
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :cost/spend :budget :release}
+                                  {:component :motion/velocity
+                                   :velocity {:ref [:session :init-vel]}
+                                   :dismount? true
+                                   :reset-fall-damage? true}
+                                  {:component :score/mark :tag :launch}
+                                  {:component :cooldown/start :name :main}
+                                  {:component :effect/vfx
+                                   :effect-id :audio-one-shot
+                                   :operation :spawn
+                                   :audience {:type :owner}
+                                   :payload {:position {:from :caster/eye}
+                                             :sound-id "academy:vecmanip.vec_accel"
+                                             :volume 0.35 :pitch 1.0}}
+                                  {:component :effect/vfx
+                                   :effect-id :trajectory-ribbon-session
+                                   :operation :destroy
+                                   :instance-key [:activation :vec-accel-trajectory]
+                                   :payload {}}
+                                  {:component :flow/finish
+                                   :outcome :launched
+                                   :finish-session? true}]}
+                   :on-fail {:component :flow/sequence
+                             :steps [{:component :effect/vfx
+                                      :effect-id :trajectory-ribbon-session
+                                      :operation :destroy
+                                      :instance-key [:activation :vec-accel-trajectory]
+                                      :payload {}}
+                                     {:component :flow/finish
+                                      :outcome :insufficient-resource
+                                      :finish-session? true}]}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :trajectory-ribbon-session
+                            :operation :destroy
+                            :instance-key [:activation :vec-accel-trajectory]
+                            :payload {}}
+                           {:component :flow/finish
+                            :outcome :not-performable
+                            :finish-session? true}]}}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :trajectory-ribbon-session
+                   :operation :destroy
+                   :instance-key [:activation :vec-accel-trajectory]
+                   :payload {}}
+                  {:component :flow/finish
+                   :outcome :aborted
+                   :finish-session? true}]}
+  :events {}}}

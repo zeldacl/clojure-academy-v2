@@ -12,7 +12,9 @@
             [cn.li.mcmod.platform.block-manipulation :as blocks]
             [cn.li.mcmod.platform.entity-damage :as damage]
             [cn.li.mcmod.platform.inventory :as inventory]
+            [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.runtime.capabilities :as capabilities]))
 
@@ -438,6 +440,34 @@
         {:status (if (not= false result) :applied :failed)})
       {:status :rejected :reason :invalid-explosion-request})))
 
+(defn motion-velocity!
+  "Set a bounded player velocity through the neutral motion relay."
+  [{:keys [owner velocity dismount? reset-fall-damage?]}]
+  (let [p (point velocity)
+        valid? (and owner p (= 3 (count p))
+                    (every? #(Double/isFinite (double %)) p)
+                    (player-motion/available?))]
+    (if-not valid?
+      {:status :rejected :reason :invalid-motion-request}
+      (let [[x y z] p
+            dismounted? (or (not (true? dismount?))
+                            (player-motion/dismount-riding! owner))
+            applied? (and dismounted?
+                          (player-motion/set-velocity! owner x y z))]
+        (when (and applied? (true? reset-fall-damage?)
+                   (teleportation/available?))
+          (teleportation/reset-fall-damage! owner))
+        {:status (if applied? :applied :failed)
+         :velocity {:x x :y y :z z}}))))
+
+(defn reset-fall-damage!
+  [{:keys [owner target]}]
+  (let [entity-id (str (or target owner))]
+    (if (and (seq entity-id) (teleportation/available?))
+      {:status (if (teleportation/reset-fall-damage! entity-id)
+                 :applied :failed)}
+      {:status :rejected :reason :teleportation-port-missing})))
+
 (defn consume-item!
   [{:keys [owner source count]}]
   (if (and owner (= :main-hand source) (inventory/available?))
@@ -510,6 +540,8 @@
    :block/break-budget break-budget!
    :world/sound sound!
    :world/explosion explosion!
+   :motion/velocity motion-velocity!
+   :entity/reset-fall-damage reset-fall-damage!
    :inventory/consume consume-item!
    :entity/spawn spawn-entity!
    :entity/discard discard-entity!

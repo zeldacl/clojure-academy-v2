@@ -286,6 +286,57 @@
     (emit! ctx (stage-of ctx :world-after-translucent) :ribbon
            [{:points points :max-points max-points}])))
 
+(defn- trajectory-point [value]
+  (cond
+    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
+    (and (map? value) (every? #(number? (get value %)) [:x :y :z]))
+    [(double (:x value)) (double (:y value)) (double (:z value))]
+    (and (vector? value) (= 3 (count value))) (mapv double value)
+    :else [0.0 0.0 0.0]))
+
+(defmethod sample-node! :vfx/trajectory-ribbon
+  [node ctx]
+  (let [{:keys [origin initial-velocity look-dir lateral-offset
+                forward-offset vertical-offset drag gravity dt
+                segments width style can-perform?]}
+        (resolve-fields node ctx)
+        [ox oy oz] (trajectory-point origin)
+        [lx ly lz] (trajectory-point look-dir)
+        horizontal (Math/sqrt (+ (* lx lx) (* lz lz)))
+        safe-horizontal (if (pos? horizontal) horizontal 1.0)
+        lateral-offset (double (or lateral-offset 0.0))
+        forward-offset (double (or forward-offset 0.0))
+        vertical-offset (double (or vertical-offset 0.0))
+        sx (+ (* -1.0 lateral-offset (/ lz safe-horizontal))
+              (* -1.0 forward-offset lx))
+        sy (- vertical-offset (* forward-offset ly))
+        sz (+ (* lateral-offset (/ lx safe-horizontal))
+              (* -1.0 forward-offset lz))
+        [vx0 vy0 vz0] (trajectory-point initial-velocity)
+        drag (double (or drag 1.0))
+        gravity (double (or gravity 0.0))
+        dt (double (or dt 0.02))
+        segments (long (max 2 (min 256 (or segments 2))))
+        ready? (boolean can-perform?)
+        palette (or style {})
+        color (or (if ready? (:ready-color palette) (:blocked-color palette))
+                  (:color palette) [255 255 255 255])
+        height (double (or (:height palette) (or width 0.02)))
+        points (loop [idx 0
+                      px (double (+ ox sx)) py (double (+ oy sy)) pz (double (+ oz sz))
+                      vx (double vx0) vy (double vy0) vz (double vz0)
+                      acc (transient [])]
+                (if (>= idx segments)
+                  (persistent! acc)
+                  (let [acc (conj! acc {:position [px py pz]
+                                        :color color :height height})
+                        vx2 (* vx drag) vy2 (* vy drag) vz2 (* vz drag)
+                        px2 (+ px (* vx2 dt)) py2 (+ py (* vy2 dt)) pz2 (+ pz (* vz2 dt))
+                        vy3 (- vy2 (* dt gravity))]
+                    (recur (inc idx) px2 py2 pz2 vx2 vy3 vz2 acc))))]
+    (emit! ctx (stage-of ctx :world-after-translucent) :ribbon
+           [{:points points :max-points segments :width width :style style}])))
+
 (defmethod sample-node! :vfx/emitter
   [node ctx]
   (let [{:keys [anchor rate-per-tick limit particle]} (resolve-fields node ctx)]

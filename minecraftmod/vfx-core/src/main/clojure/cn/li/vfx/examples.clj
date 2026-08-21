@@ -82,6 +82,18 @@
                  :limit 1 :particle {:material :additive :life-ticks 1 :speed 0.01}}
    :vfx/ribbon {:component :vfx/ribbon :points {:ref [:state :trail-points]}
                 :width 0.01 :max-points 1 :color [255 255 255 255]}
+   :vfx/trajectory-ribbon {:component :vfx/trajectory-ribbon
+                           :origin point-example
+                           :initial-velocity {:vec3 [0.0 1.0 0.0]}
+                           :look-dir {:vec3 [0.0 0.0 1.0]}
+                           :lateral-offset 0.08
+                           :forward-offset 0.12
+                           :vertical-offset -0.06
+                           :drag 0.98 :gravity 1.9 :dt 0.02
+                           :segments 32 :width 0.02 :can-perform? true
+                           :style {:ready-color [255 255 255 255]
+                                   :blocked-color [255 51 51 255]
+                                   :height 0.02}}
    :vfx/fade {:component :vfx/fade :from-tick 0 :to-tick 1
               :from-alpha 1.0 :to-alpha 0.0 :child ring-example}
    :vfx/scale {:component :vfx/scale :from 0.0 :to 1.0

@@ -60,11 +60,6 @@
   [world-id owner plan]
   (call :execute-blood-retrograde! world-id owner plan))
 
-(defn execute-vec-accel!
-  "Execute the charged Vector Acceleration movement behind a Host Port."
-  [world-id owner plan]
-  (call :execute-vec-accel! world-id owner plan))
-
 (defn execute-flashing!
   "Execute the approved Flashing movement behind a Host Port."
   [world-id owner plan]

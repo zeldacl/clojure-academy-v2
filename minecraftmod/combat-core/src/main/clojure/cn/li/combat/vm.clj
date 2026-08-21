@@ -165,6 +165,22 @@
                         {:vec3 [(/ (double x) length)
                                 (/ (double y) length)
                                 (/ (double z) length)]}))
+    :vec3/launch
+    (let [[look-x look-y look-z] (vec3-components (nth args 0))
+          speed (double (nth args 1))
+          pitch-offset (double (nth args 2))
+          horiz-len (Math/sqrt (+ (* (double look-x) (double look-x))
+                                  (* (double look-z) (double look-z))))
+          safe-h (if (pos? horiz-len) horiz-len 1.0)
+          current-pitch (Math/atan2 (- (double look-y)) safe-h)
+          pitch (+ current-pitch pitch-offset)
+          cos-p (Math/cos pitch)
+          sin-p (Math/sin pitch)
+          hx (/ (double look-x) safe-h)
+          hz (/ (double look-z) safe-h)]
+      {:vec3 [(* cos-p hx speed)
+              (- (* sin-p speed))
+              (* cos-p hz speed)]})
     :vec3/approach (let [[fx fy fz] (vec3-components (nth args 0))
                          [tx ty tz] (vec3-components (nth args 1))
                          step (Math/abs (double (nth args 2)))]

@@ -224,6 +224,17 @@
     :damage-cp :cost.damage.cp
     :exp-deflect-scale :progression.exp-deflect-scale
     :exp-damage-scale :progression.exp-damage-scale}
+   :vec-accel
+   {:max-charge-ticks :charge.max-ticks
+    :max-velocity :movement.max-velocity
+    :speed-progress :movement.speed-progress
+    :pitch-offset-radians :movement.pitch-offset-radians
+    :ground-check-distance :targeting.ground-check-distance
+    :groundless-exp-threshold :targeting.groundless-exp-threshold
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-use :progression.exp-use}
    :meltdowner
    {:charge-min-ticks :charge.min-ticks
     :charge-max-ticks :charge.max-ticks

@@ -270,14 +270,6 @@
                               (catch Exception e
                                 (log/warn "Failed to apply knockback:" (ex-message e))
                                 false)))
-        execute-vec-accel! (fn [world-id owner plan]
-                             (let [q (:query-result plan)
-                                   velocity (:initial-velocity q)]
-                               (when (and world-id (map? q) (map? velocity))
-                                 (let [player (query-core/get-player-by-uuid (server-fn) owner)]
-                                   (and (player-motion/set-velocity-for-player!
-                                         player (:x velocity) (:y velocity) (:z velocity))
-                                        (when player (.resetFallDistance player)))))))
         execute-flashing! (fn [world-id owner plan]
                             (let [q (:query-result plan)
                                   {:keys [to-x to-y to-z]} q]
@@ -597,7 +589,6 @@
                             (catch Exception e
                               (log/warn "Failed to configure entity:" (ex-message e))
                               false)))
-     :execute-vec-accel! execute-vec-accel!
      :execute-flashing! execute-flashing!
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-knockback! execute-knockback!

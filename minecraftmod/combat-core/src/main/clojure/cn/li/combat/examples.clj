@@ -167,6 +167,7 @@
    :value/status-id {:expr :value/status-id :args ["jump-boost:1"]}
    :value/status-max-amplifier {:expr :value/status-max-amplifier :args ["jump-boost:1"]}
    :vec3/approach {:expr :vec3/approach :args [vec3-example vec3-example 0.1]}
+   :vec3/launch {:expr :vec3/launch :args [vec3-example 2.0 -0.174533]}
    :collection/first {:expr :collection/first :args [[{:id "x"}]]}
    :collection/nonempty {:expr :collection/nonempty :args [[]]}})
 

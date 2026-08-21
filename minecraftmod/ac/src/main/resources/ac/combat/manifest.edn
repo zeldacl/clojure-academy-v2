@@ -15,6 +15,9 @@
               :id :vec-deviation
               :resource "ac/combat/abilities/vec_deviation.edn"}
              {:kind :ability
+              :id :vec-accel
+              :resource "ac/combat/abilities/vec_accel.edn"}
+             {:kind :ability
               :id :scatter-bomb
               :resource "ac/combat/abilities/scatter_bomb.edn"}
              {:kind :ability

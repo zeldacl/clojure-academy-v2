@@ -1,0 +1,38 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :trajectory-ribbon-session
+ :revision 1
+ :lifecycle :session
+ :inputs
+ {:spawn {:origin :vec3 :look-dir :vec3 :init-vel :vec3
+          :can-perform? :boolean :lateral-offset :double
+          :forward-offset :double :vertical-offset :double
+          :drag :double :gravity :double :dt :double
+          :segments :long :width :double :style :object}
+  :update {:origin {:type :vec3} :look-dir {:type :vec3}
+           :init-vel {:type :vec3} :can-perform? {:type :boolean}
+           :lateral-offset {:type :double} :forward-offset {:type :double}
+           :vertical-offset {:type :double} :drag {:type :double}
+           :gravity {:type :double} :dt {:type :double}
+           :segments {:type :long} :width {:type :double}
+           :style {:type :object}}
+  :destroy {}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/trajectory-ribbon
+         :origin {:ref [:input :origin]}
+         :initial-velocity {:ref [:input :init-vel]}
+         :look-dir {:ref [:input :look-dir]}
+         :lateral-offset {:ref [:input :lateral-offset]}
+         :forward-offset {:ref [:input :forward-offset]}
+         :vertical-offset {:ref [:input :vertical-offset]}
+         :drag {:ref [:input :drag]}
+         :gravity {:ref [:input :gravity]}
+         :dt {:ref [:input :dt]}
+         :segments {:ref [:input :segments]}
+         :width {:ref [:input :width]}
+         :style {:ref [:input :style]}
+         :can-perform? {:ref [:input :can-perform?]}}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :origin]}
+          :end {:ref [:input :origin]}
+          :radius 16.0}}

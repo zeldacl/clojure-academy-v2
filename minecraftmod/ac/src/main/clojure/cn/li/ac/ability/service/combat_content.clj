@@ -273,32 +273,6 @@
                                   :damage (scale 3.0 6.0)}
                                  {:op :vfx :effect-id :threatening-teleport
                                  :event :release :params {:max-range 15.0}}]}}}
-    {:id :vec-accel
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 20
-     :cost-phase :release
-     :cost {:cp (scale 120.0 80.0)
-            :overload (scale 30.0 15.0)}
-     :cooldown {:ticks (scale 80.0 50.0)}
-     :program {:op :phase
-               :pulse {:op :session-patch
-                       :entries [[[:charge-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :query :query-type :vec-accel
-                                  :max-charge-ticks 20
-                                  :result-ref :launch}
-                                 {:op :require :predicate :launch}
-                                 {:op :world-effect
-                                  :effect-type :vec-accel
-                                  :query-ref :launch
-                                  :charge-ticks (session-value [:charge-ticks])
-                                  :max-charge-ticks 20}
-                                 {:op :vfx :effect-id :vec-accel
-                                  :event :perform
-                                  :params {:max-charge-ticks 20}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

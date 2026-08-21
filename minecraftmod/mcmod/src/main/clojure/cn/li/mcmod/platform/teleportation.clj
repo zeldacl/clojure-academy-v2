@@ -56,7 +56,7 @@
 (defn teleport-player!
   [owner world-id x y z]
   (boolean (call :teleport-player! owner world-id
-                (double x) (double y) (double z))))
+                 (double x) (double y) (double z))))
 
 (defn teleport-with-entities!
   [owner world-id x y z radius]
@@ -70,11 +70,14 @@
    stored destination and performs collision/dimension/entity validation."
   [owner ability-id location-id radius]
   (boolean (call :teleport-approved-location!
-                owner ability-id location-id (double radius))))
+                 owner ability-id location-id (double radius))))
 
 (defn teleport-approved-target!
   "Teleport using a server-issued approval token from a target query.
    Loader code owns target, collision, dimension and passenger validation."
   [owner ability-id approval-token mode]
   (boolean (call :teleport-approved-target!
-                owner ability-id approval-token mode)))
+                 owner ability-id approval-token mode)))
+
+(defn reset-fall-damage! [entity-id]
+  (boolean (call :reset-fall-damage! (str entity-id))))

@@ -82,6 +82,12 @@
                                 :frame-period-ticks :parts :color :facing}]
            [:vfx/emitter #{:anchor :rate-per-tick :limit}]
            [:vfx/ribbon #{:points :max-points}]
+           ;; Generic configurable ballistic preview. Physics, origin offset,
+           ;; segment count and style are supplied by the effect document.
+           [:vfx/trajectory-ribbon #{:origin :initial-velocity :look-dir
+                                      :lateral-offset :forward-offset
+                                      :vertical-offset :drag :gravity :dt
+                                      :segments :width :style :can-perform?}]
            [:vfx/fade #{:from-tick :to-tick :child}]
            [:vfx/scale #{:from :to :child}]
            [:vfx/noise #{:seed :amplitude :child}]
