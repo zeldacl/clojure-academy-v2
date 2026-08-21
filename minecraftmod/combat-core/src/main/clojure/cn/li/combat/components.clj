@@ -178,6 +178,14 @@
             :effects #{:query}
             :produces {:destination {:name-field :result :type :destination}}}
 
+           ;; Neutral block placement/drop planning.  The host resolves the
+           ;; hit-face offset and platform permissions; the ability supplies
+           ;; only the placement policy and consumes the returned plan.
+           :target/block-placement
+           {:schema {:required #{:hit :origin :direction :distance :result}}
+            :effects #{:query}
+            :produces {:destination {:name-field :result :type :block-placement}}}
+
            ;; Directional movement landing is a neutral query: the host owns
            ;; raycast/collision reads while the EDN supplies the direction and
            ;; landing policy.  It is deliberately separate from the generic
@@ -325,6 +333,13 @@
            ;; mode is an explicit data input, never a skill rule.
            :inventory/settle
            {:schema {:required #{:source :count :position :drop? :creative?}}
+            :effects #{:mutate}}
+
+           ;; Atomically place the held block at the planned face, or drop it
+           ;; at the neutral fallback point.  This is reusable for any
+           ;; ability that relocates a placeable main-hand item.
+           :inventory/place-or-drop
+           {:schema {:required #{:source :count :plan :creative?}}
             :effects #{:mutate}}
 
            :entity/spawn

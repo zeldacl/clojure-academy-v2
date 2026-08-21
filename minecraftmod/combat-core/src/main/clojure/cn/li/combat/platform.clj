@@ -11,6 +11,7 @@
             [cn.li.combat.targeting :as targeting]
             [cn.li.mcmod.platform.block-manipulation :as blocks]
             [cn.li.mcmod.platform.entity-damage :as damage]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.inventory :as inventory]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -39,6 +40,8 @@
         eye-height (double (or (:eye-height entity) (:height entity) 0.0))
         values {:id id :type type
                 :position {:x x :y y :z z}
+                :width (double (or (:width entity) 0.6))
+                :height (double (or (:height entity) 1.8))
                 :eye-height eye-height
                 :age-ms (long (or (:age-ms entity) 0))
                 :motion-progress (double (or (:motion-progress entity) 0.0))
@@ -78,9 +81,79 @@
           entities
           (or sort-spec [])))
 
+(defn- segment-intersects-aabb?
+  "Neutral slab intersection used by any line-shaped entity query."
+  [[sx sy sz] [ex ey ez] entity]
+  (let [x (double (or (:x entity) 0.0))
+        y (double (or (:y entity) 0.0))
+        z (double (or (:z entity) 0.0))
+        half-width (/ (double (or (:width entity) 0.6)) 2.0)
+        height (double (or (:height entity) 1.8))
+        bounds [[(- x half-width) y (- z half-width)]
+                [(+ x half-width) (+ y height) (+ z half-width)]]
+        [min-x min-y min-z] (first bounds)
+        [max-x max-y max-z] (second bounds)
+        dx (- (double ex) (double sx))
+        dy (- (double ey) (double sy))
+        dz (- (double ez) (double sz))
+        clip (fn [p d mn mx lo hi]
+               (if (< (Math/abs (double d)) 1.0e-9)
+                 (when (and (>= p mn) (<= p mx)) [lo hi])
+                 (let [inv (/ 1.0 d)
+                       a (* (- mn p) inv)
+                       b (* (- mx p) inv)]
+                   [(max lo (min a b)) (min hi (max a b))])))]
+    (when-let [[lo hi] (clip (double sx) dx min-x max-x 0.0 1.0)]
+      (when (<= lo hi)
+        (when-let [[lo2 hi2] (clip (double sy) dy min-y max-y lo hi)]
+          (when (<= lo2 hi2)
+            (when-let [[lo3 hi3] (clip (double sz) dz min-z max-z lo2 hi2)]
+              (<= lo3 hi3))))))))
+
+(defn- point-line-distance-sq
+  [[sx sy sz] [ex ey ez] entity]
+  (let [px (double (or (:x entity) 0.0))
+        py (double (or (:y entity) 0.0))
+        pz (double (or (:z entity) 0.0))
+        vx (- (double ex) (double sx))
+        vy (- (double ey) (double sy))
+        vz (- (double ez) (double sz))
+        wx (- px (double sx))
+        wy (- py (double sy))
+        wz (- pz (double sz))
+        len-sq (+ (* vx vx) (* vy vy) (* vz vz))
+        t (if (pos? len-sq)
+            (max 0.0 (min 1.0 (/ (+ (* wx vx) (* wy vy) (* wz vz)) len-sq)))
+            0.0)
+        qx (+ (double sx) (* vx t))
+        qy (+ (double sy) (* vy t))
+        qz (+ (double sz) (* vz t))
+        dx (- px qx) dy (- py qy) dz (- pz qz)]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
+(defn- within-cone?
+  [entity x y z eye-origin yaw0 pitch0 yaw-span pitch-span]
+  (let [ex (- (double (or (:x entity) x)) x)
+        ey (- (+ (double (or (:y entity) y))
+                 (double (or (:eye-height entity) 0.0)))
+              (double (or (second eye-origin) y)))
+        ez (- (double (or (:z entity) z)) z)
+        len (Math/sqrt (+ (* ex ex) (* ey ey) (* ez ez)))]
+    (if (<= len 1.0e-8)
+      true
+      (let [yaw (Math/atan2 ex ez)
+            pitch (Math/atan2 ey (Math/sqrt (+ (* ex ex) (* ez ez))))
+            yd (Math/abs (Math/toDegrees (- yaw yaw0)))
+            pd (Math/abs (Math/toDegrees (- pitch pitch0)))]
+        (and (<= (min yd (- 360.0 yd)) (* 0.5 yaw-span))
+             (<= pd (* 0.5 pitch-span)))))))
+
 (defn entity-select!
   [{:keys [world-id owner shape filter projection limit sort]} _frame]
-  (let [center (point (or (:center shape) (:origin shape)))
+  (let [line? (= :line (:type shape))
+        line-start (point (:start shape))
+        line-end (point (:end shape))
+        center (point (or (:center shape) (:origin shape) line-start))
         eye-origin (point (or (:eye-origin shape) (:origin shape)
                               (:center shape)))
         direction (point (:direction shape))
@@ -107,13 +180,19 @@
     (if (and world-id center (pos? limit)
              (if cone?
                (and direction eye-origin (<= 0.0 distance 128.0))
-               (<= 0.0 radius 128.0))
+               (and (<= 0.0 radius 128.0)
+                    (or (not line?) (and line-start line-end))))
              (world-effects/available?))
       (let [[x y z] center]
-        (let [candidates (if cone?
+        (let [candidates (if (or cone? line?)
                            (world-effects/find-entities-in-aabb
-                            (str world-id) (- x distance) (- y distance) (- z distance)
-                            (+ x distance) (+ y distance) (+ z distance))
+                            (str world-id)
+                            (if line? (min (nth line-start 0) (nth line-end 0)) (- x distance))
+                            (if line? (min (nth line-start 1) (nth line-end 1)) (- y distance))
+                            (if line? (min (nth line-start 2) (nth line-end 2)) (- z distance))
+                            (if line? (max (nth line-start 0) (nth line-end 0)) (+ x distance))
+                            (if line? (max (nth line-start 1) (nth line-end 1)) (+ y distance))
+                            (if line? (max (nth line-start 2) (nth line-end 2)) (+ z distance)))
                            (world-effects/find-entities-in-radius
                             (str world-id) x y z radius))
               [dx dy dz] (or direction [0.0 0.0 1.0])
@@ -124,7 +203,11 @@
               yaw-span (double (or (:yaw-span-degrees shape) 360.0))
               pitch-span (double (or (:pitch-span-degrees shape) 180.0))
               yaw0 (Math/atan2 dx dz)
-              pitch0 (Math/atan2 dy (Math/sqrt (+ (* dx dx) (* dz dz))))]
+              pitch0 (Math/atan2 dy (Math/sqrt (+ (* dx dx) (* dz dz))))
+              sort-items (fn [items]
+                           (if line?
+                             (sort-by #(point-line-distance-sq line-start line-end %) items)
+                             (sort-entities items [x y z] sort)))]
           (->> candidates
              (filter map?)
              (remove #(= owner (str (or (:id %) (:uuid %) (:entity-id %)))))
@@ -140,23 +223,14 @@
                                                    (:owner-uuid %))))))
              (filter #(or (nil? living-filter)
                           (= living-filter (boolean (:living? %)))))
-             (filter #(if-not cone?
-                        true
-                        (let [ex (- (double (or (:x %) x)) x)
-                              ey (- (+ (double (or (:y %) y))
-                                       (double (or (:eye-height %) 0.0)))
-                                    (double (or (second eye-origin) y)))
-                              ez (- (double (or (:z %) z)) z)
-                              len (Math/sqrt (+ (* ex ex) (* ey ey) (* ez ez)))]
-                          (if (<= len 1.0e-8)
-                            true
-                            (let [yaw (Math/atan2 ex ez)
-                                  pitch (Math/atan2 ey (Math/sqrt (+ (* ex ex) (* ez ez))))
-                                  yd (Math/abs (Math/toDegrees (- yaw yaw0)))
-                                  pd (Math/abs (Math/toDegrees (- pitch pitch0)))]
-                              (and (<= (min yd (- 360.0 yd)) (* 0.5 yaw-span))
-                                   (<= pd (* 0.5 pitch-span))))))))
-             (sort-entities [x y z] sort)
+             (filter (fn [candidate]
+                       (or (and line? (segment-intersects-aabb?
+                                       line-start line-end candidate))
+                           (and (not line?)
+                                (or (not cone?)
+                                    (within-cone? candidate x y z eye-origin
+                                                  yaw0 pitch0 yaw-span pitch-span))))))
+             (sort-items)
              (take limit)
              (mapv (fn [entity]
                      (let [type (or (:type entity) (:entity-type entity))
@@ -517,8 +591,30 @@
         hz (double (or (:hit-z hit) (:z hit) 0.0))
         eye-height (double (or (:eye-height hit)
                                (:entity-eye-height policy) 1.6))
-        face (:face hit)
-        destination (if miss?
+        face (or (:face hit) :down)
+        placement? (true? (:block-placement? policy))
+        face-offsets {:up [0 1 0] :down [0 -1 0]
+                      :north [0 0 -1] :south [0 0 1]
+                      :west [-1 0 0] :east [1 0 0]}
+        [fx fy fz] (get face-offsets face [0 -1 0])
+        endpoint {:x (+ ox (* dx (double distance)))
+                  :y (+ oy (* dy (double distance)))
+                  :z (+ oz (* dz (double distance)))}
+        hit-block-x (long (or (:x hit) (Math/floor hx)))
+        hit-block-y (long (or (:y hit) (Math/floor hy)))
+        hit-block-z (long (or (:z hit) (Math/floor hz)))
+        place-x (if miss? (long (:x endpoint)) (+ hit-block-x fx))
+        place-y (if miss? (long (:y endpoint)) (+ hit-block-y fy))
+        place-z (if miss? (long (:z endpoint)) (+ hit-block-z fz))
+        destination (if (and placement? miss?)
+                      {:x (+ (double place-x) 0.5)
+                       :y (double place-y)
+                       :z (+ (double place-z) 0.5)}
+                      (if (and placement? (not miss?))
+                        {:x (+ (double place-x) 0.5)
+                         :y (double place-y)
+                         :z (+ (double place-z) 0.5)}
+                        (if miss?
                       {:x (+ ox (* dx (double distance)))
                        :y (+ oy (* dy (double distance)))
                        :z (+ oz (* dz (double distance)))}
@@ -531,13 +627,30 @@
                           :south {:x hx :y (+ hy 1.7) :z (+ hz 0.6)}
                           :west {:x (- hx 0.6) :y (+ hy 1.7) :z hz}
                           :east {:x (+ hx 0.6) :y (+ hy 1.7) :z hz}
-                          {:x hx :y hy :z hz})))
+                          {:x hx :y hy :z hz})))))
         ddx (- (double (:x destination)) ox)
         ddy (- (double (:y destination)) oy)
         ddz (- (double (:z destination)) oz)]
-    {:position destination
+    {:world-id (str (:world-id request))
+     :position destination
+     :hit-position {:x hx :y hy :z hz}
+     :drop-position (if miss?
+                     endpoint
+                     {:x (+ hx fx) :y (+ hy fy) :z (+ hz fz)})
+     :line-position {:x ox :y oy :z oz}
+     :place-position {:x (double place-x) :y (double place-y) :z (double place-z)}
+     :hit-block-position {:x (double hit-block-x) :y (double hit-block-y) :z (double hit-block-z)}
+     :face face
+     :target-hit? (not miss?)
      :distance (Math/sqrt (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)))
      :hit? (not miss?)
+     :can-place? (boolean
+                  (and placement? (not miss?) (blocks/available?)
+                       (blocks/destroy-allowed?)
+                       (not (blocks/block-collidable? (str (:world-id request))
+                                                      place-x place-y place-z))
+                       (blocks/can-break-block? (str owner) (str (:world-id request))
+                                                hit-block-x hit-block-y hit-block-z)))
      :valid? (>= (Math/sqrt (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)))
                  (double (or (:minimum-distance policy) 0.0)))}))
 
@@ -568,6 +681,7 @@
       :raycast-fan (raycast-fan! request nil)
       :directional-destination (directional-raycast owner request)
       :resolve-destination (resolve-destination owner request)
+      :block-placement (resolve-destination owner request)
       :penetration (penetration-raycast request)
       (basic-raycast request))))
 
@@ -741,6 +855,21 @@
       {:status :failed})
     {:status :rejected :reason :invalid-inventory-consume-request}))
 
+(defn item-held!
+  "Neutral main-hand snapshot.  Item identity/count comes from the mcmod
+   inventory relay; placeability is a platform fact exposed through the
+   entity relay, never a skill-specific decision."
+  [{:keys [owner source]} _frame]
+  (let [snapshot (when (and owner (= :main-hand source))
+                   (inventory/main-hand-item owner))]
+    {:present? (boolean snapshot)
+     :placeable? (boolean (and snapshot (entity/available?)
+                               (entity/player-main-hand-placeable-block? owner)))
+     :item-id (:item-id snapshot)
+     :block-id (:item-id snapshot)
+     :count (long (or (:count snapshot) 0))
+     :source source}))
+
 (defn settle-item!
   "Settle one main-hand item using a neutral drop/consume policy.
 
@@ -769,6 +898,46 @@
         :else
         {:status (if (inventory/consume-main-hand-item! owner count)
                    :applied :failed)}))))
+
+(defn place-or-drop-item!
+  "Place a held block at a neutral face plan, falling back to a drop.
+
+   All policy facts (can-place?/creative?) are supplied by the query/EDN
+   boundary; this function only sequences the cross-platform relays and never
+   names a skill or an item type."
+  [{:keys [owner source count plan creative?]}]
+  (let [count (long (or count 1))
+        p (when (map? plan) (:place-position plan))
+        d (when (map? plan) (:drop-position plan))
+        face (:face plan)
+        world-id (:world-id plan)
+        can-place? (true? (:can-place? plan))
+        valid? (and owner (= :main-hand source) (= 1 count)
+                    world-id p d face)]
+    (if-not valid?
+      {:status :rejected :executed? false}
+      (let [placed? (when can-place?
+                      (let [[x y z] (point p)]
+                        (boolean (and (entity/available?)
+                                      (:placed? (entity/player-place-main-hand-block-at-hit!
+                                                 owner (str world-id)
+                                                 (long x) (long y) (long z) face))))))
+            dropped? (when-not placed?
+                       (let [[x y z] (point d)]
+                         (boolean (if creative?
+                                   (inventory/spawn-main-hand-item-copy-at!
+                                    owner count x y z)
+                                   (inventory/drop-main-hand-item-at!
+                                    owner count x y z)))))
+            consumed? (or (true? creative?)
+                          (and placed?
+                               (boolean (inventory/consume-main-hand-item!
+                                         owner count)))
+                          dropped?)]
+        {:status (if consumed? :applied :failed)
+         :placed? (boolean placed?)
+         :dropped? (boolean dropped?)
+         :executed? (boolean consumed?)}))))
 
 (defn spawn-entity!
   "Spawn a neutral tracked entity through the mcmod relay."
@@ -1047,6 +1216,7 @@
 
 (defn query-handlers []
   {:raycast raycast!
+   :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!
    :terrain/propagate terrain-propagate!
@@ -1065,6 +1235,7 @@
    :entity/reset-fall-damage reset-fall-damage!
    :inventory/consume consume-item!
    :inventory/settle settle-item!
+   :inventory/place-or-drop place-or-drop-item!
    :entity/spawn spawn-entity!
    :entity/discard discard-entity!
    :entity/configure configure-entity!

@@ -223,6 +223,7 @@
   {:target/raycast :raycast
    :target/raycast-fan :raycast
    :target/resolve-destination :raycast
+   :target/block-placement :raycast
    :target/directional-destination-query :raycast
    :target/entities :entity/select
    :target/entity-snapshot :entity/snapshot
@@ -239,6 +240,7 @@
 (def ^:private action-capability-by-component
   {:inventory/consume :inventory/consume
    :inventory/settle :inventory/settle
+   :inventory/place-or-drop :inventory/place-or-drop
    :combat/damage :entity/damage
    :entity/trigger-behavior :entity/trigger-behavior
    :entity/mark :entity/mark
@@ -352,6 +354,8 @@
                              {:query-kind :raycast-fan})
                            (when (= component :target/resolve-destination)
                              {:query-kind :resolve-destination})
+                           (when (= component :target/block-placement)
+                             {:query-kind :block-placement})
                            (when (= :penetration (get-in data [:policy :type]))
                              {:query-kind :penetration})
                            (dissoc data :result :component))

@@ -39,12 +39,6 @@
   [world-id owner entity-type position velocity life-ticks]
   (call :spawn-entity! world-id owner entity-type position velocity life-ticks))
 
-(defn execute-shift-teleport!
-  "Place/drop the caster's held item at a raycasted point and damage
-   whatever intersects the caster->point line, behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-shift-teleport! world-id owner plan))
-
 (defn execute-flashing!
   "Execute the approved Flashing movement behind a Host Port."
   [world-id owner plan]

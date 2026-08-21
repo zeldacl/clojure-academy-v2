@@ -1,0 +1,248 @@
+{:schema-version 2
+ :kind :ability
+ :id :shift-teleport
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id
+            :caster/creative? :rng/seed]
+ :prerequisites [{:skill-id :location-teleport :min-exp 0.5}]
+ :tunables
+ {:maximum-range {:curve :mastery-lerp}
+  :damage {:curve :mastery-lerp}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-base {:curve :const}}
+ :costs
+ {:release {:resources {:cp {:tunable :release-cp}
+                        :overload {:tunable :release-overload}}}}
+ :progression
+ {:teleport {:per-mark {:expr :math/mul
+                        :args [{:tunable :exp-base}
+                               {:expr :math/add
+                                :args [1.0 {:ref [:slot :hit-count]}]}]}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :fragments
+ {:refresh-trace
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :target/item-held
+                   :source :main-hand
+                   :result :hand-item}
+                  {:component :target/raycast
+                   :origin {:from :caster/eye}
+                   :direction {:from :caster/aim}
+                   :distance {:tunable :maximum-range}
+                   :include-entities? false
+                   :include-blocks? true
+                   :result :block-hit}
+                  {:component :target/block-placement
+                   :hit {:ref [:slot :block-hit]}
+                   :origin {:from :caster/eye}
+                   :direction {:from :caster/aim}
+                   :distance {:tunable :maximum-range}
+                   :policy {:block-placement? true}
+                   :result :trace}
+                  {:component :target/entities
+                   :shape {:type :line
+                           :start {:from :caster/body}
+                           :end {:expr :vec3/add
+                                 :args [{:ref [:slot :trace :position]}
+                                        {:vec3 [0.0 0.5 0.0]}]}}
+                   :projection [:id :position :width :height]
+                   :limit 256
+                   :result :targets}
+                  {:component :session/patch
+                   :entries [{:path [:hand-item] :mode :assign
+                              :value {:ref [:slot :hand-item]}}
+                             {:path [:trace] :mode :assign
+                              :value {:ref [:slot :trace]}}
+                             {:path [:targets] :mode :assign
+                              :value {:ref [:slot :targets]}}]}]}}}
+  :destroy-target-markers
+  {:inputs {}
+   :body {:component :flow/foreach
+          :items {:ref [:slot :targets]}
+          :as :target
+          :limit 256
+          :body {:component :effect/vfx
+                 :effect-id :target-box-session
+                 :operation :destroy
+                 :instance-key [:activation :shift-teleport-target
+                                {:ref [:slot :target :id]}]
+                 :payload {}}}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :refresh-trace}
+                  {:component :flow/branch
+                   :when {:expr :bool/and
+                          :args [{:ref [:slot :hand-item :present?]}
+                                 {:ref [:slot :hand-item :placeable?]}
+                                 {:ref [:slot :trace :valid?]}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :effect/vfx
+                                   :effect-id :target-box-session
+                                   :operation :spawn
+                                   :instance-key [:activation :shift-teleport-destination]
+                                   :audience {:type :nearby :radius 64.0}
+                                   :payload {:position {:ref [:slot :trace :position]}
+                                             :width 1.2 :height 1.2
+                                             :color [139 139 139 180]}}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :targets]}
+                                   :as :target :limit 256
+                                   :body {:component :effect/vfx
+                                          :effect-id :target-box-session
+                                          :operation :spawn
+                                          :instance-key [:activation :shift-teleport-target
+                                                         {:ref [:slot :target :id]}]
+                                          :audience {:type :nearby :radius 64.0}
+                                          :payload {:position {:ref [:slot :target :position]}
+                                                    :width {:ref [:slot :target :width]}
+                                                    :height {:ref [:slot :target :height]}
+                                                    :color [235 81 81 180]}}}]}
+                   :else {:component :flow/finish
+                          :outcome :no-item
+                          :finish-session? true}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :destroy-target-markers}
+                  {:component :refresh-trace}
+                  {:component :flow/branch
+                   :when {:expr :bool/and
+                          :args [{:ref [:slot :hand-item :present?]}
+                                 {:ref [:slot :hand-item :placeable?]}
+                                 {:ref [:slot :trace :valid?]}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :effect/vfx
+                                   :effect-id :target-box-session
+                                   :operation :update
+                                   :instance-key [:activation :shift-teleport-destination]
+                                   :audience {:type :nearby :radius 64.0}
+                                   :payload {:position {:ref [:slot :trace :position]}
+                                             :width 1.2 :height 1.2
+                                             :color [139 139 139 180]}}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :targets]}
+                                   :as :target :limit 256
+                                   :body {:component :effect/vfx
+                                          :effect-id :target-box-session
+                                          :operation :spawn
+                                          :instance-key [:activation :shift-teleport-target
+                                                         {:ref [:slot :target :id]}]
+                                          :audience {:type :nearby :radius 64.0}
+                                          :payload {:position {:ref [:slot :target :position]}
+                                                    :width {:ref [:slot :target :width]}
+                                                    :height {:ref [:slot :target :height]}
+                                                    :color [235 81 81 180]}}}]}
+                   :else {:component :flow/sequence
+                          :steps [{:component :effect/vfx
+                                   :effect-id :target-box-session
+                                   :operation :destroy
+                                   :instance-key [:activation :shift-teleport-destination]
+                                   :payload {}}
+                                  {:component :flow/finish
+                                   :outcome :aborted
+                                   :finish-session? true}]}}
+                  {:component :flow/finish :outcome :continue}]}
+  :release {:component :flow/sequence
+            :steps [{:component :refresh-trace}
+                    {:component :flow/branch
+                     :when {:expr :bool/and
+                            :args [{:ref [:slot :hand-item :present?]}
+                                   {:ref [:slot :hand-item :placeable?]}
+                                   {:ref [:slot :trace :valid?]}]}
+                     :then {:component :txn/atomic
+                            :guards [{:component :guard/resource
+                                      :cost {:cp {:tunable :release-cp}
+                                             :overload {:tunable :release-overload}}}]
+                            :reservations []
+                            :body {:component :flow/sequence
+                                   :steps [{:component :cost/spend :budget :release}
+                                           {:component :inventory/place-or-drop
+                                            :source :main-hand :count 1
+                                            :plan {:ref [:slot :trace]}
+                                            :creative? {:from :caster/creative?}}
+                                           {:component :data/bind
+                                            :to :hit-count :value 0.0}
+                                           {:component :flow/foreach
+                                            :items {:ref [:slot :targets]}
+                                            :as :target :limit 256
+                                            :body {:component :flow/sequence
+                                                   :steps [{:component :combat/damage
+                                                            :target {:ref [:slot :target :id]}
+                                                            :amount {:tunable :damage}
+                                                            :damage-type :magic}
+                                                           {:component :data/bind
+                                                            :to :hit-count
+                                                            :value {:expr :math/add
+                                                                    :args [{:ref [:slot :hit-count]} 1.0]}}]}}
+                                           {:component :score/mark
+                                            :tag :teleport
+                                            :weight {:expr :math/add
+                                                     :args [1.0 {:ref [:slot :hit-count]}]}}
+                                           {:component :cooldown/start :name :main}
+                                           {:component :effect/vfx
+                                            :effect-id :target-box-session
+                                            :operation :destroy
+                                            :instance-key [:activation :shift-teleport-destination]
+                                            :payload {}}
+                                           {:component :effect/vfx
+                                            :effect-id :particle-trail-audio-transient
+                                            :operation :spawn
+                                            :audience {:type :nearby :radius 64.0}
+                                            :payload {:start {:expr :vec3/sub
+                                                              :args [{:ref [:slot :trace :line-position]}
+                                                                     {:vec3 [0.0 0.5 0.0]}]}
+                                                      :end {:expr :vec3/add
+                                                            :args [{:ref [:slot :trace :position]}
+                                                                   {:vec3 [0.0 0.5 0.0]}]}
+                                                      :spacing {:min 0.6 :max 1.0}
+                                                      :radius {:min 0.1 :max 0.2}
+                                                      :count-limit 128 :life-ticks 20
+                                                      :texture "academy:textures/effects/tp_particle.png"
+                                                      :velocity {:x [-0.05 0.05] :y [-0.02 0.05] :z [-0.05 0.05]}
+                                                      :size [0.1 2.0] :alpha [153 204]
+                                                      :fade-in 5 :fade-out 20
+                                                      :sound-id "academy:tp.tp_shift"
+                                                      :sound-position {:ref [:slot :trace :line-position]}
+                                                      :sound-volume 0.5 :sound-pitch 1.0}}
+                                           {:component :destroy-target-markers}
+                                           {:component :flow/finish
+                                            :outcome :performed
+                                            :finish-session? true}]}
+                            :on-fail {:component :flow/sequence
+                                      :steps [{:component :effect/vfx
+                                               :effect-id :target-box-session
+                                               :operation :destroy
+                                               :instance-key [:activation :shift-teleport-destination]
+                                               :payload {}}
+                                             {:component :destroy-target-markers}
+                                             {:component :flow/finish
+                                              :outcome :insufficient-resource
+                                              :finish-session? true}]}}
+                     :else {:component :flow/sequence
+                            :steps [{:component :effect/vfx
+                                     :effect-id :target-box-session
+                                     :operation :destroy
+                                     :instance-key [:activation :shift-teleport-destination]
+                                     :payload {}}
+                                   {:component :destroy-target-markers}
+                                   {:component :flow/finish
+                                    :outcome :no-item
+                                    :finish-session? true}]}}
+                    {:component :flow/finish
+                     :outcome :released
+                     :finish-session? true}]}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :target-box-session
+                   :operation :destroy
+                   :instance-key [:activation :shift-teleport-destination]
+                   :payload {}}
+                  {:component :destroy-target-markers}
+                  {:component :flow/finish
+                   :outcome :aborted
+                   :finish-session? true}]}}}

@@ -1,0 +1,41 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :particle-trail-audio-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3
+          :spacing :object :radius :object :count-limit :long
+          :life-ticks :long :texture :string :velocity :object
+          :size :object :alpha :object :fade-in :long :fade-out :long
+          :sound-id :string :sound-position :vec3
+          :sound-volume :double :sound-pitch :double}}
+ :state-slots {:age :double :seed :long}
+ :graph
+ {:component :vfx/timeline
+  :duration-ticks 20
+  :children [{:at 0
+              :node {:component :vfx/particle-trail
+                     :start {:ref [:input :start]}
+                     :end {:ref [:input :end]}
+                     :spacing {:ref [:input :spacing]}
+                     :radius {:ref [:input :radius]}
+                     :count-limit {:ref [:input :count-limit]}
+                     :life-ticks {:ref [:input :life-ticks]}
+                     :texture {:ref [:input :texture]}
+                     :seed {:ref [:state :seed]}
+                     :velocity {:ref [:input :velocity]}
+                     :size {:ref [:input :size]}
+                     :alpha {:ref [:input :alpha]}
+                     :fade-in {:ref [:input :fade-in]}
+                     :fade-out {:ref [:input :fade-out]}}}
+             {:at 0
+              :node {:component :vfx/audio-one-shot
+                     :sound-id {:ref [:input :sound-id]}
+                     :position {:ref [:input :sound-position]}
+                     :volume {:ref [:input :sound-volume]}
+                     :pitch {:ref [:input :sound-pitch]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius 1.2}}

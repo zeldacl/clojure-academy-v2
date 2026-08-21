@@ -57,6 +57,10 @@
    {:component :target/directional-destination-query
     :origin vec3-example :look {:vec3 [0.0 0.0 1.0]} :eye-y 1.62
     :direction :forward :distance 16.0 :policy {} :result :destination}
+   :target/block-placement
+   {:component :target/block-placement :hit {:ref [:slot :hit]}
+    :origin vec3-example :direction {:vec3 [0.0 0.0 1.0]}
+    :distance 16.0 :policy {:block-placement? true} :result :destination}
    :target/entities {:component :target/entities
                      :shape {:type :sphere :center vec3-example :radius 1.0}
                      :projection [:id :type :position] :limit 1 :result :entities}
@@ -132,6 +136,9 @@
    :inventory/consume {:component :inventory/consume :source :main-hand :count 1}
    :inventory/settle {:component :inventory/settle :source :main-hand :count 1
                       :position {:vec3 [0.0 64.0 0.0]} :drop? true :creative? false}
+   :inventory/place-or-drop {:component :inventory/place-or-drop
+                             :source :main-hand :count 1
+                             :plan {:ref [:slot :plan]} :creative? false}
    :entity/spawn {:component :entity/spawn :entity-type "generic"
                   :owner {:ref [:context :owner]} :position vec3-example
                   :velocity vec3-example :result :spawn}

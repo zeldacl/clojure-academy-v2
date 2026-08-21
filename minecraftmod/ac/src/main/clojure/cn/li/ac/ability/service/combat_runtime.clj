@@ -212,93 +212,6 @@
                    (+ (* dx dx) (* dy dy) (* dz dz))))
                candidates)))))
 
-;; --- shift-teleport helpers ------------------------------------------------
-;; Ported from the pre-combat-core shift-teleport defskill (deleted in
-;; a8c000766, recovered from git history). The skill isn't actually a player
-;; teleport -- it raycasts a placement point, places/drops the held item
-;; there, and damages whatever intersects the line from the caster to that
-;; point. Pure geometry only; nothing here touches a live Player object, so
-;; it can run in the query (AC layer). The hand-item mutation (place/drop/
-;; consume) needs a resolved Player object that only platform-src has
-;; (query-core/get-player-by-uuid) -- see execute-shift-teleport!.
-
-(def ^:private shift-teleport-face-offsets
-  {:up [0 1 0] :down [0 -1 0]
-   :north [0 0 -1] :south [0 0 1]
-   :west [-1 0 0] :east [1 0 0]})
-
-(defn- shift-teleport-segment-intersects-aabb?
-  "True when segment p0->p1 intersects axis-aligned box {min-x..max-z}."
-  [{:keys [x y z]} p1 {:keys [min-x min-y min-z max-x max-y max-z]}]
-  (let [dx (- (double (:x p1)) (double x))
-        dy (- (double (:y p1)) (double y))
-        dz (- (double (:z p1)) (double z))
-        axis-step (fn [p d mn mx tmin tmax]
-                    (if (< (Math/abs (double d)) 1.0e-9)
-                      (if (or (< p mn) (> p mx)) nil [tmin tmax])
-                      (let [inv (/ 1.0 d)
-                            t1 (* (- mn p) inv)
-                            t2 (* (- mx p) inv)
-                            lo (min t1 t2)
-                            hi (max t1 t2)
-                            ntmin (max tmin lo)
-                            ntmax (min tmax hi)]
-                        (when (<= ntmin ntmax) [ntmin ntmax]))))]
-    (when-let [[tmin tmax] (axis-step (double x) dx (double min-x) (double max-x) 0.0 1.0)]
-      (when-let [[tmin tmax] (axis-step (double y) dy (double min-y) (double max-y) tmin tmax)]
-        (when-let [[_ _] (axis-step (double z) dz (double min-z) (double max-z) tmin tmax)]
-          true)))))
-
-(defn- shift-teleport-entity-aabb
-  [entity]
-  (let [x (double (:x entity)) y (double (:y entity)) z (double (:z entity))
-        half-w (/ (double (or (:width entity) 0.6)) 2.0)
-        h (double (or (:height entity) 1.8))]
-    {:min-x (- x half-w) :max-x (+ x half-w)
-     :min-y y :max-y (+ y h)
-     :min-z (- z half-w) :max-z (+ z half-w)}))
-
-(defn- shift-teleport-point-line-distance-sq
-  [{sx :x sy :y sz :z} {ex :x ey :y ez :z} {px :x py :y pz :z}]
-  (let [vx (- (double ex) (double sx)) vy (- (double ey) (double sy)) vz (- (double ez) (double sz))
-        wx (- (double px) (double sx)) wy (- (double py) (double sy)) wz (- (double pz) (double sz))
-        len-sq (+ (* vx vx) (* vy vy) (* vz vz))
-        t (if (pos? len-sq)
-            (max 0.0 (min 1.0 (/ (+ (* wx vx) (* wy vy) (* wz vz)) len-sq)))
-            0.0)
-        qx (+ (double sx) (* vx t)) qy (+ (double sy) (* vy t)) qz (+ (double sz) (* vz t))
-        dx (- (double px) qx) dy (- (double py) qy) dz (- (double pz) qz)]
-    (+ (* dx dx) (* dy dy) (* dz dz))))
-
-(defn- shift-teleport-line-targets
-  "Entities intersecting segment line-from->line-to, nearest-first, self
-   excluded, deduped by uuid."
-  [owner world-id line-from line-to]
-  (if-not (and (world-effects/available?) line-from line-to)
-    []
-    (let [min-x (min (double (:x line-from)) (double (:x line-to)))
-          min-y (min (double (:y line-from)) (double (:y line-to)))
-          min-z (min (double (:z line-from)) (double (:z line-to)))
-          max-x (max (double (:x line-from)) (double (:x line-to)))
-          max-y (max (double (:y line-from)) (double (:y line-to)))
-          max-z (max (double (:z line-from)) (double (:z line-to)))
-          candidates (world-effects/find-entities-in-aabb
-                      world-id min-x min-y min-z max-x max-y max-z)]
-      (->> candidates
-           (filter (fn [entity]
-                     (let [uuid (str (:uuid entity))]
-                       (and (seq uuid) (not= uuid (str owner))
-                            (shift-teleport-segment-intersects-aabb?
-                             line-from line-to (shift-teleport-entity-aabb entity))))))
-           (sort-by (partial shift-teleport-point-line-distance-sq line-from line-to))
-           (reduce (fn [acc entity]
-                     (let [uuid (str (:uuid entity))]
-                       (if (contains? (:seen acc) uuid)
-                         acc
-                         {:seen (conj (:seen acc) uuid) :entities (conj (:entities acc) entity)})))
-                   {:seen #{} :entities []})
-           :entities))))
-
 ;; `:runtime-interop :get-block-entity-at` is a neutral AC host adapter used
 ;; by the generic energy query/action ports below. It returns an opaque tile
 ;; only inside this composition root; no tile or Minecraft object crosses the
@@ -451,59 +364,6 @@
                                                    (location-teleport/query-location-teleport (str owner)))
                                         location-name (->> locations (map :name) sort first)]
                                     (when location-name {:location-id location-name}))))
-              ;; shift-teleport isn't a player teleport at all -- it's "place
-              ;; or drop the held item at a raycasted point, then damage
-              ;; whatever intersects the line from caster to that point".
-              ;; Gets its own query-type/effect-type rather than piggybacking
-              ;; on :teleport-target/:teleport-approved-target, matching this
-              ;; file's convention for skills with a genuinely distinct
-              ;; mechanic (mag-manip, knockback).
-              :shift-teleport
-              (fn [context node]
-                (if-let [host-query (contract/host-port :query)]
-                  (host-query :shift-teleport context node)
-                  (let [owner (:owner context)
-                        world-id (geom/world-id-of owner)
-                        eye (geom/eye-pos owner)
-                        body (geom/body-pos owner)
-                        look (when (raycast/available?) (raycast/player-look-vector owner))
-                        exp (skill-exp-of context (:ability-id context))
-                        max-range (resolve-scale (or (:max-range node) 25.0) exp)]
-                    (when (and world-id eye body look)
-                      (let [lx (double (or (:x look) 0.0))
-                            ly (double (or (:y look) 0.0))
-                            lz (double (or (:z look) 1.0))
-                            hit (when (raycast/available?)
-                                  (raycast/raycast-blocks
-                                   world-id (:x eye) (:y eye) (:z eye) lx ly lz max-range))
-                            face (or (:face hit) :down)
-                            [ox oy oz] (get shift-teleport-face-offsets face [0 -1 0])
-                            endpoint-x (+ (:x eye) (* lx max-range))
-                            endpoint-y (+ (:y eye) (* ly max-range))
-                            endpoint-z (+ (:z eye) (* lz max-range))
-                            hit-block-x (if hit (long (:x hit)) (long (Math/floor endpoint-x)))
-                            hit-block-y (if hit (long (:y hit)) (long (Math/floor endpoint-y)))
-                            hit-block-z (if hit (long (:z hit)) (long (Math/floor endpoint-z)))
-                            place-x (+ hit-block-x ox)
-                            place-y (+ hit-block-y oy)
-                            place-z (+ hit-block-z oz)
-                            dest-block-x (if hit place-x (long endpoint-x))
-                            dest-block-y (if hit place-y (long endpoint-y))
-                            dest-block-z (if hit place-z (long endpoint-z))
-                            drop-x (if hit (+ (double (:hit-x hit)) ox) endpoint-x)
-                            drop-y (if hit (+ (double (:hit-y hit)) oy) endpoint-y)
-                            drop-z (if hit (+ (double (:hit-z hit)) oz) endpoint-z)
-                            dest-x (+ (double dest-block-x) 0.5)
-                            dest-y (double dest-block-y)
-                            dest-z (+ (double dest-block-z) 0.5)
-                            line-end {:x dest-x :y (+ dest-y 0.5) :z dest-z}
-                            entities (shift-teleport-line-targets owner world-id body line-end)]
-                        {:world-id world-id
-                         :hit-block-x hit-block-x :hit-block-y hit-block-y :hit-block-z hit-block-z
-                         :place-x place-x :place-y place-y :place-z place-z
-                         :face face
-                         :drop-x drop-x :drop-y drop-y :drop-z drop-z
-                         :target-entities (mapv #(select-keys % [:uuid]) entities)})))))
               }]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
@@ -589,23 +449,6 @@
                                               (world-effects/spawn-lightning!
                                                world-id (double x) (double y) (double z)
                                                (boolean visual-only?)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :shift-teleport
-                         (let [{:keys [world-id query-result damage]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               valid? (and world-id (map? query-result)
-                                            (every? #(number? (get query-result %))
-                                                    [:hit-block-x :hit-block-y :hit-block-z
-                                                     :place-x :place-y :place-z
-                                                     :drop-x :drop-y :drop-z])
-                                            (finite? damage) (pos? (double damage))
-                                            (<= (double damage) 1000.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-shift-teleport!
-                                               world-id owner effect))
                                       :applied
                                       :failed)
                             :effect effect})
@@ -1240,21 +1083,6 @@
               :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
               :on-ground? (boolean on-ground?)
               :can-fly? (motion-effects/player-can-fly? owner)}))))
-      (when-not (contains? (:queries (capabilities/snapshot)) :item/held)
-        (capabilities/register-query!
-         :item/held
-         (fn [{:keys [owner source]} _frame]
-           (let [stack (when (= :main-hand source) (held-item-at owner))
-                 item-id (when (and stack (platform-item/available?))
-                           (try (str (platform-item/registry-name
-                                      (platform-item/object stack)))
-                                (catch Throwable _ nil)))]
-             {:present? (boolean stack)
-              :supported? (boolean (and stack
-                                        (energy/is-energy-item-supported? stack)))
-              :item-id item-id
-              :block-id item-id
-              :source source}))))
       (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
         (capabilities/register-query!
          :energy/target

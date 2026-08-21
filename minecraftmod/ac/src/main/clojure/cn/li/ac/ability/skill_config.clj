@@ -197,6 +197,13 @@
     :aoe-radius :combat.aoe-radius
     :cooldown-per-hold :cooldown.ticks-per-hold
     :exp-use :progression.exp-use}
+   :shift-teleport
+   {:maximum-range :targeting.range
+    :damage :combat.damage
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-base :progression.exp-base}
    :vec-reflection
    {:tick-cp :cost.tick.cp
     :overload-keep :cost.overload-keep

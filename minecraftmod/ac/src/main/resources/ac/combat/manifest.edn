@@ -42,6 +42,9 @@
               :id :threatening-teleport
               :resource "ac/combat/abilities/threatening_teleport.edn"}
              {:kind :ability
+              :id :shift-teleport
+              :resource "ac/combat/abilities/shift_teleport.edn"}
+             {:kind :ability
              :id :flashing
               :resource "ac/combat/abilities/flashing.edn"}
              {:kind :ability
