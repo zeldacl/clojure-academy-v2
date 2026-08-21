@@ -1,0 +1,58 @@
+{:schema-version 2
+ :kind :ability
+ :id :dim-folding-theorem
+ :revision 2
+ :activation :passive
+ :status :migrated
+ :requires [:world/id :rng/seed]
+ :prerequisites [{:skill-id :threatening-teleport :min-exp 0.2}]
+ :tunables
+ {:damage-multipliers {:curve :pair}
+  :level0-probability {:curve :mastery-lerp}
+  :exp-per-crit-level {:curve :const}}
+ :reactions
+ [{:on :combat/damage
+   :priority 200
+   :when {:expr :bool/and
+          :args [{:ref [:context :source-learned?]}
+                 {:expr :bool/not
+                  :args [{:ref [:context :reflected?]}]}
+                 {:expr :math/gt
+                  :args [{:ref [:request :base]} 0.0]}]}
+   :program
+   {:component :damage/critical
+    ;; The passive contributes the level-0 roll. Higher levels belong to the
+    ;; separately migrated Space Fluctuation passive and are intentionally not
+    ;; duplicated here.
+    :levels [{:level 0
+              :probability {:tunable :level0-probability}
+              :multiplier {:tunable :damage-multipliers :path [0]}}]
+    :damage-types [:magic :skill]
+    :exp-per-level {:tunable :exp-per-crit-level}
+    :vfx {:effect-id :particle-burst-trail-transient
+          :instance-key [:combat :critical]
+          :audience {:type :nearby :radius 64.0}
+          :payload {:start {:ref [:context :target-position]}
+                    :end {:ref [:context :target-position]}
+                    :spacing {:min 0.0 :max 0.0}
+                    :radius {:min 0.3 :max 0.42}
+                    :count-limit 8
+                    :life-ticks 15
+                    :texture "academy:textures/effects/formula/0.png"
+                    :velocity {:min -0.03 :max 0.03}
+                    :size {:min 1.0 :max 1.7}
+                    :alpha {:min 152 :max 255}
+                    :fade-in 2
+                    :fade-out 20}}
+    :feedback {:message-key "ability.teleporter.critical_hit"
+               :args [{:ref [:context :critical-multiplier]}]
+               :translate? true}
+    :events [{:type :achievement/trigger
+              :payload {:id "teleporter.critical_attack"}}]}}]
+ :program
+ {:component :flow/phases
+  :start {:component :flow/finish :outcome :passive}
+  :pulse {:component :flow/finish :outcome :passive}
+  :release {:component :flow/finish :outcome :passive}
+  :abort {:component :flow/finish :outcome :passive}
+  :events {}}}

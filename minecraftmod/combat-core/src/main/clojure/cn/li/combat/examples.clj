@@ -100,6 +100,11 @@
    :damage/reflect {:component :damage/reflect
                     :multiplier 1.0 :cost-per-damage 1.0
                     :minimum 1.0 :max-depth 6}
+   :damage/multiply {:component :damage/multiply :multiplier 1.0}
+   :damage/critical {:component :damage/critical
+                     :levels [{:level 0 :probability 0.1 :multiplier 1.3}]
+                     :damage-types [:magic :skill]
+                     :exp-per-level 0.005}
    :damage/absorb {:component :damage/absorb
                    :cap 10.0 :interval-ticks 18
                    :last-tick-path [:last-absorb-tick]

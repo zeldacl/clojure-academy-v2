@@ -232,7 +232,7 @@
                           (runtime-hooks/client-session-id))]
     (when-let [{:keys [text color alpha]} (combat-notice/active-notice combat-notice-component
                                                                        session-id
-                                                                       :teleporter-crit
+                                                                       :combat-critical
                                                                        now-ms)]
       {:type :combat-notice
        :y 26

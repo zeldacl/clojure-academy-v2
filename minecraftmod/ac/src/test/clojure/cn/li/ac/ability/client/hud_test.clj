@@ -16,7 +16,7 @@
     (combat-notice/show-notice!
      component
      session-id
-     :teleporter-crit
+     :combat-critical
      {:text "Critical Hit x1.6"
       :duration-ms 2000
       :color [255 226 120]})

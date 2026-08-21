@@ -1545,6 +1545,20 @@
          (str (:owner event)) (str (:id payload))))
       {:status :applied :type (:type event)})
 
+    :player/feedback
+    (let [{:keys [message-key args translate?]} (:payload event)
+          owner (:owner event)]
+      (when (and owner (string? message-key) (fw/fw-atom))
+        (platform/call-adapter (fw/fw-atom)
+                               :player-feedback
+                               :send-player-feedback!
+                               (str owner)
+                               {:mode :chat
+                                :message message-key
+                                :args (vec (or args []))
+                                :translate? (boolean (if (nil? translate?) true translate?))}))
+      {:status :applied :type (:type event)})
+
     :world/block-impact
     (let [{:keys [world-id position block-position water? ignite-probability
                   fishing-probability fishing-exp-threshold skill-exp seed]} (:payload event)
@@ -1649,7 +1663,11 @@
    returns the transformed neutral request; the platform writes only the
    resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
-  (let [request (apply-combat-damage-reactions
+  (let [world-id (or (:world-id damage-source)
+                     (some-> (raycast/player-position (str player-id)) :world-id))
+        target-position (when world-id
+                          (motion-effects/entity-position world-id (str player-id)))
+        request (apply-combat-damage-reactions
                 (combat/process-damage-request
                  (engine)
                  {:source (or attacker-id :environment)
@@ -1659,10 +1677,15 @@
                   :components {:direct (double original-damage)}
                   :tags #{:combat :intercepted}
                   :metadata {:damage-source damage-source
-                             :world-id (or (:world-id damage-source)
-                                           (some-> (raycast/player-position
-                                                    (str player-id))
-                                                   :world-id))
+                             :world-id world-id
+                             :target-position (when (map? target-position)
+                                                [(double (or (:x target-position) 0.0))
+                                                 (double (or (:y target-position) 0.0))
+                                                 (double (or (:z target-position) 0.0))])
+                             :activation-seed (hash [attacker-id player-id
+                                                     @last-known-tick*
+                                                     original-damage
+                                                     (:damage-type damage-source)])
                              :attacker-front? (attacker-front?
                                                player-id attacker-id damage-source)}})
                 {})]
@@ -1673,6 +1696,9 @@
     (when (and (not (:cancelled? request))
                (seq (:state-patch request)))
       (commit-state-patch! player-id (:state-patch request)))
+    (when (and (not (:cancelled? request)) attacker-id
+               (seq (:source-state-patch request)))
+      (commit-state-patch! (str attacker-id) (:source-state-patch request)))
     (when (and (not (:cancelled? request))
                (seq (:session-patch request)))
       (combat-sessions/apply-actions!
@@ -1696,7 +1722,11 @@
    The removed mutable cancel/precheck registries have no replacement hook;
    combat nodes can cancel through the same deterministic request pipeline."
   [player-id attacker-id original-damage damage-source]
-  (let [request (apply-combat-damage-reactions
+  (let [world-id (or (:world-id damage-source)
+                     (some-> (raycast/player-position (str player-id)) :world-id))
+        target-position (when world-id
+                          (motion-effects/entity-position world-id (str player-id)))
+        request (apply-combat-damage-reactions
                 (combat/process-damage-request
                  (engine)
                  {:source (or attacker-id :environment)
@@ -1706,10 +1736,15 @@
                   :components {:direct (double original-damage)}
                   :tags #{:combat :attack-precheck}
                   :metadata {:damage-source damage-source
-                             :world-id (or (:world-id damage-source)
-                                           (some-> (raycast/player-position
-                                                    (str player-id))
-                                                   :world-id))
+                             :world-id world-id
+                             :target-position (when (map? target-position)
+                                                [(double (or (:x target-position) 0.0))
+                                                 (double (or (:y target-position) 0.0))
+                                                 (double (or (:z target-position) 0.0))])
+                             :activation-seed (hash [attacker-id player-id
+                                                     @last-known-tick*
+                                                     original-damage
+                                                     (:damage-type damage-source)])
                              :attacker-front? (attacker-front?
                                                player-id attacker-id damage-source)}})
                 {:precheck? true})]
@@ -1734,6 +1769,8 @@
     ;; modifier, avoiding a second payment on the same attack.
     (when (or damage? patch?)
       (commit-state-patch! player-id (:state-patch request))
+      (when (and attacker-id (seq (:source-state-patch request)))
+        (commit-state-patch! (str attacker-id) (:source-state-patch request)))
       (when (seq (:session-patch request))
         (combat-sessions/apply-actions!
          player-id [{:type :session-patch :entries (:session-patch request)}]))

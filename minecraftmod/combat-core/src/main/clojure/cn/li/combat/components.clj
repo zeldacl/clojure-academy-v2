@@ -259,6 +259,15 @@
            {:schema {:required #{:multiplier}}
             :effects #{:mutate}}
 
+           ;; Generic attacker-side critical transform. Levels, chances,
+           ;; multipliers, progression and presentation signals are all data
+           ;; supplied by the reaction document; Combat Core only performs
+           ;; the bounded deterministic roll and preserves the original
+           ;; damage components/type/target.
+           :damage/critical
+           {:schema {:required #{:levels :damage-types :exp-per-level}}
+            :effects #{:mutate :emit}}
+
            ;; Generic incoming-damage absorption.  The AC boundary supplies
            ;; session state/resources; Combat Core only validates the neutral
            ;; reaction shape and never knows a skill id.

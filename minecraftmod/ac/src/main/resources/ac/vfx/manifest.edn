@@ -103,4 +103,7 @@
               :resource "ac/vfx/effects/teleport_trail_transient.edn"}
              {:kind :vfx-effect
               :id :particle-trail-audio-transient
-              :resource "ac/vfx/effects/particle_trail_audio_transient.edn"}]}
+              :resource "ac/vfx/effects/particle_trail_audio_transient.edn"}
+             {:kind :vfx-effect
+              :id :particle-burst-trail-transient
+              :resource "ac/vfx/effects/particle_burst_trail_transient.edn"}]}

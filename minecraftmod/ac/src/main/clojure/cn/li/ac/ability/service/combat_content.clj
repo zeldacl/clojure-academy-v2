@@ -35,15 +35,7 @@
   {:provider-id :academy/base
    :revision 1
    :abilities
-   [{:id :dim-folding-theorem
-     :revision 1
-     :activation :passive
-     :program {:op :sequence
-               :steps [{:op :require :predicate :critical-event}
-                       {:op :domain-event :event-type :critical-modifier
-                        :metadata {:source :dim-folding-theorem
-                                   :level 0}}]}}
-    {:id :space-fluct
+   [{:id :space-fluct
      :revision 1
      :activation :passive
      :program {:op :sequence

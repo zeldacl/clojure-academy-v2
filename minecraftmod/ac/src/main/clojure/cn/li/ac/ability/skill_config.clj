@@ -204,6 +204,10 @@
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
     :exp-base :progression.exp-base}
+   :dim-folding-theorem
+   {:damage-multipliers :critical.damage-multipliers
+    :level0-probability :critical.level0-probability
+    :exp-per-crit-level :progression.exp-per-crit-level}
    :vec-reflection
    {:tick-cp :cost.tick.cp
     :overload-keep :cost.overload-keep

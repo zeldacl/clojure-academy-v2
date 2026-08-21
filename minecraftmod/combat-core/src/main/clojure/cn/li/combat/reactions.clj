@@ -38,6 +38,86 @@
     (vector? value) (mapv #(value % context) value)
     :else value))
 
+(defn- critical-level
+  "Select the first successful critical level using the activation/request
+   seed.  A level is ordinary EDN data; no skill or damage type is embedded in
+   this evaluator."
+  [levels context]
+  (let [seed (long (or (:activation-seed context) 0))]
+    (some (fn [[index level]]
+            (let [probability (double (or (value (:probability level) context)
+                                          0.0))]
+              (when (and (Double/isFinite probability)
+                         (pos? probability) (<= probability 1.0)
+                         (boolean (vm/evaluate-expression
+                                  :random/chance [probability]
+                                  (unchecked-add seed (long index)))))
+                level)))
+          (map-indexed vector (or levels [])))))
+
+(defn- request-position [request]
+  (or (get-in request [:metadata :target-position])
+      (get-in request [:metadata :position])
+      [0.0 0.0 0.0]))
+
+(defn- critical-result [current ability-id program context source target]
+  (let [base (double (:base current))
+        source-valid? (and source (not= (str source) (str target))
+                           (not= (str source) "environment")
+                           (boolean (get-in context [:context :source-learned?])))
+        allowed-types (set (or (:damage-types program) []))
+        eligible? (and source-valid? (pos? base)
+                       (Double/isFinite base)
+                       (contains? allowed-types (:type current))
+                       (not (get-in context [:context :reflected?])))
+        level (when eligible?
+                (critical-level (:levels program) context))]
+    (if-not level
+      current
+      (let [multiplier (double (or (value (:multiplier level) context) 1.0))
+            level-index (long (or (:level level) 0))
+            exp-per-level (double (or (value (:exp-per-level program) context) 0.0))
+            scaled (* base multiplier)
+            ratio (if (pos? base) (/ scaled base) 0.0)
+            vfx (:vfx program)
+            vfx-signal (when vfx
+                         {:op :spawn
+                          :effect-id (:effect-id vfx)
+                          :instance-key (or (:instance-key vfx)
+                                            [ability-id :critical])
+                          :owner source
+                          :world-id (get-in context [:context :world-id])
+                          :audience (:audience vfx)
+                          :event-seq 0
+                          :seed (:activation-seed context)
+                          :event :spawn
+                          :params (value (:payload vfx) context)})
+            feedback (:feedback program)
+            feedback-context (assoc-in context
+                                       [:context :critical-multiplier]
+                                       multiplier)
+            events (vec (concat
+                         (or (:events program) [])
+                         (when feedback
+                           [{:type :player/feedback
+                             :payload (value feedback feedback-context)}])))
+            result (-> current
+                       (assoc :base scaled)
+                       (assoc :components (scale-components (:components current) ratio))
+                       (assoc-in [:metadata :critical]
+                                 {:ability-id ability-id
+                                  :level level-index
+                                  :multiplier multiplier
+                                  :damage-before base
+                                  :damage-after scaled})
+                       (update :source-state-patch (fnil conj [])
+                               [:ability-exp ability-id
+                                (* exp-per-level (inc level-index))])
+                       (update :events (fnil into []) events))]
+        (if vfx-signal
+          (update result :vfx-signals (fnil conj []) vfx-signal)
+          result)))))
+
 (defn apply!
   [request {:keys [reactions session-fn state-fn precheck? tunables-fn
                   domain-state]}]
@@ -55,18 +135,51 @@
     (reduce
      (fn [current {:keys [ability-id activation when program mark-type]}]
        (let [target (str (:target current))
+             source (:source current)
+             source-id (when source (str source))
              session (session-fn target)
              state (state-fn target)
+             source-session (when (and source-id
+                                       (not= source-id "environment")
+                                       (not= source-id "nil"))
+                              (session-fn source-id))
+             source-state (when (and source-id
+                                     (not= source-id "environment")
+                                     (not= source-id "nil"))
+                            (state-fn source-id))
              mark (when mark-type
                     (get-in domain-state [:entity-marks target mark-type]))
              context {:request current :state state
+                      :source-state source-state
+                      :source-session-state (:state source-session)
                       :domain-state domain-state
                       :session-state (:state session)
                       :params (:parameter-snapshot session)
-                      :tunables (tunables-fn ability-id session state)
-                      :activation-seed (long (or (:activation-seed session) 0))
+                      :tunables (tunables-fn ability-id
+                                              (if (= :damage/critical (:component program))
+                                                source-session session)
+                                              (if (= :damage/critical (:component program))
+                                                source-state state))
+                      :activation-seed (long (or (:activation-seed current)
+                                                 (get-in current [:metadata :activation-seed])
+                                                 (:activation-seed session)
+                                                 (:activation-seed source-session)
+                                                 0))
                       :context {:enabled? (boolean session)
                                 :ability-id (:ability-id session)
+                                :source source
+                                :source-id source-id
+                                :source-enabled? (boolean source-session)
+                                :source-learned? (contains?
+                                                  (get-in source-state
+                                                          [:ability-data :learned-skills] #{})
+                                                  ability-id)
+                                :source-skill-exp (double
+                                                   (or (get-in source-state
+                                                               [:ability-data :skill-exps ability-id])
+                                                       0.0))
+                                :damage-type (:type current)
+                                :reflected? (contains? (:tags current) :reflected)
                                 :front? (boolean (get-in current [:metadata :attacker-front?]))
                                 :resource (double (or (get-in state [:resources :cp]) 0.0))
                                 :skill-exp (double (or (get-in state [:ability-data :skill-exps ability-id]) 0.0))
@@ -77,13 +190,18 @@
                                 :mark? (boolean mark)
                                 :mark-rate (double (or (:rate mark) 1.0))
                                 :owner target
+                                :target-position (request-position current)
                                 :world-id (or (get-in current [:metadata :world-id])
                                               (:world-id state))}}
              condition? (or (nil? when) (boolean (value when context)))
              component (:component program)]
          (if-not (and (or session (= :passive activation)) condition?)
            current
-           (if (= :damage/multiply component)
+           (do
+             (case component
+               :damage/critical
+               (critical-result current ability-id program context source target)
+           :damage/multiply
              (let [base (double (:base current))
                    multiplier (double (or (value (:multiplier program) context) 1.0))]
                (if (and (pos? base) (Double/isFinite multiplier)
@@ -98,7 +216,7 @@
                                   :multiplier multiplier
                                   :mark mark})))
                  current))
-           (if (= :damage/reduce component)
+           :damage/reduce
              (let [base (double (:base current))
                    rate (double (or (value (:rate program) context) 0.0))
                    max-cost (double (or (value (:max-cost program) context) 0.0))
@@ -135,7 +253,7 @@
                                                              [0.0 0.0 0.0])}
                                               (dissoc vfx :effect-id))})
                      result))))
-           (if (= :damage/absorb component)
+           :damage/absorb
              (let [base (double (:base current))
                    ticks (long (or (get-in session [:state :active-ticks]) 0))
                    last-tick (long (or (get-in session [:state (:last-tick-path program)]) -1))
@@ -209,5 +327,5 @@
                                [:ability-exp ability-id (* base exp-scale)])
                        (update :world-effects (fnil conj [])
                                {:type :damage :request reflected-request})
-                       (cond-> precheck? (assoc :cancelled? true))))))))))
+                       (cond-> precheck? (assoc :cancelled? true))))))))
      request reactions)))))

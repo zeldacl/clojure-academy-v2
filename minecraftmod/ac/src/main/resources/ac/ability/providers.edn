@@ -20,18 +20,11 @@
  {:id :teleporter
   :priority 40
   :skill-namespaces
-  [cn.li.ac.content.ability.teleporter.dim-folding-theorem
-   cn.li.ac.content.ability.teleporter.flesh-ripping
-   cn.li.ac.content.ability.teleporter.location-teleport
-   cn.li.ac.content.ability.teleporter.location-teleport-reactive
-   cn.li.ac.content.ability.teleporter.passive-hooks
-   cn.li.ac.content.ability.teleporter.release-cast-base
-   cn.li.ac.content.ability.teleporter.space-fluct
-   cn.li.ac.content.ability.teleporter.tp-skill-helper]
+  [cn.li.ac.content.ability.teleporter.location-teleport
+   cn.li.ac.content.ability.teleporter.location-teleport-reactive]
   :fx-namespaces
    cn.li.ac.content.ability.teleporter.flesh-ripping-fx
    cn.li.ac.content.ability.teleporter.location-teleport-fx
-   cn.li.ac.content.ability.teleporter.teleporter-crit-fx
   ]}
  {:id :vecmanip
   :priority 50
