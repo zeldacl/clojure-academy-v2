@@ -320,6 +320,13 @@
            :inventory/consume
            {:schema {:required #{:source :count}} :effects #{:mutate}}
 
+           ;; Generic main-hand settlement: drop a copy at a world position,
+           ;; or consume one item when the drop policy is false.  Creative
+           ;; mode is an explicit data input, never a skill rule.
+           :inventory/settle
+           {:schema {:required #{:source :count :position :drop? :creative?}}
+            :effects #{:mutate}}
+
            :entity/spawn
            {:schema {:required #{:entity-type :owner :position}} :effects #{:mutate}}
 

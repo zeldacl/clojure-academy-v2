@@ -395,15 +395,27 @@
       ;; Keep one neutral hit-position shape for all platform raycast
       ;; adapters.  Some bridges expose :hit-x/:hit-y/:hit-z while entity
       ;; traces expose :x/:y/:z; ability EDN should not know either ABI.
-      (if (:position result)
-        result
-        (assoc result :position
-               {:x (double (or (:hit-x result) (:x result)
-                               (+ sx (* dx distance))))
-                :y (double (or (:hit-y result) (:y result)
-                               (+ sy (* dy distance))))
-                :z (double (or (:hit-z result) (:z result)
-                               (+ sz (* dz distance))))})))))
+      (let [position (or (:position result)
+                         {:x (double (or (:hit-x result) (:x result)
+                                         (+ sx (* dx distance))))
+                          :y (double (or (:hit-y result) (:y result)
+                                         (+ sy (* dy distance))))
+                          :z (double (or (:hit-z result) (:z result)
+                                         (+ sz (* dz distance))))})
+            attacked? (= :entity (:hit-type result))
+            target-id (or (:target-id result) (:entity-id result)
+                          (:entity-uuid result) (:uuid result))
+            target-width (double (or (:width result) 0.5))
+            target-height (double (or (:height result) 0.0))
+            drop-position (if attacked?
+                           (update position :y + target-height)
+                           position)]
+        (assoc result :position position
+               :attacked? attacked?
+               :target-id target-id
+               :target-width target-width
+               :target-height target-height
+               :drop-position drop-position)))))
 
 (defn- normalize-vector
   [[x y z]]
@@ -729,6 +741,35 @@
       {:status :failed})
     {:status :rejected :reason :invalid-inventory-consume-request}))
 
+(defn settle-item!
+  "Settle one main-hand item using a neutral drop/consume policy.
+
+   The policy is supplied by EDN; this host only invokes the cross-platform
+   inventory primitives and never names a skill or item type."
+  [{:keys [owner source count position drop? creative?]}]
+  (let [count (long (or count 1))
+        p (point position)
+        valid? (and owner (= :main-hand source) (pos? count) p)]
+    (if-not valid?
+      {:status :rejected :reason :invalid-inventory-settle-request}
+      (cond
+        (and drop? creative?)
+        {:status (if (inventory/spawn-main-hand-item-copy-at!
+                      owner count (nth p 0) (nth p 1) (nth p 2))
+                   :applied :failed)}
+
+        drop?
+        {:status (if (inventory/drop-main-hand-item-at!
+                      owner count (nth p 0) (nth p 1) (nth p 2))
+                   :applied :failed)}
+
+        creative?
+        {:status :applied}
+
+        :else
+        {:status (if (inventory/consume-main-hand-item! owner count)
+                   :applied :failed)}))))
+
 (defn spawn-entity!
   "Spawn a neutral tracked entity through the mcmod relay."
   [{:keys [world-id owner entity-type position velocity life-ticks]}]
@@ -1023,6 +1064,7 @@
    :motion/velocity motion-velocity!
    :entity/reset-fall-damage reset-fall-damage!
    :inventory/consume consume-item!
+   :inventory/settle settle-item!
    :entity/spawn spawn-entity!
    :entity/discard discard-entity!
    :entity/configure configure-entity!

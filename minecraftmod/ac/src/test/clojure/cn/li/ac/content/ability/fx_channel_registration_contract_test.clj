@@ -7,11 +7,10 @@
     cn.li.ac.content.ability.teleporter.flesh-ripping-fx/init!
     cn.li.ac.content.ability.teleporter.location-teleport-fx/init!
     cn.li.ac.content.ability.teleporter.shift-teleport-fx/init!
-    cn.li.ac.content.ability.teleporter.teleporter-crit-fx/init!
-    cn.li.ac.content.ability.teleporter.threatening-teleport-fx/init!])
+    cn.li.ac.content.ability.teleporter.teleporter-crit-fx/init!])
 
 (deftest all-content-ability-fx-inits-register-via-fx-spec-test
-  (is (= 6 (count fx-init-symbols)))
+  (is (= 5 (count fx-init-symbols)))
   (doseq [init-sym fx-init-symbols]
     (let [register-calls* (atom [])]
       (with-redefs [fx-spec/register! (fn [spec] (swap! register-calls* conj spec))]

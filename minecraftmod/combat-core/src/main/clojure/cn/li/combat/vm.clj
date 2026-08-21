@@ -238,6 +238,7 @@
 
 (def ^:private action-capability-by-component
   {:inventory/consume :inventory/consume
+   :inventory/settle :inventory/settle
    :combat/damage :entity/damage
    :entity/trigger-behavior :entity/trigger-behavior
    :entity/mark :entity/mark

@@ -94,4 +94,10 @@
               :resource "ac/vfx/effects/first_person_motion_session.edn"}
              {:kind :vfx-effect
               :id :terrain-shockwave-transient
-              :resource "ac/vfx/effects/terrain_shockwave_transient.edn"}]}
+              :resource "ac/vfx/effects/terrain_shockwave_transient.edn"}
+             {:kind :vfx-effect
+              :id :target-box-session
+              :resource "ac/vfx/effects/target_box_session.edn"}
+             {:kind :vfx-effect
+              :id :teleport-trail-transient
+              :resource "ac/vfx/effects/teleport_trail_transient.edn"}]}

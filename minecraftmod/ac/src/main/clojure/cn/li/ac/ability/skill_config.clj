@@ -405,6 +405,18 @@
     :cooldown-ticks :cooldown.ticks
     :exp-per-distance :progression.exp-per-distance
     :scan-step :targeting.scan-step}
+   :threatening-teleport
+   {:maximum-range :targeting.range
+    :damage :combat.damage
+    :needle-damage-multiplier :combat.needle-damage-multiplier
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-base :progression.exp-base
+    :exp-hit-factor :progression.exp-hit-factor
+    :exp-miss-factor :progression.exp-miss-factor
+    :drop-prob-hit :interaction.drop-prob.hit
+    :drop-prob-miss :interaction.drop-prob.miss}
    :flashing
    {:blink-distance :movement.blink-distance
     :blink-interval-ticks :timing.blink-interval-ticks

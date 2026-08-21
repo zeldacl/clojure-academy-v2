@@ -1,0 +1,222 @@
+{:schema-version 2
+ :kind :ability
+ :id :threatening-teleport
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id
+            :caster/creative? :charge/ticks :rng/seed]
+ :tunables
+ {:maximum-range {:curve :mastery-lerp}
+  :damage {:curve :mastery-lerp}
+  :needle-damage-multiplier {:curve :const}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-base {:curve :const}
+  :exp-hit-factor {:curve :const}
+  :exp-miss-factor {:curve :const}
+  :drop-prob-hit {:curve :const}
+  :drop-prob-miss {:curve :const}}
+ :costs
+ {:release {:resources {:cp {:tunable :release-cp}
+                        :overload {:tunable :release-overload}}}}
+ :progression
+ {:hit {:per-mark {:expr :math/mul
+                    :args [{:tunable :exp-base}
+                           {:tunable :exp-hit-factor}]}}
+  :miss {:per-mark {:expr :math/mul
+                     :args [{:tunable :exp-base}
+                            {:tunable :exp-miss-factor}]}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :fragments
+ {:refresh-trace
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :target/item-held
+                   :source :main-hand
+                   :result :hand-item}
+                  {:component :target/raycast
+                   :origin {:from :caster/eye}
+                   :direction {:from :caster/aim}
+                   :distance {:tunable :maximum-range}
+                   :include-entities? true
+                   :include-blocks? true
+                   :living-only? true
+                   :result :trace}
+                  {:component :session/patch
+                   :entries [{:path [:hand-item] :mode :assign
+                              :value {:ref [:slot :hand-item]}}
+                             {:path [:trace] :mode :assign
+                              :value {:ref [:slot :trace]}}]}]}}}
+ :program
+ {:component :flow/phases
+  :start
+  {:component :flow/sequence
+   :steps [{:component :refresh-trace}
+           {:component :flow/branch
+            :when {:ref [:slot :hand-item :present?]}
+            :then {:component :effect/vfx
+                   :effect-id :target-box-session
+                   :operation :spawn
+                   :instance-key [:activation :threatening-teleport-marker]
+                   :audience {:type :nearby :radius 64.0}
+                   :payload {:position {:ref [:slot :trace :position]}
+                             :width {:ref [:slot :trace :target-width]}
+                             :height {:expr :math/select
+                                      :args [{:ref [:slot :trace :attacked?]}
+                                             {:ref [:slot :trace :target-height]}
+                                             0.5]}
+                             :color {:expr :math/select
+                                     :args [{:ref [:slot :trace :attacked?]}
+                                            [186 178 35 42]
+                                            [186 186 186 186]]}}}
+            :else {:component :flow/finish
+                   :outcome :no-item
+                   :finish-session? true}}
+           {:component :flow/finish :outcome :started}]}
+  :pulse
+  {:component :flow/sequence
+   :steps [{:component :refresh-trace}
+           {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:ref [:slot :hand-item :present?]}
+                          {:ref [:slot :trace]}]}
+            :then {:component :effect/vfx
+                   :effect-id :target-box-session
+                   :operation :update
+                   :instance-key [:activation :threatening-teleport-marker]
+                   :audience {:type :nearby :radius 64.0}
+                   :payload {:position {:ref [:slot :trace :position]}
+                             :width {:ref [:slot :trace :target-width]}
+                             :height {:expr :math/select
+                                      :args [{:ref [:slot :trace :attacked?]}
+                                             {:ref [:slot :trace :target-height]}
+                                             0.5]}
+                             :color {:expr :math/select
+                                     :args [{:ref [:slot :trace :attacked?]}
+                                            [186 178 35 42]
+                                            [186 186 186 186]]}}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :target-box-session
+                            :operation :destroy
+                            :instance-key [:activation :threatening-teleport-marker]
+                            :payload {}}
+                           {:component :flow/finish
+                            :outcome :aborted
+                            :finish-session? true}]}}
+           {:component :flow/finish :outcome :continue}]}
+  :release
+  {:component :flow/sequence
+   :steps [{:component :refresh-trace}
+           {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:ref [:slot :hand-item :present?]}
+                          {:ref [:slot :trace]}]}
+            :then {:component :txn/atomic
+                   :guards [{:component :guard/resource
+                             :cost {:cp {:tunable :release-cp}
+                                    :overload {:tunable :release-overload}}}]
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :data/bind
+                                   :to :hit?
+                                   :value {:ref [:slot :trace :attacked?]}}
+                                  {:component :data/bind
+                                   :to :needle?
+                                   :value {:expr :value/eq
+                                           :args [{:ref [:slot :hand-item :item-id]}
+                                                  "academy:needle"]}}
+                                  {:component :data/bind
+                                   :to :damage
+                                   :value {:expr :math/mul
+                                           :args [{:tunable :damage}
+                                                  {:expr :math/select
+                                                   :args [{:ref [:slot :needle?]}
+                                                          {:tunable :needle-damage-multiplier}
+                                                          1.0]}]}}
+                                  {:component :data/bind
+                                   :to :drop?
+                                   :value {:expr :random/chance
+                                           :args [{:expr :math/select
+                                                   :args [{:ref [:slot :hit?]}
+                                                          {:tunable :drop-prob-hit}
+                                                          {:tunable :drop-prob-miss}]}]}}
+                                  {:component :cost/spend :budget :release}
+                                  {:component :inventory/settle
+                                   :source :main-hand
+                                   :count 1
+                                   :position {:ref [:slot :trace :drop-position]}
+                                   :drop? {:ref [:slot :drop?]}
+                                   :creative? {:from :caster/creative?}}
+                                  {:component :flow/branch
+                                   :when {:ref [:slot :hit?]}
+                                   :then {:component :combat/damage
+                                          :target {:ref [:slot :trace :target-id]}
+                                          :amount {:ref [:slot :damage]}
+                                          :damage-type :magic}
+                                   :else nil}
+                                  {:component :flow/branch
+                                   :when {:ref [:slot :hit?]}
+                                   :then {:component :score/mark :tag :hit}
+                                   :else {:component :score/mark :tag :miss}}
+                                  {:component :cooldown/start :name :main}
+                                  {:component :domain/event
+                                   :event-type :achievement/trigger
+                                   :payload {:id "teleporter.threatening_teleport"}}
+                                  {:component :effect/vfx
+                                   :effect-id :target-box-session
+                                   :operation :destroy
+                                   :instance-key [:activation :threatening-teleport-marker]
+                                   :payload {}}
+                                  {:component :flow/branch
+                                   :when {:ref [:slot :hit?]}
+                                   :then {:component :effect/vfx
+                                          :effect-id :teleport-trail-transient
+                                          :operation :spawn
+                                          :audience {:type :nearby :radius 64.0}
+                                          :payload {:start {:expr :vec3/sub
+                                                            :args [{:from :caster/body}
+                                                                   {:vec3 [0.0 0.5 0.0]}]}
+                                                    :end {:expr :vec3/add
+                                                          :args [{:ref [:slot :trace :drop-position]}
+                                                                 {:vec3 [0.5 0.5 0.5]}]}
+                                                    :sound-id "academy:tp.tp"
+                                                    :sound-volume 0.5
+                                                    :sound-pitch 1.0}}
+                                   :else nil}
+                                  {:component :flow/finish
+                                   :outcome :performed
+                                   :finish-session? true}]}
+                   :on-fail {:component :flow/sequence
+                             :steps [{:component :effect/vfx
+                                      :effect-id :target-box-session
+                                      :operation :destroy
+                                      :instance-key [:activation :threatening-teleport-marker]
+                                      :payload {}}
+                                     {:component :flow/finish
+                                      :outcome :insufficient-resource
+                                      :finish-session? true}]}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :target-box-session
+                            :operation :destroy
+                            :instance-key [:activation :threatening-teleport-marker]
+                            :payload {}}
+                           {:component :flow/finish
+                            :outcome :no-item
+                            :finish-session? true}]}}
+           {:component :flow/finish
+            :outcome :released
+            :finish-session? true}]}
+  :abort
+  {:component :flow/sequence
+   :steps [{:component :effect/vfx
+            :effect-id :target-box-session
+            :operation :destroy
+            :instance-key [:activation :threatening-teleport-marker]
+            :payload {}}
+           {:component :flow/finish
+            :outcome :aborted
+            :finish-session? true}]}}}

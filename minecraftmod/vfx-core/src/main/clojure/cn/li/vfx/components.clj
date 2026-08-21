@@ -67,6 +67,10 @@
            [:vfx/block-progress #{:target :progress :color}]
            [:vfx/beam-bounds #{:start :end :radius}]
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
+           ;; Generic randomized particle path.  Texture, spacing, size,
+           ;; velocity and fade ranges are supplied by the effect document.
+           [:vfx/particle-trail #{:start :end :spacing :radius
+                                  :count-limit :life-ticks :texture :seed}]
            [:vfx/vortex-column #{:base :axis :height :spacing :radius
                                  :count-limit :life-ticks :seed :alpha
                                  :orientation}]

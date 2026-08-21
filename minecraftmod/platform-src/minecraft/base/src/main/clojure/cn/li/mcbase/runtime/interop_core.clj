@@ -6,6 +6,7 @@
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver McAccess]
            [net.minecraft.core BlockPos]
@@ -83,6 +84,25 @@
       (log/warn "Failed to consume player main hand item:" (ex-message e))
       nil)))
 
+(defn drop-main-hand-item-at!
+  [^MinecraftServer server player-uuid count x y z]
+  (try
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
+      (boolean (entity/player-drop-main-hand-item-at! player (long count) (double x) (double y) (double z))))
+    (catch Exception e
+      (log/warn "Failed to drop player main hand item:" (ex-message e))
+      nil)))
+
+(defn spawn-main-hand-item-copy-at!
+  [^MinecraftServer server player-uuid count x y z]
+  (try
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
+      (boolean (entity/player-spawn-main-hand-item-copy-at! player (long count)
+                                                               (double x) (double y) (double z))))
+    (catch Exception e
+      (log/warn "Failed to spawn main hand item copy:" (ex-message e))
+      nil)))
+
 (defn get-player-entity
   "Resolve the live ServerPlayer for player-uuid, for callers (e.g. tick-driven
   entity-spawn visuals) that only have a player-id and no player-ref -- the
@@ -116,6 +136,10 @@
                               (main-hand-item-snapshot (server-fn) player-uuid))
    :consume-main-hand-item! (fn [player-uuid count]
                               (consume-main-hand-item! (server-fn) player-uuid count))
+   :drop-main-hand-item-at! (fn [player-uuid count x y z]
+                              (drop-main-hand-item-at! (server-fn) player-uuid count x y z))
+   :spawn-main-hand-item-copy-at! (fn [player-uuid count x y z]
+                                    (spawn-main-hand-item-copy-at! (server-fn) player-uuid count x y z))
    :get-block-entity-at (fn [world-id x y z]
                           (get-block-entity-at (server-fn) world-id x y z))
    :get-player-entity (fn [player-uuid]

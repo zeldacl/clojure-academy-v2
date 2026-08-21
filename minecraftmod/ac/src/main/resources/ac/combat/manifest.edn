@@ -39,6 +39,9 @@
              :id :penetrate-teleport
               :resource "ac/combat/abilities/penetrate_teleport.edn"}
              {:kind :ability
+              :id :threatening-teleport
+              :resource "ac/combat/abilities/threatening_teleport.edn"}
+             {:kind :ability
              :id :flashing
               :resource "ac/combat/abilities/flashing.edn"}
              {:kind :ability

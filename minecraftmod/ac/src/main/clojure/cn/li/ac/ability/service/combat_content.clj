@@ -109,32 +109,6 @@
                         :damage (scale 15.0 35.0)}
                        {:op :vfx :effect-id :shift-teleport
                         :event :release :params {:max-range 35.0}}]}}
-    {:id :threatening-teleport
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 60
-     :cost-phase :release
-     :cost {:cp (scale 35.0 100.0)
-            :overload (scale 18.0 10.0)}
-     :cooldown {:ticks (scale 30.0 15.0)}
-     :program {:op :phase
-               :pulse {:op :session-patch
-                       :entries [[[:hold-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :query :query-type :teleport-target
-                                  :mode :threatening
-                                  :max-range (scale 8.0 15.0)
-                                  :result-ref :destination}
-                                 {:op :require :predicate :destination}
-                                 {:op :world-effect
-                                  :effect-type :teleport-approved-target
-                                  :target-ref :destination
-                                  :mode :threatening
-                                  :damage (scale 3.0 6.0)}
-                                 {:op :vfx :effect-id :threatening-teleport
-                                 :event :release :params {:max-range 15.0}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

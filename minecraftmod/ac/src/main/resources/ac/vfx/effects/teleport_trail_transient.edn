@@ -1,0 +1,40 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :teleport-trail-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3
+          :sound-id :string :sound-volume :double :sound-pitch :double}
+  :destroy {}}
+ :state-slots {:age :double :seed :long}
+ :graph
+ {:component :vfx/timeline
+  :duration-ticks 20
+  :children [{:at 0
+              :node {:component :vfx/particle-trail
+                     :start {:ref [:input :start]}
+                     :end {:ref [:input :end]}
+                     :spacing {:min 1.0 :max 2.0}
+                     :radius {:min 0.1 :max 0.2}
+                     :count-limit 128
+                     :life-ticks 20
+                     :texture "academy:textures/effects/tp_particle.png"
+                     :seed {:ref [:state :seed]}
+                     :velocity {:x [-0.02 0.02]
+                                :y [-0.02 0.05]
+                                :z [-0.02 0.02]}
+                     :size [0.1 0.2]
+                     :alpha [153 204]
+                     :fade-in 5
+                     :fade-out 20}}
+             {:at 0
+              :node {:component :vfx/audio-one-shot
+                     :sound-id {:ref [:input :sound-id]}
+                     :position {:ref [:input :end]}
+                     :volume {:ref [:input :sound-volume]}
+                     :pitch {:ref [:input :sound-pitch]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius 1.2}}

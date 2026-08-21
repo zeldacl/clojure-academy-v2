@@ -230,6 +230,16 @@
            [{:start start :end end :spacing spacing :radius radius
              :count-limit count-limit :life-ticks life-ticks :seed seed}])))
 
+(defmethod sample-node! :vfx/particle-trail
+  [node ctx]
+  (let [{:keys [start end spacing radius count-limit life-ticks texture seed
+                velocity size alpha fade-in fade-out]} (resolve-fields node ctx)]
+    (emit! ctx (stage-of ctx :world-after-translucent) :particle
+           [{:start start :end end :spacing spacing :radius radius
+             :count-limit count-limit :life-ticks life-ticks :texture texture
+             :seed seed :velocity velocity :size size :alpha alpha
+             :fade-in fade-in :fade-out fade-out}])))
+
 (defmethod sample-node! :vfx/arc-strike
   [node ctx]
   (let [{:keys [start end aoe-origin aoe-points arc-life-ticks pattern
@@ -280,18 +290,21 @@
           The node is reusable for any block-target progress indicator.")
 (defmethod sample-node! :vfx/block-progress
   [node ctx]
-  (let [{:keys [target progress color pulse-period]} (resolve-fields node ctx)
+  (let [{:keys [target progress color pulse-period width height corner-length]} (resolve-fields node ctx)
         p (block-point target)]
     (when p
       (let [[x y z] p
             progress (max 0.0 (min 1.0 (double (or progress 0.0))))
+            width (double (or width 1.0))
+            height (double (or height width))
+            depth width
             shrink (* 0.05 (- 1.0 progress))
             min-x (+ (double x) shrink)
             min-y (+ (double y) shrink)
             min-z (+ (double z) shrink)
-            max-x (- (+ (double x) 1.0) shrink)
-            max-y (- (+ (double y) 1.0) shrink)
-            max-z (- (+ (double z) 1.0) shrink)
+            max-x (- (+ (double x) width) shrink)
+            max-y (- (+ (double y) height) shrink)
+            max-z (- (+ (double z) depth) shrink)
             corners [[min-x min-y min-z] [max-x min-y min-z]
                      [max-x max-y min-z] [min-x max-y min-z]
                      [min-x min-y max-z] [max-x min-y max-z]
@@ -301,13 +314,36 @@
                    [0 4] [1 5] [2 6] [3 7]]
             base (if (and (vector? color) (= 4 (count color))) color
                    [255 255 255 200])
-            pulse (+ 0.5 (* 0.5 (Math/sin (* (double (or pulse-period 0.3))
+            pulse-period (double (or pulse-period 0.0))
+            pulse (if (pos? pulse-period)
+                    (+ 0.5 (* 0.5 (Math/sin (* pulse-period
                                                (double (or (:age ctx) 0.0))))))
-            rgba (assoc base 3 (* (double (nth base 3)) pulse))]
+                    1.0)
+            rgba (assoc base 3 (* (double (nth base 3)) pulse))
+            corner-length (double (or corner-length 0.0))]
         (emit! ctx (stage-of ctx :world-always-on-top) :line
-               (mapv (fn [[a b]] {:start (nth corners a)
-                                  :end (nth corners b)
-                                  :color rgba}) edges))))))
+               (if (pos? corner-length)
+                 (let [corner-dirs [[1 1] [-1 1] [-1 -1] [1 -1]
+                                    [1 1] [-1 1] [-1 -1] [1 -1]]
+                       segment (fn [corner [dx dz] bottom?]
+                                 (let [[cx cy cz] (nth corners corner)
+                                       vy (if bottom? corner-length (- corner-length))]
+                                   [{:start [cx cy cz]
+                                     :end [cx (+ cy vy) cz]
+                                     :color rgba}
+                                    {:start [cx cy cz]
+                                     :end [(+ cx (* dx corner-length)) cy cz]
+                                     :color rgba}
+                                    {:start [cx cy cz]
+                                     :end [cx cy (+ cz (* dz corner-length))]
+                                     :color rgba}]))]
+                   (vec (mapcat (fn [corner]
+                                  (segment corner (nth corner-dirs corner)
+                                           (< corner 4)))
+                                (range 8))))
+                 (mapv (fn [[a b]] {:start (nth corners a)
+                                    :end (nth corners b)
+                                    :color rgba}) edges)))))))
 
 (defmethod sample-node! :vfx/vortex-column
   [node ctx]
@@ -688,9 +724,11 @@
 
 (defmethod sample-node! :vfx/audio-one-shot
   [node ctx]
-  (let [{:keys [sound-id position]} (resolve-fields node ctx)]
+  (let [{:keys [sound-id position volume pitch]} (resolve-fields node ctx)]
     (when sound-id
-      (emit! ctx :screen-post :audio [{:sound-id sound-id :position position}]))))
+      (emit! ctx :screen-post :audio
+             [{:sound-id sound-id :position position
+               :volume volume :pitch pitch}]))))
 
 (defmethod sample-node! :vfx/audio-loop
   [node ctx]

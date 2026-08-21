@@ -130,6 +130,8 @@
    :interaction/dispatch {:component :interaction/dispatch :kind :generic
                            :target {:ref [:slot :target-id]} :payload {} :result :interaction}
    :inventory/consume {:component :inventory/consume :source :main-hand :count 1}
+   :inventory/settle {:component :inventory/settle :source :main-hand :count 1
+                      :position {:vec3 [0.0 64.0 0.0]} :drop? true :creative? false}
    :entity/spawn {:component :entity/spawn :entity-type "generic"
                   :owner {:ref [:context :owner]} :position vec3-example
                   :velocity vec3-example :result :spawn}

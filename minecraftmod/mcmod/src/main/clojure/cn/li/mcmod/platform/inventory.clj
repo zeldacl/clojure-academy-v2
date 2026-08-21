@@ -25,3 +25,19 @@
   (when-let [fw-atom (fw/fw-atom)]
     (platform/call-adapter-optional fw-atom :runtime-interop
                                     :consume-main-hand-item! (str player-id) (long count))))
+
+(defn drop-main-hand-item-at!
+  "Drop count one from the player's main hand at a neutral world position."
+  [player-id count x y z]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter-optional fw-atom :runtime-interop
+                                    :drop-main-hand-item-at!
+                                    (str player-id) (long count) (double x) (double y) (double z))))
+
+(defn spawn-main-hand-item-copy-at!
+  "Spawn a copy of the main-hand stack at a neutral world position."
+  [player-id count x y z]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter-optional fw-atom :runtime-interop
+                                    :spawn-main-hand-item-copy-at!
+                                    (str player-id) (long count) (double x) (double y) (double z))))

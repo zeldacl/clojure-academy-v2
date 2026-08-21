@@ -451,27 +451,6 @@
                                                    (location-teleport/query-location-teleport (str owner)))
                                         location-name (->> locations (map :name) sort first)]
                                     (when location-name {:location-id location-name}))))
-              :teleport-target
-              (fn [context node]
-                (if-let [host-query (contract/host-port :query)]
-                  (host-query :teleport-target context node)
-                  (let [owner (:owner context)
-                        world-id (geom/world-id-of owner)
-                        exp (skill-exp-of context (:ability-id context))
-                        cp (double (or (get-in context [:state :resources :cp]) 0.0))
-                        hold-ticks (double (or (get-in context [:session-state :hold-ticks]) 0.0))
-                        head-blocked? (fn [x y z]
-                                        (block-manipulation/block-collidable?
-                                         world-id x (inc (long y)) z))]
-                    (case (:mode node)
-                      :threatening
-                      (let [range (resolve-scale (:max-range node) exp)
-                            eye (geom/eye-pos owner)
-                            target (nearest-entity-in-range world-id eye range #{(str owner)})]
-                        (when target
-                          {:entity-uuid (:uuid target)}))
-
-                      nil))))
               ;; shift-teleport isn't a player teleport at all -- it's "place
               ;; or drop the held item at a raycasted point, then damage
               ;; whatever intersects the line from caster to that point".
@@ -649,36 +628,9 @@
                            {:status (if applied? :applied :failed)
                             :effect effect})
                          :teleport-approved-target
-                         (let [{:keys [world-id target destination ability-id mode damage]} effect
-                               destination (or destination target)]
-                           (case mode
-                             ;; threatening-teleport is not a player teleport
-                             ;; ("teleport a small fragment into the target" --
-                             ;; see docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
-                             ;; A section): it moves a target entity's fate,
-                             ;; not the caster's position, so it applies
-                             ;; damage directly instead of minting a token and
-                             ;; calling teleport-approved-target!.
-                             :threatening
-                             (let [target-uuid (when (map? destination)
-                                                  (or (:uuid destination)
-                                                      (:entity-uuid destination)
-                                                      (:target-uuid destination)))
-                                   finite? #(and (number? %) (Double/isFinite (double %)))
-                                   valid? (and (= :threatening-teleport ability-id)
-                                                world-id target-uuid
-                                                (finite? damage) (pos? (double damage))
-                                                (<= (double damage) 1000.0)
-                                                (entity-damage/available?))
-                                   applied? (when valid?
-                                              (entity-damage/apply-direct-damage!
-                                               world-id target-uuid (double damage) :vector
-                                               {:attacker-uuid owner}))]
-                               {:status (if applied? :applied :failed)
-                                :effect effect})
-                             {:status :unhandled
-                              :reason :unsupported-teleport-mode
-                              :effect effect}))
+                         {:status :unhandled
+                          :reason :unsupported-teleport-mode
+                          :effect effect}
                          :knockback
                          (let [{:keys [world-id target movement]} effect
                                {:keys [impulse knockback-y-adjust knockback-scale]} movement
