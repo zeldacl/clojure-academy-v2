@@ -4,6 +4,7 @@
             [cn.li.ac.ability.model.develop :as ddata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.reducer :as reducer]
             [cn.li.ac.ability.service.runtime-store :as store]))
@@ -13,8 +14,13 @@
 (defn- fire-recover-speed-event!
   "Extracted to top-level defn- so AOT emits one static class.
    Eliminates per-tick {:uuid uuid-str} map allocation inside doseq context."
-  [event-type base-speed uuid-str]
-  (evt/fire-calc-event! event-type base-speed {:uuid uuid-str}))
+  [event-type base-speed uuid-str ability-data]
+  (let [legacy (evt/fire-calc-event! event-type base-speed {:uuid uuid-str})
+        target (if (= event-type evt/CALC-CP-RECOVER-SPEED)
+                 :cp-recovery-speed
+                 :overload-recovery-speed)]
+    (get (combat-catalog/apply-passive-resource-modifiers
+          ability-data {target legacy}) target)))
 
 (defn- drain-portable-develop-energy!
   "Pull this tick's develop energy (CPS/TPS) from the held portable developer
@@ -46,10 +52,12 @@
       (drain-portable-develop-energy! session-id uuid-str state)
       (let [cp-speed (fire-recover-speed-event! evt/CALC-CP-RECOVER-SPEED
                                                 (cfg/cp-recover-speed)
-                                                uuid-str)
+                                                uuid-str
+                                                (:ability-data state))
             ov-speed (fire-recover-speed-event! evt/CALC-OVERLOAD-RECOVER-SPEED
                                                 (cfg/overload-recover-speed)
-                                                uuid-str)
+                                                uuid-str
+                                                (:ability-data state))
             tick-result (command-rt/run-command-in-session! session-id
                                                             uuid-str
                                                             {:command :server-tick

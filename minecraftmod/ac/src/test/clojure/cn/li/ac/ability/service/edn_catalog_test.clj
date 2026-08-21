@@ -160,6 +160,28 @@
       (is (= 2.5 (:frame-period-ticks model-node)))
     (is (= 7 (count (:parts model-node)))))))
 
+(deftest brain-course-is-one-shared-passive-document
+  (let [state (catalog/initialize!)
+        ids [:electromaster/brain-course
+             :meltdowner/brain-course
+             :teleporter/brain-course
+             :vecmanip/brain-course]]
+    (doseq [ability-id ids]
+      (is (catalog/available? ability-id))
+      (is (= :passive
+             (get-in state [:combat :abilities ability-id :activation])))
+      (is (pos? (count (get-in state [:combat :abilities ability-id :compiled-ir])))))
+    (is (= 1000.0
+           (get (catalog/apply-passive-resource-modifiers
+                 {:learned-skills #{:electromaster/brain-course}}
+                 {:max-cp 0.0})
+                :max-cp)))
+    (is (= 0.0
+           (get (catalog/apply-passive-resource-modifiers
+                 {:learned-skills #{}}
+                 {:max-cp 0.0})
+                :max-cp)))))
+
 (deftest meltdowner-edn-program-includes-complete-beam-contract
   (catalog/initialize!)
   (let [ability (get-in (catalog/catalog) [:combat :abilities :meltdowner])

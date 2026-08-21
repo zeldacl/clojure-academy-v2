@@ -22,26 +22,6 @@
 
 (use-fixtures :each reset-runtime-fixture)
 
-(deftest build-skill-specs-produces-category-specific-generic-course-skills-test
-  (let [specs (courses/build-skill-specs :brain-course)
-        ids (set (map :id specs))]
-    (is (= 4 (count specs)))
-    (is (= #{:electromaster/brain-course
-             :meltdowner/brain-course
-             :teleporter/brain-course
-             :vecmanip/brain-course}
-           ids))
-    (testing "metadata and translations are present on every generated skill"
-      (doseq [spec specs]
-        (is (= :passive (:pattern spec)))
-        (is (= false (:controllable? spec)))
-        (is (= "ability.skill.generic.brain_course" (:name-key spec)))
-        (is (= "ability.skill.generic.brain_course.desc" (:description-key spec)))
-        (is (= "Brain Course"
-               (get-in spec [:translations :en_us "ability.skill.generic.brain_course"])))
-        (is (= "脑域课程"
-               (get-in spec [:translations :zh_cn "ability.skill.generic.brain_course"])))))))
-
 (deftest register-passive-hooks-apply-only-for-learned-skills-test
   (courses/register-passive-hooks! :brain-course-advanced)
   (courses/register-passive-hooks! :mind-course)
@@ -71,5 +51,4 @@
            (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED 10.0 {:uuid "u-learned"})))
     (is (= 10.0
            (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED 10.0 {:uuid "u-unlearned"})))))
-
 

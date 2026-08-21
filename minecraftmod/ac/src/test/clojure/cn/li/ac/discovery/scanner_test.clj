@@ -6,10 +6,9 @@
 (deftest discover-ability-namespaces-uses-scanner-outline-test
   (testing "scanner discovers current classpath ability namespaces"
     (let [{:keys [all skill fx]} (scanner/discover-ability-namespaces)
-          path (fn [sym] (str/replace (str sym) #"\\" "/"))
-          brain-course? (fn [sym] (= "cn.li.ac.content.ability.generic/brain-course" (path sym)))]
+          path (fn [sym] (str/replace (str sym) #"\\" "/"))]
       (is (pos? (count all)))
-      (is (some brain-course? skill))
+      (is (not-any? #(= "cn.li.ac.content.ability.generic/brain-course" (path %)) skill))
       (is (some #(= "cn.li.ac.content.ability.meltdowner/mine-ray-fx" (path %)) fx))
       (is (every? #(re-find #"cn\.li\.ac\.content\.ability" (path %)) all)))))
 

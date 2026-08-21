@@ -145,18 +145,20 @@
    command))
 
 (defn- recalc-max-for-level-with-calc
-  [res-data level uuid]
+  [res-data level uuid ability-data]
   (let [base (rdata/recalc-max-values res-data level)
         calc-extra {:uuid uuid}
         max-cp (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) calc-extra)
-        max-ol (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)]
+        max-ol (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)
+        passive (combat-catalog/apply-passive-resource-modifiers
+                  ability-data {:max-cp max-cp :max-overload max-ol})]
     ;; recalc-max-values already refilled to its own maximum; redo it against
     ;; the post-CALC one so passive bonuses are part of the refill rather than
     ;; headroom left empty.
     (assoc base
-           :max-cp max-cp
-           :max-overload max-ol
-           :cur-cp max-cp
+           :max-cp (:max-cp passive)
+           :max-overload (:max-overload passive)
+           :cur-cp (:max-cp passive)
            :cur-overload 0.0)))
 
 (defn lifecycle-subscriptions-registered-snapshot
@@ -200,7 +202,8 @@
            (let [next-resource-data (recalc-max-for-level-with-calc
                                      (rdata/reset-add-max (:resource-data state))
                                      new-level
-                                     uuid)]
+                                     uuid
+                                     (:ability-data state))]
              (run-runtime-command! uuid
                                    {:command :hydrate-player-state
                                     :resource-data next-resource-data}))))))
@@ -215,7 +218,8 @@
                                     :resource-data (recalc-max-for-level-with-calc
                                                     (:resource-data state)
                                                     level
-                                                    uuid)}))))))
+                                                    uuid
+                                                    (:ability-data state))}))))))
     (evt/subscribe-ability-event!
      evt/EVT-CATEGORY-CHANGE
      (fn [{:keys [uuid]}]
@@ -230,7 +234,8 @@
                                     :resource-data (recalc-max-for-level-with-calc
                                                     (:resource-data state)
                                                     level
-                                                    uuid)}))))))
+                                                    uuid
+                                                    (:ability-data state))}))))))
     (evt/subscribe-ability-event!
      evt/EVT-OVERLOAD
      (fn [{:keys [uuid]}]

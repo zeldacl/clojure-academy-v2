@@ -8,4 +8,4 @@
          (merge/merge-skill-specs
           [{:id :arc-gen :execution :combat-core}]
           [{:id :arc-gen :execution :legacy}
-           {:id :brain-course :execution :legacy}]))))
+           {:id :pending-skill :execution :legacy}]))))

@@ -1,0 +1,23 @@
+{:schema-version 2
+ :kind :ability
+ :id :brain-course
+ :revision 1
+ :activation :passive
+ :status :migrated
+ :category-id :generic
+ :level 3
+ :controllable? false
+ :ctrl-id :brain-course
+ :pattern :passive
+ :name-key "ability.skill.generic.brain_course"
+ :description-key "ability.skill.generic.brain_course.desc"
+ :icon "textures/abilities/generic/skills/brain_course.png"
+ :ui-position [30 110]
+ :conditions [{:type :any-skill-level :level 3}]
+ :passive-effects [{:target :max-cp :operation :add :value 1000.0}]
+ :program
+ {:component :flow/phases
+  :start {:component :flow/finish :outcome :passive}
+  :pulse {:component :flow/finish :outcome :passive}
+  :release {:component :flow/finish :outcome :passive}
+  :abort {:component :flow/finish :outcome :passive}}}

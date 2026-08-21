@@ -8,33 +8,7 @@
   [:electromaster :meltdowner :teleporter :vecmanip])
 
 (def ^:private course-definitions
-  {:brain-course
-   {:id-suffix "brain-course"
-    :name-key "ability.skill.generic.brain_course"
-    :description-key "ability.skill.generic.brain_course.desc"
-    :icon "textures/abilities/generic/skills/brain_course.png"
-    :ui-position [30 110]
-    :level 3
-    :ctrl-id :brain-course
-    :conditions [{:type :any-skill-level :level 3}]
-    :effects [{:handler-suffix "max-cp"
-               :event evt/CALC-MAX-CP
-               :transform (fn [value _event] (+ value 1000.0))}]
-    :translations
-    {:en_us {"ability.skill.generic.brain_course" "Brain Course"
-             "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}
-     :zh_cn {"ability.skill.generic.brain_course" "脑域课程"
-             "ability.skill.generic.brain_course.desc" "接受针对脑域的基础训练，使最大 CP 提高 1000。"}
-     :zh_tw {"ability.skill.generic.brain_course" "大腦訓練課程"
-             "ability.skill.generic.brain_course.desc" "鍛鍊能力者的大腦，使其能力的有效持續時間延長。提高最大計算力1000點。"}
-     :ja_jp {"ability.skill.generic.brain_course" "ブレイン・コース"
-             "ability.skill.generic.brain_course.desc" "脳のための訓練を開始し、スキルをより長く使用できるようにします。"}
-     :ko_kr {"ability.skill.generic.brain_course" "브레인 코스"
-             "ability.skill.generic.brain_course.desc" "당신의 뇌를 위한 훈련을 받으세요. 최대 CP가 1000만큼 증가합니다."}
-     :ru_ru {"ability.skill.generic.brain_course" "Мозговой курс"
-             "ability.skill.generic.brain_course.desc" "Пройти тренировку для вашего мозга. Увеличивает Макс. CP на 1000."}}}
-
-   :brain-course-advanced
+  {:brain-course-advanced
    {:id-suffix "brain-course-advanced"
     :name-key "ability.skill.generic.brain_course_advanced"
     :description-key "ability.skill.generic.brain_course_advanced.desc"

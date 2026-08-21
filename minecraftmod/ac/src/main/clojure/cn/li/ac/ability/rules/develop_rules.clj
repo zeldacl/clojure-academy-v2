@@ -11,21 +11,24 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.ability.registry.event :as evt]))
+            [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]))
 
 (defn- recalc-max-for-level-with-calc
-  [resource-data level uuid]
+  [resource-data level uuid ability-data]
   (let [base (rdata/recalc-max-values resource-data level)
         calc-extra {:uuid uuid}
         max-cp (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) calc-extra)
-        max-ol (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)]
+        max-ol (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)
+        passive (combat-catalog/apply-passive-resource-modifiers
+                  ability-data {:max-cp max-cp :max-overload max-ol})]
     ;; recalc-max-values already refilled to its own maximum; redo it against
     ;; the post-CALC one so passive bonuses are part of the refill rather than
     ;; headroom left empty.
     (assoc base
-           :max-cp max-cp
-           :max-overload max-ol
-           :cur-cp max-cp
+           :max-cp (:max-cp passive)
+           :max-overload (:max-overload passive)
+           :cur-cp (:max-cp passive)
            :cur-overload 0.0)))
 
 (defn start-skill-learning
@@ -90,7 +93,7 @@
             event (when-not already-learned?
                     (evt/make-skill-learn-event uuid skill-id))
             level (:level data)
-            new-res (recalc-max-for-level-with-calc resource-data level uuid)]
+            new-res (recalc-max-for-level-with-calc resource-data level uuid data)]
         {:ability-data data
          :resource-data new-res
          :events (if event [event] [])
@@ -100,9 +103,9 @@
       (let [target-level (:target-level action-data)
             old-level (:level ability-data)
             data2 (adata/set-level ability-data target-level)
-            new-res (-> resource-data
-                        (rdata/reset-add-max)
-                        (rdata/recalc-max-values target-level))
+            new-res (recalc-max-for-level-with-calc
+                     (rdata/reset-add-max resource-data)
+                     target-level uuid data2)
             event (evt/make-level-change-event uuid old-level target-level)]
         {:ability-data data2
          :resource-data new-res
@@ -116,9 +119,9 @@
       (let [target-category (:target-category action-data)
             old-category (:category-id ability-data)
             data2 (adata/set-category ability-data target-category)
-            new-res (-> resource-data
-                        (rdata/reset-add-max)
-                        (rdata/recalc-max-values (:level data2 1)))
+            new-res (recalc-max-for-level-with-calc
+                     (rdata/reset-add-max resource-data)
+                     (:level data2 1) uuid data2)
             event (evt/make-category-change-event uuid old-category target-category)]
         {:ability-data data2
          :resource-data new-res

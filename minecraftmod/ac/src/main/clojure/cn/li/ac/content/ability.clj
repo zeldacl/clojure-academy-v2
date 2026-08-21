@@ -97,8 +97,7 @@
 (declare run-namespace-init!)
 
 (def ^:private generic-content-namespaces
-  '[cn.li.ac.content.ability.generic.brain-course
-    cn.li.ac.content.ability.generic.brain-course-advanced
+  '[cn.li.ac.content.ability.generic.brain-course-advanced
     cn.li.ac.content.ability.generic.course-chain
     cn.li.ac.content.ability.generic.mind-course])
 

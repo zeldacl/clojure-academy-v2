@@ -171,4 +171,24 @@
                                                   :inner-rgb {:r 241 :g 229 :b 247}
                                                   :inner-alpha 230.0
                                                   :glow-width 0.45
-                                                  :glow-alpha 153.0}}}}]}
+                                    :glow-alpha 153.0}}}}
+             {:kind :ability
+              :id :electromaster/brain-course
+              :source-id :brain-course
+              :resource "ac/combat/abilities/brain_course.edn"
+              :overrides {:category-id :electromaster}}
+             {:kind :ability
+              :id :meltdowner/brain-course
+              :source-id :brain-course
+              :resource "ac/combat/abilities/brain_course.edn"
+              :overrides {:category-id :meltdowner}}
+             {:kind :ability
+              :id :teleporter/brain-course
+              :source-id :brain-course
+              :resource "ac/combat/abilities/brain_course.edn"
+              :overrides {:category-id :teleporter}}
+             {:kind :ability
+              :id :vecmanip/brain-course
+              :source-id :brain-course
+              :resource "ac/combat/abilities/brain_course.edn"
+              :overrides {:category-id :vecmanip}}]}

@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.service.combat-catalog
   "Authoritative first-phase EDN catalog. Unmigrated skills have no runtime fallback."
   (:require [cn.li.combat.recipe :as combat-recipe]
+            [cn.li.combat.passives :as combat-passives]
             [cn.li.vfx.install :as vfx-install]
             [cn.li.vfx.recipe :as vfx-recipe]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -92,6 +93,8 @@
                     :migration migration
                     :combat combat
                     :vfx vfx
+                    :passive-index (combat-passives/build-index
+                                    {:combat combat})
                     :trigger-index (build-trigger-index
                                      (vals (:abilities combat)))})
     @state*))
@@ -134,6 +137,14 @@
                      :status (migration-status ability-id)})))
   (get-in @state* [:combat :abilities ability-id]))
 
+(defn apply-passive-resource-modifiers
+  "Apply learned passive resource effects declared by the Combat Core catalog.
+
+   AC supplies the neutral ability-data snapshot; the effect evaluator and
+   all effect semantics remain in Combat Core."
+  [ability-data values]
+  (combat-passives/apply-resource-modifiers @state* ability-data values))
+
 (defn migrated-skill-specs
   "Player-facing metadata derived from AC config plus migration state.
 
@@ -141,18 +152,27 @@
   skill has no registry entry and is represented by `ui-state` instead."
   []
   (mapv (fn [ability-id]
-          (let [{:keys [category-id level controllable?]}
-                (get skill-config/skill-definitions-by-id ability-id)]
+          (let [ability (get-in @state* [:combat :abilities ability-id])
+                configured (get skill-config/skill-definitions-by-id ability-id)
+                category-id (or (:category-id ability) (:category-id configured))
+                level (or (:level ability) (:level configured))
+                controllable? (if (contains? ability :controllable?)
+                                (:controllable? ability)
+                                (:controllable? configured))
+                pattern (or (:pattern ability) :hold-channel)]
             {:id ability-id
              :category-id category-id
              :level level
              :controllable? controllable?
-             :name-key (str "ability.skill." (name category-id) "." (name ability-id))
-             :description-key (str "ability.skill." (name category-id) "." (name ability-id) ".desc")
-             :icon (str "textures/abilities/" (name category-id) "/skills/" (name ability-id) ".png")
-             :ctrl-id ability-id
-             :pattern :hold-channel
-             :actions {}
+             :name-key (or (:name-key ability)
+                           (str "ability.skill." (name category-id) "." (name ability-id)))
+             :description-key (or (:description-key ability)
+                                  (str "ability.skill." (name category-id) "." (name ability-id) ".desc"))
+             :icon (or (:icon ability)
+                       (str "textures/abilities/" (name category-id) "/skills/" (name ability-id) ".png"))
+             :ctrl-id (or (:ctrl-id ability) ability-id)
+             :pattern pattern
+             :actions (or (:actions ability) {})
              ;; The registry field is metadata only; execution and cooldown
              ;; settlement remain in the EDN VM.  `:manual` keeps the
              ;; existing player-facing schema valid without installing a

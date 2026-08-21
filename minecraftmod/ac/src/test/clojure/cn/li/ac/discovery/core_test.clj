@@ -5,13 +5,13 @@
 (deftest normalize-provider-contract-test
   (is (= {:id :demo
           :priority 42
-          :skill-namespaces ['cn.li.ac.content.ability.generic.brain-course]
+          :skill-namespaces ['cn.li.ac.content.ability.generic.course-chain]
           :fx-namespaces []}
          (core/normalize-provider
            {:id :demo
             :priority 42
-            :skill-namespaces ['cn.li.ac.content.ability.generic.brain-course
-                               'cn.li.ac.content.ability.generic.brain-course]
+            :skill-namespaces ['cn.li.ac.content.ability.generic.course-chain
+                               'cn.li.ac.content.ability.generic.course-chain]
             :fx-namespaces []}))))
 
 (deftest provider-sort-key-orders-priority-then-id-test
