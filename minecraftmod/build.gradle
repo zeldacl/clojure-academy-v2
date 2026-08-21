@@ -1089,7 +1089,11 @@ tasks.register("verifyCombatSkillCoverage") {
         }
         def manifest = file("ac/src/main/resources/ac/combat/manifest.edn").text
         def manifestIds = [] as Set
-        (manifest =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> manifestIds << match[1].toString() }
+        // A shared EDN document may be exposed under several public ability
+        // ids.  `:source-id` is the manifest's explicit coverage declaration
+        // for that shared migrated document, so count both public aliases and
+        // their source id here.
+        (manifest =~ /:(?:id|source-id)\s+(:[A-Za-z0-9!?*-]+)/).each { match -> manifestIds << match[1].toString() }
         def missing = migrated - manifestIds
         if (!missing.isEmpty()) {
             throw new GradleException("Migrated abilities missing from EDN manifest: ${missing.sort().join(', ')}")
