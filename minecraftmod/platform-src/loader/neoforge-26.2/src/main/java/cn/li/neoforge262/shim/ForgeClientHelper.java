@@ -5,12 +5,9 @@ import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
 
 /** NeoForge-only helpers for first-person render event integration. */
-@OnlyIn(Dist.CLIENT)
 public final class ForgeClientHelper {
     private ForgeClientHelper() {
     }
