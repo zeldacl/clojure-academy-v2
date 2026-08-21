@@ -218,6 +218,15 @@
             :effects #{:query}
             :produces {:blocks {:name-field :result :type :block-list}}}
 
+           ;; Generic bounded terrain propagation. The host returns a
+           ;; deterministic mutation plan; EDN decides how to apply it.
+           :terrain/propagate
+           {:schema {:required #{:origin :direction :max-iterations
+                                 :initial-energy :spread :energy-cost
+                                 :result}}
+            :effects #{:query}
+            :produces {:plan {:name-field :result :type :terrain-plan}}}
+
            :combat/damage
            {:schema {:required #{:target :amount}} :effects #{:mutate}}
 
@@ -335,6 +344,9 @@
 
            :block/break
            {:schema {:required #{:position}} :effects #{:mutate}}
+
+           :block/set
+           {:schema {:required #{:position :block-id}} :effects #{:mutate}}
 
            :block/random-break
            {:schema {:required #{:origin :attempts :radius :hardness-max :seed}}

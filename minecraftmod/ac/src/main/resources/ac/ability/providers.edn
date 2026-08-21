@@ -39,8 +39,6 @@
  {:id :vecmanip
   :priority 50
   :skill-namespaces
-  [cn.li.ac.content.ability.vecmanip.arbitration
-   cn.li.ac.content.ability.vecmanip.groundshock
-   ]
+  [cn.li.ac.content.ability.vecmanip.arbitration]
   :fx-namespaces
-  [cn.li.ac.content.ability.vecmanip.groundshock-fx]}]
+  []}]

@@ -3,7 +3,7 @@
 
 ;; Ability-internal breaking exemption: while the ability runtime is activated
 ;; (V mode), the platform cancels player block-break events (the "ability
-;; mode" interaction lock). The beam/groundshock permission checks post
+;; mode" interaction lock). Generic beam/terrain propagation permission checks post
 ;; synthetic BreakEvents of their own, which that lock then cancels — so
 ;; ability breaking must mark itself and have the lock skip it.
 (def ^:private ^ThreadLocal internal-break-flag (ThreadLocal.))

@@ -143,11 +143,11 @@
    {:skill-id :vec-reflection :id :progression.exp-damage-scale :path "progression.exp-damage-scale" :section-suffix "progression" :type :double :min 0.0 :default 0.0004 :comment "VecReflection exp gained per reflected damage."}])
 
 (def internal-tunable-definitions
-  [{:skill-id :directed-shock :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.62 :comment "Internal target eye height fallback."}
+  [{:skill-id :groundshock :id :charge.max-tolerant-ticks :path "charge.max-tolerant-ticks" :section-suffix "charge" :type :int :min 1 :default 200 :comment "Internal Groundshock charge timeout."}
+   {:skill-id :directed-shock :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.62 :comment "Internal target eye height fallback."}
    {:skill-id :directed-shock :id :charge.punch-anim-ticks :path "charge.punch-anim-ticks" :section-suffix "charge" :type :int :min 0 :default 6 :comment "Internal punch animation ticks before context termination."}
    {:skill-id :directed-blastwave :id :charge.punch-anim-ticks :path "charge.punch-anim-ticks" :section-suffix "charge" :type :int :min 0 :default 6 :comment "Internal punch animation ticks before termination."}
    {:skill-id :directed-blastwave :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.62 :comment "Internal target eye height fallback."}
-  {:skill-id :groundshock :id :targeting.horizontal-look-fallback :path "targeting.horizontal-look-fallback" :section-suffix "targeting" :type :boolean :default false :comment "Internal fallback to +Z when horizontal look vector is unavailable."}
    {:skill-id :blood-retrograde :id :charge.fx-ratio-ticks :path "charge.fx-ratio-ticks" :section-suffix "charge" :type :double :min 0.001 :default 20.0 :comment "Internal charge ticks mapped to full FX ratio."}
    {:skill-id :blood-retrograde :id :targeting.fallback-width :path "targeting.fallback-width" :section-suffix "targeting" :type :double :min 0.0 :default 0.6 :comment "Internal fallback entity width."}
    {:skill-id :blood-retrograde :id :targeting.fallback-height :path "targeting.fallback-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.8 :comment "Internal fallback entity height."}

@@ -201,6 +201,175 @@
                      ))))
       [])))
 
+(defn- terrain-overlap?
+  [entity bx by bz radius]
+  (let [half-width (/ (double (or (:width entity) 0.6)) 2.0)
+        ex (double (or (:x entity) 0.0))
+        ey (double (or (:y entity) 0.0))
+        ez (double (or (:z entity) 0.0))
+        height (double (or (:height entity) 1.8))
+        r (double radius)]
+    (and (< (- ex half-width) (+ (double bx) r))
+         (> (+ ex half-width) (- (double bx) (- r 1.0)))
+         (< (+ ey height) (+ (double by) (+ r 0.2)))
+         (> ey (- (double by) 0.2))
+         (< (- ez half-width) (+ (double bz) r))
+         (> (+ ez half-width) (- (double bz) (- r 1.0))))))
+
+(defn- terrain-plotter [x0 y0 z0 dx dz]
+  (let [adx (Math/abs (double dx)) adz (Math/abs (double dz))]
+    (cond
+      (> adz adx)
+      {:axis :z :x0 (int z0) :y0 (int y0) :z0 (int x0)
+       :x (int z0) :y (int y0) :z (int x0) :dyx 0.0
+       :dzx (/ (double dx) (double dz)) :dirflag (if (pos? (double dz)) 1 -1)}
+      (pos? adx)
+      {:axis :x :x0 (int x0) :y0 (int y0) :z0 (int z0)
+       :x (int x0) :y (int y0) :z (int z0) :dyx 0.0
+       :dzx (/ (double dz) (double dx)) :dirflag (if (pos? (double dx)) 1 -1)})))
+
+(defn- terrain-next-plotter [plotter]
+  (let [{:keys [x0 y0 z0 x y z dyx dzx dirflag axis]} plotter
+        next-x (+ x dirflag)
+        val-y (+ y0 (* (- next-x x0) dyx))
+        val-z (+ z0 (* (- next-x x0) dzx))
+        next-state (cond
+                     (> (Math/abs (double (- val-y y))) 0.5)
+                     (assoc plotter :y (+ y (* (Math/signum (double dyx)) dirflag)))
+                     (> (Math/abs (double (- val-z z))) 0.5)
+                     (assoc plotter :z (+ z (* (Math/signum (double dzx)) dirflag)))
+                     :else (assoc plotter :x next-x))]
+    [(case axis
+       :z [(int (:z next-state)) (int (:y next-state)) (int (:x next-state))]
+       [(int (:x next-state)) (int (:y next-state)) (int (:z next-state))])
+     next-state]))
+
+(defn terrain-propagate!
+  "Build a bounded deterministic terrain propagation plan.
+
+   This is a neutral query. EDN applies transforms, breaks, damage and
+   impulses as independent actions, so no skill-specific mutation is hidden
+   in the host."
+  [{:keys [owner world-id origin direction max-iterations initial-energy
+           entity-search-radius spread energy-cost block-transforms
+           ground-break-probability drop-probability launch-base launch-span
+           seed mastery mastery-threshold mastery-radius mastery-hardness-cap]} _frame]
+  (let [origin (point origin) direction (point direction)
+        [ox oy oz] (or origin [0.0 0.0 0.0])
+        [dx _dy dz] (or direction [0.0 0.0 1.0])
+        horizontal (Math/sqrt (+ (* dx dx) (* dz dz)))
+        max-iterations (long (max 0 (min 64 (or max-iterations 0))))
+        energy0 (double (or initial-energy 0.0))
+        radius (double (or entity-search-radius 2.0))
+        seed (long (or seed 0))
+        spread (or spread {})
+        angle (double (or (:angle-radians spread) 90.0))
+        c (Math/cos angle) s (Math/sin angle)
+        sx (if (pos? horizontal) (/ dx horizontal) 0.0)
+        sz (if (pos? horizontal) (/ dz horizontal) 1.0)
+        spread-x (+ (* sx c) (* sz s))
+        spread-z (- (* sz c) (* sx s))
+        entries (or (:entries spread) [[0.0 1.0]])
+        transforms (or block-transforms {})
+        costs (or energy-cost {})
+        plotter0 (terrain-plotter (Math/floor ox) (Math/floor oy)
+                                  (Math/floor oz) sx sz)]
+    (if-not (and owner world-id origin plotter0 (pos? horizontal))
+      {:affected-blocks [] :transforms [] :broken-blocks [] :entities [] :mastery-breaks []}
+      (let [state
+            (loop [iter 0 plotter plotter0 energy energy0 rng seed
+                   seen-blocks #{} seen-entities #{} affected [] transforms* [] broken [] entities []]
+              (if (or (nil? plotter) (>= iter max-iterations) (<= energy 0.0))
+                {:affected-blocks affected :transforms transforms* :broken-blocks broken
+                 :entities entities}
+                (let [[[bx by bz] next-plotter] (terrain-next-plotter plotter)
+                      candidates (when (world-effects/available?)
+                                   (world-effects/find-entities-in-aabb
+                                    (str world-id) (- bx (+ radius 3.0)) (- by 2.0) (- bz (+ radius 3.0))
+                                    (+ bx (+ radius 3.0)) (+ by 4.0) (+ bz (+ radius 3.0))))
+                      result
+                      (reduce
+                       (fn [acc entry]
+                         (let [[energy seen-blocks seen-entities affected transforms* broken entities rng] acc
+                               [_entry [lateral probability]] entry
+                               rng (seeded-rng/next-long rng)]
+                           (if (> (double probability) (seeded-rng/unit-double rng))
+                             (let [px (long (Math/floor (+ bx (* (double lateral) spread-x))))
+                                   pz (long (Math/floor (+ bz (* (double lateral) spread-z))))
+                                   py (long (Math/floor by)) key [px py pz]]
+                               (if (contains? seen-blocks key)
+                                 [energy seen-blocks seen-entities affected transforms* broken entities rng]
+                                 (let [block-id (when (blocks/available?)
+                                                  (blocks/get-block (str world-id) px py pz))
+                                       cost (double (or (get costs block-id) (:default costs) 0.5))
+                                       affected (if block-id (conj affected {:x px :y py :z pz :block-id block-id}) affected)
+                                       seen-blocks (conj seen-blocks key)
+                                       transform (get transforms block-id)
+                                       transforms* (if (and block-id transform)
+                                                     (conj transforms* {:position {:x px :y py :z pz}
+                                                                        :block-id (:to transform)
+                                                                        :expected-block-ids [block-id]})
+                                                     transforms*)
+                                       energy (- energy cost)
+                                       ground-rng (seeded-rng/next-long rng)
+                                       break? (and block-id
+                                                    (> (double (or ground-break-probability 0.0))
+                                                       (seeded-rng/unit-double ground-rng)))
+                                       broken (if break?
+                                                (conj broken {:position {:x bx :y by :z bz}
+                                                              :drop? (> (double (or drop-probability 0.0))
+                                                                        (seeded-rng/unit-double
+                                                                         (seeded-rng/next-long ground-rng)))})
+                                                broken)
+                                       new-entities
+                                       (reduce (fn [acc entity]
+                                                 (let [id (or (:id entity) (:uuid entity) (:entity-id entity))]
+                                                   (if (and id (not= (str id) (str owner))
+                                                            (true? (:living? entity))
+                                                            (not (contains? seen-entities (str id)))
+                                                            (terrain-overlap? entity px py pz radius))
+                                                     (conj acc {:id id
+                                                                :position {:x (double (or (:x entity) 0.0))
+                                                                           :y (double (or (:y entity) 0.0))
+                                                                           :z (double (or (:z entity) 0.0))}
+                                                                :velocity (or (:velocity entity) {:x 0.0 :y 0.0 :z 0.0})
+                                                                :launch-y (+ (double (or launch-base 0.6))
+                                                                             (* (double (or launch-span 0.3))
+                                                                                (seeded-rng/unit-double
+                                                                                 (seeded-rng/next-long
+                                                                                  (unchecked-add seed (count acc))))))})
+                                                     acc))) [] (or candidates []))]
+                                   [energy seen-blocks
+                                    (into seen-entities (map #(str (:id %)) new-entities))
+                                    affected transforms* broken (into entities new-entities)
+                                    (seeded-rng/next-long ground-rng)])))
+                             [energy seen-blocks seen-entities affected transforms* broken entities rng])))
+                       [energy seen-blocks seen-entities affected transforms* broken entities rng]
+                       (map-indexed vector entries))
+                      [energy _seen-blocks _seen-entities affected transforms* broken entities rng] result
+                      vertical (reduce (fn [out dy*]
+                                         (if (and (blocks/available?)
+                                                  (blocks/get-block (str world-id) bx (+ by dy*) bz))
+                                           (conj out {:position {:x bx :y (+ by dy*) :z bz} :drop? false})
+                                           out))
+                                       broken (range 1 4))]
+                  (recur (inc iter) next-plotter (double energy) (long rng) _seen-blocks _seen-entities
+                         affected transforms* vertical entities))))]
+        (let [mastery (double (or mastery 0.0))
+              mr (long (max 0 (min 8 (or mastery-radius 0))))
+              x0 (long (Math/floor ox)) y0 (long (Math/floor oy)) z0 (long (Math/floor oz))
+              mastery-breaks (if (and (>= mastery (double (or mastery-threshold 1.0))) (pos? mr))
+                               (vec (for [x (range (- x0 mr) (+ x0 mr)) y (range (dec y0) (inc y0))
+                                          z (range (- z0 mr) (+ z0 mr))
+                                          :let [hardness (when (blocks/available?)
+                                                           (blocks/get-block-hardness (str world-id) x y z))]
+                                          :when (and (number? hardness)
+                                                      (<= (double hardness) (double (or mastery-hardness-cap 0.6)))
+                                                      (blocks/can-break-block? (str owner) (str world-id) x y z))]
+                                     {:position {:x x :y y :z z} :drop? true}))
+                               [])]
+          (assoc state :mastery-breaks mastery-breaks))))))
+
 (defn- basic-raycast [request]
   (let [{:keys [world-id owner origin direction distance include-entities?
                 include-blocks?]} request
@@ -479,6 +648,15 @@
     {:status (if broken? :applied :failed)
      :block-id current
      :position {:x x :y y :z z}}))
+
+(defn set-block!
+  [{:keys [world-id position block-id]}]
+  (let [p (point position)
+        [x y z] (mapv #(long (Math/floor (double %))) (or p [0.0 0.0 0.0]))
+        applied? (and world-id p block-id (blocks/available?)
+                      (blocks/set-block! (str world-id) x y z (str block-id)))]
+    {:status (if (not= false applied?) :applied :failed)
+     :position {:x x :y y :z z} :block-id block-id}))
 
 (defn break-budget!
   "Bounded, energy-metered break of a beam/aoe's discovered block list.
@@ -830,6 +1008,7 @@
   {:raycast raycast!
    :entity/select entity-select!
    :block/select block-select!
+   :terrain/propagate terrain-propagate!
    :interaction/resolve interaction-resolve!})
 
 (defn action-handlers []
@@ -837,6 +1016,7 @@
    :entity/impulse entity-impulse!
    :entity/radial-impulse radial-impulse!
    :block/break break!
+   :block/set set-block!
    :block/break-budget break-budget!
    :world/sound sound!
    :world/explosion explosion!

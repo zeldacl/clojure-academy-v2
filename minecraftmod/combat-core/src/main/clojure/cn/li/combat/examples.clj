@@ -76,6 +76,16 @@
                            :direction {:vec3 [0.0 0.0 1.0]}
                            :radius 1.0 :length 1.0 :step 1.0}
                    :projection [:position :hardness] :limit 1 :result :blocks}
+   :terrain/propagate {:component :terrain/propagate
+                       :origin vec3-example
+                       :direction {:vec3 [0.0 0.0 1.0]}
+                       :max-iterations 4 :initial-energy 2.0
+                       :entity-search-radius 2.0
+                       :spread {:angle-radians 90.0
+                                :entries [[0.0 1.0] [1.0 0.7] [-1.0 0.7]]}
+                       :energy-cost {:default 0.5}
+                       :block-transforms {"minecraft:stone" {:to "minecraft:cobblestone"}}
+                       :result :terrain-plan}
    :host/beam-trace {:component :host/beam-trace :origin vec3-example
                      :trace-origin vec3-example
                      :direction {:vec3 [0.0 0.0 1.0]} :length 1.0 :radius 0.1
@@ -140,6 +150,9 @@
                  :position {:ref [:slot :block-position]}
                  :expected-block-id "minecraft:iron_block"
                  :drop? false}
+   :block/set {:component :block/set
+               :position {:ref [:slot :block-position]}
+               :block-id "minecraft:cobblestone"}
    :block/random-break {:component :block/random-break :origin vec3-example
                         :attempts 1 :radius 1.0 :hardness-max 0.3 :seed 0}
    :block/area-break {:component :block/area-break :origin vec3-example

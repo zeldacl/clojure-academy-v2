@@ -227,6 +227,7 @@
    :target/entities :entity/select
    :target/entity-snapshot :entity/snapshot
    :target/blocks :block/select
+   :terrain/propagate :terrain/propagate
    :owner/snapshot :owner/snapshot
    :target/item-held :item/held
    :energy/target :energy/target
@@ -257,6 +258,7 @@
    :projectile/schedule-beam :projectile/schedule-beam
    :block/break-budget :block/break-budget
    :block/break :block/break
+   :block/set :block/set
    :block/random-break :block/random-break
    :block/area-break :block/area-break
    :world/sound :world/sound
@@ -298,7 +300,9 @@
                       (effect-contract/action-request
                         (assoc (dissoc data :component)
                                :capability capability
-                               :world-id (str (or (:world-id data) "unknown"))
+                               :world-id (str (or (:world-id data)
+                                                  (get-in context [:context :world-id])
+                                                  "unknown"))
                                :activation-seed (:activation-seed context)
                                ;; Neutral provenance metadata lets a host apply
                                ;; its generic damage pipeline without making
@@ -441,6 +445,7 @@
     :target/item-held (invoke-query-component! frame host component data context)
     :energy/target (invoke-query-component! frame host component data context)
     :target/blocks (invoke-query-component! frame host component data context)
+    :terrain/propagate (invoke-query-component! frame host component data context)
     :host/beam-trace (invoke-query-component! frame host component data context)
     :flow/phases
     (let [phase (or (:phase context) :start)

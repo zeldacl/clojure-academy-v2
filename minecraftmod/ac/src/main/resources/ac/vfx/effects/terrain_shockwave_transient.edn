@@ -1,0 +1,52 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :terrain-shockwave-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:origin :vec3 :direction :vec3 :surface-hits :object :seed :long
+          :sound-id :string :sound-volume :double :sound-pitch :double}
+  :destroy {}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 20
+         :children [{:at 0
+                     :node {:component :vfx/directional-wave
+                            :position {:ref [:input :origin]}
+                            :direction {:ref [:input :direction]}
+                            :ring-count-min 3 :ring-count-max 5
+                            :life-ticks 18 :ring-life-min 8 :ring-life-max 14
+                            :ring-life-jitter 1.0 :ring-offset-step 1.0
+                            :ring-offset-jitter 0.2 :ring-size-min 0.7
+                            :ring-size-max 1.3 :time-offset-step 1.5
+                            :time-offset-jitter 0.5 :fade-in-ratio 0.2
+                            :full-ratio 0.7 :fade-out-ratio 0.3
+                            :growth-ticks 8.0 :initial-scale 0.3
+                            :mid-scale 0.8 :mid-ratio 0.35 :final-scale 1.4
+                            :forward-speed 0.02
+                            :texture "academy:textures/effects/glow_circle.png"
+                            :color [188 252 238 220]
+                            :seed {:ref [:input :seed]}}}
+                    {:at 0
+                     :node {:component :vfx/impact-burst
+                            :origin {:ref [:input :origin]}
+                            :look-dir {:ref [:input :direction]}
+                            :target-width 0.8 :target-height 0.4
+                            :surface-hits {:ref [:input :surface-hits]}
+                            :splash-count 8 :splash-life-ticks 10
+                            :splash-texture-pattern "academy:textures/effects/glow_circle.png"
+                            :splash-frame-count 1 :splash-frame-duration-ms 50
+                            :splash-size 0.35
+                            :spray-textures ["academy:textures/effects/glow_circle.png"]
+                            :spray-life-ticks 8 :spray-duplicates 1
+                            :seed {:ref [:input :seed]}}}
+                    {:at 0
+                     :node {:component :vfx/audio-one-shot
+                            :sound-id {:ref [:input :sound-id]}
+                            :volume {:ref [:input :sound-volume]}
+                            :pitch {:ref [:input :sound-pitch]}
+                            :position {:ref [:input :origin]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :origin]}
+          :end {:ref [:input :origin]}
+          :radius 8.0}}

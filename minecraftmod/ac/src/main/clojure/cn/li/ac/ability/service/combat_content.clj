@@ -84,46 +84,6 @@
                                  {:op :vfx :effect-id :flesh-ripping
                                   :event :perform
                                   :params {:range-min 6.0 :range-max 14.0}}]}}}
-    {:id :groundshock
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :release
-     :cost {:cp (scale 80.0 150.0)
-            :overload (scale 15.0 10.0)}
-     :cooldown {:ticks (scale 80.0 40.0)}
-     :program {:op :phase
-               :start {:op :session-patch
-                       :entries [[[:charge-ticks] 0.0]]}
-               :pulse {:op :session-patch
-                       :entries [[[:charge-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :require-session
-                                  :path [:charge-ticks] :min 5.0 :max 200.0}
-                                 {:op :query :query-type :groundshock
-                                  :result-ref :ground}
-                                 {:op :require :predicate :ground}
-                                 {:op :world-effect
-                                  :effect-type :groundshock
-                                  :query-ref :ground
-                                  :amount (scale 4.0 6.0)
-                                  :max-iterations (scale 10.0 25.0)
-                                  :init-energy (scale 60.0 120.0)
-                                  :entity-search-radius 2.0
-                                  :launch-scale (scale 0.8 1.3)
-                                  :launch-random-base 0.6
-                                  :launch-random-span 0.3
-                                  :breaking {:ground-break-probability 0.3
-                                             :drop-rate (scale 0.3 1.0)}
-                                  :energy-cost {:stone 0.4
-                                                :grass-block 0.2
-                                                :farmland 0.1
-                                                :default-block 0.5}}
-                                 {:op :vfx :effect-id :groundshock
-                                  :event :perform
-                                  :params {:charge-min-ticks 5}}]}}}
     ;; Not a player teleport -- place/drop the held item at a raycasted
     ;; point, then damage whatever intersects the line from caster to that
     ;; point. Own :shift-teleport query-type/effect-type; previously

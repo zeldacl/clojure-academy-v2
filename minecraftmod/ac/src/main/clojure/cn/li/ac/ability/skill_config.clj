@@ -271,6 +271,30 @@
     :cooldown-ticks :cooldown.ticks
     :exp-hit :progression.exp-hit
     :exp-miss :progression.exp-miss}
+   :groundshock
+   {:charge-min-ticks :charge.min-ticks
+    :charge-max-tolerant-ticks :charge.max-tolerant-ticks
+    :initial-energy :effect.init-energy
+    :max-iterations :effect.max-iterations
+    :entity-search-radius :combat.entity-search-radius
+    :damage :combat.damage
+    :launch-base :movement.launch-random-base
+    :launch-span :movement.launch-random-span
+    :launch-scale :movement.launch-scale
+    :ground-break-probability :breaking.ground-break-probability
+    :drop-probability :breaking.drop-rate
+    :energy-cost-stone :effect.energy-cost.stone
+    :energy-cost-grass :effect.energy-cost.grass-block
+    :energy-cost-farmland :effect.energy-cost.farmland
+    :energy-cost-default :effect.energy-cost.default-block
+    :mastery-exp-threshold :breaking.mastery-exp-threshold
+    :mastery-radius :breaking.mastery-radius
+    :mastery-hardness-cap :breaking.mastery-hardness-cap
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-entity :progression.exp-entity
+    :exp-use :progression.exp-use}
    :blood-retrograde
    {:max-charge-ticks :charge.max-ticks
     :targeting-distance :targeting.distance

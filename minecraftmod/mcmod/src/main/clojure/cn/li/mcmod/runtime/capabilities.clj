@@ -7,7 +7,7 @@
 
 (def ^:private query-capabilities
   #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read :interaction/resolve
-    :energy/target})
+    :energy/target :terrain/propagate})
 (def ^:private action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
     :entity/trigger-behavior :entity/mark :energy/charge

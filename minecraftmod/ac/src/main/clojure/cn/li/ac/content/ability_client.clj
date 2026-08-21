@@ -37,7 +37,7 @@
     (init-discovered-fx!)
     ;; Validate multimethod arities BEFORE freezing — catches the class of
     ;; bug where a defmethod with wrong arity silently corrupts the dispatch
-    ;; table for ALL effects (see groundshock fix).
+    ;; table for ALL effects; declarative VFX are resolved by the shared catalog.
     (arc-beam/validate-fx-multimethods!)
     (keybinds/freeze-keybind-registries!)
     (vfx/warmup!)

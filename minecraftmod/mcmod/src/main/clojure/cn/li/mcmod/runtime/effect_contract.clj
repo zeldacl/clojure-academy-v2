@@ -5,7 +5,7 @@
 
 (def query-capabilities
   #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read :interaction/resolve
-    :energy/target})
+    :energy/target :terrain/propagate})
 
 (def action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport

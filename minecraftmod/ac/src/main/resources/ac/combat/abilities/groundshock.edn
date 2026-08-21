@@ -1,0 +1,211 @@
+{:schema-version 2
+ :kind :ability
+ :id :groundshock
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/body :caster/aim :caster/id :world/id :rng/seed
+            :progression/mastery]
+ :prerequisites [{:skill-id :directed-shock :min-exp 0.0}]
+ :tunables
+ {:charge-min-ticks {:curve :const :type :long}
+  :charge-max-tolerant-ticks {:curve :const :type :long}
+  :initial-energy {:curve :mastery-lerp}
+  :max-iterations {:curve :mastery-lerp :type :long}
+  :entity-search-radius {:curve :const}
+  :damage {:curve :mastery-lerp}
+  :launch-base {:curve :const}
+  :launch-span {:curve :const}
+  :launch-scale {:curve :mastery-lerp}
+  :ground-break-probability {:curve :const}
+  :drop-probability {:curve :mastery-lerp}
+  :energy-cost-stone {:curve :const}
+  :energy-cost-grass {:curve :const}
+  :energy-cost-farmland {:curve :const}
+  :energy-cost-default {:curve :const}
+  :mastery-exp-threshold {:curve :const}
+  :mastery-radius {:curve :const :type :long}
+  :mastery-hardness-cap {:curve :const}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-entity {:curve :const}
+  :exp-use {:curve :const}}
+ :costs {:release {:resources {:cp {:tunable :release-cp}
+                               :overload {:tunable :release-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:hit {:per-mark {:tunable :exp-entity}}
+               :use {:per-mark {:tunable :exp-use}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :assign :value 0}]}
+                  {:component :effect/vfx
+                   :effect-id :first-person-motion-session
+                   :operation :spawn
+                   :instance-key [:activation :groundshock-hand]
+                   :audience {:type :owner}
+                   :payload {:stage :prepare :phase-ticks 0 :duration-ticks 25
+                             :curves {:prepare {:tx [[0.0 0.0] [1.0 -0.02]]
+                                                :ty [[0.0 0.0] [0.5 0.08] [1.0 0.0]]
+                                                :tz [[0.0 0.0] [1.0 -0.04]]
+                                                :rot-x [[0.0 0.0] [1.0 -8.0]]
+                                                :rot-y [[0.0 0.0] [1.0 0.0]]
+                                                :rot-z [[0.0 0.0] [1.0 0.0]]}
+                                      :punch {:tx [[0.0 0.0] [0.5 -0.04] [1.0 0.0]]
+                                              :ty [[0.0 0.7] [0.5 0.65] [1.0 0.0]]
+                                              :tz [[0.0 0.0] [0.3 -0.35] [1.0 0.0]]
+                                              :rot-x [[0.0 -35.0] [0.5 -40.0] [1.0 0.0]]
+                                              :rot-y [[0.0 0.0] [0.3 8.0] [1.0 0.0]]
+                                              :rot-z [[0.0 0.0] [1.0 0.0]]}}}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :increment :value 1}]}
+                  {:component :effect/vfx
+                   :effect-id :first-person-motion-session
+                   :operation :update
+                   :instance-key [:activation :groundshock-hand]
+                   :audience {:type :owner}
+                   :payload {:stage :prepare
+                             :phase-ticks {:ref [:session :charge-ticks]}
+                             :duration-ticks 25}}
+                  {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:ref [:session :charge-ticks]}
+                                 {:tunable :charge-max-tolerant-ticks}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :effect/vfx
+                                   :effect-id :first-person-motion-session
+                                   :operation :destroy
+                                   :instance-key [:activation :groundshock-hand]
+                                   :payload {}}
+                                  {:component :flow/finish :outcome :aborted
+                                   :finish-session? true}]}
+                   :else {:component :flow/finish :outcome :charging}}]}
+  :release {:component :flow/sequence
+            :steps [{:component :owner/snapshot
+                     :projection [:on-ground?]
+                     :result :groundshock-owner}
+                    {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:expr :math/gte
+                           :args [{:ref [:session :charge-ticks]}
+                                  {:tunable :charge-min-ticks}]}
+                          {:ref [:slot :groundshock-owner :on-ground?]}]}
+            :then {:component :txn/atomic
+                   :guards [{:component :guard/resource
+                             :cost {:cp {:tunable :release-cp}
+                                    :overload {:tunable :release-overload}}}]
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :cost/spend :budget :release}
+                                  {:component :terrain/propagate
+                                   :origin {:expr :vec3/sub
+                                            :args [{:from :caster/body}
+                                                   {:vec3 [0.0 1.0 0.0]}]}
+                                   :direction {:from :caster/aim}
+                                   :max-iterations {:tunable :max-iterations}
+                                   :initial-energy {:tunable :initial-energy}
+                                   :entity-search-radius {:tunable :entity-search-radius}
+                                   :spread {:angle-radians 90.0
+                                            :entries [[0.0 1.0] [1.0 0.7] [-1.0 0.7]
+                                                      [2.0 0.3] [-2.0 0.3]]}
+                                   :energy-cost {"minecraft:stone" {:tunable :energy-cost-stone}
+                                                 "minecraft:grass_block" {:tunable :energy-cost-grass}
+                                                 "minecraft:farmland" {:tunable :energy-cost-farmland}
+                                                 :default {:tunable :energy-cost-default}}
+                                   :block-transforms {"minecraft:stone" {:to "minecraft:cobblestone"}
+                                                      "minecraft:grass_block" {:to "minecraft:dirt"}}
+                                   :ground-break-probability {:tunable :ground-break-probability}
+                                   :drop-probability {:tunable :drop-probability}
+                                   :launch-base {:tunable :launch-base}
+                                   :launch-span {:tunable :launch-span}
+                                   :seed {:from :rng/seed}
+                                   :mastery {:from :progression/mastery}
+                                   :mastery-threshold {:tunable :mastery-exp-threshold}
+                                   :mastery-radius {:tunable :mastery-radius}
+                                   :mastery-hardness-cap {:tunable :mastery-hardness-cap}
+                                   :result :terrain-plan}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :terrain-plan :transforms]}
+                                   :as :transform :limit 256
+                                   :body {:component :block/set
+                                          :position {:ref [:slot :transform :position]}
+                                          :block-id {:ref [:slot :transform :block-id]}
+                                          :expected-block-ids {:ref [:slot :transform :expected-block-ids]}}}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :terrain-plan :broken-blocks]}
+                                   :as :broken :limit 256
+                                   :body {:component :block/break
+                                          :position {:ref [:slot :broken :position]}
+                                          :drop? {:ref [:slot :broken :drop?]}}}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :terrain-plan :mastery-breaks]}
+                                   :as :mastery-block :limit 4096
+                                   :body {:component :block/break
+                                          :position {:ref [:slot :mastery-block :position]}
+                                          :drop? true}}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :terrain-plan :entities]}
+                                   :as :entity :limit 256
+                                   :body {:component :flow/sequence
+                                          :steps [{:component :combat/damage
+                                                   :target {:ref [:slot :entity :id]}
+                                                   :amount {:tunable :damage}
+                                                   :damage-type :skill
+                                                   :damage-pipeline :skill}
+                                                  {:component :motion/entity-velocity
+                                                   :target {:ref [:slot :entity :id]}
+                                                   :velocity {:vec3 [{:ref [:slot :entity :velocity :x]}
+                                                                     {:ref [:slot :entity :launch-y]}
+                                                                     {:ref [:slot :entity :velocity :z]}]}}
+                                                  {:component :score/mark :tag :hit}]}}
+                                  {:component :score/mark :tag :use}
+                                  {:component :cooldown/start :name :main}
+                                  {:component :effect/vfx
+                                   :effect-id :first-person-motion-session
+                                   :operation :destroy
+                                   :instance-key [:activation :groundshock-hand]
+                                   :payload {}}
+                                  {:component :effect/vfx
+                                   :effect-id :terrain-shockwave-transient
+                                   :operation :spawn
+                                   :audience {:type :nearby :radius 32.0}
+                                   :payload {:origin {:expr :vec3/sub
+                                                      :args [{:from :caster/body}
+                                                             {:vec3 [0.0 1.0 0.0]}]}
+                                             :direction {:from :caster/aim}
+                                             :surface-hits {:ref [:slot :terrain-plan :affected-blocks]}
+                                             :seed {:from :rng/seed}
+                                             :sound-id "academy:vecmanip.groundshock"
+                                             :sound-volume 2.0 :sound-pitch 1.0}}
+                                  {:component :flow/finish :outcome :performed
+                                   :finish-session? true}]}
+                   :on-fail {:component :flow/sequence
+                             :steps [{:component :effect/vfx
+                                      :effect-id :first-person-motion-session
+                                      :operation :destroy
+                                      :instance-key [:activation :groundshock-hand]
+                                      :payload {}}
+                                     {:component :flow/finish :outcome :insufficient-resource
+                                      :finish-session? true}]}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :first-person-motion-session
+                            :operation :destroy
+                            :instance-key [:activation :groundshock-hand]
+                            :payload {}}
+                          {:component :flow/finish :outcome :undercharged
+                           :finish-session? true}]}}
+                    ]}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :first-person-motion-session
+                   :operation :destroy
+                   :instance-key [:activation :groundshock-hand]
+                   :payload {}}
+                  {:component :flow/finish :outcome :aborted
+                   :finish-session? true}]}
+  :events {}}}
