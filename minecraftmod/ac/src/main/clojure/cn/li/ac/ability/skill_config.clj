@@ -233,6 +233,19 @@
     :settle-ticks :charge.settle-ticks
     :settle-ticks-improved :charge.settle-ticks-improved
     :improved-exp-threshold :charge.improved-exp-threshold}
+   :electron-missile
+   {:seek-range :targeting.seek-range
+    :max-hold-ticks :charge.max-hold-ticks
+    :max-balls :projectile.max-hold-balls
+    :spawn-interval-ticks :timing.spawn-interval-ticks
+    :fire-interval-ticks :timing.fire-interval-ticks
+    :damage :combat.damage
+    :cost-down-overload :cost.down.overload
+    :cost-attack-cp :cost.attack.cp
+    :cost-attack-overload :cost.attack.overload
+    :cost-tick-cp :cost.tick.cp
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit}
    :scatter-bomb
    {:max-balls :projectile.max-balls
     :max-hold-ticks :projectile.max-hold-ticks

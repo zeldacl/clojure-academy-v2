@@ -61,4 +61,7 @@
               :resource "ac/combat/abilities/meltdowner.edn"}
              {:kind :ability
               :id :electron-bomb
-              :resource "ac/combat/abilities/electron_bomb.edn"}]}
+              :resource "ac/combat/abilities/electron_bomb.edn"}
+             {:kind :ability
+              :id :electron-missile
+              :resource "ac/combat/abilities/electron_missile.edn"}]}

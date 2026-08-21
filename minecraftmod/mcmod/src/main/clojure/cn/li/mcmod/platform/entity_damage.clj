@@ -56,9 +56,9 @@
 
 (defn apply-direct-damage!
   "opts (optional) supports :reset-invulnerable-time? — when true, clears the
-  target's post-hit invulnerability window before applying damage, for
-  skills whose original deliberately does this (e.g. ElectronMissile's
-  hurtResistantTime = -1) so rapid successive hits always land full damage."
+  target's post-hit invulnerability window before applying damage.  This is
+  an explicit neutral combat policy supplied by the caller so rapid
+  successive hits can land full damage when the ability contract requires it."
   ([world-id entity-uuid damage source-type]
    (apply-direct-damage! world-id entity-uuid damage source-type nil))
   ([world-id entity-uuid damage source-type opts]

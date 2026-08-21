@@ -1,0 +1,248 @@
+{:schema-version 2
+ :kind :ability
+ :id :electron-missile
+ :revision 1
+ :activation :session
+ :status :migrated
+ :requires [:caster/body :caster/id :world/id :progression/mastery
+            :rng/seed]
+ :prerequisites [{:skill-id :jet-engine :min-exp 0.3}]
+ :tunables
+ {:seek-range {:curve :mastery-lerp}
+  :max-hold-ticks {:curve :mastery-lerp :type :long}
+  :max-balls {:curve :const :type :long}
+  :spawn-interval-ticks {:curve :const :type :long}
+  :fire-interval-ticks {:curve :const :type :long}
+  :damage {:curve :mastery-lerp}
+  :cost-down-overload {:curve :const}
+  :cost-attack-cp {:curve :mastery-lerp}
+  :cost-attack-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :const :type :long}
+  :exp-hit {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  :charging {:resources {:cp {:tunable :cost-tick-cp}}}
+  :attack {:resources {:cp {:tunable :cost-attack-cp}
+                       :overload {:tunable :cost-attack-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:hit {:per-mark {:tunable :exp-hit}}}
+ :fragments
+ {:cleanup
+  {:inputs {:outcome :keyword}
+   :body {:component :flow/sequence
+          :steps [{:component :target/entities
+                   :shape {:type :sphere
+                           :center {:from :caster/body}
+                           :radius 4.0}
+                   :filter {:entity-types ["academy:entity_md_ball"]
+                            :owner-id {:from :caster/id}}
+                   :projection [:id :type :position :owner-id]
+                   :limit {:tunable :max-balls}
+                   :result :remaining-balls}
+                  {:component :flow/foreach
+                   :items {:ref [:slot :remaining-balls]}
+                   :as :ball
+                   :limit {:tunable :max-balls}
+                   :body {:component :entity/discard
+                          :world-id {:from :world/id}
+                          :entity {:ref [:slot :ball]}}}
+                  {:component :effect/vfx
+                   :effect-id :particle-session
+                   :operation :destroy
+                   :instance-key [:activation :electron-missile-charge]
+                   :payload {}}
+                  {:component :cooldown/start :name :main}
+                  {:component :flow/finish
+                   :outcome {:ref [:input :outcome]}
+                   :finish-session? true}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :cost/spend
+                   :budget :activate
+                   :on-insufficient {:component :flow/finish
+                                     :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :session/patch
+                   :entries [{:path [:ticks] :mode :assign :value 0}
+                             {:path [:balls] :mode :assign :value 0}
+                             {:path [:next-spawn-tick] :mode :assign :value 0}
+                             {:path [:next-fire-tick]
+                              :mode :assign
+                              :value {:tunable :fire-interval-ticks}}
+                             {:path [:overload-floor]
+                              :mode :assign
+                              :value {:expr :math/sub
+                                      :args [{:ref [:context :resources :overload]}
+                                             {:tunable :cost-down-overload}]}}]}
+                  {:component :effect/vfx
+                   :effect-id :particle-session
+                   :operation :spawn
+                   :instance-key [:activation :electron-missile-charge]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:position {:from :caster/body}
+                             :rate-per-tick 2
+                             :limit 256
+                             :particle {:material :additive
+                                        :texture "academy:textures/effects/md_particle.png"
+                                        :life-ticks 10
+                                        :speed 1.0
+                                        :spread {:x 0.5 :y 0.8 :z 0.5}
+                                        :velocity {:x 0.02 :y 0.03 :z 0.02}}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-one-shot
+                   :operation :spawn
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:position {:from :caster/body}
+                             :sound-id "academy:md.em_start"
+                             :volume 0.5
+                             :pitch 1.0}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :resource/enforce-floor
+                   :resource :overload
+                   :minimum {:ref [:session :overload-floor]}}
+                  {:component :cost/spend
+                   :budget :charging
+                   :on-insufficient {:component :cleanup
+                                     :outcome :insufficient-resource}}
+                  {:component :effect/vfx
+                   :effect-id :particle-session
+                   :operation :update
+                   :instance-key [:activation :electron-missile-charge]
+                   :payload {:position {:from :caster/body}}}
+                  {:component :flow/branch
+                   :when {:expr :math/gt
+                          :args [{:ref [:session :ticks]}
+                                 {:tunable :max-hold-ticks}]}
+                   :then {:component :cleanup :outcome :timeout}
+                   :else {:component :flow/sequence
+                          :steps [{:component :target/entities
+                                   :shape {:type :sphere
+                                           :center {:from :caster/body}
+                                           :radius 4.0}
+                                   :filter {:entity-types ["academy:entity_md_ball"]
+                                            :owner-id {:from :caster/id}}
+                                   :projection [:id :type :position :owner-id]
+                                   :limit {:tunable :max-balls}
+                                   :result :balls}
+                                  {:component :target/entities
+                                   :shape {:type :sphere
+                                           :center {:from :caster/body}
+                                           :radius {:tunable :seek-range}}
+                                   :filter {:living? true}
+                                   :projection [:id :type :position :eye-height :living?]
+                                   :sort [{:by :distance-squared :order :ascending}]
+                                   :limit 1
+                                   :result :targets}
+                                  {:component :flow/branch
+                                   :when {:expr :math/gte
+                                          :args [{:ref [:session :ticks]}
+                                                 {:ref [:session :next-spawn-tick]}]}
+                                   :then {:component :flow/sequence
+                                          :steps [{:component :flow/branch
+                                                   :when {:expr :math/lt
+                                                          :args [{:ref [:session :balls]}
+                                                                 {:tunable :max-balls}]}
+                                                   :then {:component :entity/spawn
+                                                          :world-id {:from :world/id}
+                                                          :entity-type "academy:entity_md_ball"
+                                                          :owner {:from :caster/id}
+                                                          :position {:from :caster/body}
+                                                          :velocity {:vec3 [0.0 0.0 0.0]}
+                                                          :life-ticks 400}
+                                                   :else nil}
+                                                 {:component :session/patch
+                                                  :entries [{:path [:next-spawn-tick]
+                                                             :mode :increment
+                                                             :value {:tunable :spawn-interval-ticks}}
+                                                            {:path [:balls]
+                                                             :mode :increment
+                                                             :value {:expr :math/select
+                                                                     :args [{:expr :math/lt
+                                                                             :args [{:ref [:session :balls]}
+                                                                                    {:tunable :max-balls}]}
+                                                                            1 0]}}]}]}
+                                   :else nil}
+                                  {:component :flow/branch
+                                   :when {:expr :bool/and
+                                          :args [{:expr :math/gte
+                                                  :args [{:ref [:session :ticks]}
+                                                         {:ref [:session :next-fire-tick]}]}
+                                                 {:expr :collection/nonempty
+                                                  :args [{:ref [:slot :balls]}]}
+                                                 {:expr :collection/nonempty
+                                                  :args [{:ref [:slot :targets]}]}]}
+                                   :then {:component :flow/sequence
+                                          :steps [{:component :txn/atomic
+                                                   :guards [{:component :guard/resource
+                                                             :cost {:cp {:tunable :cost-attack-cp}
+                                                                    :overload {:tunable :cost-attack-overload}}}]
+                                                   :reservations []
+                                                   :body {:component :flow/sequence
+                                                          :steps [{:component :data/random-item
+                                                                   :items {:ref [:slot :balls]}
+                                                                   :result :ball}
+                                                                  {:component :data/bind
+                                                                   :to :target
+                                                                   :value {:expr :collection/first
+                                                                           :args [{:ref [:slot :targets]}]}}
+                                                                  {:component :cost/spend
+                                                                   :budget :attack}
+                                                                  {:component :combat/damage
+                                                                   :world-id {:from :world/id}
+                                                                   :target {:ref [:slot :target :id]}
+                                                                   :amount {:tunable :damage}
+                                                                   :damage-type :magic
+                                                                   :reset-invulnerable-time? true}
+                                                                  {:component :entity/discard
+                                                                   :world-id {:from :world/id}
+                                                                   :entity {:ref [:slot :ball]}}
+                                                                  {:component :session/patch
+                                                                   :entries [{:path [:balls]
+                                                                              :mode :increment
+                                                                              :value -1}]}
+                                                                  {:component :score/mark :tag :hit}
+                                                                  {:component :effect/vfx
+                                                                   :effect-id :beam-fade-audio
+                                                                   :operation :spawn
+                                                                   :audience {:type :nearby :radius 64.0}
+                                                                   :payload {:start {:ref [:slot :ball :position]}
+                                                                             :end {:expr :vec3/add
+                                                                                   :args [{:ref [:slot :target :position]}
+                                                                                          {:vec3 [0.0
+                                                                                                  {:ref [:slot :target :eye-height]}
+                                                                                                  0.0]}]}
+                                                                             :duration-ticks 14
+                                                                             :beam-at 0
+                                                                             :grow-ticks 4
+                                                                             :layers [{:shape :tube :radius 0.045
+                                                                                       :color [106 242 106 50]}
+                                                                                      {:shape :tube :radius 0.03
+                                                                                       :color [216 248 216 230]}
+                                                                                      {:shape :line :width 0.3
+                                                                                       :color [255 255 255 127]}]
+                                                                             :sound-id "academy:md.ray_small"
+                                                                             :sound-volume 0.8
+                                                                             :sound-pitch 1.0
+                                                                             :sound-position {:ref [:slot :ball :position]}
+                                                                             :fade-at 6
+                                                                             :fade-from-tick 6
+                                                                             :fade-to-tick 14
+                                                                             :fade-from-alpha 1.0
+                                                                             :fade-to-alpha 0.0
+                                                                             :fade-layers []}}]}
+                                                   :on-fail nil}
+                                                 {:component :session/patch
+                                                  :entries [{:path [:next-fire-tick]
+                                                             :mode :increment
+                                                             :value {:tunable :fire-interval-ticks}}]}]}
+                                   :else nil}
+                                  {:component :session/patch
+                                   :entries [{:path [:ticks] :mode :increment :value 1}]}
+                                   {:component :flow/finish :outcome :continue}]}}
+          ]}
+  :release {:component :cleanup :outcome :released}
+  :abort {:component :cleanup :outcome :aborted}
+  :events {}}}

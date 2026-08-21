@@ -629,15 +629,6 @@
                                     (host-query :blood-retrograde context node)
                                     ((get-in context [:queries :raycast])
                                      context (assoc node :query-type :raycast))))
-              :electron-missile (fn [context node]
-                                  (if-let [host-query (contract/host-port :query)]
-                                    (host-query :electron-missile context node)
-                                    ;; execute-electron-missile! does its own
-                                    ;; fresh nearest-target search every fire;
-                                    ;; :require never gates on this step's
-                                    ;; result (see combat_content.clj), so a
-                                    ;; non-nil map is all :world-effect needs.
-                                    {}))
               :saved-location (fn [context node]
                                 (if-let [host-query (contract/host-port :query)]
                                   (host-query :saved-location context node)
@@ -948,37 +939,6 @@
                                plan (assoc effect :max-charge-ticks (long max-charge-ticks))]
                            {:status (if (and valid?
                                               (world-effects/execute-blood-retrograde!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :electron-missile
-                         (let [{:keys [world-id query-result damage seek-range
-                                       spawn-interval fire-interval max-balls max-hold-ticks
-                                       attack-cp attack-overload]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :damage (double (or damage 0.0))
-                                     :seek-range (double (or seek-range 0.0))
-                                     :spawn-interval (long (or spawn-interval 10))
-                                     :fire-interval (long (or fire-interval 8))
-                                     :max-balls (long (or max-balls 5))
-                                     :max-hold-ticks (long (or max-hold-ticks 200))
-                                     :attack-cp (double (or attack-cp 0.0))
-                                     :attack-overload (double (or attack-overload 0.0))}
-                               valid? (and world-id (map? query-result)
-                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
-                                            (finite? seek-range) (<= 1.0 (:seek-range plan) 32.0)
-                                            (<= 1 (:spawn-interval plan) 40)
-                                            (<= 1 (:fire-interval plan) 40)
-                                            (<= 1 (:max-balls plan) 5)
-                                            (<= 1 (:max-hold-ticks plan) 400)
-                                            (finite? attack-cp) (<= 0.0 (:attack-cp plan) 1000.0)
-                                            (finite? attack-overload) (<= 0.0 (:attack-overload plan) 1000.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-electron-missile!
                                                world-id owner plan))
                                       :applied
                                       :failed)

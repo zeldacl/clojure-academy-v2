@@ -283,37 +283,6 @@
                               (catch Exception e
                                 (log/warn "Failed to apply mine-ray:" (ex-message e))
                                 false)))
-        ;; Owner-keyed fire-interval throttle. combat-core drives this once
-        ;; per real tick (:pulse, :period-ticks 1); electron-missile's own
-        ;; fire-interval/spawn-interval describe a slower cadence than that,
-        ;; so the executor counts ticks itself and only actually fires when
-        ;; the interval elapses -- an instant hit on the nearest target in
-        ;; range rather than a traveling homing projectile.
-        electron-missile-state (atom {})
-        execute-electron-missile! (fn [world-id owner plan]
-                                   (try
-                                     (let [{:keys [damage seek-range fire-interval]} plan
-                                           fire-interval (long (max 1 (long (or fire-interval 8))))
-                                           elapsed (inc (long (or (:ticks (get @electron-missile-state owner)) 0)))]
-                                       (if (< elapsed fire-interval)
-                                         (do (swap! electron-missile-state assoc owner {:ticks elapsed})
-                                             true)
-                                         (do (swap! electron-missile-state assoc owner {:ticks 0})
-                                             (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
-                                               (let [origin {:x (.getX player) :y (.getY player) :z (.getZ player)}
-                                                     target (first (sort-by-distance
-                                                                    origin
-                                                                    (aoe-victims! world-id owner
-                                                                                  (:x origin) (:y origin) (:z origin)
-                                                                                  seek-range)))]
-                                                 (when target
-                                                   (entity-damage/apply-direct-damage!
-                                                    world-id (:uuid target) (double damage) :electric
-                                                    {:attacker-uuid owner}))))
-                                             true)))
-                                     (catch Exception e
-                                       (log/warn "Failed to apply electron-missile:" (ex-message e))
-                                       false)))
         ;; directed-shock ("Directed Shock" / 定向冲力): "seize the counter-
         ;; force from a punch and redirect it into the target, making the
         ;; punch more powerful" -- a forward push along the caster's look
@@ -657,7 +626,6 @@
      :execute-flashing! execute-flashing!
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-mine-ray! execute-mine-ray!
-     :execute-electron-missile! execute-electron-missile!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!
      :execute-shift-teleport! execute-shift-teleport!

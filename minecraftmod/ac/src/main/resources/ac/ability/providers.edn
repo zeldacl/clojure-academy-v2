@@ -15,15 +15,13 @@
   :priority 30
   :skill-namespaces
   [cn.li.ac.content.ability.meltdowner.damage-helper
-   cn.li.ac.content.ability.meltdowner.electron-missile
    cn.li.ac.content.ability.meltdowner.mine-ray-basic
    cn.li.ac.content.ability.meltdowner.mine-ray-expert
    cn.li.ac.content.ability.meltdowner.mine-ray-luck
    cn.li.ac.content.ability.meltdowner.mine-rays-base
    cn.li.ac.content.ability.meltdowner.rad-intensify]
   :fx-namespaces
-  [cn.li.ac.content.ability.meltdowner.electron-missile-fx
-   cn.li.ac.content.ability.meltdowner.mine-ray-fx
+  [cn.li.ac.content.ability.meltdowner.mine-ray-fx
    cn.li.ac.content.ability.meltdowner.rad-intensify-fx]}
  {:id :teleporter
   :priority 40

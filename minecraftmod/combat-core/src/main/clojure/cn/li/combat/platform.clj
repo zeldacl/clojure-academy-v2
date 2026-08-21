@@ -41,8 +41,30 @@
     (select-keys values (or (seq projection)
                             [:id :type :position :eye-height]))))
 
+(defn- entity-sort-key [by center entity]
+  (let [[cx cy cz] center
+        ex (double (or (:x entity) 0.0))
+        ey (double (or (:y entity) 0.0))
+        ez (double (or (:z entity) 0.0))]
+    (case by
+      :distance-squared
+      (let [dx (- ex cx) dy (- ey cy) dz (- ez cz)]
+        (+ (* dx dx) (* dy dy) (* dz dz)))
+      :distance
+      (Math/sqrt (double (entity-sort-key :distance-squared center entity)))
+      :age-ms (long (or (:age-ms entity) 0))
+      :motion-progress (double (or (:motion-progress entity) 0.0))
+      (str (or (get entity by) "")))))
+
+(defn- sort-entities [entities center sort-spec]
+  (reduce (fn [items {:keys [by order]}]
+            (let [items (sort-by #(entity-sort-key by center %) items)]
+              (if (= :descending order) (reverse items) items)))
+          entities
+          (or sort-spec [])))
+
 (defn entity-select!
-  [{:keys [world-id owner shape filter projection limit]} _frame]
+  [{:keys [world-id owner shape filter projection limit sort]} _frame]
   (let [center (point (or (:center shape) (:origin shape)))
         eye-origin (point (or (:eye-origin shape) (:origin shape)
                               (:center shape)))
@@ -107,6 +129,7 @@
                                   pd (Math/abs (Math/toDegrees (- pitch pitch0)))]
                               (and (<= (min yd (- 360.0 yd)) (* 0.5 yaw-span))
                                    (<= pd (* 0.5 pitch-span))))))))
+             (sort-entities [x y z] sort)
              (take limit)
              (mapv #(project-entity % projection)))))
       [])))
@@ -368,6 +391,16 @@
        :entity-id (when (not (true? entity-id)) entity-id)})
     {:status :rejected :reason :invalid-entity-spawn}))
 
+(defn discard-entity!
+  "Discard a neutral entity through the mcmod relay."
+  [{:keys [world-id entity]}]
+  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))]
+    (if (and world-id entity-id (world-effects/available?))
+      {:status (if (world-effects/discard-entity-by-uuid!
+                    world-id (str entity-id))
+                 :applied :failed)}
+      {:status :rejected :reason :invalid-entity-discard})))
+
 (defn query-handlers []
   {:raycast raycast!
    :entity/select entity-select!
@@ -381,6 +414,7 @@
    :world/sound sound!
    :inventory/consume consume-item!
    :entity/spawn spawn-entity!
+   :entity/discard discard-entity!
    :projectile/schedule-beam deferred/schedule-action!})
 
 (defn install!

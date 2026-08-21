@@ -60,11 +60,6 @@
   [world-id owner plan]
   (call :execute-blood-retrograde! world-id owner plan))
 
-(defn execute-electron-missile!
-  "Execute the bounded Electron Missile channel behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-electron-missile! world-id owner plan))
-
 (defn execute-mine-ray!
   "Execute one bounded mining-ray tick behind a neutral Host Port."
   [world-id owner plan]

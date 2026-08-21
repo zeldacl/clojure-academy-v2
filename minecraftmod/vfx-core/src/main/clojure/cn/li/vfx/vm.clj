@@ -237,9 +237,10 @@
 
 (defmethod sample-node! :vfx/emitter
   [node ctx]
-  (let [{:keys [anchor rate-per-tick limit]} (resolve-fields node ctx)]
+  (let [{:keys [anchor rate-per-tick limit particle]} (resolve-fields node ctx)]
     (emit! ctx (stage-of ctx :world-after-translucent) :particle
-           [{:anchor anchor :rate-per-tick rate-per-tick :limit limit}])))
+           [{:anchor anchor :rate-per-tick rate-per-tick :limit limit
+             :particle particle}])))
 
 (defmethod sample-node! :vfx/billboard-sequence
   [node ctx]

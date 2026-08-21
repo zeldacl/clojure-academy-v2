@@ -10,19 +10,19 @@
           brain-course? (fn [sym] (= "cn.li.ac.content.ability.generic/brain-course" (path sym)))]
       (is (pos? (count all)))
       (is (some brain-course? skill))
-      (is (some #(= "cn.li.ac.content.ability.meltdowner/electron-missile-fx" (path %)) fx))
+      (is (some #(= "cn.li.ac.content.ability.meltdowner/mine-ray-fx" (path %)) fx))
       (is (every? #(re-find #"cn\.li\.ac\.content\.ability" (path %)) all)))))
 
 (deftest discover-ability-providers-groups-by-family-and-layout-test
   (with-redefs [scanner/discover-ability-namespaces
                 (fn []
-                  {:all ['cn.li.ac.content.ability.meltdowner/electron-missile-fx]
+                  {:all ['cn.li.ac.content.ability.meltdowner/mine-ray-fx]
                    :skill []
-                   :fx ['cn.li.ac.content.ability.meltdowner/electron-missile-fx]})]
+                   :fx ['cn.li.ac.content.ability.meltdowner/mine-ray-fx]})]
     (let [providers (scanner/discover-ability-providers)
           meltdowner (first (filter #(= :meltdowner (:id %)) providers))]
       (is (some? meltdowner))
       (is (= []
              (:skill-namespaces meltdowner)))
-      (is (= ['cn.li.ac.content.ability.meltdowner/electron-missile-fx]
+      (is (= ['cn.li.ac.content.ability.meltdowner/mine-ray-fx]
              (:fx-namespaces meltdowner))))))
