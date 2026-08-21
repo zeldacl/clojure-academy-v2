@@ -21,6 +21,9 @@
               :id :blood-retrograde
               :resource "ac/combat/abilities/blood_retrograde.edn"}
              {:kind :ability
+              :id :directed-blastwave
+              :resource "ac/combat/abilities/directed_blastwave.edn"}
+             {:kind :ability
               :id :scatter-bomb
               :resource "ac/combat/abilities/scatter_bomb.edn"}
              {:kind :ability

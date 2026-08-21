@@ -16,6 +16,7 @@
     (is (catalog/available? :vec-deviation))
     (is (catalog/available? :vec-accel))
     (is (catalog/available? :blood-retrograde))
+    (is (catalog/available? :directed-blastwave))
     (is (catalog/available? :scatter-bomb))
     (is (catalog/available? :mark-teleport))
     (is (catalog/available? :penetrate-teleport))
@@ -39,6 +40,7 @@
     (is (= :migrated (catalog/migration-status :vec-deviation)))
     (is (= :migrated (catalog/migration-status :vec-accel)))
     (is (= :migrated (catalog/migration-status :blood-retrograde)))
+    (is (= :migrated (catalog/migration-status :directed-blastwave)))
     (is (= :migrated (catalog/migration-status :mine-detect)))
     (is (= :migrated (catalog/migration-status :mag-movement)))
     (is (= :migrated (catalog/migration-status :mag-manip)))
@@ -70,6 +72,10 @@
     (is (= :vec-deviation (get-in state [:combat :abilities :vec-deviation :id])))
     (is (= :vec-accel (get-in state [:combat :abilities :vec-accel :id])))
     (is (= :blood-retrograde (get-in state [:combat :abilities :blood-retrograde :id])))
+    (is (= :directed-blastwave
+           (get-in state [:combat :abilities :directed-blastwave :id])))
+    (is (pos? (count (get-in state [:combat :abilities :directed-blastwave :compiled-ir]))))
+    (is (nil? (get-in state [:combat :errors :directed-blastwave])))
     (is (pos? (count (get-in state [:combat :abilities :blood-retrograde :compiled-ir]))))
     (is (nil? (get-in state [:combat :errors :blood-retrograde])))
     (is (pos? (count (get-in state [:combat :abilities :vec-accel :compiled-ir]))))
@@ -114,6 +120,10 @@
            (get-in state [:vfx :effects :blood-retrograde-charge :id])))
     (is (= :blood-retrograde-impact
            (get-in state [:vfx :effects :blood-retrograde-impact :id])))
+    (is (= :directed-blastwave-charge
+           (get-in state [:vfx :effects :directed-blastwave-charge :id])))
+    (is (= :directed-blastwave-wave
+           (get-in state [:vfx :effects :directed-blastwave-wave :id])))
     (is (= :teleport-marker (get-in state [:vfx :effects :teleport-marker :id])))
     (is (= :energy-orb-session (get-in state [:vfx :effects :energy-orb-session :id])))
     (is (= :vortex-column-session (get-in state [:vfx :effects :vortex-column-session :id])))

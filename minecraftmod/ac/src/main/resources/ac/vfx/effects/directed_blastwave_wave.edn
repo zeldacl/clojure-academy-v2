@@ -1,0 +1,35 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :directed-blastwave-wave
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:position :vec3 :direction :vec3 :seed :long}
+          :destroy {}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/directional-wave
+         :position {:ref [:input :position]}
+         :direction {:ref [:input :direction]}
+         :ring-count-min 2
+         :ring-count-max 3
+         :life-ticks 15
+         :ring-life-min 8
+         :ring-life-max 12
+         :ring-life-jitter 0.0
+         :ring-offset-step 1.5
+         :ring-offset-jitter 0.3
+         :ring-size-min 0.8
+         :ring-size-max 1.2
+         :time-offset-step 2.0
+         :time-offset-jitter 1.0
+         :fade-in-ratio 0.2
+         :full-ratio 0.8
+         :fade-out-ratio 0.2
+         :growth-ticks 20.0
+         :initial-scale 0.4
+         :mid-scale 0.8
+         :mid-ratio 0.2
+         :final-scale 1.5
+         :forward-speed 0.025
+         :texture "academy:textures/effects/glow_circle.png"
+         :color [188 252 238 220]
+         :seed {:ref [:input :seed]}}}

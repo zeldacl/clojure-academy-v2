@@ -116,42 +116,6 @@
                                  {:op :vfx :effect-id :directed-shock
                                   :event :perform
                                   :params {:charge-min-ticks 6}}]}}}
-    {:id :directed-blastwave
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :release
-     :cost {:cp (scale 160.0 200.0)
-            :overload (scale 50.0 30.0)}
-     :cooldown {:ticks (scale 80.0 50.0)}
-     :program {:op :phase
-               :start {:op :session-patch
-                       :entries [[[:charge-ticks] 0.0]]}
-               :pulse {:op :session-patch
-                       :entries [[[:charge-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :require-session
-                                  :path [:charge-ticks] :min 6.0 :max 50.0}
-                                 {:op :query :query-type :directed-blastwave
-                                  :range 4.0 :result-ref :blastwave}
-                                 {:op :world-effect
-                                  :effect-type :directed-blastwave
-                                  :query-ref :blastwave
-                                  :ray-count 1
-                                  :aoe-radius 3.0
-                                  :amount (scale 10.0 25.0)
-                                  :damage-type :vector
-                                  :movement {:impulse 0.24
-                                             :knockback-y-adjust 0.4
-                                             :knockback-scale -1.2}
-                                  :breaking {:hardness-caps [2.9 25.0 55.0]
-                                             :break-probability [0.5 0.8]
-                                             :drop-probability [0.4 0.9]}}
-                                 {:op :vfx :effect-id :directed-blastwave
-                                  :event :perform
-                                  :params {:radius 3.0}}]}}}
     {:id :groundshock
      :revision 1
      :activation :session

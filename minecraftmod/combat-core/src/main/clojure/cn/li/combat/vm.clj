@@ -254,6 +254,7 @@
    :block/break-budget :block/break-budget
    :block/break :block/break
    :block/random-break :block/random-break
+   :block/area-break :block/area-break
    :world/sound :world/sound
    :world/lightning :world/lightning
    :world/explosion :world/explosion

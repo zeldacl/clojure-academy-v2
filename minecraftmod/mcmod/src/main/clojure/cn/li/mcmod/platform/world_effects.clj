@@ -39,11 +39,6 @@
   [world-id owner entity-type position velocity life-ticks]
   (call :spawn-entity! world-id owner entity-type position velocity life-ticks))
 
-(defn execute-directed-blastwave!
-  "Execute the bounded block/entity shockwave behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-directed-blastwave! world-id owner plan))
-
 (defn execute-groundshock!
   "Execute the bounded ground propagation/launch plan behind a Host Port."
   [world-id owner plan]

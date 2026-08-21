@@ -1,0 +1,23 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :directed-blastwave-charge
+ :revision 1
+ :lifecycle :session
+ :inputs {:spawn {:center :vec3 :charge-ticks :long :punched? :boolean
+                  :max-charge-ticks :long}
+          :update {:center :vec3 :charge-ticks :long :punched? :boolean
+                   :max-charge-ticks :long}
+          :destroy {}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/charge-ring
+         :center {:ref [:input :center]}
+         :charge-ticks {:ref [:input :charge-ticks]}
+         :max-charge-ticks {:ref [:input :max-charge-ticks]}
+         :points 16
+         :base-radius 0.1
+         :radius-growth 0.16
+         :pulse-amplitude 0.025
+         :pulse-frequency 0.22
+         :outer-color [236 170 93 170]
+         :core-color [241 240 222 220]
+         :punched? {:ref [:input :punched?]}}}

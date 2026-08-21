@@ -294,6 +294,169 @@
       (emit! ctx (stage-of ctx :world-after-translucent) :mesh
              [{:variant :walk-speed :local-walk-speed (double speed)}]))))
 
+(defn- seeded-next-long
+  [state]
+  (let [state (long state)
+        z (unchecked-add state -7046029254386353131)
+        z (unchecked-multiply
+           (bit-xor z (unsigned-bit-shift-right z 30))
+           -4658895280553007687)
+        z (unchecked-multiply
+           (bit-xor z (unsigned-bit-shift-right z 27))
+           -7723592293110705685)]
+    (bit-xor z (unsigned-bit-shift-right z 31))))
+
+(defn- seeded-uniform
+  [state lo hi]
+  (let [state (long state)
+        lo (double lo)
+        hi (double hi)
+        z1 (unchecked-add state -7046029254386353131)
+        z2 (unchecked-multiply
+            (bit-xor z1 (unsigned-bit-shift-right z1 30))
+            -4658895280553007687)
+        z3 (unchecked-multiply
+            (bit-xor z2 (unsigned-bit-shift-right z2 27))
+            -7723592293110705685)
+        next (bit-xor z3 (unsigned-bit-shift-right z3 31))
+        unit (/ (double (bit-and (unsigned-bit-shift-right next 11)
+                                0x1fffffffffffff))
+                9007199254740992.0)]
+    (+ lo (* (- hi lo) unit))))
+
+(defn- seeded-bounded-int
+  [state lo hi]
+  (let [state (long state)
+        lo (long lo)
+        hi (long hi)]
+    (if (<= hi lo)
+      lo
+      (let [z1 (unchecked-add state -7046029254386353131)
+            z2 (unchecked-multiply
+                (bit-xor z1 (unsigned-bit-shift-right z1 30))
+                -4658895280553007687)
+            z3 (unchecked-multiply
+                (bit-xor z2 (unsigned-bit-shift-right z2 27))
+                -7723592293110705685)
+            next (bit-xor z3 (unsigned-bit-shift-right z3 31))
+            unit (/ (double (bit-and (unsigned-bit-shift-right next 11)
+                                    0x1fffffffffffff))
+                    9007199254740992.0)]
+        (+ lo (long (* unit (double (inc (- hi lo))))))))))
+
+(defmethod sample-node! :vfx/charge-ring
+  [node ctx]
+  (let [{:keys [center charge-ticks max-charge-ticks points base-radius
+                radius-growth pulse-amplitude pulse-frequency outer-color
+                core-color punched?]} (resolve-fields node ctx)
+        ticks (double (or charge-ticks 0.0))
+        max-ticks (max 1.0 (double (or max-charge-ticks 1.0)))
+        progress (max 0.0 (min 1.0 (/ ticks max-ticks)))
+        pulse (* (double (or pulse-amplitude 0.0))
+                 (Math/sin (* (double (or pulse-frequency 0.0)) ticks)))
+        radius (+ (double (or base-radius 0.0))
+                  (* (double (or radius-growth 0.0)) progress) pulse)
+        points (long (max 3 (min 128 (or points 3))))]
+    (emit! ctx (stage-of ctx :world-after-translucent) :line
+           [{:variant :charge-ring :center center :points points :radius radius
+             :progress progress :punched? (boolean punched?)
+             :outer-color outer-color :core-color core-color}])))
+
+(defmethod sample-node! :vfx/directional-wave
+  [node ctx]
+  (let [{:keys [position direction ring-count-min ring-count-max life-ticks
+                ring-life-min ring-life-max
+                ring-life-jitter ring-offset-step ring-offset-jitter
+                ring-size-min ring-size-max time-offset-step
+                time-offset-jitter fade-in-ratio full-ratio fade-out-ratio
+                growth-ticks initial-scale mid-scale mid-ratio final-scale
+                forward-speed texture color seed]}
+        (resolve-fields node ctx)
+        age (double (or (:age ctx) 0.0))
+        life (max 1.0 (double (or life-ticks 1.0)))
+        t (max 0.0 (min 1.0 (/ age life)))
+        fade-in (max 1.0e-6 (double (or fade-in-ratio 0.2)))
+        full-ratio (max 0.0 (min 1.0 (double (or full-ratio 0.8))))
+        fade-out (max 1.0e-6 (double (or fade-out-ratio 0.2)))
+        rise (min 1.0 (/ t fade-in))
+        fade (max 0.0 (min 1.0 (/ (- 1.0 t) fade-out)))
+        alpha (* rise fade)
+        growth (max 1.0e-6 (double (or growth-ticks 1.0)))
+        growth-ratio (max 0.0 (/ age growth))
+        size-scale (cond
+                     (< growth-ratio fade-in)
+                     (+ (double (or initial-scale 0.0))
+                        (* (/ growth-ratio fade-in)
+                           (- (double (or mid-scale 1.0))
+                              (double (or initial-scale 0.0)))))
+                     (< growth-ratio (double (or mid-ratio 0.2)))
+                     (double (or mid-scale 1.0))
+                     :else
+                     (min (double (or final-scale 1.0))
+                          (+ (double (or mid-scale 1.0))
+                             (* (/ (- growth-ratio (double (or mid-ratio 0.2)))
+                                   (max 1.0e-6 (- 1.0 (double (or mid-ratio 0.2)))))
+                                (- (double (or final-scale 1.0))
+                                   (double (or mid-scale 1.0)))))))
+        [px py pz] (let [p (block-point position)] (or p [0.0 0.0 0.0]))
+        [dx dy dz] (let [d (block-point direction)
+                         [x y z] (or d [0.0 0.0 1.0])
+                         len (Math/sqrt (+ (* x x) (* y y) (* z z)))]
+                     (if (pos? len) [(/ x len) (/ y len) (/ z len)]
+                         [0.0 0.0 1.0]))
+        count-min (long (max 1 (min 16 (or ring-count-min 1))))
+        count-max (long (max count-min (min 16 (or ring-count-max count-min))))
+        base-seed (long (or seed 0))
+        count (seeded-bounded-int base-seed count-min count-max)
+        life-min (long (max 1 (min 256 (or ring-life-min 1))))
+        life-max (long (max life-min (min 256 (or ring-life-max life-min))))
+        rings (loop [idx 0 state (seeded-next-long base-seed) out (transient [])]
+                (if (>= idx count)
+                  (persistent! out)
+                  (let [s1 (seeded-next-long state)
+                        s2 (seeded-next-long s1)
+                        s3 (seeded-next-long s2)
+                        life-j (seeded-uniform s1
+                                               (- (double (or ring-life-jitter 0.0)))
+                                               (double (or ring-life-jitter 0.0)))
+                        off-j (seeded-uniform s2
+                                              (- (double (or ring-offset-jitter 0.0)))
+                                              (double (or ring-offset-jitter 0.0)))
+                        size (seeded-uniform s3
+                                             (double (or ring-size-min 1.0))
+                                             (double (or ring-size-max 1.0)))
+                        time-j (seeded-bounded-int (seeded-next-long s3)
+                                                   (- (long (or time-offset-jitter 0)))
+                                                   (long (or time-offset-jitter 0)))
+                        ring-life (+ (double (seeded-bounded-int s1 life-min life-max))
+                                     life-j)]
+                    (let [offset (+ (* idx (double (or ring-offset-step 0.0))) off-j)
+                          forward-distance (* age (double (or forward-speed 0.0)))
+                          distance (+ offset forward-distance)
+                          local-t (/ (- age (double time-j))
+                                     (max 1.0 ring-life))
+                          ring-rise (min 1.0 (max 0.0 (/ local-t fade-in)))
+                          ring-fade (if (< local-t full-ratio)
+                                      1.0
+                                      (max 0.0 (min 1.0
+                                                   (/ (- 1.0 local-t) fade-out))))
+                          ring-alpha (* ring-rise ring-fade)
+                          real-alpha (min alpha ring-alpha)]
+                      (recur (inc idx) (long (seeded-next-long s3))
+                             (conj! out {:index idx
+                                         :offset offset
+                                         :center {:vec3 [(+ px (* dx distance))
+                                                         (+ py (* dy distance))
+                                                         (+ pz (* dz distance))]}
+                                         :size (* size size-scale)
+                                         :alpha real-alpha
+                                         :life ring-life
+                                         :time-offset (+ (* idx (double (or time-offset-step 0.0))) time-j)
+                                         :max-alpha alpha}))))))]
+    (emit! ctx (stage-of ctx :world-after-translucent) :mesh
+           [{:variant :directional-wave :position position :direction direction
+             :rings rings :texture texture :color color :age age :life-ticks life}])))
+
 (defn- impact-coordinate [value]
   (cond
     (and (map? value) (vector? (:vec3 value))) (:vec3 value)

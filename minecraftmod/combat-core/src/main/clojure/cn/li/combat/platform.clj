@@ -16,6 +16,7 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.mcmod.runtime.capabilities :as capabilities]))
 
@@ -593,6 +594,193 @@
   (configure-entity! {:world-id world-id :entity target :velocity velocity
                        :add-tags []}))
 
+(defn entity-impulse!
+  "Set one entity's neutral velocity vector.  The component remains generic;
+   the platform relay is responsible only for resolving the entity id and
+   applying the vector."
+  [{:keys [world-id target vector]}]
+  (configure-entity! {:world-id world-id :entity target :velocity vector
+                       :add-tags []}))
+
+(defn radial-impulse!
+  "Apply a deterministic radial velocity to entities in a bounded sphere."
+  [{:keys [owner world-id center radius speed-min speed-max seed]}]
+  (let [center (point center)
+        radius (double (or radius 0.0))
+        speed-min (double (or speed-min 0.0))
+        speed-max (double (or speed-max speed-min))
+        finite? #(and (number? %) (Double/isFinite (double %)))
+        valid? (and owner world-id center
+                    (every? finite? (conj center radius speed-min speed-max))
+                    (<= 0.0 radius 32.0)
+                    (<= 0.0 speed-min speed-max 32.0)
+                    (world-effects/available?))]
+    (if-not valid?
+      {:status :rejected :reason :invalid-radial-impulse-request}
+      (let [[cx cy cz] center
+            entities (entity-select!
+                      {:owner owner :world-id world-id
+                       :shape {:type :sphere :center center :radius radius}
+                       :projection [:id :position :eye-height]
+                       :limit 256}
+                      nil)
+            seed (long (or seed 0))
+            hits (loop [xs (seq entities) index 0 total 0]
+                   (if-let [entity (first xs)]
+                     (let [[ex ey ez] (or (point (:position entity)) [cx cy cz])
+                           ey (+ ey (double (or (:eye-height entity) 0.0)))
+                           vx (- ex cx) vy (- ey cy) vz (- ez cz)
+                           length (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
+                       (if (<= length 1.0e-6)
+                         (recur (next xs) (inc index) total)
+                         (let [rng (seeded-rng/next-long
+                                    (unchecked-add seed index))
+                               magnitude (seeded-rng/uniform rng speed-min speed-max)
+                               result (entity-impulse!
+                                       {:world-id world-id :target entity
+                                        :vector [(* (/ vx length) magnitude)
+                                                 (* (/ vy length) magnitude)
+                                                 (* (/ vz length) magnitude)]})]
+                           (recur (next xs) (inc index)
+                                  (if (= :applied (:status result))
+                                    (inc total) total)))))
+                     total))]
+        {:status :applied :hits hits}))))
+
+(defn random-break!
+  "Break bounded random blocks around an origin with configurable hardness
+   and drop policies.  This is a reusable terrain primitive, not a skill
+   implementation."
+  [{:keys [owner world-id origin attempts radius hardness-max break-probability
+           drop-probability seed drop?]}]
+  (let [origin (point origin)
+        attempts (long (or attempts 0))
+        radius (double (or radius 0.0))
+        hardness-max (double (or hardness-max 0.0))
+        break-probability (double (or break-probability 1.0))
+        drop-probability (double (or drop-probability
+                                    (if (nil? drop?) 1.0 0.0)))
+        valid? (and owner world-id origin (blocks/available?)
+                    (<= 0 attempts 256) (<= 0.0 radius 32.0)
+                    (Double/isFinite hardness-max) (<= 0.0 hardness-max 64.0)
+                    (Double/isFinite break-probability)
+                    (<= 0.0 break-probability 1.0)
+                    (Double/isFinite drop-probability)
+                    (<= 0.0 drop-probability 1.0))]
+    (if-not valid?
+      {:status :rejected :reason :invalid-random-break-request}
+      (let [[ox oy oz] origin
+            seed (long (or seed 0))
+            broken (loop [index 0 total 0]
+                     (if (>= index attempts)
+                       total
+                       (let [rng (seeded-rng/next-long (unchecked-add seed index))
+                             rx (long (Math/floor (seeded-rng/uniform rng (- radius) radius)))
+                             r1 (seeded-rng/next-long rng)
+                             ry (long (Math/floor (seeded-rng/uniform r1 (- radius) radius)))
+                             r2 (seeded-rng/next-long r1)
+                             rz (long (Math/floor (seeded-rng/uniform r2 (- radius) radius)))
+                             x (long (Math/floor (+ ox rx)))
+                             y (long (Math/floor (+ oy ry)))
+                             z (long (Math/floor (+ oz rz)))
+                             hardness (double (or (blocks/get-block-hardness
+                                                  (str world-id) x y z)
+                                                 -1.0))
+                             allowed? (and (>= hardness 0.0)
+                                           (<= hardness hardness-max)
+                                           (blocks/can-break-block?
+                                            (str owner) (str world-id) x y z))
+                             break? (and allowed?
+                                          (<= (seeded-rng/unit-double r2)
+                                              break-probability))
+                             did-break? (and break?
+                                              (not= false
+                                                    (blocks/break-block!
+                                                     (str owner) (str world-id)
+                                                     x y z
+                                                     (<= (seeded-rng/unit-double r2)
+                                                         drop-probability))))]
+                         (recur (inc index) (if did-break? (inc total) total)))))]
+        {:status :applied :broken broken}))))
+
+(defn area-break!
+  "Scan a bounded spherical neighborhood inside an integer cube and apply
+   EDN-supplied hardness, break and drop policies.  The loops are primitive
+   and deterministic; no coordinate collection is allocated."
+  [{:keys [owner world-id origin radius hardness-max break-probability
+           drop-probability self-drop? seed]}]
+  (let [origin (point origin)
+        radius (double (or radius 0.0))
+        hardness-max (double (or hardness-max 0.0))
+        break-probability (double (or break-probability 1.0))
+        drop-probability (double (or drop-probability 1.0))
+        valid? (and owner world-id origin (blocks/available?)
+                    (<= 0.0 radius 8.0)
+                    (Double/isFinite hardness-max) (<= 0.0 hardness-max 64.0)
+                    (Double/isFinite break-probability)
+                    (<= 0.0 break-probability 1.0)
+                    (Double/isFinite drop-probability)
+                    (<= 0.0 drop-probability 1.0))]
+    (if-not valid?
+      {:status :rejected :reason :invalid-area-break-request}
+      (let [[ox0 oy0 oz0] origin
+            ox (double ox0) oy (double oy0) oz (double oz0)
+            x0 (long (+ ox 0.5)) y0 (long (+ oy 0.5)) z0 (long (+ oz 0.5))
+            r (long (Math/ceil radius))
+            radius-sq (* radius radius)
+            seed (long (or seed 0))
+            scan-block (fn [x y z index]
+                         (let [dx (- (double x) ox)
+                               dy (- (double y) oy)
+                               dz (- (double z) oz)
+                               inside? (<= (+ (* dx dx) (* dy dy) (* dz dz)) radius-sq)
+                               rng (seeded-rng/next-long (unchecked-add seed index))
+                               hardness (if inside?
+                                         (double (or (blocks/get-block-hardness
+                                                      (str world-id) x y z) -1.0))
+                                         -1.0)
+                               block-id (when (and inside? (>= hardness 0.0))
+                                          (blocks/get-block (str world-id) x y z))
+                               allowed? (and inside? (<= hardness hardness-max) block-id
+                                             (blocks/can-break-block?
+                                              (str owner) (str world-id) x y z))
+                               break? (and allowed?
+                                            (<= (seeded-rng/unit-double rng)
+                                                break-probability))
+                               drop? (if (or (not allowed?) self-drop?)
+                                        false
+                                        (<= (seeded-rng/unit-double
+                                             (seeded-rng/next-long rng))
+                                            drop-probability))]
+                           (if break?
+                             (let [result (blocks/break-block!
+                                           (str owner) (str world-id) x y z drop?)]
+                               (when (and self-drop?
+                                          (not= false result)
+                                          (server-bridge/server-bridge-available?))
+                                 (server-bridge/spawn-item-stack-at!
+                                  (str world-id) x y z block-id 1))
+                               (if (not= false result) 1 0))
+                             0)))
+            scan-z (fn scan-z [x y z total index]
+                     (if (> z (+ z0 r))
+                       [total index]
+                       (scan-z x y (inc z)
+                               (+ total (scan-block x y z index))
+                               (inc index))))
+            scan-y (fn scan-y [x y total index]
+                     (if (> y (+ y0 r))
+                       [total index]
+                       (let [[total index] (scan-z x y (- z0 r) total index)]
+                         (scan-y x (inc y) total index))))
+            scan-x (fn scan-x [x total index]
+                     (if (> x (+ x0 r))
+                       total
+                       (let [[total index] (scan-y x (- y0 r) total index)]
+                         (scan-x (inc x) total index))))
+            broken (scan-x (- x0 r) 0 0)]
+        {:status :applied :broken broken}))))
+
 (defn query-handlers []
   {:raycast raycast!
    :entity/select entity-select!
@@ -601,6 +789,8 @@
 
 (defn action-handlers []
   {:entity/damage damage!
+   :entity/impulse entity-impulse!
+   :entity/radial-impulse radial-impulse!
    :block/break break!
    :block/break-budget break-budget!
    :world/sound sound!
@@ -611,6 +801,8 @@
    :entity/spawn spawn-entity!
    :entity/discard discard-entity!
    :entity/configure configure-entity!
+   :block/random-break random-break!
+   :block/area-break area-break!
    :motion/entity-velocity entity-velocity!
    :projectile/schedule-beam deferred/schedule-action!})
 

@@ -139,6 +139,9 @@
                  :drop? false}
    :block/random-break {:component :block/random-break :origin vec3-example
                         :attempts 1 :radius 1.0 :hardness-max 0.3 :seed 0}
+   :block/area-break {:component :block/area-break :origin vec3-example
+                      :radius 1.0 :hardness-max 0.3
+                      :break-probability 1.0 :drop-probability 1.0 :seed 0}
    :world/sound {:component :world/sound :sound-id "generic" :position vec3-example
                  :category :ambient :volume 1.0 :pitch 1.0}
    :world/explosion {:component :world/explosion :position vec3-example

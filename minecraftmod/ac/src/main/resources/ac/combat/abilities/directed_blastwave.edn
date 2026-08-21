@@ -1,0 +1,226 @@
+{:schema-version 2
+ :kind :ability
+ :id :directed-blastwave
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed
+            :charge/ticks]
+ :prerequisites [{:skill-id :groundshock :min-exp 0.0}]
+ :tunables
+ {:charge-min-ticks {:curve :const :type :long}
+  :charge-max-accepted-ticks {:curve :const :type :long}
+  :charge-max-tolerant-ticks {:curve :const :type :long}
+  :punch-animation-ticks {:curve :const :type :long}
+  :targeting-distance {:curve :const}
+  :aoe-radius {:curve :const}
+  :damage {:curve :mastery-lerp}
+  :knockback-scale {:curve :const}
+  :hardness-low-threshold {:curve :const}
+  :hardness-mid-threshold {:curve :const}
+  :hardness-caps {:curve :pair}
+  :break-probability {:curve :mastery-lerp}
+  :drop-probability {:curve :mastery-lerp}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-hit {:curve :const}
+  :exp-miss {:curve :const}}
+ :costs {:release {:resources {:cp {:tunable :release-cp}
+                               :overload {:tunable :release-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:hit {:per-mark {:tunable :exp-hit}}
+               :miss {:per-mark {:tunable :exp-miss}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :assign :value 0}
+                             {:path [:punched?] :mode :assign :value false}
+                             {:path [:punch-ticks] :mode :assign :value 0}]}
+                  {:component :effect/vfx
+                   :effect-id :directed-blastwave-charge
+                   :operation :spawn
+                   :instance-key [:activation :directed-blastwave-charge]
+                   :audience {:type :owner}
+                   :payload {:center {:from :caster/eye}
+                             :charge-ticks 0 :max-charge-ticks
+                             {:tunable :charge-max-accepted-ticks}
+                             :punched? false}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :increment :value 1}
+                             {:path [:punch-ticks] :mode :increment :value
+                              {:expr :math/select
+                               :args [{:ref [:session :punched?]} 1 0]}}]}
+                  {:component :effect/vfx
+                   :effect-id :directed-blastwave-charge
+                   :operation :update
+                   :instance-key [:activation :directed-blastwave-charge]
+                   :audience {:type :owner}
+                   :payload {:center {:from :caster/eye}
+                             :charge-ticks {:ref [:session :charge-ticks]}
+                             :max-charge-ticks {:tunable :charge-max-accepted-ticks}
+                             :punched? {:ref [:session :punched?]}}}
+                  {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:ref [:session :charge-ticks]}
+                                 {:tunable :charge-max-tolerant-ticks}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :effect/vfx
+                                   :effect-id :directed-blastwave-charge
+                                   :operation :destroy
+                                   :instance-key [:activation :directed-blastwave-charge]
+                                   :payload {}}
+                                  {:component :flow/finish :outcome :aborted
+                                   :finish-session? true}]}
+                   :else {:component :flow/branch
+                          :when {:expr :bool/and
+                                 :args [{:ref [:session :punched?]}
+                                        {:expr :math/gt
+                                         :args [{:ref [:session :punch-ticks]}
+                                                {:tunable :punch-animation-ticks}]}]}
+                          :then {:component :flow/sequence
+                                 :steps [{:component :effect/vfx
+                                          :effect-id :directed-blastwave-charge
+                                          :operation :destroy
+                                          :instance-key [:activation :directed-blastwave-charge]
+                                          :payload {}}
+                                         {:component :flow/finish :outcome :performed
+                                          :finish-session? true}]}
+                          :else {:component :flow/finish :outcome :charging}}}]}
+  :release {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:expr :math/gt
+                           :args [{:ref [:session :charge-ticks]}
+                                  {:tunable :charge-min-ticks}]}
+                          {:expr :math/lt
+                           :args [{:ref [:session :charge-ticks]}
+                                  {:tunable :charge-max-accepted-ticks}]}]}
+            :then {:component :txn/atomic
+                   :guards [{:component :guard/resource
+                             :cost {:cp {:tunable :release-cp}
+                                    :overload {:tunable :release-overload}}}]
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :cost/spend :budget :release}
+                                  {:component :target/raycast
+                                   :origin {:from :caster/eye}
+                                   :direction {:from :caster/aim}
+                                   :distance {:tunable :targeting-distance}
+                                   :include-entities? true
+                                   :include-blocks? true
+                                   :result :aim-hit}
+                                  {:component :target/entities
+                                   :shape {:type :sphere
+                                           :center {:ref [:slot :aim-hit :position]}
+                                           :radius {:tunable :aoe-radius}}
+                                   :filter {:excluded-entity-ids [{:from :caster/id}]}
+                                   :projection [:id :position :eye-height]
+                                   :limit 256
+                                   :result :targets}
+                                  {:component :flow/foreach
+                                   :items {:ref [:slot :targets]}
+                                   :as :target
+                                   :limit 256
+                                   :body {:component :flow/sequence
+                                          :steps [{:component :combat/damage
+                                                   :target {:ref [:slot :target :id]}
+                                                   :amount {:tunable :damage}
+                                                   :damage-type :skill
+                                                   :damage-pipeline :skill}
+                                                  {:component :combat/impulse
+                                                   :target {:ref [:slot :target]}
+                                                   :vector {:expr :vec3/scale
+                                                            :args [{:expr :vec3/normalize
+                                                                    :args [{:expr :vec3/sub
+                                                                            :args [{:expr :vec3/add
+                                                                                    :args [{:ref [:slot :target :position]}
+                                                                                           {:vec3 [0.0 0.1 0.0]}]}
+                                                                                   {:from :caster/body}]}]}
+                                                                   {:expr :math/mul
+                                                                    :args [0.2 {:expr :math/abs
+                                                                                :args [{:tunable :knockback-scale}]}]}]}}]}}
+                                  {:component :block/area-break
+                                   :owner {:from :caster/id}
+                                   :world-id {:from :world/id}
+                                   :origin {:ref [:slot :aim-hit :position]}
+                                   :radius 3.0
+                                   :hardness-max {:expr :math/select
+                                                  :args [{:expr :math/lt
+                                                          :args [{:from :progression/mastery}
+                                                                 {:tunable :hardness-low-threshold}]}
+                                                         {:tunable :hardness-caps :path [0]}
+                                                         {:expr :math/select
+                                                          :args [{:expr :math/lt
+                                                                  :args [{:from :progression/mastery}
+                                                                         {:tunable :hardness-mid-threshold}]}
+                                                                 {:tunable :hardness-caps :path [1]}
+                                                                 {:tunable :hardness-caps :path [2]}]}]}
+                                   :break-probability {:expr :math/lerp
+                                                       :args [{:tunable :break-probability :path [0]}
+                                                              {:tunable :break-probability :path [1]}
+                                                              {:from :progression/mastery}]}
+                                   :drop-probability {:expr :math/lerp
+                                                      :args [{:tunable :drop-probability :path [0]}
+                                                             {:tunable :drop-probability :path [1]}
+                                                             {:from :progression/mastery}]}
+                                   :self-drop? {:expr :math/eq
+                                                :args [{:from :progression/mastery} 1.0]}
+                                   :seed {:from :rng/seed}}
+                                  {:component :flow/branch
+                                   :when {:expr :collection/nonempty
+                                          :args [{:ref [:slot :targets]}]}
+                                   :then {:component :score/mark :tag :hit}
+                                   :else {:component :score/mark :tag :miss}}
+                                  {:component :cooldown/start :name :main}
+                                  {:component :effect/vfx
+                                   :effect-id :directed-blastwave-charge
+                                   :operation :destroy
+                                   :instance-key [:activation :directed-blastwave-charge]
+                                   :payload {}}
+                                  {:component :effect/vfx
+                                   :effect-id :directed-blastwave-wave
+                                   :operation :spawn
+                                   :audience {:type :nearby :radius 32.0}
+                                   :payload {:position {:ref [:slot :aim-hit :position]}
+                                             :direction {:from :caster/aim}
+                                             :seed {:from :rng/seed}}}
+                                  {:component :effect/vfx
+                                   :effect-id :audio-one-shot
+                                   :operation :spawn
+                                   :audience {:type :nearby :radius 32.0}
+                                   :payload {:position {:ref [:slot :aim-hit :position]}
+                                             :sound-id "academy:vecmanip.directed_blast"
+                                             :volume 0.5 :pitch 1.0}}
+                                  {:component :session/patch
+                                   :entries [{:path [:punched?] :mode :assign :value true}
+                                             {:path [:punch-ticks] :mode :assign :value 0}]}
+                                  {:component :flow/finish :outcome :punched}]}
+                   :on-fail {:component :flow/sequence
+                             :steps [{:component :effect/vfx
+                                      :effect-id :directed-blastwave-charge
+                                      :operation :destroy
+                                      :instance-key [:activation :directed-blastwave-charge]
+                                      :payload {}}
+                                     {:component :flow/finish
+                                      :outcome :insufficient-resource
+                                      :finish-session? true}]}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :directed-blastwave-charge
+                            :operation :destroy
+                            :instance-key [:activation :directed-blastwave-charge]
+                            :payload {}}
+                          {:component :flow/finish :outcome :undercharged
+                           :finish-session? true}]}}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :directed-blastwave-charge
+                   :operation :destroy
+                   :instance-key [:activation :directed-blastwave-charge]
+                   :payload {}}
+                  {:component :flow/finish :outcome :aborted
+                   :finish-session? true}]}
+  :events {}}}

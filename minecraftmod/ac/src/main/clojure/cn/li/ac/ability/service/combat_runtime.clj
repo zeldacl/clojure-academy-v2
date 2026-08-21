@@ -448,18 +448,6 @@
                                          (double (or (:aoe-radius node) 8.0))
                                          excluded)]
                             (assoc attack-data :victims victims))))
-              :directed-blastwave (fn [context node]
-                                    (if-let [host-query (contract/host-port :query)]
-                                      (host-query :directed-blastwave context node)
-                                      (let [owner (:owner context)
-                                            range (double (or (:range node) 4.0))
-                                            attack-data (attack/resolve-attack-data owner range)
-                                            victims (attack/aoe-victims
-                                                     (:world-id attack-data)
-                                                     (:impact attack-data)
-                                                     3.0
-                                                     #{owner})]
-                                        (assoc attack-data :victims victims))))
               ;; Ground-level start point + flattened look direction only --
               ;; the actual DDA propagation walk, block breaking and entity
               ;; sweep all happen in execute-groundshock! (platform-src),
@@ -661,41 +649,6 @@
                                               (world-effects/spawn-lightning!
                                                world-id (double x) (double y) (double z)
                                                (boolean visual-only?)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :directed-blastwave
-                         (let [{:keys [world-id query-result ray-count aoe-radius
-                                       amount damage-type movement breaking]} effect
-                               {:keys [impulse knockback-y-adjust knockback-scale]} movement
-                               {:keys [hardness-caps break-probability drop-probability]} breaking
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               bounded-probabilities? (and (vector? break-probability)
-                                                           (= 2 (count break-probability))
-                                                           (every? #(and (finite? %) (<= 0.0 (double %) 1.0))
-                                                                   break-probability)
-                                                           (vector? drop-probability)
-                                                           (= 2 (count drop-probability))
-                                                           (every? #(and (finite? %) (<= 0.0 (double %) 1.0))
-                                                                   drop-probability))
-                               valid? (and world-id (map? query-result)
-                                            (<= 1 (long (or ray-count 1)) 16)
-                                            (finite? aoe-radius) (pos? (double aoe-radius))
-                                            (<= (double aoe-radius) 16.0)
-                                            (finite? amount) (pos? (double amount))
-                                            (<= (double amount) 1000.0)
-                                            (every? #(and (finite? %) (<= -10.0 (double %) 10.0))
-                                                    [impulse knockback-y-adjust knockback-scale])
-                                            (vector? hardness-caps)
-                                            (= 3 (count hardness-caps))
-                                            (every? #(and (finite? %) (<= 0.0 (double %) 100.0))
-                                                    hardness-caps)
-                                            bounded-probabilities?
-                                            (world-effects/available?))
-                               plan (assoc effect :ray-count (long (or ray-count 1)))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-directed-blastwave!
-                                               world-id owner plan))
                                       :applied
                                       :failed)
                             :effect effect})
@@ -1658,99 +1611,6 @@
                    (motion-effects/reset-fall-damage! owner))
                  {:status (if applied? :applied :failed)
                   :velocity {:x tx :y ty :z tz}}))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/radial-impulse)
-        (capabilities/register-action!
-         :entity/radial-impulse
-         (fn [{:keys [owner world-id center radius speed-min speed-max seed]}]
-           (let [point (cond
-                         (and (map? center) (vector? (:vec3 center))) (:vec3 center)
-                         (map? center) [(:x center) (:y center) (:z center)]
-                         :else nil)
-                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
-                 [x y z] (mapv #(double (or % 0.0)) (or point [0.0 0.0 0.0]))
-                 radius (double (or radius 0.0))
-                 speed-min (double (or speed-min 0.0))
-                 speed-max (double (or speed-max speed-min))
-                 valid? (and owner world-id point (world-effects/available?)
-                             (motion-effects/entity-motion-available?)
-                             (every? finite? [x y z radius speed-min speed-max])
-                             (<= 0.0 radius 32.0) (<= 0.0 speed-min speed-max 32.0))]
-             (if-not valid?
-               {:status :rejected :reason :invalid-radial-impulse-request}
-               (let [entities (take 256 (world-effects/find-entities-in-radius
-                                         (str world-id) x y z radius))
-                     seed (long (or seed 0))
-                     result (loop [xs (seq entities) index 0 hits 0]
-                              (if-let [entity (first xs)]
-                                (let [id (or (:id entity) (:uuid entity))
-                                      ex (double (or (:x entity) x))
-                                      ey (+ (double (or (:y entity) y))
-                                            (double (or (:eye-height entity) 0.0)))
-                                      ez (double (or (:z entity) z))
-                                      vx (- ex x) vy (- ey y) vz (- ez z)
-                                      length (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))
-                                      ^long next-rng (seeded-rng/next-long
-                                                      (unchecked-add seed index))]
-                                  (if (or (nil? id) (= (str id) (str owner))
-                                          (<= length 1.0e-6))
-                                    (recur (next xs) (inc index) hits)
-                                    (let [magnitude (seeded-rng/uniform next-rng speed-min speed-max)
-                                          applied? (motion-effects/set-entity-velocity!
-                                                    (str world-id) (str id)
-                                                    (* (/ vx length) magnitude)
-                                                    (* (/ vy length) magnitude)
-                                                    (* (/ vz length) magnitude))]
-                                      (recur (next xs) (inc index)
-                                             (if applied? (inc hits) hits)))))
-                                hits))]
-                 {:status :applied :hits result}))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :block/random-break)
-        (capabilities/register-action!
-         :block/random-break
-         (fn [{:keys [owner world-id origin attempts radius hardness-max seed drop?]}]
-           (let [point (cond
-                         (and (map? origin) (vector? (:vec3 origin))) (:vec3 origin)
-                         (map? origin) [(:x origin) (:y origin) (:z origin)]
-                         :else nil)
-                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
-                 [x y z] (mapv #(double (or % 0.0)) (or point [0.0 0.0 0.0]))
-                 attempts (long (or attempts 0))
-                 radius (double (or radius 0.0))
-                 hardness-max (double (or hardness-max 0.0))
-                 valid? (and owner world-id point (block-manipulation/available?)
-                             (every? finite? [x y z radius hardness-max])
-                             (<= 0 attempts 256) (<= 0.0 radius 32.0)
-                             (<= 0.0 hardness-max 64.0))]
-             (if-not valid?
-               {:status :rejected :reason :invalid-random-break-request}
-               (let [seed (long (or seed 0))
-                 broken (loop [index 0 total 0]
-                          (if (>= index attempts)
-                            total
-                                (let [rng (seeded-rng/next-long (unchecked-add seed index))
-                                      rx (long (Math/floor (seeded-rng/uniform rng (- radius) radius)))
-                                      ry (long (Math/floor (seeded-rng/uniform (seeded-rng/next-long rng)
-                                                                              (- radius) radius)))
-                                      rz (long (Math/floor (seeded-rng/uniform (seeded-rng/next-long
-                                                                                (seeded-rng/next-long rng))
-                                                                              (- radius) radius)))
-                                      bx (long (Math/floor (+ x rx)))
-                                      by (long (Math/floor (+ y ry)))
-                                      bz (long (Math/floor (+ z rz)))
-                                      hardness (double (or (block-manipulation/get-block-hardness
-                                                           (str world-id) bx by bz)
-                                                          -1.0))
-                                      allowed? (and (>= hardness 0.0) (<= hardness hardness-max)
-                                                    (block-manipulation/can-break-block?
-                                                     (str owner) (str world-id) bx by bz))
-                                      did-break? (and allowed?
-                                                       (not= false
-                                                             (block-manipulation/break-block!
-                                                              (str owner) (str world-id) bx by bz
-                                                              (not= false drop?))))]
-                                  (recur (inc index)
-                                         (if did-break? (inc total) total)))))]
-                 {:status :applied :broken broken}))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/teleport)
         (capabilities/register-action!
          :entity/teleport

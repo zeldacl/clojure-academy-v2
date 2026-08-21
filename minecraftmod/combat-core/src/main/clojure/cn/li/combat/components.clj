@@ -337,6 +337,14 @@
            {:schema {:required #{:origin :attempts :radius :hardness-max :seed}}
             :effects #{:mutate}}
 
+           ;; Deterministic bounded cube scan with EDN-supplied hardness and
+           ;; drop policies.  This is distinct from random sampling because
+           ;; callers that promise area coverage must not silently miss
+           ;; eligible blocks due to duplicate random coordinates.
+           :block/area-break
+           {:schema {:required #{:origin :radius :hardness-max :seed}}
+            :effects #{:mutate}}
+
            :world/sound
            {:schema {:required #{:sound-id :position}} :effects #{:emit}}
 

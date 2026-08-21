@@ -85,6 +85,26 @@
            ;; Generic client presentation override used while charging an
            ;; effect.  The speed is supplied by the effect document.
            [:vfx/charge-slow #{:speed}]
+           ;; Generic radial charge indicator.  Geometry, pulse and palette
+           ;; are all supplied by the effect document; this node has no
+           ;; ability-specific knowledge.
+           [:vfx/charge-ring #{:center :charge-ticks :max-charge-ticks
+                               :points :base-radius :radius-growth
+                               :pulse-amplitude :pulse-frequency
+                               :outer-color :core-color :punched?}]
+           ;; Generic directional expanding wave.  Ring count, jitter,
+           ;; lifetime, texture and palette are data supplied by EDN.
+           [:vfx/directional-wave #{:position :direction :ring-count-min
+                                    :ring-count-max :life-ticks
+                                    :ring-life-min :ring-life-max
+                                    :ring-life-jitter :ring-offset-step
+                                    :ring-offset-jitter :ring-size-min
+                                    :ring-size-max :time-offset-step
+                                    :time-offset-jitter :fade-in-ratio
+                                    :full-ratio :fade-out-ratio :growth-ticks
+                                    :initial-scale :mid-scale :mid-ratio
+                                    :final-scale :forward-speed
+                                    :texture :color :seed}]
            ;; Generic impact burst: target splashes plus surface decals.  All
            ;; geometry, textures, lifetimes and random policy are inputs.
            [:vfx/impact-burst #{:origin :look-dir :target-width :target-height

@@ -55,6 +55,48 @@
       (is (= {:vec3 [1.0 2.0 3.0]} (:center (first (:payload batch)))))
       (is (= 0.5 (:radius-from (first (:payload batch))))))))
 
+(deftest charge-ring-node-emits-parameterized-ring-payload
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/charge-ring
+               :center {:ref [:input :center]}
+               :charge-ticks 25 :max-charge-ticks 50 :points 16
+               :base-radius 0.1 :radius-growth 0.16
+               :pulse-amplitude 0.0 :pulse-frequency 0.22
+               :outer-color [236 170 93 170]
+               :core-color [241 240 222 220]
+               :punched? false}]
+    (vm/sample! graph {:age 0.0 :input {:center {:vec3 [1.0 2.0 3.0]}}}
+                {:sink sink})
+    (let [payload (first (:payload (first @batches)))]
+      (is (= :charge-ring (:variant payload)))
+      (is (= 16 (:points payload)))
+      (is (= 0.5 (:progress payload)))
+      (is (= 0.18 (:radius payload))))))
+
+(deftest directional-wave-node-emits-seeded-ring-payload
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/directional-wave
+               :position {:ref [:input :position]}
+               :direction {:ref [:input :direction]}
+               :ring-count-min 2 :ring-count-max 3
+               :life-ticks 15 :ring-life-min 8 :ring-life-max 12
+               :ring-life-jitter 0.0 :ring-offset-step 1.5
+               :ring-offset-jitter 0.3 :ring-size-min 0.8 :ring-size-max 1.2
+               :time-offset-step 2.0 :time-offset-jitter 1
+               :fade-in-ratio 0.2 :full-ratio 0.8 :fade-out-ratio 0.2
+               :growth-ticks 20.0 :initial-scale 0.4 :mid-scale 0.8
+               :mid-ratio 0.2 :final-scale 1.5 :forward-speed 0.025
+               :texture "generic" :color [188 252 238 220] :seed 7}]
+    (vm/sample! graph {:age 5.0 :input {:position {:vec3 [0.0 0.0 0.0]}
+                                         :direction {:vec3 [0.0 0.0 2.0]}}}
+                {:sink sink})
+    (let [payload (first (:payload (first @batches)))
+          rings (:rings payload)]
+      (is (= :directional-wave (:variant payload)))
+      (is (<= 2 (count rings) 3))
+      (is (every? #(and (map? (:center %))
+                        (<= 0.0 (double (:alpha %)) 1.0)) rings)))))
+
 (deftest unknown-component-throws-instead-of-silently-dropping
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown VFX component"
                         (vm/sample! {:component :vfx/does-not-exist} {:age 0.0 :input {}} {:sink nil}))))

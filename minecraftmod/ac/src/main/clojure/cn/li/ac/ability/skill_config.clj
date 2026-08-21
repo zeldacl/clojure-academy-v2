@@ -235,6 +235,25 @@
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
     :exp-use :progression.exp-use}
+   :directed-blastwave
+   {:charge-min-ticks :charge.min-ticks
+    :charge-max-accepted-ticks :charge.max-accepted-ticks
+    :charge-max-tolerant-ticks :charge.max-tolerant-ticks
+    :punch-animation-ticks :charge.punch-anim-ticks
+    :targeting-distance :targeting.raycast-distance
+    :aoe-radius :combat.aoe-radius
+    :damage :combat.damage
+    :knockback-scale :movement.knockback-scale
+    :hardness-low-threshold :breaking.hardness-low-threshold
+    :hardness-mid-threshold :breaking.hardness-mid-threshold
+    :hardness-caps :breaking.hardness-caps
+    :break-probability :breaking.break-probability
+    :drop-probability :breaking.drop-probability
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit
+    :exp-miss :progression.exp-miss}
    :blood-retrograde
    {:max-charge-ticks :charge.max-ticks
     :targeting-distance :targeting.distance

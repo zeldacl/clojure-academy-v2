@@ -83,6 +83,25 @@
    :vfx/ribbon {:component :vfx/ribbon :points {:ref [:state :trail-points]}
                 :width 0.01 :max-points 1 :color [255 255 255 255]}
    :vfx/charge-slow {:component :vfx/charge-slow :speed 0.1}
+   :vfx/charge-ring {:component :vfx/charge-ring :center point-example
+                     :charge-ticks 1 :max-charge-ticks 50 :points 16
+                     :base-radius 0.1 :radius-growth 0.16
+                     :pulse-amplitude 0.025 :pulse-frequency 0.22
+                     :outer-color [236 170 93 170] :core-color [241 240 222 220]
+                     :punched? false}
+   :vfx/directional-wave {:component :vfx/directional-wave :position point-example
+                          :direction {:vec3 [0.0 0.0 1.0]} :ring-count-min 2
+                          :ring-count-max 3 :life-ticks 15
+                          :ring-life-min 8 :ring-life-max 12
+                          :ring-life-jitter 0.0 :ring-offset-step 1.5
+                          :ring-offset-jitter 0.3 :ring-size-min 0.8
+                          :ring-size-max 1.2 :time-offset-step 2.0
+                          :time-offset-jitter 1.0 :fade-in-ratio 0.2
+                          :full-ratio 0.8 :fade-out-ratio 0.2
+                          :growth-ticks 20.0 :initial-scale 0.4
+                          :mid-scale 0.8 :mid-ratio 0.2 :final-scale 1.5
+                          :forward-speed 0.025 :texture "generic/glow_circle.png"
+                          :color [188 252 238 200] :seed 0}
    :vfx/impact-burst {:component :vfx/impact-burst
                       :origin point-example :look-dir {:vec3 [0.0 0.0 1.0]}
                       :target-width 0.6 :target-height 1.8

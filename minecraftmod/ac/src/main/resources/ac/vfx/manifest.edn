@@ -81,5 +81,11 @@
               :id :blood-retrograde-charge
               :resource "ac/vfx/effects/blood_retrograde_charge.edn"}
              {:kind :vfx-effect
-              :id :blood-retrograde-impact
-              :resource "ac/vfx/effects/blood_retrograde_impact.edn"}]}
+             :id :blood-retrograde-impact
+              :resource "ac/vfx/effects/blood_retrograde_impact.edn"}
+             {:kind :vfx-effect
+              :id :directed-blastwave-charge
+              :resource "ac/vfx/effects/directed_blastwave_charge.edn"}
+             {:kind :vfx-effect
+              :id :directed-blastwave-wave
+              :resource "ac/vfx/effects/directed_blastwave_wave.edn"}]}
