@@ -235,6 +235,20 @@
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
     :exp-use :progression.exp-use}
+   :blood-retrograde
+   {:max-charge-ticks :charge.max-ticks
+    :targeting-distance :targeting.distance
+    :entity-search-radius :targeting.entity-search-radius
+    :release-cp :cost.release.cp
+    :release-overload :cost.release.overload
+    :damage :combat.damage
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit
+    :fx-ratio-ticks :charge.fx-ratio-ticks
+    :fallback-width :targeting.fallback-width
+    :fallback-height :targeting.fallback-height
+    :fallback-eye-height :targeting.fallback-eye-height
+    :spray-angles :effect.spray-angles}
    :meltdowner
    {:charge-min-ticks :charge.min-ticks
     :charge-max-ticks :charge.max-ticks

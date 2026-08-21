@@ -76,4 +76,10 @@
               :resource "ac/vfx/effects/target_mark_session.edn"}
              {:kind :vfx-effect
               :id :trajectory-ribbon-session
-              :resource "ac/vfx/effects/trajectory_ribbon_session.edn"}]}
+              :resource "ac/vfx/effects/trajectory_ribbon_session.edn"}
+             {:kind :vfx-effect
+              :id :blood-retrograde-charge
+              :resource "ac/vfx/effects/blood_retrograde_charge.edn"}
+             {:kind :vfx-effect
+              :id :blood-retrograde-impact
+              :resource "ac/vfx/effects/blood_retrograde_impact.edn"}]}

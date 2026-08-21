@@ -82,6 +82,16 @@
                  :limit 1 :particle {:material :additive :life-ticks 1 :speed 0.01}}
    :vfx/ribbon {:component :vfx/ribbon :points {:ref [:state :trail-points]}
                 :width 0.01 :max-points 1 :color [255 255 255 255]}
+   :vfx/charge-slow {:component :vfx/charge-slow :speed 0.1}
+   :vfx/impact-burst {:component :vfx/impact-burst
+                      :origin point-example :look-dir {:vec3 [0.0 0.0 1.0]}
+                      :target-width 0.6 :target-height 1.8
+                      :surface-hits [] :splash-count 8
+                      :splash-life-ticks 10
+                      :splash-texture-pattern "academy:textures/effects/blood_splash/%d.png"
+                      :splash-frame-count 10 :splash-frame-duration-ms 50
+                      :splash-size 1.4 :spray-textures []
+                      :spray-life-ticks 24 :spray-duplicates 2 :seed 0}
    :vfx/trajectory-ribbon {:component :vfx/trajectory-ribbon
                            :origin point-example
                            :initial-velocity {:vec3 [0.0 1.0 0.0]}

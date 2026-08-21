@@ -40,13 +40,11 @@
   :priority 50
   :skill-namespaces
   [cn.li.ac.content.ability.vecmanip.arbitration
-   cn.li.ac.content.ability.vecmanip.blood-retrograde
    cn.li.ac.content.ability.vecmanip.directed-blastwave
    cn.li.ac.content.ability.vecmanip.directed-shock
    cn.li.ac.content.ability.vecmanip.groundshock
    ]
   :fx-namespaces
-  [cn.li.ac.content.ability.vecmanip.blood-retrograde-fx
-   cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
+  [cn.li.ac.content.ability.vecmanip.directed-blastwave-fx
    cn.li.ac.content.ability.vecmanip.directed-shock-fx
    cn.li.ac.content.ability.vecmanip.groundshock-fx]}]

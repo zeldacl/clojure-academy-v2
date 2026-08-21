@@ -1,0 +1,173 @@
+{:schema-version 2
+ :kind :ability
+ :id :blood-retrograde
+ :revision 2
+ :activation :session
+ :status :migrated
+ :period-ticks 1
+ :max-session-ticks 30
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed
+            :charge/ticks]
+ :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}]
+ :tunables
+ {:max-charge-ticks {:curve :const :type :long}
+  :targeting-distance {:curve :const}
+  :entity-search-radius {:curve :const}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :damage {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-hit {:curve :const}
+  :fx-ratio-ticks {:curve :const}
+  :fallback-width {:curve :const}
+  :fallback-height {:curve :const}
+  :fallback-eye-height {:curve :const}
+  :spray-angles {:curve :pair}}
+ :costs
+ {:release {:resources {:cp {:tunable :release-cp}
+                        :overload {:tunable :release-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:hit {:per-mark {:tunable :exp-hit}}}
+ :fragments
+ {:blood-release
+  {:inputs {}
+   :body
+   {:component :flow/sequence
+    :steps
+    [{:component :target/raycast
+      :origin {:from :caster/eye}
+      :direction {:from :caster/aim}
+      :distance {:tunable :targeting-distance}
+      :include-entities? true
+      :include-blocks? false
+      :living-only? true
+      :result :aim-hit}
+     {:component :flow/branch
+      :when {:ref [:slot :aim-hit :entity-id]}
+      :then
+      {:component :flow/sequence
+       :steps
+       [{:component :data/bind
+         :to :target-base
+         :value {:ref [:slot :aim-hit :position]}}
+        {:component :data/bind
+         :to :target-origin
+         :value {:expr :vec3/add
+                 :args [{:ref [:slot :target-base]}
+                        {:expr :vec3/scale
+                         :args [{:vec3 [0.0 1.0 0.0]}
+                                {:expr :math/mul
+                                 :args [{:tunable :fallback-height} 0.6]}]}]}}
+        {:component :target/raycast-fan
+         :origin {:ref [:slot :target-origin]}
+         :direction {:from :caster/aim}
+         :distance 5.5
+         :pitch-angles {:tunable :spray-angles}
+         :yaw-range-degrees [-20.0 20.0]
+         :limit 9
+         :seed {:from :rng/seed}
+         :result :spray-hits}
+        {:component :txn/atomic
+         :guards [{:component :guard/resource
+                   :cost {:cp {:tunable :release-cp}
+                          :overload {:tunable :release-overload}}}]
+         :reservations []
+         :body {:component :flow/sequence
+                :steps [{:component :combat/damage
+                         :target {:ref [:slot :aim-hit :entity-id]}
+                         :amount {:tunable :damage}
+                         :damage-type :skill
+                         :damage-pipeline :skill}
+                        {:component :score/mark :tag :hit}
+                        {:component :cooldown/start :name :main}
+                        {:component :effect/vfx
+                         :effect-id :blood-retrograde-impact
+                         :operation :spawn
+                         :instance-key [:activation :blood-impact]
+                         :audience {:type :nearby :radius 32.0}
+                                   :payload {:origin {:ref [:slot :target-base]}
+                                   :look-dir {:from :caster/aim}
+                                   :target-width {:tunable :fallback-width}
+                                   :target-height {:tunable :fallback-height}
+                                   :surface-hits {:ref [:slot :spray-hits]}
+                                   :splash-count {:expr :math/add
+                                                  :args [6 {:expr :random/int
+                                                            :args [0 3]}]}
+                                   :splash-life-ticks 10
+                                   :splash-texture-pattern
+                                   "academy:textures/effects/blood_splash/%d.png"
+                                   :splash-frame-count 10
+                                   :splash-frame-duration-ms 50
+                                   :splash-size 1.4
+                                   :spray-textures
+                                   {:ground ["academy:textures/effects/blood_spray/grnd/0.png"
+                                             "academy:textures/effects/blood_spray/grnd/1.png"
+                                             "academy:textures/effects/blood_spray/grnd/2.png"]
+                                    :wall ["academy:textures/effects/blood_spray/wall/0.png"
+                                           "academy:textures/effects/blood_spray/wall/1.png"
+                                           "academy:textures/effects/blood_spray/wall/2.png"]}
+                                   :spray-life-ticks 24
+                                   :spray-duplicates 2
+                                   :seed {:from :rng/seed}}}
+                        {:component :effect/vfx
+                         :effect-id :audio-one-shot
+                         :operation :spawn
+                         :audience {:type :nearby :radius 32.0}
+                         :payload {:position {:from :caster/body}
+                                   :sound-id "academy:vecmanip.blood_retro"
+                                   :volume 1.0 :pitch 1.0}}
+                        {:component :flow/finish
+                         :outcome :performed
+                         :finish-session? true}]}
+         :on-fail {:component :flow/finish
+                   :outcome :insufficient-resource
+                   :finish-session? true}}]}
+       :else {:component :flow/finish
+              :outcome :no-target
+              :finish-session? true}}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :assign :value 0}]}
+                  {:component :effect/vfx
+                   :effect-id :blood-retrograde-charge
+                   :operation :spawn
+                   :instance-key [:activation :blood-charge]
+                   :audience {:type :owner}
+                   :payload {:speed 0.1}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :increment :value 1}]}
+                  {:component :effect/vfx
+                   :effect-id :blood-retrograde-charge
+                   :operation :update
+                   :instance-key [:activation :blood-charge]
+                   :audience {:type :owner}
+                   :payload {:speed {:expr :math/lerp
+                                     :args [0.1 0.007
+                                            {:expr :math/clamp
+                                             :args [{:expr :math/div
+                                                     :args [{:expr :math/add
+                                                             :args [{:ref [:session :charge-ticks]} 1]}
+                                                            {:tunable :fx-ratio-ticks}]}
+                                                    0.0 1.0]}]}}}
+                  {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:expr :math/add
+                                  :args [{:ref [:session :charge-ticks]} 1]}
+                                 {:tunable :max-charge-ticks}]}
+                   :then {:component :blood-release}
+                   :else {:component :flow/finish :outcome :charging}}]}
+  :release {:component :blood-release}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :blood-retrograde-charge
+                   :operation :destroy
+                   :instance-key [:activation :blood-charge]
+                   :payload {}}
+                  {:component :flow/finish
+                   :outcome :aborted
+                   :finish-session? true}]}
+  :events {}}}

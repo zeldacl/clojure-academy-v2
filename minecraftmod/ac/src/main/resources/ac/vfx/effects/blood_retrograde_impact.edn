@@ -1,0 +1,33 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :blood-retrograde-impact
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:origin :vec3 :look-dir :vec3
+                  :target-width :double :target-height :double
+                  :surface-hits :object :splash-count :long
+                  :splash-life-ticks :long
+                  :splash-texture-pattern :string
+                  :splash-frame-count :long
+                  :splash-frame-duration-ms :long
+                  :splash-size :double :spray-textures :object
+                  :spray-life-ticks :long :spray-duplicates :long
+                  :seed :long}
+          :destroy {}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/impact-burst
+         :origin {:ref [:input :origin]}
+         :look-dir {:ref [:input :look-dir]}
+         :target-width {:ref [:input :target-width]}
+         :target-height {:ref [:input :target-height]}
+         :surface-hits {:ref [:input :surface-hits]}
+         :splash-count {:ref [:input :splash-count]}
+         :splash-life-ticks {:ref [:input :splash-life-ticks]}
+         :splash-texture-pattern {:ref [:input :splash-texture-pattern]}
+         :splash-frame-count {:ref [:input :splash-frame-count]}
+         :splash-frame-duration-ms {:ref [:input :splash-frame-duration-ms]}
+         :splash-size {:ref [:input :splash-size]}
+         :spray-textures {:ref [:input :spray-textures]}
+         :spray-life-ticks {:ref [:input :spray-life-ticks]}
+         :spray-duplicates {:ref [:input :spray-duplicates]}
+         :seed {:ref [:input :seed]}}}

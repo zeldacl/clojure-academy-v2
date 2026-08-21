@@ -82,6 +82,17 @@
                                 :frame-period-ticks :parts :color :facing}]
            [:vfx/emitter #{:anchor :rate-per-tick :limit}]
            [:vfx/ribbon #{:points :max-points}]
+           ;; Generic client presentation override used while charging an
+           ;; effect.  The speed is supplied by the effect document.
+           [:vfx/charge-slow #{:speed}]
+           ;; Generic impact burst: target splashes plus surface decals.  All
+           ;; geometry, textures, lifetimes and random policy are inputs.
+           [:vfx/impact-burst #{:origin :look-dir :target-width :target-height
+                                :surface-hits :splash-count :splash-life-ticks
+                                :splash-texture-pattern :splash-frame-count
+                                :splash-frame-duration-ms :splash-size
+                                :spray-textures :spray-life-ticks
+                                :spray-duplicates :seed}]
            ;; Generic configurable ballistic preview. Physics, origin offset,
            ;; segment count and style are supplied by the effect document.
            [:vfx/trajectory-ribbon #{:origin :initial-velocity :look-dir

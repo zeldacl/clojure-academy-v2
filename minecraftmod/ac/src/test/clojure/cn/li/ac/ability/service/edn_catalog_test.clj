@@ -15,6 +15,7 @@
     (is (catalog/available? :thunder-clap))
     (is (catalog/available? :vec-deviation))
     (is (catalog/available? :vec-accel))
+    (is (catalog/available? :blood-retrograde))
     (is (catalog/available? :scatter-bomb))
     (is (catalog/available? :mark-teleport))
     (is (catalog/available? :penetrate-teleport))
@@ -37,6 +38,7 @@
     (is (= :migrated (catalog/migration-status :thunder-bolt)))
     (is (= :migrated (catalog/migration-status :vec-deviation)))
     (is (= :migrated (catalog/migration-status :vec-accel)))
+    (is (= :migrated (catalog/migration-status :blood-retrograde)))
     (is (= :migrated (catalog/migration-status :mine-detect)))
     (is (= :migrated (catalog/migration-status :mag-movement)))
     (is (= :migrated (catalog/migration-status :mag-manip)))
@@ -67,6 +69,9 @@
     (is (= :thunder-clap (get-in state [:combat :abilities :thunder-clap :id])))
     (is (= :vec-deviation (get-in state [:combat :abilities :vec-deviation :id])))
     (is (= :vec-accel (get-in state [:combat :abilities :vec-accel :id])))
+    (is (= :blood-retrograde (get-in state [:combat :abilities :blood-retrograde :id])))
+    (is (pos? (count (get-in state [:combat :abilities :blood-retrograde :compiled-ir]))))
+    (is (nil? (get-in state [:combat :errors :blood-retrograde])))
     (is (pos? (count (get-in state [:combat :abilities :vec-accel :compiled-ir]))))
     (is (nil? (get-in state [:combat :errors :vec-accel])))
     (is (pos? (count (get-in state [:combat :abilities :vec-deviation :compiled-ir]))))
@@ -105,6 +110,10 @@
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
     (is (= :audio-one-shot
            (get-in state [:vfx :effects :audio-one-shot :id])))
+    (is (= :blood-retrograde-charge
+           (get-in state [:vfx :effects :blood-retrograde-charge :id])))
+    (is (= :blood-retrograde-impact
+           (get-in state [:vfx :effects :blood-retrograde-impact :id])))
     (is (= :teleport-marker (get-in state [:vfx :effects :teleport-marker :id])))
     (is (= :energy-orb-session (get-in state [:vfx :effects :energy-orb-session :id])))
     (is (= :vortex-column-session (get-in state [:vfx :effects :vortex-column-session :id])))

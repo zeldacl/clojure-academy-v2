@@ -10,7 +10,8 @@
    instance's current state, resolving {:ref [:input ...]}/{:ref [:state
    ...]} as it goes and, at sample time, emitting one vfx-contract batch
    per drawable node reached."
-  (:require [cn.li.mcmod.runtime.vfx-contract :as contract]))
+  (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
+            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]))
 
 ;; ---------------------------------------------------------------------------
 ;; Value resolution
@@ -285,6 +286,114 @@
   (let [{:keys [points max-points]} (resolve-fields node ctx)]
     (emit! ctx (stage-of ctx :world-after-translucent) :ribbon
            [{:points points :max-points max-points}])))
+
+(defmethod sample-node! :vfx/charge-slow
+  [node ctx]
+  (let [{:keys [speed]} (resolve-fields node ctx)]
+    (when (number? speed)
+      (emit! ctx (stage-of ctx :world-after-translucent) :mesh
+             [{:variant :walk-speed :local-walk-speed (double speed)}]))))
+
+(defn- impact-coordinate [value]
+  (cond
+    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
+    (and (map? value) (every? #(number? (get value %)) [:x :y :z]))
+    [(double (:x value)) (double (:y value)) (double (:z value))]
+    (and (map? value) (every? #(number? (get value %)) [:hit-x :hit-y :hit-z]))
+    [(double (:hit-x value)) (double (:hit-y value)) (double (:hit-z value))]
+    (and (vector? value) (= 3 (count value))) (mapv double value)
+    :else [0.0 0.0 0.0]))
+
+(defmethod sample-node! :vfx/impact-burst
+  [node ctx]
+  (let [{:keys [origin look-dir target-width target-height surface-hits
+                splash-count splash-life-ticks splash-texture-pattern
+                splash-frame-count splash-frame-duration-ms splash-size
+                spray-textures spray-life-ticks spray-duplicates seed]}
+        (resolve-fields node ctx)
+        [ox oy oz] (impact-coordinate origin)
+        [lx ly lz] (impact-coordinate look-dir)
+        width (double (or target-width 0.6))
+        height (double (or target-height 1.8))
+        count (long (max 0 (min 64 (or splash-count 0))))
+        splash-life (long (max 1 (or splash-life-ticks 1)))
+        spray-life (long (max 1 (or spray-life-ticks 1)))
+        frame-count (long (max 1 (or splash-frame-count 1)))
+        frame-duration (long (max 1 (or splash-frame-duration-ms 50)))
+        age (long (or (:age ctx) 0))
+        frame (mod (long (/ (* age 50) frame-duration)) frame-count)
+        seed (long (or seed 0))
+        splash-size (double (or splash-size 1.0))
+        [splashes _]
+        (loop [idx 0 state (long seed) out (transient [])]
+          (if (>= idx count)
+            [(persistent! out) state]
+            (let [s1 (seeded-rng/next-long state)
+                  s2 (seeded-rng/next-long s1)
+                  s3 (seeded-rng/next-long s2)
+                  rx (- (* 2.0 (seeded-rng/unit-double s1)) 1.0)
+                  ry (seeded-rng/unit-double s2)
+                  rz (- (* 2.0 (seeded-rng/unit-double s3)) 1.0)]
+              (recur (inc idx) (long (seeded-rng/next-long s3))
+                     (conj! out {:position [(+ ox (* rx width) (* lx 0.2))
+                                             (+ oy (* ry height) (* ly 0.2))
+                                             (+ oz (* rz width) (* lz 0.2))]
+                                  :size (+ splash-size (* 0.4 splash-size
+                                                            (seeded-rng/unit-double s1)))
+                                  :frame frame
+                                  :ttl splash-life
+                                  :max-ttl splash-life
+                                  :texture-pattern splash-texture-pattern})))))
+        hits (if (vector? surface-hits) surface-hits [])
+        duplicates (long (max 1 (min 4 (or spray-duplicates 1))))
+        texture-map (if (map? spray-textures) spray-textures {})
+        textures (if (vector? spray-textures) spray-textures [])
+        sprays (loop [remaining (seq hits)
+                      hit-index 0
+                      out (transient [])]
+                 (if-let [hit (first remaining)]
+                   (let [[hx hy hz] (impact-coordinate
+                                     (or (:position hit) hit))
+                         face (:face hit)
+                         face-textures (if (contains? #{:up :down} face)
+                                         (get texture-map :wall textures)
+                                         (get texture-map :ground textures))
+                         face-size (if (contains? #{:up :down} face) 1.0 0.8)]
+                     (recur (next remaining)
+                            (inc hit-index)
+                            (reduce (fn [acc dup]
+                                      (conj! acc
+                                             (let [rstate (seeded-rng/next-long
+                                                           (+ seed (* hit-index duplicates) dup))]
+                                               {:position [hx hy hz]
+                                              :block-position [hx hy hz]
+                                              :face face
+                                              :size (* face-size
+                                                       (+ 1.1 (* 0.3 (seeded-rng/unit-double rstate))))
+                                              :rotation
+                                              (seeded-rng/uniform
+                                               rstate
+                                               0.0 360.0)
+                                              :offset-u (- (* 0.3 (seeded-rng/unit-double
+                                                                   (seeded-rng/next-long rstate))) 0.15)
+                                              :offset-v (- (* 0.3 (seeded-rng/unit-double
+                                                                   (seeded-rng/next-long
+                                                                    (seeded-rng/next-long rstate)))) 0.15)
+                                              :texture-id (mod dup 3)
+                                              :texture (when (seq face-textures)
+                                                         (nth face-textures
+                                                              (mod dup (count face-textures))))
+                                              :ttl spray-life :max-ttl spray-life}))
+                                    out
+                                    (range duplicates)))))
+                   (persistent! out)))]
+    (when (or (seq splashes) (seq sprays))
+      (emit! ctx (stage-of ctx :world-after-translucent) :mesh
+             [{:variant :impact-burst
+               :splashes splashes
+               :sprays sprays
+               :splash-life-ticks splash-life
+               :spray-life-ticks spray-life}]))))
 
 (defn- trajectory-point [value]
   (cond

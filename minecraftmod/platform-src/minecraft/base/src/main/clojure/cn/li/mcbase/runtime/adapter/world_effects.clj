@@ -232,12 +232,6 @@
                                               (catch Exception e
                                                 (log/warn "Failed to apply AOE damage:" (ex-message e))
                                                 false)))
-        execute-blood-retrograde! (fn [world-id owner plan]
-                                    (let [{:keys [query-result amount entity-search-radius]} plan
-                                          point (point-of query-result)]
-                                      (apply-aoe-damage-excluding-owner!
-                                       world-id owner (:x point) (:y point) (:z point)
-                                       entity-search-radius amount :vector)))
         ;; directed-shock ("Directed Shock" / 定向冲力): "seize the counter-
         ;; force from a punch and redirect it into the target, making the
         ;; punch more powerful" -- a forward push along the caster's look
@@ -590,7 +584,6 @@
                               (log/warn "Failed to configure entity:" (ex-message e))
                               false)))
      :execute-flashing! execute-flashing!
-     :execute-blood-retrograde! execute-blood-retrograde!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!
      :execute-shift-teleport! execute-shift-teleport!

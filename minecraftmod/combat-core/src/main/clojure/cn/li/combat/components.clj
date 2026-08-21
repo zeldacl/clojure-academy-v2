@@ -159,6 +159,16 @@
             :effects #{:query}
             :produces {:hit {:name-field :result :type :hit-result}}}
 
+           ;; Bounded fan of block rays around a direction.  Angles, jitter,
+           ;; range and result limits are supplied by EDN; the host only
+           ;; performs neutral block-ray queries.
+           :target/raycast-fan
+           {:schema {:required #{:origin :direction :distance
+                                 :pitch-angles :yaw-range-degrees
+                                 :limit :result}}
+            :effects #{:query}
+            :produces {:hits {:name-field :result :type :hit-list}}}
+
            ;; A raycast may ask the host to resolve the neutral landing point
            ;; (entity feet/eye offset, block-face offset and head clearance)
            ;; in the same bounded query.  The policy is supplied by EDN; the

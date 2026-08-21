@@ -55,11 +55,6 @@
   [world-id owner plan]
   (call :execute-shift-teleport! world-id owner plan))
 
-(defn execute-blood-retrograde!
-  "Execute the close-range blood damage/effect plan behind a Host Port."
-  [world-id owner plan]
-  (call :execute-blood-retrograde! world-id owner plan))
-
 (defn execute-flashing!
   "Execute the approved Flashing movement behind a Host Port."
   [world-id owner plan]

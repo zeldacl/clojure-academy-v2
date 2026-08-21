@@ -218,6 +218,7 @@
 
 (def ^:private query-capability-by-component
   {:target/raycast :raycast
+   :target/raycast-fan :raycast
    :target/resolve-destination :raycast
    :target/directional-destination-query :raycast
    :target/entities :entity/select
@@ -337,6 +338,8 @@
                              {:query-kind :beam})
                            (when (= component :target/directional-destination-query)
                              {:query-kind :directional-destination})
+                           (when (= component :target/raycast-fan)
+                             {:query-kind :raycast-fan})
                            (when (= component :target/resolve-destination)
                              {:query-kind :resolve-destination})
                            (when (= :penetration (get-in data [:policy :type]))
@@ -425,6 +428,7 @@
   [^ExecutionFrame frame ^HostTable host component data context]
   (case component
     :target/raycast (invoke-query-component! frame host component data context)
+    :target/raycast-fan (invoke-query-component! frame host component data context)
     :target/resolve-destination (invoke-query-component! frame host component data context)
     :target/directional-destination-query (invoke-query-component! frame host component data context)
     :target/entities (invoke-query-component! frame host component data context)

@@ -16,6 +16,7 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.mcmod.runtime.capabilities :as capabilities]))
 
 (set! *warn-on-reflection* true)
@@ -225,6 +226,69 @@
              :world-id world-id
              :owner owner})))
 
+(defn- normalize-vector
+  [[x y z]]
+  (let [length (Math/sqrt (+ (* (double x) (double x))
+                             (* (double y) (double y))
+                             (* (double z) (double z))))]
+    (if (pos? length)
+      [(/ (double x) length) (/ (double y) length) (/ (double z) length)]
+      [0.0 0.0 1.0])))
+
+(defn- fan-direction
+  [[x _y z] yaw-degrees pitch-degrees]
+  (let [[hx _ hz] (normalize-vector [x 0.0 z])
+        yaw (Math/toRadians (double yaw-degrees))
+        cy (Math/cos yaw) sy (Math/sin yaw)
+        yaw-dir [(+ (* hx cy) (* hz sy)) 0.0
+                 (- (* hz cy) (* hx sy))]
+        right (normalize-vector [(- (nth yaw-dir 2)) 0.0 (nth yaw-dir 0)])
+        pitch (Math/toRadians (double pitch-degrees))
+        cp (Math/cos pitch) sp (Math/sin pitch)
+        [rx _ rz] right
+        [yx _y yz] yaw-dir]
+    [(+ (* yx cp) (* rx sp))
+     sp
+     (+ (* yz cp) (* rz sp))]))
+
+(defn raycast-fan!
+  "Resolve a bounded deterministic fan of block rays.
+
+   Angles, jitter, range and result limits come from the effect document;
+   this host function only calls the neutral block-ray relay."
+  [{:keys [world-id origin direction distance pitch-angles
+           yaw-range-degrees limit seed]} _frame]
+  (let [[ox oy oz] (point origin)
+        [dx dy dz] (point direction)
+        pitches (vec (or pitch-angles []))
+        [yaw-min yaw-max] (if (and (vector? yaw-range-degrees)
+                                  (= 2 (count yaw-range-degrees)))
+                            (mapv double yaw-range-degrees)
+                            [0.0 0.0])
+        max-count (max 0 (min 128 (long (or limit (count pitches)))))
+        distance (max 0.0 (min 64.0 (double (or distance 0.0))))
+        seed (long (or seed 0))]
+    (if (and world-id origin direction (pos? distance)
+             (seq pitches) (pos? max-count) (raycast/available?))
+      (loop [idx 0 state (long seed) hits (transient [])]
+        (if (or (>= idx max-count) (>= idx (count pitches)))
+          (persistent! hits)
+          (let [next-state (seeded-rng/next-long state)
+                yaw (seeded-rng/uniform next-state yaw-min yaw-max)
+                dir (fan-direction [dx dy dz] yaw (double (nth pitches idx)))
+                start [(- (double ox) (* 0.5 (nth dir 0)))
+                       (- (double oy) (* 0.5 (nth dir 1)))
+                       (- (double oz) (* 0.5 (nth dir 2)))]
+                hit (raycast/raycast-blocks (str world-id)
+                                            (nth start 0) (nth start 1) (nth start 2)
+                                            (nth dir 0) (nth dir 1) (nth dir 2)
+                                            distance)]
+            (recur (inc idx) (long (seeded-rng/next-long next-state))
+                   (if (map? hit)
+                     (conj! hits (select-keys hit [:x :y :z :face :hit-x :hit-y :hit-z]))
+                     hits)))))
+      [])))
+
 (defn- directional-raycast [owner request]
   (let [{:keys [origin direction distance policy world-id]} request
         origin (or (point origin) [0.0 0.0 0.0])
@@ -310,6 +374,7 @@
                  (= :directional-destination query-kind))
              (raycast/available?))
     (case query-kind
+      :raycast-fan (raycast-fan! request nil)
       :directional-destination (directional-raycast owner request)
       :resolve-destination (resolve-destination owner request)
       :penetration (penetration-raycast request)
