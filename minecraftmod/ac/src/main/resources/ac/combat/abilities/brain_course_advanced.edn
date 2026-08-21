@@ -1,0 +1,36 @@
+{:schema-version 2
+ :kind :ability
+ :id :brain-course-advanced
+ :revision 1
+ :activation :passive
+ :status :migrated
+ :category-id :generic
+ :level 4
+ :controllable? false
+ :ctrl-id :brain-course-advanced
+ :pattern :passive
+ :name-key "ability.skill.generic.brain_course_advanced"
+ :description-key "ability.skill.generic.brain_course_advanced.desc"
+ :icon "textures/abilities/generic/skills/brain_course_advanced.png"
+ :ui-position [115 110]
+ :conditions [{:type :any-skill-level :level 4}]
+ :translations {:en_us {:ability.skill.generic.brain_course_advanced "Advanced Brain Course"
+                        :ability.skill.generic.brain_course_advanced.desc "Deepen your neural development to raise maximum CP by 1500 and maximum overload by 100."}
+                :zh_cn {:ability.skill.generic.brain_course_advanced "脑域进阶课程"
+                        :ability.skill.generic.brain_course_advanced.desc "进一步开发脑部思维能力，使最大 CP 提高 1500，最大过载提高 100。"}
+                :zh_tw {:ability.skill.generic.brain_course_advanced "大腦訓練課程 (高階)"
+                        :ability.skill.generic.brain_course_advanced.desc "更深入有效的開發大腦的思維能力。提高最大計算力1000點，最大過載100點。"}
+                :ja_jp {:ability.skill.generic.brain_course_advanced "ブレイン・コース・アドバンスド"
+                        :ability.skill.generic.brain_course_advanced.desc "さらに深く、効率的に思考能力を開発します。これにより、スキル保持時間と忍耐力を向上させます。"}
+                :ko_kr {:ability.skill.generic.brain_course_advanced "브레인 고급 코스"
+                        :ability.skill.generic.brain_course_advanced.desc "여러분의 두뇌의 사고력을 깊이 발전시키세요. 최대 CP는 1000개, 최대 과부하는 100개 증가합니다."}
+                :ru_ru {:ability.skill.generic.brain_course_advanced "Продвинутый курс мозга"
+                        :ability.skill.generic.brain_course_advanced.desc "Развить мыслительные способности вашего мозга глубже. Увеличивает Макс. CP на 1000 и Макс. Перегрузку на 100."}}
+ :passive-effects [{:target :max-cp :operation :add :value 1500.0}
+                    {:target :max-overload :operation :add :value 100.0}]
+ :program
+ {:component :flow/phases
+  :start {:component :flow/finish :outcome :passive}
+  :pulse {:component :flow/finish :outcome :passive}
+  :release {:component :flow/finish :outcome :passive}
+  :abort {:component :flow/finish :outcome :passive}}}

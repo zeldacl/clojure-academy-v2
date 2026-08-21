@@ -204,6 +204,20 @@
                    (catalog/migrated-skill-specs)))
                    [:translations :en_us "ability.skill.generic.mind_course"])))))
 
+(deftest brain-course-advanced-is-one-shared-passive-document
+  (let [state (catalog/initialize!)
+        ids [:electromaster/brain-course-advanced
+             :meltdowner/brain-course-advanced
+             :teleporter/brain-course-advanced
+             :vecmanip/brain-course-advanced]]
+    (doseq [ability-id ids]
+      (is (catalog/available? ability-id))
+      (is (= 4 (get-in state [:combat :abilities ability-id :level]))))
+    (is (= {:max-cp 2500.0 :max-overload 300.0}
+           (catalog/apply-passive-resource-modifiers
+            {:learned-skills #{:electromaster/brain-course-advanced}}
+            {:max-cp 1000.0 :max-overload 200.0})))))
+
 (deftest meltdowner-edn-program-includes-complete-beam-contract
   (catalog/initialize!)
   (let [ability (get-in (catalog/catalog) [:combat :abilities :meltdowner])

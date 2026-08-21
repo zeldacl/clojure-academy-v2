@@ -80,9 +80,8 @@
   skill-config/skill-definitions-by-id, the single source of truth for those
   two fields, and cross-check :category-id agrees.
 
-  Callers that already supply :level directly (generic/course-chain passive
-  skills built outside the defskill DSL, and any future external/third-party
-  skill provider) are trusted as-is and skipped — they have no
+  Callers that already supply :level directly (external/third-party skill
+  providers built outside the defskill DSL) are trusted as-is and skipped — they have no
   skill-definitions entry by design."
   [{:keys [id category-id] :as spec}]
   (if (contains? spec :level)

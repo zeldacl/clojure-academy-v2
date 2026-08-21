@@ -219,4 +219,32 @@
               :resource "ac/combat/abilities/mind_course.edn"
               :overrides {:category-id :vecmanip
                           :prerequisites [{:skill-id :vecmanip/brain-course-advanced
+                                           :min-exp 0.0}]}}
+             {:kind :ability
+              :id :electromaster/brain-course-advanced
+              :source-id :brain-course-advanced
+              :resource "ac/combat/abilities/brain_course_advanced.edn"
+              :overrides {:category-id :electromaster
+                          :prerequisites [{:skill-id :electromaster/brain-course
+                                           :min-exp 0.0}]}}
+             {:kind :ability
+              :id :meltdowner/brain-course-advanced
+              :source-id :brain-course-advanced
+              :resource "ac/combat/abilities/brain_course_advanced.edn"
+              :overrides {:category-id :meltdowner
+                          :prerequisites [{:skill-id :meltdowner/brain-course
+                                           :min-exp 0.0}]}}
+             {:kind :ability
+              :id :teleporter/brain-course-advanced
+              :source-id :brain-course-advanced
+              :resource "ac/combat/abilities/brain_course_advanced.edn"
+              :overrides {:category-id :teleporter
+                          :prerequisites [{:skill-id :teleporter/brain-course
+                                           :min-exp 0.0}]}}
+             {:kind :ability
+              :id :vecmanip/brain-course-advanced
+              :source-id :brain-course-advanced
+              :resource "ac/combat/abilities/brain_course_advanced.edn"
+              :overrides {:category-id :vecmanip
+                          :prerequisites [{:skill-id :vecmanip/brain-course
                                            :min-exp 0.0}]}}]}

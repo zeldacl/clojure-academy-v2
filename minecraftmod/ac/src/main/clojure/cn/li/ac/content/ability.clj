@@ -46,41 +46,6 @@
   :prog-incr-rate 1.0
   :enabled true)
 
-(defn- skill-spec?
-  [value]
-  (and (map? value)
-       (= :skill (:ac/content-type value))))
-
-(defn- skill-specs-from-value
-  [value]
-  (cond
-    (delay? value)
-    (skill-specs-from-value @value)
-
-    (skill-spec? value)
-    [(dissoc value :ac/content-type)]
-
-    (sequential? value)
-    (->> value
-         (filter skill-spec?)
-         (map #(dissoc % :ac/content-type)))
-
-    :else
-    nil))
-
-(defn- declared-skill-specs
-  [ns-sym]
-  (->> (ns-publics ns-sym)
-       vals
-       (keep #(when (bound? %) (var-get %)))
-       (mapcat skill-specs-from-value)))
-
-(defn- register-declared-skills!
-  [skill-namespaces]
-  (doseq [ns-sym skill-namespaces
-          skill-spec (declared-skill-specs ns-sym)]
-    (skill-registry/register-skill! skill-spec)))
-
 (defn register-combat-catalog!
   "Register player-facing metadata and initialize the authoritative EDN catalog.
 
@@ -94,40 +59,6 @@
     (skill-registry/register-skill! skill-spec))
   true)
 
-(declare run-namespace-init!)
-
-(def ^:private generic-content-namespaces
-  '[cn.li.ac.content.ability.generic.brain-course-advanced
-    cn.li.ac.content.ability.generic.course-chain])
-
-(defn- register-generic-content!
-  "Load and register the non-combat course chain explicitly.
-
-  Generic courses are progression metadata, not executable combat skills, so
-  they remain outside Combat Core while retaining their existing registry
-  semantics."
-  []
-  (doseq [ns-sym generic-content-namespaces]
-    (require ns-sym))
-  (register-declared-skills! generic-content-namespaces)
-  (doseq [ns-sym generic-content-namespaces]
-    (run-namespace-init! ns-sym)))
-
-(defn- run-namespace-init!
-  [ns-sym]
-  (when-let [init-var (ns-resolve ns-sym 'init!)]
-    (when-let [init-fn (and (bound? init-var) (var-get init-var))]
-      (when (ifn? init-fn)
-        (try
-          (init-fn)
-          (catch clojure.lang.ExceptionInfo e
-            (if (= "Conflicting network handler id" (ex-message e))
-              ;; Re-initialization may revisit namespaces that already registered RPC handlers.
-              ;; Keep existing handlers and continue rebuilding content registries.
-              (log/debug "Skipped duplicate network handler during ability reinit"
-                         {:namespace ns-sym :data (ex-data e)})
-              (throw e))))))))
-
 (defn init-combat-ability-content!
   "Production composition root for ability content.
 
@@ -140,7 +71,6 @@
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (register-combat-catalog!)
-      (register-generic-content!)
       ;; Domain-event/RPC bridges, not legacy skill discovery: location-
       ;; teleport registers the saved-location query/save/delete/
       ;; perform RPC handlers (Combat Core's own :location-teleport program

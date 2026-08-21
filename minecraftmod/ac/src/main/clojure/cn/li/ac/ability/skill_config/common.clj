@@ -10,7 +10,7 @@
   — it gates the skill from the preset/N-key selection list. Only skills that
   set canControl = false upstream may declare false here:
   RadiationIntensify, DimFoldingTheorem, SpaceFluctuation, and the generic
-  brain/mind course chain (course_chain.clj).")
+  brain/mind course skills (combat catalog metadata).")
 
 (def category-ids
   [:electromaster :meltdowner :teleporter :vecmanip])
