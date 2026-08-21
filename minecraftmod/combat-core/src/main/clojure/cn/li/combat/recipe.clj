@@ -428,25 +428,37 @@
            document-transform]
     :or {document-loader safe-edn/read-resource!}}]
   (components/register-builtins!)
-  (let [document-loader (if document-transform
-                          (fn [resource]
-                            (document-transform (document-loader resource)))
-                          document-loader)
-        manifest (load-manifest! manifest-resource)
+  (let [manifest (load-manifest! manifest-resource)
         composites (if composites-manifest-resource
                      (:composites (load-composites!
                                     {:manifest-resource composites-manifest-resource
                                      :document-loader document-loader}))
                      {})
-        outcomes (mapv (fn [{:keys [kind id resource]}]
+        outcomes (mapv (fn [{:keys [kind id resource source-id overrides]}]
                          (try
                            (when-not (= :ability kind)
                              (fail "unsupported combat document kind" {:kind kind}))
-                           (let [ability (document-loader resource)]
-                             (when-not (= id (:id ability))
+                           ;; A manifest entry may alias one shared ability
+                           ;; document to several public ids.  The alias is
+                           ;; applied before AC's materializer so per-skill
+                           ;; config overlays still resolve against the
+                           ;; public id; :overrides is manifest-owned data
+                           ;; (styles/asset variants), never executable code.
+                           (let [raw (document-loader resource)
+                                 document-id (:id raw)
+                                 source-id (or source-id id)]
+                             (when-not (= source-id document-id)
                                (fail "manifest/document id mismatch"
-                                     {:manifest-id id :document-id (:id ability)}))
-                             {:id id :ability (compile-ability ability {:composites composites})})
+                                     {:manifest-id id :source-id source-id
+                                      :document-id document-id}))
+                             (let [ability (cond-> (if (= id document-id)
+                                                     raw
+                                                     (assoc raw :id id))
+                                             (map? overrides) (merge overrides))
+                                   ability (if document-transform
+                                             (document-transform ability)
+                                             ability)]
+                               {:id id :ability (compile-ability ability {:composites composites})}))
                            (catch clojure.lang.ExceptionInfo e
                              {:id id :error {:message (ex-message e) :data (ex-data e)}})))
                        (:documents manifest))

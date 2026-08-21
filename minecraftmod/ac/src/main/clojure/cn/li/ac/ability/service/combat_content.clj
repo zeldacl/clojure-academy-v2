@@ -230,57 +230,6 @@
                                  {:op :vfx :effect-id :blood-retrograde
                                   :event :perform
                                  :params {:max-charge-ticks 30}}]}}}
-    {:id :mine-ray-basic
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :pulse
-     :cost {:cp (scale 12.0 7.0)
-            :overload (scale 200.0 150.0)}
-     :cooldown {:ticks (scale 40.0 20.0)}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :block-scan
-                        :distance 10.0 :result-ref :scan}
-                       {:op :world-effect :effect-type :mine-ray
-                        :scan-ref :scan :range 10.0
-                        :break-speed (scale 0.2 0.4) :fortune 0}
-                       {:op :vfx :effect-id :mine-ray
-                        :event :pulse :params {:range 10.0 :variant :basic}}]}}
-    {:id :mine-ray-expert
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :pulse
-     :cost {:cp (scale 25.0 15.0)
-            :overload (scale 300.0 200.0)}
-     :cooldown {:ticks (scale 60.0 30.0)}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :block-scan
-                        :distance 20.0 :result-ref :scan}
-                       {:op :world-effect :effect-type :mine-ray
-                        :scan-ref :scan :range 20.0
-                        :break-speed (scale 0.5 1.0) :fortune 0}
-                       {:op :vfx :effect-id :mine-ray
-                        :event :pulse :params {:range 20.0 :variant :expert}}]}}
-    {:id :mine-ray-luck
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :pulse
-     :cost {:cp (scale 50.0 35.0)
-            :overload (scale 350.0 300.0)}
-     :cooldown {:ticks (scale 60.0 30.0)}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :block-scan
-                        :distance 20.0 :result-ref :scan}
-                       {:op :world-effect :effect-type :mine-ray
-                        :scan-ref :scan :range 20.0
-                        :break-speed (scale 0.5 1.0) :fortune 3}
-                       {:op :vfx :effect-id :mine-ray
-                       :event :pulse :params {:range 20.0 :fortune 3 :variant :luck}}]}}
     ;; Not a player teleport -- place/drop the held item at a raycasted
     ;; point, then damage whatever intersects the line from caster to that
     ;; point. Own :shift-teleport query-type/effect-type; previously

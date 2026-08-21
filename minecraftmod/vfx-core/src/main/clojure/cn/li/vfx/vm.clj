@@ -219,6 +219,49 @@
              :max-results max-results :texture texture :base-color base-color
              :tier-colors tier-colors :seed seed}])))
 
+(defn- block-point [value]
+  (cond
+    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
+    (and (map? value) (every? #(number? (get value %)) [:x :y :z]))
+    [(double (:x value)) (double (:y value)) (double (:z value))]
+    (and (vector? value) (= 3 (count value))) (mapv double value)
+    :else nil))
+
+(comment "Draw a bounded, pulsing progress box around a neutral block position.
+          Geometry is deliberately emitted as line primitives so renderers can
+          choose their own batching/material without coupling VFX Core to a game.
+          The node is reusable for any block-target progress indicator.")
+(defmethod sample-node! :vfx/block-progress
+  [node ctx]
+  (let [{:keys [target progress color pulse-period]} (resolve-fields node ctx)
+        p (block-point target)]
+    (when p
+      (let [[x y z] p
+            progress (max 0.0 (min 1.0 (double (or progress 0.0))))
+            shrink (* 0.05 (- 1.0 progress))
+            min-x (+ (double x) shrink)
+            min-y (+ (double y) shrink)
+            min-z (+ (double z) shrink)
+            max-x (- (+ (double x) 1.0) shrink)
+            max-y (- (+ (double y) 1.0) shrink)
+            max-z (- (+ (double z) 1.0) shrink)
+            corners [[min-x min-y min-z] [max-x min-y min-z]
+                     [max-x max-y min-z] [min-x max-y min-z]
+                     [min-x min-y max-z] [max-x min-y max-z]
+                     [max-x max-y max-z] [min-x max-y max-z]]
+            edges [[0 1] [1 2] [2 3] [3 0]
+                   [4 5] [5 6] [6 7] [7 4]
+                   [0 4] [1 5] [2 6] [3 7]]
+            base (if (and (vector? color) (= 4 (count color))) color
+                   [255 255 255 200])
+            pulse (+ 0.5 (* 0.5 (Math/sin (* (double (or pulse-period 0.3))
+                                               (double (or (:age ctx) 0.0))))))
+            rgba (assoc base 3 (* (double (nth base 3)) pulse))]
+        (emit! ctx (stage-of ctx :world-always-on-top) :line
+               (mapv (fn [[a b]] {:start (nth corners a)
+                                  :end (nth corners b)
+                                  :color rgba}) edges))))))
+
 (defmethod sample-node! :vfx/vortex-column
   [node ctx]
   (let [{:keys [base axis height spacing radius count-limit life-ticks

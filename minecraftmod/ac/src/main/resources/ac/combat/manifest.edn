@@ -64,4 +64,75 @@
               :resource "ac/combat/abilities/electron_bomb.edn"}
              {:kind :ability
               :id :electron-missile
-              :resource "ac/combat/abilities/electron_missile.edn"}]}
+              :resource "ac/combat/abilities/electron_missile.edn"}
+             {:kind :ability
+              :id :mine-ray-basic
+              :source-id :mine-ray
+              :resource "ac/combat/abilities/mine_ray.edn"
+              :overrides {:runtime {:variant :basic
+                                    :tool-tier-capped? true
+                                    :fortune-level 0
+                                    :startup-sound-id "academy:md.mine_basic_startup"
+                                    :loop-sound-id "academy:md.mine_loop"
+                                    :progress-color [150 220 255 180]
+                                    :particle {:material :additive
+                                               :texture "academy:textures/effects/md_particle.png"
+                                               :life-ticks 10 :speed 0.1
+                                               :spread {:x 0.3 :y 0.3 :z 0.3}}
+                                    :beam-style {:glow-textures "mdray_small"
+                                                  :outer-radius 0.045
+                                                  :outer-rgb {:r 106 :g 242 :b 106}
+                                                  :outer-alpha 50.0
+                                                  :inner-radius 0.03
+                                                  :inner-rgb {:r 216 :g 248 :b 216}
+                                                  :inner-alpha 230.0
+                                                  :glow-width 0.3
+                                                  :glow-alpha 127.0}}}}
+             {:kind :ability
+              :id :mine-ray-expert
+              :source-id :mine-ray
+              :resource "ac/combat/abilities/mine_ray.edn"
+              :overrides {:prerequisites [{:skill-id :mine-ray-basic :min-exp 0.8}]
+                           :runtime {:variant :expert
+                                    :tool-tier-capped? false
+                                    :fortune-level 0
+                                    :startup-sound-id "academy:md.mine_expert_startup"
+                                    :loop-sound-id "academy:md.mine_loop"
+                                    :progress-color [100 255 100 200]
+                                    :particle {:material :additive
+                                               :texture "academy:textures/effects/md_particle.png"
+                                               :life-ticks 10 :speed 0.1
+                                               :spread {:x 0.3 :y 0.3 :z 0.3}}
+                                    :beam-style {:glow-textures "mdray_expert"
+                                                  :outer-radius 0.056
+                                                  :outer-rgb {:r 106 :g 242 :b 106}
+                                                  :outer-alpha 50.0
+                                                  :inner-radius 0.045
+                                                  :inner-rgb {:r 216 :g 248 :b 216}
+                                                  :inner-alpha 180.0
+                                                  :glow-width 0.5
+                                                  :glow-alpha 127.0}}}}
+             {:kind :ability
+              :id :mine-ray-luck
+              :source-id :mine-ray
+              :resource "ac/combat/abilities/mine_ray.edn"
+              :overrides {:prerequisites [{:skill-id :mine-ray-expert :min-exp 1.0}]
+                           :runtime {:variant :luck
+                                    :tool-tier-capped? false
+                                    :fortune-level 3
+                                    :startup-sound-id "academy:md.mine_luck_startup"
+                                    :loop-sound-id "academy:md.mine_loop"
+                                    :progress-color [255 215 0 220]
+                                    :particle {:material :additive
+                                               :texture "academy:textures/effects/md_particle_luck.png"
+                                               :life-ticks 10 :speed 0.1
+                                               :spread {:x 0.3 :y 0.3 :z 0.3}}
+                                    :beam-style {:glow-textures "mdray_luck"
+                                                  :outer-radius 0.05
+                                                  :outer-rgb {:r 205 :g 166 :b 232}
+                                                  :outer-alpha 50.0
+                                                  :inner-radius 0.04
+                                                  :inner-rgb {:r 241 :g 229 :b 247}
+                                                  :inner-alpha 230.0
+                                                  :glow-width 0.45
+                                                  :glow-alpha 153.0}}}}]}

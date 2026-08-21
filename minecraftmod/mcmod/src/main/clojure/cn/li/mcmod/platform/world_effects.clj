@@ -60,11 +60,6 @@
   [world-id owner plan]
   (call :execute-blood-retrograde! world-id owner plan))
 
-(defn execute-mine-ray!
-  "Execute one bounded mining-ray tick behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-mine-ray! world-id owner plan))
-
 (defn execute-vec-accel!
   "Execute the charged Vector Acceleration movement behind a Host Port."
   [world-id owner plan]

@@ -135,7 +135,7 @@
       [])))
 
 (defn block-select!
-  [{:keys [world-id shape limit]} _frame]
+  [{:keys [owner world-id shape limit]} _frame]
   (let [start (point (or (:start shape) (:origin shape)))
         direction (point (:direction shape))
         length (double (or (:length shape) 0.0))
@@ -149,11 +149,25 @@
              (filter map?)
              (take limit)
              (mapv (fn [block]
-                     {:position [(double (or (:x block) 0.0))
+                     (let [x (long (or (:x block) 0))
+                           y (long (or (:y block) 0))
+                           z (long (or (:z block) 0))]
+                       {:position [(double x)
                                  (double (or (:y block) 0.0))
                                  (double (or (:z block) 0.0))]
-                      :hardness (double (or (:hardness block) 0.0))
-                      :block-id (:block-id block)}))))
+                        :hardness (double (or (:hardness block) 0.0))
+                        :block-id (:block-id block)
+                        ;; These are neutral policy facts, not a skill
+                        ;; decision.  The ability EDN decides whether a
+                        ;; tier-capped variant may proceed.
+                        :breakable? (boolean (and owner world-id
+                                                   (blocks/can-break-block?
+                                                    (str owner) (str world-id) x y z)))
+                        :requires-high-tier-tool? (boolean
+                                                   (and world-id
+                                                        (blocks/requires-high-tier-tool?
+                                                         (str world-id) x y z)))})
+                     ))))
       [])))
 
 (defn- basic-raycast [request]
@@ -338,19 +352,26 @@
         {:status (if (not= false applied) :applied :failed)}))))
 
 (defn break!
-  [{:keys [owner world-id position expected-block-id drop?]}]
+  [{:keys [owner world-id position expected-block-id drop? fortune-level
+           tool-tier-capped?]}]
   (let [p (point position)
         [x y z] (mapv #(long (Math/floor (double %)))
                       (or p [0.0 0.0 0.0]))
         current (when (and world-id (blocks/available?))
                   (blocks/get-block (str world-id) x y z))
-        valid? (and owner world-id p current
+        tier-blocked? (and tool-tier-capped?
+                           (blocks/requires-high-tier-tool? (str world-id) x y z))
+        valid? (and owner world-id p current (not tier-blocked?)
                     (or (nil? expected-block-id)
                         (= (str expected-block-id) (str current)))
                     (blocks/can-break-block? (str owner) (str world-id) x y z))
         broken? (and valid?
-                     (blocks/break-block! (str owner) (str world-id)
-                                          x y z (not= false drop?)))]
+                     (if (some? fortune-level)
+                       (blocks/break-block! (str owner) (str world-id)
+                                            x y z (not= false drop?)
+                                            (long fortune-level))
+                       (blocks/break-block! (str owner) (str world-id)
+                                            x y z (not= false drop?))))]
     {:status (if broken? :applied :failed)
      :block-id current
      :position {:x x :y y :z z}}))

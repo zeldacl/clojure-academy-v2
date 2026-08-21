@@ -1,0 +1,241 @@
+{:schema-version 2
+ :kind :ability
+ :id :mine-ray
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :caster/creative?
+            :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :meltdowner :min-exp 0.3}]
+ :tunables
+ {:targeting-range {:curve :const}
+  :break-speed {:curve :mastery-lerp}
+  :cost-down-overload {:curve :mastery-lerp}
+  :cost-tick-cp {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-block {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :cost-down-overload}}}
+  :tick {:resources {:cp {:tunable :cost-tick-cp}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:block {:per-mark {:tunable :exp-block}}}
+ :fragments
+ {:cleanup
+  {:inputs {:outcome :keyword}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :beam-session
+                   :operation :destroy
+                   :instance-key [:activation :beam]
+                   :payload {:fade-ticks 0}}
+                  {:component :effect/vfx
+                   :effect-id :block-progress-session
+                   :operation :destroy
+                   :instance-key [:activation :progress]
+                   :payload {:fade-ticks 0}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session
+                   :operation :destroy
+                   :instance-key [:activation :loop]
+                   :payload {:fade-ticks 0}}
+                  {:component :cooldown/start :name :main}
+                  {:component :flow/finish
+                   :outcome {:ref [:input :outcome]}
+                   :finish-session? true}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :cost/spend
+                   :budget :activate
+                   :on-insufficient {:component :flow/finish
+                                     :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :session/patch
+                   :entries [{:path [:target] :mode :assign :value nil}
+                             {:path [:hardness-left] :mode :assign
+                              :value 3.4028235E38}
+                             {:path [:starting-hardness] :mode :assign
+                              :value 3.4028235E38}
+                             {:path [:overload-floor] :mode :assign
+                              :value {:expr :math/sub
+                                      :args [{:ref [:context :resources :overload]}
+                                             {:tunable :cost-down-overload}]}}]}
+                  {:component :effect/vfx
+                   :effect-id :beam-session
+                   :operation :spawn
+                   :instance-key [:activation :beam]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:start {:from :caster/eye}
+                             :end {:expr :vec3/add
+                                   :args [{:from :caster/eye}
+                                          {:expr :vec3/scale
+                                           :args [{:from :caster/aim} 15.0]}]}
+                             :life-ticks 4096
+                             :grow-ticks 0
+                             :style {:ref [:context :ability-runtime :beam-style]}
+                             :bounds-radius 0.6}}
+                  {:component :effect/vfx
+                   :effect-id :block-progress-session
+                   :operation :spawn
+                   :instance-key [:activation :progress]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:target nil :progress 0.0
+                             :color {:ref [:context :ability-runtime :progress-color]}
+                             :pulse-period 0.3}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session
+                   :operation :spawn
+                   :instance-key [:activation :loop]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:position {:from :caster/body}
+                             :sound-id {:ref [:context :ability-runtime :loop-sound-id]}
+                             :volume 0.3 :pitch 1.0}}
+                  {:component :effect/vfx
+                   :effect-id :audio-one-shot
+                   :operation :spawn
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:position {:from :caster/body}
+                             :sound-id {:ref [:context :ability-runtime :startup-sound-id]}
+                             :volume 0.4 :pitch 1.0}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :resource/enforce-floor
+                   :resource :overload
+                   :minimum {:ref [:session :overload-floor]}}
+                  {:component :cost/spend
+                   :budget :tick
+                   :on-insufficient {:component :cleanup
+                                     :outcome :insufficient-resource}}
+                  {:component :effect/vfx
+                   :effect-id :beam-session
+                   :operation :update
+                   :instance-key [:activation :beam]
+                   :payload {:start {:from :caster/eye}
+                             :end {:expr :vec3/add
+                                   :args [{:from :caster/eye}
+                                          {:expr :vec3/scale
+                                           :args [{:from :caster/aim} 15.0]}]}
+                             :life-ticks 4096 :grow-ticks 0
+                             :style {:ref [:context :ability-runtime :beam-style]}
+                             :bounds-radius 0.6}}
+                  {:component :effect/vfx
+                   :effect-id :audio-loop-session
+                   :operation :update
+                   :instance-key [:activation :loop]
+                   :payload {:position {:from :caster/body}}}
+                  {:component :target/blocks
+                   :shape {:type :line
+                           :start {:from :caster/eye}
+                           :direction {:from :caster/aim}
+                           :length {:tunable :targeting-range}
+                           :step 0.5}
+                   :projection [:position :hardness :block-id :breakable?
+                                :requires-high-tier-tool?]
+                   :limit 1
+                   :result :blocks}
+                  {:component :data/bind
+                   :to :block
+                   :value {:expr :collection/first
+                           :args [{:ref [:slot :blocks]}]}}
+                  {:component :flow/branch
+                   :when {:expr :collection/nonempty
+                          :args [{:ref [:slot :blocks]}]}
+                   :then {:component :flow/branch
+                          :when {:expr :value/eq
+                                 :args [{:ref [:slot :block :position]}
+                                        {:ref [:session :target]}]}
+                          :then {:component :flow/sequence
+                                 :steps [{:component :data/bind
+                                          :to :new-hardness
+                                          :value {:expr :math/sub
+                                                  :args [{:ref [:session :hardness-left]}
+                                                         {:tunable :break-speed}]}}
+                                         {:component :data/bind
+                                          :to :progress
+                                          :value {:expr :math/clamp
+                                                  :args [{:expr :math/sub
+                                                          :args [1.0
+                                                                 {:expr :math/div
+                                                                  :args [{:ref [:slot :new-hardness]}
+                                                                         {:ref [:session :starting-hardness]}]}]}
+                                                         0.0 1.0]}}
+                                         {:component :effect/vfx
+                                          :effect-id :block-progress-session
+                                          :operation :update
+                                          :instance-key [:activation :progress]
+                                          :payload {:target {:ref [:slot :block :position]}
+                                                    :progress {:ref [:slot :progress]}
+                                                    :color {:ref [:context :ability-runtime :progress-color]}
+                                                    :pulse-period 0.3}}
+                                         {:component :effect/vfx
+                                          :effect-id :particle-burst
+                                          :operation :spawn
+                                          :instance-key [:activation :particle]
+                                          :audience {:type :nearby :radius 32.0}
+                                          :payload {:position {:expr :vec3/add
+                                                               :args [{:ref [:slot :block :position]}
+                                                                      {:vec3 [0.5 0.5 0.5]}]}
+                                                    :rate-per-tick 3 :limit 3
+                                                    :particle {:ref [:context :ability-runtime :particle]}}}
+                                         {:component :flow/branch
+                                          :when {:expr :math/lte
+                                                 :args [{:ref [:slot :new-hardness]} 0.0]}
+                                          :then {:component :flow/sequence
+                                                 :steps [{:component :block/break
+                                                          :position {:ref [:slot :block :position]}
+                                                          :expected-block-id {:ref [:slot :block :block-id]}
+                                                          :drop? true
+                                                          :fortune-level {:ref [:context :ability-runtime :fortune-level]}
+                                                          :tool-tier-capped? {:ref [:context :ability-runtime :tool-tier-capped?]}}
+                                                         {:component :score/mark :tag :block}
+                                                         {:component :session/patch
+                                                          :entries [{:path [:target] :mode :assign :value nil}
+                                                                    {:path [:hardness-left] :mode :assign
+                                                                     :value 3.4028235E38}
+                                                                    {:path [:starting-hardness] :mode :assign
+                                                                     :value 3.4028235E38}]}]}
+                                          :else {:component :session/patch
+                                                 :entries [{:path [:hardness-left]
+                                                            :mode :assign
+                                                            :value {:ref [:slot :new-hardness]}}]}}]}
+                          :else {:component :flow/branch
+                                 :when {:expr :bool/and
+                                        :args [{:ref [:slot :block :breakable?]}
+                                               {:expr :bool/not
+                                                :args [{:expr :bool/and
+                                                        :args [{:ref [:context :ability-runtime :tool-tier-capped?]}
+                                                               {:ref [:slot :block :requires-high-tier-tool?]}]}]}]}
+                                 :then {:component :session/patch
+                                        :entries [{:path [:target]
+                                                   :mode :assign
+                                                   :value {:ref [:slot :block :position]}}
+                                                  {:path [:hardness-left]
+                                                   :mode :assign
+                                                   :value {:expr :math/select
+                                                           :args [{:expr :math/lt
+                                                                   :args [{:ref [:slot :block :hardness]} 0.0]}
+                                                                  3.4028235E38
+                                                                   {:ref [:slot :block :hardness]}]}}
+                                                  {:path [:starting-hardness]
+                                                   :mode :assign
+                                                   :value {:expr :math/select
+                                                           :args [{:expr :math/lt
+                                                                   :args [{:ref [:slot :block :hardness]} 0.0]}
+                                                                  3.4028235E38
+                                                                  {:ref [:slot :block :hardness]}]}}]}
+                                 :else {:component :session/patch
+                                        :entries [{:path [:target] :mode :assign :value nil}
+                                                  {:path [:hardness-left] :mode :assign
+                                                   :value 3.4028235E38}
+                                                  {:path [:starting-hardness] :mode :assign
+                                      :value 3.4028235E38}]}}}
+                   :else {:component :session/patch
+                          :entries [{:path [:target] :mode :assign :value nil}
+                                    {:path [:hardness-left] :mode :assign
+                                     :value 3.4028235E38}
+                                    {:path [:starting-hardness] :mode :assign
+                                     :value 3.4028235E38}]}}
+                  {:component :flow/finish :outcome :continue}]}
+  :release {:component :cleanup :outcome :released}
+  :abort {:component :cleanup :outcome :aborted}
+  :events {}}}

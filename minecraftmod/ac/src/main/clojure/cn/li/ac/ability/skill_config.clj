@@ -246,6 +246,27 @@
     :cost-tick-cp :cost.tick.cp
     :cooldown-ticks :cooldown.ticks
     :exp-hit :progression.exp-hit}
+   :mine-ray-basic
+   {:targeting-range :targeting.range
+    :break-speed :mining.break-speed
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :cooldown-ticks :cooldown.ticks
+    :exp-block :progression.exp-block}
+   :mine-ray-expert
+   {:targeting-range :targeting.range
+    :break-speed :mining.break-speed
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :cooldown-ticks :cooldown.ticks
+    :exp-block :progression.exp-block}
+   :mine-ray-luck
+   {:targeting-range :targeting.range
+    :break-speed :mining.break-speed
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :cooldown-ticks :cooldown.ticks
+    :exp-block :progression.exp-block}
    :scatter-bomb
    {:max-balls :projectile.max-balls
     :max-hold-ticks :projectile.max-hold-ticks

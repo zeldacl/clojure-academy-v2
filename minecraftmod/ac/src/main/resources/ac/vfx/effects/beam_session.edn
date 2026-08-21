@@ -1,0 +1,23 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :beam-session
+ :revision 1
+ :lifecycle :session
+ :inputs
+ {:spawn {:start :vec3 :end :vec3 :life-ticks :long :grow-ticks :long
+          :style :object :bounds-radius :double}
+  :update {:start {:type :vec3} :end {:type :vec3}
+           :life-ticks {:type :long} :grow-ticks {:type :long}
+           :style {:type :object} :bounds-radius {:type :double}}
+  :destroy {:fade-ticks :long}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/ray-beam
+         :start {:ref [:input :start]}
+         :end {:ref [:input :end]}
+         :life-ticks {:ref [:input :life-ticks]}
+         :grow-ticks {:ref [:input :grow-ticks]}
+         :style {:ref [:input :style]}}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :start]}
+          :end {:ref [:input :end]}
+          :radius {:ref [:input :bounds-radius]}}}

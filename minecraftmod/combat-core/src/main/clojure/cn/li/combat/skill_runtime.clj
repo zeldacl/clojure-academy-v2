@@ -88,7 +88,14 @@
                              :server-tick (long (or (:server-tick intent) 0))
                              :event-seq (long (or (:event-seq intent) 1))
                              :event (:event intent) :intent intent
-                             :context (merge {:owner owner :ability-id ability-id}
+                             :context (merge {:owner owner :ability-id ability-id
+                                              ;; Manifest aliases may carry
+                                              ;; declarative visual/asset
+                                              ;; variants.  They are exposed
+                                              ;; through the neutral ability
+                                              ;; runtime bag; no skill code is
+                                              ;; needed in AC or Combat Core.
+                                              :ability-runtime (:runtime ability)}
                                              (:context intent))
                              :session-state (:session-state intent)
                              :params (or (:parameter-snapshot intent)
@@ -230,4 +237,3 @@
                          (#{:accepted :rejected} (:status result))))
             ((:remove! session-port) owner))
           result)))))
-

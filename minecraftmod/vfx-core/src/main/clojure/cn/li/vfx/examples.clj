@@ -40,6 +40,11 @@
                     :base-color [255 255 255 160]
                     :tier-colors {}
                     :seed {:ref [:state :seed]}}
+   :vfx/block-progress {:component :vfx/block-progress
+                        :target [0.0 64.0 0.0]
+                        :progress 0.5
+                        :color [106 242 106 180]
+                        :pulse-period 0.3}
    :vfx/beam-bounds {:component :vfx/beam-bounds :start point-example
                      :end point-example :radius 0.1}
    :vfx/arc-field {:component :vfx/arc-field :start point-example :end point-example

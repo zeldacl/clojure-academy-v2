@@ -61,4 +61,13 @@
               :resource "ac/vfx/effects/screen_flash_session.edn"}
              {:kind :vfx-effect
               :id :camera-fov-session
-              :resource "ac/vfx/effects/camera_fov_session.edn"}]}
+              :resource "ac/vfx/effects/camera_fov_session.edn"}
+             {:kind :vfx-effect
+              :id :beam-session
+              :resource "ac/vfx/effects/beam_session.edn"}
+             {:kind :vfx-effect
+              :id :block-progress-session
+              :resource "ac/vfx/effects/block_progress_session.edn"}
+             {:kind :vfx-effect
+              :id :particle-burst
+              :resource "ac/vfx/effects/particle_burst.edn"}]}

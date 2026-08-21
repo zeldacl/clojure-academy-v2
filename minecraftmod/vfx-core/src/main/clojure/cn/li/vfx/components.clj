@@ -61,6 +61,10 @@
            [:vfx/block-scan #{:origin :range :max-range :filter :advanced?
                               :life-ticks :rescan-interval :max-results
                               :texture :base-color :tier-colors :seed}]
+           ;; Generic progress geometry around a block target.  Palette,
+           ;; pulse and progress are supplied by the effect document; this
+           ;; node has no mining/skill knowledge.
+           [:vfx/block-progress #{:target :progress :color}]
            [:vfx/beam-bounds #{:start :end :radius}]
            [:vfx/arc-field #{:start :end :count-limit :life-ticks}]
            [:vfx/vortex-column #{:base :axis :height :spacing :radius
