@@ -524,9 +524,9 @@
                 (>= (double (or (get resources key) 0.0))
                     (double (resolve-data value context))))
               cost))
-    :guard/held-item
-    (let [held (get-in context [:context :held-item])]
-      (contains? (set (:item-ids data)) held))
+    :guard/value-in
+    (contains? (set (resolve-data (:one-of data) context))
+               (resolve-data (:value data) context))
     ;; Schema v2 design A: a named budget declared once in the ability's own
     ;; :costs block, spent by reference here. This deliberately emits the
     ;; SAME neutral :owner/patch action shape the ability-authored :program

@@ -86,6 +86,31 @@
               acc))
           [] children-spec)))))
 
+(defn- collect-vfx-nodes
+  "Every :effect/vfx node anywhere in `node`'s already-expanded subtree,
+   walked via the same descriptor-driven nested-nodes as compile-tree/
+   validate-tree -- no composites remain post-expansion, so the composites
+   arg is always {}."
+  [node acc]
+  (let [acc (if (= :effect/vfx (:component node)) (conj acc node) acc)]
+    (reduce (fn [acc [_path child]] (collect-vfx-nodes child acc))
+            acc (nested-nodes node {}))))
+
+(defn vfx-signal-requirements
+  "Every :effect/vfx node in a compiled ability's :program, as
+   {:ability-id :effect-id :operation :payload-keys}. This module only
+   extracts what the ability's program actually sends; the neutral VFX
+   module (which owns the VFX contract) is the one that judges whether an
+   effect document satisfies it -- see that module's install namespace,
+   validate-requirements!."
+  [ability]
+  (mapv (fn [node]
+          {:ability-id (:id ability)
+           :effect-id (:effect-id node)
+           :operation (or (:operation node) :spawn)
+           :payload-keys (set (keys (:payload node)))})
+        (collect-vfx-nodes (:program ability) [])))
+
 (defn- input-reference [value]
   (let [reference (:ref value)]
     (when (and (map? value)

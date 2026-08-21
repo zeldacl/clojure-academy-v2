@@ -27,34 +27,6 @@
   :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:use {:per-mark {:tunable :progression-exp-use}}}
- :vfx
- {:charge-arc-start
-  {:effect-id :arc-channel-session :op :spawn
-   :payload {:mode :keyword :caster :vec3 :target :vec3
-             :block-pos :object :block-bounds :object :good? :boolean
-             :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :charge-arc-update
-  {:effect-id :arc-channel-session :op :update
-   :payload {:mode :keyword :caster :vec3 :target :vec3
-             :block-pos :object :block-bounds :object :good? :boolean
-             :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :charge-arc-end
-  {:effect-id :arc-channel-session :op :destroy
-   :payload {:fade-ticks :long}}
-  :charge-audio-start
-  {:effect-id :audio-loop-session :op :spawn
-   :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
-  :charge-audio-update
-  {:effect-id :audio-loop-session :op :update
-   :payload {:position :vec3}}
-  :charge-audio-end
-  {:effect-id :audio-loop-session :op :destroy
-   :payload {:fade-ticks :long}}
-  :release-burst
-  {:effect-id :endpoint-burst :op :spawn
-   :payload {:from :vec3 :to :vec3 :duration-ticks :long
-             :rate-per-tick :long :limit :long :particle :object
-             :sound-id :string :sound-volume :double :sound-pitch :double}}}
  :fragments
  {:stop-charge
   {:inputs {}

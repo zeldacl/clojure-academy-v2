@@ -27,21 +27,6 @@
  {:charging {:resources {:cp {:tunable :cost-tick-cp}}}}
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:fire {:per-mark {:tunable :exp-use}}}
- :vfx
- {:charge-spawn {:effect-id :energy-orb-session :op :spawn
-                 :payload {:position :vec3 :radius :double :segments :long
-                           :outer-color :object :inner-color :object
-                           :core-color :object :rate-per-tick :long :limit :long
-                           :particle :object}}
-  :charge-update {:effect-id :energy-orb-session :op :update
-                  :payload {:position :vec3}}
-  :charge-destroy {:effect-id :energy-orb-session :op :destroy
-                   :payload {:fade-ticks :long}}
-  :impact {:effect-id :endpoint-burst :op :spawn
-           :payload {:from :vec3 :to :vec3 :duration-ticks :long
-                     :rate-per-tick :long :limit :long :particle :object
-                     :sound-id :string :sound-volume :double
-                     :sound-pitch :double}}}
  :fragments
  {:charge-position
   {:inputs {}

@@ -20,13 +20,6 @@
                          :overload {:tunable :cost-down-overload}}}}
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:cast {:per-mark {:tunable :exp-cast}}}
- :vfx
- {:scan {:effect-id :block-scan-transient
-         :op :spawn
-         :payload {:origin :vec3 :range :double :max-range :double
-                   :filter :object :advanced? :boolean
-                   :life-ticks :long :rescan-interval :long :max-results :long
-                   :texture :string :base-color :object :tier-colors :object}}}
  :program
  {:component :flow/sequence
   :steps [{:component :cost/spend

@@ -38,27 +38,6 @@
                          {:tunable :cooldown-ticks}]}}}
  :progression {:use {:per-mark {:tunable :exp-use}
                       :weight {:ref [:session :time-rate]}}}
- :vfx
- {:charge-audio {:effect-id :audio-loop-session :op :spawn
-                 :payload {:position :vec3 :sound-id :string
-                           :volume :double :pitch :double}}
-  :charge-particles {:effect-id :particle-session :op :spawn
-                     :payload {:position :vec3 :rate-per-tick :long
-                               :limit :long :particle :object}}
-  :charge-camera {:effect-id :camera-fov-session :op :signal
-                  :payload {:offset :double}}
-  :beam-fired {:effect-id :beam-arc-fade :op :spawn
-               :payload {:start :vec3 :end :vec3 :duration-ticks :long
-                         :beam-at :long :grow-ticks :long :layers :object
-                         :arc-at :long :arc-spacing :object :arc-radius :object
-                         :arc-count-limit :long :arc-life-ticks :long
-                         :fade-at :long :fade-from-tick :long :fade-to-tick :long
-                         :fade-from-alpha :double :fade-to-alpha :double
-                         :ring-radius :object :ring-segments :long
-                         :ring-color :object}}
-  :reflected-beam {:effect-id :ray-beam-transient :op :spawn
-                   :payload {:start :vec3 :end :vec3 :life-ticks :long
-                             :grow-ticks :long :style :object :bounds-radius :double}}}
  :fragments
  {:stop-vfx
   {:inputs {}
@@ -190,15 +169,7 @@
                             :reflection-policy {:shot-distance {:tunable :reflection-shot-distance}
                                                 :damage-multiplier {:tunable :reflection-damage-multiplier}
                                                 :reflection-base-damage {:tunable :reflection-base-damage}}
-                            :block-policy {:component :block/break-budget
-                                           :blocks []
-                                           :energy {:expr :math/mul
-                                                    :args [{:ref [:session :time-rate]}
-                                                           {:tunable :beam-block-energy}]}
-                                           :step {:tunable :beam-step}
-                                           :drop-chance 0.05
-                                           :neighbor-break-chance 0.05
-                                           :limit 4096}
+                            :block-limit 4096
                             :result :beam-result}
                            {:component :flow/foreach
                             :items {:ref [:slot :beam-result :entities]}
@@ -226,12 +197,13 @@
                                           :amount {:ref [:slot :target :damage]}
                                           :damage-type :magic}}}
                            {:component :block/break-budget
+                            :world-id {:from :world/id}
                             :blocks {:ref [:slot :beam-result :blocks]}
                             :energy {:expr :math/mul
                                      :args [{:ref [:session :time-rate]}
                                             {:tunable :beam-block-energy}]}
-                            :step {:tunable :beam-step} :limit 4096
-                            :drop-chance 0.05 :neighbor-break-chance 0.05
+                            :limit 4096
+                            :drop-chance 0.05
                             :seed {:from :rng/seed}}
                            {:component :effect/vfx :effect-id :beam-arc-fade
                             :operation :spawn :instance-key [:activation :meltdowner-beam]

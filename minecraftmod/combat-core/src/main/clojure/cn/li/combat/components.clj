@@ -146,8 +146,13 @@
            :guard/resource
            {:schema {:required #{:cost}} :effects #{}}
 
-           :guard/held-item
-           {:schema {:required #{:source :item-ids}} :effects #{}}
+           ;; Generic pure value guard: does :value equal one of :one-of.
+           ;; Replaces the old :guard/held-item, which read
+           ;; [:context :held-item] -- a slot nothing ever bound (U1
+           ;; violation). Callers now query the actual value through a
+           ;; declared port (e.g. :target/item-held) and check it here.
+           :guard/value-in
+           {:schema {:required #{:value :one-of}} :effects #{}}
 
            :target/raycast
            {:schema {:required #{:origin :direction :distance}}
@@ -230,10 +235,14 @@
            {:schema {:required #{:cap :interval-ticks :last-tick-path :cost}}
             :effects #{:mutate}}
 
+           ;; :block-limit is a plain scalar cap on how many discovered blocks
+           ;; beam.clj/trace! returns -- not a :block/break-budget node. The
+           ;; ability's own top-level :block/break-budget step (a real,
+           ;; separately-executed component) is what actually commits the
+           ;; discovered blocks, using its own :energy/:drop-chance/:seed.
            :host/beam-trace
            {:schema {:required #{:origin :direction :length :radius :damage :result}}
             :effects #{:query :mutate}
-            :children {:block-policy {:kind :single :required? false}}
             :produces {:beam {:name-field :result :type :beam-result}}}
 
            :combat/impulse

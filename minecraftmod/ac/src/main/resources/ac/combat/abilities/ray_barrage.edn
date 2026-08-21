@@ -19,17 +19,6 @@
                             :overload {:tunable :cost-down-overload}}}}
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:hit {:per-mark {:tunable :exp-hit}}}
- :vfx
- {:preray {:effect-id :ray-beam-transient :op :spawn
-           :payload {:start :vec3 :end :vec3 :life-ticks :long
-                     :grow-ticks :long :style :object :bounds-radius :double}}
-  :sound {:effect-id :audio-one-shot :op :spawn
-          :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
-  :fan {:effect-id :ray-fan-transient :op :spawn
-        :payload {:origin :vec3 :direction :vec3 :length :double :count :long
-                  :yaw-range-degrees :object :pitch-range-degrees :object
-                  :life-ticks :long :grow-ticks :long :style :object
-                  :seed :long :bounds-radius :double}}}
  :program
  {:component :flow/phases
   :start

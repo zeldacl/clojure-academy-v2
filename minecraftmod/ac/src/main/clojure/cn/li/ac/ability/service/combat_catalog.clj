@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.service.combat-catalog
   "Authoritative first-phase EDN catalog. Unmigrated skills have no runtime fallback."
   (:require [cn.li.combat.recipe :as combat-recipe]
-            [cn.li.mcmod.runtime.safe-edn :as safe-edn]
+            [cn.li.vfx.install :as vfx-install]
             [cn.li.vfx.recipe :as vfx-recipe]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.util.log :as log]))
@@ -33,9 +33,26 @@
         skill-config/overlay-edn-tunables)
     document))
 
+(defn- vfx-contract-errors
+  "Every ability whose compiled :program asks a VFX effect for a payload
+   that effect's own :inputs doesn't support -- unknown fields, missing
+   required ones, an effect-id nothing compiled, or a non-empty :destroy
+   payload. combat-core only knows what its abilities send (recipe.clj's
+   vfx-signal-requirements); vfx-core (cn.li.vfx.install/validate-
+   requirements!) is the one that owns the contract those requests are
+   judged against -- this function is pure wiring between the two."
+  [combat vfx]
+  (into {}
+        (keep (fn [[ability-id ability]]
+                (let [requirements (combat-recipe/vfx-signal-requirements ability)
+                      failures (vfx-install/validate-requirements! vfx requirements)]
+                  (when (seq failures)
+                    [ability-id {:message "VFX contract violation"
+                                 :data {:failures failures}}]))))
+        (:abilities combat)))
+
 (defn initialize! []
-  (let [migration (safe-edn/read-resource! "ac/ability/migration_status.edn")
-        combat (combat-recipe/load-catalog!
+  (let [combat (combat-recipe/load-catalog!
                  {:manifest-resource "ac/combat/manifest.edn"
                   :composites-manifest-resource
                   "ac/combat/components_manifest.edn"
@@ -43,16 +60,36 @@
         vfx (vfx-recipe/load-catalog!
               {:manifest-resource "ac/vfx/manifest.edn"
                :composites-manifest-resource
-               "ac/vfx/components_manifest.edn"})]
+               "ac/vfx/components_manifest.edn"})
+        ;; A VFX contract violation disables only the offending ability,
+        ;; the same Design E fail-closed granularity as a compile error --
+        ;; every other ability still loads.
+        vfx-errors (vfx-contract-errors combat vfx)
+        combat (-> combat
+                   (update :abilities #(apply dissoc % (keys vfx-errors)))
+                   (update :errors merge vfx-errors))
+        ;; Migration status is each ability's own :status field, not a
+        ;; separately-maintained file -- a second place to update, and one
+        ;; that can drift from the EDN it's supposedly describing. An
+        ;; ability absent here (no EDN file, or one that failed to compile
+        ;; or failed its VFX contract and was dropped from :combat's
+        ;; :abilities) falls through migration-status's own :pending
+        ;; default below.
+        migration (into {} (map (fn [[id ability]] [id (:status ability)]))
+                        (:abilities combat))]
     ;; A single ability failing to compile (bad EDN, a dataflow violation,
     ;; ...) does not fail the whole catalog load -- combat-recipe/load-catalog!
     ;; already dropped it from :abilities and carries the reason here so it
     ;; is loud, not silent, while every other ability still boots normally.
+    ;; vfx-recipe/load-catalog! carries the same per-effect isolation.
     (doseq [[ability-id error] (:errors combat)]
       (log/error "EDN ability" ability-id "failed to compile and is disabled:"
                  (:message error) (:data error)))
+    (doseq [[effect-id error] (:errors vfx)]
+      (log/error "EDN VFX effect" effect-id "failed to compile and is disabled:"
+                 (:message error) (:data error)))
     (reset! state* {:initialized? true
-                    :migration (:skills migration)
+                    :migration migration
                     :combat combat
                     :vfx vfx
                     :trigger-index (build-trigger-index

@@ -393,11 +393,13 @@
    for :singleton effects: :spawn/:signal go straight to the existing
    aggregate instance's own signal queue every time.
 
-   :transient effects (migrated) use vfx-core's real dispatch-signal!
-   unconditionally, passing the full signal straight through -- the
-   per-owner-per-activation :instance-key combat-core already stamps on
-   every signal is exactly the stable key vfx-core's own spawn/event-seq/
-   tombstone rules are built to consume; no bypass needed."
+   :transient and :session effects (migrated) use vfx-core's real
+   dispatch-signal! unconditionally, passing the full signal straight
+   through -- the per-owner-per-activation :instance-key combat-core
+   already stamps on every signal is exactly the stable key vfx-core's own
+   spawn/event-seq/tombstone rules are built to consume; no bypass needed.
+   The two lifecycles route identically here; they differ only in whether
+   the effect's own graph self-expires (see vfx-core/vm.clj)."
   [signal]
   (let [signal (contract/signal signal)
         camera-fov? (apply-camera-fov-signal! signal)
@@ -405,7 +407,7 @@
         lifecycle (core/effect-lifecycle (runtime) (:effect-id signal))]
     (if camera-fov?
       nil
-      (if (= :transient lifecycle)
+      (if (#{:transient :session} lifecycle)
       (core/dispatch-signal! (runtime) signal)
       (case (:op signal)
         (:spawn :signal)

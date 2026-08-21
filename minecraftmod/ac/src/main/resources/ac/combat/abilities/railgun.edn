@@ -1,7 +1,7 @@
 {:schema-version 2
  :kind :ability
  :id :railgun
- :revision 3
+ :revision 4
  :activation :session
  :status :migrated
  :requires [:caster/eye :caster/aim :caster/id]
@@ -16,31 +16,14 @@
   :charge-ticks {:curve :const :type :long}
   :cost-down-cp {:curve :mastery-lerp}
   :cost-down-overload {:curve :mastery-lerp}}
- ;; Only spent at :release -- :start/:pulse are free (charge-up and beam
- ;; tracing cost nothing; the shot itself does).
+ ;; Only spent at :release -- :start/:pulse are free (charge-up costs
+ ;; nothing; the shot itself does).
  :costs {:fire {:resources {:cp {:tunable :cost-down-cp}
                             :overload {:tunable :cost-down-overload}}}}
  :external-triggers [{:source :item/use
                       :filter {:item-ids ["ac:coin" "academy:coin"]
                                :ability-mode? true}
                       :dispatch {:ability :railgun :event :coin-thrown}}]
- :vfx
- {:beam-fired {:effect-id :beam-arc-fade
-              :op :spawn
-              :payload {:start :vec3 :end :vec3 :duration-ticks :long
-                        :beam-at :long :grow-ticks :long :layers :object
-                        :arc-at :long :arc-spacing :object :arc-radius :object
-                        :arc-count-limit :long :arc-life-ticks :long
-                        :fade-at :long :fade-from-tick :long :fade-to-tick :long
-                        :fade-from-alpha :double :fade-to-alpha :double
-                        :ring-radius :object :ring-segments :long
-                        :ring-color :object}}
-  :charge-started {:effect-id :billboard-session
-                   :op :spawn
-                   :payload {:anchor :object :duration-ticks :long
-                             :texture-pattern :string
-                             :frame-count :long :frame-duration-ms :long
-                             :half-size :double}}}
  :program
  {:component :flow/phases
   :start
@@ -60,55 +43,15 @@
                       :texture-pattern "academy:textures/effects/arc_burst/%d.png"
                       :frame-count 40 :frame-duration-ms 40 :half-size 0.4}}
            {:component :flow/finish :outcome :started}]}
-  :pulse
-  {:component :flow/sequence
-   :steps [{:component :target/raycast
-            :origin {:from :caster/eye} :direction {:from :caster/aim}
-            :distance {:tunable :max-distance}
-            :include-entities? true :include-blocks? true
-            :result :aim-hit}
-           ;; :host/beam-trace's neutral raycast handler does not yet
-           ;; implement the beam contract (see docs/04-systems/
-           ;; COMBAT_CORE.md's known-limitations section) -- there is no
-           ;; capability that discovers a muzzle offset or the blocks a
-           ;; beam would pass through, so :origin falls back to the same
-           ;; caster/eye facade the raycast step above uses, and the
-           ;; block-break policy starts from an explicit empty block list
-           ;; rather than a dangling reference. Deferred alongside
-           ;; :caster/hand-item (see Phase 3).
-           {:component :host/beam-trace
-            :origin {:from :caster/eye}
-            :direction {:from :caster/aim}
-            :length {:tunable :max-distance}
-            :visual-length {:tunable :beam-visual-distance}
-            :radius {:tunable :beam-radius}
-            :query-radius {:tunable :beam-query-radius}
-            :step {:tunable :beam-step}
-            :damage {:tunable :beam-damage}
-            :entity-limit 256
-            :block-policy {:component :block/break-budget
-                           :blocks []
-                           :energy {:tunable :beam-block-energy}
-                           :step {:tunable :beam-step}
-                           :limit 4096}
-            :result :beam-result}
-           {:component :effect/vfx
-            :effect-id :beam-arc-fade
-            :operation :spawn
-            :payload {:start {:ref [:slot :beam-result :start]}
-                      :end {:ref [:slot :beam-result :end]}
-                      :duration-ticks 50 :beam-at 0 :grow-ticks 3
-                      :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
-                               {:shape :tube :radius 0.09 :color [241 240 222 200]}
-                               {:shape :line :width 0.02 :color [165 230 255 160]}]
-                      :arc-at 3 :arc-spacing {:min 1.0 :max 2.0}
-                      :arc-radius {:min 0.1 :max 0.25}
-                      :arc-count-limit 64 :arc-life-ticks 30
-                      :fade-at 30 :fade-from-tick 30 :fade-to-tick 50
-                      :fade-from-alpha 1.0 :fade-to-alpha 0.0
-                      :ring-radius 0.34 :ring-segments 12
-                      :ring-color [188 252 238 180]}}
-           {:component :flow/finish :outcome :continue}]}
+  ;; Charge-up only -- the beam is a release-time weapon discharge, not a
+  ;; continuous per-tick trace (spawning a 50-tick beam VFX and re-querying
+  ;; the beam every pulse tick, as this used to, fired the shot effect the
+  ;; whole time the trigger was held down, and there was no :combat/damage
+  ;; node anywhere in the file, so nothing the beam passed through was ever
+  ;; actually damaged). :aim-hit is unused by :release below (:host/beam-trace
+  ;; there reads :caster/eye/:caster/aim directly) -- :pulse has nothing left
+  ;; to compute.
+  :pulse {:component :flow/finish :outcome :continue}
   :release
   {:component :flow/sequence
    :steps [{:component :effect/vfx
@@ -116,10 +59,11 @@
             :operation :destroy
             :instance-key [:activation :railgun-charge]
             :payload {}}
+           {:component :target/item-held :source :main-hand :result :hand-item}
            {:component :txn/atomic
-            :guards [{:component :guard/held-item
-                     :source :main-hand
-                     :item-ids ["minecraft:iron_ingot" "minecraft:iron_block"]}]
+            :guards [{:component :guard/value-in
+                     :value {:ref [:slot :hand-item :item-id]}
+                     :one-of ["minecraft:iron_ingot" "minecraft:iron_block"]}]
             :reservations [{:component :inventory/consume
                             :source :main-hand
                             :count 1}]
@@ -128,7 +72,49 @@
                             :budget :fire
                             :on-insufficient {:component :flow/finish
                                               :outcome :insufficient-resource}}
+                           {:component :host/beam-trace
+                            :origin {:from :caster/eye}
+                            :direction {:from :caster/aim}
+                            :length {:tunable :max-distance}
+                            :visual-length {:tunable :beam-visual-distance}
+                            :radius {:tunable :beam-radius}
+                            :query-radius {:tunable :beam-query-radius}
+                            :step {:tunable :beam-step}
+                            :damage {:tunable :beam-damage}
+                            :damage-type :skill :entity-limit 256
+                            :block-limit 4096
+                            :result :beam-result}
+                           {:component :flow/foreach
+                            :items {:ref [:slot :beam-result :entities]}
+                            :as :target :limit 256
+                            :body {:component :combat/damage
+                                   :target {:ref [:slot :target :id]}
+                                   :amount {:ref [:slot :target :damage]}
+                                   :damage-type :skill}}
+                           {:component :block/break-budget
+                            :world-id {:from :world/id}
+                            :blocks {:ref [:slot :beam-result :blocks]}
+                            :energy {:tunable :beam-block-energy}
+                            :limit 4096
+                            :seed {:from :rng/seed}}
+                           {:component :effect/vfx
+                            :effect-id :beam-arc-fade
+                            :operation :spawn
+                            :payload {:start {:ref [:slot :beam-result :start]}
+                                      :end {:ref [:slot :beam-result :end]}
+                                      :duration-ticks 50 :beam-at 0 :grow-ticks 3
+                                      :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
+                                               {:shape :tube :radius 0.09 :color [241 240 222 200]}
+                                               {:shape :line :width 0.02 :color [165 230 255 160]}]
+                                      :arc-at 3 :arc-spacing {:min 1.0 :max 2.0}
+                                      :arc-radius {:min 0.1 :max 0.25}
+                                      :arc-count-limit 64 :arc-life-ticks 30
+                                      :fade-at 30 :fade-from-tick 30 :fade-to-tick 50
+                                      :fade-from-alpha 1.0 :fade-to-alpha 0.0
+                                      :ring-radius 0.34 :ring-segments 12
+                                      :ring-color [188 252 238 180]}}
                            {:component :world/sound
+                            :world-id {:from :world/id}
                             :sound-id "academy:em.railgun"
                             :position {:from :caster/eye}}
                            {:component :flow/finish :outcome :committed}]}

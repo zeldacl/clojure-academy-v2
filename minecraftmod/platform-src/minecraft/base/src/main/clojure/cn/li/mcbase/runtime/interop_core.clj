@@ -9,8 +9,10 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver McAccess]
            [net.minecraft.core BlockPos]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.server MinecraftServer]
-           [net.minecraft.server.level ServerPlayer ServerLevel]))
+           [net.minecraft.server.level ServerPlayer ServerLevel]
+           [net.minecraft.world.item ItemStack]))
 
 (defn get-level-by-id
   ^ServerLevel [^MinecraftServer server world-id]
@@ -48,6 +50,39 @@
       (log/warn "Failed to get player main hand item:" (ex-message e))
       nil)))
 
+(defn- item-registry-id [^ItemStack stack]
+  (when-let [registry-name (.getKey BuiltInRegistries/ITEM (.getItem stack))]
+    (str (.getNamespace registry-name) ":" (.getPath registry-name))))
+
+(defn main-hand-item-snapshot
+  "Neutral `{:item-id :count}` snapshot of player-uuid's main-hand stack, or
+   nil when empty. Never returns the raw ItemStack -- callers on the neutral
+   side must not see a Minecraft object."
+  [^MinecraftServer server player-uuid]
+  (try
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
+      (let [^ItemStack stack (.getMainHandItem player)]
+        (when (and stack (not (.isEmpty stack)))
+          {:item-id (item-registry-id stack) :count (.getCount stack)})))
+    (catch Exception e
+      (log/warn "Failed to get player main hand item snapshot:" (ex-message e))
+      nil)))
+
+(defn consume-main-hand-item!
+  "Shrink player-uuid's main-hand stack by count. Returns `{:consumed n}`
+   when the stack held at least count, or nil (no mutation) otherwise."
+  [^MinecraftServer server player-uuid count]
+  (try
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
+      (let [^ItemStack stack (.getMainHandItem player)
+            count (long count)]
+        (when (and stack (not (.isEmpty stack)) (>= (.getCount stack) count))
+          (.shrink stack (int count))
+          {:consumed count})))
+    (catch Exception e
+      (log/warn "Failed to consume player main hand item:" (ex-message e))
+      nil)))
+
 (defn get-player-entity
   "Resolve the live ServerPlayer for player-uuid, for callers (e.g. tick-driven
   entity-spawn visuals) that only have a player-id and no player-ref -- the
@@ -77,6 +112,10 @@
                       (get-player-view (server-fn) player-uuid))
    :get-player-main-hand-item (fn [player-uuid]
                                 (get-player-main-hand-item (server-fn) player-uuid))
+   :main-hand-item-snapshot (fn [player-uuid]
+                              (main-hand-item-snapshot (server-fn) player-uuid))
+   :consume-main-hand-item! (fn [player-uuid count]
+                              (consume-main-hand-item! (server-fn) player-uuid count))
    :get-block-entity-at (fn [world-id x y z]
                           (get-block-entity-at (server-fn) world-id x y z))
    :get-player-entity (fn [player-uuid]

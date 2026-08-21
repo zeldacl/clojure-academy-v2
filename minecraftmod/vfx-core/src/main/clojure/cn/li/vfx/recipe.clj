@@ -188,6 +188,14 @@
      :content-hash (content-hash documents)}))
 
 (defn load-catalog!
+  "Compile every VFX effect the manifest lists. A single effect document
+   being unparseable, mismatched, or failing a schema/lifecycle check
+   disables only that effect -- :errors carries its id and failure so the
+   caller can log it -- and every other effect still loads. One bad EDN
+   file must not be able to take every VFX effect in the mod down at boot
+   (Design E: fail-closed per effect, not globally; see
+   combat-core/recipe.clj's load-catalog! for the same pattern on the
+   combat side)."
   [{:keys [manifest-resource composites-manifest-resource document-loader]
     :or {document-loader safe-edn/read-resource!}}]
   (components/register-builtins!)
@@ -197,19 +205,25 @@
                                     {:manifest-resource composites-manifest-resource
                                      :document-loader document-loader}))
                      {})
-        effects (mapv (fn [{:keys [kind id resource]}]
-                        (when-not (= :vfx-effect kind)
-                          (fail "unsupported VFX document kind" {:kind kind}))
-                        (let [effect (compile-effect
-                                       (document-loader resource)
-                                       {:composites composites})]
-                          (when-not (= id (:id effect))
-                            (fail "VFX manifest/document id mismatch"
-                                  {:manifest-id id :document-id (:id effect)}))
-                          effect))
-                      (:documents manifest))]
+        outcomes (mapv (fn [{:keys [kind id resource]}]
+                         (try
+                           (when-not (= :vfx-effect kind)
+                             (fail "unsupported VFX document kind" {:kind kind}))
+                           (let [effect (compile-effect
+                                          (document-loader resource)
+                                          {:composites composites})]
+                             (when-not (= id (:id effect))
+                               (fail "VFX manifest/document id mismatch"
+                                     {:manifest-id id :document-id (:id effect)}))
+                             {:id id :effect effect})
+                           (catch clojure.lang.ExceptionInfo e
+                             {:id id :error {:message (ex-message e) :data (ex-data e)}})))
+                       (:documents manifest))
+        effects (keep :effect outcomes)
+        errors (into {} (keep (fn [{:keys [id error]}] (when error [id error])) outcomes))]
     {:schema-version 1
      :manifest manifest
      :composites composites
      :effects (into {} (map (juxt :id identity) effects))
+     :errors errors
      :content-hash (content-hash {:effects effects :composites composites})}))

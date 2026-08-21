@@ -5,6 +5,8 @@
 (def get-level-by-id shared/get-level-by-id)
 (def get-player-view shared/get-player-view)
 (def get-player-main-hand-item shared/get-player-main-hand-item)
+(def main-hand-item-snapshot shared/main-hand-item-snapshot)
+(def consume-main-hand-item! shared/consume-main-hand-item!)
 (def get-player-entity shared/get-player-entity)
 (def get-block-entity-at shared/get-block-entity-at)
 (def runtime-interop-impl shared/runtime-interop-impl)

@@ -1072,9 +1072,21 @@ tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
     description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled."
     doLast {
-        def migration = file("ac/src/main/resources/ac/ability/migration_status.edn").text
+        // Migration status is each ability document's own :status field
+        // (combat_catalog.clj/initialize! reads it the same way) -- there is
+        // no separate migration_status.edn to drift out of sync with it.
+        def abilitiesDir = file("ac/src/main/resources/ac/combat/abilities")
         def migrated = [] as Set
-        (migration =~ /(?:\{|\s):([A-Za-z0-9!?*-]+)\s+:migrated\b/).each { match -> migrated << ":${match[1]}" }
+        abilitiesDir.eachFile { File abilityFile ->
+            if (abilityFile.name.endsWith(".edn")) {
+                def text = abilityFile.text
+                def idMatch = (text =~ /:id\s+(:[A-Za-z0-9!?*-]+)/)
+                def statusMatch = (text =~ /:status\s+:([A-Za-z0-9!?*-]+)/)
+                if (idMatch.find() && statusMatch.find() && statusMatch.group(1) == "migrated") {
+                    migrated << idMatch.group(1)
+                }
+            }
+        }
         def manifest = file("ac/src/main/resources/ac/combat/manifest.edn").text
         def manifestIds = [] as Set
         (manifest =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> manifestIds << match[1].toString() }

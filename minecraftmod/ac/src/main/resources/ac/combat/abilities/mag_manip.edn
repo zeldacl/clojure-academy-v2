@@ -23,37 +23,6 @@
                       :overload {:tunable :cost-up-overload}}}}
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:throw {:per-mark {:tunable :progression-exp-throw}}}
- :vfx
- {:hold-start {:effect-id :arc-channel-session :op :spawn
-               :payload {:mode :magnetic-hold :caster :vec3 :target :vec3
-                         :block-pos :object :block-bounds :object :good? :boolean
-                         :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :hold-update {:effect-id :arc-channel-session :op :update
-                :payload {:mode :magnetic-hold :caster :vec3 :target :vec3
-                          :block-pos :object :block-bounds :object :good? :boolean
-                          :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :hold-end {:effect-id :arc-channel-session :op :destroy
-             :payload {:fade-ticks :long}}
-  :hold-audio-start {:effect-id :audio-loop-session :op :spawn
-                     :payload {:position :vec3 :sound-id :string
-                               :volume :double :pitch :double}}
-  :hold-audio-update {:effect-id :audio-loop-session :op :update
-                      :payload {:position :vec3}}
-  :hold-audio-end {:effect-id :audio-loop-session :op :destroy
-                   :payload {:fade-ticks :long}}
-  :throw-beam {:effect-id :beam-arc-fade :op :spawn
-               :payload {:start :vec3 :end :vec3 :duration-ticks :long
-                         :beam-at :long :grow-ticks :long :layers :object
-                         :arc-at :long :arc-spacing :object
-                         :arc-radius :object :arc-count-limit :long
-                         :arc-life-ticks :long :fade-at :long
-                         :fade-from-tick :long :fade-to-tick :long
-                         :fade-from-alpha :double :fade-to-alpha :double
-                         :ring-radius :object :ring-segments :long
-                         :ring-color :object}}
-  :throw-sound {:effect-id :audio-one-shot :op :spawn
-                :payload {:position :vec3 :sound-id :string
-                          :volume :double :pitch :double}}}
  :fragments
  {:start-holding
   {:inputs {:block-id {} :source-position {:default nil}}

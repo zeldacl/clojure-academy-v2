@@ -28,24 +28,6 @@
                                {:expr :math/mul
                                 :args [{:tunable :exp-distance-scale}
                                        {:ref [:slot :traveled]}]}]}}}
- :vfx
- {:arc-start {:effect-id :arc-channel-session :op :spawn
-              :payload {:mode :keyword :caster :vec3 :target :vec3
-                        :block-pos :object :block-bounds :object :good? :boolean
-                        :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :arc-update {:effect-id :arc-channel-session :op :update
-               :payload {:mode :keyword :caster :vec3 :target :vec3
-                         :block-pos :object :block-bounds :object :good? :boolean
-                         :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :arc-end {:effect-id :arc-channel-session :op :destroy
-            :payload {:fade-ticks :long}}
-  :audio-start {:effect-id :audio-loop-session :op :spawn
-                :payload {:position :vec3 :sound-id :string
-                          :volume :double :pitch :double}}
-  :audio-update {:effect-id :audio-loop-session :op :update
-                 :payload {:position :vec3}}
-  :audio-end {:effect-id :audio-loop-session :op :destroy
-              :payload {:fade-ticks :long}}}
  :fragments
  {:begin
   {:inputs {:target-kind {} :target-id {:default nil} :target-position {}}

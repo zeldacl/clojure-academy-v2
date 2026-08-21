@@ -57,23 +57,6 @@
                     :overload {:tunable :absorb-cp}}
              :exp-tag :attacked
              :exp-scale 1.0}}]
- :vfx
- {:startup {:effect-id :audio-one-shot :op :spawn
-            :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
-  :shield-start {:effect-id :billboard-session :op :spawn
-                 :payload {:anchor :object :duration-ticks :long
-                           :texture-pattern :string :frame-count :long
-                           :frame-duration-ms :long :half-size :double}}
-  :shield-update {:effect-id :billboard-session :op :update :payload {:anchor :object}}
-  :shield-end {:effect-id :billboard-session :op :destroy :payload {}}
-  :particles-start {:effect-id :particle-session :op :spawn
-                    :payload {:position :vec3 :rate-per-tick :long :limit :long :particle :object}}
-  :particles-update {:effect-id :particle-session :op :update :payload {:position :vec3}}
-  :particles-end {:effect-id :particle-session :op :destroy :payload {}}
-  :audio-start {:effect-id :audio-loop-session :op :spawn
-                :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
-  :audio-update {:effect-id :audio-loop-session :op :update :payload {:position :vec3}}
-  :audio-end {:effect-id :audio-loop-session :op :destroy :payload {:fade-ticks :long}}}
  :fragments
  {:stop-vfx
   {:inputs {}

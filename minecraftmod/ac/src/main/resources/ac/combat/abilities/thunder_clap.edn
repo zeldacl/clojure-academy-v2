@@ -26,20 +26,6 @@
  :cooldown {:main {:ticks {:expr :math/mul
                           :args [{:from :charge/ticks} {:tunable :cooldown-per-hold}]}}}
  :progression {:cast {:per-mark {:tunable :exp-use}}}
- :vfx
- {:charge-started {:effect-id :arc-ring-session :op :spawn
-                   :payload {:start :vec3 :end :vec3 :duration-ticks :long
-                             :arc-spacing :object :arc-radius :object
-                             :arc-count-limit :long :arc-life-ticks :long
-                             :ring-from :double :ring-to :double
-                             :ring-segments :long :ring-color :object
-                             :sound-id :string :sound-volume :double
-                             :sound-pitch :double :sound-position :vec3
-                             :fade-at :long :fade-to-tick :long
-                             :fade-ring-from :double :fade-ring-to :double
-                             :fade-segments :long :fade-color :object}}
-  :charge-updated {:effect-id :arc-ring-session :op :update
-                   :payload {:end :vec3}}}
  :fragments
  {:aim {:inputs {}
         :body {:component :target/raycast

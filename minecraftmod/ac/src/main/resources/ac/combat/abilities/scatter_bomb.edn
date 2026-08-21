@@ -24,20 +24,6 @@
  {:activate {:resources {:overload {:tunable :cost-down-overload}}}
   :charging {:resources {:cp {:tunable :cost-tick-cp}}}}
  :progression {:ball-fired {:per-mark {:tunable :exp-per-ball}}}
- :vfx
- {:charge-started {:effect-id :particle-session :op :spawn
-                   :payload {:position :vec3 :rate-per-tick :long :limit :long
-                             :particle :object}}
-  :charge-updated {:effect-id :particle-session :op :update
-                   :payload {:position :vec3}}
-  :beam-fired {:effect-id :beam-fade-audio :op :spawn
-               :payload {:start :vec3 :end :vec3 :duration-ticks :long
-                         :beam-at :long :grow-ticks :long :layers :object
-                         :sound-id :string :sound-volume :double
-                         :sound-pitch :double :sound-position :vec3
-                         :fade-at :long :fade-from-tick :long
-                         :fade-to-tick :long :fade-from-alpha :double
-                         :fade-to-alpha :double :fade-layers :object}}}
  :program
  {:component :flow/phases
   :start

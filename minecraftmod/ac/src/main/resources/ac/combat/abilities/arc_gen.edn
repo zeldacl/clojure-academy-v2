@@ -23,16 +23,6 @@
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:hit-entity {:per-mark {:tunable :exp-entity}}
                :hit-block {:per-mark {:tunable :exp-block}}}
- :vfx
- {:arc-fired {:effect-id :beam-arc-fade :op :spawn
-              :payload {:start :vec3 :end :vec3 :duration-ticks :long
-                        :beam-at :long :grow-ticks :long :layers :object
-                        :arc-at :long :arc-spacing :object :arc-radius :object
-                        :arc-count-limit :long :arc-life-ticks :long
-                        :fade-at :long :fade-from-tick :long :fade-to-tick :long
-                        :fade-from-alpha :double :fade-to-alpha :double
-                        :ring-radius :object :ring-segments :long
-                        :ring-color :object}}}
  :program
  {:component :flow/sequence
   :steps

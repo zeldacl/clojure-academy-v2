@@ -600,7 +600,7 @@
                                   speed (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
 
                                (entity/player-spawn-tracked-entity-by-id!
-                                player (str entity-type) speed life-ticks)))))
+                                player (str entity-type) speed life-ticks))))
                         (catch Exception e
                           (log/warn "Failed to spawn neutral entity:" (ex-message e))
                           false)))

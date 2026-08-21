@@ -9,11 +9,13 @@
   (:require [cn.li.ac.ability.discovery :as discovery]
             [cn.li.ac.discovery.core :as discovery-core]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.client.effect-controller :as vfx]
             [cn.li.ac.client.combat-vfx-adapter :as combat-vfx]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.vfx.install :as vfx-install]))
 
 (defn- init-fx-namespace! [ns-sym]
   (let [ns-sym (discovery-core/ns-symbol ns-sym)]
@@ -39,6 +41,13 @@
     (arc-beam/validate-fx-multimethods!)
     (keybinds/freeze-keybind-registries!)
     (vfx/warmup!)
+    ;; Register every compiled EDN VFX effect as a real vfx-core descriptor
+    ;; before the registry freezes -- until this call, an EDN ability's
+    ;; :effect/vfx signals compiled fine but had no registered effect-id to
+    ;; land on, so they were silently dropped (see effect_controller.clj's
+    ;; unmapped-signal-count*). combat-catalog/initialize! (ac/core/init.clj)
+    ;; must already have run by the time client init reaches here.
+    (vfx-install/install-catalog! (vfx/runtime) (:vfx (combat-catalog/catalog)))
     (vfx/freeze!)
     (combat-vfx/install-dispatch! vfx/dispatch-signal!)
     (log/info "Ability client FX content initialized"))))

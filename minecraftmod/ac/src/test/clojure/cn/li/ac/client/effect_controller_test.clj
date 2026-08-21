@@ -1,6 +1,8 @@
 (ns cn.li.ac.client.effect-controller-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.client.effect-controller :as vfx-level]))
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.client.effect-controller :as vfx-level]
+            [cn.li.vfx.install :as vfx-install]))
 
 ;; See effect_controller.clj's descriptor :update docstring: apply-tick only
 ;; ever dissoc's the inner :level/:hand key when a per-track tick-state-fn
@@ -109,3 +111,26 @@
   (is (= {:count 1} (vfx-level/instance-for-owner :owner-write-probe "mine" :level)))
   (is (= {:count 0} (vfx-level/instance-for-owner :owner-write-probe "someone-else" :level))
       "a different owner's instance of the same effect must be untouched"))
+
+;; Regression test for the actual bug this session's Phase B closed: before
+;; install-catalog! existed, a real ability's :effect/vfx signal (e.g.
+;; railgun's :beam-arc-fade) compiled fine but had no registered effect-id
+;; to dispatch to, so dispatch-signal! always fell through to the
+;; "unregistered effect-id" branch and incremented unmapped-signal-count*
+;; forever, silently. This drives the exact combat-vfx-adapter/
+;; skill-runtime signal shape (:transient lifecycle, a real production
+;; effect-id) through the real client dispatch path -- not just vfx-core's
+;; own runtime primitives (see vfx-core/install_test.clj for that layer).
+(deftest a-real-edn-vfx-effect-dispatches-through-the-client-path-not-as-unmapped
+  (vfx-level/reset-for-test!)
+  (combat-catalog/initialize!)
+  (vfx-install/install-catalog! (vfx-level/runtime) (:vfx (combat-catalog/catalog)))
+  (let [before (vfx-level/unmapped-signal-count)]
+    (vfx-level/dispatch-signal!
+     {:op :spawn :effect-id :beam-arc-fade :owner "p1" :world-id "w"
+      :instance-key [:activation "p1" :beam-arc-fade] :event-seq 1 :event :spawn
+      :params {:start {:x 0.0 :y 0.0 :z 0.0} :end {:x 10.0 :y 0.0 :z 0.0}
+               :layers []}})
+    (is (= before (vfx-level/unmapped-signal-count))
+        "a registered production effect-id must never fall into the unmapped-signal path")
+    (is (= 1 (count @(:instances (vfx-level/runtime)))))))

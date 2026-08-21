@@ -406,8 +406,8 @@
 (defn- held-item-at
   [owner]
   (when-let [fw-atom (fw/fw-atom)]
-    (platform/call-adapter fw-atom :runtime-interop
-                           :get-player-main-hand-item (str owner))))
+    (platform/call-adapter-optional fw-atom :runtime-interop
+                                    :get-player-main-hand-item (str owner))))
 
 (defn- resolve-energy-tile
   "Resolve a neutral block position to the controller tile when the platform
@@ -1146,10 +1146,15 @@
      :active-abilities (if-let [session (combat-sessions/session (str owner))]
                          #{(:ability-id session)}
                          #{})
-     :cooldowns (into {}
-                     (map (fn [[[ctrl-id _sub-id] value]]
-                            [ctrl-id (long (or (:ticks value) 0))])
-                          cooldown-data))
+     ;; {ability-id {sub-id ticks}} -- keyed by BOTH ctrl-id and sub-id, unlike
+     ;; the flattened {ctrl-id ticks} this used to project, which silently
+     ;; collapsed an ability with more than one named cooldown onto a single
+     ;; value. Combat Core's cooldown gate (skill_runtime/dispatch!) reads
+     ;; this shape directly.
+     :cooldowns (reduce (fn [acc [[ctrl-id sub-id] value]]
+                          (assoc-in acc [ctrl-id sub-id]
+                                    (long (or (:ticks value) 0))))
+                        {} cooldown-data)
      :ability-data (:ability-data state)
      :preset-data (:preset-data state)}))
 

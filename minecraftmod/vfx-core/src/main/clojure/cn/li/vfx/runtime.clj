@@ -48,13 +48,17 @@
 (def lifecycles
   "Valid values for a descriptor's :lifecycle. :transient -- one instance per
    activation, spawned/destroyed via dispatch-signal!'s stable-key path
-   (combat casts). :persistent -- keyed by world-id + position/BE identity,
-   ends via destroy!/clear-world! (machine/block-attached effects). :singleton
-   -- one instance per effect-id via ensure-instance!/instance-for-effect, no
-   owner dimension (the effect_controller.clj aggregate-instance escape
-   hatch; also the correct shape for true per-game-instance effects like
+   (combat casts). :session -- the same stable-key spawn/destroy path as
+   :transient, but with no self-expiring duration baked into the effect's
+   own graph (see vfx-core/vm.clj's root-lifespan-ticks): it lives exactly
+   as long as its caller keeps it alive, ended only by an explicit :destroy
+   signal. :persistent -- keyed by world-id + position/BE identity, ends via
+   destroy!/clear-world! (machine/block-attached effects). :singleton -- one
+   instance per effect-id via ensure-instance!/instance-for-effect, no owner
+   dimension (the effect_controller.clj aggregate-instance escape hatch;
+   also the correct shape for true per-game-instance effects like
    camera/FOV)."
-  #{:transient :persistent :singleton})
+  #{:transient :session :persistent :singleton})
 
 (defn register-effect! [runtime {:keys [id init update sample bounds priority lifecycle destroy]
                                   :or {lifecycle :singleton} :as descriptor}]

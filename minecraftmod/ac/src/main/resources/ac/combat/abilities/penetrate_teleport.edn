@@ -24,25 +24,6 @@
  {:teleport {:per-mark {:tunable :exp-per-distance}}}
  :cooldown
  {:main {:ticks {:tunable :cooldown-ticks}}}
- :vfx
- {:marker-started {:effect-id :teleport-marker
-                   :op :spawn
-                   :payload {:owner :owner-id
-                             :position :vec3
-                             :color :object
-                             :particle-chance :double}}
-  :marker-updated {:effect-id :teleport-marker
-                   :op :update
-                   :payload {:position :vec3
-                             :color :object
-                             :particle-chance :double}}
-  :marker-ended {:effect-id :teleport-marker
-                 :op :destroy
-                 :payload {}}
-  :teleported {:effect-id :audio-one-shot
-               :op :spawn
-               :payload {:position :vec3 :sound-id :string
-                         :volume :double :pitch :double}}}
  ;; These fragments are ability-local wiring only.  The actual target march,
  ;; resource clamp, transaction, and marker geometry are shared components.
  :fragments

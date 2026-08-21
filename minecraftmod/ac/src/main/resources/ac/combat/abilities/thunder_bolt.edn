@@ -29,15 +29,6 @@
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:effective {:per-mark {:tunable :exp-effective}}
                :ineffective {:per-mark {:tunable :exp-ineffective}}}
- :vfx
- {:strike {:effect-id :arc-strike-transient
-           :op :spawn
-           :payload {:start :vec3 :end :vec3 :aoe-origin :vec3
-                     :aoe-points :object :arc-life-ticks :long
-                     :pattern :keyword :hand-origin? :boolean
-                     :sound-id :string :sound-volume :double
-                     :sound-pitch :double :sound-position :vec3
-                     :bounds-radius :double}}}
  :fragments
   {:creeper-charge
   {:inputs {:target-id {:type :object}

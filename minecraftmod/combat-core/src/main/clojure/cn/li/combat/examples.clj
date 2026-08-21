@@ -38,8 +38,9 @@
                 :on-success {:component :flow/finish :outcome :committed}
                 :on-fail {:component :flow/finish :outcome :insufficient}}
    :guard/resource {:component :guard/resource :cost {:cp 1.0}}
-   :guard/held-item {:component :guard/held-item :source :main-hand
-                     :item-ids ["minecraft:stick"]}
+   :guard/value-in {:component :guard/value-in
+                    :value {:ref [:slot :held-item :item-id]}
+                    :one-of ["minecraft:stick"]}
    :target/raycast {:component :target/raycast :origin vec3-example
                     :direction {:vec3 [0.0 0.0 1.0]} :distance 1.0
                     :result :hit}

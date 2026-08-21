@@ -67,7 +67,7 @@
   "Any component without special control-flow shape: its declared children
    (per :children -- :single/:seq/:case-map) are each analyzed against the
    SAME incoming bound-set (they are independent, non-forward-threading
-   alternatives, e.g. :host/beam-trace's :block-policy), and its own
+   alternatives, e.g. :cost/spend's :on-insufficient), and its own
    :produces name (if any) is added for the node's successor."
   [node bound in-loop? path]
   (let [component (:component node)

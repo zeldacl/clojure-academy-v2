@@ -797,3 +797,31 @@
           (is (contains? (:errors catalog) :broken-one)
               "the failure must be surfaced, not silently dropped")
           (is (not (contains? (:errors catalog) :good-one))))))))
+
+(deftest vfx-signal-requirements-finds-nodes-nested-under-flow-branch
+  (let [ability (recipe/compile-ability
+                 {:schema-version 1 :kind :ability :id :vfx-req-test
+                  :revision 1 :activation :instant
+                  :program
+                  {:component :flow/sequence
+                   :steps [{:component :flow/branch
+                            :when true
+                            :then {:component :effect/vfx
+                                   :effect-id :arc-ring-session
+                                   :operation :spawn
+                                   :payload {:start {:vec3 [0.0 0.0 0.0]}
+                                             :end {:vec3 [1.0 0.0 0.0]}}}
+                            :else {:component :flow/finish :outcome :idle}}
+                           {:component :effect/vfx
+                            :effect-id :arc-ring-session
+                            :operation :destroy
+                            :payload {}}
+                           {:component :flow/finish :outcome :ok}]}})
+        requirements (recipe/vfx-signal-requirements ability)]
+    (is (= 2 (count requirements))
+        "one node nested under :flow/branch's :then, one at the top level")
+    (is (= #{:spawn :destroy} (set (map :operation requirements))))
+    (is (every? #(= :vfx-req-test (:ability-id %)) requirements))
+    (is (every? #(= :arc-ring-session (:effect-id %)) requirements))
+    (is (= #{:start :end}
+           (:payload-keys (first (filter #(= :spawn (:operation %)) requirements)))))))

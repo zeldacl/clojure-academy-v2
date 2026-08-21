@@ -20,52 +20,6 @@
                         :overload {:tunable :release-overload}}}}
  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
  :progression {:use {:per-mark {:tunable :progression-exp-use}}}
- :vfx
- {:mark-start {:effect-id :ring-particle-field :op :spawn
-               :payload {:position :vec3 :ring-from :double :ring-to :double
-                         :segments :long :ring-color :object :rate-per-tick :long
-                         :limit :long :particle :object}}
-  :mark-update {:effect-id :ring-particle-field :op :update
-                :payload {:position :vec3}}
-  :mark-end {:effect-id :ring-particle-field :op :destroy
-             :payload {}}
-  :trail-start {:effect-id :arc-channel-session :op :spawn
-                :payload {:mode :keyword :caster :vec3 :target :vec3
-                          :block-pos :object :block-bounds :object :good? :boolean
-                          :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :trail-update {:effect-id :arc-channel-session :op :update
-                 :payload {:mode :keyword :caster :vec3 :target :vec3
-                           :block-pos :object :block-bounds :object :good? :boolean
-                           :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :trail-end {:effect-id :arc-channel-session :op :destroy
-              :payload {:fade-ticks :long}}
-  :trigger-particles-start {:effect-id :particle-session :op :spawn
-                            :payload {:position :vec3 :rate-per-tick :long
-                                      :limit :long :particle :object}}
-  :trigger-particles-update {:effect-id :particle-session :op :update
-                             :payload {:position :vec3}}
-  :trigger-particles-end {:effect-id :particle-session :op :destroy
-                          :payload {}}
-  :shield-start {:effect-id :billboard-session :op :spawn
-                 :payload {:anchor :object :duration-ticks :long
-                           :texture-pattern :string :frame-count :long
-                           :frame-duration-ms :long :half-size :double}}
-  :shield-update {:effect-id :billboard-session :op :update
-                  :payload {:anchor :object}}
-  :shield-end {:effect-id :billboard-session :op :destroy
-               :payload {}}
-  :impact-start {:effect-id :ring-particle-field :op :spawn
-                 :payload {:position :vec3 :ring-from :double :ring-to :double
-                           :segments :long :ring-color :object :rate-per-tick :long
-                           :limit :long :particle :object}}
-  :impact-end {:effect-id :ring-particle-field :op :destroy
-               :payload {}}
-  :screen-flash-start {:effect-id :screen-flash-session :op :spawn
-                       :payload {:alpha :double :duration-ticks :long :color :object}}
-  :screen-flash-update {:effect-id :screen-flash-session :op :update
-                        :payload {:alpha :double}}
-  :screen-flash-end {:effect-id :screen-flash-session :op :destroy
-                     :payload {}}}
  :fragments
  {:stop-mark
   {:inputs {}

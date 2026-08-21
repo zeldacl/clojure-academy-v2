@@ -4,8 +4,7 @@
    AC supplies only neutral snapshots and persistence callbacks.  This
    namespace owns phase selection, parameter/tunable materialization, VM
    execution, VFX ABI normalization and action commit ordering."
-  (:require [cn.li.combat.actions :as combat-actions]
-            [cn.li.combat.frame :as frame]
+  (:require [cn.li.combat.frame :as frame]
             [cn.li.combat.host :as host]
             [cn.li.combat.vm :as vm]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
@@ -126,31 +125,27 @@
           (let [capability (:capability action)
                 handler (get action-handlers capability)
                 request (assoc action :owner owner)]
-            (if (= :block/break-budget capability)
-              {:status :committed :capability capability
-               :result (combat-actions/commit-block-break-budget!
-                        request (get action-handlers :block/break))}
-              (if (and (= :block/set capability)
-                       (not (and (vector? (:expected-block-ids request))
-                                 (seq (:expected-block-ids request))
-                                 (<= (count (:expected-block-ids request)) 8)
-                                 (string? (:block-id request))
-                                 (let [position (:position request)
-                                       point (if (and (map? position)
-                                                      (vector? (:vec3 position)))
-                                               (:vec3 position) position)]
-                                   (and (vector? point) (= 3 (count point))
-                                        (every? number? point))))))
-                {:status :rejected :capability capability
-                 :reason :invalid-bounded-block-set :request request}
-                (if-not handler
-                  {:status :unhandled :capability capability :request request}
-                  (try
-                    {:status :committed :capability capability
-                     :result (handler request)}
-                    (catch Throwable throwable
-                      {:status :failed :capability capability
-                       :message (ex-message throwable)})))))))
+            (if (and (= :block/set capability)
+                     (not (and (vector? (:expected-block-ids request))
+                               (seq (:expected-block-ids request))
+                               (<= (count (:expected-block-ids request)) 8)
+                               (string? (:block-id request))
+                               (let [position (:position request)
+                                     point (if (and (map? position)
+                                                    (vector? (:vec3 position)))
+                                             (:vec3 position) position)]
+                                 (and (vector? point) (= 3 (count point))
+                                      (every? number? point))))))
+              {:status :rejected :capability capability
+               :reason :invalid-bounded-block-set :request request}
+              (if-not handler
+                {:status :unhandled :capability capability :request request}
+                (try
+                  {:status :committed :capability capability
+                   :result (handler request)}
+                  (catch Throwable throwable
+                    {:status :failed :capability capability
+                     :message (ex-message throwable)}))))))
         actions))
 
 (defn dispatch!
@@ -159,7 +154,8 @@
    `session-port` contains :current, :start!, :context, :apply-actions! and
    :remove! functions.  `activation-context-fn` and `caster-facade-fn` are
    neutral snapshot providers; Combat Core owns all EDN decisions around
-   them."
+   them, including cooldown gating -- AC never inspects cooldown state
+   itself, it only projects it into `:cooldowns` on the owner view."
   [{:keys [catalog owner intent session-port owner-view-fn
            activation-context-fn caster-facade-fn now-tick-fn seed-fn]}]
   (let [ability-id (or (:ability-id intent) (:ability intent)
@@ -168,58 +164,70 @@
         current-tick (long (or (:server-tick intent) (now-tick-fn)))
         active-session ((:current session-port) owner)
         requested-op (or (:action intent) (:op intent) :start)
+        ;; toggle-close? must be resolved before the cooldown gate: closing
+        ;; an already-active toggle is an :abort, which the gate never
+        ;; blocks, even while its own cooldown (started at the prior
+        ;; :release) is still counting down.
         toggle-close? (and (= :start requested-op) active-session
                            (= :toggle (:activation ability))
                            (= ability-id (:ability-id active-session)))
         op (if toggle-close? :abort requested-op)
-        activation-seed (or (:activation-seed active-session)
-                            (:activation-seed intent)
-                            (seed-fn owner ability-id current-tick))
-        normalized (assoc intent :action op :ability-id ability-id
-                          :activation-seed activation-seed
-                          :context (or (:context active-session)
-                                       (activation-context-fn owner ability-id
-                                                              intent activation-seed))
-                          :parameter-snapshot
-                          (or (:parameter-snapshot intent)
-                              (:parameter-snapshot active-session)
-                              (parameter-snapshot ability-id ability intent)))]
-    (when (= :start op)
-      ((:start! session-port) owner ability-id normalized))
-    (let [session ((:current session-port) owner)
-          session-context ((:context session-port) owner normalized)
-          owner-view (owner-view-fn owner)
-          start-tick (long (or (:start-tick session) current-tick))
-          dynamic-context (merge (:context session-context)
-                                 {:server-tick current-tick
-                                  :session-start-tick start-tick
-                                  :resources (:resources owner-view)
-                                  :skill-exp (double (or (get-in owner-view
-                                                               [:ability-data :skill-exps ability-id]) 0.0))
-                                  :hold-ticks (max 0 (- current-tick start-tick))})
-          execution-intent (merge normalized
-                                  (select-keys session-context
-                                               [:context :parameter-snapshot
-                                                :activation-seed])
-                                  {:context dynamic-context
-                                   :session-state (:state session-context)
-                                   :latches (:latches session-context)
-                                   :server-tick current-tick
-                                   :from (caster-facade-fn owner dynamic-context)
-                                   :tunables (materialize-tunables
-                                              ability (:skill-exp dynamic-context))
-                                   :costs (:costs ability)
-                                   :progression (:progression ability)
-                                   :cooldown (:cooldown ability)
-                                   :invariants (:invariants ability)})
-          result (execute! catalog ability-id owner execution-intent)]
-      (when (= :accepted (:status result))
-        ((:apply-actions! session-port) owner (:actions result)))
-      (when (or (:finish-session? result)
-                (= :instant (:activation ability))
-                (and (#{:release :abort} op)
-                     (not= true (:release-keeps-session? ability))
-                     (#{:accepted :rejected} (:status result))))
-        ((:remove! session-port) owner))
-      result)))
+        owner-view (owner-view-fn owner)
+        cooldown-remaining (when (= :start op)
+                             (some->> (get (:cooldowns owner-view) ability-id)
+                                      vals (filter pos?) seq (apply max)))]
+    (if cooldown-remaining
+      {:schema-version 2 :status :rejected :reason :on-cooldown
+       :ability-id ability-id :owner owner
+       :feedback [{:type :on-cooldown :ability-id ability-id
+                   :remaining-ticks (long cooldown-remaining)}]}
+      (let [activation-seed (or (:activation-seed active-session)
+                                (:activation-seed intent)
+                                (seed-fn owner ability-id current-tick))
+            normalized (assoc intent :action op :ability-id ability-id
+                              :activation-seed activation-seed
+                              :context (or (:context active-session)
+                                           (activation-context-fn owner ability-id
+                                                                  intent activation-seed))
+                              :parameter-snapshot
+                              (or (:parameter-snapshot intent)
+                                  (:parameter-snapshot active-session)
+                                  (parameter-snapshot ability-id ability intent)))]
+        (when (= :start op)
+          ((:start! session-port) owner ability-id normalized))
+        (let [session ((:current session-port) owner)
+              session-context ((:context session-port) owner normalized)
+              start-tick (long (or (:start-tick session) current-tick))
+              dynamic-context (merge (:context session-context)
+                                     {:server-tick current-tick
+                                      :session-start-tick start-tick
+                                      :resources (:resources owner-view)
+                                      :skill-exp (double (or (get-in owner-view
+                                                                   [:ability-data :skill-exps ability-id]) 0.0))
+                                      :hold-ticks (max 0 (- current-tick start-tick))})
+              execution-intent (merge normalized
+                                      (select-keys session-context
+                                                   [:context :parameter-snapshot
+                                                    :activation-seed])
+                                      {:context dynamic-context
+                                       :session-state (:state session-context)
+                                       :latches (:latches session-context)
+                                       :server-tick current-tick
+                                       :from (caster-facade-fn owner dynamic-context)
+                                       :tunables (materialize-tunables
+                                                  ability (:skill-exp dynamic-context))
+                                       :costs (:costs ability)
+                                       :progression (:progression ability)
+                                       :cooldown (:cooldown ability)
+                                       :invariants (:invariants ability)})
+              result (execute! catalog ability-id owner execution-intent)]
+          (when (= :accepted (:status result))
+            ((:apply-actions! session-port) owner (:actions result)))
+          (when (or (:finish-session? result)
+                    (= :instant (:activation ability))
+                    (and (#{:release :abort} op)
+                         (not= true (:release-keeps-session? ability))
+                         (#{:accepted :rejected} (:status result))))
+            ((:remove! session-port) owner))
+          result)))))
 

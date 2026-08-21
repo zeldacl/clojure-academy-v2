@@ -49,30 +49,6 @@
              :minimum {:ref [:param :min-reflected-damage]}
              :max-depth {:ref [:param :max-reflections]}
              :exp-scale {:ref [:param :exp-damage-scale]}}}]
- :vfx
- {:reflection-start {:effect-id :ring-particle-field :op :spawn
-                     :payload {:position :vec3 :ring-from :double
-                               :ring-to :double :segments :long
-                               :ring-color :object :rate-per-tick :long
-                               :limit :long :particle :object}}
-  :projectile-reflected {:effect-id :ring-fade-audio :op :spawn
-                         :payload {:position :vec3 :duration-ticks :long
-                                   :ring-from :double :ring-to :double
-                                   :ring-segments :long :ring-color :object
-                                   :fade-at :long :fade-to-tick :long
-                                   :fade-ring-from :double :fade-ring-to :double
-                                   :fade-segments :long :fade-color :object
-                                   :sound-id :string :sound-volume :double
-                                   :sound-pitch :double}}
-  :damage-reflected {:effect-id :ring-fade-audio :op :spawn
-                     :payload {:position :vec3 :duration-ticks :long
-                               :ring-from :double :ring-to :double
-                               :ring-segments :long :ring-color :object
-                               :fade-at :long :fade-to-tick :long
-                               :fade-ring-from :double :fade-ring-to :double
-                               :fade-segments :long :fade-color :object
-                               :sound-id :string :sound-volume :double
-                               :sound-pitch :double}}}
  :program
  {:component :flow/phases
   :start

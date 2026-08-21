@@ -5,11 +5,14 @@
    semantics.  The mcmod namespaces used here are relays only; their
    operations are installed by platform-src and never contain Minecraft
    behaviour."
-  (:require [cn.li.combat.targeting :as targeting]
+  (:require [cn.li.combat.actions :as combat-actions]
+            [cn.li.combat.targeting :as targeting]
             [cn.li.mcmod.platform.block-manipulation :as blocks]
             [cn.li.mcmod.platform.entity-damage :as damage]
+            [cn.li.mcmod.platform.inventory :as inventory]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.runtime.capabilities :as capabilities]))
 
 (set! *warn-on-reflection* true)
 
@@ -328,6 +331,32 @@
      :block-id current
      :position {:x x :y y :z z}}))
 
+(defn break-budget!
+  "Bounded, energy-metered break of a beam/aoe's discovered block list.
+   Delegates each individual block to break! so both paths share the same
+   permission/collision checks and internal-break flag."
+  [request]
+  (combat-actions/commit-block-break-budget! request break!))
+
+(defn sound!
+  [{:keys [world-id position sound-id source volume pitch]}]
+  (let [p (point position)]
+    (when (and world-id sound-id p (world-effects/available?))
+      (let [[x y z] p]
+        {:status (if (world-effects/play-sound!
+                      (str world-id) x y z (str sound-id)
+                      (or source :ambient)
+                      (double (or volume 1.0)) (double (or pitch 1.0)))
+                   :applied :failed)}))))
+
+(defn consume-item!
+  [{:keys [owner source count]}]
+  (if (and owner (= :main-hand source) (inventory/available?))
+    (if-let [result (inventory/consume-main-hand-item! owner (long (or count 1)))]
+      {:status :applied :consumed (long (:consumed result))}
+      {:status :failed})
+    {:status :rejected :reason :invalid-inventory-consume-request}))
+
 (defn query-handlers []
   {:raycast raycast!
    :entity/select entity-select!
@@ -336,4 +365,21 @@
 
 (defn action-handlers []
   {:entity/damage damage!
-   :block/break break!})
+   :block/break break!
+   :block/break-budget break-budget!
+   :world/sound sound!
+   :inventory/consume consume-item!})
+
+(defn install!
+  "Register every neutral capability Combat Core owns with the shared
+   mcmod capability registry.  Idempotent: a capability another caller
+   already registered is left alone.  AC's bootstrap calls this once,
+   ahead of catalog load, instead of hand-registering each capability
+   itself."
+  []
+  (doseq [[capability handler] (query-handlers)]
+    (when-not (contains? (:queries (capabilities/snapshot)) capability)
+      (capabilities/register-query! capability handler)))
+  (doseq [[capability handler] (action-handlers)]
+    (when-not (contains? (:actions (capabilities/snapshot)) capability)
+      (capabilities/register-action! capability handler))))

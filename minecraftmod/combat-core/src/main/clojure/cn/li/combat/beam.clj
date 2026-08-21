@@ -30,7 +30,7 @@
 (defn trace!
   [^HostTable host capability-order ^ExecutionFrame frame request]
   (let [{:keys [owner world-id origin trace-origin direction length visual-length radius
-                query-radius entity-limit damage damage-type block-policy
+                query-radius entity-limit damage damage-type block-limit
                 reflection-policy step]} request
         origin (point origin)
         trace-origin (or (point trace-origin) origin)
@@ -119,7 +119,7 @@
                         (mapcat #(blocks-for-sample query! owner world-id %
                                                      [dx dy dz] length step))
                         (filter map?)
-                        (take (long (or (:limit block-policy) 4096)))
+                        (take (long (or block-limit 4096)))
                         vec)]
         {:performed? true
          :start {:x ox :y oy :z oz}

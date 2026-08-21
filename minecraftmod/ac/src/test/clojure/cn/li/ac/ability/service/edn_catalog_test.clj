@@ -2,7 +2,9 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.combat-catalog :as catalog]
             [cn.li.ac.ability.service.combat-runtime-bridge :as execution]
-             [cn.li.ac.ability.service.combat-sessions :as sessions])
+             [cn.li.ac.ability.service.combat-sessions :as sessions]
+            [cn.li.vfx.install :as vfx-install]
+            [cn.li.vfx.runtime :as vfx-runtime])
   (:import [cn.li.mcmod.runtime.effect CompiledProgram]))
 
 (deftest first-phase-catalog-is-authoritative
@@ -102,8 +104,12 @@
            (get-in (catalog/catalog) [:vfx :effects :beam-arc-fade :id])))
     (is (= :ray-beam-transient
            (get-in (catalog/catalog) [:vfx :effects :ray-beam-transient :id])))
-    (is (some #(= :camera-fov-session (:effect-id %))
-              (tree-seq coll? seq (:vfx ability))))))
+    ;; The ability's own :vfx metadata block (a hand-maintained duplicate of
+    ;; each referenced VFX effect's :inputs, and never read by anything --
+    ;; see combat_catalog.clj's vfx-contract-errors) is gone; :program's own
+    ;; :effect/vfx nodes are the only source of truth now.
+    (is (some #(and (map? %) (= :camera-fov-session (:effect-id %)))
+              (tree-seq coll? seq (:program ability))))))
 
 (deftest light-shield-start-executes-compiled-program
   (catalog/initialize!)
@@ -247,3 +253,40 @@
                             [:context :world-id])))
     (sessions/remove! "owner-1")
     (is (not (sessions/active? "owner-1")))))
+
+(deftest every-real-vfx-effect-compiles-and-installs
+  (let [state (catalog/initialize!)
+        vfx-catalog (:vfx state)
+        rt (vfx-runtime/create-runtime)]
+    ;; Zero compile errors: every effect ac/vfx/effects/*.edn ships must
+    ;; actually compile, not just the ones a handful of abilities happen
+    ;; to reference.
+    (is (empty? (:errors vfx-catalog)))
+    ;; Before install-catalog! existed, an EDN effect compiled fine but had
+    ;; no registered effect-id to spawn -- every ability's :effect/vfx
+    ;; signal reached effect_controller.clj and was silently dropped as
+    ;; "unregistered". This is the regression test for that gap.
+    (let [registered (vfx-install/install-catalog! rt vfx-catalog)]
+      (is (= (set (keys (:effects vfx-catalog))) registered))
+      (is (contains? registered :beam-arc-fade))
+      (is (contains? registered :arc-ring-session)))))
+
+(deftest a-real-vfx-effect-actually-spawns-ticks-and-samples
+  (let [state (catalog/initialize!)
+        rt (vfx-runtime/create-runtime)]
+    (vfx-install/install-catalog! rt (:vfx state))
+    (vfx-runtime/freeze-registry! rt)
+    ;; billboard-session (railgun's charge VFX): :spawn only needs :anchor
+    ;; and the timing/texture fields it declares, all supplied here.
+    (let [id (vfx-runtime/spawn!
+              rt :billboard-session
+              {:owner "owner"
+               :params {:anchor {:vec3 [0.0 1.6 0.0]} :duration-ticks 64
+                        :texture-pattern "academy:textures/effects/arc_burst/%d.png"
+                        :frame-count 40 :frame-duration-ms 40 :half-size 0.4}})]
+      (is (some? id))
+      (vfx-runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+      (let [frame (vfx-runtime/sample-frame! rt {:frame-id 1 :partial-tick 0.0})
+            batches (get-in frame [:stages :world-after-translucent])]
+        (is (= 1 (count batches)))
+        (is (= :billboard (:primitive (first batches))))))))

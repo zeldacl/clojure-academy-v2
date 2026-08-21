@@ -7,7 +7,7 @@
               :world-after-translucent :world-always-on-top :world-glow
               :first-person :hud-underlay :hud-overlay :screen-post})
 (def primitives #{:billboard :particle :beam :ribbon :line :mesh
-                  :first-person :camera :post-process})
+                  :first-person :camera :post-process :audio})
 
 (def signal-ops #{:spawn :signal :destroy :clear-owner})
 

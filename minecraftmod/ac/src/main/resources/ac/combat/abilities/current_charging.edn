@@ -21,29 +21,6 @@
  :progression
  {:effective {:per-mark {:tunable :exp-effective}}
   :ineffective {:per-mark {:tunable :exp-ineffective}}}
- :vfx
- {:channel-started
-  {:effect-id :arc-channel-session :op :spawn
-   :payload {:mode :keyword :caster :vec3 :target :vec3
-             :block-pos :object :block-bounds :object :good? :boolean
-             :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :channel-updated
-  {:effect-id :arc-channel-session :op :update
-   :payload {:mode :keyword :caster :vec3 :target :vec3
-             :block-pos :object :block-bounds :object :good? :boolean
-             :charge-ticks :long :visual-max-ticks :long :style :object}}
-  :channel-destroyed
-  {:effect-id :arc-channel-session :op :destroy
-   :payload {:fade-ticks :long}}
-  :audio-started
-  {:effect-id :audio-loop-session :op :spawn
-   :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
-  :audio-updated
-  {:effect-id :audio-loop-session :op :update
-   :payload {:position :vec3}}
-  :audio-destroyed
-  {:effect-id :audio-loop-session :op :destroy
-   :payload {:fade-ticks :long}}}
  :fragments
  {:stop-channel
   {:inputs {}
