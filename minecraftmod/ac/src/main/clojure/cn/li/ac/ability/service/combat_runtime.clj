@@ -185,38 +185,6 @@
                             :y (- (* sin-p speed))
                             :z (* cos-p (/ lz safe-horizontal) speed)}}))))
 
-(defn- vec-deviation-query
-  "Resolve the authoritative projectile scan for one Combat pulse.
-
-   The result is immutable neutral data.  Platform adapters decide how an
-   entity is stopped; no entity object or Context state crosses this boundary.
-   Already-tagged entities and the owner are excluded so repeated deadline
-   pulses do not reapply the same deflection." 
-  [context node]
-  (let [owner (str (:owner context))
-        position (raycast/player-position owner)
-        radius (double (or (:radius node)
-                           (skill-config/tunable-double :vec-deviation
-                                                        :targeting.radius)))]
-    (when (and (map? position)
-               (world-effects/available?)
-               (Double/isFinite radius)
-               (<= 0.0 radius 32.0))
-      (let [entities (world-effects/find-entities-in-radius
-                      (:world-id position)
-                      (double (:x position))
-                      (double (:y position))
-                      (double (:z position)) radius)]
-        {:center (select-keys position [:x :y :z :world-id])
-         :radius radius
-         :entities (->> (or entities [])
-                         (filter map?)
-                         (remove #(= owner (str (or (:uuid %) (:entity-id %)))))
-                         (remove :vec-deviation-marked?)
-                         (remove :ac-vm-deviated?)
-                         (take 64)
-                         vec)}))))
-
 (defn- mark-policy-for
   "Return the declarative policy for a neutral mark type.
 
@@ -462,46 +430,6 @@
                              :block-id block-id})))
                        (catch Throwable _ nil)))}))
 
-(defn- academy-damage-pipeline
-  "Pure AC-owned damage transforms contributed by passive Combat abilities.
-
-   The transform only reads the immutable owner snapshot supplied to Combat
-   Core.  It never reaches the player store or installs a platform damage
-   listener, so passive skills remain part of the deterministic pipeline." 
-  []
-  [{:priority 50
-    :provider-id :academy/base
-    :ability-id :vec-deviation
-    :node-id :damage-reduction
-   :run (fn [request context]
-           (let [active? (contains? (get-in (or (:target-state context)
-                                               (:state context) {}) [:active-abilities] #{})
-                                    :vec-deviation)
-                 base (double (:base request))
-                 exp (double (ability-model/get-skill-exp
-                              (get-in (or (:target-state context)
-                                           (:state context) {}) [:ability-data])
-                              :vec-deviation))
-                 reduction-rate (+ 0.4 (* 0.5 exp))
-                 cp-limit (max 0.0 (+ 15.0 (* -3.0 exp)))
-                 cp-available (max 0.0
-                                   (double
-                                    (or (get-in (or (:target-state context)
-                                                    (:state context) {})
-                                                [:resources :cp])
-                                        0.0)))
-                 cp-cost (min cp-available cp-limit)]
-             (if (and active?
-                      (Double/isFinite base)
-                      (<= 0.0 base 9999.0))
-               (-> request
-                   (assoc :base (* base (- 1.0 reduction-rate)))
-                   (assoc-in [:metadata :resource-cost] {:cp (- cp-cost)})
-                   (assoc-in [:metadata :vec-deviation]
-                             {:reduction-rate reduction-rate
-                              :damage-ignore-threshold 9999.0}))
-               request)))}])
-
 (defn initialize!
   ([] (initialize! {}))
   ([{:keys [owner-state-fn query-port now-tick ability-resolver damage-pipeline
@@ -704,10 +632,7 @@
                            (if-let [host-query (contract/host-port :query)]
                              (host-query :vec-accel context node)
                              (vec-accel-query context node)))
-              :vec-deviation (fn [context node]
-                               (if-let [host-query (contract/host-port :query)]
-                                 (host-query :vec-deviation context node)
-                                 (vec-deviation-query context node)))}]
+              }]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -723,8 +648,7 @@
                             :now-tick (or now-tick (fn [] @last-known-tick*))
                             :ability-resolver (or ability-resolver resolve-slot)
                             :domain-event-handler domain-event-handler
-                            :damage-pipeline (or damage-pipeline
-                                                 (academy-damage-pipeline))}))
+                            :damage-pipeline damage-pipeline}))
          (when-not @world-effect-handler*
            (reset! world-effect-handler*
                    (fn [owner effect]
@@ -935,22 +859,6 @@
                                       :applied
                                       :failed)
                             :effect effect})
-                         :vec-deviation
-                         (let [{:keys [world-id query-result radius session-id]} effect
-                               radius (double (or radius 5.0))
-                               valid? (and world-id (map? query-result)
-                                            (vector? (:entities query-result))
-                                            (<= 0.0 radius 32.0)
-                                            (world-effects/available?))
-                               plan {:query-result query-result
-                                     :session-id session-id
-                                     :radius radius}]
-                           {:status (if (and valid?
-                                              (world-effects/execute-vec-deviation!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
                          :teleport-approved
                          (let [{:keys [target destination radius ability-id]} effect
                                destination (or destination target)
@@ -1040,7 +948,9 @@
   [owner]
   (let [state (runtime-store/get-player-state (server-session-id) (str owner))
         resource-data (:resource-data state)
-        cooldown-data (:cooldown-data state)]
+        cooldown-data (:cooldown-data state)
+        position (when (raycast/available?)
+                   (raycast/player-position (str owner)))]
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :max-cp (double (or (:max-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
@@ -1057,7 +967,10 @@
                                     (long (or (:ticks value) 0))))
                         {} cooldown-data)
      :ability-data (:ability-data state)
-     :preset-data (:preset-data state)}))
+     :preset-data (:preset-data state)
+     :position (when (map? position)
+                 [(:x position) (:y position) (:z position)])
+     :world-id (:world-id position)}))
 
 (defn resolve-slot
   "Resolve a client slot only against the server-authoritative preset." 
@@ -2048,56 +1961,6 @@
                       (constantly [])))
              {:status (if (pos? discarded) :applied :failed)
               :discarded discarded}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/configure)
-        (capabilities/register-action!
-         :entity/configure
-         (fn [{:keys [world-id entity block-id place-when-collide? position]}]
-           (let [entity-id (if (map? entity)
-                             (or (:id entity) (:uuid entity) (:entity-id entity))
-                             entity)
-                 point (cond
-                         (and (map? position) (vector? (:vec3 position))) (:vec3 position)
-                         (map? position) [(:x position) (:y position) (:z position)]
-                         (vector? position) position
-                         :else nil)
-                 configured? (and world-id entity-id
-                                  (motion-effects/entity-motion-available?))
-                 block-ok? (or (nil? block-id)
-                               (motion-effects/set-block-body-block-id!
-                                (str world-id) (str entity-id) (str block-id)))
-                 place-ok? (or (nil? place-when-collide?)
-                               (motion-effects/set-block-body-place-when-collide!
-                                (str world-id) (str entity-id)
-                                (boolean place-when-collide?)))
-                 pos-ok? (or (nil? point)
-                             (and (= 3 (count point))
-                                  (every? number? point)
-                                  (apply motion-effects/set-entity-position!
-                                         (str world-id) (str entity-id)
-                                         (map double point))))]
-             {:status (if (and configured? block-ok? place-ok? pos-ok?)
-                        :applied :failed)}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :motion/entity-velocity)
-        (capabilities/register-action!
-         :motion/entity-velocity
-         (fn [{:keys [world-id target velocity]}]
-           (let [entity-id (if (map? target)
-                             (or (:id target) (:uuid target) (:entity-id target))
-                             target)
-                 point (cond
-                         (and (map? velocity) (vector? (:vec3 velocity))) (:vec3 velocity)
-                         (map? velocity) [(:x velocity) (:y velocity) (:z velocity)]
-                         (vector? velocity) velocity
-                         :else nil)
-                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
-                 valid? (and world-id entity-id (= 3 (count (or point [])))
-                             (every? finite? point)
-                             (motion-effects/entity-motion-available?))]
-             {:status (if (and valid?
-                               (apply motion-effects/set-entity-velocity!
-                                      (str world-id) (str entity-id)
-                                      (map double point)))
-                        :applied :failed)}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :projectile/redirect)
         (capabilities/register-action!
          :projectile/redirect
@@ -2395,6 +2258,10 @@
     (when (and (not (:cancelled? request))
                (damage-output? request))
       (execute-damage-effects! player-id request))
+    (when (and (not (:cancelled? request)) (seq (:vfx-signals request)))
+      (publish-result! {:schema-version 2 :status :accepted :owner player-id
+                        :ability-id :combat-damage
+                        :vfx-signals (:vfx-signals request)}))
     (when (and (not (:cancelled? request)) (seq (:events request)))
       (dispatch-result-domain-events! player-id request))
     (if (:cancelled? request)
@@ -2451,6 +2318,10 @@
       (when damage?
         (execute-damage-effects! player-id request)
         (dispatch-result-domain-events! player-id request)))
+    (when (and (not (:cancelled? request)) (seq (:vfx-signals request)))
+      (publish-result! {:schema-version 2 :status :accepted :owner player-id
+                        :ability-id :combat-damage
+                        :vfx-signals (:vfx-signals request)}))
     (boolean (or (:cancelled? request) damage?))))
 
 (defn install-world-effect-handler!

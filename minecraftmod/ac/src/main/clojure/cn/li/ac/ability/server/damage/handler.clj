@@ -36,8 +36,8 @@
   The handler will only be called if the toggle skill is active.
 
   Parameters:
-  - handler-id: keyword identifier (e.g. :vec-deviation-damage)
-  - skill-id: keyword skill identifier (e.g. :vec-deviation)
+  - handler-id: keyword identifier (e.g. :generic-toggle-damage)
+  - skill-id: keyword skill identifier
   - handler-fn: (fn [player-id attacker-id damage damage-source] -> [modified-damage metadata])
   - priority: int (lower = earlier, default 100)
 

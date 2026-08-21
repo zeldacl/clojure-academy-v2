@@ -70,11 +70,6 @@
   [world-id owner plan]
   (call :execute-flashing! world-id owner plan))
 
-(defn execute-vec-deviation!
-  "Execute one server-authoritative VecDeviation scan/deflection step."
-  [world-id owner plan]
-  (call :execute-vec-deviation! world-id owner plan))
-
 (defn execute-knockback!
   "Apply a directional velocity impulse to a target entity behind a neutral
    Host Port (e.g. Directed Shock)."
@@ -106,3 +101,9 @@
   entity when its ability context ends)."
   [world-id entity-uuid]
   (boolean (call :discard-entity-by-uuid! world-id entity-uuid)))
+
+(defn configure-entity!
+  "Neutral entity configuration relay.  The platform decides how a UUID is
+   resolved and applies the requested velocity/tags; mcmod only forwards data."
+  [world-id entity-uuid velocity add-tags projectile-damage]
+  (boolean (call :configure-entity! world-id entity-uuid velocity add-tags projectile-damage)))

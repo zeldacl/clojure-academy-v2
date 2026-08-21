@@ -176,20 +176,6 @@
     "minecraft:farmland" (double (:farmland energy-cost))
     (double (:default-block energy-cost))))
 
-(defn- execute-vec-deviation-adapter!
-  [server-fn world-id plan]
-  (let [entities (:entities (:query-result plan))]
-    (and world-id
-         (sequential? entities)
-         (every? (fn [{:keys [uuid]}]
-                   (when uuid
-                     (when-let [entity (entity-motion/resolve-entity
-                                        (server-fn) world-id uuid)]
-                       (entity-motion/set-velocity-for-entity! entity 0.0 0.0 0.0)
-                       (entity-motion/add-tag-for-entity! entity "ac_vm_deviated")
-                       true)))
-                 entities))))
-
 (defn create-world-effects
   [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn]
               :or {resolve-level-fn query-core/resolve-level-strict
@@ -591,14 +577,33 @@
                                       (catch Exception e
                                         (log/warn "Failed to discard entity:" (ex-message e))
                                     false)))
+     :configure-entity! (fn [world-id entity-uuid velocity add-tags projectile-damage]
+                          (try
+                            (when-let [^MinecraftServer server (server-fn)]
+                              (when-let [entity (entity-motion/resolve-entity
+                                                 server world-id (str entity-uuid))]
+                                (let [velocity (or velocity [0.0 0.0 0.0])
+                                      [vx vy vz] (map double velocity)]
+                                  (when (= 3 (count velocity))
+                                    (entity-motion/set-velocity-for-entity!
+                                     entity vx vy vz)
+                                    (when (number? projectile-damage)
+                                      (entity-motion/set-projectile-damage-for-entity!
+                                       entity (double projectile-damage)))
+                                    (doseq [tag (or add-tags [])]
+                                      (when (string? tag)
+                                        (entity-motion/add-tag-for-entity! entity tag)))
+                                    true))))
+                            (catch Exception e
+                              (log/warn "Failed to configure entity:" (ex-message e))
+                              false)))
      :execute-vec-accel! execute-vec-accel!
      :execute-flashing! execute-flashing!
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!
      :execute-shift-teleport! execute-shift-teleport!
-     :execute-vec-deviation! (fn [world-id _owner plan]
-                               (execute-vec-deviation-adapter! server-fn world-id plan))}))
+     }))
 
 (defn install-world-effects!
   [world-effects label]

@@ -299,38 +299,6 @@
                                  {:op :vfx :effect-id :vec-accel
                                   :event :perform
                                   :params {:max-charge-ticks 20}}]}}}
-    {:id :vec-deviation
-     :revision 1
-     :activation :toggle
-     :period-ticks 1
-     :max-session-ticks 1200
-     :cost-phase :pulse
-     :activation-cost {:overload (scale 80.0 50.0)}
-     :cost {:cp {:op :add
-                 :values [(scale 13.0 5.0) (scale 5.0 2.5)]}
-            :overload (scale 0.5 0.2)}
-     :program {:op :phase
-               :start {:op :vfx
-                       :effect-id :vec-deviation
-                       :event :start
-                       :params {:radius 5.0}}
-               :pulse {:op :sequence
-                       :steps [{:op :query
-                                :query-type :vec-deviation
-                                :radius 5.0
-                                :result-ref :scan}
-                               {:op :world-effect
-                                :effect-type :vec-deviation
-                                :query-ref :scan
-                                :radius 5.0}
-                               {:op :vfx
-                                :effect-id :vec-deviation
-                                :event :update
-                                :params {:radius 5.0}}]}
-               :abort {:op :vfx
-                       :effect-id :vec-deviation
-                       :event :end
-                       :params {}}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

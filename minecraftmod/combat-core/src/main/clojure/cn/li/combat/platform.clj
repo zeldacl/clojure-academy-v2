@@ -5,7 +5,8 @@
    semantics.  The mcmod namespaces used here are relays only; their
    operations are installed by platform-src and never contain Minecraft
    behaviour."
-  (:require [cn.li.combat.actions :as combat-actions]
+  (:require [clojure.set :as set]
+            [cn.li.combat.actions :as combat-actions]
             [cn.li.combat.deferred :as deferred]
             [cn.li.combat.targeting :as targeting]
             [cn.li.mcmod.platform.block-manipulation :as blocks]
@@ -37,7 +38,17 @@
                 :eye-height eye-height
                 :age-ms (long (or (:age-ms entity) 0))
                 :motion-progress (double (or (:motion-progress entity) 0.0))
-                :owner-id (or (:owner-id entity) (:owner-uuid entity))}]
+                :owner-id (or (:owner-id entity) (:owner-uuid entity))
+                :velocity (:velocity entity)
+                :difficulty (double (or (:difficulty entity) 0.0))
+                :explosion-power (:explosion-power entity)
+                :item? (boolean (:item? entity))
+                :projectile? (boolean (:projectile? entity))
+                :arrow? (boolean (:arrow? entity))
+                :living? (boolean (:living? entity))
+                :mob? (boolean (:mob? entity))
+                :multipart? (boolean (:multipart? entity))
+                :tags (set (or (:tags entity) []))}]
     (select-keys values (or (seq projection)
                             [:id :type :position :eye-height]))))
 
@@ -77,6 +88,16 @@
         types (set (or (:entity-types filter) []))
         ids (set (map str (or (:entity-ids filter) [])))
         excluded (set (map str (or (:excluded-entity-ids filter) [])))
+        excluded-tags (set (or (:excluded-tags filter) []))
+        difficulty-map (reduce (fn [result entry]
+                                 (if (string? entry)
+                                   (let [index (.lastIndexOf ^String entry ":")]
+                                     (if (pos? index)
+                                       (try (assoc result (subs entry 0 index)
+                                                    (Double/parseDouble (subs entry (inc index))))
+                                            (catch Throwable _ result))
+                                       result))
+                                   result)) {} (or (:difficulty-entries filter) []))
         owner-filter (some-> (or (:owner filter) (:owner-id filter)) str)
         living-filter (when (contains? filter :living?) (boolean (:living? filter)))]
     (if (and world-id center (pos? limit)
@@ -108,6 +129,8 @@
              (filter #(let [id (str (or (:id %) (:uuid %) (:entity-id %)))]
                         (and (or (empty? ids) (contains? ids id))
                              (not (contains? excluded id)))))
+             (remove #(seq (set/intersection excluded-tags
+                                              (set (or (:tags %) [])))))
              (filter #(or (nil? owner-filter)
                           (= owner-filter (str (or (:owner-id %)
                                                    (:owner-uuid %))))))
@@ -131,8 +154,12 @@
                                    (<= pd (* 0.5 pitch-span))))))))
              (sort-entities [x y z] sort)
              (take limit)
-             (mapv #(project-entity % projection)))))
-      [])))
+             (mapv (fn [entity]
+                     (let [type (or (:type entity) (:entity-type entity))
+                           difficulty (double (or (get difficulty-map type) 1.0))]
+                       (project-entity (assoc entity :difficulty difficulty)
+                                       projection))))))
+      []))))
 
 (defn block-select!
   [{:keys [owner world-id shape limit]} _frame]
@@ -394,6 +421,23 @@
                       (double (or volume 1.0)) (double (or pitch 1.0)))
                    :applied :failed)}))))
 
+(defn explosion!
+  "Create a bounded neutral explosion through the mcmod relay."
+  [{:keys [world-id position radius fire? terrain? owner]}]
+  (let [p (point position)
+        radius (double (or radius 0.0))
+        valid? (and world-id p (pos? radius) (<= radius 32.0)
+                    (every? #(Double/isFinite (double %)) p)
+                    (world-effects/available?))]
+    (if valid?
+      (let [[x y z] p
+            result (world-effects/create-explosion!
+                    (str world-id) x y z radius (boolean fire?)
+                    {:terrain? (boolean terrain?)
+                     :attacker-uuid (when owner (str owner))})]
+        {:status (if (not= false result) :applied :failed)})
+      {:status :rejected :reason :invalid-explosion-request})))
+
 (defn consume-item!
   [{:keys [owner source count]}]
   (if (and owner (= :main-hand source) (inventory/available?))
@@ -422,6 +466,38 @@
                  :applied :failed)}
       {:status :rejected :reason :invalid-entity-discard})))
 
+(defn configure-entity!
+  "Apply only neutral entity state mutations requested by a compiled ability.
+   The platform relay owns entity lookup; Combat Core owns the bounded shape."
+  [{:keys [world-id entity velocity add-tags projectile-damage]}]
+  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
+        velocity (or velocity [0.0 0.0 0.0])
+        velocity (if (and (map? velocity) (vector? (:vec3 velocity)))
+                   (:vec3 velocity)
+                   (if (map? velocity)
+                     [(:x velocity) (:y velocity) (:z velocity)]
+                     velocity))
+        valid? (and world-id entity-id (= 3 (count velocity))
+                    (every? #(and (number? %) (Double/isFinite (double %))) velocity)
+                    (or (nil? projectile-damage)
+                        (and (number? projectile-damage)
+                             (Double/isFinite (double projectile-damage))))
+                    (every? string? (or add-tags []))
+                    (world-effects/available?))]
+    (if valid?
+      {:status (if (world-effects/configure-entity!
+                   (str world-id) (str entity-id)
+                   (mapv double velocity) (vec add-tags)
+                   (when (some? projectile-damage)
+                     (double projectile-damage)))
+                 :applied :failed)}
+      {:status :rejected :reason :invalid-entity-configuration})))
+
+(defn entity-velocity!
+  [{:keys [world-id target velocity]}]
+  (configure-entity! {:world-id world-id :entity target :velocity velocity
+                       :add-tags []}))
+
 (defn query-handlers []
   {:raycast raycast!
    :entity/select entity-select!
@@ -433,9 +509,12 @@
    :block/break break!
    :block/break-budget break-budget!
    :world/sound sound!
+   :world/explosion explosion!
    :inventory/consume consume-item!
    :entity/spawn spawn-entity!
    :entity/discard discard-entity!
+   :entity/configure configure-entity!
+   :motion/entity-velocity entity-velocity!
    :projectile/schedule-beam deferred/schedule-action!})
 
 (defn install!

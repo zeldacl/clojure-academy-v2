@@ -6,7 +6,8 @@
  {:center {:type :object}
   :radius {:type :double}
   :difficulty-entries {:type :object}
-  :excluded-entity-ids {:type :object}
+ :excluded-entity-ids {:type :object}
+  :excluded-tags {:type :object :default []}
   :limit {:type :long}
   :body {:type :object}}
  :body
@@ -16,10 +17,11 @@
                    :center {:ref [:input :center]}
                    :radius {:ref [:input :radius]}}
            :filter {:difficulty-entries {:ref [:input :difficulty-entries]}
-                    :excluded-entity-ids {:ref [:input :excluded-entity-ids]}}
+                    :excluded-entity-ids {:ref [:input :excluded-entity-ids]}
+                    :excluded-tags {:ref [:input :excluded-tags]}}
            :projection [:id :type :position :velocity :owner-id :item?
                         :living? :mob? :multipart? :eye-height :explosion-power
-                        :difficulty]
+                        :difficulty :projectile? :arrow? :tags]
            :limit {:ref [:input :limit]}
            :result :projectiles}
           {:component :flow/foreach

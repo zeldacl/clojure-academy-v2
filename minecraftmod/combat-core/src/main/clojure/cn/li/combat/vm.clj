@@ -550,23 +550,33 @@
           affordable? (every? (fn [[key amount]]
                                 (>= (double (or (get available key) 0.0)) (double amount)))
                               amounts)]
-      (if affordable?
+      (let [partial? (true? (:partial? data))
+            spend (if affordable?
+                    amounts
+                    (if partial?
+                      (into {}
+                            (map (fn [[key amount]]
+                                   [key (min (double (or (get available key) 0.0))
+                                             (double amount))])
+                                 amounts))
+                      {}))]
+      (if (or affordable? partial?)
         (do
           (when resources*
             (vswap! resources* (fn [resources]
                                 (reduce-kv (fn [result key amount]
                                              (update result key (fnil - 0.0) amount))
-                                           resources amounts))))
-          (when (seq amounts)
+                                           resources spend))))
+          (when (seq spend)
             (emit-component! frame :owner/patch
                              {:entries (mapv (fn [[key amount]]
                                                {:path [:resources key]
                                                 :mode :increment :value (- (double amount))})
-                                             amounts)}))
+                                             spend)}))
           nil)
         (when-let [on-insufficient (:on-insufficient data)]
           (execute-component! frame host (:component on-insufficient)
-                              (dissoc on-insufficient :component) context))))
+                              (dissoc on-insufficient :component) context)))))
     ;; A tagged experience mark: the ability names WHAT happened (:tag), the
     ;; ability's own :progression block (not this node) says how much that
     ;; is worth, and the ability id -- which the program never names itself

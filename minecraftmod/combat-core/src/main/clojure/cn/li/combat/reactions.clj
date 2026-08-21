@@ -75,7 +75,10 @@
                                 :max-cp (double (or (get-in state [:resources :max-cp]) 0.0))
                                 :mark mark
                                 :mark? (boolean mark)
-                                :mark-rate (double (or (:rate mark) 1.0))}}
+                                :mark-rate (double (or (:rate mark) 1.0))
+                                :owner target
+                                :world-id (or (get-in current [:metadata :world-id])
+                                              (:world-id state))}}
              condition? (or (nil? when) (boolean (value when context)))
              component (:component program)]
          (if-not (and (or session (= :passive activation)) condition?)
@@ -95,6 +98,43 @@
                                   :multiplier multiplier
                                   :mark mark})))
                  current))
+           (if (= :damage/reduce component)
+             (let [base (double (:base current))
+                   rate (double (or (value (:rate program) context) 0.0))
+                   max-cost (double (or (value (:max-cost program) context) 0.0))
+                   threshold (double (or (value (:ignore-threshold program) context)
+                                         Double/POSITIVE_INFINITY))
+                   cp (double (or (get-in state [:resources :cp]) 0.0))
+                   cp-cost (min cp (max 0.0 max-cost))
+                   exp-scale (double (or (value (:exp-scale program) context) 0.0))
+                   valid? (and (Double/isFinite base) (pos? base)
+                               (Double/isFinite rate) (<= 0.0 rate 1.0)
+                               (Double/isFinite threshold) (<= base threshold))]
+               (if-not valid?
+                 current
+                 (let [remaining (* base (- 1.0 rate))
+                       ratio (if (pos? base) (/ remaining base) 0.0)
+                       result (-> current
+                                  (assoc :base remaining)
+                                  (assoc :components (scale-components (:components current) ratio))
+                                  (assoc-in [:metadata :resource-cost] {:cp (- cp-cost)})
+                                  (assoc-in [:metadata :damage-reduction]
+                                            {:rate rate :damage-ignore-threshold threshold})
+                                  (update :state-patch (fnil into [])
+                                          [[:resource :cp (- cp-cost)]
+                                           [:ability-exp ability-id (* base exp-scale)]]))]
+                   (if-let [vfx (:vfx program)]
+                     (update result :vfx-signals (fnil conj [])
+                             {:op :spawn :effect-id (:effect-id vfx :audio-one-shot)
+                              :instance-key [ability-id :damage]
+                              :owner target
+                              :world-id (get-in context [:context :world-id])
+                              :event-seq 0 :seed (long (or (:activation-seed context) 0))
+                              :event :spawn
+                              :params (merge {:position (or (get-in state [:position])
+                                                             [0.0 0.0 0.0])}
+                                              (dissoc vfx :effect-id))})
+                     result))))
            (if (= :damage/absorb component)
              (let [base (double (:base current))
                    ticks (long (or (get-in session [:state :active-ticks]) 0))
@@ -170,4 +210,4 @@
                        (update :world-effects (fnil conj [])
                                {:type :damage :request reflected-request})
                        (cond-> precheck? (assoc :cancelled? true))))))))))
-     request reactions))))
+     request reactions)))))

@@ -239,6 +239,13 @@
            {:schema {:required #{:cap :interval-ticks :last-tick-path :cost}}
             :effects #{:mutate}}
 
+           ;; Generic active damage reduction.  The reaction evaluator owns
+           ;; the arithmetic and bounded partial resource payment; the
+           ;; ability supplies only rates, thresholds and optional VFX data.
+           :damage/reduce
+           {:schema {:required #{:rate :max-cost :ignore-threshold :exp-scale}}
+            :effects #{:mutate :emit}}
+
            ;; :block-limit is a plain scalar cap on how many discovered blocks
            ;; beam.clj/trace! returns -- not a :block/break-budget node. The
            ;; ability's own top-level :block/break-budget step (a real,

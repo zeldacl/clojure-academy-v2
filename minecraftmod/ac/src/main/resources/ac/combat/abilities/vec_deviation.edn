@@ -1,0 +1,162 @@
+{:schema-version 2
+ :kind :ability
+ :id :vec-deviation
+ :revision 2
+ :activation :toggle
+ :status :migrated
+ :requires [:caster/body :world/id]
+ :prerequisites [{:skill-id :vec-accel :min-exp 0.0}]
+ :tunables
+ {:tick-cp {:curve :mastery-lerp}
+  :normal-tick-cp {:curve :mastery-lerp}
+  :normal-tick-overload {:curve :mastery-lerp}
+  :target-radius {:curve :const}
+  :affected-entity-difficulty {:curve :const :type :string-list}
+  :excluded-entity-ids {:curve :const :type :string-list}
+  :excluded-tags {:curve :const :type :string-list}
+  :large-fireball-ids {:curve :const :type :string-list}
+  :small-fireball-ids {:curve :const :type :string-list}
+  :deflect-cp {:curve :mastery-lerp}
+  :activation-overload {:curve :mastery-lerp}
+  :fireball-explosion-radius {:curve :const}
+  :damage-ignore-threshold {:curve :const}
+  :damage-reduction {:curve :mastery-lerp}
+  :damage-cp {:curve :mastery-lerp}
+  :exp-deflect-scale {:curve :const}
+  :exp-damage-scale {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :activation-overload}}}
+  :scan {:resources {:cp {:tunable :tick-cp}}}
+  :normal-tick {:resources {:cp {:tunable :normal-tick-cp}
+                            :overload {:tunable :normal-tick-overload}}}
+  :deflect {:resources {:cp {:tunable :deflect-cp}}}}
+ :invariants {:overload-floor {:ref [:session :overload-floor]}}
+ :progression {:deflect {:per-mark {:tunable :exp-deflect-scale}}}
+ :reactions
+ [{:on :combat/damage
+   :priority 70
+   :when {:expr :bool/and
+          :args [{:ref [:context :enabled?]}
+                 {:expr :math/gte
+                    :args [{:ref [:request :base]} 0.0]}]}
+   :program {:component :damage/reduce
+             :rate {:tunable :damage-reduction}
+             :max-cost {:tunable :damage-cp}
+             :ignore-threshold {:tunable :damage-ignore-threshold}
+             :exp-scale {:tunable :exp-damage-scale}
+             :vfx {:effect-id :audio-one-shot
+                   :sound-id "academy:vecmanip.vec_deviation"
+                   :volume 0.5
+                   :pitch 1.0}}}]
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :cost/spend
+                   :budget :activate
+                   :on-insufficient {:component :flow/finish
+                                     :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :session/patch
+                   :entries [{:path [:overload-floor]
+                              :mode :assign
+                              :value {:expr :math/sub
+                                      :args [{:ref [:context :resources :overload]}
+                                             {:tunable :activation-overload}]}}]}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :cost/spend
+                   :budget :scan
+                   :on-insufficient {:component :flow/finish
+                                     :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :resource/enforce-floor
+                   :resource :overload
+                   :minimum {:invariant :overload-floor}}
+                  {:component :combat/projectile-reflection-scan
+                   :center {:from :caster/body}
+                   :radius {:tunable :target-radius}
+                   :difficulty-entries {:tunable :affected-entity-difficulty}
+                   :excluded-entity-ids {:tunable :excluded-entity-ids}
+                   :excluded-tags {:tunable :excluded-tags}
+                   :limit 64
+                   :body {:component :flow/once
+                          :scope :owner
+                          :storage-path [:visited-projectiles]
+                          :strategy :last-key
+                          :key {:ref [:slot :projectile :id]}
+                          :on-first {:component :flow/branch
+                                     :when {:expr :bool/and
+                                            :args [{:expr :bool/not
+                                                    :args [{:ref [:slot :projectile :item?]}]}
+                                                   {:expr :bool/not
+                                                    :args [{:ref [:slot :projectile :living?]}]}
+                                                   {:expr :bool/not
+                                                    :args [{:ref [:slot :projectile :mob?]}]}
+                                                   {:expr :bool/not
+                                                    :args [{:ref [:slot :projectile :multipart?]}]}
+                                                   {:expr :math/gt
+                                                     :args [{:ref [:slot :projectile :difficulty]} 0.0]}]}
+                                     :then {:component :flow/sequence
+                                            :steps [{:component :cost/spend
+                                                     :budget :deflect
+                                                     :partial? true}
+                                                    {:component :flow/branch
+                                                     :when {:expr :collection/contains?
+                                                            :args [{:tunable :large-fireball-ids}
+                                                                   {:ref [:slot :projectile :type]}]}
+                                                     :then {:component :flow/sequence
+                                                            :steps [{:component :entity/discard
+                                                                     :entity {:ref [:slot :projectile]}}
+                                                                    {:component :world/explosion
+                                                                     :world-id {:from :world/id}
+                                                                     :position {:ref [:slot :projectile :position]}
+                                                                     :radius {:expr :math/select
+                                                                              :args [{:expr :math/gt
+                                                                                      :args [{:ref [:slot :projectile :explosion-power]} 0.0]}
+                                                                                     {:ref [:slot :projectile :explosion-power]}
+                                                                                     {:tunable :fireball-explosion-radius}]}
+                                                                     :fire? true}]}
+                                                     :else {:component :flow/branch
+                                                            :when {:expr :collection/contains?
+                                                                   :args [{:tunable :small-fireball-ids}
+                                                                          {:ref [:slot :projectile :type]}]}
+                                                            :then {:component :entity/discard
+                                                                   :entity {:ref [:slot :projectile]}}
+                                                                   :else {:component :flow/sequence
+                                                                   :steps [{:component :entity/configure
+                                                                            :world-id {:from :world/id}
+                                                                            :entity {:ref [:slot :projectile]}
+                           :velocity {:vec3 [0.0 0.0 0.0]}
+                           :projectile-damage 0.0
+                                                                            :add-tags ["ac_vm_deviated"]}
+                                                                           {:component :effect/vfx
+                                                                            :effect-id :ring-fade-audio
+                                                                            :operation :spawn
+                                                                            :instance-key [:projectile {:ref [:slot :projectile :id]}]
+                                                                            :audience {:type :nearby :radius 32.0}
+                                                                            :payload {:position {:ref [:slot :projectile :position]}
+                                                                                      :duration-ticks 15
+                                                                                      :ring-from 0.15 :ring-to 0.6
+                                                                                      :ring-segments 12
+                                                                                      :ring-color [255 255 255 180]
+                                                                                      :fade-at 8 :fade-to-tick 15
+                                                                                      :fade-ring-from 0.6 :fade-ring-to 0.8
+                                                                                      :fade-segments 12
+                                                                                      :fade-color [255 255 255 120]
+                                                                                      :sound-id "academy:vecmanip.vec_deviation"
+                                                                                      :sound-volume 0.5
+                                                                                      :sound-pitch 1.0}}]}}}
+                                                    {:component :score/mark
+                                                     :tag :deflect
+                                                     :weight {:ref [:slot :projectile :difficulty]}}]}}}}
+                  {:component :cost/spend
+                   :budget :normal-tick
+                   :on-insufficient {:component :flow/finish
+                                     :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :flow/finish :outcome :continue}]}
+  :release {:component :flow/finish :outcome :released
+            :finish-session? true}
+  :abort {:component :flow/finish :outcome :aborted
+          :finish-session? true}
+  :events {}}}

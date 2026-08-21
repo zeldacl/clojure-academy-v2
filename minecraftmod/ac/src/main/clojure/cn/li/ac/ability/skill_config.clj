@@ -206,6 +206,24 @@
     :large-fireball-ids :targeting.large-fireball-ids
     :reflect-entity-cp :cost.reflect-entity.cp
     :exp-reflect-entity-scale :progression.exp-reflect-entity-scale}
+   :vec-deviation
+   {:tick-cp :cost.tick.cp
+    :normal-tick-cp :cost.tick.normal-cp
+    :normal-tick-overload :cost.tick.normal-overload
+    :target-radius :targeting.radius
+    :affected-entity-difficulty :targeting.affected-entity-difficulty
+    :excluded-entity-ids :targeting.excluded-entity-ids
+    :excluded-tags :targeting.excluded-tags
+    :large-fireball-ids :targeting.large-fireball-ids
+    :small-fireball-ids :targeting.small-fireball-ids
+    :deflect-cp :cost.deflect.cp
+    :activation-overload :cost.activation.overload
+    :fireball-explosion-radius :combat.fireball-explosion-radius
+    :damage-ignore-threshold :combat.damage-ignore-threshold
+    :damage-reduction :combat.damage-reduction
+    :damage-cp :cost.damage.cp
+    :exp-deflect-scale :progression.exp-deflect-scale
+    :exp-damage-scale :progression.exp-damage-scale}
    :meltdowner
    {:charge-min-ticks :charge.min-ticks
     :charge-max-ticks :charge.max-ticks

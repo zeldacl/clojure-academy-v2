@@ -7,5 +7,4 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.directed-blastwave]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.groundshock]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.blood-retrograde]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-accel]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation]))
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-accel]))

@@ -55,7 +55,7 @@
      :item? (instance? ItemEntity entity)
      :projectile? projectile?
      :arrow? (instance? AbstractArrow entity)
-     :vec-deviation-marked? (contains? (.entityTags entity) "ac_vm_deviated")
+     :tags (set (.entityTags entity))
      :owner-uuid (when owner (str (.getUUID ^Entity owner)))
      :explosion-power explosion-power
      :age-ticks age-ticks
