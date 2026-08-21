@@ -2,10 +2,15 @@ package cn.li.mc1211.client.font.msdf;
 
 import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.font.GlyphProvider;
+import com.mojang.blaze3d.font.TrueTypeGlyphProvider;
+import net.minecraft.client.gui.font.providers.FreeTypeUtil;
+import org.lwjgl.PointerBuffer;
 import org.lwjgl.stb.STBTTFontinfo;
 import org.lwjgl.stb.STBTruetype;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.util.freetype.FT_Face;
+import org.lwjgl.util.freetype.FreeType;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,9 +22,9 @@ import java.nio.file.Path;
 /**
  * STB TrueType font face loaded from a system font file (no AWT).
  *
- * <p>1.21.1 vanilla {@code TrueTypeGlyphProvider} uses FreeType ({@code FT_Face});
- * until that port lands, glyphProvider() returns an empty provider and metrics
- * still come from STB for monospace helpers.</p>
+ * <p>The glyph provider is 1.21.1's FreeType-backed {@link TrueTypeGlyphProvider}
+ * (the same class vanilla uses for {@code "type": "ttf"} font definitions);
+ * STB is kept only for the MSDF monospace metrics helpers.</p>
  */
 public final class MsdfFontFace implements AutoCloseable {
 
@@ -52,18 +57,20 @@ public final class MsdfFontFace implements AutoCloseable {
             STBTruetype.stbtt_GetFontVMetrics(fontInfo, ascentBuf, descentBuf, lineGapBuf);
             this.ascent = ascentBuf.get(0);
         }
-        // Empty provider: FreeType TrueTypeGlyphProvider port pending.
-        this.glyphProvider = new GlyphProvider() {
-            @Override
-            public GlyphInfo getGlyph(int codePoint) {
-                return null;
-            }
-
-            @Override
-            public it.unimi.dsi.fastutil.ints.IntSet getSupportedGlyphs() {
-                return it.unimi.dsi.fastutil.ints.IntSets.EMPTY_SET;
-            }
-        };
+        // 1.21.1 FreeType-backed provider, constructed exactly like vanilla
+        // TrueTypeGlyphProviderDefinition.load (size, oversample, shift, skip).
+        final PointerBuffer facePtr = PointerBuffer.allocateDirect(1);
+        synchronized (FreeTypeUtil.LIBRARY_LOCK) {
+            FreeTypeUtil.assertError(
+                    FreeType.FT_New_Memory_Face(FreeTypeUtil.getLibrary(), data, 0L, facePtr),
+                    "Failed to create MSDF font face");
+        }
+        final FT_Face face = FT_Face.create(facePtr.get(0));
+        FreeTypeUtil.assertError(
+                FreeType.FT_Select_Charmap(face, FreeType.FT_ENCODING_UNICODE),
+                "Find unicode charmap");
+        this.glyphProvider =
+                new TrueTypeGlyphProvider(data, face, pixelHeight, 1.0f, 0.0f, 0.0f, "");
     }
 
     public STBTTFontinfo fontInfo() {
@@ -122,8 +129,9 @@ public final class MsdfFontFace implements AutoCloseable {
 
     @Override
     public void close() {
-        if (fontData != null) {
-            MemoryUtil.memFree(fontData);
+        // The glyph provider owns the FT_Face and the font memory buffer.
+        if (glyphProvider != null) {
+            glyphProvider.close();
         }
     }
 

@@ -16,6 +16,7 @@
             [cn.li.mcmod.runtime.install :as install])
   (:import [cn.li.mc1211.runtime BlockRegistry RuntimeAccess]
            [net.minecraft.core BlockPos]
+           [net.minecraft.core.component DataComponents]
            [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
            [net.minecraft.resources ResourceLocation]
@@ -195,7 +196,9 @@
         :item-set-hover-name!     (fn [^ItemStack this name-key]
                                     ;; name-key is a translation key, not
                                     ;; literal text — keeps variants localized.
-                                    (.setHoverName this (Component/translatable (str name-key))))
+                                    ;; 1.21.1 removed setHoverName; custom names
+                                    ;; are a data component now.
+                                    (.set this (DataComponents/CUSTOM_NAME) (Component/translatable (str name-key))))
         :item-copy-stack          (fn [^ItemStack this] (.copy this))
         :item-set-count!          (fn [^ItemStack this n] (.setCount this (int n)))
         :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))

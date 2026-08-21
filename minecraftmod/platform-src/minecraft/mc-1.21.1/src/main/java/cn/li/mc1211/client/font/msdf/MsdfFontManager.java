@@ -2,7 +2,11 @@ package cn.li.mc1211.client.font.msdf;
 
 import cn.li.mcver.ResourceLocations;
 import cn.li.mcmod.ModId;
+import com.mojang.blaze3d.font.GlyphProvider;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.font.FontOption;
 import net.minecraft.client.gui.font.FontSet;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -10,13 +14,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Shadow font: isolated FontSet + Font for mod CGUI text.
  * Supports monospace/proportional dual mode via {@link MSDFAwareGlyph}.
- *
- * <p>On 1.21.1 the FreeType-backed {@code TrueTypeGlyphProvider} / FontSet.reload
- * API changed; init is currently a no-op until that port lands.</p>
  */
 public final class MsdfFontManager {
 
@@ -41,8 +44,44 @@ public final class MsdfFontManager {
     public static boolean init(final Path fontPath) {
         synchronized (MsdfFontManager.class) {
             if (shadowFont != null) return true;
-            LOGGER.warn("MSDF shadow font disabled on 1.21.1 (FreeType glyph provider pending); path={}", fontPath);
-            return false;
+            try {
+                final Minecraft mc = Minecraft.getInstance();
+                if (mc == null) {
+                    LOGGER.debug("MSDF init deferred: Minecraft not ready");
+                    return false;
+                }
+
+                face = new MsdfFontFace(fontPath, DESIGN_PIXEL_HEIGHT);
+                final GlyphProvider vanilla = face.glyphProvider();
+                final GlyphProvider provider =
+                        new MonospaceAwareGlyphProvider(vanilla, face);
+
+                final FontSet fontSet =
+                        new FontSet(mc.getTextureManager(), SHADOW_FONT_ID);
+                fontSet.reload(
+                        List.of(new GlyphProvider.Conditional(
+                                provider, FontOption.Filter.ALWAYS_PASS)),
+                        Set.of());
+                shadowFontSet = fontSet;
+                shadowFont = new Font(rl -> shadowFontSet, false);
+
+                // Pre-warm glyph cache
+                if (RenderSystem.isOnRenderThread()) {
+                    fontSet.getGlyph('A');
+                    fontSet.getGlyph(0x4E2D);
+                }
+
+                LOGGER.info(
+                        "MSDF shadow font loaded from {} (A={}, U+4E2D={})",
+                        fontPath,
+                        face.hasGlyph('A'),
+                        face.hasGlyph(0x4E2D));
+                return true;
+            } catch (Exception e) {
+                LOGGER.error("MSDF font init failed for {}", fontPath, e);
+                shutdown();
+                return false;
+            }
         }
     }
 
