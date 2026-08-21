@@ -83,6 +83,25 @@
       (is (= 2.5 (:frame-period-ticks model-node)))
     (is (= 7 (count (:parts model-node)))))))
 
+(deftest meltdowner-edn-program-includes-complete-beam-contract
+  (catalog/initialize!)
+  (let [ability (get-in (catalog/catalog) [:combat :abilities :meltdowner])
+        beam-node (some (fn [node]
+                          (when (and (map? node)
+                                     (= :host/beam-trace (:component node)))
+                            node))
+                        (tree-seq coll? seq
+                                  (first (:compiled-ir ability))))]
+    (is (= :meltdowner (:id ability)))
+    (is (pos? (count (:compiled-ir ability))))
+    (is (some? beam-node))
+    (is (= :caster/body (get-in beam-node [:trace-origin :from])))
+    (is (contains? beam-node :reflection-policy))
+    (is (= :beam-arc-fade
+           (get-in (catalog/catalog) [:vfx :effects :beam-arc-fade :id])))
+    (is (= :ray-beam-transient
+           (get-in (catalog/catalog) [:vfx :effects :ray-beam-transient :id])))))
+
 (deftest light-shield-start-executes-compiled-program
   (catalog/initialize!)
   (let [result (execution/execute!

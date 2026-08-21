@@ -251,7 +251,7 @@
    Eligibility is supplied by the caller/session boundary; this function
    never names a skill.  The platform relay only supplies the target's eye
    ray and entity collision result."
-  [{:keys [world-id target policy]} _frame]
+  [{:keys [world-id target policy visual-origin visual-direction]} _frame]
   (let [target (some-> target str)
         distance (double (or (:shot-distance policy) 10.0))]
     (when (and world-id target (raycast/available?))
@@ -263,15 +263,41 @@
                      (str world-id) (:x eye) eye-y (:z eye)
                      (:x look) (:y look) (:z look) distance)]
             (when (= :entity (:hit-type hit))
-              {:reflection-accepted? true
-               :reflection-target (or (:uuid hit) (:entity-id hit))
-               :reflection-start {:x (:x eye) :y eye-y :z (:z eye)}
-               :reflection-end {:x (+ (:x eye) (* (:x look) distance))
-                                :y (+ eye-y (* (:y look) distance))
-                                :z (+ (:z eye) (* (:z look) distance))}
+              (let [visual-origin (point visual-origin)
+                    visual-direction (point visual-direction)
+                    visual-length (when (and visual-origin visual-direction)
+                                    (let [[ox oy oz] visual-origin
+                                          [ex ey ez] [(double (:x eye)) eye-y (double (:z eye))]
+                                          vx (- ex ox) vy (- ey oy) vz (- ez oz)]
+                                      (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))))
+                    visual-direction (when visual-direction
+                                       (let [[dx dy dz] visual-direction
+                                             len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+                                         (if (> len 1.0e-8)
+                                           [(/ dx len) (/ dy len) (/ dz len)]
+                                           [0.0 0.0 1.0])))
+                    visual-start (when (and visual-origin visual-direction visual-length)
+                                   (let [[ox oy oz] visual-origin
+                                         [dx dy dz] visual-direction]
+                                     {:x (+ ox (* dx visual-length))
+                                      :y (+ oy (* dy visual-length))
+                                      :z (+ oz (* dz visual-length))}))
+                    visual-end (when (and visual-start visual-direction)
+                                 (let [[dx dy dz] visual-direction]
+                                   {:x (+ (:x visual-start) (* dx distance))
+                                    :y (+ (:y visual-start) (* dy distance))
+                                    :z (+ (:z visual-start) (* dz distance))}))]
+                {:reflection-accepted? true
+                 :reflection-target (or (:uuid hit) (:entity-id hit))
+                 :reflection-start (or visual-start
+                                       {:x (:x eye) :y eye-y :z (:z eye)})
+                 :reflection-end (or visual-end
+                                     {:x (+ (:x eye) (* (:x look) distance))
+                                      :y (+ eye-y (* (:y look) distance))
+                                      :z (+ (:z eye) (* (:z look) distance))})
                :reflection-damage
                (* (double (or (:damage-multiplier policy) 0.5))
-                  (double (or (:reflection-base-damage policy) 0.0)))})))))))
+                  (double (or (:reflection-base-damage policy) 0.0)))}))))))))
 
 (defn damage!
   [{:keys [world-id target amount damage-type owner]}]

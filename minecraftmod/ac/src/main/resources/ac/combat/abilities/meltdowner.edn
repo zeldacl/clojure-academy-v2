@@ -157,6 +157,7 @@
             :else {:component :flow/sequence
                    :steps [{:component :host/beam-trace
                             :origin {:from :caster/eye}
+                            :trace-origin {:from :caster/body}
                             :direction {:from :caster/aim}
                             :length {:tunable :beam-max-distance}
                             :visual-length {:tunable :beam-visual-distance}

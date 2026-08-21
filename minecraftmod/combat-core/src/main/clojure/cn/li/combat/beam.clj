@@ -29,10 +29,11 @@
 
 (defn trace!
   [^HostTable host capability-order ^ExecutionFrame frame request]
-  (let [{:keys [owner world-id origin direction length visual-length radius
+  (let [{:keys [owner world-id origin trace-origin direction length visual-length radius
                 query-radius entity-limit damage damage-type block-policy
                 reflection-policy step]} request
         origin (point origin)
+        trace-origin (or (point trace-origin) origin)
         direction (point direction)
         length (double (or length 0.0))
         visual-length (double (or visual-length length))
@@ -46,6 +47,7 @@
                   (effect-contract/query-request query) frame))]
     (when (and origin direction world-id (pos? length) (pos? entity-limit))
       (let [[ox oy oz] origin
+            [tx ty tz] trace-origin
             [dx dy dz] direction
             dlen (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
             [dx dy dz] (if (> dlen 1.0e-8)
@@ -53,7 +55,7 @@
                          [0.0 0.0 1.0])
             raw-entities (query! {:capability :entity/select
                                   :owner owner :world-id world-id
-                                  :shape {:type :sphere :center origin
+                                  :shape {:type :sphere :center trace-origin
                                           :radius query-radius}
                                   :projection [:id :type :position :eye-height]
                                   :limit entity-limit})
@@ -65,7 +67,7 @@
                                         p (point (:position entity))
                                         [px py pz] (or p [ox oy oz])
                                         py (+ py (double (or (:eye-height entity) 0.0)))
-                                        vx (- px ox) vy (- py oy) vz (- pz oz)
+                                        vx (- px tx) vy (- py ty) vz (- pz tz)
                                         forward (+ (* vx dx) (* vy dy) (* vz dz))
                                         rx (- vx (* forward dx))
                                         ry (- vy (* forward dy))
@@ -82,6 +84,8 @@
                                                          (query! {:capability :interaction/resolve
                                                                   :owner owner :world-id world-id
                                                                   :target id
+                                                                  :visual-origin origin
+                                                                  :visual-direction [dx dy dz]
                                                                   :kind :vector-reflection
                                                                   :policy reflection-policy}))]
                                         (merge {:id (str id)
@@ -106,6 +110,11 @@
                       [(+ ox (* radius 0.5 a ux) (* radius 0.5 b vx))
                        (+ oy (* radius 0.5 b vy))
                        (+ oz (* radius 0.5 a uz) (* radius 0.5 b vz))])
+            samples (mapv (fn [[sx sy sz]]
+                            [(+ tx (- sx ox))
+                             (+ ty (- sy oy))
+                             (+ tz (- sz oz))])
+                          samples)
             blocks (->> samples
                         (mapcat #(blocks-for-sample query! owner world-id %
                                                      [dx dy dz] length step))
