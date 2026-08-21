@@ -6,7 +6,7 @@
    batches or action results with the core runtimes.")
 
 (def ^:private query-capabilities
-  #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read
+  #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read :interaction/resolve
     :energy/target})
 (def ^:private action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
@@ -15,7 +15,7 @@
     :owner/can-fly
     :entity/status :entity/spawn :entity/discard :entity/configure
     :motion/entity-velocity :block/break :block/set
-    :world/lightning :world/explosion :world/sound
+    :world/lightning :world/explosion :world/sound :block/break-budget
     :projectile/redirect :projectile/schedule-beam :resource/enforce-floor
     :resource/add :block/random-break})
   

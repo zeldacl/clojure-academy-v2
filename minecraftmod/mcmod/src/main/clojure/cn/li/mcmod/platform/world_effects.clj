@@ -70,11 +70,6 @@
   [world-id owner plan]
   (call :execute-mine-ray! world-id owner plan))
 
-(defn execute-meltdowner!
-  "Execute the charged Meltdowner beam behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-meltdowner! world-id owner plan))
-
 (defn execute-vec-accel!
   "Execute the charged Vector Acceleration movement behind a Host Port."
   [world-id owner plan]

@@ -206,6 +206,26 @@
     :large-fireball-ids :targeting.large-fireball-ids
     :reflect-entity-cp :cost.reflect-entity.cp
     :exp-reflect-entity-scale :progression.exp-reflect-entity-scale}
+   :meltdowner
+   {:charge-min-ticks :charge.min-ticks
+    :charge-max-ticks :charge.max-ticks
+    :charge-max-tolerant-ticks :charge.max-tolerant-ticks
+    :charge-time-rate :charge.time-rate
+    :beam-radius :beam.radius
+    :beam-query-radius :beam.query-radius
+    :beam-step :beam.step
+    :beam-max-distance :beam.max-distance
+    :beam-visual-distance :beam.visual-distance
+    :beam-damage :combat.damage
+    :beam-block-energy :beam.block-energy
+    :reflection-shot-distance :reflection.shot-distance
+    :reflection-damage-multiplier :reflection.damage-multiplier
+    :reflection-base-damage :reflection.base-damage
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :cooldown-base-multiplier :cooldown.base-multiplier
+    :cooldown-ticks :cooldown.ticks
+    :exp-use :progression.exp-use}
    :scatter-bomb
    {:max-balls :projectile.max-balls
     :max-hold-ticks :projectile.max-hold-ticks

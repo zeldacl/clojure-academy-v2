@@ -252,22 +252,6 @@
                                       (apply-aoe-damage-excluding-owner!
                                        world-id owner (:x point) (:y point) (:z point)
                                        entity-search-radius amount :vector)))
-        ;; Only the raycast-hit target takes damage. beam-radius/block-energy
-        ;; (block melting along the beam path) and the :reflection field
-        ;; (Vector-Reflection passive integration) are deliberately not
-        ;; implemented here -- see docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md.
-        execute-meltdowner! (fn [world-id owner plan]
-                             (let [{:keys [target damage]} plan
-                                   entity-uuid (or (:uuid target) (:entity-uuid target) (:entity-id target))]
-                               (try
-                                 (boolean
-                                  (and entity-uuid
-                                       (entity-damage/apply-direct-damage!
-                                        world-id entity-uuid (double damage) :electric
-                                        {:attacker-uuid owner})))
-                                 (catch Exception e
-                                   (log/warn "Failed to apply meltdowner damage:" (ex-message e))
-                                   false))))
         ;; Owner-keyed mining progress. combat-core drives this executor once
         ;; per real tick (:period-ticks 1) with a freshly re-scanned block
         ;; position each time; break-speed is a fraction of the target
@@ -672,7 +656,6 @@
      :execute-vec-accel! execute-vec-accel!
      :execute-flashing! execute-flashing!
      :execute-blood-retrograde! execute-blood-retrograde!
-     :execute-meltdowner! execute-meltdowner!
      :execute-mine-ray! execute-mine-ray!
      :execute-electron-missile! execute-electron-missile!
      :execute-knockback! execute-knockback!

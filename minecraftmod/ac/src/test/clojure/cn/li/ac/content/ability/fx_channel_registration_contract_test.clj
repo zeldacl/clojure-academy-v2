@@ -5,7 +5,6 @@
 (def ^:private fx-init-symbols
   '[cn.li.ac.content.ability.meltdowner.electron-bomb-fx/init!
     cn.li.ac.content.ability.meltdowner.electron-missile-fx/init!
-    cn.li.ac.content.ability.meltdowner.meltdowner-fx/init!
     cn.li.ac.content.ability.meltdowner.mine-ray-fx/init!
     cn.li.ac.content.ability.meltdowner.rad-intensify-fx/init!
     cn.li.ac.content.ability.teleporter.flesh-ripping-fx/init!

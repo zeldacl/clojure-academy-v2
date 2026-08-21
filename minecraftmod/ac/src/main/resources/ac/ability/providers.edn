@@ -17,7 +17,6 @@
   [cn.li.ac.content.ability.meltdowner.damage-helper
    cn.li.ac.content.ability.meltdowner.electron-bomb
    cn.li.ac.content.ability.meltdowner.electron-missile
-   cn.li.ac.content.ability.meltdowner.meltdowner
    cn.li.ac.content.ability.meltdowner.mine-ray-basic
    cn.li.ac.content.ability.meltdowner.mine-ray-expert
    cn.li.ac.content.ability.meltdowner.mine-ray-luck
@@ -26,7 +25,6 @@
   :fx-namespaces
   [cn.li.ac.content.ability.meltdowner.electron-bomb-fx
    cn.li.ac.content.ability.meltdowner.electron-missile-fx
-   cn.li.ac.content.ability.meltdowner.meltdowner-fx
    cn.li.ac.content.ability.meltdowner.mine-ray-fx
    cn.li.ac.content.ability.meltdowner.rad-intensify-fx]}
  {:id :teleporter

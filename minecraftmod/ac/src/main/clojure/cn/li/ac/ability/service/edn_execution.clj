@@ -6,6 +6,7 @@
    combat VM, and returns the neutral result to the existing AC publication
    seam.  Pending entries never reach this function." 
   (:require [cn.li.combat.frame :as frame]
+            [cn.li.combat.actions :as combat-actions]
             [cn.li.combat.host :as host]
             [cn.li.combat.vm :as vm]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
@@ -134,7 +135,12 @@
           (let [capability (:capability action)
                 handler (get action-handlers capability)
                 request (assoc action :owner owner)]
-            (if (and (= :block/set capability)
+            (if (= :block/break-budget capability)
+              {:status :committed
+               :capability capability
+               :result (combat-actions/commit-block-break-budget!
+                        request (get action-handlers :block/break))}
+              (if (and (= :block/set capability)
                      (not (and (vector? (:expected-block-ids request))
                                (seq (:expected-block-ids request))
                                (<= (count (:expected-block-ids request)) 8)
@@ -160,5 +166,5 @@
                   (catch Throwable throwable
                     {:status :failed
                      :capability capability
-                     :message (ex-message throwable)}))))))
+                     :message (ex-message throwable)})))))))
         actions))

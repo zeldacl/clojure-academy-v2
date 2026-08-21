@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.runtime.expr :as expr]
             [cn.li.mcmod.runtime.seeded-rng :as rng]
             [cn.li.mcmod.runtime.effect-contract :as effect-contract]
+            [cn.li.combat.beam :as beam]
             [clojure.string :as str])
   (:import [cn.li.mcmod.runtime.effect CompiledProgram ExecutionFrame HostTable]
            [clojure.lang IFn]
@@ -233,7 +234,7 @@
    :entity/configure :entity/configure
    :motion/entity-velocity :motion/entity-velocity
    :projectile/schedule-beam :projectile/schedule-beam
-   :block/break-budget :block/break
+   :block/break-budget :block/break-budget
    :block/break :block/break
    :block/random-break :block/random-break
    :world/sound :world/sound
@@ -319,9 +320,15 @@
                              {:query-kind :beam})
                            (when (= component :target/directional-destination-query)
                              {:query-kind :directional-destination})
+                           (when (= component :target/resolve-destination)
+                             {:query-kind :resolve-destination})
+                           (when (= :penetration (get-in data [:policy :type]))
+                             {:query-kind :penetration})
                            (dissoc data :result :component))
                     context))
-        result (when handler (.invoke handler request frame))]
+        result (if (= component :host/beam-trace)
+                 (beam/trace! host order frame request)
+                 (when handler (.invoke handler request frame)))]
     (when-let [results* (:results* context)]
       (vswap! results* assoc (:result data) result))
     (when-let [slots* (:slots* context)]

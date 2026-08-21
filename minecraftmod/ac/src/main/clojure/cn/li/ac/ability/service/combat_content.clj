@@ -277,41 +277,6 @@
                                 :params {:max-balls 5
                                          :spawn-interval 10
                                          :fire-interval 8}}]}}}
-    ;; Meltdowner's host port owns the beam trace, block breaking and
-    ;; Vector-Reflection callback. Combat Core supplies only charge and
-    ;; balance data; the 20..40 time-rate is evaluated by the port.
-    {:id :meltdowner
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 100
-     :cost-phase :release
-     :cost {:cp (scale 10.0 15.0)
-            :overload (scale 200.0 170.0)}
-     :cooldown {:ticks (scale 300.0 140.0)}
-     :program {:op :phase
-               :pulse {:op :session-patch
-                       :entries [[[:charge-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :require-session
-                                  :path [:charge-ticks] :min 20.0 :max 100.0}
-                                 {:op :query :query-type :raycast
-                                  :distance 64.0 :result-ref :target}
-                                 {:op :require :predicate :target}
-                                 {:op :world-effect
-                                  :effect-type :meltdowner
-                                  :target-ref :target
-                                  :charge-ticks (session-value [:charge-ticks])
-                                  :damage (scale 18.0 50.0)
-                                  :beam-radius (scale 2.0 3.0)
-                                  :max-distance 64.0
-                                  :block-energy (scale 1.0 3.0)
-                                  :reflection {:enabled? true
-                                               :shot-distance 64.0
-                                               :damage-multiplier 1.0}}
-                                 {:op :vfx :effect-id :meltdowner
-                                  :event :release :params {:range 64.0}}]}}}
     {:id :mine-ray-basic
      :revision 1
      :activation :session

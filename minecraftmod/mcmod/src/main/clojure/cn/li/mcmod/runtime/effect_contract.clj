@@ -4,7 +4,7 @@
 (def schema-version 2)
 
 (def query-capabilities
-  #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read
+  #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read :interaction/resolve
     :energy/target})
 
 (def action-capabilities
@@ -14,7 +14,7 @@
     :owner/can-fly
     :entity/status :entity/spawn :entity/discard :entity/configure
     :motion/entity-velocity :block/break :block/set
-    :world/lightning :world/explosion :world/sound :block/random-break
+    :world/lightning :world/explosion :world/sound :block/random-break :block/break-budget
     :projectile/redirect :resource/enforce-floor :resource/add})
 
 (defn- require-map! [value message]

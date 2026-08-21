@@ -54,5 +54,8 @@
               :id :jet-engine
               :resource "ac/combat/abilities/jet_engine.edn"}
              {:kind :ability
-              :id :light-shield
-              :resource "ac/combat/abilities/light_shield.edn"}]}
+             :id :light-shield
+              :resource "ac/combat/abilities/light_shield.edn"}
+             {:kind :ability
+              :id :meltdowner
+              :resource "ac/combat/abilities/meltdowner.edn"}]}

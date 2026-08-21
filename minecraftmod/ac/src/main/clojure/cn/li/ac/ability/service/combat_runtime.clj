@@ -4,6 +4,7 @@
    Combat Core itself never knows about AC, Minecraft or VFX."
   (:require [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
+            [cn.li.combat.platform :as combat-platform]
             [cn.li.combat.runtime :as combat]
             [cn.li.combat.targeting :as targeting]
             [cn.li.combat.vm :as combat-vm]
@@ -1017,41 +1018,6 @@
                                       :applied
                                       :failed)
                             :effect effect})
-                         :meltdowner
-                         (let [{:keys [world-id target charge-ticks damage beam-radius
-                                       max-distance block-energy reflection]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               reflection (merge {:enabled? true
-                                                  :shot-distance 64.0
-                                                  :damage-multiplier 1.0}
-                                                 (or reflection {}))
-                               plan {:target target
-                                     :session-id (:session-id effect)
-                                     :charge-ticks (long (or charge-ticks 0))
-                                     :damage (double (or damage 0.0))
-                                     :beam-radius (double (or beam-radius 0.0))
-                                     :max-distance (double (or max-distance 0.0))
-                                     :block-energy (double (or block-energy 0.0))
-                                     :reflection reflection}
-                               valid? (and world-id (map? target)
-                                            (<= 20 (:charge-ticks plan) 100)
-                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
-                                            (finite? beam-radius) (<= 0.0 (:beam-radius plan) 8.0)
-                                            (finite? max-distance) (<= 1.0 (:max-distance plan) 128.0)
-                                            (finite? block-energy) (<= 0.0 (:block-energy plan) 1000.0)
-                                            (map? reflection)
-                                            (boolean (:enabled? reflection))
-                                            (finite? (:shot-distance reflection))
-                                            (<= 1.0 (double (:shot-distance reflection)) 128.0)
-                                            (finite? (:damage-multiplier reflection))
-                                            (<= 0.0 (double (:damage-multiplier reflection)) 8.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-meltdowner!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
                          :vec-accel
                          (let [{:keys [world-id query-result charge-ticks max-charge-ticks]} effect
                                valid? (and world-id (map? query-result)
@@ -1721,117 +1687,14 @@
   []
   (when (compare-and-set! edn-host-capabilities-installed? false true)
     (try
-      (when-not (contains? (:queries (capabilities/snapshot)) :raycast)
-        (capabilities/register-query!
-         :raycast
-         (fn [{:keys [owner distance include-entities? include-blocks? hit origin policy]
-              :as request} _frame]
-           (if (= :directional-destination (:query-kind request))
-             (directional-destination owner request)
-             (if (= :penetration (:type policy))
-               (penetration-destination owner
-                                        {:origin origin
-                                         :direction (:direction policy)
-                                         :distance distance
-                                         :policy policy
-                                         :world-id (:world-id request)})
-               (if (contains? request :hit)
-               (resolve-raycast-destination owner
-                                            {:hit hit :origin origin
-                                             :distance distance :policy policy
-                                             :world-id (:world-id request)})
-               (let [owner (str owner)
-                 point-of (fn [value]
-                            (cond
-                              (and (map? value) (vector? (:vec3 value)))
-                              (:vec3 value)
-                              (and (map? value)
-                                   (every? #(number? (get value %)) [:x :y :z]))
-                              [(double (:x value)) (double (:y value)) (double (:z value))]
-                              (and (vector? value) (= 3 (count value)))
-                              (mapv double value)
-                              :else nil))
-                 distance (max 0.0 (min 128.0 (double (or distance 0.0))))
-                 world-id (or (:world-id request) (geom/world-id-of owner))
-                 origin-point (point-of origin)
-                 direction-point (point-of (:direction request))
-                 owner-eye (geom/eye-pos owner)
-                 eye (or (when origin-point
-                           {:x (nth origin-point 0)
-                            :y (nth origin-point 1)
-                            :z (nth origin-point 2)})
-                         owner-eye)
-                 look (or (when direction-point
-                            {:x (nth direction-point 0)
-                             :y (nth direction-point 1)
-                             :z (nth direction-point 2)})
-                          (when (raycast/available?)
-                            (raycast/player-look-vector owner)))
-                 player-eye-origin?
-                 (and origin-point owner-eye
-                      (every? (fn [[a b]]
-                                (<= (Math/abs (- (double a) (double b))) 1.0e-4))
-                              [[(nth origin-point 0) (:x owner-eye)]
-                               [(nth origin-point 1) (:y owner-eye)]
-                               [(nth origin-point 2) (:z owner-eye)]]))
-                 hit (when (and look (raycast/available?))
-                       (let [sx (:x eye) sy (:y eye) sz (:z eye)
-                             dx (double (or (:x look) 0.0))
-                             dy (double (or (:y look) 0.0))
-                             dz (double (or (:z look) 1.0))]
-                         (cond
-                           ;; Preserve the platform's living-only semantics
-                           ;; when a generic request explicitly names the
-                           ;; caster eye.  The origin/direction form is still
-                           ;; used for arbitrary projectile positions.
-                           (and (boolean (:living-only? request))
-                                player-eye-origin?
-                                (not= false include-entities?))
-                           (raycast/raycast-combined-from-player
-                            owner distance true)
-                           (and (not= false include-entities?)
-                                (not= false include-blocks?))
-                           (raycast/raycast-combined world-id sx sy sz dx dy dz distance)
-                           (not= false include-entities?)
-                           (raycast/raycast-entities world-id sx sy sz dx dy dz distance)
-                           (not= false include-blocks?)
-                           (raycast/raycast-blocks world-id sx sy sz dx dy dz distance)
-                           :else nil)))
-                 kind (cond
-                        (= :entity (:hit-type hit)) :entity
-                        (= :block (:hit-type hit)) :block
-                        (:entity-id hit) :entity
-                        (:uuid hit) :entity
-                        hit :block
-                        :else :miss)
-                 position (case kind
-                            :entity {:x (double (or (:hit-x hit) (:x hit) 0.0))
-                                     :y (double (or (:hit-y hit) (:y hit) 0.0))
-                                     :z (double (or (:hit-z hit) (:z hit) 0.0))}
-                            :block {:x (double (or (:hit-x hit) (:x hit) 0.0))
-                                    :y (double (or (:hit-y hit) (:y hit) 0.0))
-                                    :z (double (or (:hit-z hit) (:z hit) 0.0))}
-                            {:x (+ (:x eye) (* (double (or (:x look) 0.0)) distance))
-                             :y (+ (:y eye) (* (double (or (:y look) 0.0)) distance))
-                             :z (+ (:z eye) (* (double (or (:z look) 1.0)) distance))})
-                 block-id (:block-id hit)]
-             {:hit-type kind
-              :hit? (not= :miss kind)
-              :entity-id (or (:entity-id hit) (:uuid hit))
-               :hit-x (:hit-x hit) :hit-y (:hit-y hit) :hit-z (:hit-z hit)
-               :x (:x hit) :y (:y hit) :z (:z hit)
-               :face (:face hit)
-               :eye-height (:eye-height hit)
-               :entity-type (or (:entity-type hit) (:type hit))
-               :creeper? (contains? #{"minecraft:creeper" "entity.minecraft.creeper"}
-                                     (or (:entity-type hit) (:type hit)))
-              :position position
-              :block-position {:x (Math/floor (double (:x position)))
-                               :y (Math/floor (double (:y position)))
-                               :z (Math/floor (double (:z position)))}
-              :block-id block-id
-              :water? (= "minecraft:water" block-id)
-              :world-id world-id})))))))
+      ;; Atomic combat capabilities are owned by Combat Core.  AC only links
+      ;; the startup registry; mcmod relays each call to platform-src.
+      (doseq [[capability handler] (combat-platform/query-handlers)]
+        (when-not (contains? (:queries (capabilities/snapshot)) capability)
+          (capabilities/register-query! capability handler)))
+      (doseq [[capability handler] (combat-platform/action-handlers)]
+        (when-not (contains? (:actions (capabilities/snapshot)) capability)
+          (capabilities/register-action! capability handler)))
       (when-not (contains? (:queries (capabilities/snapshot)) :owner/snapshot)
         (capabilities/register-query!
          :owner/snapshot
@@ -1874,11 +1737,6 @@
          :energy/target
          (fn [{:keys [world-id hit]} _frame]
            (energy-target-result world-id hit))))
-      (when-not (contains? (:queries (capabilities/snapshot)) :entity/select)
-        (capabilities/register-query!
-         :entity/select
-         (fn [request _frame]
-           (entity-select-results request))))
       (when-not (contains? (:queries (capabilities/snapshot)) :entity/snapshot)
         (capabilities/register-query!
          :entity/snapshot
@@ -1957,29 +1815,6 @@
                               {:terrain? (boolean terrain?)
                                :attacker-uuid owner})]
                  {:status (if (not= false result) :applied :failed)}))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/damage)
-        (capabilities/register-action!
-         :entity/damage
-         (fn [{:keys [world-id target amount damage-type owner
-                      damage-pipeline ability-id]}]
-           (let [raw (double (or amount 0.0))
-                 scaled (if (and (= :skill damage-pipeline) ability-id)
-                          (skill-effects/scale-damage
-                           (skill-registry/get-skill ability-id)
-                           (ability-event/fire-calc-event!
-                            ability-event/CALC-SKILL-ATTACK
-                            raw
-                            {:player-id owner
-                             :target-id target
-                             :skill-id ability-id}))
-                          raw)]
-             (when (and target (entity-damage/available?)
-                        (Double/isFinite scaled)
-                        (pos? scaled))
-               (entity-damage/apply-direct-damage!
-                world-id target scaled (or damage-type :generic)
-                (cond-> {:attacker-uuid owner}
-                  ability-id (assoc :skill-id ability-id))))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/trigger-behavior)
         (capabilities/register-action!
          :entity/trigger-behavior
@@ -2174,32 +2009,6 @@
                                              (if applied? (inc hits) hits)))))
                                 hits))]
                  {:status :applied :hits result}))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :block/break)
-        (capabilities/register-action!
-         :block/break
-         (fn [{:keys [owner world-id position expected-block-id drop?]}]
-           (let [point (cond
-                         (and (map? position) (vector? (:vec3 position))) (:vec3 position)
-                         (map? position) [(:x position) (:y position) (:z position)]
-                         (vector? position) position
-                         :else nil)
-                 [x y z] (mapv #(long (Math/floor (double %)))
-                               (or point [0.0 0.0 0.0]))
-                 current (when (and world-id (block-manipulation/available?))
-                           (block-manipulation/get-block (str world-id) x y z))
-                 expected? (or (nil? expected-block-id)
-                               (= (str expected-block-id) (str current)))
-                 valid? (and owner world-id point expected? current
-                             (block-manipulation/available?)
-                             (block-manipulation/can-break-block?
-                              (str owner) (str world-id) x y z))
-                 broken? (and valid?
-                               (block-manipulation/break-block!
-                                (str owner) (str world-id) x y z
-                                (not= false drop?)))]
-             {:status (if broken? :applied :failed)
-              :block-id current
-              :position {:x x :y y :z z}}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :block/random-break)
         (capabilities/register-action!
          :block/random-break

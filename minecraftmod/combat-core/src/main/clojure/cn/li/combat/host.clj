@@ -37,6 +37,20 @@
         ^IFn handler (aget handlers capability-id)]
     (.invoke handler request output)))
 
+(defn invoke-query-capability!
+  "Invoke a neutral query by keyword from a compiled HostTable.  The table
+  keeps only startup-linked function arrays; `capability-order` is the stable
+  keyword order owned by the execution context."
+  [^HostTable host capability-order capability request output]
+  (let [capability-id (.indexOf ^java.util.List capability-order capability)
+        ^objects handlers (.-queryHandlers host)]
+    (when-not (and (<= 0 (long capability-id))
+                   (< (long capability-id) (alength handlers)))
+      (throw (ex-info "missing query capability"
+                      {:capability capability})))
+    (.invoke ^clojure.lang.IFn (aget handlers capability-id)
+             request output)))
+
 (defn invoke-preflight! [^HostTable host transaction]
   (let [^IFn handler (.-preflightHandler host)]
     (.invoke handler transaction)))

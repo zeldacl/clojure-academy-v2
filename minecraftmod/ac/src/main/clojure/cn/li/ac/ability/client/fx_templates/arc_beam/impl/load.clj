@@ -1,6 +1,5 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.load
-  (:require [cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb]
+  (:require [cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.rad-intensify-mark]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.threatening-teleport]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.shift-teleport]
