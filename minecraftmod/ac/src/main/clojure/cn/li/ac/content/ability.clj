@@ -10,7 +10,7 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.content.ability.teleporter.location-teleport :as loc-teleport]
+            [cn.li.ac.content.ability.teleporter.location-teleport-rpc :as loc-teleport-rpc]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
@@ -71,12 +71,9 @@
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (register-combat-catalog!)
-      ;; Domain-event/RPC bridges, not legacy skill discovery: location-
-      ;; teleport registers the saved-location query/save/delete/
-      ;; perform RPC handlers (Combat Core's own :location-teleport program
-      ;; only covers the teleport-execution step, not location CRUD). Both
-      ;; are required content regardless of which composition root is active.
-      (loc-teleport/init!)
+      ;; The saved-name screen is only a persistence/RPC bridge. Teleport
+      ;; execution itself is the migrated Combat Core EDN program.
+      (loc-teleport-rpc/init!)
       (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
       (category/freeze-category-registry!)
       (skill-registry/freeze-skill-registry!)

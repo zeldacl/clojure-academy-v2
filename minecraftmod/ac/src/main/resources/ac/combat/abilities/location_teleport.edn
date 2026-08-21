@@ -1,0 +1,133 @@
+{:schema-version 2
+ :kind :ability
+ :id :location-teleport
+ :revision 2
+ :activation :instant
+ :status :migrated
+ :requires [:caster/id :world/id :caster/creative? :rng/seed
+            :progression/mastery]
+ :tunables
+ {:cross-dimension-exp-threshold {:curve :const}
+  :teleport-radius {:curve :const}
+  :cp-base {:curve :pair}
+  :overload {:curve :const}
+  :cross-dimension-multiplier {:curve :const}
+  :min-distance-multiplier {:curve :const}
+  :distance-cap {:curve :const}
+  :cooldown-ticks {:curve :pair :type :double}
+  :long-distance-threshold {:curve :const}
+  :exp-short {:curve :const}
+  :exp-long {:curve :const}}
+ :costs
+ {:perform-cp {:resources {:cp {:ref [:slot :cp-cost]}}}
+  :perform-overload {:resources {:overload {:tunable :overload}}}}
+ :progression
+ {:teleport
+  {:per-mark {:expr :math/select
+              :args [{:expr :math/gte
+                      :args [{:ref [:slot :distance]}
+                             {:tunable :long-distance-threshold}]}
+                     {:tunable :exp-long}
+                     {:tunable :exp-short}]}}}
+ :cooldown
+ {:main {:ticks {:expr :math/lerp
+                 :args [{:tunable :cooldown-ticks :path [0]}
+                        {:tunable :cooldown-ticks :path [1]}
+                        {:from :progression/mastery}]}}}
+ :program
+ {:component :flow/sequence
+  :steps
+  [{:component :owner/snapshot
+    :projection [:position]
+    :result :owner}
+   {:component :target/saved-location
+    :location-name {:ref [:context :location-name]}
+    :result :destination}
+   {:component :flow/branch
+    :when {:ref [:slot :destination]}
+    :then {:component :flow/sequence
+           :steps
+           [{:component :data/bind
+             :to :source-position
+             :value {:ref [:slot :owner :position]}}
+            {:component :data/bind
+             :to :distance
+             :value {:expr :vec3/distance
+                     :args [{:ref [:slot :source-position]}
+                            {:ref [:slot :destination]}]}}
+            {:component :data/bind
+             :to :cross-dimension?
+             :value {:expr :value/eq
+                     :args [{:ref [:slot :source-position :world-id]}
+                            {:ref [:slot :destination :world-id]}]}}
+            {:component :data/bind
+             :to :cp-distance-multiplier
+             :value {:expr :math/max
+                     :args [{:tunable :min-distance-multiplier}
+                            {:expr :math/sqrt
+                             :args [{:expr :math/min
+                                     :args [{:tunable :distance-cap}
+                                            {:ref [:slot :distance]}]}]}]}}
+            {:component :data/bind
+             :to :cp-cost
+            :value {:expr :math/mul
+                     :args [{:expr :math/mul
+                             :args [{:expr :math/lerp
+                                     :args [{:tunable :cp-base :path [0]}
+                                            {:tunable :cp-base :path [1]}
+                                            {:from :progression/mastery}]}
+                                    {:expr :math/select
+                                     :args [{:ref [:slot :cross-dimension?]}
+                                            {:tunable :cross-dimension-multiplier}
+                                            1.0]}]}
+                            {:ref [:slot :cp-distance-multiplier]}]}}
+            {:component :flow/branch
+             :when {:expr :bool/or
+                    :args [{:expr :bool/not
+                            :args [{:ref [:slot :cross-dimension?]}]}
+                           {:expr :math/gt
+                            :args [{:from :progression/mastery}
+                                   {:tunable :cross-dimension-exp-threshold}]}]}
+             :then {:component :txn/atomic
+                    :guards [{:component :guard/resource
+                              :cost {:cp {:ref [:slot :cp-cost]}
+                                     :overload {:tunable :overload}}}]
+                    :reservations []
+                    :body {:component :flow/sequence
+                           :steps [{:component :cost/spend :budget :perform-cp}
+                                   {:component :cost/spend :budget :perform-overload}
+                                   {:component :entity/teleport-group
+                                    :world-id {:ref [:slot :destination :world-id]}
+                                    :position {:ref [:slot :destination]}
+                                    :radius {:tunable :teleport-radius}}
+                                   {:component :score/mark :tag :teleport}
+                                   {:component :cooldown/start :name :main}
+                                   {:component :flow/branch
+                                    :when {:ref [:slot :cross-dimension?]}
+                                    :then {:component :domain/event
+                                           :event-type :achievement/trigger
+                                           :payload {:id "teleporter.ignore_barrier"}}
+                                    :else nil}
+                                   {:component :effect/vfx
+                                    :effect-id :audio-one-shot
+                                    :operation :spawn
+                                    :audience {:type :nearby :radius 64.0}
+                                    :payload {:position {:ref [:slot :destination]}
+                                              :sound-id "academy:tp.tp"
+                                              :volume 0.5
+                                              :pitch 1.0}}
+                                   {:component :flow/finish
+                                    :outcome :teleported
+                                    :finish-session? true}]}
+                    :on-fail {:component :flow/finish
+                              :outcome :insufficient-resource
+                              :finish-session? true}}
+             :else {:component :flow/finish
+                    :outcome :cross-dimension-exp-required
+                    :finish-session? true}}]}
+    :else {:component :flow/finish
+           :outcome :location-not-found
+           :finish-session? true}}
+   {:component :flow/finish
+    :outcome :rejected
+    :finish-session? true}]}}

@@ -231,6 +231,7 @@
    :terrain/propagate :terrain/propagate
    :owner/snapshot :owner/snapshot
    :target/item-held :item/held
+   :target/saved-location :saved-location
    :energy/target :energy/target
    ;; Beam traversal is a host primitive.  Its neutral request shape is still
    ;; handled by the existing raycast capability; the EDN composite owns the
@@ -252,6 +253,7 @@
    :owner/can-fly :owner/can-fly
    :combat/status :entity/status
    :entity/teleport :entity/teleport
+   :entity/teleport-group :entity/teleport-group
    :entity/reset-fall-damage :entity/reset-fall-damage
    :entity/spawn :entity/spawn
    :entity/discard :entity/discard
@@ -448,6 +450,7 @@
     :target/entities (invoke-query-component! frame host component data context)
     :owner/snapshot (invoke-query-component! frame host component data context)
     :target/item-held (invoke-query-component! frame host component data context)
+    :target/saved-location (invoke-query-component! frame host component data context)
     :energy/target (invoke-query-component! frame host component data context)
     :target/blocks (invoke-query-component! frame host component data context)
     :terrain/propagate (invoke-query-component! frame host component data context)

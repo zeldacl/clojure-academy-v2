@@ -214,6 +214,18 @@
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
     :exp-base :progression.exp-base}
+   :location-teleport
+   {:cross-dimension-exp-threshold :targeting.cross-dimension-exp-threshold
+    :teleport-radius :targeting.teleport-radius
+    :cp-base :cost.perform.cp-base
+    :overload :cost.perform.overload
+    :cross-dimension-multiplier :cost.perform.cross-dimension-multiplier
+    :min-distance-multiplier :cost.perform.min-distance-multiplier
+    :distance-cap :cost.perform.distance-cap
+    :cooldown-ticks :cooldown.ticks
+    :long-distance-threshold :progression.long-distance-threshold
+    :exp-short :progression.exp-short
+    :exp-long :progression.exp-long}
    :dim-folding-theorem
    {:damage-multipliers :critical.damage-multipliers
     :level0-probability :critical.level0-probability

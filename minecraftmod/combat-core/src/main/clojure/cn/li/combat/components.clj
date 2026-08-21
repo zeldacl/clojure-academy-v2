@@ -216,6 +216,11 @@
             :effects #{:query}
             :produces {:held-item {:name-field :result :type :item-snapshot}}}
 
+           :target/saved-location
+           {:schema {:required #{:location-name :result}}
+            :effects #{:query}
+            :produces {:location {:name-field :result :type :world-position}}}
+
            :energy/target
            {:schema {:required #{:hit :result}}
             :effects #{:query}
@@ -323,6 +328,10 @@
 
            :entity/teleport
            {:schema {:required #{:target :position}}
+            :effects #{:mutate}}
+
+           :entity/teleport-group
+           {:schema {:required #{:position :radius}}
             :effects #{:mutate}}
 
            :entity/reset-fall-damage

@@ -42,7 +42,6 @@
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
-            [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
@@ -344,26 +343,6 @@
                                          (double (or (:aoe-radius node) 8.0))
                                          excluded)]
                             (assoc attack-data :victims victims))))
-              :saved-location (fn [context node]
-                                (if-let [host-query (contract/host-port :query)]
-                                  (host-query :saved-location context node)
-                                  ;; No "home"/primary-location convention
-                                  ;; exists anywhere in this codebase (the
-                                  ;; RPC-driven UI in location_teleport.clj
-                                  ;; always teleports by an explicit name the
-                                  ;; player picked). For a hotbar-slot
-                                  ;; activation with no name input, fall back
-                                  ;; to the alphabetically-first saved name --
-                                  ;; deterministic and simple, but an inferred
-                                  ;; UX choice, not a confirmed design. Revisit
-                                  ;; if it turns out players expect something
-                                  ;; else (most-recently-saved, a reserved
-                                  ;; "home" name, ...).
-                                  (let [owner (:owner context)
-                                        locations (:locations
-                                                   (location-teleport/query-location-teleport (str owner)))
-                                        location-name (->> locations (map :name) sort first)]
-                                    (when location-name {:location-id location-name}))))
               }]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
@@ -451,24 +430,6 @@
                                                (boolean visual-only?)))
                                       :applied
                                       :failed)
-                            :effect effect})
-                         :teleport-approved
-                         (let [{:keys [target destination radius ability-id]} effect
-                               destination (or destination target)
-                               location-id (when (map? destination)
-                                             (or (:location-id destination)
-                                                 (:id destination)
-                                                 (:name destination)))
-                               radius (double (or radius 5.0))
-                               valid? (and (= :location-teleport ability-id)
-                                            (string? location-id)
-                                            (<= 1 (count location-id) 64)
-                                            (<= 0.0 radius 32.0)
-                                            (teleportation/available?))
-                               applied? (when valid?
-                                          (teleportation/teleport-approved-location!
-                                           owner ability-id location-id radius))]
-                           {:status (if applied? :applied :failed)
                             :effect effect})
                          :teleport-approved-target
                          {:status :unhandled

@@ -239,6 +239,13 @@
                                        projection))))))
       []))))
 
+(defn saved-location!
+  "Read one named position through the neutral persistence relay."
+  [{:keys [owner location-name]} _frame]
+  (when (and owner (string? location-name) (seq location-name)
+             (teleportation/named-position-available?))
+    (teleportation/get-saved-location owner location-name)))
+
 (defn block-select!
   [{:keys [owner world-id shape limit]} _frame]
   (let [start (point (or (:start shape) (:origin shape)))
@@ -1027,6 +1034,19 @@
          :position {:x x :y y :z z}})
       {:status :rejected :reason :invalid-entity-teleport-request})))
 
+(defn teleport-group!
+  "Teleport the owner and bounded nearby entities while preserving offsets."
+  [{:keys [owner world-id position radius]}]
+  (let [p (point position)
+        radius (double (or radius 0.0))]
+    (if (and owner world-id p (= 3 (count p))
+             (every? #(Double/isFinite (double %)) p)
+             (<= 0.0 radius 32.0))
+      (let [[x y z] p]
+        (teleportation/teleport-with-entities! owner world-id x y z radius))
+      {:success false :teleported-count 0
+       :reason :invalid-teleport-group-request})))
+
 (defn entity-impulse!
   "Set one entity's neutral velocity vector.  The component remains generic;
    the platform relay is responsible only for resolving the entity id and
@@ -1220,7 +1240,8 @@
    :entity/select entity-select!
    :block/select block-select!
    :terrain/propagate terrain-propagate!
-   :interaction/resolve interaction-resolve!})
+   :interaction/resolve interaction-resolve!
+   :saved-location saved-location!})
 
 (defn action-handlers []
   {:entity/damage damage!
@@ -1240,6 +1261,7 @@
    :entity/discard discard-entity!
    :entity/configure configure-entity!
    :entity/teleport teleport-entity!
+   :entity/teleport-group teleport-group!
    :block/random-break random-break!
    :block/area-break area-break!
    :motion/entity-velocity entity-velocity!

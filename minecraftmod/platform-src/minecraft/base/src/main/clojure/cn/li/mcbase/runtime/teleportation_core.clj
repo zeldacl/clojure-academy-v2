@@ -3,7 +3,6 @@
 
   Teleports go through cn.li.mcver.TeleportAccess; dimension ids via McAccess."
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
-            [cn.li.mcbase.runtime.named-position-store-core :as position-store]
             [cn.li.mcmod.platform.teleportation :as teleportation-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver McAccess TeleportAccess]
@@ -118,23 +117,6 @@
       (log/warn "Failed to get player dimension:" (ex-message e))
       nil)))
 
-(defn teleport-approved-location!
-  "Resolve `location-id` (a player-named saved position, see
-   named-position-store-core) and teleport player-uuid there via the
-   already-proven teleport-with-entities!. ability-id is not re-validated
-   here -- combat_runtime.clj's :teleport-approved world-effect case
-   already checked it before calling this."
-  [^MinecraftServer server player-uuid _ability-id location-id radius]
-  (try
-    (if-let [loc (position-store/get-location server player-uuid location-id)]
-      (boolean (:success (teleport-with-entities! server player-uuid
-                                                   (:world-id loc) (:x loc) (:y loc) (:z loc)
-                                                   radius)))
-      false)
-    (catch Exception e
-      (log/warn "Failed to teleport to approved location:" (ex-message e))
-      false)))
-
 (defn teleport-approved-target!
   "Redeem approval-token (minted by combat_runtime.clj's
    :teleport-approved-target world-effect case right after it resolves and
@@ -165,9 +147,6 @@
                           (get-player-position (get-server) player-uuid))
    :get-player-dimension (fn [player-uuid]
                            (get-player-dimension (get-server) player-uuid))
-   :teleport-approved-location! (fn [player-uuid ability-id location-id radius]
-                                  (teleport-approved-location!
-                                   (get-server) player-uuid ability-id location-id radius))
    :teleport-approved-target! (fn [player-uuid ability-id approval-token mode]
                                 (teleport-approved-target!
                                  (get-server) player-uuid ability-id approval-token mode))})

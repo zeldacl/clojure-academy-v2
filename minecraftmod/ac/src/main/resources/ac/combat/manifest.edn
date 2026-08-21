@@ -45,6 +45,9 @@
               :id :shift-teleport
               :resource "ac/combat/abilities/shift_teleport.edn"}
              {:kind :ability
+              :id :location-teleport
+              :resource "ac/combat/abilities/location_teleport.edn"}
+             {:kind :ability
               :id :dim-folding-theorem
               :resource "ac/combat/abilities/dim_folding_theorem.edn"}
              {:kind :ability

@@ -1,11 +1,39 @@
 (ns cn.li.mcmod.platform.teleportation
   "Minecraft-free relay for the neutral teleportation Host Port."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]))
 
 (defn current []
   (get-in @(fw/fw-atom) [:platform :teleportation]))
 
 (defn available? [] (boolean (current)))
+
+(defn- named-position-store []
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/get-adapter fw-atom :named-position-store)))
+
+(defn named-position-available? [] (boolean (named-position-store)))
+
+(defn- named-position-call [operation & args]
+  (let [ops (named-position-store)
+        handler (get ops operation)]
+    (when-not handler
+      (throw (ex-info "Named position operation is not installed"
+                      {:operation operation :installed (keys ops)})))
+    (apply handler args)))
+
+(defn get-saved-location [owner location-name]
+  (named-position-call :get-location (str owner) (str location-name)))
+
+(defn list-saved-locations [owner]
+  (or (named-position-call :list-locations (str owner)) []))
+
+(defn save-saved-location! [owner location-name world-id x y z]
+  (boolean (named-position-call :save-location! (str owner) (str location-name)
+                                (str world-id) (double x) (double y) (double z))))
+
+(defn delete-saved-location! [owner location-name]
+  (boolean (named-position-call :delete-location! (str owner) (str location-name))))
 
 (defn- call [kind & args]
   (let [ops (current)
@@ -62,15 +90,6 @@
   [owner world-id x y z radius]
   (call :teleport-with-entities! owner world-id
         (double x) (double y) (double z) (double radius)))
-
-(defn teleport-approved-location!
-  "Teleport to a server-resolved saved location.
-
-   The caller supplies an opaque location id; the loader port resolves the
-   stored destination and performs collision/dimension/entity validation."
-  [owner ability-id location-id radius]
-  (boolean (call :teleport-approved-location!
-                 owner ability-id location-id (double radius))))
 
 (defn teleport-approved-target!
   "Teleport using a server-issued approval token from a target query.
