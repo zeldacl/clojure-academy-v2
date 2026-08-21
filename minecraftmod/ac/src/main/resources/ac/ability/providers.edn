@@ -23,7 +23,6 @@
   [cn.li.ac.content.ability.teleporter.location-teleport
    cn.li.ac.content.ability.teleporter.location-teleport-reactive]
   :fx-namespaces
-   cn.li.ac.content.ability.teleporter.flesh-ripping-fx
    cn.li.ac.content.ability.teleporter.location-teleport-fx
   ]}
  {:id :vecmanip

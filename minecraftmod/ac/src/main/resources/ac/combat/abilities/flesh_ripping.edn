@@ -1,0 +1,157 @@
+{:schema-version 2
+ :kind :ability
+ :id :flesh-ripping
+ :revision 1
+ :activation :session
+ :status :migrated
+ :requires [:caster/id :caster/eye :caster/aim :caster/creative?
+            :world/id :rng/seed]
+ :prerequisites [{:skill-id :mark-teleport :min-exp 0.5}
+                 {:skill-id :penetrate-teleport :min-exp 0.5}]
+ :tunables
+ {:targeting-range {:curve :mastery-lerp}
+  :damage {:curve :mastery-lerp}
+  :nausea-chance {:curve :const}
+  :nausea-duration-ticks {:curve :const :type :long}
+  :nausea-amplifier {:curve :const :type :long}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-hit {:curve :const}}
+ :costs
+ {:release {:resources {:cp {:tunable :release-cp}
+                        :overload {:tunable :release-overload}}}}
+ :progression {:hit {:per-mark {:tunable :exp-hit}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :fragments
+ {:refresh-trace
+  {:inputs {}
+   :body {:component :target/raycast
+          :origin {:from :caster/eye}
+          :direction {:from :caster/aim}
+          :distance {:tunable :targeting-range}
+          :include-entities? true
+          :include-blocks? false
+          :living-only? true
+          :result :trace}}
+  :marker-payload
+  {:inputs {:operation {:type :keyword}}
+   :body {:component :effect/vfx
+          :effect-id :target-box-session
+          :operation {:ref [:input :operation]}
+          :instance-key [:activation :flesh-ripping-marker]
+          :audience {:type :nearby :radius 64.0}
+          :payload {:position {:ref [:slot :trace :position]}
+                    :width {:expr :math/select
+                            :args [{:ref [:slot :trace :attacked?]}
+                                   {:ref [:slot :trace :target-width]} 1.0]}
+                    :height {:expr :math/select
+                             :args [{:ref [:slot :trace :attacked?]}
+                                    {:ref [:slot :trace :target-height]} 1.0]}
+                    :color {:expr :math/select
+                            :args [{:ref [:slot :trace :attacked?]}
+                                   [185 25 25 180]
+                                   [74 74 74 160]]}}}}
+  :destroy-marker
+  {:inputs {}
+   :body {:component :effect/vfx
+          :effect-id :target-box-session
+          :operation :destroy
+          :instance-key [:activation :flesh-ripping-marker]
+          :payload {}}}
+  :impact-vfx
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :particle-burst
+                   :operation :spawn
+                   :audience {:type :nearby :radius 64.0}
+                   :payload {:position {:ref [:slot :trace :position]}
+                             :rate-per-tick 6 :limit 6
+                             :particle {:material :additive
+                                        :color [180 20 20 230]
+                                        :life-ticks 10 :speed 0.08
+                                        :spread {:x 0.35 :y 0.55 :z 0.35}}}}
+                  {:component :effect/vfx
+                   :effect-id :audio-one-shot
+                   :operation :spawn
+                   :audience {:type :nearby :radius 64.0}
+                   :payload {:position {:ref [:slot :trace :position]}
+                             :sound-id "academy:tp.guts"
+                             :volume 0.6 :pitch 1.0}}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :refresh-trace}
+                  {:component :marker-payload :operation :spawn}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :flow/branch
+                   :when {:expr :bool/or
+                          :args [{:from :caster/creative?}
+                                 {:expr :math/gte
+                                  :args [{:ref [:context :resources :cp]}
+                                         {:tunable :release-cp}]}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :refresh-trace}
+                                  {:component :marker-payload :operation :update}
+                                  {:component :flow/finish :outcome :continue}]}
+                   :else {:component :flow/sequence
+                          :steps [{:component :destroy-marker}
+                                  {:component :flow/finish
+                                   :outcome :insufficient-resource
+                                   :finish-session? true}]}}]}
+  :release {:component :flow/sequence
+            :steps [{:component :refresh-trace}
+                    {:component :flow/branch
+                     :when {:ref [:slot :trace :attacked?]}
+                     :then {:component :txn/atomic
+                            :guards [{:component :guard/resource
+                                      :cost {:cp {:tunable :release-cp}
+                                             :overload {:tunable :release-overload}}}]
+                            :reservations []
+                            :body {:component :flow/sequence
+                                   :steps [{:component :cost/spend :budget :release}
+                                           {:component :combat/damage
+                                            :world-id {:from :world/id}
+                                            :target {:ref [:slot :trace :target-id]}
+                                            :amount {:tunable :damage}
+                                            :damage-type :magic}
+                                           {:component :flow/branch
+                                            :when {:expr :random/chance
+                                                   :args [{:tunable :nausea-chance}]}
+                                            :then {:component :combat/status
+                                                   :target {:from :caster/id}
+                                                   :status-id :nausea
+                                                   :duration-ticks {:tunable :nausea-duration-ticks}
+                                                   :amplifier {:tunable :nausea-amplifier}}}
+                                           {:component :score/mark :tag :hit}
+                                           {:component :cooldown/start :name :main}
+                                           {:component :impact-vfx}
+                                           {:component :destroy-marker}
+                                           {:component :flow/finish
+                                            :outcome :performed
+                                            :finish-session? true}]}
+                            :on-fail {:component :flow/sequence
+                                      :steps [{:component :impact-vfx}
+                                              {:component :destroy-marker}
+                                              {:component :flow/finish
+                                               :outcome :insufficient-resource
+                                               :finish-session? true}]}}
+                     :else {:component :flow/sequence
+                            :steps [{:component :destroy-marker}
+                                    {:component :effect/vfx
+                                     :effect-id :audio-one-shot
+                                     :operation :spawn
+                                     :audience {:type :nearby :radius 64.0}
+                                     :payload {:position {:ref [:slot :trace :position]}
+                                               :sound-id "academy:tp.guts"
+                                               :volume 0.6 :pitch 1.0}}
+                                    {:component :flow/finish
+                                     :outcome :miss
+                                     :finish-session? true}]}}]}
+  :abort {:component :flow/sequence
+          :steps [{:component :destroy-marker}
+                  {:component :flow/finish
+                   :outcome :aborted
+                   :finish-session? true}]}}}

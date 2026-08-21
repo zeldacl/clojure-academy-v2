@@ -87,8 +87,11 @@
              :id :light-shield
               :resource "ac/combat/abilities/light_shield.edn"}
              {:kind :ability
-             :id :meltdowner
+              :id :meltdowner
               :resource "ac/combat/abilities/meltdowner.edn"}
+             {:kind :ability
+              :id :flesh-ripping
+              :resource "ac/combat/abilities/flesh_ripping.edn"}
              {:kind :ability
               :id :electron-bomb
               :resource "ac/combat/abilities/electron_bomb.edn"}

@@ -186,6 +186,16 @@
     :cooldown-ticks :cooldown.ticks
     :exp-entity :progression.exp-entity
     :exp-block :progression.exp-block}
+   :flesh-ripping
+   {:targeting-range :targeting.range
+    :damage :combat.damage
+    :nausea-chance :effect.nausea-chance
+    :nausea-duration-ticks :effect.nausea-duration-ticks
+    :nausea-amplifier :effect.nausea-amplifier
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit}
    :thunder-clap
    {:targeting-range :targeting.range
     :charge-min :charge.min-ticks
