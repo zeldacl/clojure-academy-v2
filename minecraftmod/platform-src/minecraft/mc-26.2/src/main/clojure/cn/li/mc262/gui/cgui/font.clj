@@ -1,23 +1,30 @@
 (ns cn.li.mc262.gui.cgui.font
   "CLIENT-ONLY CGui font bridge for Minecraft 26.2.
 
-   Minecraft 26.2's text extractor owns glyph render-state submission. This
-   adapter therefore uses the vanilla Font directly instead of carrying the
-   removed ShaderInstance/GlyphInfo MSDF pipeline.
+   Minecraft 26.2's text extractor owns glyph render-state submission, so the
+   adapter hands it either the MSDF shadow font (cn.li.mc262.client.font.msdf,
+   FreeType-backed FontSet) or, before the face is ready, the vanilla Font.
 
    When `:monospace?` is set, glyphs are measured and drawn with a fixed
-   advance (width of `0`) so terminal/CGui layouts stay columnar without MSDF."
+   advance (MSDF monospaceAdvance, else width of `0`) so terminal/CGui
+   layouts stay columnar."
   (:require [clojure.string :as str])
   (:import [cn.li.mcbase.client MinecraftClientAccess]
+           [cn.li.mc262.client.font.msdf MsdfFontManager]
            [cn.li.mc262.client.render GuiPerspectiveWarp]
            [net.minecraft.client StringSplitter]
            [net.minecraft.client.gui Font GuiGraphicsExtractor]
            [net.minecraft.network.chat Component MutableComponent Style]
            [org.joml Matrix3x2f Matrix3x2fStack]))
 
+;; MSDF shadow-font em: glyphs are rasterized at 32px, so a :font-size N
+;; MSDF draw needs scale N/32. The vanilla-font fallback (no MSDF face yet)
+;; scales by N/9 instead — see vanilla-scale-factor.
 (def ^:private DEFAULT-BASE-HEIGHT 32.0)
 (defonce ^:private registry (atom {}))
 (defonce ^:private base-height (atom DEFAULT-BASE-HEIGHT))
+
+(def ^:private vanilla-line-height 9.0)
 
 (defn set-msdf-base-height!
   "Compatibility name retained for content font-size configuration."
@@ -43,6 +50,12 @@
 (defn- vanilla-font ^Font []
   (MinecraftClientAccess/getFont))
 
+(defn- shadow-font ^Font []
+  (MsdfFontManager/shadowFont))
+
+(defn- msdf-ready? []
+  (boolean (MsdfFontManager/hasFontFace)))
+
 (defn- build-style ^Style [{:keys [bold? italic?]}]
   (cond-> Style/EMPTY
     bold? (.withBold true)
@@ -64,6 +77,16 @@
   (/ (double (or font-size @base-height))
      (double @base-height)))
 
+(defn- vanilla-scale-factor [font-size]
+  ;; Vanilla font is 9px tall at scale 1.0; the MSDF em is 32px — a fallback
+  ;; draw (no MSDF face yet) must scale by N/9, not N/32.
+  (/ (double font-size) vanilla-line-height))
+
+(defn- width-scale [font-size]
+  (if (msdf-ready?)
+    (scale-factor font-size)
+    (vanilla-scale-factor font-size)))
+
 (defn- aligned-x [align x total-width]
   (case align
     :center (- (double x) (/ total-width 2.0))
@@ -73,7 +96,9 @@
 (defn- monospace-advance
   "Unscaled em-space advance used when `:monospace?` is true."
   ^double [font-desc]
-  (double (.width (vanilla-font) (component "0" font-desc))))
+  (if (msdf-ready?)
+    (double (MsdfFontManager/monospaceAdvance))
+    (double (.width (vanilla-font) (component "0" font-desc)))))
 
 (defn- codepoint-count
   ^long [^String text]
@@ -89,16 +114,17 @@
   ([font-desc ^String text font-size _glyph-styles]
    (if (str/blank? text)
      0.0
-     (let [scale (scale-factor font-size)
+     (let [scale (width-scale font-size)
            unscaled (if (:monospace? font-desc)
                       (monospace-width font-desc text)
-                      (double (.width (vanilla-font) (component text font-desc))))]
+                      (double (.width (if (msdf-ready?) (shadow-font) (vanilla-font))
+                                     (component text font-desc))))]
        (* unscaled scale)))))
 
 (defn- draw-monospace!
   [^GuiGraphicsExtractor graphics font-desc ^String text
    color shadow?]
-  (let [^Font font (vanilla-font)
+  (let [^Font font (if (msdf-ready?) (shadow-font) (vanilla-font))
         advance (float (monospace-advance font-desc))
         color-i (unchecked-int color)
         shadow (boolean shadow?)
@@ -125,7 +151,7 @@
    they coalesce into the same draw."
   [^GuiGraphicsExtractor graphics ^Matrix3x2fStack pose font-desc ^String text
    draw-x y scale color shadow?]
-  (let [^Font font (vanilla-font)
+  (let [^Font font (if (msdf-ready?) (shadow-font) (vanilla-font))
         ;; Advances come from the splitter, unrounded. `Font.width` is just
         ;; `ceil` of the same sum, and vanilla lays a run out at these float
         ;; advances too, so accumulating them keeps the glyphs on the alignment
@@ -182,7 +208,7 @@
    (when (seq text)
      (let [width (text-width font-desc text font-size)
            draw-x (aligned-x align x width)
-           scale (float (scale-factor font-size))
+           scale (float (width-scale font-size))
            ^Matrix3x2fStack pose (.pose graphics)
            warped? (some? (GuiPerspectiveWarp/active))]
        (if warped?
@@ -196,7 +222,7 @@
              (if (:monospace? font-desc)
                (draw-monospace! graphics font-desc text color shadow?)
                (.text graphics
-                      (vanilla-font)
+                      (if (msdf-ready?) (shadow-font) (vanilla-font))
                       (component text font-desc)
                       0 0
                       (unchecked-int color)

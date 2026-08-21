@@ -19,6 +19,7 @@
            [cn.li.mc262.runtime BlockRegistry RuntimeAccess]
            [cn.li.mcver ItemData ResourceLocations]
            [net.minecraft.core BlockPos Holder]
+           [net.minecraft.core.component DataComponents]
            [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
            [net.minecraft.server.level ServerPlayer]
@@ -131,8 +132,8 @@
                                 (.put this (str key) lst))
                               this)
          :sd-get-string-list  (fn [^CompoundTag this key]
-                              (let [lst (.getList this (str key) 8)]
-                                (vec (for [i (range (.size lst))] (.getString lst i)))))
+                              (let [lst (.getListOrEmpty this (str key))]
+                                (vec (for [i (range (.size lst))] (.getStringOr lst i "")))))
          :sd-get-string    (fn [^CompoundTag this key] (NbtAccess/getString this (str key)))
          :sd-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
          :sd-get-boolean   (fn [^CompoundTag this key] (NbtAccess/getBoolean this (str key)))
@@ -194,7 +195,9 @@
         :item-set-hover-name!     (fn [^ItemStack this name-key]
                                     ;; name-key is a translation key, not
                                     ;; literal text — keeps variants localized.
-                                    (.setHoverName this (Component/translatable (str name-key))))
+                                    ;; 26.2 removed setHoverName; custom names
+                                    ;; are a data component now.
+                                    (.set this (DataComponents/CUSTOM_NAME) (Component/translatable (str name-key))))
         :item-copy-stack          (fn [^ItemStack this] (.copy this))
         :item-set-count!          (fn [^ItemStack this n] (.setCount this (int n)))
         :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))

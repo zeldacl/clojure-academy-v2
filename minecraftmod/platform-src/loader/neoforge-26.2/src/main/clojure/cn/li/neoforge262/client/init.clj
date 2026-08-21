@@ -14,6 +14,7 @@
             [cn.li.neoforge262.runtime.owner :as runtime-owner]
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
+            [cn.li.mc262.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc262.client.i18n :as i18n]
             [cn.li.neoforge262.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
@@ -415,6 +416,7 @@
       ;; hook may have fired earlier, before the bridge ops existed) — retry now
       ;; that the bridge is complete.
       (power-runtime/client-font-init!)
+      (msdf-setup/init!)
 
       (runtime-bridge/init!)
       (overlay-renderer/init!)

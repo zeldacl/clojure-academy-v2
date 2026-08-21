@@ -1,6 +1,8 @@
 (ns cn.li.neoforge262.client.runtime-bridge
   "CLIENT-ONLY Forge adapter for runtime hooks."
   (:require [cn.li.mc262.client.effects.particle :as particle]
+            [cn.li.mc262.client.font.msdf-tick :as msdf-tick]
+
             [cn.li.mc262.client.effects.sound :as sound]
             [cn.li.mc262.client.session-cleanup :as session-cleanup]
             [cn.li.mcbase.client.session :as client-session]
@@ -98,6 +100,7 @@
     (catch Throwable _ nil)))
 
 (defn tick-client! []
+  (msdf-tick/client-tick!)
   (session-cleanup/tick-connection-change! {})
   (particle/tick-particles!)
   (sound/tick-sounds!)
