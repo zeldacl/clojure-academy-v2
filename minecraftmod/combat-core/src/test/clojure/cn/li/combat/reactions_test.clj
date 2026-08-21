@@ -38,3 +38,64 @@
     (is (= 0 (get-in result [:metadata :critical :level])))
     (is (= [[:ability-exp :critical-passive 0.005]]
            (:source-state-patch result)))))
+
+(deftest critical-contributions-aggregate-without-double-roll-test
+  (let [dim {:id :dim-folding-theorem
+             :activation :passive
+             :reactions [{:on :combat/damage
+                          :priority 200
+                          :program {:component :damage/critical
+                                    :levels [{:level 0 :probability 0.0
+                                              :multiplier {:tunable :damage-multipliers
+                                                           :path [0]}}
+                                             {:level 1 :probability 0.0
+                                              :multiplier {:tunable :damage-multipliers
+                                                           :path [1]}}
+                                             {:level 2 :probability 0.0
+                                              :multiplier {:tunable :damage-multipliers
+                                                           :path [2]}}]
+                                    :damage-types [:magic]
+                                    :exp-per-level 0.005}}]}
+        space {:id :space-fluct
+               :activation :passive
+               :reactions [{:on :combat/damage
+                            :priority 200
+                            :program {:component :damage/critical
+                                      :levels [{:level 0 :probability 0.0}
+                                               {:level 1 :probability 0.0}
+                                               {:level 2 :probability 1.0}]
+                                      :damage-types [:magic]
+                                      :exp-per-level 0.0001
+                                      :exp-mode :fixed
+                                      :events-by-level
+                                      {:level-2 [{:type :achievement/trigger
+                                                  :payload {:id "teleporter.mastery"}}]}}}]}
+        request {:source "attacker"
+                 :target "target"
+                 :base 10.0
+                 :type :magic
+                 :components {:direct 10.0}
+                 :tags #{:combat}
+                 :metadata {:activation-seed 7}}
+        state (fn [_]
+                {:ability-data {:learned-skills #{:dim-folding-theorem :space-fluct}
+                                :skill-exps {}}})
+        result (reactions/apply!
+                request
+                {:reactions [dim space]
+                 :session-fn (constantly nil)
+                 :state-fn state
+                 :tunables-fn (fn [id _ _]
+                                (if (= id :dim-folding-theorem)
+                                  {:damage-multipliers [1.3 1.6 2.6]}
+                                  {}))
+                 :domain-state {}})]
+    (is (= 26.0 (:base result)))
+    (is (= 26.0 (get-in result [:components :direct])))
+    (is (= 2 (get-in result [:metadata :critical :level])))
+    (is (= [[:ability-exp :dim-folding-theorem 0.015]
+            [:ability-exp :space-fluct 0.0001]]
+           (:source-state-patch result)))
+    (is (= 1 (count (filter #(= "teleporter.mastery"
+                                (get-in % [:payload :id]))
+                            (:events result)))))))

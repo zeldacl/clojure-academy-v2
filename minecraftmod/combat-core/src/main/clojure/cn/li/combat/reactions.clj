@@ -60,59 +60,117 @@
       (get-in request [:metadata :position])
       [0.0 0.0 0.0]))
 
-(defn- critical-result [current ability-id program context source target]
+(defn- critical-exp-gain
+  [program context level-index]
+  (let [amount (double (or (value (:exp-per-level program) context) 0.0))]
+    (if (= :fixed (:exp-mode program))
+      amount
+      (* amount (inc (long level-index))))))
+
+(defn- critical-result
+  "Apply one deterministic critical roll for all independent critical
+   contributions.  Multiple passive abilities may add probability to the same
+   level; they must not roll independently or multiply damage twice."
+  [current contributions source target]
   (let [base (double (:base current))
-        source-valid? (and source (not= (str source) (str target))
-                           (not= (str source) "environment")
-                           (boolean (get-in context [:context :source-learned?])))
-        allowed-types (set (or (:damage-types program) []))
-        eligible? (and source-valid? (pos? base)
-                       (Double/isFinite base)
-                       (contains? allowed-types (:type current))
-                       (not (get-in context [:context :reflected?])))
-        level (when eligible?
-                (critical-level (:levels program) context))]
-    (if-not level
+        reflected? (boolean (some #(get-in % [:context :context :reflected?])
+                                  contributions))
+        allowed? (fn [{:keys [program context]}]
+                   (and (boolean (get-in context [:context :source-learned?]))
+                        (contains? (set (or (:damage-types program) []))
+                                   (:type current))))
+        eligible? (and source (not= (str source) (str target))
+                       (not= (str source) "environment")
+                       (pos? base) (Double/isFinite base)
+                       (not reflected?))
+        active (if eligible? (filter allowed? contributions) [])
+        levels (reduce (fn [result contribution]
+                         (let [program (:program contribution)
+                               context (:context contribution)]
+                           (reduce (fn [result level]
+                                     (update result (long (or (:level level) 0))
+                                             (fnil conj [])
+                                             (assoc contribution :level level)))
+                                   result (:levels program))))
+                       (sorted-map) active)
+        selected-level (some (fn [[level entries]]
+                               (let [probability (min 1.0
+                                                       (reduce + 0.0
+                                                               (map #(double (or (value (get-in % [:level :probability])
+                                                                                         (:context %))
+                                                                                 0.0))
+                                                                    entries)))]
+                                 (when (and (Double/isFinite probability)
+                                            (pos? probability)
+                                            (boolean (vm/evaluate-expression
+                                                      :random/chance
+                                                      [probability]
+                                                      (unchecked-add
+                                                       (long (or (get-in (first entries) [:context :activation-seed]) 0))
+                                                       (long level)))))
+                                   [level entries])))
+                             levels)]
+    (if-not selected-level
       current
-      (let [multiplier (double (or (value (:multiplier level) context) 1.0))
-            level-index (long (or (:level level) 0))
-            exp-per-level (double (or (value (:exp-per-level program) context) 0.0))
+      (let [[level entries] selected-level
+            multiplier (double
+                       (or (some (fn [{:keys [level context]}]
+                                   (when (contains? level :multiplier)
+                                     (value (:multiplier level) context)))
+                                 entries)
+                           1.0))
             scaled (* base multiplier)
             ratio (if (pos? base) (/ scaled base) 0.0)
-            vfx (:vfx program)
+            presentation (some #(when (:vfx (:program %)) %) entries)
+            vfx (:vfx (:program presentation))
             vfx-signal (when vfx
-                         {:op :spawn
-                          :effect-id (:effect-id vfx)
-                          :instance-key (or (:instance-key vfx)
-                                            [ability-id :critical])
-                          :owner source
-                          :world-id (get-in context [:context :world-id])
-                          :audience (:audience vfx)
-                          :event-seq 0
-                          :seed (:activation-seed context)
-                          :event :spawn
-                          :params (value (:payload vfx) context)})
-            feedback (:feedback program)
-            feedback-context (assoc-in context
-                                       [:context :critical-multiplier]
-                                       multiplier)
-            events (vec (concat
-                         (or (:events program) [])
-                         (when feedback
-                           [{:type :player/feedback
-                             :payload (value feedback feedback-context)}])))
+                         (let [context (:context presentation)]
+                           {:op :spawn
+                            :effect-id (:effect-id vfx)
+                            :instance-key (or (:instance-key vfx)
+                                              [(:ability-id presentation) :critical])
+                            :owner source
+                            :world-id (get-in context [:context :world-id])
+                            :audience (:audience vfx)
+                            :event-seq 0
+                            :seed (:activation-seed context)
+                            :event :spawn
+                            :params (value (:payload vfx) context)}))
+            feedback (some #(when (:feedback (:program %)) %) entries)
+            feedback-context (when feedback
+                              (assoc-in (:context feedback)
+                                        [:context :critical-multiplier]
+                                        multiplier))
+            events (->> entries
+                        (mapcat (fn [{:keys [program]}]
+                                  (concat (or (:events program) [])
+                                          (or (get-in program [:events-by-level level])
+                                              (get-in program
+                                                      [:events-by-level
+                                                       (keyword (str "level-" level))])
+                                              []))))
+                        distinct
+                        vec)
+            events (cond-> events
+                     feedback
+                     (conj {:type :player/feedback
+                            :payload (value (:feedback (:program feedback))
+                                            feedback-context)}))
             result (-> current
                        (assoc :base scaled)
                        (assoc :components (scale-components (:components current) ratio))
                        (assoc-in [:metadata :critical]
-                                 {:ability-id ability-id
-                                  :level level-index
+                                 {:ability-id (:ability-id (first entries))
+                                  :level (long level)
                                   :multiplier multiplier
                                   :damage-before base
                                   :damage-after scaled})
-                       (update :source-state-patch (fnil conj [])
-                               [:ability-exp ability-id
-                                (* exp-per-level (inc level-index))])
+                       (update :source-state-patch (fnil into [])
+                               (keep (fn [{:keys [ability-id program context]}]
+                                       (let [gain (critical-exp-gain program context level)]
+                                         (when (and (Double/isFinite gain) (pos? gain))
+                                           [:ability-exp ability-id gain])))
+                                     entries))
                        (update :events (fnil into []) events))]
         (if vfx-signal
           (update result :vfx-signals (fnil conj []) vfx-signal)
@@ -131,9 +189,14 @@
                                    [entry])))
                        (filter #(= :combat/damage (:on %)))
                        (sort-by (juxt #(long (or (:priority %) 0))
-                                      #(str (:ability-id %)))))]
+                                      #(str (:ability-id %)))))
+        critical-reactions (filter #(= :damage/critical
+                                        (get-in % [:program :component]))
+                                   reactions)
+        critical-anchor-id (:ability-id (first critical-reactions))]
     (reduce
-     (fn [current {:keys [ability-id activation when program mark-type]}]
+     (fn [current {:keys [ability-id activation program mark-type]
+                   when-condition :when}]
        (let [target (str (:target current))
              source (:source current)
              source-id (when source (str source))
@@ -193,14 +256,48 @@
                                 :target-position (request-position current)
                                 :world-id (or (get-in current [:metadata :world-id])
                                               (:world-id state))}}
-             condition? (or (nil? when) (boolean (value when context)))
+             condition? (if (= :damage/critical (:component program))
+                          true
+                           (or (nil? when-condition)
+                               (boolean (value when-condition context))))
              component (:component program)]
          (if-not (and (or session (= :passive activation)) condition?)
            current
            (do
              (case component
                :damage/critical
-               (critical-result current ability-id program context source target)
+               (if (= ability-id critical-anchor-id)
+                 (let [contributions
+                       (keep (fn [{entry-id :ability-id
+                                   entry-when :when
+                                   entry-program :program}]
+                               (let [entry-context
+                                     (assoc context
+                                            :tunables
+                                            (tunables-fn entry-id
+                                                         source-session
+                                                         source-state)
+                                            :context
+                                            (assoc (:context context)
+                                                   :ability-id entry-id
+                                                   :source-learned?
+                                                   (contains?
+                                                    (get-in source-state
+                                                            [:ability-data :learned-skills] #{})
+                                                    entry-id)
+                                                   :source-skill-exp
+                                                   (double
+                                                    (or (get-in source-state
+                                                                [:ability-data :skill-exps entry-id])
+                                                        0.0))))]
+                                 (when (or (nil? entry-when)
+                                           (boolean (value entry-when entry-context)))
+                                   {:ability-id entry-id
+                                    :program entry-program
+                                    :context entry-context})))
+                             critical-reactions)]
+                   (critical-result current contributions source target))
+                 current)
            :damage/multiply
              (let [base (double (:base current))
                    multiplier (double (or (value (:multiplier program) context) 1.0))]
@@ -327,5 +424,5 @@
                                [:ability-exp ability-id (* base exp-scale)])
                        (update :world-effects (fnil conj [])
                                {:type :damage :request reflected-request})
-                       (cond-> precheck? (assoc :cancelled? true))))))))
-     request reactions)))))
+                        (cond-> precheck? (assoc :cancelled? true)))))))))))
+      request reactions)))

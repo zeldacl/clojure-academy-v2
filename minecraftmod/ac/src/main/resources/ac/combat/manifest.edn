@@ -48,6 +48,9 @@
               :id :dim-folding-theorem
               :resource "ac/combat/abilities/dim_folding_theorem.edn"}
              {:kind :ability
+              :id :space-fluct
+              :resource "ac/combat/abilities/space_fluct.edn"}
+             {:kind :ability
              :id :flashing
               :resource "ac/combat/abilities/flashing.edn"}
              {:kind :ability

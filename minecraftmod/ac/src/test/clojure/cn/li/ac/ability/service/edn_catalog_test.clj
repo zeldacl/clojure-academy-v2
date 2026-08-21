@@ -35,6 +35,7 @@
     (is (catalog/available? :electron-missile))
     (is (catalog/available? :rad-intensify))
     (is (catalog/available? :dim-folding-theorem))
+    (is (catalog/available? :space-fluct))
     (is (catalog/available? :mine-ray-basic))
     (is (catalog/available? :mine-ray-expert))
     (is (catalog/available? :mine-ray-luck))
@@ -51,6 +52,7 @@
     (is (= :migrated (catalog/migration-status :meltdowner)))
     (is (= :migrated (catalog/migration-status :rad-intensify)))
     (is (= :migrated (catalog/migration-status :dim-folding-theorem)))
+    (is (= :migrated (catalog/migration-status :space-fluct)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -100,6 +102,7 @@
            (get-in state [:combat :abilities :rad-intensify :tunables :mark-duration-ticks :value])))
     (is (pos? (count (get-in state [:combat :abilities :rad-intensify :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :dim-folding-theorem :compiled-ir]))))
+    (is (pos? (count (get-in state [:combat :abilities :space-fluct :compiled-ir]))))
     (is (= :mine-ray-basic (get-in state [:combat :abilities :mine-ray-basic :id])))
     (is (= :mine-ray-expert (get-in state [:combat :abilities :mine-ray-expert :id])))
     (is (= :mine-ray-luck (get-in state [:combat :abilities :mine-ray-luck :id])))

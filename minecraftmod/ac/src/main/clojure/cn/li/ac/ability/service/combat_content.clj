@@ -35,14 +35,7 @@
   {:provider-id :academy/base
    :revision 1
    :abilities
-   [{:id :space-fluct
-     :revision 1
-     :activation :passive
-     :program {:op :sequence
-               :steps [{:op :require :predicate :critical-event}
-                       {:op :domain-event :event-type :critical-modifier
-                        :metadata {:source :space-fluct}}]}}
-    {:id :location-teleport
+   [{:id :location-teleport
      :revision 1
      :activation :instant
      :cost {:cp 12}

@@ -208,6 +208,12 @@
    {:damage-multipliers :critical.damage-multipliers
     :level0-probability :critical.level0-probability
     :exp-per-crit-level :progression.exp-per-crit-level}
+   :space-fluct
+   {:damage-multipliers :critical.damage-multipliers
+    :level0-probability :critical.level0-probability
+    :level1-probability :critical.level1-probability
+    :level2-probability :critical.level2-probability
+    :exp-critical :progression.exp-critical}
    :vec-reflection
    {:tick-cp :cost.tick.cp
     :overload-keep :cost.overload-keep
@@ -584,24 +590,26 @@
   is applied fresh per activation by combat_runtime's caster-facade sibling,
   never baked in here: catalog load only ever sees config, never a player's
   mastery."
-  [skill-id tunable-id field-id {:keys [curve type]}]
+  [skill-id tunable-id field-id {:keys [curve type source-skill-id]}]
+  (let [config-skill-id (or source-skill-id skill-id)]
   (case curve
     :const (case (or type :double)
-             :double {:value (tunable-double skill-id field-id)}
-             :long {:value (tunable-int skill-id field-id)}
-             :string-list {:value (tunable-string-list skill-id field-id)}
+             :double {:value (tunable-double config-skill-id field-id)}
+             :long {:value (tunable-int config-skill-id field-id)}
+             :string-list {:value (tunable-string-list config-skill-id field-id)}
              (throw (ex-info "unsupported :const tunable type"
                              {:ability-id skill-id :tunable tunable-id :type type})))
-    :mastery-lerp {:range (tunable-double-list skill-id field-id)}
-    :affine {:range (tunable-double-list skill-id field-id)}
+    :mastery-lerp {:range (tunable-double-list config-skill-id field-id)}
+    :affine {:range (tunable-double-list config-skill-id field-id)}
     ;; A raw (lo,hi) config pair with NO automatic curve applied against
     ;; skill-exp -- for a tunable that needs to be interpolated against
     ;; something other than mastery (e.g. a runtime charge ratio). The
     ;; ability reads both ends via {:tunable name :path [0]}/[1] and
     ;; supplies its own math/lerp.
-    :pair {:value (tunable-double-list skill-id field-id)}
+    :pair {:value (tunable-double-list config-skill-id field-id)}
     (throw (ex-info "unsupported tunable curve"
                     {:ability-id skill-id :tunable tunable-id :curve curve}))))
+  )
 
 (defn overlay-edn-tunables
   "Materialize config-driven values into an ability's :tunables block before
