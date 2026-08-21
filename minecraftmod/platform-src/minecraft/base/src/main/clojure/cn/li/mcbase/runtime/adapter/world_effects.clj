@@ -583,6 +583,26 @@
                             (catch Exception e
                               (log/warn "Failed to configure entity:" (ex-message e))
                               false)))
+     :teleport-entity! (fn [world-id entity-uuid x y z]
+                         (try
+                           (when-let [^MinecraftServer server (server-fn)]
+                             (when-let [entity (entity-motion/resolve-entity
+                                                server world-id (str entity-uuid))]
+                               (boolean (entity-motion/set-position-for-entity!
+                                         entity (double x) (double y) (double z))))
+                           (catch Exception e
+                             (log/warn "Failed to teleport entity:" (ex-message e))
+                             false)))
+     :add-entity-velocity! (fn [world-id entity-uuid x y z]
+                             (try
+                               (when-let [^MinecraftServer server (server-fn)]
+                                 (when-let [entity (entity-motion/resolve-entity
+                                                    server world-id (str entity-uuid))]
+                                   (boolean (entity-motion/add-velocity-for-entity!
+                                             entity (double x) (double y) (double z))))
+                               (catch Exception e
+                                 (log/warn "Failed to add entity velocity:" (ex-message e))
+                                 false)))
      :execute-flashing! execute-flashing!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!

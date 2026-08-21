@@ -129,6 +129,44 @@
   (when (:child node)
     (sample-node! (:child node) (assoc ctx :stage-override :first-person))))
 
+(defn- sample-keyframes
+  "Piecewise-linear sample of [[progress value] ...] keyframes.  Curves are
+   effect data so the same primitive can drive any first-person animation."
+  [curve progress]
+  (let [points (if (vector? curve) curve [])
+        progress (double (max 0.0 (min 1.0 progress)))]
+    (cond
+      (empty? points) 0.0
+      (= 1 (count points)) (double (or (second (first points)) 0.0))
+      (<= progress (double (or (first (first points)) 0.0)))
+      (double (or (second (first points)) 0.0))
+      :else
+      (loop [idx 1]
+        (if (>= idx (count points))
+          (double (or (second (last points)) 0.0))
+          (let [[p1 v1] (nth points (dec idx))
+                [p2 v2] (nth points idx)
+                p1 (double p1) p2 (double p2)]
+            (if (<= progress p2)
+              (let [span (max 1.0e-9 (- p2 p1))
+                    t (max 0.0 (min 1.0 (/ (- progress p1) span)))]
+                (+ (double v1) (* t (- (double v2) (double v1)))))
+              (recur (inc idx)))))))))
+
+(defmethod sample-node! :vfx/first-person-motion
+  [node ctx]
+  (let [{:keys [stage phase-ticks duration-ticks curves]} (resolve-fields node ctx)
+        curves (or (get curves stage) {})
+        duration (double (max 1.0 (or duration-ticks 1.0)))
+        progress (/ (double (max 0.0 (or phase-ticks 0.0))) duration)
+        transform (into {}
+                        (map (fn [key]
+                               [key (sample-keyframes (get curves key) progress)]))
+                        [:tx :ty :tz :rot-x :rot-y :rot-z])]
+    (emit! ctx :first-person :first-person [transform]
+           {:material :presentation-first-person
+            :variant :transform})))
+
 (defmethod sample-node! :vfx/noise
   [node ctx]
   (when (:child node)

@@ -24,6 +24,9 @@
               :id :directed-blastwave
               :resource "ac/combat/abilities/directed_blastwave.edn"}
              {:kind :ability
+              :id :directed-shock
+              :resource "ac/combat/abilities/directed_shock.edn"}
+             {:kind :ability
               :id :scatter-bomb
               :resource "ac/combat/abilities/scatter_bomb.edn"}
              {:kind :ability

@@ -135,6 +135,21 @@
    :vfx/first-person-transform {:component :vfx/first-person-transform
                                 :offset {:right 0.0 :up 0.0 :forward 0.0}
                                 :child ring-example}
+   :vfx/first-person-motion {:component :vfx/first-person-motion
+                             :stage :prepare :phase-ticks 0
+                             :duration-ticks 1
+                             :curves {:prepare {:tx [[0.0 0.0] [1.0 0.0]]
+                                                :ty [[0.0 0.0] [1.0 0.0]]
+                                                :tz [[0.0 0.0] [1.0 0.0]]
+                                                :rot-x [[0.0 0.0] [1.0 0.0]]
+                                                :rot-y [[0.0 0.0] [1.0 0.0]]
+                                                :rot-z [[0.0 0.0] [1.0 0.0]]}
+                                      :punch {:tx [[0.0 0.0] [1.0 0.0]]
+                                              :ty [[0.0 0.0] [1.0 0.0]]
+                                              :tz [[0.0 0.0] [1.0 0.0]]
+                                              :rot-x [[0.0 0.0] [1.0 0.0]]
+                                              :rot-y [[0.0 0.0] [1.0 0.0]]
+                                              :rot-z [[0.0 0.0] [1.0 0.0]]}}}
    :vfx/camera {:component :vfx/camera :operation :pitch-impulse :value 0.0 :duration-ticks 1}
    :vfx/audio-one-shot {:component :vfx/audio-one-shot :sound-id "generic" :position point-example}
    :vfx/audio-loop {:component :vfx/audio-loop :sound-id "generic"

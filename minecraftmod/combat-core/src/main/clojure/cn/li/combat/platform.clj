@@ -220,12 +220,21 @@
               (not= false include-blocks?)
               (raycast/raycast-blocks world-id sx sy sz dx dy dz distance)
               :else nil)]
-    (or hit {:hit-type :miss :hit? false
-             :position {:x (+ sx (* dx distance))
-                        :y (+ sy (* dy distance))
-                        :z (+ sz (* dz distance))}
-             :world-id world-id
-             :owner owner})))
+    (let [result (or hit {:hit-type :miss :hit? false
+                          :world-id world-id
+                          :owner owner})]
+      ;; Keep one neutral hit-position shape for all platform raycast
+      ;; adapters.  Some bridges expose :hit-x/:hit-y/:hit-z while entity
+      ;; traces expose :x/:y/:z; ability EDN should not know either ABI.
+      (if (:position result)
+        result
+        (assoc result :position
+               {:x (double (or (:hit-x result) (:x result)
+                               (+ sx (* dx distance))))
+                :y (double (or (:hit-y result) (:y result)
+                               (+ sy (* dy distance))))
+                :z (double (or (:hit-z result) (:z result)
+                               (+ sz (* dz distance))))})))))
 
 (defn- normalize-vector
   [[x y z]]
@@ -594,6 +603,42 @@
   (configure-entity! {:world-id world-id :entity target :velocity velocity
                        :add-tags []}))
 
+(defn entity-velocity-add!
+  "Add a neutral velocity delta to one entity, preserving its current motion."
+  [{:keys [world-id target velocity]}]
+  (let [entity-id (or (:id target) (:uuid target) (:entity-id target))
+        p (point velocity)
+        valid? (and world-id entity-id p
+                    (= 3 (count p))
+                    (every? #(Double/isFinite (double %)) p)
+                    (world-effects/available?))]
+    (if valid?
+      (let [[x y z] p]
+        {:status (if (world-effects/add-entity-velocity!
+                      (str world-id) (str entity-id) x y z)
+                   :applied :failed)
+         :velocity {:x x :y y :z z}})
+      {:status :rejected :reason :invalid-entity-velocity-add-request})))
+
+(defn teleport-entity!
+  "Move one neutral entity to a position through the mcmod relay.
+   Position mutation is deliberately separate from velocity/configuration so
+   callers can compose ordering without a skill-specific host operation."
+  [{:keys [world-id target position]}]
+  (let [entity-id (or (:id target) (:uuid target) (:entity-id target) target)
+        p (point position)
+        valid? (and world-id entity-id p
+                    (= 3 (count p))
+                    (every? #(Double/isFinite (double %)) p)
+                    (world-effects/available?))]
+    (if valid?
+      (let [[x y z] p]
+        {:status (if (world-effects/teleport-entity!
+                      (str world-id) (str entity-id) x y z)
+                   :applied :failed)
+         :position {:x x :y y :z z}})
+      {:status :rejected :reason :invalid-entity-teleport-request})))
+
 (defn entity-impulse!
   "Set one entity's neutral velocity vector.  The component remains generic;
    the platform relay is responsible only for resolving the entity id and
@@ -801,9 +846,11 @@
    :entity/spawn spawn-entity!
    :entity/discard discard-entity!
    :entity/configure configure-entity!
+   :entity/teleport teleport-entity!
    :block/random-break random-break!
    :block/area-break area-break!
    :motion/entity-velocity entity-velocity!
+   :motion/entity-velocity-add entity-velocity-add!
    :projectile/schedule-beam deferred/schedule-action!})
 
 (defn install!

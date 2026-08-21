@@ -88,4 +88,7 @@
               :resource "ac/vfx/effects/directed_blastwave_charge.edn"}
              {:kind :vfx-effect
               :id :directed-blastwave-wave
-              :resource "ac/vfx/effects/directed_blastwave_wave.edn"}]}
+              :resource "ac/vfx/effects/directed_blastwave_wave.edn"}
+             {:kind :vfx-effect
+              :id :first-person-motion-session
+              :resource "ac/vfx/effects/first_person_motion_session.edn"}]}

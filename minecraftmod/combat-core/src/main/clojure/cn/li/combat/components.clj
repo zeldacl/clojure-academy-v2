@@ -323,6 +323,9 @@
            :motion/entity-velocity
            {:schema {:required #{:target :velocity}} :effects #{:mutate}}
 
+           :motion/entity-velocity-add
+           {:schema {:required #{:target :velocity}} :effects #{:mutate}}
+
            :projectile/schedule-beam
            {:schema {:required #{:origin :destination :damage :damage-type :delay-ticks}}
             :effects #{:mutate :emit}}

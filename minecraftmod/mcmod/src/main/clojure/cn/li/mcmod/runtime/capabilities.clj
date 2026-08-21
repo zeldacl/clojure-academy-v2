@@ -14,7 +14,7 @@
     :entity/reset-fall-damage :entity/radial-impulse :motion/flight
     :owner/can-fly
     :entity/status :entity/spawn :entity/discard :entity/configure
-    :motion/entity-velocity :motion/velocity :block/break :block/set
+    :motion/entity-velocity :motion/entity-velocity-add :motion/velocity :block/break :block/set
     :world/lightning :world/explosion :world/sound :block/break-budget
     :projectile/redirect :projectile/schedule-beam :resource/enforce-floor
     :resource/add :block/random-break})

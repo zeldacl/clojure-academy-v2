@@ -254,6 +254,23 @@
     :cooldown-ticks :cooldown.ticks
     :exp-hit :progression.exp-hit
     :exp-miss :progression.exp-miss}
+   :directed-shock
+   {:charge-min-ticks :charge.min-ticks
+    :charge-max-accepted-ticks :charge.max-accepted-ticks
+    :charge-max-tolerant-ticks :charge.max-tolerant-ticks
+    :punch-animation-ticks :charge.punch-anim-ticks
+    :targeting-distance :targeting.raycast-distance
+    :target-eye-height :targeting.eye-height
+    :hit-impulse :movement.hit-impulse
+    :knockback-y-adjust :movement.knockback-y-adjust
+    :knockback-scale :movement.knockback-scale
+    :knockback-exp-threshold :movement.knockback-exp-threshold
+    :damage :combat.damage
+    :release-cp :cost.up.cp
+    :release-overload :cost.up.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit
+    :exp-miss :progression.exp-miss}
    :blood-retrograde
    {:max-charge-ticks :charge.max-ticks
     :targeting-distance :targeting.distance

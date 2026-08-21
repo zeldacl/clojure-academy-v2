@@ -92,3 +92,15 @@
    resolved and applies the requested velocity/tags; mcmod only forwards data."
   [world-id entity-uuid velocity add-tags projectile-damage]
   (boolean (call :configure-entity! world-id entity-uuid velocity add-tags projectile-damage)))
+
+(defn teleport-entity!
+  "Neutral relay for moving an entity to an absolute position."
+  [world-id entity-uuid x y z]
+  (boolean (call :teleport-entity! world-id entity-uuid
+                 (double x) (double y) (double z))))
+
+(defn add-entity-velocity!
+  "Neutral relay for adding an entity velocity delta."
+  [world-id entity-uuid x y z]
+  (boolean (call :add-entity-velocity! world-id entity-uuid
+                 (double x) (double y) (double z))))

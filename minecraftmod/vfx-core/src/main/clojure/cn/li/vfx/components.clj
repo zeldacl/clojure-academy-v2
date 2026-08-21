@@ -124,6 +124,11 @@
            [:vfx/noise #{:seed :amplitude :child}]
            [:vfx/attach #{:anchor-type :owner :child}]
            [:vfx/first-person-transform #{:offset :child}]
+           ;; Generic first-person transform animation.  Stage names,
+           ;; durations and all keyframes are supplied by the effect EDN;
+           ;; this node contains no skill or item knowledge.
+           [:vfx/first-person-motion #{:stage :phase-ticks
+                                       :duration-ticks :curves}]
            [:vfx/camera #{:operation :value :duration-ticks}]
            [:vfx/audio-one-shot #{:sound-id :position}]
            [:vfx/audio-loop #{:sound-id :position :volume :pitch :instance-key

@@ -84,38 +84,6 @@
                                  {:op :vfx :effect-id :flesh-ripping
                                   :event :perform
                                   :params {:range-min 6.0 :range-max 14.0}}]}}}
-    {:id :directed-shock
-     :revision 1
-     :activation :session
-     :period-ticks 1
-     :max-session-ticks 200
-     :cost-phase :release
-     :cost {:cp (scale 50.0 100.0)
-            :overload (scale 18.0 12.0)}
-     :cooldown {:ticks (scale 60.0 20.0)}
-     :program {:op :phase
-               :start {:op :session-patch
-                       :entries [[[:charge-ticks] 0.0]]}
-               :pulse {:op :session-patch
-                       :entries [[[:charge-ticks]
-                                  {:op :increment :amount 1.0}]]}
-               :release {:op :sequence
-                         :steps [{:op :require-session
-                                  :path [:charge-ticks] :min 6.0 :max 50.0}
-                                 {:op :query :query-type :raycast
-                                  :distance 3.0 :result-ref :hit}
-                                 {:op :require :predicate :hit}
-                                 {:op :damage :amount (scale 7.0 15.0)
-                                  :type :vector
-                                  :target-ref :hit}
-                                 {:op :world-effect :effect-type :knockback
-                                  :target-ref :hit
-                                  :movement {:impulse 0.24
-                                             :knockback-y-adjust 0.6
-                                             :knockback-scale -0.7}}
-                                 {:op :vfx :effect-id :directed-shock
-                                  :event :perform
-                                  :params {:charge-min-ticks 6}}]}}}
     {:id :groundshock
      :revision 1
      :activation :session

@@ -17,6 +17,7 @@
     (is (catalog/available? :vec-accel))
     (is (catalog/available? :blood-retrograde))
     (is (catalog/available? :directed-blastwave))
+    (is (catalog/available? :directed-shock))
     (is (catalog/available? :scatter-bomb))
     (is (catalog/available? :mark-teleport))
     (is (catalog/available? :penetrate-teleport))
@@ -74,6 +75,10 @@
     (is (= :blood-retrograde (get-in state [:combat :abilities :blood-retrograde :id])))
     (is (= :directed-blastwave
            (get-in state [:combat :abilities :directed-blastwave :id])))
+    (is (= :directed-shock
+           (get-in state [:combat :abilities :directed-shock :id])))
+    (is (pos? (count (get-in state [:combat :abilities :directed-shock :compiled-ir]))))
+    (is (nil? (get-in state [:combat :errors :directed-shock])))
     (is (pos? (count (get-in state [:combat :abilities :directed-blastwave :compiled-ir]))))
     (is (nil? (get-in state [:combat :errors :directed-blastwave])))
     (is (pos? (count (get-in state [:combat :abilities :blood-retrograde :compiled-ir]))))
@@ -124,6 +129,8 @@
            (get-in state [:vfx :effects :directed-blastwave-charge :id])))
     (is (= :directed-blastwave-wave
            (get-in state [:vfx :effects :directed-blastwave-wave :id])))
+    (is (= :first-person-motion-session
+           (get-in state [:vfx :effects :first-person-motion-session :id])))
     (is (= :teleport-marker (get-in state [:vfx :effects :teleport-marker :id])))
     (is (= :energy-orb-session (get-in state [:vfx :effects :energy-orb-session :id])))
     (is (= :vortex-column-session (get-in state [:vfx :effects :vortex-column-session :id])))

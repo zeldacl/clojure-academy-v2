@@ -1,0 +1,266 @@
+{:schema-version 2
+ :kind :ability
+ :id :directed-shock
+ :revision 2
+ :activation :session
+ :status :migrated
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id
+            :rng/seed :progression/mastery]
+ :tunables
+ {:charge-min-ticks {:curve :const :type :long}
+  :charge-max-accepted-ticks {:curve :const :type :long}
+  :charge-max-tolerant-ticks {:curve :const :type :long}
+  :punch-animation-ticks {:curve :const :type :long}
+  :targeting-distance {:curve :const}
+  :target-eye-height {:curve :const}
+  :hit-impulse {:curve :const}
+  :knockback-y-adjust {:curve :const}
+  :knockback-scale {:curve :const}
+  :knockback-exp-threshold {:curve :const}
+  :damage {:curve :mastery-lerp}
+  :release-cp {:curve :mastery-lerp}
+  :release-overload {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp :type :long}
+  :exp-hit {:curve :const}
+  :exp-miss {:curve :const}}
+ :costs {:release {:resources {:cp {:tunable :release-cp}
+                               :overload {:tunable :release-overload}}}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:hit {:per-mark {:tunable :exp-hit}}
+               :miss {:per-mark {:tunable :exp-miss}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :assign :value 0}
+                             {:path [:punched?] :mode :assign :value false}
+                             {:path [:punch-ticks] :mode :assign :value 0}]}
+                  {:component :effect/vfx
+                   :effect-id :first-person-motion-session
+                   :operation :spawn
+                   :instance-key [:activation :directed-shock-hand]
+                   :audience {:type :owner}
+                   :payload {:stage :prepare
+                             :phase-ticks 0
+                             :duration-ticks 3
+                             :curves {:prepare {:tx [[0.0 0.0] [1.0 -0.02]]
+                                                :ty [[0.0 0.0] [0.5 0.2] [1.0 0.4]]
+                                                :tz [[0.0 0.0] [1.0 -0.05]]
+                                                :rot-x [[0.0 0.0] [1.0 -20.0]]
+                                                :rot-y [[0.0 0.0] [1.0 0.0]]
+                                                :rot-z [[0.0 0.0] [1.0 0.0]]}
+                                      :punch {:tx [[0.0 -0.04] [0.5 -0.04] [1.0 0.0]]
+                                              :ty [[0.0 0.8] [0.5 0.75] [1.0 0.0]]
+                                              :tz [[0.0 0.0] [0.3 -0.4] [1.0 0.0]]
+                                              :rot-x [[0.0 -40.0] [0.5 -45.0] [1.0 0.0]]
+                                              :rot-y [[0.0 0.0] [0.3 10.0] [1.0 0.0]]
+                                              :rot-z [[0.0 0.0] [1.0 0.0]]}}}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :session/patch
+                   :entries [{:path [:charge-ticks] :mode :increment :value 1}
+                             {:path [:punch-ticks] :mode :increment
+                              :value {:expr :math/select
+                                      :args [{:ref [:session :punched?]} 1 0]}}]}
+                  {:component :flow/branch
+                   :when {:ref [:session :punched?]}
+                   :then {:component :effect/vfx
+                          :effect-id :first-person-motion-session
+                          :operation :update
+                          :instance-key [:activation :directed-shock-hand]
+                          :audience {:type :owner}
+                          :payload {:stage :punch
+                                    :phase-ticks {:ref [:session :punch-ticks]}
+                                    :duration-ticks 6}}
+                   :else {:component :effect/vfx
+                          :effect-id :first-person-motion-session
+                          :operation :update
+                          :instance-key [:activation :directed-shock-hand]
+                          :audience {:type :owner}
+                          :payload {:stage :prepare
+                                    :phase-ticks {:ref [:session :charge-ticks]}
+                                    :duration-ticks 3}}}
+                  {:component :flow/branch
+                   :when {:expr :math/gte
+                          :args [{:ref [:session :charge-ticks]}
+                                 {:tunable :charge-max-tolerant-ticks}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :effect/vfx
+                                   :effect-id :first-person-motion-session
+                                   :operation :destroy
+                                   :instance-key [:activation :directed-shock-hand]
+                                   :payload {}}
+                                  {:component :flow/finish :outcome :aborted
+                                   :finish-session? true}]}
+                   :else {:component :flow/branch
+                          :when {:expr :bool/and
+                                 :args [{:ref [:session :punched?]}
+                                        {:expr :math/gt
+                                         :args [{:ref [:session :punch-ticks]}
+                                                {:tunable :punch-animation-ticks}]}]}
+                          :then {:component :flow/sequence
+                                 :steps [{:component :effect/vfx
+                                          :effect-id :first-person-motion-session
+                                          :operation :destroy
+                                          :instance-key [:activation :directed-shock-hand]
+                                          :payload {}}
+                                         {:component :flow/finish :outcome :performed
+                                          :finish-session? true}]}
+                          :else {:component :flow/finish :outcome :charging}}}]}
+  :release {:component :flow/branch
+            :when {:expr :bool/and
+                   :args [{:expr :math/gt
+                           :args [{:ref [:session :charge-ticks]}
+                                  {:tunable :charge-min-ticks}]}
+                          {:expr :math/lt
+                           :args [{:ref [:session :charge-ticks]}
+                                  {:tunable :charge-max-accepted-ticks}]}]}
+            :then {:component :txn/atomic
+                   :guards [{:component :guard/resource
+                             :cost {:cp {:tunable :release-cp}
+                                    :overload {:tunable :release-overload}}}]
+                   :reservations []
+                   :body {:component :flow/sequence
+                          :steps [{:component :cost/spend :budget :release}
+                                  {:component :target/raycast
+                                   :origin {:from :caster/eye}
+                                   :direction {:from :caster/aim}
+                                   :distance {:tunable :targeting-distance}
+                                   :include-entities? true
+                                   :include-blocks? false
+                                   :result :aim-hit}
+                                  {:component :flow/branch
+                                   :when {:ref [:slot :aim-hit :entity-id]}
+                                   :then {:component :flow/sequence
+                                          :steps [{:component :data/bind
+                                                   :to :hit-position
+                                                   :value {:ref [:slot :aim-hit :position]}}
+                                                  {:component :data/bind
+                                                   :to :target-eye-height
+                                                   :value {:expr :math/select
+                                                           :args [{:ref [:slot :aim-hit :eye-height]}
+                                                                  {:ref [:slot :aim-hit :eye-height]}
+                                                                  {:tunable :target-eye-height}]}}
+                                                  {:component :data/bind
+                                                   :to :target-head
+                                                   :value {:expr :vec3/add
+                                                           :args [{:ref [:slot :hit-position]}
+                                                                  {:vec3 [0.0 {:ref [:slot :target-eye-height]} 0.0]}]}}
+                                                  {:component :data/bind
+                                                   :to :knockback-base
+                                                   :value {:expr :vec3/scale
+                                                           :args [{:expr :vec3/normalize
+                                                                   :args [{:expr :vec3/add
+                                                                           :args [{:expr :vec3/normalize
+                                                                                   :args [{:expr :vec3/sub
+                                                                                           :args [{:from :caster/eye}
+                                                                                                  {:ref [:slot :target-head]}]}]}
+                                                                                  {:vec3 [0.0 {:expr :math/mul
+                                                                                              :args [-1.0 {:tunable :knockback-y-adjust}]}
+                                                                                           0.0]}]}]}
+                                                                  {:tunable :knockback-scale}]}}
+                                                  {:component :data/bind
+                                                   :to :knockback
+                                                   :value {:expr :math/select
+                                                           :args [{:expr :math/gte
+                                                                   :args [{:from :progression/mastery}
+                                                                          {:tunable :knockback-exp-threshold}]}
+                                                                  {:expr :vec3/with-z
+                                                                   :args [{:ref [:slot :knockback-base]}
+                                                                          {:ref [:slot :knockback-base :vec3 1]}]}
+                                                                  {:vec3 [0.0 0.0 0.0]}]}}
+                                                  {:component :data/bind
+                                                   :to :moved-hit-position
+                                                   :value {:expr :math/select
+                                                           :args [{:expr :math/gte
+                                                                   :args [{:from :progression/mastery}
+                                                                          {:tunable :knockback-exp-threshold}]}
+                                                                  {:expr :vec3/add
+                                                                   :args [{:ref [:slot :hit-position]}
+                                                                          {:vec3 [0.0 0.1 0.0]}]}
+                                                                  {:ref [:slot :hit-position]}]}}
+                                                  {:component :data/bind
+                                                   :to :hit-impulse
+                                                   :value {:expr :vec3/scale
+                                                           :args [{:expr :vec3/normalize
+                                                                   :args [{:expr :vec3/sub
+                                                                           :args [{:ref [:slot :moved-hit-position]}
+                                                                                  {:from :caster/body}]}]}
+                                                                  {:tunable :hit-impulse}]}}
+                                                  {:component :combat/damage
+                                                   :target {:ref [:slot :aim-hit :entity-id]}
+                                                   :amount {:tunable :damage}
+                                                   :damage-type :skill
+                                                   :damage-pipeline :skill}
+                                                  {:component :flow/branch
+                                                   :when {:expr :math/gte
+                                                          :args [{:from :progression/mastery}
+                                                                 {:tunable :knockback-exp-threshold}]}
+                                                   :then {:component :flow/sequence
+                                                                  :steps [{:component :entity/teleport
+                                                                   :target {:ref [:slot :aim-hit]}
+                                                                   :position {:ref [:slot :moved-hit-position]}}
+                                                                  {:component :motion/entity-velocity
+                                                                   :target {:ref [:slot :aim-hit]}
+                                                                   :velocity {:expr :vec3/add
+                                                                              :args [{:ref [:slot :knockback]}
+                                                                                     {:ref [:slot :hit-impulse]}]}}]}
+                                                   :else {:component :motion/entity-velocity-add
+                                                          :target {:ref [:slot :aim-hit]}
+                                                          :velocity {:ref [:slot :hit-impulse]}}}
+                                                  {:component :effect/vfx
+                                                   :effect-id :first-person-motion-session
+                                                   :operation :update
+                                                   :instance-key [:activation :directed-shock-hand]
+                                                   :audience {:type :owner}
+                                                   :payload {:stage :punch
+                                                             :phase-ticks 0
+                                                             :duration-ticks 6}}
+                                                  {:component :effect/vfx
+                                                   :effect-id :audio-one-shot
+                                                   :operation :spawn
+                                                   :audience {:type :nearby :radius 32.0}
+                                                   :payload {:position {:from :caster/body}
+                                                             :sound-id "academy:vecmanip.directed_shock"
+                                                             :volume 0.5 :pitch 1.0}}
+                                                  {:component :session/patch
+                                                   :entries [{:path [:punched?] :mode :assign :value true}
+                                                             {:path [:punch-ticks] :mode :assign :value 0}]}
+                                                  {:component :score/mark :tag :hit}
+                                                  {:component :cooldown/start :name :main}
+                                                  {:component :flow/finish :outcome :punched}]}
+                                   :else {:component :flow/sequence
+                                          :steps [{:component :score/mark :tag :miss}
+                                                  {:component :effect/vfx
+                                                   :effect-id :first-person-motion-session
+                                                   :operation :destroy
+                                                   :instance-key [:activation :directed-shock-hand]
+                                                   :payload {}}
+                                                  {:component :flow/finish :outcome :miss
+                                                   :finish-session? true}]}}]}
+                   :on-fail {:component :flow/sequence
+                             :steps [{:component :effect/vfx
+                                      :effect-id :first-person-motion-session
+                                      :operation :destroy
+                                      :instance-key [:activation :directed-shock-hand]
+                                      :payload {}}
+                                     {:component :flow/finish
+                                      :outcome :insufficient-resource
+                                      :finish-session? true}]}}
+            :else {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :first-person-motion-session
+                            :operation :destroy
+                            :instance-key [:activation :directed-shock-hand]
+                            :payload {}}
+                          {:component :flow/finish :outcome :undercharged
+                           :finish-session? true}]}}
+  :abort {:component :flow/sequence
+          :steps [{:component :effect/vfx
+                   :effect-id :first-person-motion-session
+                   :operation :destroy
+                   :instance-key [:activation :directed-shock-hand]
+                   :payload {}}
+                  {:component :flow/finish :outcome :aborted
+                   :finish-session? true}]}
+  :events {}}}

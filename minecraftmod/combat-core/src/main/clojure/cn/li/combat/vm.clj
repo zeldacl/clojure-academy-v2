@@ -152,6 +152,9 @@
                   {:vec3 [(* (double ax) scale)
                           (* (double ay) scale)
                           (* (double az) scale)]})
+    :vec3/with-z (let [[x y _z] (vec3-components (nth args 0))
+                       z (double (nth args 1))]
+                   {:vec3 [(double x) (double y) z]})
     :vec3/length (let [[x y z] (vec3-components (nth args 0))]
                    (Math/sqrt (+ (* (double x) (double x))
                                  (* (double y) (double y))
@@ -250,6 +253,7 @@
    :entity/discard :entity/discard
    :entity/configure :entity/configure
    :motion/entity-velocity :motion/entity-velocity
+   :motion/entity-velocity-add :motion/entity-velocity-add
    :projectile/schedule-beam :projectile/schedule-beam
    :block/break-budget :block/break-budget
    :block/break :block/break

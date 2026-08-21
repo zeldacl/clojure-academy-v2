@@ -104,6 +104,9 @@
    :motion/entity-velocity {:component :motion/entity-velocity
                             :target {:ref [:slot :entity-id]}
                             :velocity vec3-example}
+   :motion/entity-velocity-add {:component :motion/entity-velocity-add
+                                :target {:ref [:slot :entity-id]}
+                                :velocity vec3-example}
    :owner/can-fly {:component :owner/can-fly :enabled? true}
    :combat/status {:component :combat/status :target {:ref [:slot :target-id]}
                    :status-id :generic :duration-ticks 1 :amplifier 0}
@@ -169,6 +172,7 @@
    :value/parse-status-spec {:expr :value/parse-status-spec :args ["jump-boost:1"]}
    :value/status-id {:expr :value/status-id :args ["jump-boost:1"]}
    :value/status-max-amplifier {:expr :value/status-max-amplifier :args ["jump-boost:1"]}
+   :vec3/with-z {:expr :vec3/with-z :args [vec3-example 0.0]}
    :vec3/approach {:expr :vec3/approach :args [vec3-example vec3-example 0.1]}
    :vec3/launch {:expr :vec3/launch :args [vec3-example 2.0 -0.174533]}
    :collection/first {:expr :collection/first :args [[{:id "x"}]]}

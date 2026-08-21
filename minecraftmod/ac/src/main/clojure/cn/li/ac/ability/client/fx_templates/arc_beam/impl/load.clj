@@ -3,5 +3,4 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.shift-teleport]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.flesh-ripping]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.teleporter-crit]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.directed-shock]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.groundshock]))
