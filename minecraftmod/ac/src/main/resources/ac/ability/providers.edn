@@ -7,9 +7,8 @@
  {:id :generic
   :priority 10
   :skill-namespaces
-  [cn.li.ac.content.ability.generic.brain-course-advanced
-   cn.li.ac.content.ability.generic.course-chain
-   cn.li.ac.content.ability.generic.mind-course]}
+   [cn.li.ac.content.ability.generic.brain-course-advanced
+   cn.li.ac.content.ability.generic.course-chain]}
  {:id :meltdowner
   :priority 30
   :skill-namespaces

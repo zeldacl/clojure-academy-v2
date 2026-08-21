@@ -182,6 +182,28 @@
                  {:max-cp 0.0})
                 :max-cp)))))
 
+(deftest mind-course-is-one-shared-passive-document
+  (let [state (catalog/initialize!)
+        ids [:electromaster/mind-course
+             :meltdowner/mind-course
+             :teleporter/mind-course
+             :vecmanip/mind-course]]
+    (doseq [ability-id ids]
+      (is (catalog/available? ability-id))
+      (is (= 5 (get-in state [:combat :abilities ability-id :level])))
+      (is (= [{:skill-id (keyword (namespace ability-id) "brain-course-advanced")
+               :min-exp 0.0}]
+             (get-in state [:combat :abilities ability-id :prerequisites]))))
+    (is (= 12.0
+           (get (catalog/apply-passive-resource-modifiers
+                 {:learned-skills #{:electromaster/mind-course}}
+                 {:cp-recovery-speed 10.0})
+                :cp-recovery-speed)))
+    (is (= "Mind Course"
+           (get-in (first (filter #(= :electromaster/mind-course (:id %))
+                   (catalog/migrated-skill-specs)))
+                   [:translations :en_us "ability.skill.generic.mind_course"])))))
+
 (deftest meltdowner-edn-program-includes-complete-beam-contract
   (catalog/initialize!)
   (let [ability (get-in (catalog/catalog) [:combat :abilities :meltdowner])

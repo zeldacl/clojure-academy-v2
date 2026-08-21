@@ -98,8 +98,7 @@
 
 (def ^:private generic-content-namespaces
   '[cn.li.ac.content.ability.generic.brain-course-advanced
-    cn.li.ac.content.ability.generic.course-chain
-    cn.li.ac.content.ability.generic.mind-course])
+    cn.li.ac.content.ability.generic.course-chain])
 
 (defn- register-generic-content!
   "Load and register the non-combat course chain explicitly.

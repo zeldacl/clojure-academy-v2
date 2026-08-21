@@ -137,6 +137,18 @@
                      :status (migration-status ability-id)})))
   (get-in @state* [:combat :abilities ability-id]))
 
+(defn- normalize-translations
+  "Convert safe-EDN keyword message keys to the registry's string-key map."
+  [translations]
+  (into {}
+        (map (fn [[locale entries]]
+               [locale
+                (into {}
+                      (map (fn [[key value]]
+                             [(if (keyword? key) (name key) (str key)) value])
+                           entries))]))
+        (or translations {})))
+
 (defn apply-passive-resource-modifiers
   "Apply learned passive resource effects declared by the Combat Core catalog.
 
@@ -173,6 +185,7 @@
              :ctrl-id (or (:ctrl-id ability) ability-id)
              :pattern pattern
              :actions (or (:actions ability) {})
+             :translations (normalize-translations (:translations ability))
              ;; The registry field is metadata only; execution and cooldown
              ;; settlement remain in the EDN VM.  `:manual` keeps the
              ;; existing player-facing schema valid without installing a

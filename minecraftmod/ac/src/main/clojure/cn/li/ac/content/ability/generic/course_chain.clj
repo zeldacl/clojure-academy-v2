@@ -38,32 +38,7 @@
      :ru_ru {"ability.skill.generic.brain_course_advanced" "Продвинутый курс мозга"
              "ability.skill.generic.brain_course_advanced.desc" "Развить мыслительные способности вашего мозга глубже. Увеличивает Макс. CP на 1000 и Макс. Перегрузку на 100."}}}
 
-   :mind-course
-   {:id-suffix "mind-course"
-    :name-key "ability.skill.generic.mind_course"
-    :description-key "ability.skill.generic.mind_course.desc"
-    :icon "textures/abilities/generic/skills/mind_course.png"
-    :ui-position [205 110]
-    :level 5
-    :ctrl-id :mind-course
-    :prerequisites [{:skill-id-suffix "brain-course-advanced" :min-exp 0.0}]
-    :conditions [{:type :any-skill-level :level 5}]
-    :effects [{:handler-suffix "cp-recovery"
-               :event evt/CALC-CP-RECOVER-SPEED
-               :transform (fn [value _event] (* value 1.2))}]
-    :translations
-    {:en_us {"ability.skill.generic.mind_course" "Mind Course"
-             "ability.skill.generic.mind_course.desc" "Train your mental composure so CP recovers 20% faster."}
-     :zh_cn {"ability.skill.generic.mind_course" "心智课程"
-             "ability.skill.generic.mind_course.desc" "学习更高效地放松精神，使 CP 恢复速度提高 20%。"}
-     :zh_tw {"ability.skill.generic.mind_course" "思維修養課程"
-             "ability.skill.generic.mind_course.desc" "學習如何更好的放鬆自己的思想。計算力恢復速率提高20%。"}
-     :ja_jp {"ability.skill.generic.mind_course" "マインド・コース"
-             "ability.skill.generic.mind_course.desc" "脳をよりリラックスさせる方法を学び、CPの回復速度を向上させます。"}
-     :ko_kr {"ability.skill.generic.mind_course" "마인드 코스"
-             "ability.skill.generic.mind_course.desc" "여러분의 뇌를 더 잘 이완시키는 방법을 배우세요. CP 복구 속도를 20% 향상시킵니다."}
-     :ru_ru {"ability.skill.generic.mind_course" "Курс разума"
-             "ability.skill.generic.mind_course.desc" "Узнайте, как лучше расслабить свой мозг. Ускоряет восстановление CP на 20%."}}}})
+  })
 
 (defn skill-id
   [cat-id id-suffix]

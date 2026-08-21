@@ -24,14 +24,12 @@
 
 (deftest register-passive-hooks-apply-only-for-learned-skills-test
   (courses/register-passive-hooks! :brain-course-advanced)
-  (courses/register-passive-hooks! :mind-course)
        (store/set-player-state!
         ps-fix/test-session-id
    "u-learned"
-        (assoc (store/fresh-player-state)
+       (assoc (store/fresh-player-state)
           :ability-data (-> (adata/new-ability-data)
-                            (adata/learn-skill :electromaster/brain-course-advanced)
-                            (adata/learn-skill :electromaster/mind-course))))
+                            (adata/learn-skill :electromaster/brain-course-advanced))))
        (store/set-player-state!
         ps-fix/test-session-id
    "u-unlearned"
@@ -46,9 +44,5 @@
     (is (= 1000.0
            (evt/fire-calc-event! evt/CALC-MAX-CP 1000.0 {:uuid "u-unlearned"}))))
 
-  (testing "mind course scales CP recovery speed"
-    (is (= 12.0
-           (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED 10.0 {:uuid "u-learned"})))
-    (is (= 10.0
-           (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED 10.0 {:uuid "u-unlearned"})))))
-
+  (is (= 10.0
+         (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED 10.0 {:uuid "u-learned"}))))
