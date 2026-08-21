@@ -38,7 +38,7 @@
 	"List all registered particle ids."
 	[]
 	(if-let [fw-atom (fw/fw-atom)]
-		(keys (get @fw-atom :particles))
+		(keys (get-in @fw-atom [:registry :particles]))
 		()))
 
 (defmacro defparticle

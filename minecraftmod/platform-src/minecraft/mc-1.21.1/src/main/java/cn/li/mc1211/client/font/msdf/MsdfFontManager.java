@@ -45,6 +45,12 @@ public final class MsdfFontManager {
         synchronized (MsdfFontManager.class) {
             if (shadowFont != null) return true;
             try {
+                if (!RenderSystem.isOnRenderThread()) {
+                    // FontSet.reload creates GL textures (GlyphStitcher), which
+                    // must happen on the render thread; clientTick retries here.
+                    LOGGER.debug("MSDF init deferred: not on render thread");
+                    return false;
+                }
                 final Minecraft mc = Minecraft.getInstance();
                 if (mc == null) {
                     LOGGER.debug("MSDF init deferred: Minecraft not ready");

@@ -16,6 +16,8 @@ import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import cn.li.neoforge262.client.render.ForgeClientRenderRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import net.minecraft.client.renderer.block.FluidModel;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.bus.api.IEventBus;
@@ -39,6 +41,8 @@ import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
  * {@code minecraft:display_context} (see item-model-provider datagen).
  */
 public final class ModClientRenderSetup {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModClientRenderSetup.class);
+
 
     private ModClientRenderSetup() {
     }
@@ -72,7 +76,7 @@ public final class ModClientRenderSetup {
         if (type instanceof SimpleParticleType simple) {
             event.registerSpriteSet(simple, MdParticle.Provider::new);
         } else {
-            throw new IllegalStateException("md particle type not registered: academy:" + id);
+            LOGGER.error("md particle type not registered: academy:{}", id);
         }
     }
 
