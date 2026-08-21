@@ -69,8 +69,30 @@ public final class MsdfFontFace implements AutoCloseable {
         FreeTypeUtil.assertError(
                 FreeType.FT_Select_Charmap(face, FreeType.FT_ENCODING_UNICODE),
                 "Find unicode charmap");
+        // 1.20.1 rasterized via stbtt_ScaleForPixelHeight: scale =
+        // height / (hhea.ascender - hhea.descender), so a full-em glyph renders
+        // at height*em/(asc-desc) pixels — for CJK fonts (em < asc-desc) well
+        // below the nominal height. FreeType's FT_Set_Pixel_Sizes sets the em
+        // box exactly, so convert the requested height to the STB-equivalent
+        // pixel size to keep glyph geometry identical to 1.20.1.
+        // Read the hhea values via STB: FT_Face.ascender/descender follow the
+        // OS/2 win metrics on some CJK faces (e.g. msyh.ttc), which diverge
+        // from the hhea table STB's ScaleForPixelHeight uses.
+        final int hheaAsc;
+        final int hheaDesc;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer ascBuf = stack.mallocInt(1);
+            final IntBuffer descBuf = stack.mallocInt(1);
+            STBTruetype.stbtt_GetFontVMetrics(fontInfo, ascBuf, descBuf, null);
+            hheaAsc = ascBuf.get(0);
+            hheaDesc = descBuf.get(0);
+        }
+        final float vMetric = (float) (hheaAsc - hheaDesc);
+        final float stbEquivalentSize = vMetric > 0.0f
+                ? pixelHeight * face.units_per_EM() / vMetric
+                : pixelHeight;
         this.glyphProvider =
-                new TrueTypeGlyphProvider(data, face, pixelHeight, 1.0f, 0.0f, 0.0f, "");
+                new TrueTypeGlyphProvider(data, face, stbEquivalentSize, 1.0f, 0.0f, 0.0f, "");
     }
 
     public STBTTFontinfo fontInfo() {
@@ -113,6 +135,42 @@ public final class MsdfFontFace implements AutoCloseable {
 
     public float ascentPixels() {
         return ascent * scale;
+    }
+
+    /**
+     * Baseline-to-em-bottom distance in pixels (the descender share of the
+     * 32px em). 1.20.1's quad math anchored glyphs with
+     * pixelHeight - descenderPixels; see MSDFAwareGlyph's vertical formula.
+     */
+    public float descenderPixels() {
+        final int hheaAsc;
+        final int hheaDesc;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer ascBuf = stack.mallocInt(1);
+            final IntBuffer descBuf = stack.mallocInt(1);
+            STBTruetype.stbtt_GetFontVMetrics(fontInfo, ascBuf, descBuf, null);
+            hheaAsc = ascBuf.get(0);
+            hheaDesc = descBuf.get(0);
+        }
+        final float vMetric = (float) (hheaAsc - hheaDesc);
+        return vMetric > 0.0f ? -hheaDesc * scale : 0.0f;
+    }
+
+    /**
+     * STB bitmap-top y-coordinate relative to the baseline for a code point,
+     * in scaled pixels (negative above the baseline — the signed value
+     * 1.20.1's provider used to position glyphs, see MSDFAwareGlyph).
+     */
+    public float stbGlyphTop(final int codePoint) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer x0 = stack.mallocInt(1);
+            final IntBuffer y0 = stack.mallocInt(1);
+            final IntBuffer x1 = stack.mallocInt(1);
+            final IntBuffer y1 = stack.mallocInt(1);
+            STBTruetype.stbtt_GetCodepointBitmapBox(
+                    fontInfo, codePoint, scale, scale, x0, y0, x1, y1);
+            return y0.get(0);
+        }
     }
 
     public GlyphProvider glyphProvider() {

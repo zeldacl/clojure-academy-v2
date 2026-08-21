@@ -7,7 +7,7 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1211.recipe ContentRecipe]
            [net.minecraft.client Minecraft]
-           [net.minecraft.world.item.crafting RecipeType RecipeManager Recipe Ingredient]
+           [net.minecraft.world.item.crafting RecipeType RecipeManager Recipe RecipeHolder Ingredient]
            [net.minecraft.world.item ItemStack Item]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
@@ -40,14 +40,15 @@
         nil))))
 
 (defn- recipes-for-type
-  "Get all recipes of a given RecipeType whose output matches target-id."
+  "Get all recipes of a given RecipeType whose output matches target-id.
+  Unwraps the RecipeHolder elements 1.21.1's getAllRecipesFor returns."
   [^RecipeManager rm ^RecipeType rtype target-id]
   (try
     (when rtype
       (let [recipes (.getAllRecipesFor rm rtype)]
         (filter (fn [^Recipe recipe]
                   (= target-id (stack->item-id (.getResultItem recipe nil))))
-                recipes)))
+                (map (fn [^RecipeHolder holder] (.value holder)) recipes))))
     (catch Exception e
       (log/warn "[rq] recipes-for-type failed for" target-id ":" (ex-message e))
       nil)))

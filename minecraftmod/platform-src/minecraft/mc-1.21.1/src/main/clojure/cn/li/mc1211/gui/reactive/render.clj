@@ -582,14 +582,18 @@
                 (-> (ImmediateDraw/vertex pose x1  y0 0.0)  (.uv (u-at x1)  (float v0))  (.endVertex))
                 (ImmediateDraw/draw))
               ;; Rectangular fill: existing scissor+blit path
-              (let [uoff (float (* scroll iw))]
-                (apply-color!)  ;; BEFORE blit
-                (.enableScissor gg seg-start iy seg-end ih)
-                (.blit gg fg-rl ix iy uoff 0.0 iw ih (float iw) (float ih))
-                (.disableScissor gg)))))))]
+              (let [uoff (float (* scroll iw))
+                    hh (unchecked-int h)         ;; node HEIGHT — ih is the bottom edge (y+h)
+                    fw (- (int seg-end) (int seg-start))]
+                ;; Clip by UV, not scissor: GuiGraphics.enableScissor takes
+                ;; absolute SCREEN coords, but node x/y are GUI-local — on a
+                ;; centered container the bar fell outside the scissor rect
+                ;; and vanished. Blit only the filled width (u 0..fw/iw).
+                (apply-color!)
+                (.blit gg fg-rl ix iy uoff 0.0 fw hh (float iw) (float hh))))))))]
     ;; ---- background ----
     (when bg-rl
-      (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
+      (.blit gg bg-rl ix iy 0 0 iw (unchecked-int h) iw (unchecked-int h)))
     ;; ---- upstream autoLerp: multi-stop color lerp (bands nil → white/no tint) ----
     (when (and fg-rl (pos? filled-w))
       (let [t       (double (max 0.0 (min 1.0 percent)))
@@ -602,11 +606,15 @@
           (let [bar-right (int (+ x w))
                 bar-start (int (- bar-right filled-w))]
             (draw-trap! (max ix bar-start) bar-right r g b fill-alpha))
-          (let [bar-end (int (+ x filled-w))]
+          (let [bar-end (int (+ x filled-w))
+                ;; Absolute right edge of the node — `iw` is the node WIDTH
+                ;; (relative), and the trap segments are absolute screen x.
+                ;; (min bar-end iw) clipped a 90%-full bar to ~6px.
+                node-right (int (+ x w))]
             (if (and cutout-x0 cutout-w (pos? cutout-w))
               (do (draw-trap! ix       (min bar-end cutout-x0) r g b fill-alpha)
-                  (draw-trap! cutout-x1 (min bar-end         iw) r g b fill-alpha))
-              (draw-trap! ix (min bar-end iw) r g b fill-alpha))))))
+                  (draw-trap! cutout-x1 (min bar-end node-right) r g b fill-alpha))
+              (draw-trap! ix (min bar-end node-right) r g b fill-alpha))))))
     ;; ---- icon overlay ----
     (when (and cutout-x0 cutout-w (pos? cutout-w) icon-rl)
       (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))

@@ -102,6 +102,14 @@
 (defn- scale-factor [font-size]
   (* (/ (double font-size) (get-msdf-base-height)) 1.0))
 
+(def ^:private vanilla-line-height 9.0)
+
+(defn- vanilla-scale-factor [font-size]
+  ;; Vanilla font is 9px tall (8px glyphs + 1px line gap) at scale 1.0, so a
+  ;; :font-size N fallback draw needs N/9 — the MSDF em's N/32 would shrink
+  ;; every glyph to ~28% when the MSDF face is unavailable.
+  (/ (double font-size) vanilla-line-height))
+
 (defn- component-for-run [^String text font-desc]
   (let [^MutableComponent c (Component/literal (or text ""))]
     (.withStyle c ^Style (build-style (or font-desc {})))))
@@ -231,7 +239,8 @@
        (with-monospace (boolean (:monospace? font-desc))
          #(* scale (segmented-width font-desc text :glyph-styles glyph-styles)))
        :else
-       (* (double (.width (vanilla-font) (Component/literal text))) scale)))))
+       (* (double (.width (vanilla-font) (Component/literal text)))
+          (vanilla-scale-factor font-size))))))
 
 ;; ---- draw-msdf-runs! ----
 
@@ -244,7 +253,7 @@
 (defn- draw-vanilla-run! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?]
   (let [^Font mc-font (vanilla-font)
         ^Component comp (component-for-run text font-desc)
-        scale (float (scale-factor font-size))
+        scale (float (vanilla-scale-factor font-size))
         ^PoseStack ps (.pose gg)]
     (.pushPose ps)
     (try
