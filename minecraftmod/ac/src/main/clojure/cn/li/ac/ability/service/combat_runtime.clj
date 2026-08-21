@@ -7,6 +7,7 @@
             [cn.li.combat.skill-runtime :as combat-skill-runtime]
             [cn.li.combat.reactions :as combat-reactions]
             [cn.li.combat.platform :as combat-platform]
+            [cn.li.combat.deferred :as deferred]
             [cn.li.combat.runtime :as combat]
             [cn.li.combat.targeting :as targeting]
             [cn.li.combat.vm :as combat-vm]
@@ -41,6 +42,7 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
+            [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
@@ -824,26 +826,6 @@
                                               (world-effects/spawn-lightning!
                                                world-id (double x) (double y) (double z)
                                                (boolean visual-only?)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :spawn-projectile
-                         (let [{:keys [world-id projectile-spec]} effect
-                               spec (if (map? projectile-spec)
-                                      (-> projectile-spec
-                                          (update :delay-ticks #(max 0 (long (or % 0))))
-                                          (update :damage #(when (number? %) (double %))))
-                                      {})
-                               valid? (and world-id
-                                            (= :electron-bomb (:kind spec))
-                                            (number? (:damage spec))
-                                            (Double/isFinite (double (:damage spec)))
-                                            (pos? (double (:damage spec)))
-                                            (map? (:target spec))
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/spawn-projectile!
-                                               world-id (assoc spec :owner owner)))
                                       :applied
                                       :failed)
                             :effect effect})
@@ -1650,6 +1632,26 @@
   []
   (when (compare-and-set! edn-host-capabilities-installed? false true)
     (try
+      (deferred/install-vfx-emitter!
+       (fn [{:keys [effect-id payload owner world-id event-seq seed audience instance-key]}]
+         (let [normalized (vfx-contract/signal
+                           {:op :spawn
+                            :effect-id effect-id
+                            :instance-key (or instance-key [:delayed-beam effect-id])
+                            :owner owner
+                            :world-id world-id
+                            :audience audience
+                            :event-seq (long (or event-seq 0))
+                            :seed (long (or seed 0))
+                            :event :spawn
+                            :params (or payload {})})]
+           (publish-result!
+            (finalize-result!
+             owner
+             {:schema-version 2
+              :status :accepted
+              :owner owner
+              :vfx-signals [normalized]})))))
       ;; Atomic combat capabilities are owned by Combat Core.  AC only links
       ;; the startup registry; mcmod relays each call to platform-src.
       (doseq [[capability handler] (combat-platform/query-handlers)]
@@ -2154,21 +2156,6 @@
                                       (str world-id) (str entity-id)
                                       (map double point)))
                         :applied :failed)}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :projectile/schedule-beam)
-        (capabilities/register-action!
-         :projectile/schedule-beam
-         (fn [{:keys [owner world-id origin destination damage damage-type delay-ticks]}]
-           (if (and owner world-id (map? origin) (map? destination)
-                    (number? damage) (Double/isFinite (double damage)))
-             (do
-               ((requiring-resolve
-                 'cn.li.ac.ability.service.delayed-projectiles/schedule-beam!)
-                {:owner owner :world-id world-id :origin origin
-                 :destination destination :damage (double damage)
-                 :damage-type (or damage-type :generic)
-                 :delay-ticks (long (max 1 (or delay-ticks 1)))})
-               {:status :scheduled})
-             {:status :rejected :reason :invalid-beam-request}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :projectile/redirect)
         (capabilities/register-action!
          :projectile/redirect

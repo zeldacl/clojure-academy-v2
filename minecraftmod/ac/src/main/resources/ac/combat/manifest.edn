@@ -57,5 +57,8 @@
              :id :light-shield
               :resource "ac/combat/abilities/light_shield.edn"}
              {:kind :ability
-              :id :meltdowner
-              :resource "ac/combat/abilities/meltdowner.edn"}]}
+             :id :meltdowner
+              :resource "ac/combat/abilities/meltdowner.edn"}
+             {:kind :ability
+              :id :electron-bomb
+              :resource "ac/combat/abilities/electron_bomb.edn"}]}

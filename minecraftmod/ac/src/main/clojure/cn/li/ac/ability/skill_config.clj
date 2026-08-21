@@ -226,6 +226,13 @@
     :cooldown-base-multiplier :cooldown.base-multiplier
     :cooldown-ticks :cooldown.ticks
     :exp-use :progression.exp-use}
+   :electron-bomb
+   {:damage :combat.damage
+    :cooldown-ticks :cooldown.ticks
+    :exp-hit :progression.exp-hit
+    :settle-ticks :charge.settle-ticks
+    :settle-ticks-improved :charge.settle-ticks-improved
+    :improved-exp-threshold :charge.improved-exp-threshold}
    :scatter-bomb
    {:max-balls :projectile.max-balls
     :max-hold-ticks :projectile.max-hold-ticks

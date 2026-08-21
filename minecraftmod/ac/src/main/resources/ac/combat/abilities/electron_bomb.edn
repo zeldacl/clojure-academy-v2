@@ -1,0 +1,82 @@
+{:schema-version 2
+ :kind :ability
+ :id :electron-bomb
+ :revision 1
+ :activation :instant
+ :status :migrated
+ :requires [:caster/id :caster/eye :caster/aim :world/id
+            :progression/mastery :rng/seed]
+ :tunables
+ {:damage {:curve :mastery-lerp}
+  :cooldown-ticks {:curve :mastery-lerp}
+  :exp-hit {:curve :const}
+  :settle-ticks {:curve :const :type :long}
+  :settle-ticks-improved {:curve :const :type :long}
+  :improved-exp-threshold {:curve :const}}
+ :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+ :progression {:cast {:per-mark {:tunable :exp-hit}}}
+ :program
+ {:component :flow/sequence
+  :steps
+  [{:component :data/bind
+    :to :ball-life-ticks
+    :value {:expr :math/select
+            :args [{:expr :math/gt
+                    :args [{:from :progression/mastery}
+                           {:tunable :improved-exp-threshold}]}
+                   {:tunable :settle-ticks-improved}
+                   {:tunable :settle-ticks}]}}
+   ;; EntityMdBall is a neutral transient projectile carrier.  Its renderer
+   ;; supplies the visible orb; the EDN only supplies owner, position and
+   ;; lifetime, so the same primitive can be reused by other skills.
+   {:component :entity/spawn
+    :world-id {:from :world/id}
+    :entity-type "academy:entity_md_ball"
+    :owner {:from :caster/id}
+    :position {:from :caster/eye}
+    :velocity {:vec3 [0.0 0.0 0.0]}
+    :life-ticks {:ref [:slot :ball-life-ticks]}}
+   ;; The generic delayed beam resolves both selectors on settlement.  The
+   ;; owner may turn or move during the delay, while the transient entity's
+   ;; current position remains the ray origin.  `settlement-vfx` is a neutral
+   ;; deferred presentation signal; no skill code is called by the scheduler.
+   {:component :projectile/schedule-beam
+    :world-id {:from :world/id}
+    :owner {:from :caster/id}
+    :origin {:from :caster/eye}
+    :destination {:expr :vec3/add
+                   :args [{:from :caster/eye}
+                          {:expr :vec3/scale
+                           :args [{:from :caster/aim} 15.0]}]}
+    :origin-selector {:entity-type "academy:entity_md_ball"
+                      :owner-id {:from :caster/id}
+                      :radius 3.5}
+    :destination-selector {:mode :owner-raycast :distance 15.0}
+    :exclude-owner? true
+    :damage {:tunable :damage}
+    :damage-type :magic
+    :delay-ticks {:expr :math/sub
+                  :args [{:ref [:slot :ball-life-ticks]} 2]}
+    :seed {:from :rng/seed}
+    :instance-key [:activation :electron-bomb-ray]
+    :settlement-vfx
+    {:effect-id :arc-strike-transient
+     :operation :spawn
+     :audience {:type :nearby :radius 64.0}
+     :payload {:aoe-origin {:from :caster/eye}
+               :aoe-points []
+               :arc-life-ticks 10
+               :pattern :weak
+               :hand-origin? false
+               :sound-id nil
+               :sound-volume 0.0
+               :sound-pitch 1.0
+               :sound-position {:from :caster/eye}
+               :bounds-radius 0.8}}}
+   ;; Original grants both progression and cooldown at cast time, before the
+   ;; delayed ray can hit.  Keeping these nodes before the terminal finish
+   ;; preserves that ordering and makes a no-hit ray side-effect free only in
+   ;; the damage dimension.
+   {:component :score/mark :tag :cast}
+   {:component :cooldown/start :name :main}
+   {:component :flow/finish :outcome :performed :finish-session? true}]}}

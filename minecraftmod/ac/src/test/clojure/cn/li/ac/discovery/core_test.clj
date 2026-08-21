@@ -22,7 +22,7 @@
 
 (deftest base-family-and-fx-namespace-landscan-test
   (is (= :meltdowner
-         (core/base-family 'cn.li.ac.content.ability.meltdowner/electron-bomb))
+         (core/base-family 'cn.li.ac.content.ability.meltdowner/electron-missile))
       "family segment follows the ability path segment")
-  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-bomb-fx)))
-  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-bomb))))
+  (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-missile-fx)))
+  (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-missile))))

@@ -72,22 +72,6 @@
                         :radius 5.0}
                        {:op :vfx :effect-id :location-teleport
                         :event :release :params {:strength 1.0}}]}}
-    {:id :electron-bomb
-     :revision 1
-     :activation :instant
-     :cooldown {:ticks (scale 20.0 10.0)}
-     :program {:op :sequence
-               :steps [{:op :query :query-type :raycast
-                        :distance 20.0 :result-ref :aim}
-                       {:op :world-effect
-                        :effect-type :spawn-projectile
-                        :projectile-spec {:kind :electron-bomb
-                                          :damage (scale 6.0 12.0)
-                                          :delay-ticks 20
-                                          :target-ref :aim}}
-                       {:op :vfx :effect-id :electron-bomb
-                        :event :spawn
-                       :params {:settle-ticks 20}}]}}
     {:id :flesh-ripping
      :revision 1
      :activation :session

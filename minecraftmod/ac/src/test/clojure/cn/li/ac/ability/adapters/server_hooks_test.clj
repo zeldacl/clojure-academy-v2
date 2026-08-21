@@ -12,7 +12,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.server.network :as network]
-            [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
+            [cn.li.combat.deferred :as delayed-projectiles]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -160,7 +160,7 @@
     (with-redefs [ctx-mgr/abort-player-contexts! (fn [uuid]
                                                    (swap! called conj [:abort uuid])
                                                    nil)
-                  delayed-projectiles/clear-player-tasks! (fn [uuid]
+                  delayed-projectiles/clear-owner! (fn [uuid]
                                                             (swap! called conj [:projectiles uuid])
                                                             nil)
                   md-damage/clear-target-mark! (fn [_uuid] nil)
@@ -191,7 +191,7 @@
                                                  (swap! calls conj [:context-tick uuid])
                                                  nil)
                   md-damage/tick-marks! (fn [] (swap! calls conj [:marks]) nil)
-                  delayed-projectiles/tick-player! (fn [uuid]
+                  delayed-projectiles/tick-owner! (fn [uuid]
                                                      (swap! calls conj [:projectiles uuid])
                                                      nil)
                   ctx-mgr/tick-context-manager! (fn []
@@ -239,7 +239,7 @@
                   md-damage/on-server-stop! (fn [session-id]
                                               (swap! called conj [:marks session-id])
                                               nil)
-                  delayed-projectiles/clear-all-tasks! (fn []
+                  delayed-projectiles/clear-all! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
       (stop! :server-session))

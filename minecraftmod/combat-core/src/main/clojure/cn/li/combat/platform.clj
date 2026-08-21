@@ -6,6 +6,7 @@
    operations are installed by platform-src and never contain Minecraft
    behaviour."
   (:require [cn.li.combat.actions :as combat-actions]
+            [cn.li.combat.deferred :as deferred]
             [cn.li.combat.targeting :as targeting]
             [cn.li.mcmod.platform.block-manipulation :as blocks]
             [cn.li.mcmod.platform.entity-damage :as damage]
@@ -357,6 +358,16 @@
       {:status :failed})
     {:status :rejected :reason :invalid-inventory-consume-request}))
 
+(defn spawn-entity!
+  "Spawn a neutral tracked entity through the mcmod relay."
+  [{:keys [world-id owner entity-type position velocity life-ticks]}]
+  (if (and world-id owner (string? entity-type) (world-effects/available?))
+    (let [entity-id (world-effects/spawn-entity!
+                     world-id owner entity-type position velocity life-ticks)]
+      {:status (if entity-id :applied :failed)
+       :entity-id (when (not (true? entity-id)) entity-id)})
+    {:status :rejected :reason :invalid-entity-spawn}))
+
 (defn query-handlers []
   {:raycast raycast!
    :entity/select entity-select!
@@ -368,7 +379,9 @@
    :block/break break!
    :block/break-budget break-budget!
    :world/sound sound!
-   :inventory/consume consume-item!})
+   :inventory/consume consume-item!
+   :entity/spawn spawn-entity!
+   :projectile/schedule-beam deferred/schedule-action!})
 
 (defn install!
   "Register every neutral capability Combat Core owns with the shared

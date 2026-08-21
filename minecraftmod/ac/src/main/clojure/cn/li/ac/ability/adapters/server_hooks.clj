@@ -14,7 +14,7 @@
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
+            [cn.li.combat.deferred :as deferred]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.session :as dev-session]
@@ -247,7 +247,7 @@
    :on-player-logout!
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
-     (delayed-projectiles/clear-player-tasks! player-uuid)
+     (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
@@ -260,7 +260,7 @@
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
-     (delayed-projectiles/clear-all-tasks!)
+     (deferred/clear-all!)
      (combat-runtime/dispatch-domain-event!
       {:type :radiation-marks-clear-all
        :owner :system
@@ -273,14 +273,14 @@
    :on-player-death!
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
-     (delayed-projectiles/clear-player-tasks! player-uuid)
+     (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
      (combat-runtime/abort-owner! player-uuid)
-     (delayed-projectiles/clear-player-tasks! player-uuid)
+     (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
@@ -304,7 +304,7 @@
      (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                              player-uuid
                                              nil)
-     (delayed-projectiles/tick-player! player-uuid))
+     (deferred/tick-owner! player-uuid))
 
    :on-server-tick-end!
    (fn [_tick-id] nil)

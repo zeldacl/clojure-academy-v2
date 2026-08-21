@@ -15,7 +15,8 @@
     :entity/status :entity/spawn :entity/discard :entity/configure
     :motion/entity-velocity :block/break :block/set
     :world/lightning :world/explosion :world/sound :block/random-break :block/break-budget
-    :projectile/redirect :resource/enforce-floor :resource/add})
+    :projectile/redirect :projectile/schedule-beam
+    :resource/enforce-floor :resource/add})
 
 (defn- require-map! [value message]
   (when-not (map? value)
