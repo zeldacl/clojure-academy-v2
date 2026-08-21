@@ -244,7 +244,7 @@
                                                                              :args [20.0
                                                                                     {:ref [:session :trigger-ticks]}]}
                                                                             20.0]}
-                                                                    0.0 1.0]}]}}}}
+                                                                    0.0 1.0]}]}}}
                                   {:component :flow/finish :outcome :continue}]}}]}}
  :program
  {:component :flow/phases

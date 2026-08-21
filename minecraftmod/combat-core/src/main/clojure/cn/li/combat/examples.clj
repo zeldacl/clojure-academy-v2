@@ -84,6 +84,10 @@
    :damage/reflect {:component :damage/reflect
                     :multiplier 1.0 :cost-per-damage 1.0
                     :minimum 1.0 :max-depth 6}
+   :damage/absorb {:component :damage/absorb
+                   :cap 10.0 :interval-ticks 18
+                   :last-tick-path [:last-absorb-tick]
+                   :front? true :cost {:cp 1.0 :overload 1.0}}
    :combat/impulse {:component :combat/impulse :target {:ref [:slot :target-id]}
                     :vector vec3-example}
    :entity/radial-impulse {:component :entity/radial-impulse

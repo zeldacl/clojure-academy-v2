@@ -17,4 +17,5 @@
           :current-charging :migrated
           :mag-manip :migrated
           :body-intensify :migrated
-          :jet-engine :migrated}}
+          :jet-engine :migrated
+          :light-shield :migrated}}

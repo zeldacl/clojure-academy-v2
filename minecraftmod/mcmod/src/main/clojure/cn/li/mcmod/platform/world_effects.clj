@@ -90,11 +90,6 @@
   [world-id owner plan]
   (call :execute-vec-deviation! world-id owner plan))
 
-(defn execute-light-shield!
-  "Update the authoritative Light Shield state behind a Host Port."
-  [world-id owner plan]
-  (call :execute-light-shield! world-id owner plan))
-
 (defn execute-knockback!
   "Apply a directional velocity impulse to a target entity behind a neutral
    Host Port (e.g. Directed Shock)."

@@ -68,6 +68,7 @@
         latches* (volatile! (set (or (:latches intent) #{})))
         slots* (volatile! {})
         rng-counter* (volatile! 0)
+        resources* (volatile! (or (get-in intent [:context :resources]) {}))
         execution-context
         {:owner owner
          :ability-id ability-id
@@ -106,6 +107,7 @@
          :latches* latches*
          :slots* slots*
          :rng-counter* rng-counter*}
+        execution-context (assoc execution-context :resources* resources*)
         result (vm/execute! program execution-frame host 0
                             execution-context)]
     (assoc result

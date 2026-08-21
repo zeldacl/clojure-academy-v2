@@ -299,39 +299,6 @@
                               (catch Exception e
                                 (log/warn "Failed to apply mine-ray:" (ex-message e))
                                 false)))
-        ;; Conservative implementations (2026-08-17 追加会话, see
-        ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md 节 C-2): each only
-        ;; implements the well-defined "deal damage to nearby/targeted
-        ;; entities" core the skill's own valid? already validates. Visual
-        ;; behavior (traveling missiles, scatter spread) and light-shield's
-        ;; damage-absorption (needs a damage-pipeline interception hook that
-        ;; doesn't exist anywhere in this codebase) are deliberately not
-        ;; implemented -- see the doc for why those need design input this
-        ;; session has no authority to invent.
-        execute-light-shield! (fn [world-id owner plan]
-                                (try
-                                  (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
-                                    (let [{:keys [touch-damage touch-radius front-cone-degrees]} plan
-                                          origin {:x (.getX player) :y (.getY player) :z (.getZ player)}
-                                          look (when (raycast/available?)
-                                                 (raycast/player-look-vector owner))
-                                          lx (double (or (:x look) 0.0))
-                                          ly (double (or (:y look) 0.0))
-                                          lz (double (or (:z look) 1.0))
-                                          victims (aoe-victims! world-id owner
-                                                                 (:x origin) (:y origin) (:z origin)
-                                                                 touch-radius)
-                                          targets (filter #(within-cone? origin lx ly lz
-                                                                          (/ (double front-cone-degrees) 2.0) %)
-                                                           victims)]
-                                      (doseq [{:keys [uuid]} targets]
-                                        (entity-damage/apply-direct-damage!
-                                         world-id uuid (double touch-damage) :generic
-                                         {:attacker-uuid owner}))
-                                      true))
-                                  (catch Exception e
-                                    (log/warn "Failed to apply light-shield touch damage:" (ex-message e))
-                                    false)))
         ;; Owner-keyed fire-interval throttle. combat-core drives this once
         ;; per real tick (:pulse, :period-ticks 1); electron-missile's own
         ;; fire-interval/spawn-interval describe a slower cadence than that,
@@ -647,7 +614,7 @@
                                   vy (double (or (:y v) 0.0))
                                   vz (double (or (:z v) 0.0))
                                   speed (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
-                              (boolean
+
                                (entity/player-spawn-tracked-entity-by-id!
                                 player (str entity-type) speed life-ticks)))))
                         (catch Exception e
@@ -707,7 +674,6 @@
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-meltdowner! execute-meltdowner!
      :execute-mine-ray! execute-mine-ray!
-     :execute-light-shield! execute-light-shield!
      :execute-electron-missile! execute-electron-missile!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!

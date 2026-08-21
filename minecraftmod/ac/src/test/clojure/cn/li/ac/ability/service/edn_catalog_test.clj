@@ -22,11 +22,13 @@
     (is (catalog/available? :mag-movement))
     (is (catalog/available? :mag-manip))
     (is (catalog/available? :body-intensify))
+    (is (catalog/available? :light-shield))
     (is (= :migrated (catalog/migration-status :thunder-bolt)))
     (is (= :migrated (catalog/migration-status :mine-detect)))
     (is (= :migrated (catalog/migration-status :mag-movement)))
     (is (= :migrated (catalog/migration-status :mag-manip)))
     (is (= :migrated (catalog/migration-status :body-intensify)))
+    (is (= :migrated (catalog/migration-status :light-shield)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -57,6 +59,7 @@
     (is (pos? (count (get-in state [:combat :abilities :mag-movement :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :mag-manip :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :body-intensify :compiled-ir]))))
+    (is (pos? (count (get-in state [:combat :abilities :light-shield :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :plasma-cannon :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :flashing :compiled-ir]))))
     (is (pos? (count (get-in state [:combat :abilities :penetrate-teleport :compiled-ir]))))
@@ -76,7 +79,35 @@
       (is (some? model-node))
       (is (= 7 (:frame-count model-node)))
       (is (= 2.5 (:frame-period-ticks model-node)))
-      (is (= 7 (count (:parts model-node)))))))
+    (is (= 7 (count (:parts model-node)))))))
+
+(deftest light-shield-start-executes-compiled-program
+  (catalog/initialize!)
+  (let [result (execution/execute!
+                :light-shield "owner-shield"
+                {:action :start
+                 :context {:world-id "world"
+                           :resources {:cp 1000.0 :overload 500.0}
+                           :skill-exp 0.0}
+                 :from {:caster/id "owner-shield"
+                        :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                        :caster/eye {:x 0.0 :y 65.62 :z 0.0}
+                        :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                        :caster/creative? false
+                        :world/id "world"}
+                 :tunables {:touch-damage 2.0 :touch-radius 3.0
+                            :absorb-damage 15.0 :absorb-interval-ticks 18
+                            :front-cone-degrees 60.0 :max-active-ticks 120.0
+                            :slowness-duration-ticks 100 :slowness-amplifier 1
+                            :activate-overload 110.0 :tick-cp 9.0
+                            :touch-cp 50.0 :touch-overload 5.0
+                            :absorb-cp 50.0 :absorb-overload 5.0
+                            :exp-tick 0.000001 :exp-touch 0.001
+                            :exp-attacked 0.001}})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (some #(= :session-patch (:type %)) (:actions result)))
+    (is (some #(= :entity/spawn (:capability %)) (:actions result)))))
 
 (deftest migrated-entry-executes-compiled-program
   (catalog/initialize!)

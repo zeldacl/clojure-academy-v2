@@ -510,7 +510,8 @@
         (vswap! slots* assoc (:to data) (resolve-data (:value data) context)))
       nil)
     :guard/resource
-    (let [resources (or (get-in context [:context :resources]) {})
+    (let [resources (or (some-> (:resources* context) deref)
+                        (get-in context [:context :resources]) {})
           cost (:cost data)]
       (every? (fn [[key value]]
                 (>= (double (or (get resources key) 0.0))
@@ -535,12 +536,19 @@
                                [key (* (double (resolve-data value context))
                                        (double (or scale 1.0)))]))
                         (:resources spec))
-          available (or (get-in context [:context :resources]) {})
+          resources* (:resources* context)
+          available (or (some-> resources* deref)
+                        (get-in context [:context :resources]) {})
           affordable? (every? (fn [[key amount]]
                                 (>= (double (or (get available key) 0.0)) (double amount)))
                               amounts)]
       (if affordable?
         (do
+          (when resources*
+            (vswap! resources* (fn [resources]
+                                (reduce-kv (fn [result key amount]
+                                             (update result key (fnil - 0.0) amount))
+                                           resources amounts))))
           (when (seq amounts)
             (emit-component! frame :owner/patch
                              {:entries (mapv (fn [[key amount]]

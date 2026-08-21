@@ -15,7 +15,6 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.radiation-marks :as radiation-marks]
-            [cn.li.ac.ability.service.light-shield-state :as light-shield-state]
             [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
             [cn.li.ac.ability.service.edn-execution :as edn-execution]
             [cn.li.ac.ability.service.edn-sessions :as edn-sessions]
@@ -61,6 +60,7 @@
 ;; would make `random/*` behave identically for repeated activations. Mixing
 ;; in this counter and wall-clock nanos gives every activation its own seed.
 (defonce ^:private activation-seed-counter* (atom 0))
+(defonce ^:private spawned-entity-ids* (atom {}))
 (declare owner-state resolve-slot execute-world-effects! finalize-result! publish-result!)
 
 (defn- generate-activation-seed
@@ -169,23 +169,6 @@
     :combat-owner-clear
     (update state :radiation-marks
             #(radiation-marks/clear-owner (or %) (:owner event)))
-
-    :light-shield-start
-    (assoc-in state [:light-shields (str (:owner event))]
-              (light-shield-state/start (:overload-floor event)))
-
-    :light-shield-tick
-    (update-in state [:light-shields (str (:owner event))]
-               light-shield-state/tick)
-
-    :light-shield-absorb
-    (update-in state [:light-shields (str (:owner event))]
-               (fn [shield]
-                 (when shield
-                   (assoc shield :last-absorb-tick (long (:tick event))))))
-
-    :light-shield-end
-    (update state :light-shields dissoc (str (:owner event)))
 
     state))
 
@@ -505,68 +488,6 @@
                               :rate rate
                               :ticks-left ticks-left}))
                request)))}
-   {:priority 80
-    :provider-id :academy/base
-    :ability-id :light-shield
-    :node-id :damage-absorption
-    :run (fn [request context]
-           (let [target (str (:target request))
-                 shield (get-in context [:domain-state :light-shields target])
-                 metadata (:metadata request)
-                 ticks (long (or (:ticks shield) 0))
-                 last-absorb (long (or (:last-absorb-tick shield) -1))
-                 interval (long (or (skill-config/tunable-int
-                                     :light-shield :combat.absorb-interval-ticks)
-                                    18))
-                 base (double (:base request))
-                 ;; Rear/unknown direction fails closed. The AC boundary must
-                 ;; supply this neutral fact from the authoritative entity
-                 ;; geometry before an absorb can occur.
-                 front? (and (contains? metadata :attacker-front?)
-                             (boolean (:attacker-front? metadata)))
-                 exp (double (ability-model/get-skill-exp
-                              (get-in (or (:target-state context)
-                                           (:state context) {}) [:ability-data])
-                              :light-shield))
-                 overload-cost (skill-config/lerp-double
-                                :light-shield :cost.absorb.cp exp)
-                 cp-cost (skill-config/lerp-double
-                          :light-shield :cost.absorb.overload exp)
-                 cap (skill-config/lerp-double
-                      :light-shield :combat.absorb-damage exp)
-                 resources (or (:resources (:target-state context))
-                               (:resources (:state context)) {})
-                 enough? (and (>= (double (or (:overload resources) 0.0))
-                                 cp-cost)
-                             (>= (double (or (:cp resources) 0.0))
-                                 overload-cost))
-                 eligible? (and shield
-                                (light-shield-state/eligible-absorb?
-                                 {:ticks ticks
-                                  :last-absorb-tick last-absorb
-                                  :interval interval
-                                  :front? front?
-                                  :damage base})
-                                enough?
-                                (Double/isFinite cap)
-                                (<= 0.0 cap 100.0))]
-             (if eligible?
-               (let [absorbed (min base cap)
-                     next-base (- base absorbed)]
-                 (-> request
-                     (assoc :base next-base)
-                     (assoc-in [:metadata :resource-cost]
-                               {:overload (- cp-cost)
-                                :cp (- overload-cost)})
-                     (update :state-patch (fnil conj [])
-                             [:ability-exp :light-shield 0.001])
-                     (update :events (fnil conj [])
-                             {:type :light-shield-absorb
-                              :owner target
-                              :tick (long (:tick context))
-                              :event-id [:light-shield-absorb target
-                                         (long (:tick context))]})))
-               request)))}
    {:priority 50
     :provider-id :academy/base
     :ability-id :vec-deviation
@@ -807,13 +728,6 @@
                          :face face
                          :drop-x drop-x :drop-y drop-y :drop-z drop-z
                          :target-entities (mapv #(select-keys % [:uuid]) entities)})))))
-               :light-shield (fn [context node]
-                              (if-let [host-query (contract/host-port :query)]
-                                (host-query :light-shield context node)
-                                ;; execute-light-shield! finds nearby entities
-                                ;; itself; :require never gates on this step's
-                                ;; result.
-                                {}))
               :vec-accel (fn [context node]
                            (if-let [host-query (contract/host-port :query)]
                              (host-query :vec-accel context node)
@@ -1134,33 +1048,6 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-meltdowner!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :light-shield
-                         (let [{:keys [world-id query-result ticks absorb-damage
-                                       touch-damage touch-radius front-cone-degrees
-                                       max-active-ticks]} effect
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               plan {:query-result query-result
-                                     :session-id (:session-id effect)
-                                     :ticks (long (or ticks 0))
-                                     :absorb-damage (double (or absorb-damage 0.0))
-                                     :touch-damage (double (or touch-damage 0.0))
-                                     :touch-radius (double (or touch-radius 0.0))
-                                     :front-cone-degrees (double (or front-cone-degrees 60.0))
-                                     :max-active-ticks (long (or max-active-ticks 180))}
-                               valid? (and world-id (map? query-result)
-                                            (<= 0 (:ticks plan) (:max-active-ticks plan) 180)
-                                            (finite? absorb-damage) (<= 0.0 (:absorb-damage plan) 100.0)
-                                            (finite? touch-damage) (<= 0.0 (:touch-damage plan) 100.0)
-                                            (finite? touch-radius) (<= 0.0 (:touch-radius plan) 8.0)
-                                            (finite? front-cone-degrees)
-                                            (<= 0.0 (:front-cone-degrees plan) 180.0)
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/execute-light-shield!
                                                world-id owner plan))
                                       :applied
                                       :failed)
@@ -1696,6 +1583,7 @@
                        :id id :type type :position position
                        :age-ms (long (or (:age-ms entity) 0))
                        :motion-progress (double (or (:motion-progress entity) 0.0))
+                       :invulnerable-time (long (or (:invulnerable-time entity) 0))
                        :difficulty (double (or (get difficulty-map type) 0.0))
                        :velocity (or (:velocity entity)
                                      {:x (double (or (:vx entity) 0.0))
@@ -1947,14 +1835,23 @@
       (when-not (contains? (:queries (capabilities/snapshot)) :owner/snapshot)
         (capabilities/register-query!
          :owner/snapshot
-         (fn [{:keys [owner]} _frame]
-           (let [owner (str owner)
-                 position (when (raycast/available?)
+                 (fn [{:keys [owner]} _frame]
+                   (let [owner (str owner)
+                         position (when (raycast/available?)
                             (raycast/player-position owner))
-                 velocity (when (motion-effects/player-motion-available?)
-                            (motion-effects/player-velocity owner))]
+                         velocity (when (motion-effects/player-motion-available?)
+                            (motion-effects/player-velocity owner))
+                         look (when (raycast/available?)
+                                (raycast/player-look-vector owner))]
              {:position (when (map? position)
                           (select-keys position [:x :y :z :eye-y :world-id]))
+              :eye-position (when (map? position)
+                             (let [x (double (or (:x position) 0.0))
+                                   y (double (or (:y position) 0.0))
+                                   z (double (or (:z position) 0.0))
+                                   eye-y (double (or (:eye-y position) (+ y 1.62)))]
+                               {:x x :y eye-y :z z}))
+              :look (or look {:x 0.0 :y 0.0 :z 1.0})
               :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
               :can-fly? (motion-effects/player-can-fly? owner)}))))
       (when-not (contains? (:queries (capabilities/snapshot)) :item/held)
@@ -2403,20 +2300,38 @@
          (fn [{:keys [world-id owner entity-type position velocity life-ticks]}]
            (if (and world-id owner (string? entity-type)
                     (world-effects/available?))
-             {:status (if (world-effects/spawn-entity!
-                           world-id owner entity-type position velocity life-ticks)
-                        :applied :failed)}
+             (let [entity-id (world-effects/spawn-entity!
+                               world-id owner entity-type position velocity life-ticks)
+                   applied? (boolean entity-id)]
+               (when (and applied? (not (true? entity-id)))
+                 (swap! spawned-entity-ids* update-in
+                        [(str world-id) (str owner) entity-type]
+                        (fnil conj []) entity-id))
+               {:status (if applied? :applied :failed)
+                :entity-id (when (not (true? entity-id)) entity-id)})
              {:status :rejected :reason :invalid-entity-spawn}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/discard)
         (capabilities/register-action!
          :entity/discard
          (fn [{:keys [world-id entity]}]
-           (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))]
-             {:status (if (and world-id entity-id
-                               (world-effects/available?)
-                               (world-effects/discard-entity-by-uuid!
-                                world-id entity-id))
-                        :applied :failed)}))))
+           (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
+                 owner (:owner entity)
+                 entity-type (:entity-type entity)
+                 tracked (when (and world-id owner entity-type)
+                           (get-in @spawned-entity-ids*
+                                   [(str world-id) (str owner) entity-type]))
+                 ids (if entity-id [entity-id] tracked)
+                 discarded (if (and world-id (world-effects/available?))
+                             (count (filter #(world-effects/discard-entity-by-uuid!
+                                             world-id %)
+                                            ids))
+                             0)]
+             (when (and owner entity-type)
+               (swap! spawned-entity-ids* update-in
+                      [(str world-id) (str owner) entity-type]
+                      (constantly [])))
+             {:status (if (pos? discarded) :applied :failed)
+              :discarded discarded}))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/configure)
         (capabilities/register-action!
          :entity/configure
@@ -2807,9 +2722,13 @@
                  :context (:context context)
                  :request (:request context)
                  :param (:params context)
+                 :session (:session-state context)
                  :state (:state context)
                  {})]
       (get-in root (into [key] path)))
+
+    (and (map? value) (contains? value :tunable))
+    (get (or (:tunables context) {}) (:tunable value))
 
     (map? value) (reduce-kv (fn [m k v]
                               (assoc m k (reaction-value v context)))
@@ -2839,23 +2758,76 @@
               ability (get-in (edn-catalog/catalog) [:combat :abilities ability-id])
               params (:parameter-snapshot session)
               state (owner-state target)
+              skill-exp (double (or (get-in state
+                                           [:ability-data :skill-exps ability-id])
+                                    0.0))
               context {:request current
                        :state state
+                       :session-state (:state session)
                        :params params
+                       :tunables (materialize-tunables ability skill-exp)
                        :activation-seed (long (or (:activation-seed session) 0))
                        :context {:enabled? (boolean session)
+                                 :ability-id (:ability-id session)
+                                 :front? (boolean (get-in current [:metadata :attacker-front?]))
                                  :resource (double (or (get-in state [:resources :cp]) 0.0))
-                                 :skill-exp (double (or (get-in state
-                                                                [:ability-data :skill-exps ability-id])
-                                                         0.0))
+                                  :skill-exp skill-exp
                                  :depth (long (or (get-in current [:metadata :reflection-depth]) 0))
                                  :damage (double (:base current))}}
               condition? (or (nil? when)
                              (boolean (reaction-value when context)))
               component (:component program)]
-          (if-not (and session ability condition? (= :damage/reflect component))
+          (if-not (and session ability condition?)
             current
-            (let [multiplier (double (or (reaction-value (:multiplier program) context) 0.0))
+            (if (= :damage/absorb component)
+              (let [base (double (:base current))
+                    ticks (long (or (get-in session [:state :active-ticks]) 0))
+                    last-tick (long (or (get-in session [:state (:last-tick-path program)]) -1))
+                    interval (long (or (reaction-value (:interval-ticks program) context) 0))
+                    cap (double (or (reaction-value (:cap program) context) 0.0))
+                    front? (boolean (reaction-value (:front? program) context))
+                    window? (and (pos? base)
+                                 (or (= -1 last-tick)
+                                     (> (- ticks last-tick) interval)))
+                    costs (into {}
+                                (map (fn [[resource amount]]
+                                       [resource (double (or (reaction-value amount context) 0.0))])
+                                     (:cost program)))
+                    resources (or (:resources state) {})
+                    enough? (every? (fn [[resource amount]]
+                                      (>= (double (or (get resources resource) 0.0)) amount))
+                                    costs)
+                    exp-scale (double (or (reaction-value (:exp-scale program) context) 0.0))
+                    current (if window?
+                              (update current :state-patch (fnil conj [])
+                                      [:ability-exp ability-id exp-scale])
+                              current)]
+                (if (and window? front? enough? (Double/isFinite cap) (<= 0.0 cap 100.0))
+                  (let [absorbed (min base cap)
+                        remaining (max 0.0 (- base absorbed))
+                        ;; Attack prechecks are cancellation-only.  A partial
+                        ;; absorb must be deferred to the amount modifier so
+                        ;; the same hit cannot pay the shield twice.
+                        defer-partial? (and precheck? (pos? remaining))
+                        ratio (if (pos? base) (/ remaining base) 0.0)]
+                    (if defer-partial?
+                      current
+                      (cond->
+                        (-> current
+                            (assoc :base remaining)
+                            (assoc :components (scale-damage-components (:components current) ratio))
+                            (assoc-in [:metadata :resource-cost]
+                                      (into {} (map (fn [[resource amount]]
+                                                      [resource (- amount)]) costs)))
+                            (update :state-patch (fnil into [])
+                                    (mapv (fn [[resource amount]]
+                                            [:resource resource (- amount)]) costs))
+                            (update :session-patch (fnil conj [])
+                                    {:path (:last-tick-path program)
+                                     :mode :assign :value ticks}))
+                        precheck? (assoc :cancelled? true))))
+                  current))
+              (let [multiplier (double (or (reaction-value (:multiplier program) context) 0.0))
                   cost-rate (double (or (reaction-value (:cost-per-damage program) context) 0.0))
                   minimum (double (or (reaction-value (:minimum program) context) 0.0))
                   max-depth (long (or (reaction-value (:max-depth program) context) 0))
@@ -2897,7 +2869,7 @@
                       (update :world-effects (fnil conj [])
                               {:type :damage :request reflected-request})
                       (cond-> precheck? (assoc :cancelled? true)))))))))
-      request reactions)))
+      request reactions))))
 
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
@@ -2930,6 +2902,10 @@
     (when (and (not (:cancelled? request))
                (seq (:state-patch request)))
       (commit-state-patch! player-id (:state-patch request)))
+    (when (and (not (:cancelled? request))
+               (seq (:session-patch request)))
+      (edn-sessions/apply-actions!
+       player-id [{:type :session-patch :entries (:session-patch request)}]))
     (when (and (not (:cancelled? request))
                (damage-output? request))
       (execute-damage-effects! player-id request))
@@ -2974,12 +2950,22 @@
   [player-id attacker-id original-damage damage-source]
   (let [{:keys [request]} (process-attack-precheck!
                            player-id attacker-id original-damage damage-source)
-        damage? (damage-output? request)]
-    (when damage?
+        damage? (damage-output? request)
+        patch? (or (seq (:state-patch request))
+                   (seq (:session-patch request)))]
+    ;; A fully absorbed hit has no world-effect payload, but it still owns the
+    ;; resource/session patches and must cancel the native hit.  Partial
+    ;; absorbs are intentionally deferred by the reaction to the amount
+    ;; modifier, avoiding a second payment on the same attack.
+    (when (or damage? patch?)
       (commit-state-patch! player-id (:state-patch request))
-      (execute-damage-effects! player-id request)
-      (dispatch-result-domain-events! player-id request))
-    (boolean damage?)))
+      (when (seq (:session-patch request))
+        (edn-sessions/apply-actions!
+         player-id [{:type :session-patch :entries (:session-patch request)}]))
+      (when damage?
+        (execute-damage-effects! player-id request)
+        (dispatch-result-domain-events! player-id request)))
+    (boolean (or (:cancelled? request) damage?))))
 
 (defn install-world-effect-handler!
   "Install AC's ordered WorldEffect interpreter.

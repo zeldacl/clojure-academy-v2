@@ -1,0 +1,200 @@
+{:schema-version 2
+ :kind :ability
+ :id :light-shield
+ :revision 2
+ :activation :toggle
+ :status :migrated
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative?
+            :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :electron-bomb :min-exp 1.0}]
+ :tunables
+ {:touch-damage {:curve :mastery-lerp}
+  :touch-radius {:curve :const}
+  :absorb-damage {:curve :mastery-lerp}
+  :absorb-interval-ticks {:curve :const :type :long}
+  :front-cone-degrees {:curve :const}
+  :max-active-ticks {:curve :mastery-lerp}
+  :slowness-duration-ticks {:curve :const :type :long}
+  :slowness-amplifier {:curve :const :type :long}
+  :activate-overload {:curve :mastery-lerp}
+  :tick-cp {:curve :mastery-lerp}
+  :touch-cp {:curve :mastery-lerp}
+  :touch-overload {:curve :mastery-lerp}
+  :absorb-cp {:curve :mastery-lerp}
+  :absorb-overload {:curve :mastery-lerp}
+  :exp-tick {:curve :const}
+  :exp-touch {:curve :const}
+   :exp-attacked {:curve :const}}
+ :costs
+ {:activate {:resources {:overload {:tunable :activate-overload}}}
+  :tick {:resources {:cp {:tunable :tick-cp}}}
+  :touch {:resources {:cp {:tunable :touch-cp}
+                      :overload {:tunable :touch-overload}}}}
+ :cooldown
+ {:deactivate {:ticks {:expr :math/mul
+                        :args [{:ref [:session :active-ticks]}
+                               {:expr :math/sub
+                                :args [2.0 {:ref [:context :skill-exp]}]}]}}}
+ :progression
+ {:tick {:per-mark {:tunable :exp-tick}}
+  :touch {:per-mark {:tunable :exp-touch}}
+  :attacked {:per-mark {:tunable :exp-attacked}}}
+ :reactions
+ [{:on :combat/damage
+   :priority 80
+   :when {:expr :bool/and
+          :args [{:expr :value/eq
+                  :args [{:ref [:context :ability-id]} :light-shield]}
+                 {:ref [:context :enabled?]}
+                 {:expr :math/gt
+                   :args [{:ref [:request :base]} 0.0]}]}
+   :program {:component :damage/absorb
+             :cap {:tunable :absorb-damage}
+             :interval-ticks {:tunable :absorb-interval-ticks}
+             :last-tick-path [:last-absorb-tick]
+             :front? {:ref [:context :front?]}
+             :cost {:cp {:tunable :absorb-overload}
+                    :overload {:tunable :absorb-cp}}
+             :exp-tag :attacked
+             :exp-scale 1.0}}]
+ :vfx
+ {:startup {:effect-id :audio-one-shot :op :spawn
+            :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
+  :shield-start {:effect-id :billboard-session :op :spawn
+                 :payload {:anchor :object :duration-ticks :long
+                           :texture-pattern :string :frame-count :long
+                           :frame-duration-ms :long :half-size :double}}
+  :shield-update {:effect-id :billboard-session :op :update :payload {:anchor :object}}
+  :shield-end {:effect-id :billboard-session :op :destroy :payload {}}
+  :particles-start {:effect-id :particle-session :op :spawn
+                    :payload {:position :vec3 :rate-per-tick :long :limit :long :particle :object}}
+  :particles-update {:effect-id :particle-session :op :update :payload {:position :vec3}}
+  :particles-end {:effect-id :particle-session :op :destroy :payload {}}
+  :audio-start {:effect-id :audio-loop-session :op :spawn
+                :payload {:position :vec3 :sound-id :string :volume :double :pitch :double}}
+  :audio-update {:effect-id :audio-loop-session :op :update :payload {:position :vec3}}
+  :audio-end {:effect-id :audio-loop-session :op :destroy :payload {:fade-ticks :long}}}
+ :fragments
+ {:stop-vfx
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :effect/vfx :effect-id :billboard-session :operation :destroy
+                   :instance-key [:activation :light-shield-billboard] :payload {}}
+                  {:component :effect/vfx :effect-id :particle-session :operation :destroy
+                   :instance-key [:activation :light-shield-particles] :payload {}}
+                  {:component :effect/vfx :effect-id :audio-loop-session :operation :destroy
+                   :instance-key [:activation :light-shield-audio] :payload {:fade-ticks 0}}]}}
+  :end
+  {:inputs {}
+   :body {:component :flow/sequence
+          :steps [{:component :entity/discard
+                   :entity {:owner {:from :caster/id}
+                            :entity-type "academy:entity_md_shield"}}
+                  {:component :combat/status :target {:from :caster/id}
+                   :status-id :slowness
+                   :duration-ticks {:tunable :slowness-duration-ticks}
+                   :amplifier {:tunable :slowness-amplifier}}
+                  {:component :cooldown/start :name :deactivate}
+                  {:component :stop-vfx}]}}}
+ :program
+ {:component :flow/phases
+  :start {:component :flow/sequence
+          :steps [{:component :cost/spend :budget :activate
+                   :on-insufficient {:component :flow/finish :outcome :insufficient-resource
+                                     :finish-session? true}}
+                  {:component :session/patch
+                   :entries [{:path [:active-ticks] :mode :assign :value 0}
+                             {:path [:last-absorb-tick] :mode :assign :value -1}
+                             {:path [:overload-floor] :mode :assign
+                              :value {:expr :math/max
+                                      :args [0.0 {:expr :math/sub
+                                                   :args [{:ref [:context :resources :overload]}
+                                                          {:tunable :activate-overload}]}]}}]}
+                  {:component :entity/spawn :entity-type "academy:entity_md_shield"
+                   :owner {:from :caster/id} :position {:from :caster/body}
+                    :velocity {:vec3 [0.0 0.0 0.0]}
+                    :life-ticks {:expr :math/add
+                                  :args [{:tunable :max-active-ticks} 20]}}
+                  {:component :effect/vfx :effect-id :audio-one-shot :operation :spawn
+                   :instance-key [:activation :light-shield-startup] :audience {:type :owner}
+                   :payload {:position {:from :caster/eye}
+                             :sound-id "academy:md.shield_startup" :volume 0.5 :pitch 1.0}}
+                  {:component :effect/vfx :effect-id :billboard-session :operation :spawn
+                   :instance-key [:activation :light-shield-billboard]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:anchor {:from :caster/eye} :duration-ticks 4096
+                             :texture-pattern "academy:textures/effects/mdshield.png"
+                             :frame-count 1 :frame-duration-ms 40 :half-size 1.15}}
+                  {:component :effect/vfx :effect-id :particle-session :operation :spawn
+                   :instance-key [:activation :light-shield-particles]
+                   :audience {:type :nearby :radius 32.0}
+                   :payload {:position {:from :caster/eye} :rate-per-tick 1 :limit 4096
+                             :particle {:material :additive :life-ticks 12 :speed 1.0
+                                        :color [165 230 255 190]
+                                        :spread {:x 0.5 :y 0.5 :z 0.5}
+                                        :velocity {:x 0.02 :y 0.02 :z 0.02}}}}
+                  {:component :effect/vfx :effect-id :audio-loop-session :operation :spawn
+                   :instance-key [:activation :light-shield-audio] :audience {:type :owner}
+                   :payload {:position {:from :caster/eye}
+                             :sound-id "academy:md.shield_loop" :volume 1.0 :pitch 1.0}}
+                  {:component :flow/finish :outcome :started}]}
+  :pulse {:component :flow/sequence
+          :steps [{:component :resource/enforce-floor :resource :overload
+                   :minimum {:ref [:session :overload-floor]}}
+                  {:component :cost/spend :budget :tick
+                   :on-insufficient {:component :flow/sequence
+                                     :steps [{:component :end}
+                                             {:component :flow/finish :outcome :insufficient-resource
+                                              :finish-session? true}]}}
+                  {:component :owner/snapshot :projection [:position :eye-position :look]
+                   :result :owner-now}
+                  {:component :session/patch
+                   :entries [{:path [:active-ticks] :mode :increment :value 1}]}
+                   {:component :target/entities
+                    :shape {:type :cone :origin {:ref [:slot :owner-now :position]}
+                            :eye-origin {:ref [:slot :owner-now :position]}
+                            :direction {:ref [:slot :owner-now :look]}
+                            :distance {:tunable :touch-radius}
+                            :yaw-span-degrees {:expr :math/mul
+                                               :args [2.0 {:tunable :front-cone-degrees}]}
+                            :pitch-span-degrees 180.0}
+                    :filter {}
+                   :projection [:id :position :invulnerable-time]
+                   :limit 64 :result :touch-targets}
+                  {:component :flow/foreach :items {:ref [:slot :touch-targets]}
+                   :as :target :limit 64
+                   :body {:component :flow/branch
+                          :when {:expr :math/lte
+                                 :args [{:ref [:slot :target :invulnerable-time]} 0]}
+                          :then {:component :flow/sequence
+                                 :steps [{:component :cost/spend :budget :touch
+                                          :on-insufficient {:component :flow/control
+                                                            :signal :skip-item}}
+                                         {:component :combat/damage
+                                          :target {:ref [:slot :target :id]}
+                                          :amount {:tunable :touch-damage} :damage-type :magic}
+                                         {:component :score/mark :tag :touch}]}}}
+                  {:component :score/mark :tag :tick}
+                  {:component :effect/vfx :effect-id :billboard-session :operation :update
+                   :instance-key [:activation :light-shield-billboard]
+                   :payload {:anchor {:ref [:slot :owner-now :eye-position]}}}
+                  {:component :effect/vfx :effect-id :particle-session :operation :update
+                   :instance-key [:activation :light-shield-particles]
+                   :payload {:position {:ref [:slot :owner-now :eye-position]}}}
+                  {:component :effect/vfx :effect-id :audio-loop-session :operation :update
+                   :instance-key [:activation :light-shield-audio]
+                   :payload {:position {:ref [:slot :owner-now :eye-position]}}}
+                  {:component :flow/branch
+                   :when {:expr :math/gt :args [{:ref [:session :active-ticks]}
+                                                 {:tunable :max-active-ticks}]}
+                   :then {:component :flow/sequence
+                          :steps [{:component :end}
+                                  {:component :flow/finish :outcome :timeout
+                                   :finish-session? true}]}
+                   :else {:component :flow/finish :outcome :continue}}]}
+  :release {:component :flow/sequence
+            :steps [{:component :end}
+                    {:component :flow/finish :outcome :released :finish-session? true}]}
+  :abort {:component :flow/sequence
+          :steps [{:component :end}
+                  {:component :flow/finish :outcome :aborted :finish-session? true}]}}}

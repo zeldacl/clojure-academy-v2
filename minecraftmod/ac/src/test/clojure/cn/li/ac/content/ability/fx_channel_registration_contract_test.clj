@@ -5,7 +5,6 @@
 (def ^:private fx-init-symbols
   '[cn.li.ac.content.ability.meltdowner.electron-bomb-fx/init!
     cn.li.ac.content.ability.meltdowner.electron-missile-fx/init!
-    cn.li.ac.content.ability.meltdowner.light-shield-fx/init!
     cn.li.ac.content.ability.meltdowner.meltdowner-fx/init!
     cn.li.ac.content.ability.meltdowner.mine-ray-fx/init!
     cn.li.ac.content.ability.meltdowner.rad-intensify-fx/init!
@@ -22,7 +21,7 @@
     cn.li.ac.content.ability.vecmanip.vec-deviation-fx/init!])
 
 (deftest all-content-ability-fx-inits-register-via-fx-spec-test
-  (is (= 17 (count fx-init-symbols)))
+  (is (= 16 (count fx-init-symbols)))
   (doseq [init-sym fx-init-symbols]
     (let [register-calls* (atom [])]
       (with-redefs [fx-spec/register! (fn [spec] (swap! register-calls* conj spec))]

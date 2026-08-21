@@ -52,4 +52,7 @@
               :resource "ac/combat/abilities/body_intensify.edn"}
              {:kind :ability
               :id :jet-engine
-              :resource "ac/combat/abilities/jet_engine.edn"}]}
+              :resource "ac/combat/abilities/jet_engine.edn"}
+             {:kind :ability
+              :id :light-shield
+              :resource "ac/combat/abilities/light_shield.edn"}]}

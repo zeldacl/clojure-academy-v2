@@ -326,6 +326,24 @@
      :release-overload :cost.release.overload
      :cooldown-ticks :cooldown.ticks
      :progression-exp-use :progression.exp-use}
+    :light-shield
+    {:touch-damage :combat.touch-damage
+     :touch-radius :combat.touch-radius
+     :absorb-damage :combat.absorb-damage
+     :absorb-interval-ticks :combat.absorb-interval-ticks
+     :front-cone-degrees :combat.front-cone-degrees
+     :max-active-ticks :timing.max-active-ticks
+     :slowness-duration-ticks :effect.slowness-duration-ticks
+     :slowness-amplifier :effect.slowness-amplifier
+     :activate-overload :cost.down.overload
+     :tick-cp :cost.tick.cp
+     :touch-cp :cost.absorb.cp
+     :touch-overload :cost.absorb.overload
+     :absorb-cp :cost.absorb.cp
+     :absorb-overload :cost.absorb.overload
+     :exp-tick :progression.exp-tick
+     :exp-touch :progression.exp-touch
+     :exp-attacked :progression.exp-attacked}
     :body-intensify
    {:charge-min-ticks :charge.min-ticks
     :charge-max-ticks :charge.max-ticks
