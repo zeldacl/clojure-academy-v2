@@ -9,8 +9,10 @@
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.ability.model.resource :as resource]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
@@ -50,29 +52,39 @@
 (defn- limits []
   {:cross-dimension-exp-threshold (td :targeting.cross-dimension-exp-threshold)
    :max-location-name-length (ti :ui.max-location-name-length)})
-(defn- with-stats [owner current mastery location]
+(defn- with-stats [owner player current mastery location]
   (let [cross? (not= (:world-id current) (:world-id location))
         distance (distance current location)
         cp (cp-cost mastery distance cross?)
         enough-exp? (or (not cross?)
-                        (> mastery (td :targeting.cross-dimension-exp-threshold)))]
+                        (> mastery (td :targeting.cross-dimension-exp-threshold)))
+        state (skill-effects/get-player-state (str owner))
+        creative? (boolean (and player (entity/player-creative? player)))
+        enough-resource? (boolean (and state
+                                       (resource/can-perform?
+                                        (:resource-data state)
+                                        (td :cost.perform.overload)
+                                        cp creative?)))]
     (assoc location
            :distance distance
            :cp-cost cp
            :cross-dimension? cross?
-           :can-perform? enough-exp?
-           :error (when-not enough-exp? :err-exp))))
+           :can-perform? (and enough-exp? enough-resource?)
+           :error (cond
+                    (not enough-exp?) :err-exp
+                    (not enough-resource?) :err-cp
+                    :else nil))))
 
 (defn query-location-teleport
   ([owner] (query-location-teleport owner nil))
-  ([owner _player]
+  ([owner player]
    (try
      (let [mastery (exp owner)
            current (position owner)
            saved (locations owner)]
        {:success? true :exp mastery :limits (limits) :current-pos current
         :locations (if current
-                     (mapv #(with-stats owner current mastery %) saved)
+                     (mapv #(with-stats owner player current mastery %) saved)
                      saved)})
      (catch Throwable throwable
        (log/warn "Location Teleport snapshot failed:" (ex-message throwable))
