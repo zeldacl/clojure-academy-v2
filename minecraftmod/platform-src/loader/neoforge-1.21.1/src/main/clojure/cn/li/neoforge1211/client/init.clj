@@ -8,6 +8,7 @@
           [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.platform.neutral.client-runtime :as content-actions]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.neutral.client-runtime :as widget-registry]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.platform.bootstrap :as platform-bootstrap]
@@ -415,58 +416,60 @@
   Called from within the FMLClientSetupEvent handler in mod.clj —do work directly,
   do not attempt to register new event listeners (the event is already firing)."
   []
-  (log/info "Initializing NeoForge 1.21.1 client-side systems")
+  (install/process-once! ::client-systems-initialized
+    (fn []
+      (log/info "Initializing NeoForge 1.21.1 client-side systems")
 
-  (mc-session/init-default-owner-resolver!)
-  (install-client-owner-hooks!)
-  (install-tutorial-activated-bridge!)
-  (init-client-input-systems!)
+      (mc-session/init-default-owner-resolver!)
+      (install-client-owner-hooks!)
+      (install-tutorial-activated-bridge!)
+      (init-client-input-systems!)
 
-  ;; Bind client-side rendering implementations first
-  (init-render-bindings!)
-  (init-content-client-bridge!)
-  (gui-screen-impl/init-client!)
-  (i18n/install-client-i18n!)
+      ;; Bind client-side rendering implementations first
+      (init-render-bindings!)
+      (init-content-client-bridge!)
+      (gui-screen-impl/init-client!)
+      (i18n/install-client-i18n!)
 
-  ;; Run content-owned client initialization without naming a concrete suite.
-  ((platform-bootstrap/client-init-callback!))
-  ;; MSDF font registration needs the full bridge (the content client-init
-  ;; hook may have fired earlier, on RegisterRenderers, before the bridge
-  ;; ops existed) — retry now that the bridge is complete.
-  (power-runtime/client-font-init!)
-  ;; Then register renderers
-  (register-renderers)
-  (register-fluid-render-layers!)
+      ;; Run content-owned client initialization without naming a concrete suite.
+      ((platform-bootstrap/client-init-callback!))
+      ;; MSDF font registration needs the full bridge (the content client-init
+      ;; hook may have fired earlier, on RegisterRenderers, before the bridge
+      ;; ops existed) — retry now that the bridge is complete.
+      (power-runtime/client-font-init!)
+      ;; Then register renderers
+      (register-renderers)
+      (register-fluid-render-layers!)
 
-  ;; Runtime client systems
-  (runtime-bridge/init!)
-  (overlay-renderer/init!)
-  (msdf-setup/init!)
-  (particle/init!)
-  (sound/init!)
-  (media-playback-bridge/install-media-playback-bridge!)
-  (hand-effect-renderer/init!)
-  (level-effect-renderer/init!)
-  (fov-renderer/init!)
-  (request-bridge/init!)
+      ;; Runtime client systems
+      (runtime-bridge/init!)
+      (overlay-renderer/init!)
+      (msdf-setup/init!)
+      (particle/init!)
+      (sound/init!)
+      (media-playback-bridge/install-media-playback-bridge!)
+      (hand-effect-renderer/init!)
+      (level-effect-renderer/init!)
+      (fov-renderer/init!)
+      (request-bridge/init!)
 
-  (energy-item-model-properties/register!)
+      (energy-item-model-properties/register!)
 
-  ;; Run registered client tick hooks (e.g. tutorial background sync).
-  (try
-    (.addListener (NeoForge/EVENT_BUS)
-                  net.neoforged.bus.api.EventPriority/NORMAL
-                  false
-                  net.neoforged.neoforge.client.event.ClientTickEvent$Post
-                  (reify java.util.function.Consumer
-                    (accept [_ evt]
-                      (let [^ClientTickEvent$Post evt evt]
-                        ;; Tick is a new call-chain entry: rebuild client session
-                        ;; context (same as runtime-bridge/packet handler) so hooks
-                        ;; can resolve session-id via read-model/owner-key.
-                        (mc-session/with-current-client-session
-                          content-actions/run-client-tick-hooks!)))))
-    (catch Throwable _
-      (log/warn "Failed to register client tick hooks")))
+      ;; Run registered client tick hooks (e.g. tutorial background sync).
+      (try
+        (.addListener (NeoForge/EVENT_BUS)
+                      net.neoforged.bus.api.EventPriority/NORMAL
+                      false
+                      net.neoforged.neoforge.client.event.ClientTickEvent$Post
+                      (reify java.util.function.Consumer
+                        (accept [_ evt]
+                          (let [^ClientTickEvent$Post evt evt]
+                            ;; Tick is a new call-chain entry: rebuild client session
+                            ;; context (same as runtime-bridge/packet handler) so hooks
+                            ;; can resolve session-id via read-model/owner-key.
+                            (mc-session/with-current-client-session
+                              content-actions/run-client-tick-hooks!)))))
+        (catch Throwable _
+          (log/warn "Failed to register client tick hooks")))
 
-  (log/info "NeoForge 1.21.1 client-side systems initialized"))
+      (log/info "NeoForge 1.21.1 client-side systems initialized"))))

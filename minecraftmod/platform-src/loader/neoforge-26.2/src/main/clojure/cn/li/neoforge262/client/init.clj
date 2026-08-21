@@ -4,6 +4,7 @@
    Client setup for session, input, runtime tick, rendering and model hooks."
   (:require [cn.li.platform.neutral.hooks :as power-runtime]
           [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
             [cn.li.platform.bootstrap :as platform-bootstrap]
@@ -389,52 +390,54 @@
 (defn init-client
   "Initialize client-side systems for NeoForge 26.2 (non-render subset)."
   []
-  (log/info "Initializing NeoForge 26.2 client-side systems (non-render path)")
+  (install/process-once! ::client-systems-initialized
+    (fn []
+      (log/info "Initializing NeoForge 26.2 client-side systems (non-render path)")
 
-  (mc-session/init-default-owner-resolver!)
-  (install-client-owner-hooks!)
-  (install-tutorial-activated-bridge!)
-  (init-client-input-systems!)
+      (mc-session/init-default-owner-resolver!)
+      (install-client-owner-hooks!)
+      (install-tutorial-activated-bridge!)
+      (init-client-input-systems!)
 
-  (init-content-client-bridge!)
-  (terminal-render/install-terminal-render-bridge!)
-  (init-render-bindings!)
-  (render/register-texture-binder! bind-texture-forge!)
-  (gui-screen-impl/init-client!)
-  (i18n/install-client-i18n!)
+      (init-content-client-bridge!)
+      (terminal-render/install-terminal-render-bridge!)
+      (init-render-bindings!)
+      (render/register-texture-binder! bind-texture-forge!)
+      (gui-screen-impl/init-client!)
+      (i18n/install-client-i18n!)
 
-  (try
-    ((platform-bootstrap/client-init-callback!))
-    (catch Exception e
-      (log/stacktrace "Failed to run content client init" e)
-      (log/stacktrace "Failed to run content client init" e)))
-  ;; MSDF font registration needs the full bridge (the content client-init
-  ;; hook may have fired earlier, before the bridge ops existed) — retry now
-  ;; that the bridge is complete.
-  (power-runtime/client-font-init!)
+      (try
+        ((platform-bootstrap/client-init-callback!))
+        (catch Exception e
+          (log/stacktrace "Failed to run content client init" e)
+          (log/stacktrace "Failed to run content client init" e)))
+      ;; MSDF font registration needs the full bridge (the content client-init
+      ;; hook may have fired earlier, before the bridge ops existed) — retry now
+      ;; that the bridge is complete.
+      (power-runtime/client-font-init!)
 
-  (runtime-bridge/init!)
-  (overlay-renderer/init!)
-  (particle/init!)
-  (sound/init!)
-  (media-playback-bridge/install-media-playback-bridge!)
-  (hand-effect-renderer/init!)
-  (level-effect-renderer/init!)
-  (fov-renderer/init!)
-  (request-bridge/init!)
+      (runtime-bridge/init!)
+      (overlay-renderer/init!)
+      (particle/init!)
+      (sound/init!)
+      (media-playback-bridge/install-media-playback-bridge!)
+      (hand-effect-renderer/init!)
+      (level-effect-renderer/init!)
+      (fov-renderer/init!)
+      (request-bridge/init!)
 
-  (try
-    (.addListener (NeoForge/EVENT_BUS)
-                  EventPriority/NORMAL
-                  false
-                  ClientTickEvent$Post
-                  (reify java.util.function.Consumer
-                    (accept [_ evt]
-                      (mc-session/with-current-client-session
-                        content-actions/run-client-tick-hooks!))))
-    (catch Throwable _
-      (log/warn "Failed to register client tick hooks")))
+      (try
+        (.addListener (NeoForge/EVENT_BUS)
+                      EventPriority/NORMAL
+                      false
+                      ClientTickEvent$Post
+                      (reify java.util.function.Consumer
+                        (accept [_ evt]
+                          (mc-session/with-current-client-session
+                            content-actions/run-client-tick-hooks!))))
+        (catch Throwable _
+          (log/warn "Failed to register client tick hooks")))
 
-  (log/info "NeoForge 26.2 client init complete"))
+      (log/info "NeoForge 26.2 client init complete"))))
 
 (defn init! [& _] (init-client))
