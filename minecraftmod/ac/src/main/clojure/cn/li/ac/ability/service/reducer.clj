@@ -745,8 +745,7 @@
                        (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
                        (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
                        (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{})))]
-        ;; :runtime-data can replace [:runtime] wholesale (including
-        ;; radiation-marks) — resync the derived index so it doesn't drift.
+        ;; :runtime-data can replace [:runtime] wholesale.
         (ok hydrated
             []
             (if (contains? cmd :runtime-data)
@@ -814,41 +813,6 @@
     (if-not (get-in player-state [:context-registry ctx-id])
       (rejected player-state :context-not-found)
       (ok (assoc-in player-state [:context-registry ctx-id :input-state] input-state))))
-
-;; ============================================================================
-;; Sub-Reducer: player runtime (delayed projectiles, radiation marks, vecmanip)
-;; ============================================================================
-
-(defn- cmd-mark-radiation-target
-  [player-state {:keys [player-uuid target-id mark]}]
-  (rejected player-state :combat-domain-state))
-
-(defn- cmd-clear-radiation-marks
-  [player-state {:keys [player-uuid target-id source-player-id clear-all? clear-expired?]}]
-  (rejected player-state :combat-domain-state))
-
-#_(defn- legacy-cmd-tick-radiation-marks
-  [player-state {:keys [player-uuid]}]
-  (let [marks (or (get-in player-state [:runtime :unused-radiation-legacy]) {})
-        next-marks
-        (reduce-kv
-          (fn [acc target-id mark]
-            (let [ticks-left (dec (long (or (:ticks-left mark) 0)))]
-              (if (pos? ticks-left)
-                (assoc acc target-id (assoc mark :ticks-left ticks-left))
-                acc)))
-          {}
-          marks)]
-    ;; Unconditional emit (even when next-marks == marks or empty): this is
-    ;; the index's per-tick self-healing channel — any drift from a swallowed
-    ;; effect exception is corrected on the very next tick.
-    (ok (assoc-in player-state [:runtime :unused-radiation-legacy] next-marks)
-        []
-        [])))
-
-(defn- cmd-tick-radiation-marks
-  [_player-state _command]
-  (rejected _player-state :combat-domain-state))
 
 (defn- projectile-claims-path
   []

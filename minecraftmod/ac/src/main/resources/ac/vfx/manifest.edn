@@ -70,4 +70,7 @@
               :resource "ac/vfx/effects/block_progress_session.edn"}
              {:kind :vfx-effect
               :id :particle-burst
-              :resource "ac/vfx/effects/particle_burst.edn"}]}
+              :resource "ac/vfx/effects/particle_burst.edn"}
+             {:kind :vfx-effect
+              :id :target-mark-session
+              :resource "ac/vfx/effects/target_mark_session.edn"}]}

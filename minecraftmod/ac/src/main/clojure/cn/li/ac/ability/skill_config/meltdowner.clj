@@ -4,6 +4,7 @@
 (def skill-tunable-definitions
   [{:skill-id :rad-intensify :id :combat.damage-rate :path "combat.damage-rate" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [1.4 1.8] :comment "RadIntensify damage amplification rate endpoints."}
    {:skill-id :rad-intensify :id :effect.mark-duration-ticks :path "effect.mark-duration-ticks" :section-suffix "effect" :type :int :min 1 :default 60 :comment "RadIntensify target mark duration in ticks."}
+   {:skill-id :rad-intensify :id :progression.mastery-denominator :path "progression.mastery-denominator" :section-suffix "progression" :type :double :min 1.0 :default 8000.0 :comment "RadIntensify max-CP mastery denominator."}
 
    {:skill-id :electron-bomb :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [6.0 12.0] :comment "ElectronBomb beam damage endpoints."}
    {:skill-id :electron-bomb :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [20.0 10.0] :comment "ElectronBomb cooldown ticks."}

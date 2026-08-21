@@ -28,6 +28,7 @@
     (is (catalog/available? :meltdowner))
     (is (catalog/available? :electron-bomb))
     (is (catalog/available? :electron-missile))
+    (is (catalog/available? :rad-intensify))
     (is (catalog/available? :mine-ray-basic))
     (is (catalog/available? :mine-ray-expert))
     (is (catalog/available? :mine-ray-luck))
@@ -38,6 +39,7 @@
     (is (= :migrated (catalog/migration-status :body-intensify)))
     (is (= :migrated (catalog/migration-status :light-shield)))
     (is (= :migrated (catalog/migration-status :meltdowner)))
+    (is (= :migrated (catalog/migration-status :rad-intensify)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
     (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
       (is (every? #(contains? % :value) (vals parameters)))
@@ -63,6 +65,12 @@
     (is (pos? (count (get-in state [:combat :abilities :electron-bomb :compiled-ir]))))
     (is (= :electron-missile (get-in state [:combat :abilities :electron-missile :id])))
     (is (pos? (count (get-in state [:combat :abilities :electron-missile :compiled-ir]))))
+    (is (= :rad-intensify (get-in state [:combat :abilities :rad-intensify :id])))
+    (is (= [1.4 1.8]
+           (get-in state [:combat :abilities :rad-intensify :tunables :damage-rate :value])))
+    (is (= 60
+           (get-in state [:combat :abilities :rad-intensify :tunables :mark-duration-ticks :value])))
+    (is (pos? (count (get-in state [:combat :abilities :rad-intensify :compiled-ir]))))
     (is (= :mine-ray-basic (get-in state [:combat :abilities :mine-ray-basic :id])))
     (is (= :mine-ray-expert (get-in state [:combat :abilities :mine-ray-expert :id])))
     (is (= :mine-ray-luck (get-in state [:combat :abilities :mine-ray-luck :id])))
@@ -93,6 +101,7 @@
     (is (= :camera-fov-session (get-in state [:vfx :effects :camera-fov-session :id])))
     (is (= :particle-session (get-in state [:vfx :effects :particle-session :id])))
     (is (= :audio-loop-session (get-in state [:vfx :effects :audio-loop-session :id])))
+    (is (= :target-mark-session (get-in state [:vfx :effects :target-mark-session :id])))
     (is (nil? (get-in state [:vfx :effects :particle-audio-session])))
     (is (= :arc-ring-session (get-in state [:vfx :effects :arc-ring-session :id])))
     (let [marker (get-in state [:vfx :effects :teleport-marker])

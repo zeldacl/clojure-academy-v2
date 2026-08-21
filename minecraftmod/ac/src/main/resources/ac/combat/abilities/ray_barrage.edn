@@ -111,7 +111,9 @@
                                      {:component :entity/mark
                                       :world-id {:from :world/id}
                                       :target {:ref [:slot :target :id]}
-                                      :mark-type :radiation}]}}
+                                      :mark-type :radiation
+                                      :duration-ticks 60
+                                      :requires-ability :rad-intensify}]}}
                      {:component :effect/vfx
                       :effect-id :ray-fan-transient
                       :operation :spawn
@@ -150,7 +152,9 @@
                      {:component :entity/mark
                       :world-id {:from :world/id}
                       :target {:ref [:slot :aim-hit :entity-id]}
-                      :mark-type :radiation}
+                      :mark-type :radiation
+                      :duration-ticks 60
+                      :requires-ability :rad-intensify}
                      {:component :effect/vfx
                       :effect-id :ray-beam-transient
                       :operation :spawn

@@ -277,6 +277,7 @@
                         (assoc (dissoc data :component)
                                :capability capability
                                :world-id (str (or (:world-id data) "unknown"))
+                               :activation-seed (:activation-seed context)
                                ;; Neutral provenance metadata lets a host apply
                                ;; its generic damage pipeline without making
                                ;; Combat Core know any skill id.

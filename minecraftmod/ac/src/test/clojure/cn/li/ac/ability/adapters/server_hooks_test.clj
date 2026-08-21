@@ -14,7 +14,6 @@
             [cn.li.ac.ability.server.network :as network]
             [cn.li.combat.deferred :as delayed-projectiles]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -163,8 +162,6 @@
                   delayed-projectiles/clear-owner! (fn [uuid]
                                                             (swap! called conj [:projectiles uuid])
                                                             nil)
-                  md-damage/clear-target-mark! (fn [_uuid] nil)
-                  md-damage/clear-source-marks! (fn [_uuid] nil)
           store/remove-player-state! (fn [session-id uuid]
                      (swap! called conj [:remove-state session-id uuid])
                      nil)]
@@ -190,7 +187,6 @@
                   ctx-mgr/tick-player-contexts! (fn [uuid _player]
                                                  (swap! calls conj [:context-tick uuid])
                                                  nil)
-                  md-damage/tick-marks! (fn [] (swap! calls conj [:marks]) nil)
                   delayed-projectiles/tick-owner! (fn [uuid]
                                                      (swap! calls conj [:projectiles uuid])
                                                      nil)
@@ -199,8 +195,7 @@
                                                  nil)]
       (start! 1)
       (tick! "p1" (Object.))
-      (is (= [[:marks]
-              [:context-manager]
+            (is (= [[:context-manager]
               [:ensure-state :test-session "p1"]
               [:player-state-tick :test-session "p1" nil]
               [:context-tick "p1"]
@@ -236,9 +231,6 @@
                   world-registry/clear-session-world-data! (fn [session-id]
                                                              (swap! called conj [:wireless session-id])
                                                              nil)
-                  md-damage/on-server-stop! (fn [session-id]
-                                              (swap! called conj [:marks session-id])
-                                              nil)
                   delayed-projectiles/clear-all! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
@@ -247,8 +239,7 @@
             [:player-states :server-session]
             [:wireless :server-session]
             [:reset-runtimes]
-            [:projectiles]
-            [:marks :server-session]]
+            [:projectiles]]
            @called))))
 
 (deftest register-platform-functions-registers-network-reset-and-energy-pull-test

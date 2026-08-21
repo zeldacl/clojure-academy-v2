@@ -29,24 +29,38 @@
                  :state (:state context) {})]
       (get-in root (into [key] path)))
     (and (map? value) (contains? value :tunable))
-    (get (:tunables context) (:tunable value))
+    (let [resolved (get (:tunables context) (:tunable value))]
+      (if (contains? value :path)
+        (get-in resolved (:path value))
+        resolved))
     (map? value) (reduce-kv (fn [m k v] (assoc m k (value v context)))
                             (empty value) value)
     (vector? value) (mapv #(value % context) value)
     :else value))
 
 (defn apply!
-  [request {:keys [reactions session-fn state-fn precheck? tunables-fn]}]
+  [request {:keys [reactions session-fn state-fn precheck? tunables-fn
+                  domain-state]}]
   (let [reactions (->> reactions
+                       (mapcat (fn [entry]
+                                 (if (seq (:reactions entry))
+                                   (map #(assoc %
+                                                :ability-id (:id entry)
+                                                :activation (:activation entry))
+                                        (:reactions entry))
+                                   [entry])))
                        (filter #(= :combat/damage (:on %)))
                        (sort-by (juxt #(long (or (:priority %) 0))
                                       #(str (:ability-id %)))))]
     (reduce
-     (fn [current {:keys [ability-id when program]}]
+     (fn [current {:keys [ability-id activation when program mark-type]}]
        (let [target (str (:target current))
              session (session-fn target)
              state (state-fn target)
+             mark (when mark-type
+                    (get-in domain-state [:entity-marks target mark-type]))
              context {:request current :state state
+                      :domain-state domain-state
                       :session-state (:state session)
                       :params (:parameter-snapshot session)
                       :tunables (tunables-fn ability-id session state)
@@ -57,11 +71,30 @@
                                 :resource (double (or (get-in state [:resources :cp]) 0.0))
                                 :skill-exp (double (or (get-in state [:ability-data :skill-exps ability-id]) 0.0))
                                 :depth (long (or (get-in current [:metadata :reflection-depth]) 0))
-                                :damage (double (:base current))}}
+                                :damage (double (:base current))
+                                :max-cp (double (or (get-in state [:resources :max-cp]) 0.0))
+                                :mark mark
+                                :mark? (boolean mark)
+                                :mark-rate (double (or (:rate mark) 1.0))}}
              condition? (or (nil? when) (boolean (value when context)))
              component (:component program)]
-         (if-not (and session condition?)
+         (if-not (and (or session (= :passive activation)) condition?)
            current
+           (if (= :damage/multiply component)
+             (let [base (double (:base current))
+                   multiplier (double (or (value (:multiplier program) context) 1.0))]
+               (if (and (pos? base) (Double/isFinite multiplier)
+                        (>= multiplier 0.0) (<= multiplier 16.0))
+                 (let [scaled (* base multiplier)
+                       ratio (if (pos? base) (/ scaled base) 0.0)]
+                   (-> current
+                       (assoc :base scaled)
+                       (assoc :components (scale-components (:components current) ratio))
+                       (assoc-in [:metadata :damage-multiplier]
+                                 {:ability-id ability-id
+                                  :multiplier multiplier
+                                  :mark mark})))
+                 current))
            (if (= :damage/absorb component)
              (let [base (double (:base current))
                    ticks (long (or (get-in session [:state :active-ticks]) 0))
@@ -137,4 +170,4 @@
                        (update :world-effects (fnil conj [])
                                {:type :damage :request reflected-request})
                        (cond-> precheck? (assoc :cancelled? true))))))))))
-     request reactions)))
+     request reactions))))

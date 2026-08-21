@@ -1,0 +1,27 @@
+{:schema-version 2
+ :kind :vfx-effect
+ :id :target-mark-session
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:position :vec3
+          :ttl-ticks :long
+          :count :long
+          :radius :double
+          :color :object
+          :seed :long}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 60
+         :children [{:at 0
+                     :node {:component :vfx/mark-sparks
+                            :position {:ref [:input :position]}
+                            :ttl-ticks {:ref [:input :ttl-ticks]}
+                            :count {:ref [:input :count]}
+                            :radius {:ref [:input :radius]}
+                            :color {:ref [:input :color]}
+                            :seed {:ref [:input :seed]}}}]}
+ :bounds {:component :vfx/beam-bounds
+          :start {:ref [:input :position]}
+          :end {:ref [:input :position]}
+          :radius {:ref [:input :radius]}}}

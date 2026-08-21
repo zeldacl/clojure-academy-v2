@@ -152,6 +152,14 @@
            [{:center center :radius-from (or from radius) :radius-to (or to radius)
              :segments segments :color color}])))
 
+(defmethod sample-node! :vfx/mark-sparks
+  [node ctx]
+  (let [{:keys [position ttl-ticks count radius color seed]}
+        (resolve-fields node ctx)]
+    (emit! ctx (stage-of ctx :world-after-translucent) :line
+           [{:position position :ttl-ticks ttl-ticks :count count
+             :radius radius :color color :seed seed}])))
+
 (defmethod sample-node! :vfx/beam
   [node ctx]
   (let [{:keys [start end layers]} (resolve-fields node ctx)]

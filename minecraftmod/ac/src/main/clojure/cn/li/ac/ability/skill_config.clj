@@ -246,6 +246,10 @@
     :cost-tick-cp :cost.tick.cp
     :cooldown-ticks :cooldown.ticks
     :exp-hit :progression.exp-hit}
+   :rad-intensify
+   {:damage-rate :combat.damage-rate
+    :mark-duration-ticks :effect.mark-duration-ticks
+    :mastery-denominator :progression.mastery-denominator}
    :mine-ray-basic
    {:targeting-range :targeting.range
     :break-speed :mining.break-speed

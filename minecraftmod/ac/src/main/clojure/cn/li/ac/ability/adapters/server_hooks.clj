@@ -80,18 +80,18 @@
 (defn- clear-combat-owner!
   "Clear all Combat Core domain state associated with a player lifecycle.
 
-   Radiation marks are keyed by target for O(1) damage reads, so leaving a
-   player clears both incoming target state and outgoing source state."
+   Marks are keyed by target for O(1) damage reads, so leaving a player clears
+   both incoming target state and outgoing source state."
   [player-uuid]
   (let [tick (long (or (:server-tick-id (runtime-hooks/player-state-owner)) 0))]
     (combat-runtime/dispatch-domain-event!
-     {:type :radiation-mark-clear
+     {:type :entity-mark-clear
       :target-id player-uuid
-      :event-id [:lifecycle :radiation-target-clear player-uuid tick]})
+      :event-id [:lifecycle :entity-target-clear player-uuid tick]})
     (combat-runtime/dispatch-domain-event!
-     {:type :combat-owner-clear
+     {:type :entity-owner-clear
       :owner player-uuid
-      :event-id [:lifecycle :combat-owner-clear player-uuid tick]}))
+      :event-id [:lifecycle :entity-owner-clear player-uuid tick]}))
   nil)
 
 (defn- build-sync-payload-impl
@@ -262,9 +262,9 @@
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
      (deferred/clear-all!)
      (combat-runtime/dispatch-domain-event!
-      {:type :radiation-marks-clear-all
+      {:type :entity-marks-clear-all
        :owner :system
-       :event-id [:lifecycle :radiation-marks-clear-all session-id]}) )
+       :event-id [:lifecycle :entity-marks-clear-all session-id]}) )
 
    :on-player-clone!
    (fn [_old-player-uuid _new-player-uuid]

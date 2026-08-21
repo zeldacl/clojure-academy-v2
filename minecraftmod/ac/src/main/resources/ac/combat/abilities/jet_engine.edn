@@ -152,7 +152,9 @@
                                                    :damage-type :magic}
                                                   {:component :entity/mark
                                                    :target {:ref [:slot :segment-hit :entity-id]}
-                                                   :mark-type :radiation}]}
+                                                   :mark-type :radiation
+                                                   :duration-ticks 60
+                                                   :requires-ability :rad-intensify}]}
                                    :else {:component :flow/sequence :steps []}}
                                   {:component :session/patch
                                    :entries [{:path [:trigger-ticks]

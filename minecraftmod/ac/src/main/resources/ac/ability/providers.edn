@@ -14,10 +14,9 @@
  {:id :meltdowner
   :priority 30
   :skill-namespaces
-  [cn.li.ac.content.ability.meltdowner.damage-helper
-   cn.li.ac.content.ability.meltdowner.rad-intensify]
+  []
   :fx-namespaces
-  [cn.li.ac.content.ability.meltdowner.rad-intensify-fx]}
+  []}
  {:id :teleporter
   :priority 40
   :skill-namespaces

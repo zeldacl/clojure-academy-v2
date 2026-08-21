@@ -228,6 +228,10 @@
            {:schema {:required #{:multiplier :cost-per-damage :minimum :max-depth}}
             :effects #{:mutate}}
 
+           :damage/multiply
+           {:schema {:required #{:multiplier}}
+            :effects #{:mutate}}
+
            ;; Generic incoming-damage absorption.  The AC boundary supplies
            ;; session state/resources; Combat Core only validates the neutral
            ;; reaction shape and never knows a skill id.

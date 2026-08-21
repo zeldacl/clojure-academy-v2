@@ -5,7 +5,8 @@
    adapters execute the returned world effects and VFX signals."
   (:require [cn.li.mcmod.runtime.combat-contract :as contract]
             [cn.li.combat.compiler :as compiler]
-            [cn.li.combat.damage :as damage]))
+            [cn.li.combat.damage :as damage]
+            [cn.li.combat.domain :as domain]))
 
 (defn- empty-result [] (contract/result {}))
 (def ^:private max-seen-domain-events 4096)
@@ -24,7 +25,7 @@
    :damage-pipeline (damage/compile-pipeline damage-pipeline)
    :query-port (or query-port {})
    :domain-state (atom {})
-   :domain-event-handler domain-event-handler
+   :domain-event-handler (or domain-event-handler domain/apply-event)
    :seen-domain-events (atom #{})
    :now-tick now-tick
    :seen-intents (atom {})

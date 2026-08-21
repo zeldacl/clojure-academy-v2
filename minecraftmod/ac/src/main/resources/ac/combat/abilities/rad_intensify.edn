@@ -1,0 +1,52 @@
+{:schema-version 2
+ :kind :ability
+ :id :rad-intensify
+ :revision 2
+ :activation :passive
+ :status :migrated
+ :requires [:world/id]
+ :prerequisites [{:skill-id :electron-bomb :min-exp 0.5}]
+ ;; The mark policy is neutral data consumed by the generic entity-mark
+ ;; host capability.  It deliberately contains no skill-specific code.
+ :mark-policies
+ [{:mark-type :radiation
+   :requires-ability :rad-intensify
+   :duration-ticks {:tunable :mark-duration-ticks}
+   :vfx {:effect-id :target-mark-session
+         :operation :spawn
+         :audience {:type :nearby :radius 32.0}
+         :offset {:vec3 [0.0 0.8 0.0]}
+         :payload {:position {:ref [:mark :target-position]}
+                   :ttl-ticks {:tunable :mark-duration-ticks}
+                   :seed {:ref [:context :activation-seed]}
+                   :count 3
+                   :radius 0.35
+                   :color [236 170 93 180]}}}]
+ :tunables
+ {:damage-rate {:curve :pair}
+  :mark-duration-ticks {:curve :const :type :long}
+  :mastery-denominator {:curve :const}}
+ :reactions
+ [{:on :combat/damage
+   :priority 100
+   :mark-type :radiation
+   :when {:expr :bool/and
+          :args [{:ref [:context :mark?]}
+                 {:expr :math/gt
+                  :args [{:ref [:request :base]} 0.0]}]}
+   :program {:component :damage/multiply
+             :multiplier {:expr :math/lerp
+                          :args [{:tunable :damage-rate :path [0]}
+                                 {:tunable :damage-rate :path [1]}
+                                 {:expr :math/clamp
+                                  :args [{:expr :math/div
+                                          :args [{:ref [:context :max-cp]}
+                                                 {:tunable :mastery-denominator}]}
+                                         0.0 1.0]}]}}}]
+ :program
+ {:component :flow/phases
+  :start {:component :flow/finish :outcome :passive}
+  :pulse {:component :flow/finish :outcome :passive}
+  :release {:component :flow/finish :outcome :passive}
+  :abort {:component :flow/finish :outcome :passive}
+  :events {}}}

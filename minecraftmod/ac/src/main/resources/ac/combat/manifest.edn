@@ -66,6 +66,9 @@
               :id :electron-missile
               :resource "ac/combat/abilities/electron_missile.edn"}
              {:kind :ability
+              :id :rad-intensify
+              :resource "ac/combat/abilities/rad_intensify.edn"}
+             {:kind :ability
               :id :mine-ray-basic
               :source-id :mine-ray
               :resource "ac/combat/abilities/mine_ray.edn"

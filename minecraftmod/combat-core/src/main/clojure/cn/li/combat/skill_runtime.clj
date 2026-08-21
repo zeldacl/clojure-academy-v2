@@ -148,8 +148,10 @@
               (if-not handler
                 {:status :unhandled :capability capability :request request}
                 (try
-                  {:status :committed :capability capability
-                   :result (handler request)}
+                  (let [result (handler request)]
+                    {:status :committed :capability capability
+                     :result result
+                     :vfx-signals (vec (or (:vfx-signals result) []))})
                   (catch Throwable throwable
                     {:status :failed :capability capability
                      :message (ex-message throwable)}))))))

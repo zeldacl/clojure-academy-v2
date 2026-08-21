@@ -18,7 +18,6 @@
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
-            [cn.li.ac.ability.service.radiation-marks :as radiation-marks]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -139,43 +138,6 @@
                       :light-shield :combat.front-cone-degrees))))))
       (catch Exception _ false))))
 
-(defn apply-combat-domain-event
-  "Apply AC-owned combat domain transitions without platform or Context state.
-
-   Combat Core owns the domain-state atom; this function owns only the
-   immutable content semantics for radiation marks and Light Shield state.
-   World mutation and network/VFX delivery remain outside this reducer."
-  [state event]
-  (case (:type event)
-    :radiation-mark
-    (let [target (str (:target-id event))
-          marks (or (:radiation-marks state) {})]
-      (assoc state :radiation-marks
-             (assoc marks target
-                    (radiation-marks/mark (get marks target) event))))
-
-    :radiation-mark-clear
-    (update state :radiation-marks
-            (fn [marks]
-              (dissoc (or marks {}) (str (:target-id event)))))
-
-    :radiation-marks-clear-all
-    (assoc state :radiation-marks {})
-
-    :radiation-replace
-    (assoc-in state [:radiation-marks (str (:source-player-id event))]
-              (or (:marks event) {}))
-
-    :combat-tick
-    (update state :radiation-marks
-            #(radiation-marks/tick (or %) (:tick event)))
-
-    :combat-owner-clear
-    (update state :radiation-marks
-            #(radiation-marks/clear-owner (or %) (:owner event)))
-
-    state))
-
 (defn- vec-accel-query
   "Resolve the source VecAccel release query from neutral raycast ports.
 
@@ -254,6 +216,43 @@
                          (remove :ac-vm-deviated?)
                          (take 64)
                          vec)}))))
+
+(defn- mark-policy-for
+  "Return the declarative policy for a neutral mark type.
+
+   Policies are authored by effects/abilities in EDN; this lookup deliberately
+   does not name a concrete skill so every mark producer can reuse the same
+   host action and VFX bridge."
+  [mark-type]
+  (some (fn [[_ ability]]
+          (some #(when (= mark-type (:mark-type %)) %)
+                (:mark-policies ability)))
+        (get-in (combat-catalog/catalog) [:combat :abilities])))
+
+(defn- mark-vfx-signal
+  [request policy target-position duration]
+  (when (and policy target-position)
+    (when-let [vfx (:vfx policy)]
+    (let [offset (or (get-in vfx [:offset :vec3]) [0.0 0.0 0.0])
+          [x y z] (mapv double (or (:vec3 target-position)
+                                   [(:x target-position)
+                                    (:y target-position)
+                                    (:z target-position)]))
+          [ox oy oz] (mapv double offset)
+          payload (assoc (:payload vfx)
+                         :position [ (+ x ox) (+ y oy) (+ z oz)]
+                         :ttl-ticks (long duration)
+                         :seed (long (or (:activation-seed request) 0)))]
+        (vfx-contract/signal
+         {:op :spawn
+          :effect-id (:effect-id vfx)
+          :instance-key [:entity-mark (:mark-type policy) (str (:target request))]
+          :owner (:owner request)
+          :world-id (:world-id request)
+          :event-seq (long (or (:server-tick request) 1))
+          :seed (long (or (:activation-seed request) 0))
+          :event :spawn
+          :params payload})))))
 
 (defn- skill-exp-of
   "Mirror combat-core runtime's own private skill-exp lookup (same paths)
@@ -470,29 +469,7 @@
    Core.  It never reaches the player store or installs a platform damage
    listener, so passive skills remain part of the deterministic pipeline." 
   []
-  [{:priority 100
-    :provider-id :academy/base
-    :ability-id :rad-intensify
-   :node-id :damage-amplifier
-    :run (fn [request context]
-           (let [target (str (:target request))
-                 mark (get-in context [:domain-state :radiation-marks target])
-                 ticks-left (long (or (:ticks-left mark) 0))
-                 rate (double (or (:rate mark) 1.0))
-                 base (double (:base request))]
-             (if (and mark (pos? ticks-left)
-                      (Double/isFinite base)
-                      (Double/isFinite rate)
-                      (<= 0.0 rate 8.0))
-               (-> request
-                   (assoc :base (* base rate))
-                   (assoc-in [:metadata :radiation-mark]
-                             {:source-player-id (:source-player-id mark)
-                              :target-id target
-                              :rate rate
-                              :ticks-left ticks-left}))
-               request)))}
-   {:priority 50
+  [{:priority 50
     :provider-id :academy/base
     :ability-id :vec-deviation
     :node-id :damage-reduction
@@ -745,8 +722,7 @@
                             ;; engine's now-tick to nil.
                             :now-tick (or now-tick (fn [] @last-known-tick*))
                             :ability-resolver (or ability-resolver resolve-slot)
-                            :domain-event-handler (or domain-event-handler
-                                                       apply-combat-domain-event)
+                            :domain-event-handler domain-event-handler
                             :damage-pipeline (or damage-pipeline
                                                  (academy-damage-pipeline))}))
          (when-not @world-effect-handler*
@@ -1066,6 +1042,7 @@
         resource-data (:resource-data state)
         cooldown-data (:cooldown-data state)]
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
+                 :max-cp (double (or (:max-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
      :active-abilities (if-let [session (combat-sessions/session (str owner))]
                          #{(:ability-id session)}
@@ -1737,12 +1714,35 @@
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/mark)
         (capabilities/register-action!
          :entity/mark
-         (fn [{:keys [owner target mark-type]}]
-           (when (and owner target mark-type)
-             (when-let [mark-target! (requiring-resolve
-                                      'cn.li.ac.content.ability.meltdowner.damage-helper/mark-target!)]
-               (mark-target! owner target)
-                {:status :applied})))))
+         (fn [{:keys [owner target mark-type duration-ticks requires-ability
+                      world-id] :as request}]
+           (let [owner (str owner)
+                 target (str target)
+                 learned? (or (nil? requires-ability)
+                              (ability-model/is-learned?
+                               (:ability-data (owner-state owner))
+                               requires-ability))]
+             (when (and (not= "nil" owner)
+                        (not= "nil" target)
+                        mark-type
+                        learned?)
+               (let [duration (long (or duration-ticks 60))
+                     policy (mark-policy-for mark-type)
+                     position (when world-id
+                                (motion-effects/entity-position
+                                 (str world-id) target))]
+                 (combat/dispatch-domain-event!
+                  (engine)
+                  {:type :entity-mark
+                   :source-player-id owner
+                   :target-id target
+                   :mark-type mark-type
+                   :duration duration
+                   :tick (long @last-known-tick*)})
+                 {:status :applied
+                  :vfx-signals (vec (keep #(mark-vfx-signal request policy
+                                                             position duration)
+                                          [policy]))}))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :energy/charge)
         (capabilities/register-action!
          :energy/charge
@@ -2343,8 +2343,9 @@
   (combat-reactions/apply!
    request
    {:reactions (vals (get-in (combat-catalog/catalog) [:combat :abilities]))
-    :session-fn #(combat-sessions/session (str %))
-    :state-fn owner-state
+   :session-fn #(combat-sessions/session (str %))
+   :state-fn owner-state
+   :domain-state (combat/domain-state (engine))
     :precheck? (:precheck? boundary)
     :tunables-fn
     (fn [ability-id session state]
@@ -2507,7 +2508,8 @@
                         (vec (remove #(#{:owner-patch :session-patch}
                                        (:type %)) actions))
                         (:actions (capabilities/snapshot)))]
-                   (assoc result
+                   (assoc (update result :vfx-signals into
+                                  (mapcat :vfx-signals action-results))
                           :patch-results (vec patch-results)
                           :action-results action-results))
                  result)

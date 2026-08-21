@@ -50,14 +50,6 @@
                :steps [{:op :require :predicate :critical-event}
                        {:op :domain-event :event-type :critical-modifier
                         :metadata {:source :space-fluct}}]}}
-    {:id :rad-intensify
-     :revision 1
-     :activation :passive
-     :program {:op :sequence
-               :steps [{:op :require :predicate :damage-request}
-                       {:op :domain-event :event-type :damage-modifier
-                        :metadata {:source :rad-intensify
-                                   :multiplier-source :skill-exp}}]}}
     {:id :location-teleport
      :revision 1
      :activation :instant

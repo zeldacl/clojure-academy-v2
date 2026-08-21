@@ -10,7 +10,6 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.content.ability.teleporter.location-teleport :as loc-teleport]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
@@ -144,13 +143,11 @@
         (category/register-category! (dissoc cat :ac/content-type)))
       (register-combat-catalog!)
       (register-generic-content!)
-      ;; Domain-event/RPC bridges, not legacy skill discovery: damage-helper
-      ;; writes radiation marks through combat-runtime's domain reducer, and
-      ;; location-teleport registers the saved-location query/save/delete/
+      ;; Domain-event/RPC bridges, not legacy skill discovery: location-
+      ;; teleport registers the saved-location query/save/delete/
       ;; perform RPC handlers (Combat Core's own :location-teleport program
       ;; only covers the teleport-execution step, not location CRUD). Both
       ;; are required content regardless of which composition root is active.
-      (md-damage/init!)
       (loc-teleport/init!)
       (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
       (category/freeze-category-registry!)

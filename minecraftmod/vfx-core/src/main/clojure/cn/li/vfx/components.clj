@@ -71,6 +71,9 @@
                                  :count-limit :life-ticks :seed :alpha
                                  :orientation}]
            [:vfx/ring #{:center :radius :segments}]
+           ;; Generic target-mark sparks; palette, density and lifetime are
+           ;; supplied by the effect document rather than hard-coded here.
+           [:vfx/mark-sparks #{:position :ttl-ticks :count :radius :color :seed}]
            [:vfx/billboard-sequence #{:anchor :texture-pattern :frame-count}]
            ;; A model marker is deliberately geometry/asset agnostic.  The
            ;; reusable humanoid shape lives in an AC VFX composite EDN; core
