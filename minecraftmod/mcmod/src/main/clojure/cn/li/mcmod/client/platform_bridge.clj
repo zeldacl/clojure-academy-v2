@@ -112,6 +112,14 @@
 (defn client-bridge-available? []
   (boolean (get-in @(fw/fw-atom) [:platform :client-bridge])))
 
+(defn operation-installed?
+  "Whether bridge operation `k` is currently installed. Content modules can
+   use this to skip a call site known to race the bridge merge (e.g. a
+   client-init hook that can fire before FMLClientSetup) instead of
+   calling-and-catching."
+  [k]
+  (boolean (get-in @(fw/fw-atom) [:platform :client-bridge k])))
+
 ;; All public wrapper functions — delegate to identically-named keys in the ops map
 (defn on-slot-key-down!          [player-uuid key-idx] (slot-key-down-fn player-uuid key-idx))
 (defn on-slot-key-tick!          [player-uuid key-idx] (slot-key-tick-fn player-uuid key-idx))

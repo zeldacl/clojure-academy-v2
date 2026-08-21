@@ -19,10 +19,12 @@
 	"Register :ac-normal / :ac-bold / :ac-italic for CGui.
 	Idempotent — safe to call multiple times (the content client-init hook can
 	fire before the platform bridge is installed; the platform retries after
-	its bridge merge via the :client-font-init! hook). Only marks success on
-	actual registration so a too-early failure can retry."
+	its bridge merge via the :client-font-init! hook). Skips the call entirely
+	until :register-font! is actually installed, so a too-early call site is a
+	silent no-op rather than a call-and-catch."
 	[]
-	(when-not @fonts-registered?
+	(when (and (not @fonts-registered?)
+	           (platform-bridge/operation-installed? :register-font!))
 	  (try
 	    (register-ac-fonts!)
 	    (reset! fonts-registered? true)

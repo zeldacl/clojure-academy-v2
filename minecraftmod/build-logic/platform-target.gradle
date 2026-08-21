@@ -248,11 +248,11 @@ if (target.loader != "none") {
     // distributed mod. Only the clojure entry differs — the other two
     // runtime libraries are packaged as resolved.
     def packagedRuntimeLibraries = clojureRuntimeLibraries.collect { dependencyNotation ->
-        if (dependencyNotation.startsWith("org.clojure:clojure:")) {
-            "${dependencyNotation}:slim"
-        } else {
+//        if (dependencyNotation.startsWith("org.clojure:clojure:")) {
+//            "${dependencyNotation}:slim"
+//        } else {
             dependencyNotation
-        }
+//        }
     }
 
     // Do not put SourceSetOutput on platform configurations: it is built by
