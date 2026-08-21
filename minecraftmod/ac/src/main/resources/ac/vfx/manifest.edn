@@ -58,4 +58,7 @@
               :resource "ac/vfx/effects/block_scan_transient.edn"}
              {:kind :vfx-effect
               :id :screen-flash-session
-              :resource "ac/vfx/effects/screen_flash_session.edn"}]}
+              :resource "ac/vfx/effects/screen_flash_session.edn"}
+             {:kind :vfx-effect
+              :id :camera-fov-session
+              :resource "ac/vfx/effects/camera_fov_session.edn"}]}

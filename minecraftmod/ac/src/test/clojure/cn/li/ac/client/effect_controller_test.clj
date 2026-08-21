@@ -44,6 +44,20 @@
   (is (= 1 (count @(:instances (vfx-level/runtime))))
       "the one eternal aggregate instance must survive its tracked state going empty"))
 
+(deftest generic-camera-fov-session-is-owner-scoped-and-eases-on-destroy-test
+  (vfx-level/reset-for-test!)
+  (vfx-level/dispatch-signal!
+    {:op :spawn :effect-id :camera-fov-session :owner "p1"
+     :instance-key [:camera "p1"] :event-seq 1 :params {:offset 24.0}})
+  (is (= 2.88 (double (vfx-level/current-fov-offset "p1")))
+      "the generic camera signal is consumed without a skill-specific handler")
+  (is (= 0.0 (double (vfx-level/current-fov-offset "p2"))))
+  (vfx-level/dispatch-signal!
+    {:op :destroy :effect-id :camera-fov-session :owner "p1"
+     :instance-key [:camera "p1"] :event-seq 2 :params {}})
+  (is (< (double (vfx-level/current-fov-offset "p1")) 2.88)
+      "destroy clears the target while retaining a short easing tail"))
+
 ;; Batch 4 (directed_shock/mag_manip): a :hand transform-fn has no per-call
 ;; context of its own to carry an owner through (sample-hand! calls it with
 ;; zero arguments), so a :hand-only :transient effect needs a way to find

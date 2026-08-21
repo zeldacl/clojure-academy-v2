@@ -45,6 +45,8 @@
   :charge-particles {:effect-id :particle-session :op :spawn
                      :payload {:position :vec3 :rate-per-tick :long
                                :limit :long :particle :object}}
+  :charge-camera {:effect-id :camera-fov-session :op :signal
+                  :payload {:offset :double}}
   :beam-fired {:effect-id :beam-arc-fade :op :spawn
                :payload {:start :vec3 :end :vec3 :duration-ticks :long
                          :beam-at :long :grow-ticks :long :layers :object
@@ -66,6 +68,9 @@
                    :payload {:fade-ticks 0}}
                   {:component :effect/vfx :effect-id :particle-session
                    :operation :destroy :instance-key [:activation :meltdowner-particles]
+                   :payload {}}
+                  {:component :effect/vfx :effect-id :camera-fov-session
+                   :operation :destroy :instance-key [:activation :meltdowner-camera]
                    :payload {}}]}}
   :finish
   {:inputs {:performed? :boolean}
@@ -106,6 +111,10 @@
                              :particle {:material :additive :life-ticks 10 :speed 0.04
                                         :color [106 242 106 150]
                                         :spread {:x 0.7 :y 0.7 :z 0.7}}}}
+                  {:component :effect/vfx :effect-id :camera-fov-session
+                   :operation :spawn :instance-key [:activation :meltdowner-camera]
+                   :audience {:type :owner}
+                   :payload {:offset 0.0}}
                   {:component :flow/finish :outcome :started}]}
   :pulse {:component :flow/sequence
           :steps [{:component :resource/enforce-floor :resource :overload
@@ -137,6 +146,16 @@
                   {:component :effect/vfx :effect-id :particle-session
                    :operation :update :instance-key [:activation :meltdowner-particles]
                    :payload {:position {:from :caster/body}}}
+                  {:component :effect/vfx :effect-id :camera-fov-session
+                   :operation :update :instance-key [:activation :meltdowner-camera]
+                   :audience {:type :owner}
+                   :payload {:offset {:expr :math/mul
+                                      :args [24.0
+                                             {:expr :math/clamp
+                                              :args [{:expr :math/div
+                                                      :args [{:ref [:session :hold-ticks]}
+                                                             {:tunable :charge-max-ticks}]}
+                                                     0.0 1.0]}]}}}
                   {:component :flow/branch
                    :when {:expr :math/gt
                           :args [{:ref [:session :hold-ticks]}

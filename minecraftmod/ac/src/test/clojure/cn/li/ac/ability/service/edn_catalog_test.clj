@@ -70,6 +70,7 @@
     (is (= :teleport-marker (get-in state [:vfx :effects :teleport-marker :id])))
     (is (= :energy-orb-session (get-in state [:vfx :effects :energy-orb-session :id])))
     (is (= :vortex-column-session (get-in state [:vfx :effects :vortex-column-session :id])))
+    (is (= :camera-fov-session (get-in state [:vfx :effects :camera-fov-session :id])))
     (is (= :particle-session (get-in state [:vfx :effects :particle-session :id])))
     (is (= :audio-loop-session (get-in state [:vfx :effects :audio-loop-session :id])))
     (is (nil? (get-in state [:vfx :effects :particle-audio-session])))
@@ -100,7 +101,9 @@
     (is (= :beam-arc-fade
            (get-in (catalog/catalog) [:vfx :effects :beam-arc-fade :id])))
     (is (= :ray-beam-transient
-           (get-in (catalog/catalog) [:vfx :effects :ray-beam-transient :id])))))
+           (get-in (catalog/catalog) [:vfx :effects :ray-beam-transient :id])))
+    (is (some #(= :camera-fov-session (:effect-id %))
+              (tree-seq coll? seq (:vfx ability))))))
 
 (deftest light-shield-start-executes-compiled-program
   (catalog/initialize!)

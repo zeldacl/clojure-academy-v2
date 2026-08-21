@@ -13,7 +13,10 @@
 (defonce ^:private ^ArrayDeque camera-pitch* (ArrayDeque. 1024))
 (defonce ^:private frozen?* (atom false))
 (defonce ^:private screen-flashes* (atom {}))
+(defonce ^:private camera-fov-targets* (atom {}))
+(defonce ^:private camera-fov-eased* (atom {}))
 (def ^:private screen-flash-effect-id :screen-flash-session)
+(def ^:private camera-fov-effect-id :camera-fov-session)
 (def ^:dynamic *sample-state*
   "Interpolated aggregate state for the descriptor currently being sampled."
   ::unbound)
@@ -331,6 +334,31 @@
           nil)))
     true))
 
+(defn- apply-camera-fov-signal!
+  "Consume the neutral camera FOV side-channel.
+
+  FOV is sampled by the platform camera hook rather than by a world VFX
+  primitive. Keeping this adapter keyed by owner lets concurrent sessions
+  coexist while the easing state survives the destroy signal long enough to
+  return the camera smoothly to its normal FOV."
+  [signal]
+  (when (= camera-fov-effect-id (:effect-id signal))
+    (let [owner (some-> (:owner signal) str)
+          payload (or (:params signal) {})]
+      (when owner
+        (case (:op signal)
+          (:spawn :signal)
+          (swap! camera-fov-targets* assoc owner
+                 (double (or (:offset payload) 0.0)))
+
+          :destroy
+          (swap! camera-fov-targets* dissoc owner)
+
+          :clear-owner
+          (swap! camera-fov-targets* dissoc owner)
+          nil)))
+    true))
+
 (defn screen-flash-alpha
   "Current generic screen-flash overlay alpha for one owner.
 
@@ -372,9 +400,12 @@
    tombstone rules are built to consume; no bypass needed."
   [signal]
   (let [signal (contract/signal signal)
+        camera-fov? (apply-camera-fov-signal! signal)
         _ (apply-screen-flash-signal! signal)
         lifecycle (core/effect-lifecycle (runtime) (:effect-id signal))]
-    (if (= :transient lifecycle)
+    (if camera-fov?
+      nil
+      (if (= :transient lifecycle)
       (core/dispatch-signal! (runtime) signal)
       (case (:op signal)
         (:spawn :signal)
@@ -382,7 +413,7 @@
           (core/signal! (runtime) {:instance instance-id} (:event signal) (:params signal))
           (do (swap! unmapped-signal-count* inc)
               (log/warn "VFX signal for an unregistered effect-id" {:effect-id (:effect-id signal)})))
-        (core/dispatch-signal! (runtime) signal))))
+        (core/dispatch-signal! (runtime) signal)))))
   nil)
 
 (defn unmapped-signal-count [] @unmapped-signal-count*)
@@ -415,11 +446,24 @@
   (core/reload-resources! (runtime) generation))
 
 (defn current-fov-offset [player-uuid]
-  (reduce max 0.0
-          (for [[_ {:keys [level]}] @handlers*
-                :let [fov-offset-fn (:fov-offset-fn level)]
-                :when fov-offset-fn]
-            (double (or (fov-offset-fn player-uuid) 0.0)))))
+  (let [owner (some-> player-uuid str)
+        target (double (or (get @camera-fov-targets* owner) 0.0))
+        eased (if owner
+                (let [next (swap! camera-fov-eased*
+                                  (fn [values]
+                                    (let [current (double (or (get values owner) 0.0))
+                                          value (+ (* current 0.88) (* target 0.12))]
+                                      (if (and (zero? target) (< (Math/abs value) 1.0e-4))
+                                        (dissoc values owner)
+                                        (assoc values owner value)))))]
+                  (double (or (get next owner) 0.0)))
+                0.0)
+        legacy (reduce max 0.0
+                       (for [[_ {:keys [level]}] @handlers*
+                             :let [fov-offset-fn (:fov-offset-fn level)]
+                             :when fov-offset-fn]
+                         (double (or (fov-offset-fn player-uuid) 0.0))))]
+    (max eased legacy)))
 
 (defn add-camera-pitch-delta!
   ([delta] (add-camera-pitch-delta! nil delta))
@@ -522,5 +566,7 @@
   (reset! handlers* {})
   (reset! frozen?* false)
   (reset! unmapped-signal-count* 0)
+  (reset! camera-fov-targets* {})
+  (reset! camera-fov-eased* {})
   (.clear camera-pitch*)
   nil)
