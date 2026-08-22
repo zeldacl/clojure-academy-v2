@@ -1,5 +1,7 @@
 (ns cn.li.vfx.vm-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.node.descriptor :as node]
+            [cn.li.vfx.v3-primitives :as v3]
             [cn.li.vfx.vm :as vm])
   (:import [cn.li.mcmod.math V3]))
 
@@ -197,6 +199,41 @@
                                                :to {:x {:ref [:input :i]} :y 0.0 :z 0.0} :color [1 1 1 1]}}}]}]
     (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
     (is (= 2 (count @batches)) "the repeat body ran twice, each with its own ctx")))
+
+;; --- composite expansion wired into sample-node!'s :default fallback ---
+;; Proves the R3 architectural reasoning with real code, not just analysis:
+;; a :layer :mid composite authored using only vfx's native :input idiom
+;; (no internal :bind) expands and samples correctly with zero changes to
+;; cn.li.node.composite or resolve-value.
+
+(deftest unregistered-composite-still-throws-unknown-component-test
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown VFX component"
+                        (vm/sample-node! {:component :vfx/does-not-exist} {:input {} :seed 0}))))
+
+(deftest mid-layer-composite-expands-and-samples-real-geometry-test
+  (node/reset-for-test!)
+  (try
+    (v3/install!)
+    (node/register-composite!
+     {:id :vfx.fx/test-ring-burst :revision 1 :layer :mid
+      :inputs {:center {:type :vec3} :radius {:type :double} :segments {:type :long} :color {:type :color}}
+      :outputs {}
+      :body {:component :vfx/repeat :count {:ref [:input :segments]} :index-as :i
+             :body {:component :vfx/line
+                    :from {:ref [:input :center]}
+                    :to {:x {:expr :math/add :args [{:ref [:input :center :x]} {:ref [:input :i]}]}
+                         :y {:ref [:input :center :y]} :z {:ref [:input :center :z]}}
+                    :color {:ref [:input :color]}}}})
+    (let [{:keys [sink batches]} (collecting-sink)
+          call-node {:component :vfx.fx/test-ring-burst
+                     :center {:x 0.0 :y 0.0 :z 0.0} :radius 5.0 :segments 3 :color [1 2 3 4]}]
+      (vm/sample-node! call-node {:input {} :seed 0 :sink sink})
+      (is (= 3 (count @batches)) "the composite's :vfx/repeat ran 3 times, each :vfx/line emitting its own batch")
+      (is (= [0.0 1.0 2.0]
+             (mapv (fn [b] (.-x ^V3 (:p2 (first (:ops (first (:payload b))))))) @batches))
+          "each iteration's :i correctly reached the leaf via composite parameter substitution, not :local"))
+    (finally
+      (node/reset-for-test!))))
 
 (deftest quad-node-defaults-missing-uv-to-full-range-test
   (let [{:keys [sink batches]} (collecting-sink)

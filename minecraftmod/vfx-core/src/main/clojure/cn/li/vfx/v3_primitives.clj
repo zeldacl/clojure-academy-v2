@@ -1,34 +1,42 @@
 (ns cn.li.vfx.v3-primitives
-  "v3 registration for vfx-core's genuinely orthogonal render primitives
-   (R3, mossy-wren plan; NODE_LANGUAGE.md section 9): :vfx/line, :vfx/quad
-   (world geometry), :vfx/camera, :vfx/audio-one-shot, :vfx/audio-loop
-   (presentation, no geometry). :impl is a pure data-shaping function --
-   given typed, already-resolved inputs, it returns one op map, reusing
-   cn.li.vfx.ops's tested construction logic for the two geometry
-   primitives rather than a second copy of it. A future vfx-core v3
-   sampler collects every op one graph evaluation produces and wraps them
-   into the batch shape each op's own :stage/:kind implies (:mesh/:ops for
-   world geometry, a distinct primitive for :camera/:audio) -- that
-   accumulation loop, and the structural primitives (:vfx/repeat/
-   :vfx/transform/:vfx/let/:vfx/curve/:vfx/branch/:vfx/timeline) it would
-   drive, are deliberately NOT written yet: they require first deciding
-   whether a vfx v3 graph keeps :input/:state as first-class value scopes
-   alongside node-core's :local (the v2 model every effect document
-   already uses, and genuinely different from an injected-environment
-   read like combat's tunables/costs -- :input/:state are closer to a
-   shader's uniform/varying inputs than a document-level table) or forces
-   everything through source nodes the way combat-core's :ability/*
-   family does. That is a real architectural decision, not busywork, and
-   deserves its own pass rather than being decided as a side effect of
-   registering five leaf primitives -- see the mossy-wren plan's R3
-   section for the open question recorded in full.
+  "v3 registration for vfx-core's vocabulary (R3, mossy-wren plan;
+   NODE_LANGUAGE.md section 9).
+
+   Architectural decision made (see the plan's R3 section for the full
+   reasoning): a vfx graph keeps :input/:state as first-class value scopes
+   -- they are closer to a shader's uniform/varying inputs than an
+   injected environment table like combat's :tunables/:costs -- so
+   structural nodes stay native cn.li.vfx.vm/sample-node! defmethods
+   (:vfx/let/:curve/:branch/:repeat) instead of node-core's :local/:bind
+   execution model. They are STILL registered here, though, because
+   cn.li.node.composite/expand's structural walk needs a real descriptor
+   (specifically its :children shape) for every node type it recurses
+   through, including ones a composite's body merely contains without
+   being itself a composite call -- without this, expanding a composite
+   whose body uses :vfx/repeat fails with :unknown-component before ever
+   reaching vfx's own execution. Their :impl is never actually invoked
+   this way (cn.li.node.runtime/invoke-primitive! is for leaf primitives
+   whose children live in :inputs, not :children) -- it throws loudly if
+   misused rather than silently doing the wrong thing.
+
+   Five render/presentation leaves (:vfx/line, :vfx/quad, :vfx/camera,
+   :vfx/audio-one-shot, :vfx/audio-loop) ARE real invoke-primitive!
+   targets: :impl is a pure data-shaping function that returns one op map,
+   reusing cn.li.vfx.ops's tested construction logic for the two geometry
+   primitives rather than a second copy of it.
 
    ADDITIVE ONLY at this revision: the v2 registry (cn.li.vfx.components)
-   and vm.clj's :vfx/line/:vfx/quad defmethods are untouched and still
-   serve every existing effect document; this is a parallel v3 vocabulary
-   registered on node-core, not a replacement."
+   and vm.clj's own defmethods are untouched and still serve every
+   existing effect document; this is a parallel v3 vocabulary registered
+   on node-core for composite expansion and schema export, not a
+   replacement of vfx-core's execution model."
   (:require [cn.li.node.descriptor :as node]
             [cn.li.vfx.ops :as ops]))
+
+(defn- structural-impl [id]
+  (fn [& _]
+    (throw (ex-info (str id " is a native vfx sample-node! structural primitive, not an invoke-primitive! target -- see this namespace's docstring")
+                    {:component id}))))
 
 (defn install!
   "Register the v3 render primitives. Call once per registry lifetime,
@@ -69,4 +77,32 @@
              :volume {:type :double :default 1.0} :pitch {:type :double :default 1.0}
              :instance-key {:type [:list-of :any]} :stop-on-destroy? {:type :boolean :default true}}
     :outputs {:op {:type :render-op}} :effects #{:emit}
-    :impl (fn [inputs _ctx] {:op (assoc inputs :kind :audio-loop)})}))
+    :impl (fn [inputs _ctx] {:op (assoc inputs :kind :audio-loop)})})
+  (node/register-primitive!
+   {:id :vfx/let :revision 1 :category :flow
+    :doc "Bind computed values into :input for :child (native sample-node! structural primitive)."
+    :inputs {:bindings {:type :map}}
+    :children {:child {:kind :single}}
+    :effects #{:mutate}
+    :impl (structural-impl :vfx/let)})
+  (node/register-primitive!
+   {:id :vfx/curve :revision 1 :category :flow
+    :doc "Sample keyframes into :input under :as for :child (native sample-node! structural primitive)."
+    :inputs {:curve {:type [:list-of :any]} :progress {:type :double} :as {:type :keyword}}
+    :children {:child {:kind :single}}
+    :effects #{:mutate}
+    :impl (structural-impl :vfx/curve)})
+  (node/register-primitive!
+   {:id :vfx/branch :revision 1 :category :flow
+    :doc "Run :then when :when is true, otherwise :else (native sample-node! structural primitive)."
+    :inputs {:when {:type :boolean}}
+    :children {:then {:kind :single} :else {:kind :single}}
+    :effects #{:mutate}
+    :impl (structural-impl :vfx/branch)})
+  (node/register-primitive!
+   {:id :vfx/repeat :revision 1 :category :flow
+    :doc "Run :body :count times, binding :index-as (native sample-node! structural primitive)."
+    :inputs {:count {:type :long} :index-as {:type :keyword}}
+    :children {:body {:kind :single}}
+    :effects #{:mutate}
+    :impl (structural-impl :vfx/repeat)}))

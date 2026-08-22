@@ -28,6 +28,16 @@
       :body {:component :test/query :origin {:vec3 [0.0 0.0 0.0]}}})
     (registry/register-composite!
      {:id :test/source :revision 1 :layer :source :outputs {:value {:type :double}}})
+    ;; Mimics a domain whose own runtime value language also uses :input as
+    ;; a scope name for something other than composite parameters (vfx-
+    ;; core's :input instance-signal scope) -- a structural primitive that
+    ;; introduces its own :input-keyed binding for its body, at a key the
+    ;; enclosing composite never declares.
+    (registry/register-primitive!
+     {:id :test/native-scope :revision 1 :children {:body {:kind :single}}
+      :impl (fn [_ _] {})})
+    (registry/register-primitive!
+     {:id :test/emit :revision 1 :inputs {:value {:type :any}} :impl (fn [_ _] {})})
     (f)
     (registry/reset-for-test!)))
 
@@ -78,6 +88,35 @@
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"source-node-outside-ability"
        (composite/expand {:component :test/bad-composite}))))
+
+(deftest undeclared-input-ref-inside-nested-native-scope-survives-expansion-test
+  ;; Regression: substitute-inputs used to replace EVERY {:ref [:input k]}
+  ;; against the composite's OWN declared inputs, including k's that
+  ;; belong to a domain-native structural primitive's own runtime binding
+  ;; (e.g. vfx-core's :vfx/repeat introducing {:ref [:input :i]} for its
+  ;; own loop index) -- (get inputs :undeclared-key) is nil, so the whole
+  ;; ref node got silently replaced with nil instead of surviving for that
+  ;; domain's own runtime resolver to handle later.
+  (registry/register-composite!
+   {:id :test/wraps-native-scope :revision 1 :layer :mid
+    :inputs {:declared {:type :any}}
+    :outputs {}
+    :body {:component :test/native-scope
+           :body {:component :test/emit :value {:ref [:input :undeclared-key]}}}})
+  (let [expanded (composite/expand {:component :test/wraps-native-scope :declared 1.0})]
+    (is (= {:ref [:input :undeclared-key]} (get-in expanded [:body :value]))
+        "an :input ref to a key this composite never declared must survive expansion untouched")))
+
+(deftest declared-input-ref-inside-nested-native-scope-still-substitutes-test
+  (registry/register-composite!
+   {:id :test/wraps-native-scope-2 :revision 1 :layer :mid
+    :inputs {:declared {:type :any}}
+    :outputs {}
+    :body {:component :test/native-scope
+           :body {:component :test/emit :value {:ref [:input :declared]}}}})
+  (let [expanded (composite/expand {:component :test/wraps-native-scope-2 :declared 42.0})]
+    (is (= 42.0 (get-in expanded [:body :value]))
+        "a ref to a genuinely declared input still substitutes as before")))
 
 (deftest cycle-detection-throws-test
   (registry/register-composite!

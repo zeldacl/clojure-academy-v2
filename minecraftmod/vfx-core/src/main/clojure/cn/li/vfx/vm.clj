@@ -12,6 +12,8 @@
    per drawable node reached."
   (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
+            [cn.li.node.descriptor :as node]
+            [cn.li.node.composite :as composite]
             [cn.li.node.expr :as expr]
             [cn.li.vfx.ops :as ops]))
 
@@ -102,8 +104,29 @@
    children; leaf nodes call emit!."
   (fn [node ctx] (:component node)))
 
-(defmethod sample-node! :default [node _ctx]
-  (throw (ex-info "unknown VFX component" {:component (:component node)})))
+(defmethod sample-node! :default [node ctx]
+  ;; Not a native v2 component -- check whether it is a :layer :mid
+  ;; composite registered on node-core (R3/R4, mossy-wren plan) before
+  ;; giving up. cn.li.node.composite/expand is pure structural
+  ;; substitution at this call, not evaluation: a composite authored using
+  ;; only vfx's native :input-threading idiom (:vfx/let, :vfx/repeat, plain
+  ;; {:ref [:input ...]} reads, no internal :bind) has nothing for
+  ;; expand's :local-renaming step to touch, and every surviving
+  ;; {:ref [:input ...]} in the expanded tree came from the CALLER's own
+  ;; argument expressions (composite parameter substitution replaces every
+  ;; occurrence of the composite's OWN {:ref [:input k]} parameter reads,
+  ;; so none of those survive to reach resolve-value) -- so the expanded
+  ;; tree resolves correctly against the real runtime :input/:state map at
+  ;; sample time with no changes needed here or in composite.clj. A
+  ;; composite that DOES declare :outputs or uses :bind/:local internally
+  ;; is not yet supported this way; expand will still run, but any
+  ;; surviving {:ref [:local ...]} in its body will fail with vm.clj's own
+  ;; "unknown VFX :ref scope" -- that is the real limitation flagged in the
+  ;; plan, not silently swallowed here.
+  (let [d (node/descriptor (:component node))]
+    (if (and d (= :mid (:layer d)))
+      (sample-node! (composite/expand node) ctx)
+      (throw (ex-info "unknown VFX component" {:component (:component node)})))))
 
 ;; -- Structural / wrapper nodes ---------------------------------------------
 

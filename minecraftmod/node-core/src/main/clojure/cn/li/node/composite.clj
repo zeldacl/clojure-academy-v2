@@ -62,13 +62,32 @@
 
 (defn- substitute-inputs
   "Replace {:ref [:input k & path]} anywhere in `body` (value position or
-   whole node position) with the resolved input value/subtree."
+   whole node position) with the resolved input value/subtree -- but ONLY
+   when `k` is one of this composite's own declared :inputs. A ref whose
+   key isn't in `inputs` is left untouched rather than substituted with
+   nil: a domain whose runtime value language also uses :input as a scope
+   name for something other than composite parameters (vfx-core's
+   :input/:state instance-signal scope, distinct from a composite's own
+   declared parameters) can nest a structural node inside a composite body
+   that introduces its OWN :input binding at a key the composite never
+   declared -- e.g. a :vfx/repeat body reading {:ref [:input :i]} for its
+   own loop-bound :index-as, not one of the composite's :inputs. Silently
+   substituting nil for that (the previous behavior) broke every such
+   nested binding; leaving it alone here defers it to whatever resolves
+   values at that domain's own runtime, exactly like a combat composite's
+   {:ref [:local ...]} forms are already left alone by this function (a
+   combat composite has no reason to ever write {:ref [:input ...]} except
+   to mean one of its own declared parameters, so this change is a no-op
+   for every existing combat composite)."
   [body inputs]
   (walk/postwalk
    (fn [form]
      (if (and (map? form) (vector? (:ref form)) (= :input (first (:ref form))))
-       (let [[_ k & path] (:ref form) v (get inputs k)]
-         (if (seq path) (get-in v (vec path)) v))
+       (let [[_ k & path] (:ref form)]
+         (if (contains? inputs k)
+           (let [v (get inputs k)]
+             (if (seq path) (get-in v (vec path)) v))
+           form))
        form))
    body))
 
