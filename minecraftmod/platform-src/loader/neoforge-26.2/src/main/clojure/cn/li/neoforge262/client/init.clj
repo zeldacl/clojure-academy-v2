@@ -291,11 +291,25 @@
                        (case shader-name
                          :ring-progbar (GuiRenderPipelines/skillProgbar)
                          :skill-progbar (GuiRenderPipelines/skillProgbar)
-                         :mono (GuiRenderPipelines/mono)
+                         ;; Depth-layering pipelines are NOT resolved on 26.2:
+                         ;; every attempt to make the skill tree's depth
+                         ;; stamp-then-test chain work in the extracted GUI
+                         ;; pass has failed in practice (byte-exact depth
+                         ;; alignment, pipeline sort-key ordering for the
+                         ;; stable element sort, and verification of the GL
+                         ;; depth state application all check out, yet the
+                         ;; EQUAL/NOT_EQUAL-tested icons and lines never
+                         ;; render — the mechanism is unusable here, unlike
+                         ;; 1.20.1/1.21.1's immediate-GL passes). Keep the
+                         ;; documented painter's-order degradation (1.21.1
+                         ;; render.clj depth-layering notes; identical to the
+                         ;; Fabric 26.2 behavior). The pipelines and shaders
+                         ;; remain registered for any future GUI depth use.
+                         :mono nil
                          :cpbar-overload (GuiRenderPipelines/cpbarOverload)
-                         :alpha-discard (GuiRenderPipelines/alphaDiscard)
-                         :depth-equal (GuiRenderPipelines/depthEqualTextured)
-                         :depth-notequal (GuiRenderPipelines/depthNotEqualColor)
+                         :alpha-discard nil
+                         :depth-equal nil
+                         :depth-notequal nil
                          nil))
      :stop-all-media! (fn [_player-uuid]
                         (sound/stop-all-media!))

@@ -782,15 +782,24 @@
                     (int x0) (int y0) (int x3) (int y3) (int color))
                   (GuiGraphicsHelper/fill ^GuiGraphicsExtractor gg
                          (int x0) (int y0) (int x3) (int y3) (int color))))]
-    (if (< (Math/abs (- x2 x1)) (Math/abs (- y2 y1)))
-      (fill! (unchecked-int (- (/ (+ x1 x2) 2.0) (/ thick 2.0)))
-             iy1
-             (unchecked-int (+ (/ (+ x1 x2) 2.0) (/ thick 2.0)))
-             iy2)
-      (fill! ix1
-             (unchecked-int (- (/ (+ y1 y2) 2.0) (/ thick 2.0)))
-             ix2
-             (unchecked-int (+ (/ (+ y1 y2) 2.0) (/ thick 2.0)))))))
+    ;; Real diagonal quad first (1.21.1 drew the p1→p2 axis quad with ±normal
+    ;; offsets sampling the tex-line gradient; the extractor's blits are
+    ;; axis-aligned, so blitRotated submits a rotate/scale-pose BlitRenderState
+    ;; instead). Falls back to the axis-aligned fills when the loader has no
+    ;; element submitter.
+    (if (GuiGraphicsHelper/blitRotated
+          gg (resolve-tex-loc :tex-line) color
+          (double x1) (double y1) (double x2) (double y2) (double thick))
+      nil
+      (if (< (Math/abs (- x2 x1)) (Math/abs (- y2 y1)))
+        (fill! (unchecked-int (- (/ (+ x1 x2) 2.0) (/ thick 2.0)))
+               iy1
+               (unchecked-int (+ (/ (+ x1 x2) 2.0) (/ thick 2.0)))
+               iy2)
+        (fill! ix1
+               (unchecked-int (- (/ (+ y1 y2) 2.0) (/ thick 2.0)))
+               ix2
+               (unchecked-int (+ (/ (+ y1 y2) 2.0) (/ thick 2.0))))))))
 
 (defn bake-nine-slice! [^INode node]
   (let [src (.getOSlot node SLOT-NS-SRC)]

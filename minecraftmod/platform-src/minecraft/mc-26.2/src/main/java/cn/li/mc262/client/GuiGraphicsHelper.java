@@ -9,9 +9,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2f;
+import org.joml.Matrix3x2fc;
 
 /** Thin GuiGraphicsExtractor helpers for 26.2. */
 public final class GuiGraphicsHelper {
@@ -248,6 +251,75 @@ public final class GuiGraphicsHelper {
         boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
                        int x0, int y0, int x1, int y1,
                        float u0, float u1, float v0, float v1, int argb);
+    }
+
+    @FunctionalInterface
+    public interface GuiElementSubmitFunction {
+        boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
+                       Matrix3x2f pose, int x0, int y0, int x1, int y1,
+                       float u0, float u1, float v0, float v1, int color);
+    }
+
+    private static volatile GuiElementSubmitFunction guiElementSubmitter;
+
+    /**
+     * Install the loader's submission path for custom GUI elements (NeoForge's
+     * {@code GuiGraphicsExtractor.submitGuiElementRenderState}). Used by
+     * {@link #blitRotated} for diagonal connection lines, which the
+     * axis-aligned extractor blits cannot express. The loader builds the
+     * BlitRenderState so it can attach the current scissor — a null scissor
+     * would sort the element first (SCISSOR_COMPARATOR nullsFirst) and let
+     * later-drawn backgrounds cover it.
+     */
+    public static void installGuiElementSubmitter(GuiElementSubmitFunction function) {
+        guiElementSubmitter = function;
+    }
+
+    /**
+     * Submit a rotated textured quad — the diagonal connection lines, matching
+     * 1.20.1/1.21.1's p1→p2 axis quad with ±normal offsets sampling the
+     * {@code tex-line} gradient texture (the extractor's blits are
+     * axis-aligned, so a unit rectangle is transformed by a rotate/scale pose
+     * instead). Returns false when the loader has no submitter, letting the
+     * caller fall back to axis-aligned fills.
+     */
+    public static boolean blitRotated(Object graphics, Identifier texture, int argb,
+                                      double x1, double y1, double x2, double y2,
+                                      double thickness) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge)) {
+            return false;
+        }
+        GuiElementSubmitFunction submitter = guiElementSubmitter;
+        if (submitter == null) {
+            return false;
+        }
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        double len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.5) {
+            return false;
+        }
+        double angle = Math.atan2(dy, dx);
+        // Unit rectangle → [0,len]×[0,thick] centered on the axis, rotated
+        // onto p1→p2, translated to p1. Then compose with the extractor's
+        // current pose (draw-tape's left/top translate + ancestor pushes) so
+        // the quad lands in screen space like every other element's abs
+        // coordinates.
+        Matrix3x2f lineTransform = new Matrix3x2f()
+                .translate((float) x1, (float) y1)
+                .rotate((float) angle)
+                .scale((float) len, (float) thickness)
+                .translate(-0.5F, -0.5F);
+        Matrix3x2f pose = new Matrix3x2f(gge.pose()).mul(lineTransform);
+        AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        // Dedicated line pipeline: created last, so its sort key puts the line
+        // after every background/blit pipeline in the sorted GUI mesh (a line
+        // through vanilla GUI_TEXTURED could sort before the background that
+        // covers it and vanish).
+        return submitter.submit(gge, cn.li.mc262.client.render.GuiRenderPipelines.lineTextured(),
+                TextureSetup.singleTexture(tex.getTextureView(), tex.getSampler()),
+                pose, 0, 0, 1, 1,
+                0.0F, 0.0F, 1.0F, 1.0F, argb);
     }
 
     private static volatile TwoTextureBlitFunction twoTextureBlitter;

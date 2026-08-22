@@ -141,6 +141,17 @@ public final class ModClientRenderSetup {
                     x0, y0, x1, y1, u0, u1, v0, v1, argb, scissor));
             return true;
         });
+        // Rotated GUI elements (diagonal connection lines): submit a
+        // BlitRenderState through the same patched API, attaching the current
+        // scissor (null would sort the element first and let backgrounds cover
+        // it).
+        GuiGraphicsHelper.installGuiElementSubmitter((graphics, pipeline, textures,
+                pose, x0, y0, x1, y1, u0, u1, v0, v1, color) -> {
+            graphics.submitGuiElementRenderState(new BlitRenderState(
+                    pipeline, textures, pose, x0, y0, x1, y1,
+                    u0, u1, v0, v1, color, graphics.peekScissorStack()));
+            return true;
+        });
     }
 
     private static void onRegisterPictureInPictureRenderers(
