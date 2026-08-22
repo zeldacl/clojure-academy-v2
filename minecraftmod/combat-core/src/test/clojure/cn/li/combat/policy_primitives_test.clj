@@ -13,7 +13,8 @@
 
 (def ^:private expected-ids
   #{:owner/patch :session/patch :effect/vfx :domain/event
-    :cost/spend :score/mark :cooldown/start :guard/value-in :data/random-item})
+    :cost/spend :score/mark :cooldown/start :session/read :session/write
+    :guard/value-in :data/random-item})
 
 (deftest every-expected-id-registers-as-primitive-test
   (doseq [id expected-ids]
@@ -86,6 +87,20 @@
      :cooldown/start {:name :main :cooldown {:ticks 40}}
      {:ability-id :railgun :emit-action! (fn [action] (reset! seen action))})
     (is (= [{:path [:cooldown-data :railgun :main] :mode :assign :value 40.0}] (:entries @seen)))))
+
+(deftest session-read-returns-declared-key-test
+  (is (= 5 (:value (runtime/invoke-primitive! :session/read {:key :charge-ticks}
+                                              {:session-state {:charge-ticks 5}})))))
+
+(deftest session-read-missing-key-returns-nil-test
+  (is (nil? (:value (runtime/invoke-primitive! :session/read {:key :missing} {:session-state {}})))))
+
+(deftest session-write-emits-assign-patch-test
+  (let [seen (atom nil)]
+    (runtime/invoke-primitive!
+     :session/write {:key :charge-ticks :value 6}
+     {:emit-action! (fn [action] (reset! seen action))})
+    (is (= {:type :session-patch :entries [{:path [:charge-ticks] :mode :assign :value 6}]} @seen))))
 
 (deftest guard-value-in-pure-membership-test
   (is (true? (:result (runtime/invoke-primitive! :guard/value-in {:value :fire :one-of [:fire :ice]} {}))))

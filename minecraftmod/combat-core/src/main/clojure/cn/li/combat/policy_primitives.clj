@@ -9,16 +9,21 @@
    read a document-level table implicitly via component context; now they
    receive that same already-resolved data as an ordinary :map input,
    supplied by the :ability/budget/:ability/progression/:ability/cooldown
-   source nodes), and two pure helpers, :guard/value-in and
-   :data/random-item.
+   source nodes), :session/read/:session/write (NODE_LANGUAGE.md section
+   2.6 -- the typed, declared replacement for authoring a raw
+   :session/patch path by hand: a session-scoped ability declares its
+   shape once in its own top-level :session-state block, then reads/writes
+   named keys against that declared shape), and two pure helpers,
+   :guard/value-in and :data/random-item.
 
    ctx contract these :impl fns rely on (extends host_primitives.clj's):
-     {:ability-id  keyword
-      :seed        long                          ; for :data/random-item
-      :resources*  atom                          ; {resource-key -> amount}, mutable
-      :emit-action! (fn [action-map] -> nil)
-      :emit-vfx!    (fn [vfx-signal-map] -> nil)
-      :emit-event!  (fn [event-map] -> nil)}
+     {:ability-id    keyword
+      :seed          long                       ; for :data/random-item
+      :resources*    atom                       ; {resource-key -> amount}, mutable
+      :session-state map                        ; this activation's current session snapshot, read-only
+      :emit-action!  (fn [action-map] -> nil)
+      :emit-vfx!     (fn [vfx-signal-map] -> nil)
+      :emit-event!   (fn [event-map] -> nil)}
 
    :cost/spend no longer takes an :on-insufficient child -- that was the
    only :children port a 'primitive' had left, and it made :cost/spend a
@@ -83,6 +88,13 @@
       :entries [{:path [:cooldown-data (:ability-id ctx) name] :mode :assign :value ticks}]})
     {}))
 
+(defn- session-read-impl [{:keys [key]} ctx]
+  {:value (get (:session-state ctx) key)})
+
+(defn- session-write-impl [{:keys [key value]} ctx]
+  ((:emit-action! ctx) {:type :session-patch :entries [{:path [key] :mode :assign :value value}]})
+  {})
+
 (defn- guard-value-in-impl [{:keys [value one-of]} _ctx]
   {:result (boolean (contains? (set one-of) value))})
 
@@ -134,6 +146,16 @@
     :doc "Start a named cooldown (spec from :ability/cooldown)."
     :inputs {:name {:type :keyword} :cooldown {:type :map}} :outputs {} :effects #{:mutate}
     :impl cooldown-start-impl})
+  (node/register-primitive!
+   {:id :session/read :revision 1 :category :policy
+    :doc "Read a key from this activation's declared :session-state."
+    :inputs {:key {:type :keyword}} :outputs {:value {:type :any}} :effects #{:query}
+    :impl session-read-impl})
+  (node/register-primitive!
+   {:id :session/write :revision 1 :category :policy
+    :doc "Write a key in this activation's declared :session-state."
+    :inputs {:key {:type :keyword} :value {:type :any}} :outputs {} :effects #{:mutate}
+    :impl session-write-impl})
   (node/register-primitive!
    {:id :guard/value-in :revision 1 :category :guard
     :doc "Pure membership test: does :value equal one of :one-of."
