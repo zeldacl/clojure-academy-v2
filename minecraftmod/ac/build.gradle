@@ -7,15 +7,19 @@ plugins {
 layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
 evaluationDependsOn(':vfx-core')
 evaluationDependsOn(':combat-core')
+evaluationDependsOn(':node-core')
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes", ":vfx-core:classes", ":combat-core:jar"
+    checkTask.dependsOn ":mcmod:classes", ":node-core:classes", ":vfx-core:classes", ":combat-core:jar"
     // Source-first neutral dependencies are not AOT jars in the default
     // build; expose their Clojure roots to AC's namespace checker explicitly.
+    checkTask.classpath.from(project(':node-core').file('src/main/clojure'))
     checkTask.classpath.from(project(':vfx-core').file('src/main/clojure'))
     checkTask.classpath.from(project(':combat-core').file('src/main/clojure'))
+    checkTask.classpath.from(project(':node-core').tasks.named('jar'))
     checkTask.classpath.from(project(':vfx-core').tasks.named('jar'))
     checkTask.classpath.from(project(':combat-core').tasks.named('jar'))
+    checkTask.classpath.from(rootProject.file('build/neutral/node-core/resources/main'))
     checkTask.classpath.from(rootProject.file('build/neutral/vfx-core/resources/main'))
     checkTask.classpath.from(rootProject.file('build/neutral/combat-core/resources/main'))
 }

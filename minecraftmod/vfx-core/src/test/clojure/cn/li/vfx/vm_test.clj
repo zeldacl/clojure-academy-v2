@@ -16,6 +16,20 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown VFX :ref scope"
                         (vm/resolve-value {:ref [:bogus :x]} {}))))
 
+(deftest resolve-value-evaluates-expr-forms-test
+  ;; Regression for the energy_orb_session.edn bug: {:expr ...} used to fall
+  ;; through to the generic map? branch and resolve to the literal opcode
+  ;; map itself instead of being evaluated.
+  (let [ctx {:input {:radius 4.0} :seed 7}]
+    (is (= 2.6 (vm/resolve-value {:expr :math/mul :args [{:ref [:input :radius]} 0.65]} ctx)))))
+
+(deftest resolve-value-evaluates-nested-expr-inside-a-map-test
+  (let [ctx {:input {:radius 4.0} :seed 7}]
+    (is (= {:from 2.6 :to 4.0}
+           (vm/resolve-value {:from {:expr :math/mul :args [{:ref [:input :radius]} 0.65]}
+                              :to {:ref [:input :radius]}}
+                             ctx)))))
+
 (defn- collecting-sink []
   (let [batches (atom [])]
     {:sink {:emit! (fn [batch] (swap! batches conj batch) batch)}

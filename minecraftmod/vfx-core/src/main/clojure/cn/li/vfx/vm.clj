@@ -11,7 +11,8 @@
    ...]} as it goes and, at sample time, emitting one vfx-contract batch
    per drawable node reached."
   (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
-            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng])
+            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
+            [cn.li.node.expr :as expr])
   (:import [cn.li.mcmod.math V3]))
 
 ;; ---------------------------------------------------------------------------
@@ -21,11 +22,24 @@
 (defn- ref? [value]
   (and (map? value) (vector? (:ref value)) (seq (:ref value))))
 
+(defn- expr? [value]
+  (and (map? value) (keyword? (:expr value))))
+
 (defn resolve-value
   "Resolve {:ref [:input & path]}/{:ref [:state & path]} against ctx's
    :input (accumulated spawn/update signal payload) or :state (the
-   instance's own state map); anything else is deep-walked so literal
-   vectors/maps of refs (e.g. :layers, :style) resolve too."
+   instance's own state map); {:expr op :args [...]} against
+   cn.li.node.expr's shared math/vec3/bool/collection/random vocabulary
+   (deterministic per ctx's :seed); anything else is deep-walked so literal
+   vectors/maps of refs (e.g. :layers, :style) resolve too.
+
+   {:expr ...} used to silently fall through the generic map? branch below
+   and resolve to the literal {:expr :op :args [...]} map itself -- vfx
+   graphs have no expression language of their own, only combat-core's
+   VM does, and the two EDN dialects look identical enough that content
+   authors kept reaching for :expr here anyway (see energy_orb_session.edn,
+   which computed :radius-from as 65% of :radius this way and got a raw
+   opcode map baked into the render batch instead)."
   [value ctx]
   (cond
     (ref? value)
@@ -35,6 +49,9 @@
                  :state (:state ctx)
                  (throw (ex-info "unknown VFX :ref scope" {:scope scope :ref value})))]
       (get-in root path))
+    (expr? value)
+    (let [args (mapv #(resolve-value % ctx) (:args value))]
+      (expr/evaluate (:expr value) args (long (or (:seed ctx) 0))))
     (map? value) (into {} (map (fn [[k v]] [k (resolve-value v ctx)])) value)
     (vector? value) (mapv #(resolve-value % ctx) value)
     :else value))
