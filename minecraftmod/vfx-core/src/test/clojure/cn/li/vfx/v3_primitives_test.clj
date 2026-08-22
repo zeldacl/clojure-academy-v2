@@ -13,12 +13,30 @@
     (f)
     (node/reset-for-test!)))
 
-(deftest both-render-primitives-registered-test
-  (doseq [id [:vfx/line :vfx/quad]]
+(deftest every-v3-primitive-registered-test
+  (doseq [id [:vfx/line :vfx/quad :vfx/camera :vfx/audio-one-shot :vfx/audio-loop]]
     (let [d (node/descriptor id)]
-      (is (some? d))
+      (is (some? d) (str id " must be registered"))
       (is (= :primitive (:layer d)))
       (is (fn? (:impl d))))))
+
+(deftest camera-impl-tags-op-kind-test
+  (let [result (runtime/invoke-primitive!
+                :vfx/camera {:operation :fov :value 10.0 :duration-ticks 5} {})]
+    (is (= :camera (get-in result [:op :kind])))
+    (is (= :fov (get-in result [:op :operation])))))
+
+(deftest audio-one-shot-impl-tags-op-kind-test
+  (let [result (runtime/invoke-primitive!
+                :vfx/audio-one-shot {:sound-id :bang :position {:x 0.0 :y 0.0 :z 0.0}} {})]
+    (is (= :audio (get-in result [:op :kind])))
+    (is (= :bang (get-in result [:op :sound-id])))))
+
+(deftest audio-loop-impl-tags-op-kind-test
+  (let [result (runtime/invoke-primitive!
+                :vfx/audio-loop {:sound-id :hum :position {:x 0.0 :y 0.0 :z 0.0} :instance-key [:owner-1]} {})]
+    (is (= :audio-loop (get-in result [:op :kind])))
+    (is (= [:owner-1] (get-in result [:op :instance-key])))))
 
 (deftest line-impl-matches-v2-op-shape-test
   (let [result (runtime/invoke-primitive!

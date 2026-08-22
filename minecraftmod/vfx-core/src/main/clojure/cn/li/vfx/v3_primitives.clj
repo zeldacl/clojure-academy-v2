@@ -1,16 +1,27 @@
 (ns cn.li.vfx.v3-primitives
   "v3 registration for vfx-core's genuinely orthogonal render primitives
-   (R3, mossy-wren plan; NODE_LANGUAGE.md section 9). :impl is a pure data-
-   shaping function -- given typed, already-resolved inputs, it returns the
-   op map cn.li.vfx.ops already produces for the v2 :vfx/line/:vfx/quad
-   leaf nodes (cn.li.vfx.vm), reusing the exact same tested construction
-   logic rather than a second copy of it. A future vfx-core v3 sampler
-   collects the ops each node in one graph evaluation produces and wraps
-   them into the single :mesh/:ops batch cn.li.vfx.ops/ops-batch already
-   knows how to build -- that accumulation loop is not written yet (same
-   category of deferred work as combat-core's source-node execution wiring,
-   pushed to R4 there for the same reason: nothing needs it to actually run
-   until real composite content exists).
+   (R3, mossy-wren plan; NODE_LANGUAGE.md section 9): :vfx/line, :vfx/quad
+   (world geometry), :vfx/camera, :vfx/audio-one-shot, :vfx/audio-loop
+   (presentation, no geometry). :impl is a pure data-shaping function --
+   given typed, already-resolved inputs, it returns one op map, reusing
+   cn.li.vfx.ops's tested construction logic for the two geometry
+   primitives rather than a second copy of it. A future vfx-core v3
+   sampler collects every op one graph evaluation produces and wraps them
+   into the batch shape each op's own :stage/:kind implies (:mesh/:ops for
+   world geometry, a distinct primitive for :camera/:audio) -- that
+   accumulation loop, and the structural primitives (:vfx/repeat/
+   :vfx/transform/:vfx/let/:vfx/curve/:vfx/branch/:vfx/timeline) it would
+   drive, are deliberately NOT written yet: they require first deciding
+   whether a vfx v3 graph keeps :input/:state as first-class value scopes
+   alongside node-core's :local (the v2 model every effect document
+   already uses, and genuinely different from an injected-environment
+   read like combat's tunables/costs -- :input/:state are closer to a
+   shader's uniform/varying inputs than a document-level table) or forces
+   everything through source nodes the way combat-core's :ability/*
+   family does. That is a real architectural decision, not busywork, and
+   deserves its own pass rather than being decided as a side effect of
+   registering five leaf primitives -- see the mossy-wren plan's R3
+   section for the open question recorded in full.
 
    ADDITIVE ONLY at this revision: the v2 registry (cn.li.vfx.components)
    and vm.clj's :vfx/line/:vfx/quad defmethods are untouched and still
@@ -37,4 +48,25 @@
              :v0 {:type :double :default 0.0} :v1 {:type :double :default 1.0}
              :color {:type :color} :texture {:type :string :default nil}}
     :outputs {:op {:type :render-op}} :effects #{:emit}
-    :impl (fn [inputs _ctx] {:op (ops/quad-op inputs)})}))
+    :impl (fn [inputs _ctx] {:op (ops/quad-op inputs)})})
+  (node/register-primitive!
+   {:id :vfx/camera :revision 1 :category :presentation
+    :doc "A camera contribution (FOV/shake/roll) for one presentation frame."
+    :inputs {:operation {:type :keyword} :value {:type :any} :duration-ticks {:type :long :default 0}}
+    :outputs {:op {:type :render-op}} :effects #{:emit}
+    :impl (fn [inputs _ctx] {:op (assoc inputs :kind :camera)})})
+  (node/register-primitive!
+   {:id :vfx/audio-one-shot :revision 1 :category :presentation
+    :doc "Play a sound once at a position."
+    :inputs {:sound-id {:type :keyword} :position {:type :vec3}
+             :volume {:type :double :default 1.0} :pitch {:type :double :default 1.0}}
+    :outputs {:op {:type :render-op}} :effects #{:emit}
+    :impl (fn [inputs _ctx] {:op (assoc inputs :kind :audio)})})
+  (node/register-primitive!
+   {:id :vfx/audio-loop :revision 1 :category :presentation
+    :doc "Start/update a looping sound instance."
+    :inputs {:sound-id {:type :keyword} :position {:type :vec3}
+             :volume {:type :double :default 1.0} :pitch {:type :double :default 1.0}
+             :instance-key {:type [:list-of :any]} :stop-on-destroy? {:type :boolean :default true}}
+    :outputs {:op {:type :render-op}} :effects #{:emit}
+    :impl (fn [inputs _ctx] {:op (assoc inputs :kind :audio-loop)})}))
