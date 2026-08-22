@@ -8,6 +8,7 @@
   texture. The mesh is attached at bake time — see
   `cn.li.fabric262.client.obj-model-registration`."
   (:require [cn.li.platform.neutral.config :as modid]
+            [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
             [cn.li.mcbase.datagen.gson-util :as gson-util]
             [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
             [clojure.string :as str])
@@ -58,6 +59,28 @@
           (keep (fn [{:keys [model-name obj-model]}]
                   (when obj-model (str model-name))) models))))
 
+(defn- block-item-definitions
+  "items/*.json definitions for block items.
+
+  The blockstate provider writes models/item/*.json for block items but not
+  the 1.21.4+ client-item definition; without it ModelManager reports
+  \"Missing item model\" and renders the missing-mesh. Block items render
+  their own item model file, so the definition is a plain model reference."
+  [^PackOutput$PathProvider item-path-provider ^Gson gson models]
+  (keep (fn [{:keys [path-key id]}]
+          (when (and (= :item-model path-key) (string? id))
+            (let [block-item-name (second (str/split id #":"))]
+              (when (and block-item-name
+                         (not (contains? (into #{}
+                                               (map (fn [s] (str (:model-name s))))
+                                               models)
+                                         block-item-name)))
+                {:path (.json ^PackOutput$PathProvider item-path-provider
+                              (Identifier/fromNamespaceAndPath (str modid/mod-id) block-item-name))
+                 :json-tree (.toJsonTree gson
+                                         (gson-util/normalize-json {:model (model-ref block-item-name)}))}))))
+        (blockstate-core/blockstate-write-entries)))
+
 (defn create-provider
     [^PackOutput output]
   (let [^String mod-id (str modid/mod-id)
@@ -87,6 +110,9 @@
                   json-tree (.toJsonTree gson (gson-util/normalize-json (item-definition spec obj-bases specs-by-name)))]
               (swap! writes conj
                      (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))))
+          (doseq [{:keys [path json-tree]} (block-item-definitions item-path-provider gson models)]
+            (swap! writes conj
+                   (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path path)))
           (println (str "[item-model-provider/fabric] summary: items=" all-item-count
                         ", energy-tier=" energy-tier-count
                         ", simple-model=" simple-count))

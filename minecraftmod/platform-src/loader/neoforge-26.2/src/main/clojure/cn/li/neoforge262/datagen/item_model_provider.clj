@@ -6,12 +6,13 @@
    OBJ models use NeoForge's built-in neoforge:obj geometry loader (no custom
    ModelEvent baking). GUI-vs-hand switching uses minecraft:select +
    minecraft:display_context in the item definition (replaces ObjComposite)."
-  (:require [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
+  (:require [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
+            [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
             [cn.li.platform.neutral.config :as modid]
             [clojure.string :as str])
   (:import [com.google.gson JsonArray JsonElement JsonNull JsonObject JsonPrimitive]
            [java.util.concurrent CompletableFuture]
-           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$Target]
+           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [cn.li.mcver ResourceLocations]))
 
 (defn- json-element
@@ -139,6 +140,28 @@
   [^CachedOutput output path value]
   (DataProvider/saveStable output (json-element value) path))
 
+(defn- block-item-definitions
+  "items/*.json definitions for block items.
+
+  The blockstate provider writes models/item/*.json for block items but not
+  the 1.21.4+ client-item definition; without it ModelManager reports
+  \"Missing item model\" and renders the missing-mesh. Block items render
+  their own item model file, so the definition is a plain model reference."
+  [^CachedOutput output ^PackOutput$PathProvider item-paths models]
+  (keep (fn [{:keys [path-key id]}]
+          (when (and (= :item-model path-key) (string? id))
+            (let [block-item-name (second (str/split id #":"))]
+              (when (and block-item-name
+                         (not (contains? (into #{}
+                                               (map (fn [s] (str (:model-name s))))
+                                               models)
+                                         block-item-name)))
+                (save-json! output
+                            (.json item-paths
+                                   (ResourceLocations/of (str modid/mod-id) block-item-name))
+                            {:model (model-ref block-item-name)})))))
+        (blockstate-core/blockstate-write-entries)))
+
 (defn create
   "Create a DataProvider that writes models/item and items definitions."
   [^PackOutput pack-output]
@@ -166,7 +189,8 @@
                                       (.json item-paths
                                              (ResourceLocations/of (str modid/mod-id) (str model-name)))
                                       (item-definition spec obj-bases specs-by-name))))
-                      models))]
+                      models)
+                (block-item-definitions output item-paths models))]
           (println (str "[item-model-provider] summary: items=" all-item-count
                         ", energy-tier=" energy-tier-count
                         ", obj-3d=" obj-3d-count

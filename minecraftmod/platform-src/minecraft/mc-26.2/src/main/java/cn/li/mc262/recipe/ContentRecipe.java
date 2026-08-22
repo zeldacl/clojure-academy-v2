@@ -9,6 +9,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.Recipe;
@@ -21,7 +22,12 @@ import net.minecraft.world.level.Level;
 
 /**
  * Content machine recipe (process / mode). 26.2: RecipeSerializer is a record;
- * assemble no longer takes HolderLookup; PlacementInfo / RecipeBookCategory required.
+ * assemble no longer takes HolderLookup; PlacementInfo / RecipeBookCategory
+ * required. The output is an {@link ItemStackTemplate} like every vanilla 26.2
+ * recipe: {@link ItemStack#CODEC} validates that the referenced item's holder
+ * has components bound, which only happens after the datapack reload completes
+ * (ReloadableServerResources.updateComponentsAndStaticRegistryTags), so a
+ * strict ItemStack codec makes every recipe file fail to parse at load time.
  */
 public final class ContentRecipe implements Recipe<SingleRecipeInput> {
     private static volatile Supplier<RecipeType<?>> processType = () -> null;
@@ -30,13 +36,13 @@ public final class ContentRecipe implements Recipe<SingleRecipeInput> {
     private static volatile Supplier<RecipeSerializer<?>> modeSerializer = () -> null;
 
     private final Ingredient input;
-    private final ItemStack output;
+    private final ItemStackTemplate output;
     private final int consumeLiquid;
     private final int craftTime;
     private final String mode;
     private final String kind;
 
-    public ContentRecipe(Ingredient input, ItemStack output,
+    public ContentRecipe(Ingredient input, ItemStackTemplate output,
                          int consumeLiquid, int craftTime, String mode, String kind) {
         this.input = input;
         this.output = output;
@@ -76,7 +82,7 @@ public final class ContentRecipe implements Recipe<SingleRecipeInput> {
     public static RecipeSerializer<ContentRecipe> createSerializer(String kind) {
         MapCodec<ContentRecipe> codec = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Ingredient.CODEC.fieldOf("input").forGetter(ContentRecipe::getInput),
-                ItemStack.CODEC.fieldOf("output").forGetter(ContentRecipe::getOutput),
+                ItemStackTemplate.CODEC.fieldOf("output").forGetter(ContentRecipe::getOutput),
                 Codec.INT.optionalFieldOf("consume_liquid", 0).forGetter(ContentRecipe::getConsumeLiquid),
                 Codec.INT.optionalFieldOf("craft_time", 200).forGetter(ContentRecipe::getCraftTime),
                 Codec.STRING.optionalFieldOf("mode", "").forGetter(ContentRecipe::getMode)
@@ -85,7 +91,7 @@ public final class ContentRecipe implements Recipe<SingleRecipeInput> {
 
         StreamCodec<RegistryFriendlyByteBuf, ContentRecipe> streamCodec = StreamCodec.composite(
                 Ingredient.CONTENTS_STREAM_CODEC, ContentRecipe::getInput,
-                ItemStack.STREAM_CODEC, ContentRecipe::getOutput,
+                ItemStackTemplate.STREAM_CODEC, ContentRecipe::getOutput,
                 ByteBufCodecs.VAR_INT, ContentRecipe::getConsumeLiquid,
                 ByteBufCodecs.VAR_INT, ContentRecipe::getCraftTime,
                 ByteBufCodecs.STRING_UTF8, ContentRecipe::getMode,
@@ -101,7 +107,7 @@ public final class ContentRecipe implements Recipe<SingleRecipeInput> {
 
     @Override
     public ItemStack assemble(SingleRecipeInput input) {
-        return output.copy();
+        return output.create();
     }
 
     @Override
@@ -145,7 +151,7 @@ public final class ContentRecipe implements Recipe<SingleRecipeInput> {
         return input;
     }
 
-    public ItemStack getOutput() {
+    public ItemStackTemplate getOutput() {
         return output;
     }
 
