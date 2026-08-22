@@ -13,9 +13,9 @@
 ;; handles (combat/vfx) are added here as the vocabulary grows -- adding one
 ;; is not a layering violation, it is still just a type tag.
 (def opaque-types
-  #{:hit-result :destination :entity-ref :entity-list :block-list
-    :owner-snapshot :item-snapshot :terrain-plan :beam-result
-    :energy-target :render-op :map
+  #{:hit-result :destination :block-placement :entity-ref :entity-list
+    :entity-snapshot :block-list :owner-snapshot :item-snapshot
+    :terrain-plan :beam-result :energy-target :render-op :map
     ;; :any is the one deliberate escape hatch, for genuinely generic
     ;; plumbing like :data/bind's :value field, which by design forwards
     ;; whatever type the caller's expression produces.
