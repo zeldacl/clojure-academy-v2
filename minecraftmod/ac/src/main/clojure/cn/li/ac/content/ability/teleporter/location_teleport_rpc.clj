@@ -7,10 +7,12 @@
   (:require [clojure.string :as str]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.resource :as resource]
             [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.combat.skill-runtime :as combat-skill-runtime]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -18,12 +20,9 @@
 
 (def ^:private skill-id :location-teleport)
 
-(defn- td [field] (skill-config/tunable-double skill-id field))
-(defn- tdl [field] (skill-config/tunable-double-list skill-id field))
 (defn- ti [field] (skill-config/tunable-int skill-id field))
-(defn- lerp [field exp]
-  (let [[lo hi] (tdl field)]
-    (+ (double lo) (* (- (double hi) (double lo)) (double exp)))))
+(defn- lerp [lo hi t]
+  (+ (double lo) (* (- (double hi) (double lo)) (double t))))
 (defn- norm-name [value]
   (let [name* (str/trim (str (or value "")))]
     (subs name* 0 (min (ti :ui.max-location-name-length) (count name*)))))
@@ -32,11 +31,27 @@
     (teleportation/player-position (str owner))))
 (defn- exp [owner]
   (double (or (skill-effects/skill-exp (str owner) skill-id) 0.0)))
-(defn- cp-cost [mastery distance cross?]
-  (let [base (lerp :cost.perform.cp-base mastery)
-        dim (if cross? (td :cost.perform.cross-dimension-multiplier) 1.0)
-        distance-factor (max (td :cost.perform.min-distance-multiplier)
-                             (Math/sqrt (min (td :cost.perform.distance-cap)
+(defn- materialized-tunables
+  "The ability's own compiled :tunables, curve-resolved against `mastery` the
+   same way the real dispatch resolves them (combat-skill-runtime/dispatch!'s
+   :tunables key) -- the single source every cost/limit preview below reads,
+   so a config or curve change can never drift the preview from the real
+   activation."
+  [mastery]
+  (combat-skill-runtime/materialize-tunables
+   (get-in (combat-catalog/catalog) [:combat :abilities skill-id])
+   mastery))
+(defn- cp-cost
+  "Mirror location_teleport.edn's own :cp-cost bind (the real dispatch runs
+   this same formula, not this function) -- only the (identical, trivially
+   reviewable) arithmetic is duplicated, never the config lookup."
+  [mastery distance cross?]
+  (let [materialized (materialized-tunables mastery)
+        [cp-base-lo cp-base-hi] (:cp-base materialized)
+        base (lerp cp-base-lo cp-base-hi mastery)
+        dim (if cross? (:cross-dimension-multiplier materialized) 1.0)
+        distance-factor (max (:min-distance-multiplier materialized)
+                             (Math/sqrt (min (:distance-cap materialized)
                                              (double distance))))]
     (* base dim distance-factor)))
 (defn- distance [a b]
@@ -48,21 +63,23 @@
   (if (teleportation/named-position-available?)
     (vec (teleportation/list-saved-locations owner))
     []))
-(defn- limits []
-  {:cross-dimension-exp-threshold (td :targeting.cross-dimension-exp-threshold)
+(defn- limits [mastery]
+  {:cross-dimension-exp-threshold (:cross-dimension-exp-threshold
+                                    (materialized-tunables mastery))
    :max-location-name-length (ti :ui.max-location-name-length)})
 (defn- with-stats [owner player current mastery location]
   (let [cross? (not= (:world-id current) (:world-id location))
         distance (distance current location)
         cp (cp-cost mastery distance cross?)
         enough-exp? (or (not cross?)
-                        (> mastery (td :targeting.cross-dimension-exp-threshold)))
+                        (> mastery (:cross-dimension-exp-threshold
+                                    (materialized-tunables mastery))))
         state (skill-effects/get-player-state (str owner))
         creative? (boolean (and player (entity/player-creative? player)))
         enough-resource? (boolean (and state
                                        (resource/can-perform?
                                         (:resource-data state)
-                                        (td :cost.perform.overload)
+                                        (:overload (materialized-tunables mastery))
                                         cp creative?)))]
     (assoc location
            :distance distance
@@ -81,13 +98,13 @@
      (let [mastery (exp owner)
            current (position owner)
            saved (locations owner)]
-       {:success? true :exp mastery :limits (limits) :current-pos current
+       {:success? true :exp mastery :limits (limits mastery) :current-pos current
         :locations (if current
                      (mapv #(with-stats owner player current mastery %) saved)
                      saved)})
      (catch Throwable throwable
        (log/warn "Location Teleport snapshot failed:" (ex-message throwable))
-       {:success? false :error :query-failed :limits (limits) :locations []}))))
+       {:success? false :error :query-failed :limits (limits 0.0) :locations []}))))
 
 (defn save-current-location! [owner value]
   (let [name* (norm-name value)

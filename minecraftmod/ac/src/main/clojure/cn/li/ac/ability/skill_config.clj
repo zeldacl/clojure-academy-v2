@@ -603,7 +603,8 @@
     :cost-up-cp :cost.up.cp
     :cost-up-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
-    :progression-exp-throw :progression.exp-throw}})
+    :progression-exp-throw :progression.exp-throw
+    :throw-damage :combat.throw-damage}})
 
 (defn- read-tunable-materialization
   "The config-driven piece of a :tunables declaration -- a constant value for

@@ -17,7 +17,8 @@
   :cost-up-cp {:curve :mastery-lerp}
   :cost-up-overload {:curve :mastery-lerp}
   :cooldown-ticks {:curve :mastery-lerp}
-  :progression-exp-throw {:curve :const}}
+  :progression-exp-throw {:curve :const}
+  :throw-damage {:curve :const}}
  :costs
  {:pulse {:resources {:cp {:tunable :cost-up-cp}
                       :overload {:tunable :cost-up-overload}}}}
@@ -343,4 +344,12 @@
                                             :outcome :too-far}}]}
                      :else {:component :release-body
                             :outcome :entity-missing}}]}
-  :abort {:component :release-body :outcome :aborted}}}
+  :abort {:component :release-body :outcome :aborted}
+  :events {:block-body-hit
+           {:component :flow/sequence
+            :steps [{:component :combat/damage
+                     :world-id {:from :world/id}
+                     :target {:ref [:context :target-id]}
+                     :amount {:tunable :throw-damage}
+                     :damage-type :skill}
+                    {:component :flow/finish :outcome :hit}]}}}}

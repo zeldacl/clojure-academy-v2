@@ -1118,6 +1118,23 @@
       (sink owner result)))
   result)
 
+(defn dispatch-and-publish-event!
+  "Dispatch a one-shot ability event (no active session required -- a fresh
+   activation context is generated the same way a :start intent would) and
+   publish its result through the installed sink.
+
+   For neutral platform callbacks that need to route a world event into an
+   ability's own EDN program instead of applying an effect directly -- e.g. a
+   scripted entity's collision hit reporting {:target-id ...} so the owning
+   ability's :events entry decides the damage, not the platform caller."
+  [owner ability-id event context]
+  (let [result (dispatch-intent! owner
+                {:op :event :action :event :ability-id ability-id
+                 :event event :context context})]
+    (when (= :accepted (:status result))
+      (publish-result! (finalize-result! owner result)))
+    result))
+
 (defn tick!
   "Advance sessions, execute their world effects, and publish each result."
   [tick]

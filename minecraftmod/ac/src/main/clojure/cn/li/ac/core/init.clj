@@ -19,12 +19,22 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn- apply-block-body-impact!
-  "Generic collision damage for configured scripted block bodies."
-  [world-id attacker-uuid target-uuid raw-damage]
-  (boolean
-    (damage-effects/apply-direct-damage!
-      world-id target-uuid (double raw-damage) :skill
-      {:attacker-uuid attacker-uuid})))
+  "Route a scripted block-body collision into its owning ability's own EDN
+   program instead of applying a flat platform-side damage number -- the
+   single combat execution path requirement means even a passive world
+   collision (not a direct player intent) must go through Combat Core's
+   dispatch, so the hit amount, reactions and VFX all come from mag-manip's
+   own :throw-damage tunable, not from this callback.
+
+   `raw-damage` (the entity's registered spec damage, still used only as the
+   Java-side \"is this body configured to deal damage at all\" gate before
+   this callback ever fires) is intentionally unused here."
+  [world-id attacker-uuid target-uuid _raw-damage]
+  (when (combat-catalog/available? :mag-manip)
+    (= :accepted
+       (:status (combat-runtime/dispatch-and-publish-event!
+                 attacker-uuid :mag-manip :block-body-hit
+                 {:world-id world-id :target-id target-uuid})))))
 
 (defn init
   "Core init hook invoked by per-version entry classes."

@@ -77,6 +77,7 @@
    {:skill-id :mag-manip :id :cost.up.overload :path "cost.up.overload" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [35.0 20.0] :comment "MagManip up-stage overload cost lerp endpoints."}
    {:skill-id :mag-manip :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [60.0 40.0] :comment "MagManip manual cooldown lerp endpoints."}
    {:skill-id :mag-manip :id :progression.exp-throw :path "progression.exp-throw" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "MagManip exp gained on successful throw."}
+   {:skill-id :mag-manip :id :combat.throw-damage :path "combat.throw-damage" :section-suffix "combat" :type :double :min 0.0 :default 10.0 :comment "MagManip thrown block direct-hit damage. Matches original's hardcoded, non-exp-scaled MagManipEntityBlock(player, 10) value."}
 
    {:skill-id :mag-movement :id :movement.acceleration :path "movement.acceleration" :section-suffix "movement" :type :double :min 0.0 :default 0.08 :comment "MagMovement smooth acceleration step."}
    {:skill-id :mag-movement :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 25.0 :comment "MagMovement target raycast range."}
