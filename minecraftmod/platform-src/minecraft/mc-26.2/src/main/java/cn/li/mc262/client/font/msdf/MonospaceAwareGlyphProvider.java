@@ -7,11 +7,12 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 /**
  * Wraps a vanilla {@link GlyphProvider} so that when monospace mode is active,
  * glyph advances are fixed to {@code monospaceAdvance} via {@link MSDFAwareGlyph}.
+ * The face/codePoint are also passed through so the wrapper can apply the
+ * 1.20.1 vertical placement convention per glyph.
  */
 public final class MonospaceAwareGlyphProvider implements GlyphProvider {
 
     private final GlyphProvider delegate;
-    @SuppressWarnings("unused")
     private final MsdfFontFace face;
 
     public MonospaceAwareGlyphProvider(final GlyphProvider delegate,
@@ -28,7 +29,9 @@ public final class MonospaceAwareGlyphProvider implements GlyphProvider {
         }
         return new MSDFAwareGlyph(original,
                 MsdfFontManager.isMonospace(),
-                MsdfFontManager.monospaceAdvance());
+                MsdfFontManager.monospaceAdvance(),
+                codePoint,
+                face);
     }
 
     @Override

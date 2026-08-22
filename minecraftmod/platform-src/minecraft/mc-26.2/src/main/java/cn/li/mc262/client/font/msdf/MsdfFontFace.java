@@ -136,6 +136,42 @@ public final class MsdfFontFace implements AutoCloseable {
         return ascent * scale;
     }
 
+    /**
+     * Baseline-to-em-bottom distance in pixels (the descender share of the
+     * 32px em). 1.20.1's quad math anchored glyphs with
+     * pixelHeight - descenderPixels; see MSDFAwareGlyph's vertical formula.
+     */
+    public float descenderPixels() {
+        final int hheaAsc;
+        final int hheaDesc;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer ascBuf = stack.mallocInt(1);
+            final IntBuffer descBuf = stack.mallocInt(1);
+            STBTruetype.stbtt_GetFontVMetrics(fontInfo, ascBuf, descBuf, null);
+            hheaAsc = ascBuf.get(0);
+            hheaDesc = descBuf.get(0);
+        }
+        final float vMetric = (float) (hheaAsc - hheaDesc);
+        return vMetric > 0.0f ? -hheaDesc * scale : 0.0f;
+    }
+
+    /**
+     * STB bitmap-top y-coordinate relative to the baseline for a code point,
+     * in scaled pixels (negative above the baseline — the signed value
+     * 1.20.1's provider used to position glyphs, see MSDFAwareGlyph).
+     */
+    public float stbGlyphTop(final int codePoint) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer x0 = stack.mallocInt(1);
+            final IntBuffer y0 = stack.mallocInt(1);
+            final IntBuffer x1 = stack.mallocInt(1);
+            final IntBuffer y1 = stack.mallocInt(1);
+            STBTruetype.stbtt_GetCodepointBitmapBox(
+                    fontInfo, codePoint, scale, scale, x0, y0, x1, y1);
+            return y0.get(0);
+        }
+    }
+
     public GlyphProvider glyphProvider() {
         return glyphProvider;
     }
