@@ -44,4 +44,4 @@
                    EventPriority/NORMAL false RenderHandEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-render-hand evt)))))
-  (log/info "Hand effect renderer initialized"))
+  (log/debug "Hand effect renderer initialized"))

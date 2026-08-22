@@ -187,4 +187,4 @@
   (net-server/register-handler (msg :init) handle-init-network)
   (net-server/register-handler (msg :change-ssid) handle-change-ssid)
   (net-server/register-handler (msg :change-password) handle-change-password)
-  (log/info "Matrix network handlers registered"))
+  (log/debug "Matrix network handlers registered"))

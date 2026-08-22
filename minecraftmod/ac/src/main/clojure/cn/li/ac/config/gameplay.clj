@@ -133,7 +133,7 @@
   []
   (config-reg/register-config-descriptors! config-common/gameplay-domain descriptors)
   (config-reg/ensure-default-values! config-common/gameplay-domain default-values)
-  (log/info "Initialized gameplay config descriptors" {:domain config-common/gameplay-domain})
+  (log/debug "Initialized gameplay config descriptors" {:domain config-common/gameplay-domain})
   nil)
 
 (defn use-mouse-wheel-enabled? []
@@ -169,7 +169,7 @@
       (swap! errors conj "font must be a string"))
     (if (empty? @errors)
       (do
-        (log/info "Gameplay configuration validation passed")
+        (log/debug "Gameplay configuration validation passed")
         nil)
       (do
         (log/error "Gameplay configuration validation failed:" @errors)

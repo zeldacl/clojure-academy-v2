@@ -212,7 +212,7 @@
     (init-runtime-network! {:send-to-server-fn send-to-server!
                             :send-to-client-fn send-to-client!
                             :send-to-except-local-fn send-to-except-local-fn}))
-  (log/info label "runtime network initialized"))
+  (log/debug label "runtime network initialized"))
 
 (defn init-runtime-network!
   [{:keys [send-to-server-fn send-to-client-fn send-to-except-local-fn]}]

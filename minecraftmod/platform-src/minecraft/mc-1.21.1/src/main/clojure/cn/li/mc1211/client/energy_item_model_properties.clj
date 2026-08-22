@@ -30,7 +30,7 @@
       (when (get-in (registry-metadata/get-item-spec item-id) [:properties :item-model-energy-levels])
         (when-let [item (resolve-item item-id)]
           (ItemProperties/register item pred-rl EnergyItemPropertyFunction/INSTANCE)
-          (log/info "Item model energy predicate registered" {:item-id item-id})))))
+          (log/debug "Item model energy predicate registered" {:item-id item-id})))))
   ;; Matter-unit variant + frame predicates (:item-model-damage-frame,
   ;; upstream ItemMatterUnit: per-damage models + `frame` override for the
   ;; flowing-liquid animation).
@@ -41,4 +41,4 @@
         (when-let [item (resolve-item item-id)]
           (ItemProperties/register item kind-rl MatterKindItemPropertyFunction/INSTANCE)
           (ItemProperties/register item frame-rl FrameItemPropertyFunction/INSTANCE)
-          (log/info "Item model matter_kind + frame predicates registered" {:item-id item-id}))))))
+          (log/debug "Item model matter_kind + frame predicates registered" {:item-id item-id}))))))

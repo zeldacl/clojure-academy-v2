@@ -115,4 +115,4 @@
 
 (defn init!
   []
-  (log/info "Shared sound effect bridge initialized"))
+  (log/debug "Shared sound effect bridge initialized"))

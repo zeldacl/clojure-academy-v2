@@ -1149,7 +1149,7 @@
       (fn tick-cleanup-overlay []
         (toast/cleanup-expired!)
         (tutorial-notification/cleanup-expired!)))
-    (log/info "Ability client push handlers registered")))
+    (log/debug "Ability client push handlers registered")))
 
 (defn runtime-client-ui-hooks
   []

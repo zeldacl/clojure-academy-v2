@@ -143,7 +143,7 @@
                          (accept [_ evt]
                            (on-mouse-scroll evt))))
 
-         (log/info "Forge keyboard event handler installed")))
+         (log/debug "Forge keyboard event handler installed")))
 
     (catch Exception e
       (log/stacktrace "Failed to install Forge keyboard event handler" e))))

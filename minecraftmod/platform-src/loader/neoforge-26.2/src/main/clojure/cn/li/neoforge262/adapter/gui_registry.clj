@@ -140,7 +140,7 @@
   Must be called before menu-register is registered with the mod event bus
   (i.e. during NeoForge bootstrap, not during FMLCommonSetupEvent)."
   []
-  (log/info "Queueing GUI menu types into DeferredRegister")
+  (log/debug "Queueing GUI menu types into DeferredRegister")
   (install-registry-contract!)
   (doseq [gui-id (gui/get-all-gui-ids)]
     (let [registry-name (gui/get-registry-name gui-id)
@@ -208,7 +208,7 @@
 
 (defn register-gui-handler! []
   (install-registry-contract!)
-  (log/info "NeoForge 26.2 GUI handler ready (menu types registered via DeferredRegister)"))
+  (log/debug "NeoForge 26.2 GUI handler ready (menu types registered via DeferredRegister)"))
 
 (gui-open-port/install-open-gui!
   (fn [player gui-id tile-entity]

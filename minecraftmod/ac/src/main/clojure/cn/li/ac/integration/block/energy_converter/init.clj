@@ -78,7 +78,7 @@
 	(install/framework-once! ::converters-loaded?
   (fn []
     (ec-bridge/install-energy-integration-hooks!)
-		(log/info "Energy converters loaded"
+		(log/debug "Energy converters loaded"
 							{:count (count ec-config/supported-blocks)}))))
 
 (defn init-converters!
@@ -102,5 +102,5 @@
 			(tdsl/register-tile-capability-keys! tile-id :wireless-receiver))
 		(doseq [tile-id ["rf-output" "eu-output"]]
 			(tdsl/register-tile-capability-keys! tile-id :wireless-generator))
-		(log/info "Energy converters initialized"
+		(log/debug "Energy converters initialized"
 							{:count (count ec-config/supported-blocks)}))))

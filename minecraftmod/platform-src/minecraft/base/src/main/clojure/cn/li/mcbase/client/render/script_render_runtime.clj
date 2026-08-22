@@ -147,7 +147,7 @@
       {})
     (let [compiled (compiler/compile-profiles (registry/snapshot))]
       (update-script-render-runtime! assoc :draw-plan-cache compiled)
-      (log/info "ScriptRender cache rebuilt, size=" (count compiled))
+      (log/debug "ScriptRender cache rebuilt, size=" (count compiled))
       compiled)))
 
 (defn get-draw-plan

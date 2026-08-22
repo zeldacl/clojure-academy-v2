@@ -232,7 +232,7 @@
      (fn [{:keys [uuid]}]
        (when uuid
          (ctx-mgr/abort-player-contexts! uuid))))
-    (log/info "Ability lifecycle event subscriptions registered"))))
+    (log/debug "Ability lifecycle event subscriptions registered"))))
 
 (defn runtime-server-hooks
   []

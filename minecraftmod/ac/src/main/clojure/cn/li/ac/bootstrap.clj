@@ -32,7 +32,7 @@
      (registers handlers into mcmod.protocol.keyboard-input)"
   []
   (try
-    (log/info "Initializing AC keybindings...")
+    (log/debug "Initializing AC keybindings...")
 
     ;; 1. Register keybinding configs into neutral registry.
     ;;    Platform key-mapping adapters read from this, not from AC directly.
@@ -43,7 +43,7 @@
     ;; 2. Bootstrap keybindings (registers handlers to mcmod.protocol.keyboard-input)
     (input-ids/bootstrap!)
 
-    (log/info "AC keybindings initialization complete")
+    (log/debug "AC keybindings initialization complete")
     nil
 
     (catch Exception e
@@ -63,5 +63,5 @@
   (install/framework-once! ::register-post-spi-init
     (fn []
       (lifecycle/register-post-spi-client-init! initialize-keybindings!)
-      (log/info "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)")))
+      (log/debug "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)")))
   nil)

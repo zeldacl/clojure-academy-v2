@@ -17,4 +17,4 @@
             :properties {:tooltip ["Wind generator rotor"
                     "Install into Wind Generator Main"]
                 :model-texture "windgen_fan"}}))
-          (log/info "Wind generator fan item initialized"))))
+          (log/debug "Wind generator fan item initialized"))))

@@ -94,6 +94,6 @@
     (cap-registry/declare-capability!
       :fluid-handler ResourceHandler
       (fn [be _side] (create-phase-gen-fluid-handler be))))
-  (log/info "Registered NeoForge Capabilities.Fluid.BLOCK for AC machines"))
+  (log/debug "Registered NeoForge Capabilities.Fluid.BLOCK for AC machines"))
 
 (defn init! [& _] (register!))

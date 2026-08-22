@@ -59,6 +59,6 @@
     (gui-orchestrator/verify-checks! "Verifying Fabric GUI system initialization..." checks)))
 
 (defn cleanup! []
-  (log/info "Cleaning up Fabric GUI system")
+  (log/debug "Cleaning up Fabric GUI system")
   (registry-api/invalidate-menu-registry! (target/current-target-key!))
-  (log/info "Fabric GUI system cleanup complete"))
+  (log/debug "Fabric GUI system cleanup complete"))

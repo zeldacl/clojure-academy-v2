@@ -93,4 +93,4 @@
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "machine_frame")}
                      :flat-item-icon? true}}))
-    (log/info "Initialized ore blocks"))))
+    (log/debug "Initialized ore blocks"))))

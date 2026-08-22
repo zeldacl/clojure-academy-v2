@@ -255,4 +255,4 @@
   (when (ic2-available?)
     (log/info "Initializing IC2 energy integration...")
     (register-ic2-capability!)
-    (log/info "IC2 energy integration initialized")))
+    (log/debug "IC2 energy integration initialized")))

@@ -29,4 +29,4 @@
 	(invoke-entries! init-entries)
 	(invoke-entries! post-init-entries)
 	(when label
-		(log/info "Loaded block category" {:label label})))
+		(log/debug "Loaded block category" {:label label})))

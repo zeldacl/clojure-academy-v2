@@ -79,4 +79,4 @@
 ;; ============================================================================
 
 (defn init-energy-items! []
-  (log/info "Energy item adapters initialized: energy-unit, developer-portable"))
+  (log/debug "Energy item adapters initialized: energy-unit, developer-portable"))

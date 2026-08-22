@@ -156,4 +156,4 @@
 (defn init!
 	"Initialize IMC payload bridge. Dispatch is bound through the framework event-bus adapter."
 	[]
-	(log/info "Runtime IMC dispatcher ready (direct payload dispatch mode)"))
+	(log/debug "Runtime IMC dispatcher ready (direct payload dispatch mode)"))

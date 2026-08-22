@@ -88,7 +88,7 @@
     (Registry/register BuiltInRegistries/MENU resource-id menu-type)))
 
 (defn register-screen-handler-types! []
-  (log/info "Registering GUI screen handler types for Fabric 1.21.1")
+  (log/debug "Registering GUI screen handler types for Fabric 1.21.1")
   (doseq [gui-id (gui/get-all-gui-ids)]
     (let [handler-type (create-extended-screen-handler-type gui-id)
           registry-name (gui/get-registry-name gui-id)]
@@ -117,12 +117,12 @@
      :invalidate-menu-registry! clear-gui-handler-types!}))
 
 (defn register-gui-handler! []
-  (log/info "Registering GUI handler for Fabric 1.21.1")
+  (log/debug "Registering GUI handler for Fabric 1.21.1")
   (install-registry-contract!)
   (register-screen-handler-types!)
-  (log/info "Fabric 1.21.1 GUI handler registered"))
+  (log/debug "Fabric 1.21.1 GUI handler registered"))
 
 (defn init! []
-  (log/info "Initializing Fabric 1.21.1 GUI system")
+  (log/debug "Initializing Fabric 1.21.1 GUI system")
   (register-gui-handler!)
-  (log/info "Fabric 1.21.1 GUI system initialized"))
+  (log/debug "Fabric 1.21.1 GUI system initialized"))

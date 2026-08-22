@@ -364,5 +364,5 @@
         ;; widget factory does (a payload :player would be nil).
         (fn [payload]
           (open-screen! (bridge/get-client-player) (or payload {}))))
-      (log/info "Location Teleport reactive screen registered")))
+      (log/debug "Location Teleport reactive screen registered")))
   nil)

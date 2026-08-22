@@ -30,4 +30,4 @@
      :reactive-overlay-build reactive-overlay/build-overlay-runtime
      :reactive-overlay-update reactive-overlay/update-overlay-signals!
      :reactive-overlay-mode-switch! reactive-overlay/on-mode-switch-key-state!})
-  (log/info "Reactive bridges installed (screen + overlay)"))
+  (log/debug "Reactive bridges installed (screen + overlay)"))

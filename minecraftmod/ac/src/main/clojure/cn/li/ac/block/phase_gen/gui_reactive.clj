@@ -63,4 +63,4 @@
     ;; SlotMatterUnit) — without it any item could enter the liquid input.
     (slot-schema/register-slot-schema! {:schema-id slot-schema-id :slots [{:id :liquid-in :type :input :x 45 :y 12 :can-place phase-liquid-unit?} {:id :liquid-out :type :output :x 112 :y 51} {:id :energy :type :energy :x 42 :y 80}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :phase-gen) (merge (gui-manifest/gui-registration :phase-gen) {:container-predicate container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil) :quick-move-fn quick-move-stack}))
-    (log/info "Phase Generator GUI initialized (reactive)"))))
+    (log/debug "Phase Generator GUI initialized (reactive)"))))

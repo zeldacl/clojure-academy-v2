@@ -14,4 +14,4 @@
 		(pdsl/defparticle {:id "silbarn_frag"})
 		(pdsl/defparticle {:id "md_particle"})
 		(pdsl/defparticle {:id "md_particle_luck"})
-		(log/info "Particle content initialized"))))
+		(log/debug "Particle content initialized"))))

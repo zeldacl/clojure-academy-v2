@@ -58,7 +58,7 @@
 (defn register-renderers
   "Register platform-agnostic renderers for Fabric."
   []
-  (log/info "Registering block renderers for Fabric 1.21.1...")
+  (log/debug "Registering block renderers for Fabric 1.21.1...")
   (try
     (render/register-texture-binder! bind-texture-fabric!)
     (render-init/register-default-renderer-init-fns!)
@@ -68,7 +68,7 @@
 
 (defn- init-render-bindings!
   []
-  (log/info "Binding Fabric client-side rendering implementations...")
+  (log/debug "Binding Fabric client-side rendering implementations...")
 
   (pose/install-pose-ops!
    {:y-rotation pose-impl/rotate-y
@@ -92,7 +92,7 @@
     :triangle-vertex-order (fn [] [0 1 2 2])}
    "fabric-client")
 
-  (log/info "Fabric client-side rendering bindings complete"))
+  (log/debug "Fabric client-side rendering bindings complete"))
 
 (defn register-scripted-block-entity-renderers!
   "Attach a single universal BlockEntity renderer to all scripted tile types."
@@ -104,7 +104,7 @@
         (reify ClientHelper$RendererFactory
           (create [_]
             (ScriptedBlockEntityBer.))))
-      (log/info (str "Fabric BER registered for tile-id " tile-id)))))
+      (log/debug (str "Fabric BER registered for tile-id " tile-id)))))
 
 (defn- open-screen-dispatcher
   "Dispatch open-screen to a registered reactive widget factory."
@@ -290,7 +290,7 @@
 (defn init-client
   "Initialize client-side systems for Fabric 1.21.1."
   []
-  (log/info "Initializing Fabric 1.21.1 client-side systems")
+  (log/debug "Initializing Fabric 1.21.1 client-side systems")
 
   (mc-session/init-default-owner-resolver!)
   (install-client-owner-hooks!)

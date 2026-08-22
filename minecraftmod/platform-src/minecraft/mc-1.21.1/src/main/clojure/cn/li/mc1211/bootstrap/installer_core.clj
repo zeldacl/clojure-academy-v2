@@ -87,7 +87,7 @@
                                     (catch Throwable t
                                       (log/warn "Failed to send player feedback" player-uuid (ex-message t))
                                       false)))})
-      (log/info "mc1211 player feedback installed"))))
+      (log/debug "mc1211 player feedback installed"))))
 
 (defn install-block-state-protocol!
   [_adapter]
@@ -116,7 +116,7 @@
                                                                          v))
                                                                      :else value)))}]
         (world/install-block-state-ops! bs-ops "mc1211 block-state"))
-      (log/info "mc1211 block-state ops initialized"))))
+      (log/debug "mc1211 block-state ops initialized"))))
 
 (defn- install-structured-data! []
   (install/framework-once! ::structured-data-installed
@@ -239,7 +239,7 @@
                                              stack)))
                                        (catch Throwable _ nil)))}
        "mc1211")
-      (log/info "mc1211 shared item ops initialized"))))
+      (log/debug "mc1211 shared item ops initialized"))))
 
 (defn- install-world! [adapter]
   (install/framework-once! ::world-installed
@@ -341,7 +341,7 @@
                          :inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))
                          :menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))}]
         (entity/install-entity-ops! player-impl "mc1211")
-        (log/info "mc1211 shared entity protocols initialized")))))
+        (log/debug "mc1211 shared entity protocols initialized")))))
 
 (defn- install-resource-location-factory! []
   (install/framework-once! ::resource-installed
@@ -351,26 +351,26 @@
                                              (if namespace
                                                (ResourceLocations/of (str namespace) (str path))
                                                (ResourceLocations/parse (str path))))})
-      (log/info "mc1211 resource factory installed"))))
+      (log/debug "mc1211 resource factory installed"))))
 
 (defn install-resource-factory!
   []
   (install-resource-location-factory!)
-  (log/info "mc1211 shared resource factory initialized"))
+  (log/debug "mc1211 shared resource factory initialized"))
 
 (defn install-be-fns!
   [fns-map]
   (install/framework-once! ::be-fns-installed
     (fn []
       (be/install-be-ops! fns-map "mc1211")
-      (log/info "mc1211 shared block-entity function hooks initialized"))))
+      (log/debug "mc1211 shared block-entity function hooks initialized"))))
 
 (defn install-world-fns!
   [fns-map]
   (install/framework-once! ::world-fns-installed
     (fn []
       (world/install-world-ops! fns-map "mc1211")
-      (log/info "mc1211 shared world function hooks initialized"))))
+      (log/debug "mc1211 shared world function hooks initialized"))))
 
 (defn install-platform-core!
   [adapter]
@@ -381,7 +381,7 @@
   (install-entity-protocols! adapter)
   (install-player-feedback!)
   (install-resource-location-factory!)
-  (log/info "mc1211 shared installer initialized"))
+  (log/debug "mc1211 shared installer initialized"))
 
 (defn install-platform-services!
   [adapter world-fns-map be-fns-map]
@@ -396,4 +396,4 @@
     (install-world-fns! world-fns-map))
   (when be-fns-map
     (install-be-fns! be-fns-map))
-  (log/info "mc1211 platform services initialized"))
+  (log/debug "mc1211 platform services initialized"))

@@ -136,7 +136,7 @@
   Must be called before menu-register is registered with the mod event bus
   (i.e. during Forge bootstrap, not during FMLCommonSetupEvent)."
   []
-  (log/info "Queueing GUI menu types into DeferredRegister")
+  (log/debug "Queueing GUI menu types into DeferredRegister")
   (install-registry-contract!)
   (doseq [gui-id (gui/get-all-gui-ids)]
     (let [registry-name (gui/get-registry-name gui-id)
@@ -205,4 +205,4 @@
 
 (defn register-gui-handler! []
   (install-registry-contract!)
-  (log/info "Forge 1.20.1 GUI handler ready (menu types registered via DeferredRegister)"))
+  (log/debug "Forge 1.20.1 GUI handler ready (menu types registered via DeferredRegister)"))

@@ -46,4 +46,4 @@
                 (reify WorldRenderEvents$AfterTranslucent
                   (afterTranslucent [_ context]
                     (on-after-translucent-render context)))))
-  (log/info "Fabric level effect renderer initialized"))
+  (log/debug "Fabric level effect renderer initialized"))

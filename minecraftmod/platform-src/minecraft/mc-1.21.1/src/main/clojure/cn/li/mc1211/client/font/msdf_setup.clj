@@ -24,7 +24,7 @@
 (defn on-shader-ready!
   "Called from platform shader registration after academy:msdf_text is loaded."
   []
-  (log/info "MSDF text shader registered")
+  (log/debug "MSDF text shader registered")
   (ensure-ready!))
 
 (defn init!

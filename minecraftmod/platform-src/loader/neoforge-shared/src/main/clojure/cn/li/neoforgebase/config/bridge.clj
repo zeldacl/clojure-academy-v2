@@ -115,7 +115,7 @@
                          {}
                          entries)]
     (config-reg/set-config-values! domain values)
-    (log/info "Loaded NeoForge config domain" domain "from" file-name)))
+    (log/debug "Loaded NeoForge config domain" domain "from" file-name)))
 
 (defn- handle-config-event!
   [^ModConfigEvent event]
@@ -140,7 +140,7 @@
                (throw (ex-info "ModContainer required to register NeoForge config"
                                {:file-name file-name :domain domain})))
              (assoc-registered-config! file-name domain-info)
-             (log/info "Registered NeoForge config file" file-name "for domain" domain)))))
+             (log/debug "Registered NeoForge config file" file-name "for domain" domain)))))
      (ConfigEventBridge/addConfigListeners mod-bus
                                            (reify Consumer
                                              (accept [_ event]

@@ -222,5 +222,5 @@
   (install/framework-once! ::install-widget-factory
     (fn []
       (widget-registry/register-widget-factory! :ac/preset-editor create-preset-editor-widget)
-      (log/info "Preset-editor widget factory registered")))
+      (log/debug "Preset-editor widget factory registered")))
   nil)

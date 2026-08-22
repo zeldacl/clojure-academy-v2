@@ -18,7 +18,7 @@
    :post-init-entries [(fn []
                          (log/debug "Integration block definitions initialized"))
                        (fn []
-                         (log/info "Loaded integration blocks content (4 converters)"))]})
+                         (log/debug "Loaded integration blocks content (4 converters)"))]})
 
 (defn init-integration-blocks!
   []

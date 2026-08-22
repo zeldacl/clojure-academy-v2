@@ -42,7 +42,7 @@
     (keybinds/freeze-keybind-registries!)
     (level-effects/freeze-level-effect-registry!)
     (hand-effects/freeze-hand-effect-registry!)
-    (log/info "Ability client FX content initialized"))))
+    (log/debug "Ability client FX content initialized"))))
 
 (defn reset-client-fx-for-test!
   "Test-only: clear the client-FX install guard so init-client-fx! can rerun

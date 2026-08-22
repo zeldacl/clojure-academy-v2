@@ -103,7 +103,7 @@
     (let [path (or override-path (when logo-path (modid/namespaced-path logo-path)))]
       (when path (ui/set-node-prop! rt logo :src path)))
     (when logo-breathe?
-      (log/info "[wireless-reactive] breathe effect not yet ported; static logo only"))))
+      (log/debug "[wireless-reactive] breathe effect not yet ported; static logo only"))))
 
 (defn set-connected-row-logo!
   [^UiRt rt connected-row-logo-path]

@@ -26,7 +26,7 @@
   []
   (config-reg/register-config-descriptors! config-common/worldgen-domain descriptors)
   (config-reg/ensure-default-values! config-common/worldgen-domain default-values)
-  (log/info "Initialized worldgen config descriptors" {:domain config-common/worldgen-domain})
+  (log/debug "Initialized worldgen config descriptors" {:domain config-common/worldgen-domain})
   nil)
 
 (defn- value [k]

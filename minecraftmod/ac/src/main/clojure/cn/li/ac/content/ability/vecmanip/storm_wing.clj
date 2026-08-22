@@ -266,7 +266,7 @@
     ;; movement-key hints stop showing) — plain terminate-context! with nil
     ;; leaves the client-side context registered forever.
     (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
-  (log/info "StormWing: Terminated" reason)
+  (log/debug "StormWing: Terminated" reason)
   nil)
 
 (defn- active-storm-wing-ctx-id

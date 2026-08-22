@@ -214,4 +214,4 @@
   (net-server/register-handler (msg :connect) handle-connect)
   (net-server/register-handler (msg :disconnect) handle-disconnect)
   (net-server/register-handler (msg :query-link) handle-query-link)
-  (log/info "Node GUI network handlers registered"))
+  (log/debug "Node GUI network handlers registered"))

@@ -206,7 +206,7 @@
     (when (seq kms)
       (set! (.-keyMappings options)
             (into-array KeyMapping (concat (.-keyMappings options) kms))))
-    (log/info "Registered AC keybindings into Options > Controls:" (count kms))))
+    (log/debug "Registered AC keybindings into Options > Controls:" (count kms))))
 
 (defn register-all-keybindings-from-ac!
   "Bootstrap function: Register all :alternative scheme keybindings from content modules.
@@ -236,7 +236,7 @@
         translation-key
         "keybind.category.content"))
 
-    (log/info "Registered all AC alternative keybindings")
+    (log/debug "Registered all AC alternative keybindings")
     nil
 
     (catch Exception e

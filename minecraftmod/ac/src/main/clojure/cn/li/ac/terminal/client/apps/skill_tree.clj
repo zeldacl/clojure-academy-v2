@@ -8,7 +8,7 @@
 (defn open!
   ([player] (open! player nil))
   ([player learn-context]
-   (log/info "Opening skill tree from terminal for player:" (entity/player-get-name player))
+   (log/debug "Opening skill tree from terminal for player:" (entity/player-get-name player))
    (client-bridge/open-screen! :ac/skill-tree
                                {:player-uuid (uuid/player-uuid player)
                                 :learn-context learn-context})))

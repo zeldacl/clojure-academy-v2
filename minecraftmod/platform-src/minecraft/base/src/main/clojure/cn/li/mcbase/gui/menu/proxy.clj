@@ -95,7 +95,7 @@
   (when call-super-removed?
     (let [^CMenuBridge s this]
       (.callSuperRemoved s player)))
-  (log/info log-message (str player)))
+  (log/debug log-message (str player)))
 
 (defn- broadcast-menu-changes!
   [this clj-container]

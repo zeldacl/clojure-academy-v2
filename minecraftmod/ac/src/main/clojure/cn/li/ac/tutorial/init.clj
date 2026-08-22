@@ -12,8 +12,8 @@
    - Register network handlers
    - Build global condition index for condition-based unlock"
   []
-  (log/info "Initializing tutorial system...")
+  (log/debug "Initializing tutorial system...")
   (hooks/register-network-handler! network/register-handlers!)
   ;; Build condition index for Phase 5 condition-based unlock
   (conds/ensure-condition-index! (tut-registry/all-tutorials))
-  (log/info "Tutorial system initialized successfully"))
+  (log/debug "Tutorial system initialized successfully"))

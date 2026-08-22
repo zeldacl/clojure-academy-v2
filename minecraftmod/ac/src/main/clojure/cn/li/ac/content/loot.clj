@@ -18,4 +18,4 @@
                    :quality 0
                    :min-count 1.0
                    :max-count 1.0})
-    (log/info "Loot content initialized"))))
+    (log/debug "Loot content initialized"))))

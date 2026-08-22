@@ -122,5 +122,5 @@
     (install/process-once! ::handlers-installed
       (fn []
         (invoke-network-static "init" @request-handler-ref @response-handler-ref)
-        (log/info "NeoForge 26.2 GUI network system initialized"))))
+        (log/debug "NeoForge 26.2 GUI network system initialized"))))
   nil)

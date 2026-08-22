@@ -28,6 +28,6 @@
 	  (try
 	    (register-ac-fonts!)
 	    (reset! fonts-registered? true)
-	    (log/info "AC MSDF font keywords registered (:ac-normal, :ac-bold, :ac-italic)")
+	    (log/debug "AC MSDF font keywords registered (:ac-normal, :ac-bold, :ac-italic)")
 	    (catch Exception e
 	      (log/stacktrace "Failed to initialize AC fonts" e)))))

@@ -33,4 +33,4 @@
   ;; Media player state is player-scoped, not an open container GUI session.
   (net-server/register-handler media-get-state-msg handle-get-state
                                {:owner-spec :server :payload-routing :none})
-  (log/info "Media player network handlers registered"))
+  (log/debug "Media player network handlers registered"))

@@ -77,4 +77,4 @@
                    EventPriority/NORMAL false SubmitCustomGeometryEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-submit-custom-geometry evt)))))
-  (log/info "Level effect renderer initialized"))
+  (log/debug "Level effect renderer initialized"))

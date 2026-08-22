@@ -204,4 +204,4 @@
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!
          :quick-move-fn quick-move-stack}))
-    (log/info "Wireless Matrix GUI initialized (reactive render + delegated container logic)"))))
+    (log/debug "Wireless Matrix GUI initialized (reactive render + delegated container logic)"))))

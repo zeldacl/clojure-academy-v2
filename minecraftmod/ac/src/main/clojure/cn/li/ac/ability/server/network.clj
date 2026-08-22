@@ -129,6 +129,6 @@
   (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      input-handler/handle-key-tick-skill ability-handler-contract)
   (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        input-handler/handle-key-up-skill ability-handler-contract)
   (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     input-handler/handle-key-abort-skill ability-handler-contract)
-  (log/info "Ability network handlers registered"))
+  (log/debug "Ability network handlers registered"))
 
 

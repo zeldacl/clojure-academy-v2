@@ -100,5 +100,5 @@
       (when after (after))
       (register-machine-hooks! {:network-handler network-handler
                                 :client-renderer client-renderer})
-      (log/info (str "Initialized " (or log-label "machine")))))
+      (log/debug (str "Initialized " (or log-label "machine")))))
   nil)

@@ -95,5 +95,5 @@
          (fw/fw-atom)
          :player-persistent-data
          {:get! (resolve-binding! 'player-persistent-data)})
-       (log/info "fabric platform initialized for selected target")))
+       (log/debug "fabric platform initialized for selected target")))
   nil)

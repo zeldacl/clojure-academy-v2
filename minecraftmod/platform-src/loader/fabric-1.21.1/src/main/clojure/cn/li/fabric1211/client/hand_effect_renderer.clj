@@ -23,4 +23,4 @@
                 (reify ClientTickEvents$EndTick
                   (onEndTick [_ _client]
                     (on-client-tick)))))
-  (log/info "Fabric hand effect renderer initialized"))
+  (log/debug "Fabric hand effect renderer initialized"))

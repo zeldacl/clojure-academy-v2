@@ -31,7 +31,7 @@
   []
   (install/process-once! ::events-registered
     #(do
-          (log/info "Registering Fabric event listeners...")
+          (log/debug "Registering Fabric event listeners...")
       (lifecycle-events/install-runtime-callbacks!)
 
       (.register UseBlockCallback/EVENT
@@ -92,5 +92,5 @@
           (lifecycle-events/install-server-stop-cleanup!)
           (world-events/register-on-world-state-changed!)
 
-          (log/info "Fabric event listeners registered")))
+          (log/debug "Fabric event listeners registered")))
   nil)

@@ -137,7 +137,7 @@
   []
   (net-server/register-handler set-tab-msg-id handle-set-tab
                                {:owner-spec :server :payload-routing :sync-routing})
-  (log/info "Registered set-tab network handler"))
+  (log/debug "Registered set-tab network handler"))
 
 (defn send-set-tab!
   "Client: send tab index and required container-id to server."

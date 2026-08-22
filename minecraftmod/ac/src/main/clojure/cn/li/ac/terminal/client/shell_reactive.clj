@@ -504,4 +504,4 @@
   (widget-registry/register-widget-factory!
     :ac/terminal-gui
     (fn [{:keys [player]}] (create-terminal-gui-reactive player)))
-  (log/info "AC terminal UI hooks installed (reactive)"))
+  (log/debug "AC terminal UI hooks installed (reactive)"))

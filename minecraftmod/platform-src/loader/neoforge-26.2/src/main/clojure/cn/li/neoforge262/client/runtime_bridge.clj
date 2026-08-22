@@ -120,4 +120,4 @@
                    EventPriority/NORMAL false ClientTickEvent$Post
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-client-tick evt)))))
-  (log/info "Client runtime bridge initialized"))
+  (log/debug "Client runtime bridge initialized"))

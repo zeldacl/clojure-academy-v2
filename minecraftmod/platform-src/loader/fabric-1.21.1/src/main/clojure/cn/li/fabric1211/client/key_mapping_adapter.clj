@@ -209,7 +209,7 @@
         (config-reg/get-config-value gameplay-domain config-key)
         translation-key
         "keybind.category.content"))
-    (log/info "Registered all AC alternative keybindings")
+    (log/debug "Registered all AC alternative keybindings")
     nil
 
     (catch Exception e

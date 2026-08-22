@@ -25,7 +25,7 @@
   [app-id player]
   (if-let [launcher (get launchers app-id)]
     (do
-      (log/info "Launching terminal app:" app-id)
+      (log/debug "Launching terminal app:" app-id)
       (launcher player)
       true)
     (do

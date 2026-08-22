@@ -80,9 +80,9 @@
     create-integer-property
     create-boolean-property
     create-horizontal-facing-property)
-   (log/info "Shared BlockState properties initialized"))
+   (log/debug "Shared BlockState properties initialized"))
   ([platform-label property-registry resolve-block-properties-fn create-integer-fn create-boolean-fn create-facing-fn]
-   (log/info (str "Initializing BlockState properties (" platform-label ")..."))
+   (log/debug (str "Initializing BlockState properties (" platform-label ")..."))
    (doseq [block-id (bquery/list-all-blocks)]
      (when-let [props (resolve-block-properties-fn block-id)]
        (register-block-properties!

@@ -25,5 +25,5 @@
     (command-actions/install-command-actions!)
 		(command-hooks/register-command-hooks!
 			{:init-commands! init-commands-and-publish-metadata!})
-		(log/info "AC command hooks installed")))
+		(log/debug "AC command hooks installed")))
 	nil)

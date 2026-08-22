@@ -138,7 +138,7 @@
       (damage-runtime/freeze-damage-handler-registry!)
       (passive/freeze-passive-handler-registry!)
       (lifecycle/freeze-lifecycle-registry!)
-      (log/info "Ability content initialized")))
+      (log/debug "Ability content initialized")))
   nil)
 
 (defn reset-ability-content-for-test!

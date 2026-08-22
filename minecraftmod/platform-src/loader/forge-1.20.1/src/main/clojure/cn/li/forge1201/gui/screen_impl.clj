@@ -31,7 +31,7 @@
 (defn register-screens!
   "Register screen factories with Forge."
   []
-  (log/info "Registering GUI screens for Forge 1.20.1")
+  (log/debug "Registering GUI screens for Forge 1.20.1")
   (try
     (screen-registry/register-platform-screens!
      (target/current-target-key!)
@@ -48,6 +48,6 @@
 (defn init-client!
   "Initialize client-side GUI system. Call during FMLClientSetupEvent."
   []
-  (log/info "Initializing Forge 1.20.1 client GUI system")
+  (log/debug "Initializing Forge 1.20.1 client GUI system")
   (register-screens!)
-  (log/info "Forge 1.20.1 client GUI system initialized"))
+  (log/debug "Forge 1.20.1 client GUI system initialized"))

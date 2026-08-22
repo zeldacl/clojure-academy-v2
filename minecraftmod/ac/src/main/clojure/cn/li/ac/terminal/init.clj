@@ -9,8 +9,8 @@
 (defn init-terminal!
   "Initialize the terminal system (network handlers only)."
   []
-  (log/info "Initializing terminal system...")
+  (log/debug "Initializing terminal system...")
   (hooks/register-network-handler! network/register-handlers!)
   (hooks/register-network-handler! freq-network/register-handlers!)
   (hooks/register-network-handler! media-network/register-handlers!)
-  (log/info "Terminal system initialized successfully"))
+  (log/debug "Terminal system initialized successfully"))

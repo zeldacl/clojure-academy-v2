@@ -168,7 +168,7 @@
             handler (:handler config)]
         ((resolve (symbol "cn.li.mcmod.protocol.keyboard-input" "register-input-id!")) input-id handler)))
     
-    (log/info "AC keybindings bootstrapped successfully")
+    (log/debug "AC keybindings bootstrapped successfully")
     nil
     
     (catch Exception e

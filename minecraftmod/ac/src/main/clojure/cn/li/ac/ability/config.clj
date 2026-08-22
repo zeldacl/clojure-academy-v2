@@ -407,7 +407,7 @@
   []
   (config-reg/register-config-descriptors! config-common/ability-domain descriptors)
   (config-reg/ensure-default-values! config-common/ability-domain default-values)
-  (log/info "Initialized ability config descriptors" {:domain config-common/ability-domain})
+  (log/debug "Initialized ability config descriptors" {:domain config-common/ability-domain})
   nil)
 
 (defn attack-player-enabled? []
@@ -613,7 +613,7 @@
   (let [errors (collect-config-errors)]
     (if (empty? errors)
       (do
-        (log/info "Ability configuration validation passed")
+        (log/debug "Ability configuration validation passed")
         nil)
       (do
         (log/error "Ability configuration validation failed:" errors)

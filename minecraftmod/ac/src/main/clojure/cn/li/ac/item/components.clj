@@ -168,6 +168,6 @@
          :creative-tab nil
          :properties {:tooltip ["AcademyCraft"]
                       :model-texture "logo"}}))
-    (log/info "Component items initialized: wafer, terminal-installer, silbarn,"
+    (log/debug "Component items initialized: wafer, terminal-installer, silbarn,"
               "reso-crystal, resonance-component, reinforced-iron-plate, needle, coin,"
               "brain-component, energy-convert-component, info-component, magnetic-coil, logo"))))

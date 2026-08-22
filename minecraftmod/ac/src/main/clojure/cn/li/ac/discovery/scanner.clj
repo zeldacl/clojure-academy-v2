@@ -102,7 +102,7 @@
         fx (->> all-ns (filter core/fx-namespace?) vec)
         skill (->> all-ns (remove core/fx-namespace?) vec)]
     (when (seq all-ns)
-      (log/info (str "Discovered ability namespaces: " (count all-ns)
+      (log/debug (str "Discovered ability namespaces: " (count all-ns)
                      " (skill=" (count skill) ", fx=" (count fx) ")")))
     {:all all-ns :skill skill :fx fx}))
 

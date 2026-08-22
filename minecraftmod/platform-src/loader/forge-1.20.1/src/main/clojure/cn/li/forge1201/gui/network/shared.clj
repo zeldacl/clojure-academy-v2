@@ -122,5 +122,5 @@
     (install/process-once! ::handlers-installed
       (fn []
         (invoke-network-static "init" @request-handler-ref @response-handler-ref)
-        (log/info "Forge 1.20.1 GUI network system initialized"))))
+        (log/debug "Forge 1.20.1 GUI network system initialized"))))
   nil)

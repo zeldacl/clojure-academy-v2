@@ -54,7 +54,7 @@
 (defn register-renderers
   "Register platform-agnostic renderers for Fabric."
   []
-  (log/info "Registering block renderers for Fabric 26.2...")
+  (log/debug "Registering block renderers for Fabric 26.2...")
   (try
     (render/register-texture-binder! bind-texture-fabric!)
     (render-init/register-default-renderer-init-fns!)
@@ -64,7 +64,7 @@
 
 (defn- init-render-bindings!
   []
-  (log/info "Binding Fabric client-side rendering implementations...")
+  (log/debug "Binding Fabric client-side rendering implementations...")
 
   (pose/install-pose-ops!
    {:y-rotation pose-impl/rotate-y
@@ -88,7 +88,7 @@
     :triangle-vertex-order (fn [] [0 1 2 2])}
    "fabric-client")
 
-  (log/info "Fabric client-side rendering bindings complete"))
+  (log/debug "Fabric client-side rendering bindings complete"))
 
 (defn register-scripted-block-entity-renderers!
   "Attach a single universal BlockEntity renderer to all scripted tile types."
@@ -275,7 +275,7 @@
 (defn init-client
   "Initialize client-side systems for Fabric 26.2."
   []
-  (log/info "Initializing Fabric 26.2 client-side systems")
+  (log/debug "Initializing Fabric 26.2 client-side systems")
 
   (mc-session/init-default-owner-resolver!)
   (install-client-owner-hooks!)

@@ -28,7 +28,7 @@
 (defn register-screens-on-event!
   "Register screen factories from RegisterMenuScreensEvent (mod bus / client)."
   [^RegisterMenuScreensEvent event]
-  (log/info "Registering GUI screens for NeoForge 26.2 via RegisterMenuScreensEvent")
+  (log/debug "Registering GUI screens for NeoForge 26.2 via RegisterMenuScreensEvent")
   (try
     (screen-registry/register-platform-screens!
      (target/current-target-key!)
@@ -46,4 +46,4 @@
   "Client GUI init hook (FMLClientSetup). Menu screens register on
   RegisterMenuScreensEvent."
   []
-  (log/info "NeoForge 26.2 client GUI system ready (screens via RegisterMenuScreensEvent)"))
+  (log/debug "NeoForge 26.2 client GUI system ready (screens via RegisterMenuScreensEvent)"))

@@ -112,4 +112,4 @@
       (when-let [fw-atom (fw/fw-atom)]
         (when-let [sd (get-in @fw-atom (conj saved-data-path world-key))]
           (.setDirty ^cn.li.mc1211.integration.saveddata.WorldLifecycleSavedData sd)))))
-  (log/info "[forge] on-world-state-changed → SavedData.setDirty() hook registered"))
+  (log/debug "[forge] on-world-state-changed → SavedData.setDirty() hook registered"))

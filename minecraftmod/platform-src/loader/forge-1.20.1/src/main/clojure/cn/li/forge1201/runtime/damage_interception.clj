@@ -40,4 +40,4 @@
                        (.getAmount evt)
                        #(.setAmount evt (float %)))))))
 
-  (log/info "Forge damage interception installed"))
+  (log/debug "Forge damage interception installed"))

@@ -157,4 +157,4 @@
                    EventPriority/NORMAL false InputEvent$MouseScrollingEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-mouse-scroll evt)))))
-  (log/info "Client runtime bridge initialized"))
+  (log/debug "Client runtime bridge initialized"))

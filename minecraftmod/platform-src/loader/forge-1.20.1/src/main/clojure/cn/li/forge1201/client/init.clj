@@ -86,7 +86,7 @@
   Called during client setup phase. Registers all block entity renderers
   by invoking their register! functions."
   []
-  (log/info "Registering block renderers for Forge 1.20.1...")
+  (log/debug "Registering block renderers for Forge 1.20.1...")
   (try
     (render/register-texture-binder! bind-texture-forge!)
 
@@ -115,7 +115,7 @@
 
   This must only be called on the client side."
   []
-  (log/info "Binding client-side rendering implementations...")
+  (log/debug "Binding client-side rendering implementations...")
 
   (pose/install-pose-ops!
    {:y-rotation pose-impl/rotate-y
@@ -139,7 +139,7 @@
     :triangle-vertex-order (fn [] [0 1 2 2])}
    "forge-client")
 
-  (log/info "Client-side rendering bindings complete"))
+  (log/debug "Client-side rendering bindings complete"))
 
 (defn- ensure-client-render-platform-for-ber!
   "Forge can fire RegisterRenderers before FMLClientSetup enqueueWork. Without pose
@@ -160,7 +160,7 @@
   ;; registry is populated before BER registration.
   (render-init/register-default-renderer-init-fns!)
   (render-init/register-all-renderers!)
-  (log/info "RegisterRenderers - attaching scripted block entity renderers")
+  (log/debug "RegisterRenderers - attaching scripted block entity renderers")
   (when (empty? (tesr-api/scripted-renderers-snapshot))
     (throw (IllegalStateException.
             "Scripted renderer registry is empty before RegisterRenderers event")))
@@ -172,7 +172,7 @@
             evt
             be-type
             (ScriptedBlockEntityBerProvider.))
-          (log/info (str "  BER registered for tile-id " tile-id)))))))
+          (log/debug (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- open-screen-dispatcher
   "Dispatch open-screen to a registered reactive widget factory."
@@ -419,7 +419,7 @@
   []
   (install/process-once! ::client-systems-initialized
     (fn []
-      (log/info "Initializing Forge 1.20.1 client-side systems")
+      (log/debug "Initializing Forge 1.20.1 client-side systems")
 
       (mc-session/init-default-owner-resolver!)
       (install-client-owner-hooks!)
@@ -477,4 +477,4 @@
         (catch Throwable _
           (log/warn "Failed to register client tick hooks")))
 
-      (log/info "Forge 1.20.1 client-side systems initialized"))))
+      (log/debug "Forge 1.20.1 client-side systems initialized"))))

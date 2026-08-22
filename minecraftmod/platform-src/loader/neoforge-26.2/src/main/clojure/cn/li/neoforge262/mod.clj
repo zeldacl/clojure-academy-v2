@@ -112,7 +112,7 @@
   [(fn []
      (content-registration/register-core-content! (build-registration-context)))
    (fn []
-     (log/info "Registering Forge creative tab...")
+     (log/debug "Registering Forge creative tab...")
      (creative-tab/register-creative-tab! (creative-tabs-register) (current-mod-id)))
    (fn []
      (gui-registry-impl/register-menu-types!))])

@@ -47,4 +47,4 @@
                 EventPriority/NORMAL false RenderGuiEvent$Post
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-render-gui-overlay evt))))
-  (log/info "Reactive overlay renderer initialized"))
+  (log/debug "Reactive overlay renderer initialized"))

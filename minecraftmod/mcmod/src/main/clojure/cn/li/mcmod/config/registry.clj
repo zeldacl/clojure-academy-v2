@@ -69,7 +69,7 @@
     (throw (ex-info "Config domain must be a keyword" {:domain domain})))
   (let [descriptors (normalize-descriptors descriptors)]
     (update-config! assoc-in [:descriptor-registry domain] descriptors)
-    (log/info "Registered config descriptors for domain" domain
+    (log/debug "Registered config descriptors for domain" domain
               "count" (count descriptors))
     nil))
 

@@ -117,4 +117,4 @@
          :properties {:tooltip (matrix-core-tooltip 3)
                       :display-name (get-in core-tiers [:tier-3 :name])
                       :model-texture "mat_core_2"}}))
-    (log/info "Matrix Cores initialized: 3 tiers"))))
+    (log/debug "Matrix Cores initialized: 3 tiers"))))

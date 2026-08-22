@@ -65,4 +65,4 @@
                                 "需要先安装终端"]
                       :model-texture "app_skill_tree"}
          :on-right-click (app-installer-handler :skill-tree)}))
-    (log/info "App installer items initialized: app_freq_transmitter, app_media_player, app_skill_tree"))))
+    (log/debug "App installer items initialized: app_freq_transmitter, app_media_player, app_skill_tree"))))

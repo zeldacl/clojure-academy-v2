@@ -337,5 +337,5 @@
   (install/framework-once! ::install-widget-factory
     (fn []
       (widget-registry/register-widget-factory! :ac/skill-tree create-skill-tree-widget)
-      (log/info "Skill-tree widget factory registered")))
+      (log/debug "Skill-tree widget factory registered")))
   nil)

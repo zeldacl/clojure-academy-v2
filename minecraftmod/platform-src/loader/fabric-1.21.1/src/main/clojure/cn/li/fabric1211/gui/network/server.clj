@@ -39,5 +39,5 @@
            (let [^ServerPlayer player player
                  server (.getServer player)]
              (.execute server (fn [] (handle-request! bytes player))))))
-       (log/info "Fabric 1.21.1 typed GUI network server transport initialized")))
+       (log/debug "Fabric 1.21.1 typed GUI network server transport initialized")))
   nil)

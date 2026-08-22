@@ -77,7 +77,7 @@
 
 (defn register-renderers
   []
-  (log/info "Registering block renderers for NeoForge 26.2...")
+  (log/debug "Registering block renderers for NeoForge 26.2...")
   (try
     (render/register-texture-binder! bind-texture-forge!)
     (render-init/register-default-renderer-init-fns!)
@@ -143,7 +143,7 @@
   (ensure-client-render-platform-for-ber!)
   (render-init/register-default-renderer-init-fns!)
   (render-init/register-all-renderers!)
-  (log/info "RegisterRenderers - attaching scripted block entity renderers")
+  (log/debug "RegisterRenderers - attaching scripted block entity renderers")
   (when (empty? (tesr-api/scripted-renderers-snapshot))
     (throw (IllegalStateException.
             "Scripted renderer registry is empty before RegisterRenderers event")))
@@ -155,7 +155,7 @@
             evt
             be-type
             (ScriptedBlockEntityBerProvider/provider))
-          (log/info (str "  BER registered for tile-id " tile-id)))))))
+          (log/debug (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- open-screen-dispatcher
   "Dispatch open-screen to a registered reactive widget factory."
@@ -393,7 +393,7 @@
   []
   (install/process-once! ::client-systems-initialized
     (fn []
-      (log/info "Initializing NeoForge 26.2 client-side systems (non-render path)")
+      (log/debug "Initializing NeoForge 26.2 client-side systems (non-render path)")
 
       (mc-session/init-default-owner-resolver!)
       (install-client-owner-hooks!)

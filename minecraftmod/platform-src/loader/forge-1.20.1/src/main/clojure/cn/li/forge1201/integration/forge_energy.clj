@@ -62,11 +62,11 @@
     (doseq [descriptor descriptors
             tile-id (target-tile-ids descriptor)]
       (tdsl/register-tile-capability-keys! tile-id (target-capability-key descriptor)))
-    (log/info "Forge Energy descriptor bridge enabled" {:descriptor-count (count descriptors)}))
+    (log/debug "Forge Energy descriptor bridge enabled" {:descriptor-count (count descriptors)}))
   true)
 
 (defn init-forge-energy!
   []
-  (log/info "Initializing Forge Energy integration...")
+  (log/debug "Initializing Forge Energy integration...")
   (register-forge-energy-capability!)
-  (log/info "Forge Energy integration initialized"))
+  (log/debug "Forge Energy integration initialized"))

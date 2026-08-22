@@ -17,11 +17,11 @@
 (defn- register-command!
   [^CommandDispatcher dispatcher command-id]
   (try
-    (log/info "Registering command:" command-id)
+    (log/debug "Registering command:" command-id)
     (when-let [spec (cmd-meta/get-command-spec command-id)]
       (let [node (build-command-node spec)]
         (.register dispatcher node)
-        (log/info "Successfully registered command:" command-id)))
+        (log/debug "Successfully registered command:" command-id)))
     (catch Exception e
       (log/stacktrace (str "Failed to register command" command-id ":" ) e))))
 

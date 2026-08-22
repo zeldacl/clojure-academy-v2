@@ -126,4 +126,4 @@
      :on-load on-world-load
      :on-unload on-world-unload
      :on-save on-world-save})
-  (log/info "World data system initialized"))
+  (log/debug "World data system initialized"))

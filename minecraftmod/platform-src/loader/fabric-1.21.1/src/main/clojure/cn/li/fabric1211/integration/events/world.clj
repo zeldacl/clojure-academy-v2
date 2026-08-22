@@ -67,4 +67,4 @@
       (when-let [fw-atom (fw/fw-atom)]
         (when-let [sd (get-in @fw-atom (conj saved-data-path world-key))]
           (.setDirty ^WorldLifecycleSavedData sd)))))
-  (log/info "[fabric] on-world-state-changed → SavedData.setDirty() hook registered"))
+  (log/debug "[fabric] on-world-state-changed → SavedData.setDirty() hook registered"))

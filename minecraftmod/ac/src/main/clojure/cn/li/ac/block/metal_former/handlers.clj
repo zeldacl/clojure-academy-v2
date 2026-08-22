@@ -25,4 +25,4 @@
 
 (defn register-network-handlers! []
   (net-server/register-handler (msg :alternate) handle-alternate)
-  (log/info "Metal Former network handlers registered"))
+  (log/debug "Metal Former network handlers registered"))

@@ -39,4 +39,4 @@
                           (overlay-host/update-overlay!
                             graphics "default" w h (float tick-delta)
                             bridge-build-fn bridge-update-fn))))))))
-  (log/info "Reactive overlay renderer initialized (Fabric)"))
+  (log/debug "Reactive overlay renderer initialized (Fabric)"))

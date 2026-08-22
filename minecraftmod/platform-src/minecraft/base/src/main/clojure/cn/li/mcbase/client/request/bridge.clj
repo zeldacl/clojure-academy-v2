@@ -11,4 +11,4 @@
    (power-runtime/dispatch-action! action-id {:callback callback} payload)))
 
 (defn init! []
-  (log/info "Client request bridge initialized"))
+  (log/debug "Client request bridge initialized"))

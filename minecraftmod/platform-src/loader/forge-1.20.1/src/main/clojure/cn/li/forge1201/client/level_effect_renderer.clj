@@ -64,4 +64,4 @@
                    EventPriority/NORMAL false RenderLevelStageEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-render-level-stage evt)))))
-  (log/info "Level effect renderer initialized"))
+  (log/debug "Level effect renderer initialized"))

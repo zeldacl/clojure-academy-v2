@@ -26,7 +26,7 @@
           (if-let [^DeferredHolder ro (registry-state/get-registered-entity-ro entity-id)]
             (when (.isBound ro)
               (register! event (.get ro))
-              (log/info "Registered attributes for"
+              (log/debug "Registered attributes for"
                         (edsl/get-entity-registry-name entity-id)))
             (log/warn "No registered entity type for scripted-mob"
                       {:entity-id entity-id})))))))

@@ -15,5 +15,5 @@
 			 :jei-get-recipes jei-plugin/get-recipes
 			 :jei-format-recipe jei-plugin/format-recipe
 			 :describe-recipe ct-bridge/describe-recipe})
-		(log/info "AC integration hooks installed")))
+		(log/debug "AC integration hooks installed")))
 	nil)

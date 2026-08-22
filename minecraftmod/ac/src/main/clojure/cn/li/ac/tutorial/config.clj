@@ -30,7 +30,7 @@
   []
   (config-reg/register-config-descriptors! config-common/tutorial-domain descriptors)
   (config-reg/ensure-default-values! config-common/tutorial-domain default-values)
-  (log/info "Initialized tutorial config descriptors" {:domain config-common/tutorial-domain})
+  (log/debug "Initialized tutorial config descriptors" {:domain config-common/tutorial-domain})
   nil)
 
 (defn give-cloud-terminal-enabled?

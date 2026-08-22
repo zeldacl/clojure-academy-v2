@@ -21,11 +21,11 @@
 (defn log-open-start!
   [prefix player gui-id tile-entity]
   (let [^Player player player]
-    (log/info prefix "Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity)))))
+    (log/debug prefix "Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity)))))
 
 (defn log-open-success!
   [prefix]
-  (log/info prefix "GUI opened successfully"))
+  (log/debug prefix "GUI opened successfully"))
 
 (defn log-open-error!
   [prefix e]

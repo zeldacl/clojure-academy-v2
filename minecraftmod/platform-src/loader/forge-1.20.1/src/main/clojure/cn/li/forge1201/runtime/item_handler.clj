@@ -31,4 +31,4 @@
                 LivingEntityUseItemEvent$Finish
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-item-finish-using evt))))
-  (log/info "Forge item lifecycle handler initialized"))
+  (log/debug "Forge item lifecycle handler initialized"))

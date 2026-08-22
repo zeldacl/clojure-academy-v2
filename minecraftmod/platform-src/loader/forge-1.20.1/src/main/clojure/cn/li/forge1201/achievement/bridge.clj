@@ -28,5 +28,5 @@
                (.trigger ModTriggers/CUSTOM player (str achievement-id)))
              (catch Exception e
                (log/warn "Failed to dispatch achievement trigger" achievement-id (ex-message e))))))
-       (log/info "Forge achievement bridge initialized")))
+       (log/debug "Forge achievement bridge initialized")))
   nil)

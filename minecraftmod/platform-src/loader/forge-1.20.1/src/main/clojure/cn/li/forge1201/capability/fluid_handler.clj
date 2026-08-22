@@ -129,4 +129,4 @@
     (cap-registry/declare-capability!
       :fluid-handler IFluidHandler
       (fn [be _side] (create-phase-gen-fluid-handler be))))
-  (log/info "Registered Forge fluid-handler capability for AC machines"))
+  (log/debug "Registered Forge fluid-handler capability for AC machines"))

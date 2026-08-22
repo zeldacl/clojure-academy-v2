@@ -270,5 +270,5 @@
                                        :damage 1
                                        :label "phase-liquid"}}
          :on-right-click use-matter-unit!}))
-    (log/info "Special items initialized: induction factors, mag_hook, matter_unit"))))
+    (log/debug "Special items initialized: induction factors, mag_hook, matter_unit"))))
 

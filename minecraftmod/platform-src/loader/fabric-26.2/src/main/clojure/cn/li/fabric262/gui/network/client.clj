@@ -51,5 +51,5 @@
            (.execute ^Minecraft client
                      (fn [] (net-client/handle-push runtime-payload/runtime-sync-message-id
                                                      (shared/decode-runtime-bytes bytes))))))
-       (log/info "Fabric 26.2 typed GUI network client transport initialized")))
+       (log/debug "Fabric 26.2 typed GUI network client transport initialized")))
   nil)

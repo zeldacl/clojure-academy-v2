@@ -65,7 +65,7 @@
             "player=" (pr-str (some-> player entity/player-get-name)))
   (let [tile (open-tile payload player)
         world (net-helpers/get-world player)]
-    (log/info "[handle-start-development] tile=" (some? tile) "world=" (some? world))
+    (log/debug "[handle-start-development] tile=" (some? tile) "world=" (some? world))
     (if-not tile
       (do (log/warn "[handle-start-development] no tile found")
           {:success false :reason "no-tile"})

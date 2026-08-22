@@ -58,4 +58,4 @@
   (fn []
     (slot-schema/register-slot-schema! {:schema-id solar-gen-id :slots [{:id :energy :type :energy :x 42 :y 81}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :solar-gen) (merge (gui-manifest/gui-registration :solar-gen) {:container-predicate solar-container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn slot-changed!}))
-    (log/info "Solar Generator GUI initialized (reactive)"))))
+    (log/debug "Solar Generator GUI initialized (reactive)"))))

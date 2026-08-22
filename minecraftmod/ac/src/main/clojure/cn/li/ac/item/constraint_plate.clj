@@ -23,7 +23,7 @@
                       :model-texture "constraint_plate"}
          :on-use (fn [_event-data]
                    (log/debug "Using constraint plate"))}))
-    (log/info "Constraint Plate initialized"))))
+    (log/debug "Constraint Plate initialized"))))
 
 (defn is-constraint-plate?
   "Check whether a platform ItemStack is a constraint plate."

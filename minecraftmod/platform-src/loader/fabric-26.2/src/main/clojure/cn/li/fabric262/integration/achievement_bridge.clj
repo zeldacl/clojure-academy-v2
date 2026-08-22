@@ -22,5 +22,5 @@
               (.trigger ModTriggers/CUSTOM player (str achievement-id)))
             (catch Exception e
               (log/warn "Failed to dispatch Fabric achievement trigger" achievement-id (ex-message e))))))
-       (log/info "Fabric achievement bridge initialized")))
+       (log/debug "Fabric achievement bridge initialized")))
   nil)

@@ -112,4 +112,4 @@
          :slot-set-fn set-slot-item!
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!}))
-    (log/info "Ability Developer GUI initialized (reactive: classic layout + console + skill-tree area)"))))
+    (log/debug "Ability Developer GUI initialized (reactive: classic layout + console + skill-tree area)"))))

@@ -113,7 +113,7 @@
       (doseq [category-meta (integration-hooks/jei-get-all-categories)]
         (let [recipe-category (create-recipe-category gui-helper category-meta)]
           (.addRecipeCategories registration (into-array IRecipeCategory [recipe-category]))
-          (log/info (str "Registered JEI category: " (:id category-meta))))))
+          (log/debug (str "Registered JEI category: " (:id category-meta))))))
     (catch Exception e
       (log/stacktrace "Failed to register JEI categories:" e))))
 
@@ -130,7 +130,7 @@
                           java.util.Map)]
         (when (seq formatted-recipes)
           (.addRecipes registration recipe-type (ArrayList. ^java.util.Collection formatted-recipes))
-          (log/info (str "Registered " (count formatted-recipes) " recipes for " (:id category-meta))))))
+          (log/debug (str "Registered " (count formatted-recipes) " recipes for " (:id category-meta))))))
     (catch Exception e
       (log/stacktrace "Failed to register JEI recipes:" e))))
 
@@ -148,7 +148,7 @@
             ^"[Lmezz.jei.api.recipe.RecipeType;" recipe-types (into-array RecipeType [recipe-type])]
         (when item-stack
           (.addRecipeCatalyst registration item-stack recipe-types)
-          (log/info (str "Registered JEI catalyst: " block-id " for " (:id category-meta))))))
+          (log/debug (str "Registered JEI catalyst: " block-id " for " (:id category-meta))))))
     (catch Exception e
       (log/stacktrace "Failed to register JEI catalysts:" e))))
 
@@ -191,7 +191,7 @@
       (.addGuiContainerHandler registration
                                DelegatingCGuiContainerScreen
                                (create-gui-handler))
-      (log/info "Registered JEI gui click areas for machine screens"))
+      (log/debug "Registered JEI gui click areas for machine screens"))
     (catch Exception e
       (log/stacktrace "Failed to register JEI gui handlers:" e))))
 
@@ -212,7 +212,7 @@
         (let [item-class (RuntimeAccess/getItemClass)
               ^"[Lnet.minecraft.world.item.Item;" item-array (into-array item-class items)]
           (.useNbtForSubtypes ^ISubtypeRegistration registration item-array))
-        (log/info "Registered JEI NBT subtypes for" (count items) "creative-tab variant items.")))
+        (log/debug "Registered JEI NBT subtypes for" (count items) "creative-tab variant items.")))
     (catch Exception e
       (log/stacktrace "Failed to register JEI item subtypes:" e))))
 
@@ -231,22 +231,22 @@
       (ResourceLocation. mod-config/mod-id "content_plugin"))
 
     (registerCategories [_ registration]
-      (log/info "Registering JEI categories for content descriptors...")
+      (log/debug "Registering JEI categories for content descriptors...")
       (register-categories registration))
 
     (registerRecipes [_ registration]
-      (log/info "Registering JEI recipes for content descriptors...")
+      (log/debug "Registering JEI recipes for content descriptors...")
       (register-recipes registration))
 
     (registerGuiHandlers [_ registration]
-      (log/info "Registering JEI gui handlers for content descriptors...")
+      (log/debug "Registering JEI gui handlers for content descriptors...")
       (register-gui-handlers registration))
 
     (registerItemSubtypes [_ registration]
       (register-item-subtypes registration))
 
     (registerRecipeCatalysts [_ registration]
-      (log/info "Registering JEI catalysts for content descriptors...")
+      (log/debug "Registering JEI catalysts for content descriptors...")
       (register-catalysts registration))))
 
 (defn init-jei!
@@ -255,4 +255,4 @@
   This is called during mod initialization if JEI is present.
   The actual plugin registration happens via @JEIPlugin annotation."
   []
-  (log/info "JEI integration initialized (plugin will be auto-discovered)"))
+  (log/debug "JEI integration initialized (plugin will be auto-discovered)"))

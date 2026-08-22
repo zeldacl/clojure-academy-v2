@@ -159,5 +159,5 @@
       (fn [_payload]
         (when-let [player (bridge/get-client-player)]
           (show! player))))
-    (log/info "AC terminal install-effect push handler installed (reactive)")))
+    (log/debug "AC terminal install-effect push handler installed (reactive)")))
   nil)

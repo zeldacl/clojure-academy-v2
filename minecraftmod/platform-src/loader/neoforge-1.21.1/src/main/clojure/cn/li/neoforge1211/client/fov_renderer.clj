@@ -29,4 +29,4 @@
                    EventPriority/NORMAL false ViewportEvent$ComputeFov
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-compute-fov evt)))))
-  (log/info "FOV renderer initialized"))
+  (log/debug "FOV renderer initialized"))

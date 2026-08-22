@@ -120,4 +120,4 @@
      :link! wireless-api/link-receiver-to-node!
      :unlink! wireless-api/unlink-receiver-from-node!
      :log-label "Ability Interferer wireless"})
-  (log/info "Ability Interferer network handlers registered"))
+  (log/debug "Ability Interferer network handlers registered"))

@@ -12,7 +12,7 @@
 (defn set-platform-version!
   [platform-key]
   (platform-dispatch/install-platform-version! platform-key "mc1201-bootstrap")
-  (log/info "Set platform dispatch to" platform-key))
+  (log/debug "Set platform dispatch to" platform-key))
 
 (defn assert-platform-ready!
   [platform-key]
@@ -40,4 +40,4 @@
         (set-platform-version! platform-key)
         (when (fn? on-runtime-init)
           (on-runtime-init))
-        (log/info "Platform adapter initialized" {:platform platform-key})))))
+        (log/debug "Platform adapter initialized" {:platform platform-key})))))

@@ -125,7 +125,7 @@
         values (resolve-domain-values descriptors parsed-tree)]
     (config-reg/set-config-values! domain values)
     (write-domain-file! file descriptors values)
-    (log/info "Loaded Fabric config domain" domain "from" (.getPath file))))
+    (log/debug "Loaded Fabric config domain" domain "from" (.getPath file))))
 
 (defn load-all! []
   (doseq [domain (config-reg/get-all-config-domains)]

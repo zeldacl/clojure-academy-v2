@@ -84,4 +84,4 @@
     (net-server/register-handler (terminal-messages/msg-id :install-app) handle-install-app contract)
     (net-server/register-handler (terminal-messages/msg-id :uninstall-app) handle-uninstall-app contract)
     (net-server/register-handler (terminal-messages/msg-id :get-state) handle-get-state contract))
-  (log/info "Terminal network handlers registered"))
+  (log/debug "Terminal network handlers registered"))

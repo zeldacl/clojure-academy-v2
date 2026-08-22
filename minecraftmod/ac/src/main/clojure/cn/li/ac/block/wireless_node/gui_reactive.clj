@@ -168,4 +168,4 @@
          :slot-count-fn get-slot-count :slot-get-fn get-slot-item
          :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item?
          :slot-changed-fn (fn [_ _] nil) :quick-move-fn quickly-move}))
-    (log/info "Wireless Node GUI initialized (reactive animation and polling)"))))
+    (log/debug "Wireless Node GUI initialized (reactive animation and polling)"))))

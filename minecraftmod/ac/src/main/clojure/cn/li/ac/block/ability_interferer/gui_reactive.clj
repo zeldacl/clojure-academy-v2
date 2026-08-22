@@ -323,4 +323,4 @@
               :slot-can-place-fn can-place-item?
               :slot-changed-fn (fn [_ _] nil)
               :quick-move-fn quick-move-stack}))
-    (log/info "Ability Interferer GUI initialized (reactive)"))))
+    (log/debug "Ability Interferer GUI initialized (reactive)"))))

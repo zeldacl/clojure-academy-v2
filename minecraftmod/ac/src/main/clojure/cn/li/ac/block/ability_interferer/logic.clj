@@ -433,5 +433,5 @@
         {:id :ac/ability-interferer
          :on-tick cleanup-stale-interferers!
          :on-unload dispose-world-interferers!})
-      (log/info "Ability Interferer world-tick cleanup handler registered")))
+      (log/debug "Ability Interferer world-tick cleanup handler registered")))
   nil)

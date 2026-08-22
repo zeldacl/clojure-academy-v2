@@ -60,7 +60,7 @@
   "Core init hook invoked by per-version entry classes."
   []
   (modid/install-modid!)
-  (log/info "Initializing core for mod-id=" modid/MOD-ID)
+  (log/debug "Initializing core for mod-id=" modid/MOD-ID)
   (ability-messages/install!)
   (entity-hook-catalog/install-resolvers!)
   (block-bridge/install-blockstate-hooks!)

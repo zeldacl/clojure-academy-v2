@@ -77,4 +77,4 @@
 
 (defn init!
   []
-  (log/info "Shared particle effect bridge initialized"))
+  (log/debug "Shared particle effect bridge initialized"))

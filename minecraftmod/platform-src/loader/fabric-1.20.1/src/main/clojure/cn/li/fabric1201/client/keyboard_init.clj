@@ -108,7 +108,7 @@
                (client-session/with-current-client-session
                  #(power-runtime/client-on-slot-wheel! player-uuid 0 yoffset)))))
 
-         (log/info "Fabric keyboard handler installed")))
+         (log/debug "Fabric keyboard handler installed")))
 
     (catch Exception e
       (log/stacktrace "Failed to install Fabric keyboard handler" e))))
