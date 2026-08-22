@@ -15,8 +15,11 @@
                                      (int iw) (int ih)))
 
    :render-background!
-   (fn [^DelegatingCGuiContainerScreen screen ^GuiGraphicsExtractor gg mx my pt]
-     (.renderBackground screen gg (int mx) (int my) (float pt)))
+   ;; 26.2 no-op: extractRenderStateWithTooltipAndSubtitles already extracted
+   ;; the background (blur + menu texture) before our extractRenderState runs;
+   ;; re-extracting here calls blurBeforeThisStratum a second time and throws
+   ;; "Can only blur once per frame".
+   (fn [^DelegatingCGuiContainerScreen _screen ^GuiGraphicsExtractor _gg _mx _my _pt] nil)
 
    :screen-dimensions
    (fn [^DelegatingCGuiContainerScreen screen]
