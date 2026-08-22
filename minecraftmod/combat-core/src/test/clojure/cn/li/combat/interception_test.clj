@@ -61,6 +61,34 @@
         (is (true? (:reaction-damage-applied? result))
             "the caller (AC) needs this fact to decide whether to cancel the native hit")))))
 
+(deftest precheck-mode-reflect-still-lands-through-the-capability-test
+  ;; Regression: a precheck-mode reflect sets :cancelled? true on the SAME
+  ;; result that also carries its :world-effects -- :cancelled? here means
+  ;; "the native hit must not also land", not "nothing happened". A gate
+  ;; that skipped applying world-effects whenever :cancelled? was true would
+  ;; silently discard the reflected damage on every precheck-cancelled hit,
+  ;; and since the platform's own attack-stage gate never calls intercept!
+  ;; again once an attack is cancelled, that would be the only chance the
+  ;; reflected damage ever had to land.
+  (with-fake-entity-damage-handler
+    (fn [seen]
+      (let [result (interception/intercept!
+                    {:target-id "target" :attacker-id "attacker" :base 10.0
+                     :damage-type :magic :damage-source {:attacker-front? true}
+                     :reactions [reflect-ability]
+                     :session-fn (constantly nil)
+                     :state-fn fixed-state
+                     :domain-state {}
+                     :tunables-fn (fn [_ _ _] {})
+                     :now-tick 1
+                     :front-cone-degrees 180.0
+                     :precheck? true})]
+        (is (true? (:cancelled? result))
+            "precheck mode must mark the native hit cancelled once a reflect is eligible")
+        (is (= 1 (count @seen))
+            "the reflected hit must still land through the capability in the same call")
+        (is (true? (:reaction-damage-applied? result)))))))
+
 (deftest a-self-targeted-reflection-never-reaches-the-capability-test
   (with-fake-entity-damage-handler
     (fn [seen]

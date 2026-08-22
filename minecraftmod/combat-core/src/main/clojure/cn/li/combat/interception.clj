@@ -126,7 +126,14 @@
                                   :domain-state domain-state
                                   :precheck? precheck?
                                   :tunables-fn tunables-fn})
-        applied (when (and (not (:cancelled? result)) (seq (:world-effects result)))
+        ;; :cancelled? marks "the native hit must not also land" -- set by a
+        ;; precheck-mode reaction (damage/reflect, damage/absorb) precisely
+        ;; WHEN it already produced a replacement world-effect. Gating this
+        ;; application on (not cancelled?) would skip applying that exact
+        ;; replacement, silently discarding it: a precheck-cancelled reflect
+        ;; hit would cancel the incoming damage and never land the reflected
+        ;; damage anywhere.
+        applied (when (seq (:world-effects result))
                  (apply-reaction-world-effects! (:world-effects result)))]
     ;; The caller (AC) needs to know whether reaction damage actually landed
     ;; -- e.g. to decide whether to cancel the native hit it intercepted --

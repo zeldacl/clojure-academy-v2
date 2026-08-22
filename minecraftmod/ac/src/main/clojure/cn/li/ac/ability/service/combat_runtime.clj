@@ -762,8 +762,7 @@
   [player-id attacker-id original-damage damage-source]
   (let [request (intercept-damage!
                  player-id attacker-id original-damage damage-source false)]
-    (when-not (:cancelled? request)
-      (commit-intercepted-request! player-id attacker-id request))
+    (commit-intercepted-request! player-id attacker-id request)
     (if (:cancelled? request)
       0.0
       (double (:base request)))))
@@ -777,8 +776,7 @@
   [player-id attacker-id original-damage damage-source]
   (let [request (intercept-damage!
                  player-id attacker-id original-damage damage-source true)]
-    (when-not (:cancelled? request)
-      (commit-intercepted-request! player-id attacker-id request))
+    (commit-intercepted-request! player-id attacker-id request)
     (boolean (or (:cancelled? request) (:reaction-damage-applied? request)))))
 
 (defn finalize-result!
