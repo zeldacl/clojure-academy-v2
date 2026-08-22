@@ -189,6 +189,34 @@
          :ctx-id ctx-id
          :channel channel}))))
 
+(defn create-nearby-inclusive-sender
+  "Create a sender that pushes msg-id/payload to every player within radius
+   of source-player-uuid, INCLUDING source itself.
+
+   For declarative VFX audience broadcast (Psi-style: server executes,
+   visual signals fan out to everyone who can see it happen) -- distinct
+   from create-except-local-context-sender, which deliberately excludes the
+   source for the (different) context-channel transport."
+  [find-nearby-player-uuids send-to-client-fn]
+  (fn [source-player-uuid msg-id payload radius]
+    (let [radius (double (or radius default-except-local-radius))
+          nearby (find-nearby-player-uuids source-player-uuid radius)
+          targets (distinct (cons source-player-uuid nearby))]
+      (reduce (fn [acc target-player-uuid]
+                (let [send-result
+                      (try
+                        (normalize-direct-send-result
+                          (send-to-client-fn target-player-uuid msg-id payload))
+                        (catch clojure.lang.ExceptionInfo e
+                          (if (= :target-player-not-found (:reason (ex-data e)))
+                            (do
+                              (log/warn "Skip VFX broadcast to missing target:" target-player-uuid)
+                              {:sent 0})
+                            (throw e))))]
+                  (update acc :sent + (long (or (:sent send-result) 0)))))
+              {:sent 0 :msg-id msg-id :source-player-uuid source-player-uuid}
+              targets))))
+
 (def send-sync-to-client!
   (create-sync-sender transport-spi/find-player-by-uuid transport-spi/send-push-to-client!))
 
@@ -208,14 +236,18 @@
                                            :find-player-by-uuid find-player-by-uuid
                                            :find-nearby-player-uuids find-nearby-player-uuids})
   (let [send-to-except-local-fn
-        (create-except-local-context-sender find-nearby-player-uuids send-to-client!)]
+        (create-except-local-context-sender find-nearby-player-uuids send-to-client!)
+        send-to-nearby-inclusive-fn
+        (create-nearby-inclusive-sender find-nearby-player-uuids send-to-client!)]
     (init-runtime-network! {:send-to-server-fn send-to-server!
                             :send-to-client-fn send-to-client!
-                            :send-to-except-local-fn send-to-except-local-fn}))
+                            :send-to-except-local-fn send-to-except-local-fn
+                            :send-to-nearby-inclusive-fn send-to-nearby-inclusive-fn}))
   (log/info label "runtime network initialized"))
 
 (defn init-runtime-network!
-  [{:keys [send-to-server-fn send-to-client-fn send-to-except-local-fn]}]
+  [{:keys [send-to-server-fn send-to-client-fn send-to-except-local-fn
+           send-to-nearby-inclusive-fn]}]
   (let [send-to-except-local-fn (or send-to-except-local-fn (fn [_ctx-id _channel _payload _ctx-map] nil))
         send-context-channel-to-server!
         (fn [ctx-id channel payload _ctx-map]
@@ -246,4 +278,5 @@
                                                 :to-client send-context-channel-to-client!
                                                 :to-except-local send-to-except-local-fn})
     (network-hooks/register-context-send-fns! {:to-server send-to-server-fn
-                                               :to-client send-to-client-fn})))
+                                               :to-client send-to-client-fn
+                                               :to-nearby send-to-nearby-inclusive-fn})))

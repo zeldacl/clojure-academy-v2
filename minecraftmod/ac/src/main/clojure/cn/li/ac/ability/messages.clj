@@ -13,6 +13,7 @@
    :ctx-channel "ability:ctx/channel"
    :combat-intent "ability:combat/intent"
    :combat-result "ability:combat/result"
+   :combat-vfx "ability:combat/vfx"
 
    :sync-v2 "ability:sync/runtime-v2"
 
@@ -35,6 +36,7 @@
 (def MSG-CTX-CHANNEL (:ctx-channel message-ids))
 (def MSG-COMBAT-INTENT (:combat-intent message-ids))
 (def MSG-COMBAT-RESULT (:combat-result message-ids))
+(def MSG-COMBAT-VFX (:combat-vfx message-ids))
 
 (def MSG-SYNC-V2 (:sync-v2 message-ids))
 

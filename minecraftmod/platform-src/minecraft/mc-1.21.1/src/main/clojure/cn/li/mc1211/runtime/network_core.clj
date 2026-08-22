@@ -9,6 +9,7 @@
 (def default-find-player-by-uuid shared/default-find-player-by-uuid)
 (def default-find-nearby-player-uuids shared/default-find-nearby-player-uuids)
 (def create-except-local-context-sender shared/create-except-local-context-sender)
+(def create-nearby-inclusive-sender shared/create-nearby-inclusive-sender)
 (def send-sync-to-client! shared/send-sync-to-client!)
 (def send-to-client! shared/send-to-client!)
 (def install-runtime-network-transport! shared/install-runtime-network-transport!)

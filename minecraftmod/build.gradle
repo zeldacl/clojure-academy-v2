@@ -1132,7 +1132,7 @@ tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":
 
 tasks.register("verifyCombatIntentOnlyNetwork") {
     group = "verification"
-    description = "Ensure AC server combat registration exposes CombatIntent only, not Context/slot packets."
+    description = "Ensure AC server combat registration exposes CombatIntent only, not Context/slot packets, and that the ability:combat/result payload never carries raw VFX signals (those are audience-routed onto ability:combat/vfx instead)."
     doLast {
         def source = file("ac/src/main/clojure/cn/li/ac/ability/server/network.clj").text
         def legacy = ["MSG-CTX-", "MSG-SLOT-KEY-"]
@@ -1142,6 +1142,16 @@ tasks.register("verifyCombatIntentOnlyNetwork") {
         }
         if (!source.contains("MSG-COMBAT-INTENT")) {
             throw new GradleException("AC server network is missing CombatIntent registration")
+        }
+        if (!source.contains("publish-combat-result!")) {
+            throw new GradleException("AC server network no longer routes CombatIntent results through combat-runtime/publish-combat-result! -- VFX audience routing would be bypassed")
+        }
+        def runtime = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj").text
+        if (!runtime.contains("(dissoc result :vfx-signals)")) {
+            throw new GradleException("combat_runtime publish-result! no longer strips :vfx-signals before pushing ability:combat/result")
+        }
+        if (!runtime.contains("(dissoc (publish-result! result) :vfx-signals)")) {
+            throw new GradleException("combat_runtime publish-combat-result! no longer strips :vfx-signals from the CombatIntent RPC reply")
         }
         logger.lifecycle("[verifyCombatIntentOnlyNetwork] ok")
     }

@@ -54,7 +54,11 @@
      (client-owner player-uuid) messages/MSG-COMBAT-INTENT
      {:schema-version 1 :intent-id intent-id :op op :slot (long slot)
       :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))}
-     (fn [result] (when (map? result) (combat-vfx/dispatch-result! result))))
+     ;; VFX arrives exclusively through the MSG-COMBAT-VFX push channel now
+     ;; (audience-routed on the server, self or nearby-broadcast) -- the RPC
+     ;; reply itself never carries :vfx-signals, so there is nothing to
+     ;; dispatch from this callback.
+     nil)
     intent-id))
 
 (defn- active-slot-for-owner [player-uuid]
@@ -73,7 +77,7 @@
         :slot (long slot) :movement-key movement-key
         :movement-transition transition
         :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))}
-       (fn [result] (when (map? result) (combat-vfx/dispatch-result! result))))
+       nil)
       intent-id)))
 
 (defn- combat-slot? [player-uuid slot]
@@ -100,12 +104,16 @@
   (when (compare-and-set! handlers-registered?* false true)
     (net-client/register-push-handler! messages/MSG-COMBAT-RESULT
       (fn [result]
-        (combat-vfx/dispatch-result! result)
         (doseq [[idx feedback] (map-indexed vector (:feedback result))]
           (combat-notice/show-notice! @notice-component*
                                       (current-session)
                                       (keyword (str "combat-" idx))
                                       (or feedback {:text "Combat rejected"})))))
+    ;; The one and only VFX delivery channel: audience-routed on the server
+    ;; (self, or nearby-broadcast including the caster), so every recipient
+    ;; -- caster or bystander -- always receives exactly one push per signal.
+    (net-client/register-push-handler! messages/MSG-COMBAT-VFX
+      (fn [signal] (combat-vfx/dispatch-signal! signal)))
     (net-client/register-push-handler! messages/MSG-SYNC-V2 apply-client-runtime-v2!)
     (log/info "CombatIntent push handlers registered")))
 

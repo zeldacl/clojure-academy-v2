@@ -4,7 +4,10 @@
  :revision 1
  :lifecycle :transient
  ;; Generic presentation side channel; intensity, duration and color are
- ;; supplied by the signal and are not tied to any skill.
+ ;; supplied by the signal and are not tied to any skill. A screen-space
+ ;; overlay is inherently first-person-only -- broadcasting it would flash
+ ;; nearby players' screens, not the caster's.
+ :audience {:scope :self}
  :inputs {:spawn {:alpha :double :duration-ticks :long :color :object}
           :update {:alpha :double}
           :destroy {}}

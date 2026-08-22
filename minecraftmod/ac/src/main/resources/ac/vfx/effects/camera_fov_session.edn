@@ -3,6 +3,9 @@
  :id :camera-fov-session
  :revision 1
  :lifecycle :session
+ ;; Camera FOV is a first-person-only effect; broadcasting it to nearby
+ ;; players would offset THEIR camera, not the caster's.
+ :audience {:scope :self}
  :inputs {:spawn {:offset :double}
           :update {:offset :double}
           :destroy {}}

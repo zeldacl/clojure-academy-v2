@@ -137,7 +137,14 @@
                  {:status :rejected :feedback [{:type :invalid-movement}]}
                  (combat-runtime/dispatch-intent! owner intent))
         result (if (= :accepted (:status result))
-                 (combat-runtime/finalize-result! owner result)
+                 ;; publish-combat-result! both routes :vfx-signals to their
+                 ;; audience (self/nearby-broadcast) through the push
+                 ;; channel and strips them from the value returned here --
+                 ;; the RPC reply itself only ever carries status/feedback,
+                 ;; the same single-execution-path contract every other
+                 ;; result-shaped payload in this module already follows.
+                 (combat-runtime/publish-combat-result!
+                  (combat-runtime/finalize-result! owner result))
                  result)]
     (when (= :rejected (:status result))
       (log/debug "Combat intent rejected" {:owner owner :feedback (:feedback result)}))

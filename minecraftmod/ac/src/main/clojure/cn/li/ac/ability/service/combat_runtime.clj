@@ -44,6 +44,14 @@
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
+;; Psi-style VFX delivery: :self signals go to the caster alone (same
+;; per-owner transport as result-sink*, just a different message id so the
+;; client can register one push handler per concern); :tracking/:world
+;; signals broadcast to every nearby client, caster included.
+(defonce ^:private vfx-self-sink* (atom nil))
+(defonce ^:private vfx-broadcast-sink* (atom nil))
+(defonce ^:private active-persistent-signals* (atom {}))
+(def ^:private persistent-replay-interval-ticks 40)
 (defonce ^:private edn-host-capabilities-installed? (atom false))
 ;; The authoritative source for `:now-tick` when a caller does not supply one.
 ;; `tick!` below updates this from the real server tick every call; intents
@@ -652,9 +660,9 @@
                    :duration duration
                    :tick (long @last-known-tick*)})
                  {:status :applied
-                  :vfx-signals (vec (keep #(mark-vfx-signal request policy
-                                                             position duration)
-                                          [policy]))}))))))
+                  :vfx-signals (vec (keep identity
+                                          [(mark-vfx-signal request policy
+                                                             position duration)]))}))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :energy/charge)
         (capabilities/register-action!
          :energy/charge
@@ -1104,19 +1112,134 @@
   "Install the AC network sink for server-driven session results.
 
    The sink receives `[owner result]`; Combat Core remains unaware of the
-   network transport and only returns neutral result data."
+   network transport and only returns neutral result data. The payload never
+   carries :vfx-signals -- those are published separately, per-signal, by
+   audience (see install-vfx-self-sink!/install-vfx-broadcast-sink!)."
   [sink]
   (when-not (ifn? sink)
     (throw (ex-info "combat result sink must be callable" {:value sink})))
   (reset! result-sink* sink)
   sink)
 
+(defn install-vfx-self-sink!
+  "Install the AC network sink for VFX signals whose audience is :self
+   (camera/screen-post-process effects, or an ability's own :audience
+   {:type :owner} declaration). The sink receives `[owner signal]`."
+  [sink]
+  (when-not (ifn? sink)
+    (throw (ex-info "vfx self-sink must be callable" {:value sink})))
+  (reset! vfx-self-sink* sink)
+  sink)
+
+(defn install-vfx-broadcast-sink!
+  "Install the AC network sink for VFX signals whose audience is :tracking
+   or :world -- broadcast to every nearby client, the caster included
+   (Psi-style: server executes, everyone who can see it happen gets the
+   visual). The sink receives `[owner signal radius]`; radius nil means no
+   distance cap."
+  [sink]
+  (when-not (ifn? sink)
+    (throw (ex-info "vfx broadcast sink must be callable" {:value sink})))
+  (reset! vfx-broadcast-sink* sink)
+  sink)
+
+(defn- normalize-signal-audience
+  "Resolve one VFX signal's effective audience as {:scope :radius}.
+
+   Precedence: (1) the ability's own {:type :owner | :nearby :radius N}
+   declaration on the :effect/vfx node that emitted this signal -- authored
+   per-activation-site, so the same effect can be :self in one ability's use
+   and broadcast in another's; (2) the VFX effect document's own :audience
+   default (combat-catalog/vfx-effect-audience, e.g. camera/screen-post-
+   process effects that are never meaningfully broadcastable); (3) the
+   global tracking default."
+  [signal]
+  (let [declared (:audience signal)]
+    (cond
+      (= :owner (:type declared)) {:scope :self}
+      (= :nearby (:type declared)) {:scope :tracking :radius (:radius declared)}
+      :else (combat-catalog/vfx-effect-audience (:effect-id signal)))))
+
+(defn- persistent-lifecycle? [effect-id]
+  (contains? #{:session :persistent} (combat-catalog/vfx-effect-lifecycle effect-id)))
+
+(defn- track-persistent-signal!
+  "Remember the last :spawn signal for a broadcast :session/:persistent VFX
+   instance so it can be resent (see replay-persistent-signals!) to a player
+   who enters tracking range after the effect started. :transient effects
+   are never tracked -- by the time anyone could join late they are already
+   over."
+  [owner signal]
+  (when (persistent-lifecycle? (:effect-id signal))
+    (case (:op signal)
+      :spawn (swap! active-persistent-signals* assoc-in
+                    [owner (:instance-key signal)] signal)
+      :destroy (swap! active-persistent-signals* update owner
+                       dissoc (:instance-key signal))
+      nil)))
+
+(defn- forget-owner-persistent-signals! [owner]
+  (swap! active-persistent-signals* dissoc owner)
+  nil)
+
+(defn- publish-vfx-signal!
+  [owner signal]
+  (let [{:keys [scope radius]} (normalize-signal-audience signal)]
+    (case scope
+      :self (when-let [sink @vfx-self-sink*] (sink owner signal))
+      (do (track-persistent-signal! owner signal)
+          (when-let [sink @vfx-broadcast-sink*]
+            (sink owner signal (when (not= :world scope) radius)))))))
+
+(defn- replay-persistent-signals!
+  "Every persistent-replay-interval-ticks, resend each owner's active
+   :session/:persistent VFX :spawn signals through the broadcast sink. The
+   client runtime's dispatch-signal! is idempotent per instance-key (vfx-
+   core/runtime.clj) -- a client that already has the instance treats this
+   as a harmless no-op re-signal, while a client that just entered tracking
+   range creates the instance fresh. No per-viewer bookkeeping needed."
+  []
+  (when-let [sink @vfx-broadcast-sink*]
+    (doseq [[owner signals] @active-persistent-signals*
+            signal (vals signals)]
+      (let [{:keys [scope radius]} (normalize-signal-audience signal)]
+        (sink owner signal (when (not= :world scope) radius)))))
+  nil)
+
 (defn- publish-result!
   [result]
+  (doseq [signal (:vfx-signals result)]
+    (publish-vfx-signal! (:owner result) signal))
   (when-let [sink @result-sink*]
     (when-let [owner (:owner result)]
-      (sink owner result)))
+      (sink owner (dissoc result :vfx-signals))))
   result)
+
+(defn publish-combat-result!
+  "Public entry point for network handlers outside this namespace (the
+   MSG-COMBAT-INTENT RPC handler) that already have a finalized result and
+   need its VFX signals audience-routed and its status/feedback pushed --
+   the exact same delivery every other dispatch path in this namespace uses.
+
+   Returns the result with :vfx-signals stripped, matching what the sinks
+   actually received: the RPC reply itself must not also carry raw signals,
+   or the caster's own client would receive its :self-scope VFX twice (once
+   from the reply, once from the push) and its :tracking-scope VFX exactly
+   once as one nearby-broadcast recipient among others -- never both."
+  [result]
+  (dissoc (publish-result! result) :vfx-signals))
+
+(defn broadcast-clear-owner!
+  "Tell every nearby client to drop its VFX instances for `owner` (logout,
+   death, dimension change). Broadcast, not self-only: a player who
+   disconnects mid-cast left :tracking-scope VFX running on OTHER clients
+   too, and only they can tear it down -- the owner's own client is about to
+   lose its whole session anyway."
+  [owner]
+  (forget-owner-persistent-signals! owner)
+  (when-let [sink @vfx-broadcast-sink*]
+    (sink owner {:op :clear-owner :owner owner :event-seq 0} nil))
+  nil)
 
 (defn dispatch-and-publish-event!
   "Dispatch a one-shot ability event (no active session required -- a fresh
@@ -1139,6 +1262,8 @@
   "Advance sessions, execute their world effects, and publish each result."
   [tick]
   (reset! last-known-tick* (long tick))
+  (when (zero? (mod (long tick) persistent-replay-interval-ticks))
+    (replay-persistent-signals!))
   (let [edn-results
         (mapv (fn [[owner session]]
                 (execute-combat-intent!
@@ -1168,5 +1293,6 @@
   (reset! world-effect-handler* nil)
   (reset! result-sink* nil)
   (reset! last-known-tick* 0)
+  (reset! active-persistent-signals* {})
   (combat-sessions/reset-for-test!)
   nil)

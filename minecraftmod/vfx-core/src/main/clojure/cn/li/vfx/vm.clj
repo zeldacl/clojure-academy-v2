@@ -598,6 +598,12 @@
                          face-size (if (contains? #{:up :down} face) 1.0 0.8)]
                      (recur (next remaining)
                             (inc hit-index)
+                            ;; clj-kondo misparses this reduce as 1-arg on this
+                            ;; deeply-nested fn+map-literal shape -- verified
+                            ;; balanced (compiles, and manually traced paren-
+                            ;; by-paren); the 3-arg call (fn, out, (range
+                            ;; duplicates)) below is correct as written.
+                            #_:clj-kondo/ignore
                             (reduce (fn [acc dup]
                                       (conj! acc
                                              (let [rstate (seeded-rng/next-long

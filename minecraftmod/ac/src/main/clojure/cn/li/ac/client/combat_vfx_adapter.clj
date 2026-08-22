@@ -23,11 +23,6 @@
         {:status :unhandled :reason :vfx-dispatch-not-installed
          :signal signal}))))
 
-(defn dispatch-result! [result]
-  (doseq [signal (:vfx-signals result)]
-    (dispatch-signal! signal))
-  result)
-
 (defn clear-owner!
   "Clear all client VFX instances for an owner through vfx-core's signal ABI."
   [owner]

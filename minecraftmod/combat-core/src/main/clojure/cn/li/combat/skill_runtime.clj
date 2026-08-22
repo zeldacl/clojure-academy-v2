@@ -34,6 +34,7 @@
       :owner owner :world-id world-id :event-seq event-seq
       :seed (long (or (:activation-seed execution-context) 0))
       :event (when (#{:spawn :update} operation) operation)
+      :audience (:audience signal)
       :params (or (:payload signal) {})})))
 
 (defn- parameter-snapshot [ability-id ability intent]

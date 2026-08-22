@@ -254,6 +254,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
+     (combat-runtime/broadcast-clear-owner! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
 
@@ -280,6 +281,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
+     (combat-runtime/broadcast-clear-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :on-player-dimension-change!
@@ -287,6 +289,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
+     (combat-runtime/broadcast-clear-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :get-skills-for-category
@@ -378,7 +381,14 @@
      (when-let [to-client (:to-client fns-map)]
        (combat-runtime/install-result-sink!
         (fn [owner result]
-          (to-client owner ability-messages/MSG-COMBAT-RESULT result)))))
+          (to-client owner ability-messages/MSG-COMBAT-RESULT result)))
+       (combat-runtime/install-vfx-self-sink!
+        (fn [owner signal]
+          (to-client owner ability-messages/MSG-COMBAT-VFX signal))))
+     (when-let [to-nearby (:to-nearby fns-map)]
+       (combat-runtime/install-vfx-broadcast-sink!
+        (fn [owner signal radius]
+          (to-nearby owner ability-messages/MSG-COMBAT-VFX signal radius)))))
 
    :get-context-player-uuid
    ;; Context ids are no longer authoritative combat handles.  Returning nil

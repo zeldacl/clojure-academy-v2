@@ -347,7 +347,7 @@
                              (when-let [entity (entity-motion/resolve-entity
                                                 server world-id (str entity-uuid))]
                                (boolean (entity-motion/set-position-for-entity!
-                                         entity (double x) (double y) (double z))))
+                                         entity (double x) (double y) (double z)))))
                            (catch Exception e
                              (log/warn "Failed to teleport entity:" (ex-message e))
                              false)))
@@ -357,7 +357,7 @@
                                  (when-let [entity (entity-motion/resolve-entity
                                                     server world-id (str entity-uuid))]
                                    (boolean (entity-motion/add-velocity-for-entity!
-                                             entity (double x) (double y) (double z))))
+                                             entity (double x) (double y) (double z)))))
                                (catch Exception e
                                  (log/warn "Failed to add entity velocity:" (ex-message e))
                                  false)))
