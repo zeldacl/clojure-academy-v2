@@ -1,58 +1,60 @@
 # Combat Core 维护手册
 
+> 语言本体（描述符/表达式/作用域/composite 展开）的完整规格见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md)——本文只讲 combat-core 如何使用这套语言、模块边界、以及排障。
+
 ## 系统职责
 
-`:combat-core` 是纯数据、平台中立的技能程序引擎：技能是编译期校验过的数据结构（`:sequence`/`:repeat`/`:branch`/`:query`/`:damage`/`:vfx`/`:world-effect`/`:domain-event`/`:patch`/`:phase`/`:session-patch` 等 op），由 `runtime.clj` 的执行器解释执行。它只产出中立的结果计划（伤害请求、VFX 信号、world-effect 描述、StatePatch）——从不认识 Minecraft、渲染或任何具体 VFX 运行时；执行这些计划是 AC 与 host 适配器的职责。
+`combat-core` 加载 `node-core` 语言之上的**战斗词汇表**（原语 + 中层 composite），执行全部技能。它是纯数据驱动、平台中立的执行引擎：技能是编译期校验过的 EDN 节点树，由树遍历解释器执行，只产出中立的结果计划（`:actions`/`:events`/`:vfx-signals`/`:query-results`）——从不直接改动 Minecraft 状态；真正落地世界效果、伤害、位移是通过 `mcmod` 端口 + 已注册的 host capability 完成的，AC 只负责组装与自己领域（技能学习/资源/成就）的注入。
 
 ## 模块边界
 
-- `combat-core/src/main/clojure/cn/li/combat/registry.clj`：node/ability/provider 的冻结注册表，`register-node!`/`register-ability!` 在 `freeze!` 之后拒绝新注册。
-- `combat-core/src/main/clojure/cn/li/combat/dsl.clj`：技能作者用的数据优先 DSL（`defability`/`sequence`/`repeat`/...），展开为不可变 map，不执行游戏逻辑。
-- `combat-core/src/main/clojure/cn/li/combat/compiler.clj`：确定性编译器，`built-in-ops` 校验合法 op 集合，`content-hash` 提供内容寻址。
-- `combat-core/src/main/clojure/cn/li/combat/damage.clj`：纯变换伤害管线，`damage-request` 构造/校验请求，永不产生 Minecraft 副作用。
-- `combat-core/src/main/clojure/cn/li/combat/runtime.clj`：`create-engine` 组装执行器；`:query-port`/`:damage-pipeline`/`:domain-event-handler` 是外部注入的中立接口，engine 本身不知道它们的实现细节。
-- `ac/src/main/clojure/cn/li/ac/ability/service/combat_content.clj`：AC 侧技能内容目录，`:execution :combat-core` 是每个 skill-spec 的执行路由标记。
-- `ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj`：AC 侧 composition root，安装 `:query-port`（`:raycast` 等 query 类型的实现）、`:damage-pipeline`、`:domain-event-handler`，并把 engine 的计划桥接到真实的伤害/VFX/world-effect 执行。
-- `ac/src/main/clojure/cn/li/ac/client/combat_vfx_adapter.clj` + `ac/src/main/clojure/cn/li/ac/client/effect_controller.clj`：客户端把 combat-core 发出的 `:vfx` 信号路由到 vfx-core 的实例（详见 [VFX_CORE.md](VFX_CORE.md)）。
+- `node-core/**`：语言本体，不依赖 Minecraft，也不依赖 combat-core/vfx-core/ac。
+- `combat-core/src/main/clojure/cn/li/combat/components.clj`：战斗词汇表注册——底层原语（`:layer :primitive`，带 `:impl`，可调 mcmod）与内建 composite。
+- `combat-core/src/main/clojure/cn/li/combat/vm.clj`：树遍历解释器；对 `:effect/vfx`/`:domain/event`/`:session-patch`/`:owner-patch` 等发射节点产出 `:actions`/`:events`/`:vfx`。
+- `combat-core/src/main/clojure/cn/li/combat/recipe.clj`：ability/composite 文档加载与编译，fail-closed 逐文档隔离（Design E）。
+- `combat-core/src/main/clojure/cn/li/combat/interception.clj`：伤害拦截决策边界（含反应管线），platform 事实采集（raycast/entity-motion）与 `:entity/damage` capability 调用都在这里直接完成，不经过 AC 转发。
+- `combat-core/src/main/clojure/cn/li/combat/skill_runtime.clj`：技能激活编排——tunable 具体化、VFX 信号规范化、结果组装。
+- `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host query/action capability 表。
+- `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：AC 侧唯一同时依赖 combat-core 与 vfx-core 的组装点——加载 manifest、跑 vfx 契约交叉校验、暴露编译后 catalog。
+- `ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj`：AC composition root，注入 AC 自己领域的端口（resource/progression/achievement/saved-location 等），提交 combat-core 产出的 `:owner-patch`/`:session-patch`。
+
+## 词汇表分层（详见 NODE_LANGUAGE.md §1）
+
+```
+:layer :primitive   Clojure 函数，可调 mcmod        components.clj 的 register-primitive!
+:layer :mid          纯 EDN composite                ac/src/main/resources/ac/combat/components/*.edn
+:layer :ability       纯 EDN 技能文档                  ac/src/main/resources/ac/combat/abilities/*.edn
+```
+
+一个组件是否该是原语，判定标准：**一个原语只做一件事且必须触碰宿主**；一旦它内部组合了"查询 → 循环 → 施加"这类多步骤，就必须是 composite。当前词汇表里哪些属于哪一层、审计依据，见迁移计划 R2 章节（`docs/04-systems/NODE_LANGUAGE.md` §12 有旧→新的概念映射）。
 
 ## 运行时流程
 
-1. `combat_content.clj` 声明技能的 skill-spec（含 `:execution :combat-core`），交给 `compiler.clj` 编译成内容寻址的 catalog。
-2. 服务端 `combat_runtime.clj` 用编译后的 catalog 调 `runtime/create-engine`，注入真实 `:query-port`（当前只装了 `:raycast`，见下方"已知限制"）。
-3. 客户端发出的 CombatIntent 驱动 engine 逐 op 执行：`:query` 向 `:query-port` 要数据，`:damage` 经 `damage.clj` 产出纯变换后的伤害请求，`:vfx` 产出携带 `[:combat owner activation-key effect-id]` 形态 `instance-key` 的信号，`:world-effect`/`:domain-event` 产出中立描述。
-4. `combat_runtime.clj` 把这些计划翻译成真实副作用：伤害请求交给 `entity-damage` 平台适配器，VFX 信号推给 `MSG-COMBAT-RESULT` 网络消息，world-effect 描述交给 world-effects 平台适配器。
-5. `assert-complete-composition!`（`combat_content.clj`）在 content 加载时校验 `:abilities` 声明集合与 `skill-specs` 集合完全一致（从 id 集合派生比较，不再硬编码技能数量）。
+1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/components_manifest.edn`、`vfx/manifest.edn`、`vfx/components_manifest.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
+2. 客户端 CombatIntent 驱动 `skill_runtime/dispatch!`：具体化 tunable → `vm/execute!` 树遍历 → 产出 `{:actions :events :vfx-signals :query-results :status}`。
+3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 交给 `combat-core/vfx-publish` 按 audience 广播。
+4. 任意入站伤害（技能命中或 vanilla 击中）都先经过 `combat-core/interception.clj` 的 `intercept!`——这是唯一的伤害决策边界，platform 事实（world-id/目标位置/攻击者朝向）与反应管线（`reactions.clj`，逐步并入同一 VM，见 NODE_LANGUAGE.md §10）都在这一步完成，结果只返回给调用方提交，不在中途落地。
 
 ## 扩展点
 
-- 新增 op：在 `compiler.clj`'s `built-in-ops` 登记，在 `runtime.clj` 加执行分支，在 `dsl.clj` 加对应构造函数。
-- 新增技能：在 `combat_content.clj` 加一条 skill-spec，`:execution :combat-core` 是必需字段——遗漏会被 `context_state.clj` 的 fail-closed 守卫拒绝执行。
-- 新增 query 类型：在 `combat_runtime.clj` 的 `:query-port` 实现里加分支——**加之前先读下面"已知限制"**，当前只有 `:raycast` 真正装了实现。
-
-## 已知限制（重要，排障先看这里）
-
-> 2026-08-17 更新：本节曾经的表述（"只装了 `:raycast`"、"mine-ray 端到端验证过"）已被逐条核实推翻。完整、按技能分类的当前缺口清单见 **[COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md)**，本节只保留排障判断依据。
-
-**`:query-port` 与 world-effect 执行器都可能缺失，且缺失方式不同、不能只查一处。** `default-query-port`（`combat_runtime.clj`）里 9 种 query 有真实本地实现（`:raycast`/`:attack`/`:ray-barrage`/`:directed-blastwave`/`:groundshock`/`:thunder-clap`/`:blood-retrograde`/`:vec-accel`/`:vec-deviation`），其余约 13 种恒返回 `nil`。world-effect 侧（`mcbase/adapter/world_effects.clj` 的 `create-world-effects`）只真正安装了 4 个执行器（`execute-vec-accel!`/`execute-mag-movement!`/`execute-mag-manip!`/`execute-vec-deviation!`），其余约 11 个调用即抛异常（被 try/catch 兜成 `:status :failed`）。**两层要分别检查**——一个技能的 query 工作正常不代表它的 world-effect 也工作（例如 `directed-shock` 的 `:raycast` 查询正常、伤害正常命中，但 `:knockback` world-effect 完全没有处理分支）。
-
-排障判断依据：如果一个已迁移到 combat-core 的技能施放后完全没有效果（伤害、位移、特效都没有），无论哪种情况都**不会抛异常或记可见错误**——query 返回 nil 被 `:require` 拒绝成普通"没瞄准目标"（这个已经在 [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md) 相关的执行会话里补了 `:query-returned-nil` 诊断 feedback，见 commit `d72b1695f`），world-effect 缺失则被 `execute-world-effects!` 的 try/catch 降级为 `:status :failed`。先检查它的 op 序列里的 `:query-type`，再检查 `:world-effect` 的 `:effect-type`，分别对照 `default-query-port` 和 `create-world-effects` 是否真的覆盖了这两个值。
-
-只有 `:raycast`/`:attack`/`:ray-barrage`/`:directed-blastwave` 类查询 + `:damage`（走独立的伤害管线，不经过 `world-effects/execute-*!`）组合出的技能（如 railgun、thunder-bolt、electron-bomb、flesh-ripping、directed-shock 的伤害部分）是当前可信的端到端正常路径。`thunder-clap`/`blood-retrograde`/`plasma-cannon`/`meltdowner` 的 world-effect 执行器已在 2026-08-17 补齐（见 [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md) C 节），编译通过但**尚未进游戏验证**，先按"可能有效但未证实"对待，不要当成和 railgun 同等级别的已验证路径。
+- 新增底层原语：在 `components.clj` 用 `register-primitive!` 登记完整 v3 描述符（`:inputs`/`:outputs`/`:effects`/`:impl`），先确认它确实"只做一件事且必须触碰宿主"——否则应该是新增中层 composite 而不是新增原语。
+- 新增中层语义：在 `ac/src/main/resources/ac/combat/components/*.edn` 加一个 `:layer :mid` composite 文档，登记进 `components_manifest.edn`。**禁止**给它写任何 Clojure 实现。
+- 新增技能：在 `ac/src/main/resources/ac/combat/abilities/*.edn` 加文档，登记进 `manifest.edn`。技能文档顶层可以用 source 节点（`:ability/caster`/`:ability/tunable`/…，见 NODE_LANGUAGE.md §5）读取环境；中层/底层节点内部不可以。
 
 ## 排障手册
 
-- 技能施放无效果 → 先看上面的"已知限制"。
-- VFX 没有出现，客户端日志报 `unknown VFX effect` → `combat_content.clj` 发出的 `:effect-id` 与客户端注册的 effect-id 不一致，参见 [VFX_CORE.md](VFX_CORE.md) 的排障手册。
-- `assert-complete-composition!` 抛 "Combat Core composition incomplete" → `:abilities` 声明与 `skill-specs` 的 id 集合不一致，检查两边是否漏加/多加了某个技能。
-- `verifyCombatSkillCoverage`/`verifyCombatContentHash`/`verifyAbilityVfxRegistryCoverage` 见 [../dev/AGENT_AND_TOOLING.md](../dev/AGENT_AND_TOOLING.md) 的 Required gate。
+- 技能施放无效果 → 先看该技能的编译 `:errors`（`combat_catalog/initialize!` 的返回值），确认文档本身编译通过。
+- "unknown component" / "component field is missing" → 对照 `components.clj`/对应 composite 文档的 `:inputs` 声明，字段名或类型不对。
+- "read of a local not bound on every reachable path" / 作用域相关错误 → 检查 `:bind` 是否在读取点之前的兄弟节点完成，是否跨了 `:flow/branch`/`:txn/atomic` 的分支边界（分支间绑定不逃逸，见 NODE_LANGUAGE.md §4）。
+- source 节点相关编译错误 → 确认该节点只出现在技能文档顶层，且技能文档确实声明了对应的 `:tunables`/`:costs`/`:progression`/`:cooldown`/`:invariants` 条目。
 
 ## 变更风险
 
-- `runtime.clj` 只产出计划，绝不能引入任何直接副作用（网络发送、渲染调用、平台 API）——这是 `verifyCombatNoPlatformNamespaces`/`verifyCombatDependencyDirection` 强制的边界。
-- `:query-port`/`:damage-pipeline`/`:domain-event-handler` 是唯一允许的外部注入点；不要在 engine 内部新增隐式依赖或全局状态读取。
-- `registry.clj` 冻结后拒绝新注册——测试之间必须调用相应的 reset，否则会跨测试污染。
+- `combat-core` 只产出计划/直接调用已注册的 mcmod 端口，绝不写 AC 的玩家存档 schema——这条边界由 `verifyAcNoWorldCapabilities`/`verifyCombatSingleDamagePath` 等门禁强制；新增 `:mutate` 原语时确认它落地的是 mcmod 端口而不是绕道 AC。
+- `:layer :mid` 组件不得有 `:impl`，不得出现在任何 `defmethod`/handler 表里——`verifyNodeLayerDiscipline` 强制。
+- 中层/底层节点不得读取 `{:from …}`/`{:tunable …}`/`{:ref [:context …]}` 等环境形式——`verifyNoImplicitDependency` 强制。
 
 ## 兼容性约束
 
-- combat-core 只依赖 `:mcmod`（见 [PROJECT_LAYOUT.md](../01-overview/PROJECT_LAYOUT.md)），不得引用 `cn.li.(ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|vfx|presentation).*`，由 `verifyCombatDependencyDirection`/`verifyCombatNoPlatformNamespaces` 强制。
-- combat-core 的 Clojure 源码是全部实现——`verifyCombatClojureOwnership` 禁止 `combat-core/src/main/java` 出现战斗实现逻辑。
+- `combat-core` 依赖 `node-core` 与 `mcmod`；可依赖 `vfx-core`（单向）用于 VFX 信号规范化。不得依赖 `ac`/`platform`/任何具体 loader 命名空间，由 `verifyCombatDependencyDirection` 强制。
+- `node-core` 不得依赖 `combat-core`/`vfx-core`/`mcmod`/`ac`，由 `verifyNodeCoreDependencyDirection` 强制。
