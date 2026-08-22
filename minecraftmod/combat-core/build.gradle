@@ -54,6 +54,11 @@ tasks.register("runCombatClojureTests", JavaExec) {
 
 dependencies {
     implementation project(":mcmod")
+    // Shared node-language kernel (descriptor registry, expression
+    // evaluator, scope checker, composite expansion) -- see
+    // verifyNodeCoreDependencyDirection and NODE_LANGUAGE.md section 2.1.
+    // combat-core's own vocabulary (components.clj) registers against it.
+    implementation project(":node-core")
     // One-directional: combat-core may depend on vfx-core (it produces VFX
     // signals that reference vfx-core effect ids and needs their compiled
     // :audience/:lifecycle metadata to route delivery), vfx-core must never

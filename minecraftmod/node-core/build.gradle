@@ -3,14 +3,14 @@ plugins {
     id "dev.clojurephant.clojure"
 }
 
-// VFX is a neutral, source-first Clojure runtime. It must not be AOTed in a
-// normal platform build because it contains no Minecraft symbols to remap.
+// node-core is the node-language kernel shared by combat-core and vfx-core:
+// descriptor registry, expression evaluator, lexical-scope checker,
+// composite expansion, structural validation, schema export. It must not
+// depend on Minecraft, mcmod, or either domain module -- see
+// verifyNodeCoreDependencyDirection in the root build.gradle and
+// NODE_LANGUAGE.md section 2.1. This is the one Clojure module in the repo
+// that deliberately has ZERO project dependencies of its own.
 layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
-
-tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
-    checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes"
-}
 
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
@@ -28,7 +28,6 @@ tasks.named("processResources").configure {
 
 tasks.named("compileClojure").configure { task ->
     onlyIf { rootProject.ext.fullAotEnabled }
-    dependsOn ":mcmod:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
         task.destinationDirectory = targetDir
@@ -37,33 +36,22 @@ tasks.named("compileClojure").configure { task ->
     }
 }
 
-// A source-first neutral module must not retain classes produced by an
-// explicit diagnostic full-AOT build.  Clearing the module-local output on
-// every normal classes/jar invocation makes the source XOR AOT boundary
-// deterministic even when developers switch build modes in one checkout.
 def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
     onlyIf { !rootProject.ext.fullAotEnabled }
-    doLast {
-        delete(layout.buildDirectory.dir("clojure/main").get().asFile)
-    }
+    doLast { delete(layout.buildDirectory.dir("clojure/main").get().asFile) }
 }
 tasks.named("classes").configure { dependsOn clearNeutralAotOutput }
 tasks.named("jar").configure { dependsOn clearNeutralAotOutput }
 
-tasks.register("runVfxClojureTests", JavaExec) {
+tasks.register("runNodeCoreClojureTests", JavaExec) {
     group = "verification"
     dependsOn "compileTestClojure", "classes"
     classpath = sourceSets.test.runtimeClasspath
     mainClass = "clojure.main"
-    args "-m", "cn.li.vfx.test-runner"
+    args "-m", "cn.li.node.test-runner"
 }
 
 dependencies {
-    implementation project(":mcmod")
-    // Shared node-language kernel -- see verifyNodeCoreDependencyDirection
-    // and NODE_LANGUAGE.md section 2.1. vfx-core's own vocabulary
-    // (components.clj) registers against it.
-    implementation project(":node-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }

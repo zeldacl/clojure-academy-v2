@@ -66,7 +66,7 @@ Minecraft，放在 `node-core` 模块。`combat-core`/`vfx-core` 各自在其上
 - `:outputs` — `{key {:type t :doc}}`。多输出端口原生支持（不再是 `:produces` 时代的"实际只支持一个"）。
 - `:children` — 仅结构性节点使用，声明子树位置：`{key {:kind :single|:seq|:case-map :required? bool}}`。
 - `:effects` — `#{:pure :query :mutate :emit}`，纯度标记，供 `guard/*` 类节点与编辑器高亮使用。
-- `:impl` — 仅 `:primitive` 合法。签名 `(fn [inputs ctx] outputs-map)`。**只能通过 `(node/input inputs :key)` 访问器读字段**——该访问器断言键已在 `:inputs` 中声明，这是描述符与实现不可能漂移的机械保证（vfx-core 现存的 8 处漂移就是没有这层强制导致的）。
+- `:impl` — 仅 `:primitive` 合法。签名 `(fn [inputs ctx] outputs-map)`。调用边界是 `cn.li.node.runtime/invoke-primitive!`：它先把节点已求值字段 `select-keys` 到该描述符 `:inputs` 声明的键集合，再调用 `:impl`——`:impl` 物理上不可能读到一个自己没声明的字段，这是描述符与实现不可能漂移的机械保证（vfx-core 现存的 8 处漂移就是没有这层强制导致的）。
 
 ## 3. 类型格
 

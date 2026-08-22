@@ -617,6 +617,8 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
             file("ac/src/test/clojure"),
             file("mcmod/src/main/clojure"),
             file("mcmod/src/test/clojure"),
+            file("node-core/src/main/clojure"),
+            file("node-core/src/test/clojure"),
             file("vfx-core/src/main/clojure"),
             file("vfx-core/src/test/clojure"),
             file("combat-core/src/main/clojure"),
@@ -996,6 +998,65 @@ tasks.register("verifyCombatDependencyDirection") {
     }
 }
 
+tasks.register("verifyNodeCoreDependencyDirection") {
+    group = "verification"
+    description = "node-core is the shared node-language kernel (descriptor registry, expression evaluator, scope checker, composite expansion) used by both combat-core and vfx-core. It must have zero dependency on Minecraft, mcmod, or either domain module -- see NODE_LANGUAGE.md section 2.1."
+    doLast {
+        def nodeCoreBuild = file("node-core/build.gradle").text
+        def combatBuild = file("combat-core/build.gradle").text
+        def vfxBuild = file("vfx-core/build.gradle").text
+        def violations = []
+        if (nodeCoreBuild =~ /project\([\"']:(?:mcmod|combat-core|vfx-core|ac|platform|presentation-core)[\"']\)/) {
+            violations << "node-core/build.gradle must not depend on mcmod, combat-core, vfx-core, AC, platform or Presentation -- it is the domain-neutral node-language kernel"
+        }
+        if (!(combatBuild =~ /project\([\"']:?node-core[\"']\)/)) {
+            violations << "combat-core must depend on node-core (shared node-language kernel)"
+        }
+        if (!(vfxBuild =~ /project\([\"']:?node-core[\"']\)/)) {
+            violations << "vfx-core must depend on node-core (shared node-language kernel)"
+        }
+        fileTree(file("node-core/src/main")) {
+            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /(?:net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(?:mcmod|ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|presentation|combat|vfx))\./) {
+                violations << "${source}: node-core contains a Minecraft/mcmod/AC/platform/Presentation/combat-core/vfx-core reference"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.unique().join("\n"))
+        logger.lifecycle("[verifyNodeCoreDependencyDirection] ok")
+    }
+}
+
+tasks.register("verifyNodeLayerDiscipline") {
+    group = "verification"
+    description = "Mechanical half of the three-layer rule (NODE_LANGUAGE.md section 1): a :layer :mid component must be pure EDN, never a Clojure case-branch/handler. node-core's registry already refuses to store :impl alongside :layer :mid at registration time (see cn.li.node.descriptor-test); this gate covers what the registry alone cannot -- a :mid composite's own :id literally appearing as a dispatch target inside a domain vm.clj, which would let a 'mid' component silently execute as if it were a primitive. Scans composite documents under ac/src/main/resources/ac/{combat,vfx}/components/ once R2/R4 introduce them; vacuously passes until then."
+    dependsOn ":node-core:runNodeCoreClojureTests"
+    doLast {
+        def violations = []
+        [
+            [dir: file("ac/src/main/resources/ac/combat/components"), vm: file("combat-core/src/main/clojure/cn/li/combat/vm.clj")],
+            [dir: file("ac/src/main/resources/ac/vfx/components"), vm: file("vfx-core/src/main/clojure/cn/li/vfx/vm.clj")]
+        ].each { pair ->
+            if (pair.dir.directory && pair.vm.file) {
+                def vmSourceWithoutComments = pair.vm.text.replaceAll(/(?m);.*$/, "")
+                fileTree(pair.dir) { include "*.edn" }.files.each { File doc ->
+                    def text = doc.text
+                    if (text =~ /:layer\s+:mid/) {
+                        (text =~ /:id\s+(:[A-Za-z0-9!?*\/-]+)/).each { match ->
+                            def id = match[1].toString()
+                            if (vmSourceWithoutComments.contains(id)) {
+                                violations << "${doc}: :mid component ${id} appears as a literal dispatch target in ${pair.vm} -- mid components must only ever be reached through composite expansion, never a case branch in the domain VM"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.unique().join("\n"))
+        logger.lifecycle("[verifyNodeLayerDiscipline] ok")
+    }
+}
+
 tasks.register("verifyPresentationContainsNoVfxRuntime") {
     group = "verification"
     description = "Ensure Presentation Core is limited to UI/HUD and does not own skill VFX runtime."
@@ -1112,6 +1173,12 @@ tasks.register("verifyCombatSkillCoverage") {
     }
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:runCombatClojureTests" }
+
+tasks.register("verifyNodeCoreLanguageKernel") {
+    group = "verification"
+    description = "Run node-core's own test suite (descriptor registry, expression evaluator, scope checker, composite expansion, structural validation, schema export)."
+    dependsOn ":node-core:runNodeCoreClojureTests"
+}
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
@@ -1557,12 +1624,14 @@ tasks.register("verifyNeutralProviderClosure") {
 tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
     group = "verification"
     description = "Require every neutral provider factory on a classpath without platform sources or Minecraft libraries."
-    dependsOn ":api:classes", ":mcmod:classes", ":presentation-core:classes",
+    dependsOn ":api:classes", ":mcmod:classes", ":node-core:classes", ":presentation-core:classes",
               ":presentation-compiler:classes", ":vfx-core:classes", ":combat-core:classes", ":ac:classes"
     // AC's neutral provider closure now owns Presentation Runtime ViewModels;
     // include the core/compiler artifacts in this isolated classpath while
-    // still excluding every Minecraft/loader project.
-    def neutralProjects = [project(":api"), project(":mcmod"), project(":vfx-core"),
+    // still excluding every Minecraft/loader project. node-core joined this
+    // list once combat-core/vfx-core started depending on it (the shared
+    // node-language kernel) -- its jar is on their runtime classpath now.
+    def neutralProjects = [project(":api"), project(":mcmod"), project(":node-core"), project(":vfx-core"),
                            project(":combat-core"),
                            project(":presentation-core"),
                            project(":presentation-compiler"), project(":ac")]
@@ -1746,6 +1815,9 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNeutralClojureNoMinecraftApis",
               "verifyPresentationJavaPurity",
               "verifyPresentationDependencyDirection",
+              "verifyNodeCoreDependencyDirection",
+              "verifyNodeCoreLanguageKernel",
+              "verifyNodeLayerDiscipline",
               "verifyVfxDependencyDirection",
               "verifyCombatDependencyDirection",
               "verifyCombatClojureOwnership",
