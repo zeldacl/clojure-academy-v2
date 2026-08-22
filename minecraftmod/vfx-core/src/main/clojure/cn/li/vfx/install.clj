@@ -38,8 +38,8 @@
   (not (and (map? declaration) (contains? declaration :default))))
 
 (defn validate-requirements!
-  "Check every combat-core requirement (as produced by
-   cn.li.combat.recipe/vfx-signal-requirements) against vfx-catalog's own
+  "Check every combat-core requirement (as produced by the combat-core
+   recipe namespace's vfx-signal-requirements) against vfx-catalog's own
    compiled effects. Returns a seq of failure maps (empty when every
    requirement is satisfied); never throws, so a caller can decide whether
    one failing requirement disables just its ability or the whole catalog.

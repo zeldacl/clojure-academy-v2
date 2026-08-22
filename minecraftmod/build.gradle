@@ -802,7 +802,7 @@ tasks.register("verifyPresentationDependencyDirection") {
 
 tasks.register("verifyVfxDependencyDirection") {
     group = "verification"
-    description = "Enforce the zero-platform-reference VFX dependency direction."
+    description = "Enforce the zero-platform-reference VFX dependency direction. The combat-core/vfx-core relationship is one-directional -- combat-core may depend on vfx-core (see verifyCombatDependencyDirection), but vfx-core must never depend back on combat-core."
     doLast {
         def vfxBuild = file("vfx-core/build.gradle").text
         def mcmodBuild = file("mcmod/build.gradle").text
@@ -812,8 +812,8 @@ tasks.register("verifyVfxDependencyDirection") {
         if (!(vfxBuild =~ /project\([\"']:?mcmod[\"']\)/)) {
             violations << "vfx-core must depend on mcmod"
         }
-        if (vfxBuild =~ /project\([\"']:(?:ac|platform|presentation-core|presentation-compiler)[\"']\)/) {
-            violations << "vfx-core must not depend on AC, platform or Presentation modules"
+        if (vfxBuild =~ /project\([\"']:(?:ac|platform|presentation-core|presentation-compiler|combat-core)[\"']\)/) {
+            violations << "vfx-core must not depend on AC, platform, Presentation or Combat Core modules"
         }
         if (!(acBuild =~ /project\([\"']:?vfx-core[\"']\)/)) {
             violations << "AC must compose vfx-core"
@@ -859,6 +859,13 @@ tasks.register("verifyVfxDependencyDirection") {
         }.files.each { File source ->
             if (source.text =~ /(?:net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(?:platform|mcbase|mc1201|mc1211|mc262|ac|presentation))\./) {
                 violations << "${source}: vfx-core contains a platform/AC/Presentation reference"
+            }
+            // Comments stripped: a docstring may legitimately mention where a
+            // *caller* (combat-core) gets an argument from (see install.clj)
+            // without vfx-core itself requiring combat-core.
+            def sourceWithoutComments = source.text.replaceAll(/(?m);.*$/, "")
+            if (sourceWithoutComments =~ /cn\.li\.combat\./) {
+                violations << "${source}: vfx-core must not depend back on combat-core (one-directional dependency)"
             }
         }
         [file("ac/src/main/clojure"), file("platform-src")].findAll { it.directory }.each { File root ->
@@ -946,7 +953,7 @@ tasks.register("verifyVfxAotBoundary") {
 
 tasks.register("verifyCombatDependencyDirection") {
     group = "verification"
-    description = "Enforce the neutral Combat Core dependency and namespace boundary."
+    description = "Enforce the neutral Combat Core dependency and namespace boundary. Combat Core may depend on VFX Core one-directionally (it produces VFX signals referencing VFX Core effect ids and needs their compiled :audience/:lifecycle metadata to route delivery) -- see verifyVfxDependencyDirection for the matching vfx-core-must-not-depend-on-combat-core half of that rule."
     doLast {
         def combatBuild = file("combat-core/build.gradle").text
         def acBuild = file("ac/build.gradle").text
@@ -955,8 +962,11 @@ tasks.register("verifyCombatDependencyDirection") {
         if (!(combatBuild =~ /project\([\"']:?mcmod[\"']\)/)) {
             violations << "combat-core must depend on mcmod"
         }
-        if (combatBuild =~ /project\([\"']:(?:ac|platform|vfx-core|presentation-core)[\"']\)/) {
-            violations << "combat-core must not depend on AC, platform, VFX or Presentation"
+        if (!(combatBuild =~ /project\([\"']:?vfx-core[\"']\)/)) {
+            violations << "combat-core must depend on vfx-core (one-directional: for VFX effect audience/lifecycle metadata only)"
+        }
+        if (combatBuild =~ /project\([\"']:(?:ac|platform|presentation-core)[\"']\)/) {
+            violations << "combat-core must not depend on AC, platform or Presentation"
         }
         if (!(acBuild =~ /project\([\"']:?combat-core[\"']\)/)) {
             violations << "AC must compose combat-core"
@@ -967,8 +977,8 @@ tasks.register("verifyCombatDependencyDirection") {
         fileTree(file("combat-core/src/main")) {
             include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
         }.files.each { File source ->
-            if (source.text =~ /cn\.li\.(?:ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|vfx|presentation)\./) {
-                violations << "${source}: combat-core contains forbidden AC/platform/VFX/Presentation reference"
+            if (source.text =~ /cn\.li\.(?:ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|presentation)\./) {
+                violations << "${source}: combat-core contains forbidden AC/platform/Presentation reference"
             }
         }
         fileTree(file("platform-src")) {
@@ -1144,14 +1154,11 @@ tasks.register("verifyCombatIntentOnlyNetwork") {
             throw new GradleException("AC server network is missing CombatIntent registration")
         }
         if (!source.contains("publish-combat-result!")) {
-            throw new GradleException("AC server network no longer routes CombatIntent results through combat-runtime/publish-combat-result! -- VFX audience routing would be bypassed")
+            throw new GradleException("AC server network no longer routes CombatIntent results through cn.li.combat.vfx-publish/publish-combat-result! -- VFX audience routing would be bypassed")
         }
-        def runtime = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj").text
-        if (!runtime.contains("(dissoc result :vfx-signals)")) {
-            throw new GradleException("combat_runtime publish-result! no longer strips :vfx-signals before pushing ability:combat/result")
-        }
-        if (!runtime.contains("(dissoc (publish-result! result) :vfx-signals)")) {
-            throw new GradleException("combat_runtime publish-combat-result! no longer strips :vfx-signals from the CombatIntent RPC reply")
+        def vfxPublish = file("combat-core/src/main/clojure/cn/li/combat/vfx_publish.clj").text
+        if (!vfxPublish.contains("(dissoc result :vfx-signals)")) {
+            throw new GradleException("combat-core vfx-publish/publish-combat-result! no longer strips :vfx-signals from the push channel and the CombatIntent RPC reply")
         }
         logger.lifecycle("[verifyCombatIntentOnlyNetwork] ok")
     }

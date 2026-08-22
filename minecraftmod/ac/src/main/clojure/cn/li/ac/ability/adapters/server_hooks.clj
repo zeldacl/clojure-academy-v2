@@ -15,6 +15,7 @@
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.combat.deferred :as deferred]
+            [cn.li.combat.vfx-publish :as vfx-publish]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.session :as dev-session]
@@ -254,7 +255,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
-     (combat-runtime/broadcast-clear-owner! player-uuid)
+     (vfx-publish/broadcast-clear-owner! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
 
@@ -281,7 +282,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
-     (combat-runtime/broadcast-clear-owner! player-uuid)
+     (vfx-publish/broadcast-clear-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :on-player-dimension-change!
@@ -289,7 +290,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
-     (combat-runtime/broadcast-clear-owner! player-uuid)
+     (vfx-publish/broadcast-clear-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :get-skills-for-category
@@ -379,14 +380,14 @@
    :register-context-send-fns!
    (fn [fns-map]
      (when-let [to-client (:to-client fns-map)]
-       (combat-runtime/install-result-sink!
+       (vfx-publish/install-result-sink!
         (fn [owner result]
           (to-client owner ability-messages/MSG-COMBAT-RESULT result)))
-       (combat-runtime/install-vfx-self-sink!
+       (vfx-publish/install-vfx-self-sink!
         (fn [owner signal]
           (to-client owner ability-messages/MSG-COMBAT-VFX signal))))
      (when-let [to-nearby (:to-nearby fns-map)]
-       (combat-runtime/install-vfx-broadcast-sink!
+       (vfx-publish/install-vfx-broadcast-sink!
         (fn [owner signal radius]
           (to-nearby owner ability-messages/MSG-COMBAT-VFX signal radius)))))
 

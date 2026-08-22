@@ -54,6 +54,12 @@ tasks.register("runCombatClojureTests", JavaExec) {
 
 dependencies {
     implementation project(":mcmod")
+    // One-directional: combat-core may depend on vfx-core (it produces VFX
+    // signals that reference vfx-core effect ids and needs their compiled
+    // :audience/:lifecycle metadata to route delivery), vfx-core must never
+    // depend back on combat-core. See verifyCombatDependencyDirection /
+    // verifyVfxDependencyDirection in the root build.gradle.
+    implementation project(":vfx-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }

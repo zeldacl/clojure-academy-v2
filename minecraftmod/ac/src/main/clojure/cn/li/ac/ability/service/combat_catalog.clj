@@ -129,31 +129,6 @@
               dispatch)))
         (get-in @state* [:trigger-index source])))
 
-(def ^:private default-vfx-audience
-  "A VFX effect document with no declared :audience broadcasts to every
-   nearby client (default server view-distance-ish radius) -- Psi-style
-   networking assumes visible-to-everyone unless a skill's own effect
-   opts into :self (camera/screen-post-process effects that only make
-   sense to the caster's own client)."
-  {:scope :tracking :radius 96.0})
-
-(defn vfx-effect-audience
-  "The compiled VFX effect's own :audience declaration, or the tracking
-   default. combat-core never sees this -- it is purely a network-routing
-   concern AC resolves at publish time (see combat_runtime/publish-result!)."
-  [effect-id]
-  (or (get-in @state* [:vfx :effects effect-id :audience])
-      default-vfx-audience))
-
-(defn vfx-effect-lifecycle
-  "The compiled VFX effect's :lifecycle (:transient, :session, :persistent,
-   or :singleton). Used by combat_runtime's late-join replay: only
-   :session/:persistent instances need their last :spawn signal resent to a
-   player who newly enters tracking range -- a :transient effect has already
-   finished playing by the time anyone could join late."
-  [effect-id]
-  (get-in @state* [:vfx :effects effect-id :lifecycle]))
-
 (defn require-available [ability-id]
   (when-not (available? ability-id)
     (throw (ex-info "ability-not-migrated"

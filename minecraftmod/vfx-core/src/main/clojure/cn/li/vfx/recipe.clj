@@ -227,3 +227,17 @@
      :effects (into {} (map (juxt :id identity) effects))
      :errors errors
      :content-hash (content-hash {:effects effects :composites composites})}))
+
+(defn effect-audience
+  "One compiled effect's own document-level :audience declaration, or nil
+   when it declared none. Reads the load-catalog! result directly -- no
+   registered runtime instance needed, so the network-routing decision
+   (which channel a VFX signal goes through) never requires a client-side
+   rendering Runtime to exist, only the compiled catalog data itself."
+  [vfx-catalog effect-id]
+  (get-in vfx-catalog [:effects effect-id :audience]))
+
+(defn effect-lifecycle
+  "One compiled effect's :lifecycle, or nil when effect-id is unknown."
+  [vfx-catalog effect-id]
+  (get-in vfx-catalog [:effects effect-id :lifecycle]))

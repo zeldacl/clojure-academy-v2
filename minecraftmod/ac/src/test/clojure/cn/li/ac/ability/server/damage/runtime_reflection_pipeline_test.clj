@@ -28,10 +28,10 @@
 
 (deftest server-hooks-route-attack-cancel-to-combat-core-test
   (let [calls (atom [])]
-    (with-redefs [combat-runtime/process-attack-precheck!
+    (with-redefs [combat-runtime/apply-attack-precheck!
                   (fn [& args]
                     (swap! calls conj args)
-                    {:cancelled? true})]
+                    true)]
       (let [hooks-map (server-hooks/runtime-server-hooks)]
         (is (true? ((:should-cancel-attack-interception? hooks-map)
                     "p" "a" 8.0 :src)))
