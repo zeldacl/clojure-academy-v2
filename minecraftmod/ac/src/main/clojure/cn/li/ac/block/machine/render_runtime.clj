@@ -81,4 +81,4 @@
                                     {:value init-ref
                                      :type (type init-ref)}))))]
     (render-init/register-renderer-init-fn! init-fn)
-    (log/info "Registered client renderer init" init-ref)))
+    (log/debug "Registered client renderer init" init-ref)))

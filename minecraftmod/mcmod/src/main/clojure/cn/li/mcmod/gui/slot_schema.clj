@@ -97,7 +97,7 @@
                                             (for [[slot-type grouped] (group-by #(get % :type) slots)]
                                               [slot-type (mapv #(get % :index) grouped)]))}]
       (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in (conj schema-path :slot-schema-registry schema-id) schema))
-      (log/info "Registered slot schema:" schema-id)
+      (log/debug "Registered slot schema:" schema-id)
       schema)))
 
 (defmacro defslot-schema

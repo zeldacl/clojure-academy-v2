@@ -110,11 +110,11 @@
         (if (or (bquery/has-block-event-handler? block-id :on-right-click)
                 (bquery/is-part-block? block-id))
           (do
-            (log/info (str log-prefix " Block has registered handler (or is part block), dispatching..."))
+            (log/debug (str log-prefix " Block has registered handler (or is part block), dispatching..."))
             (let [ret (dispatcher-fn (assoc event-data :block-id block-id))]
-              (log/info (str log-prefix " Dispatcher returned gui-id=" (:gui-id ret)
-                             " player=" (some-> (:player ret) (str))
-                             " pos=" (:pos ret)))
+              (log/debug (str log-prefix " Dispatcher returned gui-id=" (:gui-id ret)
+                              " player=" (some-> (:player ret) (str))
+                              " pos=" (:pos ret)))
               (event-feedback/emit-feedback! event-data ret)
 
               ;; Handle GUI opening if result indicates it
@@ -131,5 +131,5 @@
                   (catch Exception e
                     (log/stacktrace (str log-prefix " Failed to open GUI") e))))
               ret))
-          (log/info (str log-prefix " Block has no registered :on-right-click handler")))
+          (log/debug (str log-prefix " Block has no registered :on-right-click handler")))
         (log/debug (str log-prefix " Could not identify block-id from:" block-name))))))

@@ -13,7 +13,7 @@
 
 (defn- register-one-screen!
   [gui-id menu-type screen-creator factory-fn-kw]
-  (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
+  (log/debug "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
   (when menu-type
     (MenuScreens/register
      menu-type
@@ -26,7 +26,7 @@
            (catch Throwable e
              (log/stacktrace "[SCREEN-FACTORY] Exception:" e)
              (throw e))))))
-  (log/info "Registered screen for GUI ID" gui-id)))
+  (log/debug "Registered screen for GUI ID" gui-id)))
 
 (defn register-screens!
   "Register screen factories with Forge."

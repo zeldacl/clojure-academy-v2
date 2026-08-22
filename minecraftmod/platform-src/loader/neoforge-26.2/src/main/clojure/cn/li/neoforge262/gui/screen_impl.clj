@@ -15,7 +15,7 @@
 
 (defn- register-one-screen!
   [^RegisterMenuScreensEvent event gui-id menu-type screen-creator factory-fn-kw]
-  (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
+  (log/debug "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
   (when menu-type
     (.register event
                menu-type
@@ -23,7 +23,7 @@
                  (create [_ menu player-inventory title]
                    (log/debug "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
                    (screen-creator menu player-inventory title)))))
-  (log/info "Registered screen for GUI ID" gui-id))
+  (log/debug "Registered screen for GUI ID" gui-id))
 
 (defn register-screens-on-event!
   "Register screen factories from RegisterMenuScreensEvent (mod bus / client)."

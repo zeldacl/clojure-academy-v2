@@ -10,20 +10,20 @@
 
 (defn register-block
   [block-id ^Block block-instance]
-  (log/info "Registering block with Fabric BuiltInRegistries:" block-id)
+  (log/debug "Registering block with Fabric BuiltInRegistries:" block-id)
   (RegistryDispatch/registerBlock modid/mod-id (str block-id) block-instance))
 
 (defn register-item
   [item-id ^Item item-instance]
-  (log/info "Registering item with Fabric BuiltInRegistries:" item-id)
+  (log/debug "Registering item with Fabric BuiltInRegistries:" item-id)
   (RegistryDispatch/registerItem modid/mod-id (str item-id) item-instance))
 
 (defn register-fluid
   [fluid-id ^Fluid fluid-instance]
-  (log/info "Registering fluid with Fabric BuiltInRegistries:" fluid-id)
+  (log/debug "Registering fluid with Fabric BuiltInRegistries:" fluid-id)
   (RegistryDispatch/registerFluid modid/mod-id (str fluid-id) fluid-instance))
 
 (defn register-particle
   [particle-id always-show?]
-  (log/info "Registering particle with Fabric BuiltInRegistries:" particle-id)
+  (log/debug "Registering particle with Fabric BuiltInRegistries:" particle-id)
   (FabricParticleHelper/registerParticle modid/mod-id (str particle-id) (boolean always-show?)))

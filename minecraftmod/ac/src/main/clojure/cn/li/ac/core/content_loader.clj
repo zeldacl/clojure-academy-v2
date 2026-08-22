@@ -33,8 +33,8 @@
           (gui-registry/register-screen-factory!
             screen-fn-kw
             (partial screen-factory/create-screen gui-type))
-          (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id
-                    "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
+          (log/debug "Registered screen factory" screen-fn-kw "for GUI ID" gui-id
+                     "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
   (hooks/call-all-network-handlers!)
   (tabbed-gui/register-set-tab-handler!)
   ;; Install the client bridge used by registered reactive GUI factories.

@@ -155,7 +155,7 @@
                    ;; Store menu-type in platform adapter's metadata system
                    menu-type)))]
       (assoc-gui-menu-type! gui-id ro)
-      (log/info "Queued menu type:" registry-name "for GUI ID" gui-id)))
+      (log/debug "Queued menu type:" registry-name "for GUI ID" gui-id)))
       (log/info "Queued" (count (gui-menu-types-snapshot)) "menu types"))
 
 ;; ============================================================================

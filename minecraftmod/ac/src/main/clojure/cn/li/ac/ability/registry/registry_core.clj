@@ -67,7 +67,7 @@
                         (when (:frozen? (state-snapshot))
                           (throw (ex-info (str (capitalize-first label) " registry is frozen") {})))
                         (update-state! assoc-in [:registry id] spec)
-                        (log/info "Registered" label id)
+                        (log/debug "Registered" label id)
                         spec)))
        :get (fn [id] (get (:registry (state-snapshot)) id))
        :get-all (fn [] (vals (:registry (state-snapshot))))})))

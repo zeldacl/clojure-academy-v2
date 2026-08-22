@@ -83,9 +83,9 @@
 (defn- require-namespaces! [namespaces]
   (doseq [ns-sym namespaces]
     (try
-      (log/warn "[CONTENT_TRACE] require begin" ns-sym)
+      (log/debug "[CONTENT_TRACE] require begin" ns-sym)
       (require-lock/safe-require ns-sym)
-      (log/warn "[CONTENT_TRACE] require ok" ns-sym)
+      (log/debug "[CONTENT_TRACE] require ok" ns-sym)
       (catch Throwable t
         (log/stacktrace (str "[CONTENT_TRACE] require fail " ns-sym) t)
         (throw t)))))
@@ -94,10 +94,10 @@
   (let [tag (name (trace-tag phase-spec))]
     (doseq [init-sym init-fns]
       (try
-        (log/warn (str "[CONTENT_TRACE] " tag " begin") init-sym)
+        (log/debug (str "[CONTENT_TRACE] " tag " begin") init-sym)
         (when-let [init-fn (find-var init-sym)]
           (init-fn)
-          (log/warn (str "[CONTENT_TRACE] " tag " ok") init-sym))
+          (log/debug (str "[CONTENT_TRACE] " tag " ok") init-sym))
         (catch Throwable t
           (log/stacktrace (str "[CONTENT_TRACE] " tag " fail " init-sym) t)
           (throw t))))))
@@ -106,9 +106,9 @@
   "Load all content namespaces and execute their declared init functions."
   []
   (let [plan (current-content-load-plan)]
-    (log/warn "[CONTENT_TRACE] load-all begin" {:phases (mapv #(get % :phase) plan)})
+    (log/debug "[CONTENT_TRACE] load-all begin" {:phases (mapv #(get % :phase) plan)})
     (doseq [phase-spec plan]
       (require-namespaces! (:namespaces phase-spec)))
     (doseq [phase-spec plan]
       (run-init-fns! phase-spec))
-    (log/warn "[CONTENT_TRACE] load-all end")))
+    (log/info "[CONTENT_TRACE] content load complete:" (count plan) "phases")))

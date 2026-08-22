@@ -97,7 +97,7 @@
             (.put models base-mrl
                   (ObjCompositeBakedModel. flat-base world-model
                                            (overrides-fn flat-base world-model)))
-            (log/info "[obj-model-baking] composite installed for" item-id
+            (log/debug "[obj-model-baking] composite installed for" item-id
                       "- mesh quads:" (world-quad-count world-model)))
           (log/warn "[obj-model-baking] no composite for" item-id
                     "- it will render as a flat icon everywhere."

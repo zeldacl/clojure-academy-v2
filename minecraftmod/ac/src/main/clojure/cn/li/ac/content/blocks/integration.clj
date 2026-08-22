@@ -9,14 +9,14 @@
 (def ^:private integration-block-spec
   {:label :integration
    :init-entries [(fn []
-                    (log/info "Loading integration blocks...")
+                    (log/debug "Loading integration blocks...")
                     (ec-init/load-converters!))
                   (fn []
-                    (log/info "Initializing integration block definitions...")
+                    (log/debug "Initializing integration block definitions...")
                     (ec-init/init-converters!))
                   ec-gui-reactive/register-converter-guis-reactive!]
    :post-init-entries [(fn []
-                         (log/info "Integration block definitions initialized"))
+                         (log/debug "Integration block definitions initialized"))
                        (fn []
                          (log/info "Loaded integration blocks content (4 converters)"))]})
 

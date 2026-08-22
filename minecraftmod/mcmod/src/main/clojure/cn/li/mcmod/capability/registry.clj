@@ -59,7 +59,7 @@
         (throw (ex-info "Duplicate capability registration with different entry"
                         {:key key :previous prev :incoming entry}))))
     (update-capability-type-registry! assoc key entry))
-  (log/info "Declared capability" key "->" (.getName ^Class java-type))
+  (log/debug "Declared capability" key "->" (.getName ^Class java-type))
   nil)
 
 ;; ============================================================================

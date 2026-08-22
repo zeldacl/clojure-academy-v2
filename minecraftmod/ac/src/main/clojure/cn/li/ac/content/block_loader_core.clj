@@ -24,7 +24,7 @@
 (defn load-block-category!
 	[{:keys [label namespaces init-entries post-init-entries]}]
 	(when label
-		(log/info "Loading block category" {:label label}))
+		(log/debug "Loading block category" {:label label}))
 	(require-namespaces! namespaces)
 	(invoke-entries! init-entries)
 	(invoke-entries! post-init-entries)

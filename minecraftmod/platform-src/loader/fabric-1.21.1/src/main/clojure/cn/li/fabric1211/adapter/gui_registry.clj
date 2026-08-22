@@ -93,7 +93,7 @@
     (let [handler-type (create-extended-screen-handler-type gui-id)
           registry-name (gui/get-registry-name gui-id)]
       (assoc-gui-handler-type! gui-id handler-type)
-      (log/info "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
+      (log/debug "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
   (log/info "Registered" (count (gui-handler-types-snapshot)) "screen handler types"))
 
 (defn open-gui-for-player [player gui-id tile-entity]

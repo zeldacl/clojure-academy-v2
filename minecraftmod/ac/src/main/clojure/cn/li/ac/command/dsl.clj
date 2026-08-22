@@ -198,7 +198,7 @@
     existing
     (do
       (assert-command-registry-open!)
-      (log/info "Registering command:" (:id command-spec))
+      (log/debug "Registering command:" (:id command-spec))
       (update-command-registry-state! assoc-in [:commands (:id command-spec)] command-spec)
       command-spec)))
 

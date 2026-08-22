@@ -22,7 +22,7 @@
 	[particle-spec]
 	(when-not (string? (:id particle-spec))
 		(throw (ex-info "Particle :id must be string" {:particle-spec particle-spec})))
-	(log/info "Registering particle:" (:id particle-spec) "->" (:registry-name particle-spec))
+	(log/debug "Registering particle:" (:id particle-spec) "->" (:registry-name particle-spec))
 	(when-let [fw-atom (fw/fw-atom)]
 		(swap! fw-atom assoc-in [:registry :particles (:id particle-spec)] particle-spec))
 	particle-spec)

@@ -18,7 +18,7 @@
   (try
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
-        (log/info "World loaded, dispatching to lifecycle handlers")
+        (log/debug "World loaded, dispatching to lifecycle handlers")
         (register-level-for-state-change-hook! level)
         (let [from-storage (wl-saved/load-world-lifecycle-saved-data level)
               from-cache (world-save-cache/consume-saved-data! level)
@@ -45,7 +45,7 @@
   (try
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
-        (log/info "World unloading, dispatching to lifecycle handlers")
+        (log/debug "World unloading, dispatching to lifecycle handlers")
         (unregister-level-for-state-change-hook! level)
         (world-save-cache/clear-world-saved-data! level)
         (world-lifecycle/dispatch-world-unload level)))

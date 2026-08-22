@@ -35,7 +35,7 @@
           screen-opts (if screen-opts-fn
                         (screen-opts-fn gui-id menu-type factory-fn-kw)
                         {})]
-      (log/info "[SCREEN-INIT] Preparing GUI screen registration"
+      (log/debug "[SCREEN-INIT] Preparing GUI screen registration"
                 {:platform (or label platform)
                  :gui-id gui-id
                  :menu-type menu-type
@@ -46,6 +46,6 @@
          menu-type
          (create-screen-creator gui-id factory-fn-kw screen-opts)
          factory-fn-kw))
-      (log/info "Registered screen factory for GUI ID"
+      (log/debug "Registered screen factory for GUI ID"
                 gui-id
                 {:platform (or label platform)}))))

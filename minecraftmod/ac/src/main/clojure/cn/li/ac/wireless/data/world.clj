@@ -84,14 +84,14 @@
                                registered world-registry/network-rebuild-queue-key))
             conn-count (count (world-registry/transient-value
                                  registered world-registry/connection-rebuild-queue-key))]
-        (log/info "[on-world-load] Queued from save for budgeted rebuild:"
-                  net-count "networks," conn-count "connections")
+        (log/debug "[on-world-load] Queued from save for budgeted rebuild:"
+                   net-count "networks," conn-count "connections")
         registered)
       (let [fresh (create-world-data world)]
-        (log/info "No saved WiWorldData found, created fresh world data")
+        (log/debug "No saved WiWorldData found, created fresh world data")
         (register-world-data! world fresh)))
     (let [fresh (create-world-data world)]
-      (log/info "No saved-data provided, created fresh world data")
+      (log/debug "No saved-data provided, created fresh world data")
       (register-world-data! world fresh))))
 
 (defn on-world-save
@@ -103,7 +103,7 @@
     (let [net-count (count (world-registry/networks wi-data))
           conn-count (count (world-registry/connections wi-data))
           nbt-data (persistence/world-data-to-nbt wi-data world)]
-      (log/info "[on-world-save] Saving" net-count "networks," conn-count "connections")
+      (log/debug "[on-world-save] Saving" net-count "networks," conn-count "connections")
       nbt-data)))
 
 (defn on-world-tick
@@ -117,10 +117,10 @@
   "Called when world unloads - cleanup."
   [world]
   (remove-world-data! world)
-  (log/info "Cleaned up WiWorldData for unloaded world"))
+  (log/debug "Cleaned up WiWorldData for unloaded world"))
 
 (defn init-world-data! []
-  (log/info "Registering wireless world data lifecycle handlers...")
+  (log/debug "Registering wireless world data lifecycle handlers...")
   (world-lifecycle/register-world-lifecycle-handler!
     {:id :ac/wireless-world-data
      :on-load on-world-load

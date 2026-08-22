@@ -165,7 +165,7 @@
                 (skill-effects/set-main-cooldown!
                  player-id :directed-shock
                  (int (cfg-lerp :cooldown.ticks exp*)))
-                (log/info "DirectedShock hit" target-id "dmg" (int damage)))
+                (log/debug "DirectedShock hit" target-id "dmg" (int damage)))
               (do
                 (skill-effects/add-skill-exp! player-id :directed-shock (cfg-double :progression.exp-miss))
                 (terminate-with-end! ctx-id false)))))

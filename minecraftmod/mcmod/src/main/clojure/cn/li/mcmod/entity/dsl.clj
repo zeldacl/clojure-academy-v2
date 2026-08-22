@@ -79,7 +79,7 @@
 (defn register-entity!
   [entity-spec]
   (validate-entity-spec entity-spec)
-  (log/info "Registering entity:" (:id entity-spec))
+  (log/debug "Registering entity:" (:id entity-spec))
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :entities (:id entity-spec)] entity-spec))
   entity-spec)
 

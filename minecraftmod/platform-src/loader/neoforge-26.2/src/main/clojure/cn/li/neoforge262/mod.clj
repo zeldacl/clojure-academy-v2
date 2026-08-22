@@ -151,7 +151,7 @@
 
 (defn- register-all-content!
   [registration-steps]
-  (log/info "[LIFECYCLE] Phase 4: Content registration" {:registrations (count registration-steps)})
+  (log/debug "[LIFECYCLE] Phase 4: Content registration" {:registrations (count registration-steps)})
   (doseq [register-step registration-steps]
     (register-step))
   (log/info "[LIFECYCLE] Phase 4: Content registration complete"))
@@ -183,21 +183,21 @@
     (alter-var-root #'fw/framework (constantly fw-inst)))
   (lifecycle-init/init-lifecycle-with-error-handling!
    {:init-platform! (fn []
-                      (log/info "[LIFECYCLE] Phase 1: Platform initialization")
+                      (log/debug "[LIFECYCLE] Phase 1: Platform initialization")
                       (platform-bootstrap/start!)
                       (init/init-from-java)
                       (log/info "[LIFECYCLE] Phase 1: Platform initialization complete"))
     :activate-runtime-content! (fn []
-                                 (log/info "[LIFECYCLE] Phase 2: Runtime content activation")
+                                 (log/debug "[LIFECYCLE] Phase 2: Runtime content activation")
                                  ((platform-bootstrap/runtime-content-activation-callback!))
                                  (log/info "[LIFECYCLE] Phase 2: Runtime content activation complete"))
     :init-resource-definitions! (fn []
-                                  (log/info "[LIFECYCLE] Phase 3: Resource definition initialization")
+                                  (log/debug "[LIFECYCLE] Phase 3: Resource definition initialization")
                                   (blockstate-props/init-all-properties!)
                                   (log/info "[LIFECYCLE] Phase 3: Resource definition initialization complete"))
     :register-content! #(register-all-content! (registration-steps))
     :setup-mod-bus! (fn []
-                      (log/info "[LIFECYCLE] Phase 5: Mod bus setup")
+                      (log/debug "[LIFECYCLE] Phase 5: Mod bus setup")
                       (setup-mod-bus/run-registration-phases! mod-bus mod-container (mod-bus-opts))
                       (log/info "[LIFECYCLE] Phase 5: Mod bus setup complete"))}
    false))

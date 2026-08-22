@@ -19,7 +19,7 @@
       (reify net.minecraft.client.gui.screens.MenuScreens$ScreenConstructor
         (create [_ menu player-inventory title]
           (screen-creator menu player-inventory title)))))
-  (log/info "Registered screen factory for GUI ID" gui-id))
+  (log/debug "Registered screen factory for GUI ID" gui-id))
 
 (defn register-screens! []
   (log/info "Registering GUI screens for Fabric 26.2")

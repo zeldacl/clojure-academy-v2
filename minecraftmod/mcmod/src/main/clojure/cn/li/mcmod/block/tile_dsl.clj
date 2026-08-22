@@ -153,7 +153,7 @@ Enforces:
                      (update :block->tile-id
                              into
                              (map (fn [b] [b id]) blocks))))))
-      (log/info "Registered tile" id "for blocks" blocks))
+      (log/debug "Registered tile" id "for blocks" blocks))
     tile-spec))
 
 (defn get-tile

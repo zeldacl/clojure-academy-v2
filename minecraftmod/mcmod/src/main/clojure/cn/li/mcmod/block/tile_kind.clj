@@ -24,7 +24,7 @@
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in tile-kind-path
            (fn [current] (assoc (or current {}) tile-kind cfg))))
-  (log/info "Registered tile-kind logic" tile-kind)
+  (log/debug "Registered tile-kind logic" tile-kind)
   nil)
 
 (defn merge-with-kind

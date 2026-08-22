@@ -324,7 +324,7 @@
          ~'tile)
        
        ;; Log registration
-       (log/info ~(str "Registered NBT serialization for: " name-str)))))
+       (log/debug ~(str "Registered NBT serialization for: " name-str)))))
 
 ;; ============================================================================
 ;; Macro: defworldnbt

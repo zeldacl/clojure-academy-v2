@@ -60,8 +60,8 @@
                             :existing (registry-contract/registered-handler-contract existing)
                             :new (:contract entry)})))
          (.put handlers msg-id entry)))
-     (log/info "Registered network handler for" msg-id
-               "owner-spec=" (:owner-spec (:contract entry)))
+     (log/debug "Registered network handler for" msg-id
+                "owner-spec=" (:owner-spec (:contract entry)))
      nil)))
 
 (defn freeze-handlers!

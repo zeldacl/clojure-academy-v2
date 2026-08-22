@@ -166,7 +166,7 @@
           (category/register-category! (normalize-category-map cat)))
         (doseq [^SkillDefinition sd (.skills provider)]
           (skill-registry/register-skill! (skill-definition->spec sd)))
-        (log/info "Registered external ability provider" (.providerId provider))
+        (log/debug "Registered external ability provider" (.providerId provider))
         (catch Throwable t
           (log/warn "Failed to register external ability provider"
                     (.providerId provider) (ex-message t)))))))
