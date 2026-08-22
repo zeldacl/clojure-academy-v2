@@ -161,7 +161,14 @@
            ;; corners then end corners (see emit-quad!'s own comment): u
            ;; runs along the shape, v across its width.
            [:vfx/line #{:from :to :color}]
-           [:vfx/quad #{:p0 :p1 :p2 :p3 :u0 :u1 :v0 :v1 :color :texture}]]]
+           [:vfx/quad #{:p0 :p1 :p2 :p3 :u0 :u1 :v0 :v1 :color :texture}]
+           ;; Generic structural composition nodes -- see vm.clj's own
+           ;; comment on why these stay native sample-node! defmethods
+           ;; instead of node-core's :local execution model.
+           [:vfx/let #{:bindings :child}]
+           [:vfx/curve #{:curve :progress :as :child}]
+           [:vfx/branch #{:when :then :else}]
+           [:vfx/repeat #{:count :index-as :body}]]]
     (when-not (descriptor id)
       (register! {:id id
                   :revision 1

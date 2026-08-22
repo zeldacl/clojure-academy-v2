@@ -147,6 +147,71 @@
   (when (:child node)
     (sample-node! (:child node) (assoc ctx :stage-override :first-person))))
 
+;; -- Generic structural nodes (R3, mossy-wren plan) -------------------------
+;;
+;; These give content a way to compose the leaf render primitives
+;; (:vfx/line/:vfx/quad/...) instead of hand-writing a new Clojure defmethod
+;; for every semantic shape, the way the 10 large nodes below do today.
+;;
+;; A deliberate design choice, not an oversight: these stay native v2
+;; sample-node! defmethods rather than being routed through node-core's
+;; :local/:bind execution model the way combat-core's structural
+;; primitives are (cn.li.combat.structural-primitives). :input/:state are
+;; closer to a shader's uniform/varying inputs than an injected
+;; environment table -- forcing every field read through a source-node +
+;; :bind ceremony would make every leaf node authored against a real
+;; effect document (which already reads many :input fields inline) far
+;; more verbose for no safety benefit node-core's :local scope-checker
+;; would actually provide here (:input/:state are always populated by the
+;; calling activation, not subject to the branch/loop definite-assignment
+;; analysis that checker exists for). The existing sample-node! defmulti
+;; dispatch already IS a working structural-execution mechanism; these are
+;; new implementations on it, not a new architecture.
+;;
+;; The binding mechanism these four share: merge a computed value into
+;; ctx's :input map under an author-chosen key before recursing into the
+;; child/body, so descendants read it exactly like any other spawn/update
+;; field via {:ref [:input <name>]}.
+;;
+;; :vfx/transform (spatial transform of descendant geometry) is
+;; deliberately NOT implemented here: it needs either wrapping ctx's :sink
+;; to rewrite emitted ops' V3 corners after the fact, or every leaf
+;; primitive consulting an ambient "current transform" from ctx when
+;; resolving its own :from/:to/:p0-3 fields -- a real design decision with
+;; matrix-composition correctness questions this environment cannot verify
+;; visually. Left for a dedicated pass once real composite content
+;; (R4) exposes what shape of transform authors actually need.
+
+(defmethod sample-node! :vfx/let
+  [node ctx]
+  (let [bindings (into {} (map (fn [[k v]] [k (resolve-value v ctx)])) (:bindings node))]
+    (when (:child node)
+      (sample-node! (:child node) (update ctx :input merge bindings)))))
+
+;; :vfx/curve's defmethod is defined further down, after sample-keyframes
+;; (a helper originally written for :vfx/first-person-motion, reused here
+;; rather than duplicated) -- see the note there.
+
+(defmethod sample-node! :vfx/branch
+  [node ctx]
+  (let [taken (if (boolean (resolve-value (:when node) ctx)) (:then node) (:else node))]
+    (when taken
+      (sample-node! taken ctx))))
+
+(defmethod sample-node! :vfx/repeat
+  [node ctx]
+  ;; "Seeded loop": the loop's own per-iteration determinism comes from
+  ;; whatever the body derives from the bound index against ctx's own
+  ;; :seed (e.g. {:expr :random/uniform :args [...]} seeded by
+  ;; (+ (:seed ctx) index)) -- :vfx/repeat itself only binds :index-as, it
+  ;; does not fork ctx's seed per iteration.
+  (let [n (long (max 0 (or (resolve-value (:count node) ctx) 0)))
+        index-as (:index-as node)
+        body (:body node)]
+    (when (and body index-as)
+      (dotimes [i n]
+        (sample-node! body (update ctx :input assoc index-as i))))))
+
 (defn- sample-keyframes
   "Piecewise-linear sample of [[progress value] ...] keyframes.  Curves are
    effect data so the same primitive can drive any first-person animation."
@@ -170,6 +235,13 @@
                     t (max 0.0 (min 1.0 (/ (- progress p1) span)))]
                 (+ (double v1) (* t (- (double v2) (double v1)))))
               (recur (inc idx)))))))))
+
+(defmethod sample-node! :vfx/curve
+  [node ctx]
+  (let [progress (double (or (resolve-value (:progress node) ctx) 0.0))
+        value (sample-keyframes (:curve node) progress)]
+    (when (:child node)
+      (sample-node! (:child node) (update ctx :input assoc (:as node) value)))))
 
 (defmethod sample-node! :vfx/first-person-motion
   [node ctx]

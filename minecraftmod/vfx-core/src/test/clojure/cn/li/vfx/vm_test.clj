@@ -122,6 +122,82 @@
       (is (= 1.0 (:u1 op)))
       (is (= "academy:textures/effects/beam.png" (:texture op))))))
 
+;; --- generic structural nodes: :vfx/let, :vfx/curve, :vfx/branch, :vfx/repeat
+
+(deftest let-node-binds-into-input-for-child-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/let :bindings {:mid {:ref [:input :radius]}}
+               :child {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0}
+                       :to {:ref [:input :mid]} :color [1 1 1 1]}}]
+    (vm/sample! graph {:age 0.0 :input {:radius {:x 5.0 :y 6.0 :z 7.0}}} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= 7.0 (.-z ^V3 (:p2 op)))))))
+
+(deftest let-does-not-leak-into-sibling-scope-test
+  ;; The binding only exists inside :child's own ctx -- a sibling under
+  ;; :vfx/timeline sampled separately never sees it; its own {:ref [:input
+  ;; :mid]} resolves against the ORIGINAL (unmodified) :input, i.e. nil.
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/timeline :duration-ticks 10
+               :children [{:at 0 :node {:component :vfx/let :bindings {:mid {:x 1.0 :y 1.0 :z 1.0}}
+                                        :child {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0}
+                                                :to {:ref [:input :mid]} :color [1 1 1 1]}}}
+                          {:at 0 :node {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0}
+                                       :to {:x 9.0 :y 9.0 :z 9.0} :color [1 1 1 1]}}]}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (is (= 2 (count @batches)))
+    (is (= 1.0 (.-x ^V3 (:p2 (first (:ops (first (:payload (first @batches)))))))))
+    (is (= 9.0 (.-x ^V3 (:p2 (first (:ops (first (:payload (second @batches)))))))))))
+
+(deftest curve-node-samples-keyframes-into-input-test
+  ;; sample!'s ctx :state is the ENTIRE per-instance state map it was
+  ;; called with (see sample!'s own :state state binding, not (:state
+  ;; state)) -- :age-ratio must live at that map's top level, not nested
+  ;; under a second :state key, to be visible as {:ref [:state :age-ratio]}.
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/curve :curve [[0.0 0.0] [1.0 10.0]] :progress {:ref [:state :age-ratio]} :as :radius
+               :child {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0}
+                       :to {:x {:ref [:input :radius]} :y 0.0 :z 0.0} :color [1 1 1 1]}}]
+    (vm/sample! graph {:age 0.0 :input {} :age-ratio 0.5} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= 5.0 (.-x ^V3 (:p2 op)))))))
+
+(deftest branch-node-picks-then-when-true-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/branch :when {:ref [:input :active?]}
+               :then {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 1.0 :y 0.0 :z 0.0} :color [1 1 1 1]}
+               :else {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 2.0 :y 0.0 :z 0.0} :color [1 1 1 1]}}]
+    (vm/sample! graph {:age 0.0 :input {:active? true}} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= 1.0 (.-x ^V3 (:p2 op)))))))
+
+(deftest branch-node-picks-else-when-false-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/branch :when {:ref [:input :active?]}
+               :then {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 1.0 :y 0.0 :z 0.0} :color [1 1 1 1]}
+               :else {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 2.0 :y 0.0 :z 0.0} :color [1 1 1 1]}}]
+    (vm/sample! graph {:age 0.0 :input {:active? false}} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= 2.0 (.-x ^V3 (:p2 op)))))))
+
+(deftest repeat-node-runs-body-count-times-with-index-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/repeat :count 3 :index-as :i
+               :body {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0}
+                      :to {:x {:ref [:input :i]} :y 0.0 :z 0.0} :color [1 1 1 1]}}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (is (= 3 (count @batches)))
+    (is (= [0.0 1.0 2.0] (mapv (fn [b] (.-x ^V3 (:p2 (first (:ops (first (:payload b))))))) @batches)))))
+
+(deftest repeat-node-does-not-leak-index-to-caller-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/timeline :duration-ticks 10
+               :children [{:at 0 :node {:component :vfx/repeat :count 2 :index-as :i
+                                        :body {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0}
+                                               :to {:x {:ref [:input :i]} :y 0.0 :z 0.0} :color [1 1 1 1]}}}]}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (is (= 2 (count @batches)) "the repeat body ran twice, each with its own ctx")))
+
 (deftest quad-node-defaults-missing-uv-to-full-range-test
   (let [{:keys [sink batches]} (collecting-sink)
         graph {:component :vfx/quad
