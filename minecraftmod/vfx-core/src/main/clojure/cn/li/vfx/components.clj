@@ -148,7 +148,20 @@
            [:vfx/camera #{:operation :value :duration-ticks}]
            [:vfx/audio-one-shot #{:sound-id :position}]
            [:vfx/audio-loop #{:sound-id :position :volume :pitch :instance-key
-                              :stop-on-destroy?}]]]
+                              :stop-on-destroy?}]
+           ;; Genuinely orthogonal render primitives -- see R3 (mossy-wren
+           ;; plan): the platform renderer's own op vocabulary
+           ;; (presentation_world.clj's sort-ops/render-presentation-
+           ;; geometry!) already exists and is already wired into
+           ;; :draw-batch! via the :mesh/:ops path; these two components
+           ;; just let a VFX graph produce that exact shape directly instead
+           ;; of the :variant-tagged parameter maps the 10 legacy semantic
+           ;; nodes above emit, which nothing on the platform side ever
+           ;; understood. :vfx/quad's p0/p1/p2/p3 are the segment's start
+           ;; corners then end corners (see emit-quad!'s own comment): u
+           ;; runs along the shape, v across its width.
+           [:vfx/line #{:from :to :color}]
+           [:vfx/quad #{:p0 :p1 :p2 :p3 :u0 :u1 :v0 :v1 :color :texture}]]]
     (when-not (descriptor id)
       (register! {:id id
                   :revision 1

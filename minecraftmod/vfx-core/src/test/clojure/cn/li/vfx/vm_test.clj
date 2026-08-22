@@ -1,6 +1,7 @@
 (ns cn.li.vfx.vm-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.vfx.vm :as vm]))
+            [cn.li.vfx.vm :as vm])
+  (:import [cn.li.mcmod.math V3]))
 
 (deftest resolve-value-handles-input-state-and-nesting
   (let [ctx {:input {:start {:x 1.0 :y 2.0 :z 3.0}} :state {:age 5.0}}]
@@ -54,6 +55,71 @@
       (is (= 1 (:count batch)))
       (is (= {:vec3 [1.0 2.0 3.0]} (:center (first (:payload batch)))))
       (is (= 0.5 (:radius-from (first (:payload batch))))))))
+
+;; --- :vfx/line, :vfx/quad: end-to-end proof the render-op contract fix
+;; actually works (R3, mossy-wren plan). These are the only two components
+;; whose emitted batch shape ({:primitive :mesh :payload [{:ops [...]}]})
+;; matches what platform-src's :draw-batch! handler (via
+;; render-presentation-geometry!/sort-ops) has ever understood -- every
+;; other leaf node's :variant-tagged parameter map silently draws nothing.
+;; This is the closest thing to a real render check this environment can
+;; run: it cannot verify pixels on screen, but it proves the DATA a vfx
+;; graph produces is byte-for-byte the shape the renderer's own op
+;; vocabulary (:kind :line/:quad, real V3 corners, vector color) requires,
+;; not a shape that happens to also be named "mesh".
+
+(deftest line-node-emits-mesh-ops-batch-with-real-v3-points-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/line :from {:x 1.0 :y 2.0 :z 3.0} :to {:x 4.0 :y 5.0 :z 6.0}
+               :color [255 0 0 255]}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (let [batch (first @batches)
+          plan (first (:payload batch))
+          op (first (:ops plan))]
+      (is (= :mesh (:primitive batch)))
+      (is (= :ops (:variant batch)))
+      (is (= 1 (count (:payload batch))) "one plan per emit! call")
+      (is (= :line (:kind op)))
+      (is (instance? V3 (:p1 op)))
+      (is (instance? V3 (:p2 op)))
+      (is (= 1.0 (.-x ^V3 (:p1 op))))
+      (is (= 6.0 (.-z ^V3 (:p2 op))))
+      (is (= [255 0 0 255] (:color op))))))
+
+(deftest line-node-accepts-positional-vector-points-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/line :from [0.0 1.0 2.0] :to [3.0 4.0 5.0] :color [1 2 3 4]}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= 2.0 (.-z ^V3 (:p1 op))))
+      (is (= 3.0 (.-x ^V3 (:p2 op)))))))
+
+(deftest quad-node-emits-mesh-ops-batch-with-four-corners-and-uv-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/quad
+               :p0 {:x 0.0 :y 0.0 :z 0.0} :p1 {:x 1.0 :y 0.0 :z 0.0}
+               :p2 {:x 1.0 :y 1.0 :z 0.0} :p3 {:x 0.0 :y 1.0 :z 0.0}
+               :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+               :color [10 20 30 255] :texture "academy:textures/effects/beam.png"}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= :quad (:kind op)))
+      (is (every? #(instance? V3 (get op %)) [:p0 :p1 :p2 :p3]))
+      (is (= 1.0 (:u1 op)))
+      (is (= "academy:textures/effects/beam.png" (:texture op))))))
+
+(deftest quad-node-defaults-missing-uv-to-full-range-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/quad
+               :p0 {:x 0.0 :y 0.0 :z 0.0} :p1 {:x 1.0 :y 0.0 :z 0.0}
+               :p2 {:x 1.0 :y 1.0 :z 0.0} :p3 {:x 0.0 :y 1.0 :z 0.0}
+               :color [1 1 1 1]}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))]
+      (is (= 0.0 (:u0 op)))
+      (is (= 1.0 (:u1 op)))
+      (is (= 0.0 (:v0 op)))
+      (is (= 1.0 (:v1 op))))))
 
 (deftest charge-ring-node-emits-parameterized-ring-payload
   (let [{:keys [sink batches]} (collecting-sink)

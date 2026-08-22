@@ -11,7 +11,8 @@
    ...]} as it goes and, at sample time, emitting one vfx-contract batch
    per drawable node reached."
   (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
-            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]))
+            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng])
+  (:import [cn.li.mcmod.math V3]))
 
 ;; ---------------------------------------------------------------------------
 ;; Value resolution
@@ -744,6 +745,52 @@
       (emit! ctx :screen-post :audio
              [{:sound-id sound-id :position position :volume volume :pitch pitch
                :instance-key instance-key :stop-on-destroy? stop-on-destroy?}]))))
+
+;; ---------------------------------------------------------------------------
+;; Genuinely orthogonal render primitives -- these are the ones the platform
+;; renderer's :draw-batch! handler actually understands (see R3, mossy-wren
+;; plan): presentation_world.clj's sort-ops/render-presentation-geometry!
+;; already implement a :kind :line/:quad/:plasma-body op vocabulary and are
+;; already wired into :draw-batch! via a :primitive :mesh :variant :ops
+;; batch whose :payload is [{:ops [...]}] -- every leaf node ABOVE this
+;; point instead emits its own :variant-tagged parameter map (:line/:beam/
+;; :particle/:mesh with :variant :block-progress etc.), which nothing on the
+;; platform side has ever read (:draw-batch!'s only branch checks
+;; (= "mesh" prim) and, even then, only understands a payload shaped like
+;; {:ops [...]} -- a :variant-tagged parameter map silently draws nothing).
+;; :vfx/line and :vfx/quad close that gap for the two primitive shapes the
+;; renderer already knows how to draw; the composite mid-layer nodes R4
+;; introduces are what content should actually author against.
+;; ---------------------------------------------------------------------------
+
+(defn- ->v3
+  "Accept either a {:x :y :z} map or a positional [x y z] vector -- the same
+   two shapes eval-bounds already tolerates above -- and produce the
+   zero-allocation V3 value presentation_world.clj's emit-line!/emit-quad!
+   require. mcmod's V3 (cn.li.mcmod.math.V3) is a plain Java value type with
+   no Minecraft API surface, so vfx-core constructing it directly here does
+   not cross the neutral/platform dependency boundary (verifyVfxDependencyDirection)."
+  ^V3 [point]
+  (V3. (double (or (:x point) (nth point 0 0.0)))
+       (double (or (:y point) (nth point 1 0.0)))
+       (double (or (:z point) (nth point 2 0.0)))))
+
+(defmethod sample-node! :vfx/line
+  [node ctx]
+  (let [{:keys [from to color]} (resolve-fields node ctx)]
+    (emit! ctx (stage-of ctx :world-after-translucent) :mesh
+           [{:ops [{:kind :line :p1 (->v3 from) :p2 (->v3 to) :color color}]}]
+           {:material :presentation-world :variant :ops})))
+
+(defmethod sample-node! :vfx/quad
+  [node ctx]
+  (let [{:keys [p0 p1 p2 p3 u0 u1 v0 v1 color texture]} (resolve-fields node ctx)]
+    (emit! ctx (stage-of ctx :world-after-translucent) :mesh
+           [{:ops [{:kind :quad :p0 (->v3 p0) :p1 (->v3 p1) :p2 (->v3 p2) :p3 (->v3 p3)
+                    :u0 (double (or u0 0.0)) :u1 (double (or u1 1.0))
+                    :v0 (double (or v0 0.0)) :v1 (double (or v1 1.0))
+                    :color color :texture texture}]}]
+           {:material :presentation-world :variant :ops})))
 
 ;; ---------------------------------------------------------------------------
 ;; Bounds evaluation (a separate small tree under the effect doc's own
