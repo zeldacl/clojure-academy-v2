@@ -12,7 +12,8 @@
             [cn.li.combat.source-nodes-test]
             [cn.li.combat.host-primitives-test]
             [cn.li.combat.policy-primitives-test]
-            [cn.li.combat.structural-primitives-test]))
+            [cn.li.combat.structural-primitives-test]
+            [cn.li.combat.v3-composites-test]))
 
 (defn -main [& _]
   (let [result (t/run-tests 'cn.li.combat.runtime-test
@@ -27,6 +28,7 @@
                             'cn.li.combat.source-nodes-test
                             'cn.li.combat.host-primitives-test
                             'cn.li.combat.policy-primitives-test
-                            'cn.li.combat.structural-primitives-test)]
+                            'cn.li.combat.structural-primitives-test
+                            'cn.li.combat.v3-composites-test)]
     (when (pos? (+ (:fail result) (:error result)))
       (System/exit 1))))
