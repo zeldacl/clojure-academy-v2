@@ -1,21 +1,32 @@
 package cn.li.neoforge262.gametest;
 
-import com.mojang.serialization.MapCodec;
 import cn.li.mcver.ResourceLocations;
 import java.util.function.Consumer;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.FunctionGameTestInstance;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.gametest.framework.GameTestInstance;
 import net.minecraft.gametest.framework.TestData;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 
-/** Registers smoke tests through the data-driven 26.2 GameTest registry. */
+/**
+ * Registers smoke tests through the data-driven 26.2 GameTest registry.
+ *
+ * <p>The 26.2 TEST_INSTANCE registry is synchronized to clients through a
+ * dispatch codec ({@code GameTestInstance.DIRECT_CODEC}): the "function"
+ * type encodes with {@code FunctionGameTestInstance.CODEC}, whose field
+ * getters cast the value to FunctionGameTestInstance. A custom
+ * GameTestInstance subclass therefore fails that cast the moment the
+ * integrated server packs registries for a joining client, so the smoke
+ * tests must extend FunctionGameTestInstance. The function key is never
+ * resolved: run() is overridden to call the body directly.
+ */
 public final class ForgeGameTestRegistration {
     private static final String MODID = "academy";
 
@@ -45,19 +56,22 @@ public final class ForgeGameTestRegistration {
                                  String name,
                                  Consumer<GameTestHelper> body) {
         Identifier id = ResourceLocations.of(MODID, name);
+        ResourceKey<Consumer<GameTestHelper>> functionKey =
+                ResourceKey.create(Registries.TEST_FUNCTION, id);
         TestData<Holder<TestEnvironmentDefinition<?>>> data =
                 new TestData<>(environment, ResourceLocations.of("minecraft", "empty"), 100, 0, true);
-        event.registerTest(id, new SmokeTestInstance(data, name, body));
+        event.registerTest(id, new SmokeTestInstance(functionKey, data, name, body));
     }
 
-    private static final class SmokeTestInstance extends GameTestInstance {
+    private static final class SmokeTestInstance extends FunctionGameTestInstance {
         private final String name;
         private final Consumer<GameTestHelper> body;
 
-        private SmokeTestInstance(TestData<Holder<TestEnvironmentDefinition<?>>> data,
+        private SmokeTestInstance(ResourceKey<Consumer<GameTestHelper>> function,
+                                  TestData<Holder<TestEnvironmentDefinition<?>>> data,
                                   String name,
                                   Consumer<GameTestHelper> body) {
-            super(data);
+            super(function, data);
             this.name = name;
             this.body = body;
         }
@@ -65,11 +79,6 @@ public final class ForgeGameTestRegistration {
         @Override
         public void run(GameTestHelper helper) {
             body.accept(helper);
-        }
-
-        @Override
-        public MapCodec<? extends GameTestInstance> codec() {
-            return FunctionGameTestInstance.CODEC;
         }
 
         @Override
