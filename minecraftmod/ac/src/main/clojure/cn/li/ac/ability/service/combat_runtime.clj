@@ -5,7 +5,7 @@
   (:require [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
             [cn.li.combat.skill-runtime :as combat-skill-runtime]
-            [cn.li.combat.reactions :as combat-reactions]
+            [cn.li.combat.interception :as combat-interception]
             [cn.li.combat.deferred :as deferred]
             [cn.li.combat.runtime :as combat]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
@@ -35,12 +35,10 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.runtime.combat-contract :as contract]))
+            [cn.li.mcmod.framework.platform :as platform]))
 
 (defonce ^:private engine* (atom nil))
 (defonce ^:private catalog* (atom nil))
-(defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
 ;; Psi-style VFX delivery: :self signals go to the caster alone (same
 ;; per-owner transport as result-sink*, just a different message id so the
@@ -60,7 +58,7 @@
 ;; would make `random/*` behave identically for repeated activations. Mixing
 ;; in this counter and wall-clock nanos gives every activation its own seed.
 (defonce ^:private activation-seed-counter* (atom 0))
-(declare owner-state resolve-slot execute-world-effects! finalize-result! publish-result!)
+(declare owner-state resolve-slot finalize-result! publish-result!)
 
 (defn- generate-activation-seed
   "Produce a fresh per-activation RNG seed. Never deterministic across
@@ -74,65 +72,6 @@
          (swap! activation-seed-counter* unchecked-inc)
          (System/nanoTime)]))
 
-(defn- valid-damage-world-effect?
-  [effect]
-  (let [request (:request effect)
-        base (:base request)]
-    (and (= :damage (:type effect))
-         (:source request) (:target request)
-         (not= (str (:source request)) (str (:target request)))
-         (number? base) (Double/isFinite (double base))
-         (pos? (double base)) (<= (double base) 10000.0))))
-
-(defn- execute-damage-effects!
-  "Execute only validated neutral damage effects emitted by reactions."
-  [owner result]
-  (let [effects (vec (filter valid-damage-world-effect?
-                             (:world-effects result)))]
-    (when (= (count effects) (count (:world-effects result)))
-      (execute-world-effects! owner (assoc result :world-effects effects)))))
-
-(defn- damage-output?
-  [result]
-  (and (seq (:world-effects result))
-       (some valid-damage-world-effect? (:world-effects result))))
-
-(defn- horizontal-yaw-degrees [x z]
-  (- (Math/toDegrees (Math/atan2 (double x) (double z)))))
-
-(defn- attacker-front?
-  "Resolve Light Shield's horizontal-yaw cone at the AC boundary.
-
-   Missing entity geometry fails closed. Platform damage sources may provide
-   an already validated neutral `:attacker-front?` fact for tests or special
-   damage types; ordinary entity damage is resolved through the neutral motion
-   and raycast ports here, before Combat Core sees the request."
-  [player-id attacker-id damage-source]
-  (cond
-    (and (map? damage-source) (contains? damage-source :attacker-front?))
-    (boolean (:attacker-front? damage-source))
-
-    (nil? attacker-id) true
-
-    (not (and (raycast/available?) (entity-motion/available?)))
-    false
-
-    :else
-    (try
-      (let [position (raycast/player-position (str player-id))
-            look (raycast/player-look-vector (str player-id))
-            world-id (:world-id position)
-            attacker-pos (entity-motion/entity-position world-id (str attacker-id))]
-        (boolean
-         (when (and (map? position) (map? look) (map? attacker-pos))
-           (let [dx (- (double (:x attacker-pos)) (double (:x position)))
-                 dz (- (double (:z attacker-pos)) (double (:z position)))
-                 player-yaw (horizontal-yaw-degrees (:x look) (:z look))
-                 target-yaw (horizontal-yaw-degrees dx dz)
-                 diff (mod (Math/abs (double (- target-yaw player-yaw))) 360.0)]
-             (< diff (skill-config/tunable-double
-                      :light-shield :combat.front-cone-degrees))))))
-      (catch Exception _ false))))
 
 (defn- mark-policy-for
   "Return the declarative policy for a neutral mark type.
@@ -266,54 +205,7 @@
                             :ability-resolver (or ability-resolver resolve-slot)
                             :domain-event-handler domain-event-handler
                             :damage-pipeline damage-pipeline}))
-         (when-not @world-effect-handler*
-           (reset! world-effect-handler*
-                   (fn [owner effect]
-                     (if-let [handler (contract/host-port :world-effect)]
-                       (handler owner effect)
-                       (case (:type effect)
-                         ;; Reflected/reaction damage from combat-reactions/
-                         ;; apply! (the only real producer of a :damage
-                         ;; world-effect -- combat-core/reactions.clj is the
-                         ;; sole in-production caller; the v1 DSL's own
-                         ;; :world-effect node type is test-only, no v1
-                         ;; ability program is ever compiled) must go through
-                         ;; the same single :entity/damage capability every
-                         ;; EDN ability's own :combat/damage component uses
-                         ;; -- never AC's own raw platform port -- so a
-                         ;; reaction hit is indistinguishable, from the
-                         ;; platform's point of view, from an ability-cast
-                         ;; hit.
-                         :damage
-                         (let [{:keys [request]} effect
-                               {:keys [world-id target base type source]} request
-                               handler (get (:actions (capabilities/snapshot))
-                                            :entity/damage)]
-                           {:status (if (and handler world-id target base
-                                              (= :applied
-                                                 (:status (handler
-                                                           {:world-id world-id
-                                                            :target target
-                                                            :amount base
-                                                            :damage-type type
-                                                            :owner source}))))
-                                        :applied :failed)
-                            :effect effect})
-                         ;; :damage-aoe / :damage-targets / :lightning /
-                         ;; :teleport-approved-target / :knockback used to
-                         ;; be handled here too, each calling a raw AC
-                         ;; platform port directly. Deleted (P4): nothing
-                         ;; producing a :world-effects entry anywhere in
-                         ;; production or tests (combat-core/reactions.clj,
-                         ;; the only real producer; combat-core/runtime.clj's
-                         ;; v1 DSL :world-effect node, test-only) ever emits
-                         ;; any type but :damage -- these were unreachable,
-                         ;; and every one of them was a second, uncapability-
-                         ;; routed way to apply a world effect.
-                         {:status :unhandled
-                          :reason :missing-world-effect-host-port
-                          :effect effect}))))
-         @engine*)))))
+         @engine*))))
 
 (defn engine [] (or @engine* (initialize!)))
 (defn catalog [] @catalog*)
@@ -363,35 +255,6 @@
           slot (nth slots (long (:slot intent)) nil)]
       (when (and (vector? slot) (= 2 (count slot)))
         (skill-query/get-skill-by-controllable (first slot) (second slot))))))
-(defn- commit-state-patch! [owner patches]
-  (let [session-id (server-session-id)
-        commands (keep (fn [[kind key amount]]
-                         (case kind
-                           :resource
-                           (cond
-                             (= key :cp)
-                             {:command :consume-resource
-                              :cp (- (double amount))}
-                             (= key :overload)
-                             {:command :consume-resource
-                              :overload (- (double amount))}
-                             :else nil)
-                           :ability-exp
-                           {:command :add-skill-exp
-                            :skill-id key
-                            :amount (double amount)
-                            :source :combat-core}
-                           :cooldown
-                           (let [ticks (max 0 (long (- amount @last-known-tick*)))]
-                             {:command :set-cooldown
-                              :ctrl-id key
-                              :sub-id :main
-                              :ticks ticks})
-                           nil))
-                       patches)]
-    (when (seq commands)
-      (command-runtime/run-commands-in-session! session-id owner commands))))
-
 (defn- edn-owner-patch-commands
   "Translate the neutral owner-patch contract into AC reducer commands.
 
@@ -844,197 +707,85 @@
           []
           (:events result)))
 
-(defn- apply-combat-damage-reactions
-  "Delegate declarative damage reactions to Combat Core."
-  [request boundary]
-  (combat-reactions/apply!
-   request
-   {:reactions (vals (get-in (combat-catalog/catalog) [:combat :abilities]))
-   :session-fn #(combat-sessions/session (str %))
-   :state-fn owner-state
-   :domain-state (combat/domain-state (engine))
-    :precheck? (:precheck? boundary)
+(defn- intercept-damage!
+  "Delegate the whole damage-interception decision to Combat Core: fact-
+   gathering, the declarative reaction pipeline, and applying any resulting
+   reaction damage through the registered :entity/damage capability all
+   happen there now. AC only injects what it alone owns -- the compiled
+   catalog's :reactions, the session/player-state accessors, and the config-
+   sourced front-cone threshold -- and, below, commits whatever comes back."
+  [player-id attacker-id original-damage damage-source precheck?]
+  (combat-interception/intercept!
+   {:target-id player-id :attacker-id attacker-id :base original-damage
+    :damage-type (:damage-type damage-source) :damage-source damage-source
+    :reactions (vals (get-in (combat-catalog/catalog) [:combat :abilities]))
+    :session-fn #(combat-sessions/session (str %))
+    :state-fn owner-state
+    :domain-state (combat/domain-state (engine))
     :tunables-fn
-    (fn [ability-id session state]
+    (fn [ability-id _session state]
       (let [ability (get-in (combat-catalog/catalog)
                             [:combat :abilities ability-id])
             skill-exp (double (or (get-in state
                                           [:ability-data :skill-exps ability-id])
                                   0.0))]
-                 (combat-skill-runtime/materialize-tunables ability skill-exp)))}
-   ))
+        (combat-skill-runtime/materialize-tunables ability skill-exp)))
+    :now-tick @last-known-tick*
+    :front-cone-degrees (skill-config/tunable-double
+                         :light-shield :combat.front-cone-degrees)
+    :precheck? precheck?}))
+
+(defn- commit-intercepted-request!
+  [player-id attacker-id request]
+  (when (seq (:state-patch request))
+    (commit-edn-owner-patches!
+     player-id [{:type :owner-patch :entries (:state-patch request)}]))
+  (when (and attacker-id (seq (:source-state-patch request)))
+    (commit-edn-owner-patches!
+     (str attacker-id) [{:type :owner-patch :entries (:source-state-patch request)}]))
+  (when (seq (:session-patch request))
+    (combat-sessions/apply-actions!
+     player-id [{:type :session-patch :entries (:session-patch request)}]))
+  (when (seq (:vfx-signals request))
+    (publish-result! {:schema-version 2 :status :accepted :owner player-id
+                      :ability-id :combat-damage
+                      :vfx-signals (:vfx-signals request)}))
+  (when (seq (:events request))
+    (dispatch-result-domain-events! player-id request))
+  nil)
 
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
 
-   The old mutable damage-handler registry is not consulted. Combat Core
-   returns the transformed neutral request; the platform writes only the
-   resulting numeric amount back to its event."
+   Combat Core returns the transformed neutral request; the platform writes
+   only the resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
-  (let [world-id (or (:world-id damage-source)
-                     (some-> (raycast/player-position (str player-id)) :world-id))
-        target-position (when world-id
-                          (entity-motion/entity-position world-id (str player-id)))
-        request (apply-combat-damage-reactions
-                (combat/process-damage-request
-                 (engine)
-                 {:source (or attacker-id :environment)
-                  :target player-id
-                  :base (double original-damage)
-                  :type (or (:damage-type damage-source) :generic)
-                  :components {:direct (double original-damage)}
-                  :tags #{:combat :intercepted}
-                  :metadata {:damage-source damage-source
-                             :world-id world-id
-                             :target-position (when (map? target-position)
-                                                [(double (or (:x target-position) 0.0))
-                                                 (double (or (:y target-position) 0.0))
-                                                 (double (or (:z target-position) 0.0))])
-                             :activation-seed (hash [attacker-id player-id
-                                                     @last-known-tick*
-                                                     original-damage
-                                                     (:damage-type damage-source)])
-                             :attacker-front? (attacker-front?
-                                               player-id attacker-id damage-source)}})
-                {})]
-    ;; Damage interception is the live boundary: Combat Core owns the
-    ;; reduction decision, while AC remains the single writer for player
-    ;; resources/cooldowns.  Apply only the neutral patch returned by the
-    ;; pipeline; never reconstruct costs in the platform hook.
-    (when (and (not (:cancelled? request))
-               (seq (:state-patch request)))
-      (commit-state-patch! player-id (:state-patch request)))
-    (when (and (not (:cancelled? request)) attacker-id
-               (seq (:source-state-patch request)))
-      (commit-state-patch! (str attacker-id) (:source-state-patch request)))
-    (when (and (not (:cancelled? request))
-               (seq (:session-patch request)))
-      (combat-sessions/apply-actions!
-       player-id [{:type :session-patch :entries (:session-patch request)}]))
-    (when (and (not (:cancelled? request))
-               (damage-output? request))
-      (execute-damage-effects! player-id request))
-    (when (and (not (:cancelled? request)) (seq (:vfx-signals request)))
-      (publish-result! {:schema-version 2 :status :accepted :owner player-id
-                        :ability-id :combat-damage
-                        :vfx-signals (:vfx-signals request)}))
-    (when (and (not (:cancelled? request)) (seq (:events request)))
-      (dispatch-result-domain-events! player-id request))
+  (let [request (intercept-damage!
+                 player-id attacker-id original-damage damage-source false)]
+    (when-not (:cancelled? request)
+      (commit-intercepted-request! player-id attacker-id request))
     (if (:cancelled? request)
       0.0
       (double (:base request)))))
 
-(defn process-attack-precheck!
-  "Route attack prechecks through the authoritative DamageRequest pipeline.
-
-   The removed mutable cancel/precheck registries have no replacement hook;
-   combat nodes can cancel through the same deterministic request pipeline."
-  [player-id attacker-id original-damage damage-source]
-  (let [world-id (or (:world-id damage-source)
-                     (some-> (raycast/player-position (str player-id)) :world-id))
-        target-position (when world-id
-                          (entity-motion/entity-position world-id (str player-id)))
-        request (apply-combat-damage-reactions
-                (combat/process-damage-request
-                 (engine)
-                 {:source (or attacker-id :environment)
-                  :target player-id
-                  :base (double original-damage)
-                  :type (or (:damage-type damage-source) :generic)
-                  :components {:direct (double original-damage)}
-                  :tags #{:combat :attack-precheck}
-                  :metadata {:damage-source damage-source
-                             :world-id world-id
-                             :target-position (when (map? target-position)
-                                                [(double (or (:x target-position) 0.0))
-                                                 (double (or (:y target-position) 0.0))
-                                                 (double (or (:z target-position) 0.0))])
-                             :activation-seed (hash [attacker-id player-id
-                                                     @last-known-tick*
-                                                     original-damage
-                                                     (:damage-type damage-source)])
-                             :attacker-front? (attacker-front?
-                                               player-id attacker-id damage-source)}})
-                {:precheck? true})]
-    {:cancelled? (boolean (:cancelled? request))
-     :request request}))
-
 (defn apply-attack-precheck!
-  "Apply validated Combat Core reflection output before native hurt.
-
-   The platform calls this single boundary before cancellation. Ordinary
-   requests stay pure and continue to live damage; reflection output is
-   committed and executed here exactly once."
+  "Whether the native hit must not land: either Combat Core's reaction
+   pipeline explicitly cancelled the request, or reaction damage (e.g. a
+   reflect) already landed in its place. The platform calls this single
+   boundary before cancellation; ordinary requests stay pure and continue to
+   live damage."
   [player-id attacker-id original-damage damage-source]
-  (let [{:keys [request]} (process-attack-precheck!
-                           player-id attacker-id original-damage damage-source)
-        damage? (damage-output? request)
-        patch? (or (seq (:state-patch request))
-                   (seq (:session-patch request)))]
-    ;; A fully absorbed hit has no world-effect payload, but it still owns the
-    ;; resource/session patches and must cancel the native hit.  Partial
-    ;; absorbs are intentionally deferred by the reaction to the amount
-    ;; modifier, avoiding a second payment on the same attack.
-    (when (or damage? patch?)
-      (commit-state-patch! player-id (:state-patch request))
-      (when (and attacker-id (seq (:source-state-patch request)))
-        (commit-state-patch! (str attacker-id) (:source-state-patch request)))
-      (when (seq (:session-patch request))
-        (combat-sessions/apply-actions!
-         player-id [{:type :session-patch :entries (:session-patch request)}]))
-      (when damage?
-        (execute-damage-effects! player-id request)
-        (dispatch-result-domain-events! player-id request)))
-    (when (and (not (:cancelled? request)) (seq (:vfx-signals request)))
-      (publish-result! {:schema-version 2 :status :accepted :owner player-id
-                        :ability-id :combat-damage
-                        :vfx-signals (:vfx-signals request)}))
-    (boolean (or (:cancelled? request) damage?))))
-
-(defn install-world-effect-handler!
-  "Install AC's ordered WorldEffect interpreter.
-
-   The handler is injected by the platform composition root and receives
-   `[owner effect]`. Combat Core never calls it directly; this keeps world
-   mutation outside the neutral engine while making effect execution explicit
-   and observable." 
-  [handler]
-  (when-not (ifn? handler)
-    (throw (ex-info "world-effect handler must be callable" {:value handler})))
-  (reset! world-effect-handler* handler)
-  handler)
-
-(defn execute-world-effects!
-  "Execute WorldEffects in result order and return EffectResults.
-
-   Missing host wiring is reported as a structured result instead of being
-   silently discarded. Resource commits have already happened by this point;
-   callers must model compensation explicitly." 
-  [owner result]
-  (let [handler @world-effect-handler*
-        effect-results
-        (mapv (fn [effect]
-                (if-not handler
-                  (contract/effect-result {:status :unhandled
-                                           :reason :missing-world-effect-handler
-                                           :effect effect})
-                  (try
-                    (contract/effect-result (handler owner effect))
-                    (catch Throwable throwable
-                      (contract/effect-result
-                       {:status :failed
-                        :reason :world-effect-exception
-                        :effect effect
-                        :message (ex-message throwable)})))))
-              (:world-effects result))]
-    (assoc result :effect-results effect-results)))
+  (let [request (intercept-damage!
+                 player-id attacker-id original-damage damage-source true)]
+    (when-not (:cancelled? request)
+      (commit-intercepted-request! player-id attacker-id request))
+    (boolean (or (:cancelled? request) (:reaction-damage-applied? request)))))
 
 (defn finalize-result!
-  "Apply one accepted result at the AC composition boundary.
-
-   World effects execute before explicit domain-event reduction.  Both
-   acknowledgements remain attached to the immutable result for publication
-   and diagnostics."
+  "Apply one accepted result at the AC composition boundary: commit its
+   owner/session patches, invoke registered capability actions, then reduce
+   explicit domain events. Acknowledgements remain attached to the immutable
+   result for publication and diagnostics."
   [owner result]
   (let [result (if (and (= 2 (:schema-version result))
                         (= :accepted (:status result)))
@@ -1051,7 +802,6 @@
                           :patch-results (vec patch-results)
                           :action-results action-results))
                  result)
-        result (execute-world-effects! owner result)
         domain-results (if (= :accepted (:status result))
                          (dispatch-result-domain-events! owner result)
                          [])]
@@ -1223,10 +973,6 @@
               (combat-sessions/tick! tick))
         ]
     (mapv (fn [result]
-            ;; Session pulses produce authoritative patches before effects
-            ;; and publication, exactly like start/release intents.
-            (when (= :accepted (:status result))
-              (commit-state-patch! (:owner result) (:state-patch result)))
             (publish-result! (finalize-result! (:owner result) result)))
           edn-results)))
 (defn abort-owner! [owner]
@@ -1238,7 +984,6 @@
 (defn reset-for-test! []
   (reset! engine* nil)
   (reset! catalog* nil)
-  (reset! world-effect-handler* nil)
   (reset! result-sink* nil)
   (reset! last-known-tick* 0)
   (reset! active-persistent-signals* {})

@@ -3,11 +3,14 @@
 
 (defn available?
   []
-  (boolean (get-in @(fw/fw-atom) [:platform :raycast])))
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (get-in @fw-atom [:platform :raycast]))))
 
 (defn current
   []
-  (get-in @(fw/fw-atom) [:platform :raycast]))
+  (when-let [fw-atom (fw/fw-atom)]
+    (get-in @fw-atom [:platform :raycast])))
 
 (defn- call
   [k & args]

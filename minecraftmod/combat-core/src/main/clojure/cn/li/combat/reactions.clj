@@ -38,6 +38,20 @@
     (vector? value) (mapv #(value % context) value)
     :else value))
 
+(defn- resource-patch-entry
+  "Same neutral :owner/patch entry shape vm.clj's :cost/spend already emits
+   ({:path [:resources key] :mode :increment :value N}, negative N = spend)
+   -- one commit protocol for both EDN component costs and reaction costs,
+   so AC has exactly one owner-patch translator (edn-owner-patch-commands),
+   not a second one for reaction-produced patches."
+  [resource-key amount]
+  {:path [:resources resource-key] :mode :increment :value amount})
+
+(defn- skill-exp-patch-entry
+  "Same shape vm.clj's :score/mark already emits."
+  [ability-id amount]
+  {:path [:ability-data :skill-exps ability-id] :mode :increment :value amount})
+
 (defn- critical-level
   "Select the first successful critical level using the activation/request
    seed.  A level is ordinary EDN data; no skill or damage type is embedded in
@@ -169,7 +183,7 @@
                                (keep (fn [{:keys [ability-id program context]}]
                                        (let [gain (critical-exp-gain program context level)]
                                          (when (and (Double/isFinite gain) (pos? gain))
-                                           [:ability-exp ability-id gain])))
+                                           (skill-exp-patch-entry ability-id gain))))
                                      entries))
                        (update :events (fnil into []) events))]
         (if vfx-signal
@@ -332,12 +346,11 @@
                        result (-> current
                                   (assoc :base remaining)
                                   (assoc :components (scale-components (:components current) ratio))
-                                  (assoc-in [:metadata :resource-cost] {:cp (- cp-cost)})
                                   (assoc-in [:metadata :damage-reduction]
                                             {:rate rate :damage-ignore-threshold threshold})
                                   (update :state-patch (fnil into [])
-                                          [[:resource :cp (- cp-cost)]
-                                           [:ability-exp ability-id (* base exp-scale)]]))]
+                                          [(resource-patch-entry :cp (- cp-cost))
+                                           (skill-exp-patch-entry ability-id (* base exp-scale))]))]
                    (if-let [vfx (:vfx program)]
                      (update result :vfx-signals (fnil conj [])
                              {:op :spawn :effect-id (:effect-id vfx :audio-one-shot)
@@ -368,7 +381,7 @@
                    exp-scale (double (or (value (:exp-scale program) context) 0.0))
                    current (if window?
                              (update current :state-patch (fnil conj [])
-                                     [:ability-exp ability-id exp-scale]) current)]
+                                     (skill-exp-patch-entry ability-id exp-scale)) current)]
                (if (and window? front? enough? (Double/isFinite cap)
                         (<= 0.0 cap 100.0))
                  (let [absorbed (min base cap)
@@ -380,10 +393,8 @@
                      (cond-> (-> current
                                  (assoc :base remaining)
                                  (assoc :components (scale-components (:components current) ratio))
-                                 (assoc-in [:metadata :resource-cost]
-                                           (into {} (map (fn [[r amount]] [r (- amount)]) costs)))
                                  (update :state-patch (fnil into [])
-                                         (mapv (fn [[r amount]] [:resource r (- amount)]) costs))
+                                         (mapv (fn [[r amount]] (resource-patch-entry r (- amount))) costs))
                                  (update :session-patch (fnil conj [])
                                          {:path (:last-tick-path program) :mode :assign :value ticks}))
                        precheck? (assoc :cancelled? true))))
@@ -419,9 +430,9 @@
                                     :reflection-ability ability-id}))]
                    (-> current
                        (assoc :base (max 0.0 (- base reflected)))
-                       (assoc-in [:metadata :resource-cost] {:cp (- consumption)})
-                       (update :state-patch (fnil conj [])
-                               [:ability-exp ability-id (* base exp-scale)])
+                       (update :state-patch (fnil into [])
+                               [(resource-patch-entry :cp (- consumption))
+                                (skill-exp-patch-entry ability-id (* base exp-scale))])
                        (update :world-effects (fnil conj [])
                                {:type :damage :request reflected-request})
                         (cond-> precheck? (assoc :cancelled? true)))))))))))

@@ -36,7 +36,8 @@
     (is (= 13.0 (:base result)))
     (is (= 13.0 (get-in result [:components :direct])))
     (is (= 0 (get-in result [:metadata :critical :level])))
-    (is (= [[:ability-exp :critical-passive 0.005]]
+    (is (= [{:path [:ability-data :skill-exps :critical-passive]
+             :mode :increment :value 0.005}]
            (:source-state-patch result)))))
 
 (deftest critical-contributions-aggregate-without-double-roll-test
@@ -93,8 +94,10 @@
     (is (= 26.0 (:base result)))
     (is (= 26.0 (get-in result [:components :direct])))
     (is (= 2 (get-in result [:metadata :critical :level])))
-    (is (= [[:ability-exp :dim-folding-theorem 0.015]
-            [:ability-exp :space-fluct 0.0001]]
+    (is (= [{:path [:ability-data :skill-exps :dim-folding-theorem]
+             :mode :increment :value 0.015}
+            {:path [:ability-data :skill-exps :space-fluct]
+             :mode :increment :value 0.0001}]
            (:source-state-patch result)))
     (is (= 1 (count (filter #(= "teleporter.mastery"
                                 (get-in % [:payload :id]))
