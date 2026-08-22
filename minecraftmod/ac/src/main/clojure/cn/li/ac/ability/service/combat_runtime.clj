@@ -23,9 +23,7 @@
             [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -274,94 +272,44 @@
                      (if-let [handler (contract/host-port :world-effect)]
                        (handler owner effect)
                        (case (:type effect)
+                         ;; Reflected/reaction damage from combat-reactions/
+                         ;; apply! (the only real producer of a :damage
+                         ;; world-effect -- combat-core/reactions.clj is the
+                         ;; sole in-production caller; the v1 DSL's own
+                         ;; :world-effect node type is test-only, no v1
+                         ;; ability program is ever compiled) must go through
+                         ;; the same single :entity/damage capability every
+                         ;; EDN ability's own :combat/damage component uses
+                         ;; -- never AC's own raw platform port -- so a
+                         ;; reaction hit is indistinguishable, from the
+                         ;; platform's point of view, from an ability-cast
+                         ;; hit.
                          :damage
                          (let [{:keys [request]} effect
-                               {:keys [world-id target base type source]} request]
-                           {:status (if (and world-id target
-                                              (entity-damage/available?)
-                                              (entity-damage/apply-direct-damage!
-                                               world-id target base type
-                                               {:attacker-uuid source}))
+                               {:keys [world-id target base type source]} request
+                               handler (get (:actions (capabilities/snapshot))
+                                            :entity/damage)]
+                           {:status (if (and handler world-id target base
+                                              (= :applied
+                                                 (:status (handler
+                                                           {:world-id world-id
+                                                            :target target
+                                                            :amount base
+                                                            :damage-type type
+                                                            :owner source}))))
                                         :applied :failed)
                             :effect effect})
-                         :damage-aoe
-                         (let [{:keys [world-id origin radius amount damage-type]} effect
-                               {:keys [x y z]} origin]
-                            {:status (if (and world-id origin
-                                              (entity-damage/available?)
-                                              (entity-damage/apply-aoe-damage!
-                                               world-id x y z (double radius)
-                                               (double amount) damage-type false))
-                                        :applied :failed)
-                            :effect effect})
-                         :damage-targets
-                         (let [{:keys [world-id targets amount damage-type source]} effect
-                               amount (double amount)
-                               target-ids (->> (or targets [])
-                                               (map #(or (:uuid %)
-                                                         (:entity-id %)
-                                                         (:target-id %)
-                                                         %))
-                                               (filter string?)
-                                               distinct
-                                               sort
-                                               (take 64))
-                               hits (if (and world-id
-                                              (Double/isFinite amount)
-                                              (pos? amount)
-                                              (entity-damage/available?))
-                                      (reduce (fn [n target-id]
-                                                (if (entity-damage/apply-direct-damage!
-                                                     world-id target-id amount damage-type
-                                                     {:attacker-uuid source})
-                                                  (inc n)
-                                                  n))
-                                              0 target-ids)
-                                      0)]
-                           {:status (cond
-                                      (= hits (count target-ids)) :applied
-                                      (pos? hits) :partial
-                                      :else :failed)
-                            :hits hits
-                            :target-count (count target-ids)
-                            :effect effect})
-                         :lightning
-                         (let [{:keys [world-id origin visual-only?]} effect
-                               {:keys [x y z]} (if (map? origin) origin {})
-                               valid? (and world-id
-                                            (every? #(and (number? %) (Double/isFinite (double %)))
-                                                    [x y z])
-                                            (world-effects/available?))]
-                           {:status (if (and valid?
-                                              (world-effects/spawn-lightning!
-                                               world-id (double x) (double y) (double z)
-                                               (boolean visual-only?)))
-                                      :applied
-                                      :failed)
-                            :effect effect})
-                         :teleport-approved-target
-                         {:status :unhandled
-                          :reason :unsupported-teleport-mode
-                          :effect effect}
-                         :knockback
-                         (let [{:keys [world-id target movement]} effect
-                               {:keys [impulse knockback-y-adjust knockback-scale]} movement
-                               finite? #(and (number? %) (Double/isFinite (double %)))
-                               valid? (and world-id target
-                                            (finite? impulse) (<= 0.0 (double impulse) 4.0)
-                                            (finite? knockback-y-adjust) (<= -2.0 (double knockback-y-adjust) 2.0)
-                                            (finite? knockback-scale) (<= -2.0 (double knockback-scale) 2.0)
-                                            (world-effects/available?))
-                               plan {:target target
-                                     :impulse (double (or impulse 0.0))
-                                     :knockback-y-adjust (double (or knockback-y-adjust 0.0))
-                                     :knockback-scale (double (or knockback-scale 1.0))}]
-                           {:status (if (and valid?
-                                              (world-effects/execute-knockback!
-                                               world-id owner plan))
-                                      :applied
-                                      :failed)
-                            :effect effect})
+                         ;; :damage-aoe / :damage-targets / :lightning /
+                         ;; :teleport-approved-target / :knockback used to
+                         ;; be handled here too, each calling a raw AC
+                         ;; platform port directly. Deleted (P4): nothing
+                         ;; producing a :world-effects entry anywhere in
+                         ;; production or tests (combat-core/reactions.clj,
+                         ;; the only real producer; combat-core/runtime.clj's
+                         ;; v1 DSL :world-effect node, test-only) ever emits
+                         ;; any type but :damage -- these were unreachable,
+                         ;; and every one of them was a second, uncapability-
+                         ;; routed way to apply a world effect.
                          {:status :unhandled
                           :reason :missing-world-effect-host-port
                           :effect effect}))))

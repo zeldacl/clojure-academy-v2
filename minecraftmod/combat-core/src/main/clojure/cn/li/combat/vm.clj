@@ -273,6 +273,20 @@
    :resource/enforce-floor :resource/enforce-floor
    :resource/add :resource/add})
 
+(defn required-host-capabilities
+  "Every capability keyword a compiled ability's :query/:mutate component can
+   ask the host table for, as {:query #{...} :action #{...}}. A capability
+   appearing here with no registered handler anywhere (combat-core's own
+   platform.clj, or AC's install-ac-host-capabilities! for the handful of
+   AC-domain ones) fails silently at dispatch time -- the node's :result
+   slot is simply never populated / the action never runs -- so this exists
+   purely for a compile-time-adjacent completeness test to catch that class
+   of bug (see combat-core's own history: :motion/velocity missing from the
+   platform whitelist once silently broke ~10 later registrations)."
+  []
+  {:query (set (vals query-capability-by-component))
+   :action (set (vals action-capability-by-component))})
+
 (defn- append-object! [^ArrayList output value]
   (.add output value)
   nil)

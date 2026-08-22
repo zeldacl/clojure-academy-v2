@@ -1207,6 +1207,53 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
     }
 }
 
+tasks.register("verifyCombatSingleDamagePath") {
+    group = "verification"
+    description = "Ensure damage is only ever applied through combat-core's registered :entity/damage capability, never by a second path -- Java constructing its own DamageSource, or AC calling a raw platform damage port directly.\n\nScope note: this only checks ScriptedBlockBodyEntity.java, not every Scripted*.java. ScriptedProjectileEntity.java's own outgoing .hurt()/.hurtServer() call is entity_mag_hook's approved item mechanic (a plain grappling-hook item, zero ability EDN references -- see feedback_single_combat_execution_path.md); ScriptedMobEntity.java's hurt() is a normal incoming-damage override (super.hurt(...) receiving a hit on itself), not a second outgoing damage path -- neither is the violation this gate targets."
+    doLast {
+        def violations = []
+        fileTree(dir: "platform-src", includes: ["**/entity/ScriptedBlockBodyEntity.java"]).each { java ->
+            def text = java.text
+            if ((text =~ /(?<!super)\.hurt\(/).find() || text.contains(".hurtServer(")) {
+                violations << "${java.path} calls .hurt(/.hurtServer( directly on another entity"
+            }
+        }
+        def acMain = fileTree(dir: "ac/src/main/clojure", includes: ["**/*.clj"])
+        acMain.each { clj ->
+            def text = clj.text
+            ["apply-direct-damage!", "apply-aoe-damage!"].each { token ->
+                if (text.contains(token)) {
+                    violations << "${clj.path} references ${token} -- damage must go through combat-core's :entity/damage capability, not a raw platform port call"
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("second combat damage path detected:\n" + violations.join("\n"))
+        }
+        logger.lifecycle("[verifyCombatSingleDamagePath] ok")
+    }
+}
+
+tasks.register("verifyAcNoWorldCapabilities") {
+    group = "verification"
+    description = "Ensure AC no longer duplicates combat-core's own world-effect capability handlers by calling a raw platform port directly for an effect combat-core already owns a registered capability for (lightning, knockback -- see verifyCombatSingleDamagePath for the damage-specific check). cn.li.mcmod.platform.entity-damage/world-effects still have legitimate non-combat AC uses (policy gate installation, the scripted block-body-hit callback wiring, play-sound! on regular blocks/items), so this checks specific forbidden calls, not whole-namespace requires."
+    doLast {
+        def violations = []
+        fileTree(dir: "ac/src/main/clojure", includes: ["**/*.clj"]).each { clj ->
+            def text = clj.text
+            ["spawn-lightning!", "execute-knockback!"].each { token ->
+                if (text.contains(token)) {
+                    violations << "${clj.path} calls world-effects/${token} directly -- must go through combat-core's registered :world/lightning / motion capability instead"
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("AC still duplicates combat-core world-effect capabilities:\n" + violations.join("\n"))
+        }
+        logger.lifecycle("[verifyAcNoWorldCapabilities] ok")
+    }
+}
+
 tasks.register("verifyNeutralSourceAotXor") {
     group = "verification"
     description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
@@ -1702,6 +1749,8 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatContentHash",
               "verifyCombatIntentOnlyNetwork",
               "verifyCombatLegacyRuntimeRemoval",
+              "verifyCombatSingleDamagePath",
+              "verifyAcNoWorldCapabilities",
               "verifyAbilityVfxRegistryCoverage",
               "verifyVfxSingleTickPath",
               "verifyVfxDirectHostBoundary",

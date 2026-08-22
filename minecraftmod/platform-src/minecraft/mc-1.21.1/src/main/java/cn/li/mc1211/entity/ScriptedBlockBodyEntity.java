@@ -16,7 +16,6 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
@@ -258,11 +257,11 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements
         }
         float damage = getSyncedDamage();
         if (damage > 0.0F) {
-            Object handled = dispatchBehaviorDamage(owner, target, damage);
-            if (handled == null) {
-                DamageSource source = this.damageSources().thrown(this, owner == null ? this : owner);
-                target.hurt(source, damage);
-            }
+            // Single execution path: this only reports the hit fact.
+            // Combat Core's EDN program owns the damage amount, reactions
+            // and VFX -- there is no vanilla DamageSource/hurt() fallback
+            // here even if the interop call fails, on purpose.
+            dispatchBehaviorDamage(owner, target, damage);
         }
     }
 
