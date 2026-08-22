@@ -102,3 +102,41 @@
                       :dispatch-action! (fn [capability request] (swap! actions conj [capability request])))]
     (node-flow/execute! {:component :combat/area-damage :center {:vec3 [0.0 0.0 0.0]} :radius 1.0 :amount 1.0} ctx)
     (is (empty? @actions))))
+
+(deftest radial-impulse-pushes-each-entity-away-from-center-test
+  (let [actions (atom [])
+        ctx (base-ctx :dispatch-query! (fn [_capability _request]
+                                         [{:id "e1" :position {:vec3 [2.0 0.0 0.0]}}
+                                          {:id "e2" :position {:vec3 [0.0 0.0 3.0]}}])
+                      :dispatch-action! (fn [capability request] (swap! actions conj [capability request])))]
+    (node-flow/execute! {:component :combat/radial-impulse :center {:vec3 [0.0 0.0 0.0]} :radius 5.0 :speed 2.0} ctx)
+    (is (= 2 (count @actions)))
+    (is (every? #(= :entity/impulse (first %)) @actions))
+    (let [e1-vector (:vector (second (first (filter #(= "e1" (:target (second %))) @actions))))
+          e2-vector (:vector (second (first (filter #(= "e2" (:target (second %))) @actions))))]
+      ;; e1 is at (2,0,0) relative to center -> pushed along +x with magnitude 2.0
+      (is (< (Math/abs (- 2.0 (first (:vec3 e1-vector)))) 1.0e-9))
+      (is (< (Math/abs (first (:vec3 e2-vector))) 1.0e-9))
+      ;; e2 is at (0,0,3) relative to center -> pushed along +z with magnitude 2.0
+      (is (< (Math/abs (- 2.0 (nth (:vec3 e2-vector) 2))) 1.0e-9)))))
+
+(deftest teleport-group-teleports-every-entity-found-to-the-target-position-test
+  (let [actions (atom [])
+        ctx (base-ctx :dispatch-query! (fn [_capability _request] [{:id "a"} {:id "b"}])
+                      :dispatch-action! (fn [capability request] (swap! actions conj [capability request])))]
+    (node-flow/execute! {:component :combat/teleport-group :position {:vec3 [5.0 6.0 7.0]} :radius 8.0} ctx)
+    (is (= 2 (count @actions)))
+    (is (every? #(= :entity/teleport (first %)) @actions))
+    (is (every? #(= {:vec3 [5.0 6.0 7.0]} (:position (second %))) @actions))
+    (is (= #{"a" "b"} (set (map (comp :target second) @actions))))))
+
+(deftest area-break-breaks-every-block-the-query-returns-test
+  (let [seen-request (atom nil)
+        actions (atom [])
+        ctx (base-ctx :dispatch-query! (fn [_capability request] (reset! seen-request request)
+                                         [{:position {:vec3 [0.0 0.0 0.0]}} {:position {:vec3 [1.0 0.0 0.0]}}])
+                      :dispatch-action! (fn [capability request] (swap! actions conj [capability request])))]
+    (node-flow/execute! {:component :combat/area-break :origin {:vec3 [0.0 0.0 0.0]} :radius 2.0 :hardness-max 3.0} ctx)
+    (is (= 3.0 (get-in @seen-request [:projection :max-hardness])))
+    (is (= 2 (count @actions)))
+    (is (every? #(= :block/break (first %)) @actions))))
