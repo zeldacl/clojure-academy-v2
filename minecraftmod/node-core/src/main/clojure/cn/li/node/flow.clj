@@ -116,6 +116,12 @@
              :limit {:type :long :default nil}}
     :children {:body {:kind :single :flow :closed}}
     :effects #{:mutate}
+    ;; :as/:index-as bind loop-local names through plain keyword fields,
+    ;; not the generic :bind {port -> local} convention -- composite
+    ;; expansion's rename-locals needs this declared so it renames these
+    ;; fields' values consistently with every {:ref [:local ...]} that
+    ;; reads them (see composite.clj's own comment on the bug this fixed).
+    :binds-locals #{:as :index-as}
     :impl run-foreach})
   (registry/register-primitive!
    {:id :data/bind :revision 1

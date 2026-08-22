@@ -41,11 +41,27 @@
      {} declared)))
 
 (defn- rename-locals
-  "Rewrite every :bind target and every {:ref [:local name ...]} inside
+  "Rewrite every :bind target, every {:ref [:local name ...]} read, and
+   every field a node's own descriptor declares as :binds-locals inside
    `body` to a call-site-unique name. This is what makes an inlined
    composite body a genuinely closed scope: its internal local names
    cannot collide with, or be read by, the caller or a sibling expansion of
-   the same composite."
+   the same composite.
+
+   :binds-locals exists because :bind ({port -> local}) is not the only
+   way a component introduces a new local name -- a structural primitive
+   like :flow/foreach binds its own loop variable through plain keyword
+   fields (:as/:index-as), a different, older convention this function
+   otherwise has no way to know about generically. A component whose
+   descriptor declares :binds-locals #{:as :index-as} gets those field
+   VALUES renamed the same way :bind targets are, so a reader inside the
+   body ({:ref [:local :as-name ...]}, itself renamed by the branch above)
+   and the binder's own :as field stay in sync after renaming. Missing
+   this was a real bug: :flow/foreach's :as was left unrenamed while every
+   {:ref [:local ...]} reading it WAS renamed, so the loop variable and
+   its readers silently pointed at two different local names post-
+   expansion (caught by combat-core's :combat/area-damage composite test,
+   which returned nil for the loop-bound entity id)."
   [body ns-prefix]
   (let [rename (fn [n] (keyword (str (name ns-prefix) "$" (name n))))]
     (walk/postwalk
@@ -54,8 +70,13 @@
          (and (map? form) (vector? (:ref form)) (= :local (first (:ref form))) (keyword? (second (:ref form))))
          (update-in form [:ref 1] rename)
 
-         (and (map? form) (map? (:bind form)))
-         (update form :bind (fn [binds] (into {} (map (fn [[port local]] [port (rename local)]) binds))))
+         (and (map? form) (:component form))
+         (let [d (registry/descriptor (:component form))
+               form (if (map? (:bind form))
+                      (update form :bind (fn [binds] (into {} (map (fn [[port local]] [port (rename local)]) binds))))
+                      form)]
+           (reduce (fn [f field] (cond-> f (keyword? (get f field)) (update field rename)))
+                   form (:binds-locals d)))
 
          :else form))
      body)))

@@ -23,12 +23,12 @@
     (f)
     (node/reset-for-test!)))
 
-(defn- base-ctx [& {:keys [resources dispatch-action! emit-action! emit-vfx!]}]
+(defn- base-ctx [& {:keys [resources dispatch-action! dispatch-query! emit-action! emit-vfx!]}]
   {:locals {} :seed 0 :dispatch structural/dispatch
    :world-id "overworld" :owner "player-1" :activation-seed 7 :ability-id :thunder-clap
    :resources* (atom (or resources {:cp 100.0}))
    :dispatch-action! (or dispatch-action! (fn [_capability _request] nil))
-   :dispatch-query! (fn [_capability _request] nil)
+   :dispatch-query! (or dispatch-query! (fn [_capability _request] nil))
    :emit-action! (or emit-action! (fn [_action] nil))
    :emit-vfx! (or emit-vfx! (fn [_signal] nil))
    :emit-event! (fn [_event] nil)})
@@ -74,3 +74,31 @@
     (is (= 1.0 (:cp @(:resources* ctx))) "nothing was spent")
     (is (empty? @actions) "no lightning/damage action reached the dispatch pipeline")
     (is (empty? @vfx) "no VFX signal was emitted")))
+
+(deftest area-damage-registers-as-mid-composite-test
+  (let [d (node/descriptor :combat/area-damage)]
+    (is (some? d))
+    (is (= :mid (:layer d)))))
+
+(deftest area-damage-damages-every-entity-the-query-returns-test
+  (let [seen-request (atom nil)
+        actions (atom [])
+        ctx (base-ctx :dispatch-query! (fn [_capability request] (reset! seen-request request)
+                                         [{:id "zombie-1"} {:id "zombie-2"} {:id "zombie-3"}])
+                      :dispatch-action! (fn [capability request] (swap! actions conj [capability request])))
+        call {:component :combat/area-damage :center {:vec3 [0.0 64.0 0.0]} :radius 4.0 :amount 6.0}
+        result (node-flow/execute! call ctx)]
+    (is (= {:type :sphere :center {:vec3 [0.0 64.0 0.0]} :radius 4.0} (:shape @seen-request))
+        "the shape sent to :target/entities reflects the composite's own inputs")
+    (is (= 128 (:limit @seen-request)) "the composite's own :limit default was used")
+    (is (= 3 (count @actions)))
+    (is (= #{"zombie-1" "zombie-2" "zombie-3"} (set (map (comp :target second) @actions))))
+    (is (every? #(= 6.0 (:amount (second %))) @actions))
+    (is (not (:finished? result)))))
+
+(deftest area-damage-with-no-entities-found-does-nothing-test
+  (let [actions (atom [])
+        ctx (base-ctx :dispatch-query! (fn [_capability _request] [])
+                      :dispatch-action! (fn [capability request] (swap! actions conj [capability request])))]
+    (node-flow/execute! {:component :combat/area-damage :center {:vec3 [0.0 0.0 0.0]} :radius 1.0 :amount 1.0} ctx)
+    (is (empty? @actions))))

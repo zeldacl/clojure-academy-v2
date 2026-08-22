@@ -118,6 +118,27 @@
     (is (= 42.0 (get-in expanded [:body :value]))
         "a ref to a genuinely declared input still substitutes as before")))
 
+(deftest flow-foreach-as-binding-stays-in-sync-with-its-readers-after-renaming-test
+  ;; Regression: rename-locals renamed every {:ref [:local ...]} read
+  ;; consistently, but :flow/foreach's OWN loop-variable binding (:as, a
+  ;; bare keyword field, not the generic :bind {port -> local} convention)
+  ;; was never renamed to match -- the reader's ref pointed at the renamed
+  ;; name while the binder still produced the original, so the two never
+  ;; matched at runtime (caught by combat-core's :combat/area-damage
+  ;; composite test, which got nil for the loop-bound entity every time).
+  (registry/register-composite!
+   {:id :test/uses-foreach :revision 1 :layer :mid
+    :inputs {:items {:type [:list-of :any]}}
+    :outputs {}
+    :body {:component :flow/foreach :items {:ref [:input :items]} :as :target
+           :body {:component :test/emit :value {:ref [:local :target]}}}})
+  (let [expanded (composite/expand {:component :test/uses-foreach :items [1.0 2.0 3.0]})
+        as-name (:as expanded)
+        read-name (second (get-in expanded [:body :value :ref]))]
+    (is (some? as-name))
+    (is (= as-name read-name)
+        "the renamed :as binding and the renamed reader ref must be the SAME local name")))
+
 (deftest cycle-detection-throws-test
   (registry/register-composite!
    {:id :test/cyclic :revision 1 :layer :mid :inputs {} :outputs {}
