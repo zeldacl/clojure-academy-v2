@@ -8,7 +8,8 @@
             [cn.li.combat.capability-coverage-test]
             [cn.li.combat.impact-event-test]
             [cn.li.combat.interception-test]
-            [cn.li.combat.vfx-publish-test]))
+            [cn.li.combat.vfx-publish-test]
+            [cn.li.combat.source-nodes-test]))
 
 (defn -main [& _]
   (let [result (t/run-tests 'cn.li.combat.runtime-test
@@ -19,6 +20,7 @@
                             'cn.li.combat.capability-coverage-test
                             'cn.li.combat.impact-event-test
                             'cn.li.combat.interception-test
-                            'cn.li.combat.vfx-publish-test)]
+                            'cn.li.combat.vfx-publish-test
+                            'cn.li.combat.source-nodes-test)]
     (when (pos? (+ (:fail result) (:error result)))
       (System/exit 1))))

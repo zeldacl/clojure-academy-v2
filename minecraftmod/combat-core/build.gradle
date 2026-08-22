@@ -9,11 +9,30 @@ layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${proje
 
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes"
+    checkTask.dependsOn ":mcmod:classes", ":node-core:classes"
+    // node-core is source-first (no compileClojure output outside -PfullAot);
+    // its .clj sources land only in its own resources/main dir, which the
+    // standard project(":node-core") compileClasspath resolution does not
+    // surface here (Java's compile-classpath convention excludes a
+    // dependency's resources -- irrelevant for javac, but Clojure's
+    // ClojureCheck genuinely needs the .clj source text to require the
+    // namespace). Same fix mcmod already applies to its own Java output
+    // (see mcmod/build.gradle) for the same underlying reason.
+    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
+}
+
+// compileTestClojure hits the same node-core resources-not-on-compileClasspath
+// gap as checkClojure above (it always runs, source-first or not, since test
+// namespaces are compiled to real classes either way).
+tasks.named("compileTestClojure").configure {
+    dependsOn ":node-core:classes"
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
 tasks.named("processResources").configure {
@@ -28,7 +47,7 @@ tasks.named("processResources").configure {
 
 tasks.named("compileClojure").configure { task ->
     onlyIf { rootProject.ext.fullAotEnabled }
-    dependsOn ":mcmod:compileClojure"
+    dependsOn ":mcmod:compileClojure", ":node-core:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
         task.destinationDirectory = targetDir
