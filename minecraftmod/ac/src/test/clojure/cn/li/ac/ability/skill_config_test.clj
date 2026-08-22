@@ -1,12 +1,18 @@
 (ns cn.li.ac.ability.skill-config-test
   (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.runtime-container :as runtime-container]
             [cn.li.ac.ability.registry.skill-query :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.common :as config-common]
             [cn.li.ac.content.ability :as ability-content]
-            [cn.li.mcmod.config.registry :as config-reg]))
+            [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.network.server :as net-srv]))
+
+(use-fixtures :each
+  (fn [f]
+    (net-srv/reset-handlers-for-test!)
+    (f)))
 
 (def ^:private hidden-descriptor-fragments
   ["visual-distance"
@@ -26,12 +32,12 @@
 
 (defn- registered-content-skill-ids
   []
-  (ability-content/init-ability-content!)
+  (ability-content/init-combat-ability-content!)
   (set (map :id (skill-registry/list-skills))))
 
 (defn- player-configurable-content-skills
   []
-  (ability-content/init-ability-content!)
+  (ability-content/init-combat-ability-content!)
   ;; Discovery also loads test-classpath external providers (fixture-*) —
   ;; those are not content skills and have no per-skill config entry.
   (filter #(and (nil? (namespace (:id %)))

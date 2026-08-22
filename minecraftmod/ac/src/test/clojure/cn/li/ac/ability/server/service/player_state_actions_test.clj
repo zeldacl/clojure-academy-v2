@@ -11,7 +11,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -131,7 +131,7 @@
                               (assoc-in [:preset-data :slots] {[0 0] [:electromaster :railgun]})
                               (assoc-in [:resource-data :activated] true)
                               (assoc-in [:develop-data :state] :developing)))
-    (with-redefs [ctx-mgr/abort-player-contexts! (fn [uuid]
+    (with-redefs [combat-runtime/abort-owner! (fn [uuid]
                                                    (swap! aborted conj uuid)
                                                    nil)]
       (server-hooks/register-lifecycle-subscriptions!)

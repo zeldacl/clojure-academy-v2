@@ -10,7 +10,7 @@
        (item-actions/reset-item-action-registries!)
        (runtime-container/install-ability-runtime-container!
               (runtime-container/create-ability-runtime-container))
-  (ability-content/init-ability-content!)
+  (ability-content/init-combat-ability-content!)
   (metadata/reset-datagen-metadata-for-test!)
 
   (ability-datagen/register-datagen-metadata!)

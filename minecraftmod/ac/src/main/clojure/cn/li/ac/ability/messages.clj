@@ -11,10 +11,6 @@
    :ctx-terminate "ability:ctx/terminate"
    :ctx-terminated "ability:ctx/terminated"
    :ctx-channel "ability:ctx/channel"
-   :slot-key-down "ability:skill/key-down"
-   :slot-key-tick "ability:skill/key-tick"
-   :slot-key-up "ability:skill/key-up"
-   :slot-key-abort "ability:skill/key-abort"
    :combat-intent "ability:combat/intent"
    :combat-result "ability:combat/result"
 
@@ -37,10 +33,6 @@
 (def MSG-CTX-TERMINATE (:ctx-terminate message-ids))
 (def MSG-CTX-TERMINATED (:ctx-terminated message-ids))
 (def MSG-CTX-CHANNEL (:ctx-channel message-ids))
-(def MSG-SLOT-KEY-DOWN (:slot-key-down message-ids))
-(def MSG-SLOT-KEY-TICK (:slot-key-tick message-ids))
-(def MSG-SLOT-KEY-UP (:slot-key-up message-ids))
-(def MSG-SLOT-KEY-ABORT (:slot-key-abort message-ids))
 (def MSG-COMBAT-INTENT (:combat-intent message-ids))
 (def MSG-COMBAT-RESULT (:combat-result message-ids))
 

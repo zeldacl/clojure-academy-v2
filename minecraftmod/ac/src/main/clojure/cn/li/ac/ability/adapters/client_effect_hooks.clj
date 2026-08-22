@@ -1,21 +1,14 @@
 (ns cn.li.ac.ability.adapters.client-effect-hooks
-  "Client FX/effect hook composition for AC ability platform bridge."
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.keybinds :as client-keybinds]
+  "Client input/lifecycle hook composition for AC ability platform bridge.
+
+  Skill VFX no longer polls a namespace-local queue here -- vfx-core owns
+  effect execution end to end (see cn.li.ac.client.combat-vfx-adapter)."
+  (:require [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.client.font-init :as font-init]))
 
 (defn runtime-client-effect-hooks
   []
-  {:client-poll-particle-effects
-   (fn [owner]
-     (client-particles/poll-particle-effects! owner))
-
-   :client-poll-sound-effects
-   (fn [owner]
-     (client-sounds/poll-sound-effects! owner))
-
-   :client-tick-start!
+  {:client-tick-start!
    (fn [get-player-uuid-fn]
      ;; START-of-tick vanilla-input suppression: must run before handleKeybinds
      ;; reads the KeyMappings — the END-phase call cannot stop skill-owned

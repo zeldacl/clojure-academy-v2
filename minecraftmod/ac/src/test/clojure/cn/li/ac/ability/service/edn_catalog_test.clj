@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.service.edn-catalog-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.service.combat-catalog :as catalog]
-            [cn.li.ac.ability.service.combat-runtime-bridge :as execution]
+            [cn.li.combat.skill-runtime :as combat-skill-runtime]
              [cn.li.ac.ability.service.combat-sessions :as sessions]
             [cn.li.vfx.install :as vfx-install]
             [cn.li.vfx.runtime :as vfx-runtime])
@@ -245,7 +245,7 @@
 
 (deftest light-shield-start-executes-compiled-program
   (catalog/initialize!)
-  (let [result (execution/execute!
+  (let [result (combat-skill-runtime/execute! (catalog/catalog)
                 :light-shield "owner-shield"
                 {:action :start
                  :context {:world-id "world"
@@ -277,7 +277,7 @@
         _ (do
             (is (pos? (count (:compiled-ir compiled))))
             (is (pos? (alength ^objects (.-objectConstants ^CompiledProgram (:compiled-program compiled))))))
-        result (execution/execute! :railgun "owner-1"
+        result (combat-skill-runtime/execute! (catalog/catalog) :railgun "owner-1"
                                    {:action :start
                                     :from {:caster/eye {:x 0.0 :y 0.0 :z 0.0}
                                            :caster/aim {:x 0.0 :y 0.0 :z 1.0}
@@ -289,7 +289,7 @@
 
 (deftest mag-movement-start-executes-no-target-path
   (catalog/initialize!)
-  (let [result (execution/execute!
+  (let [result (combat-skill-runtime/execute! (catalog/catalog)
                 :mag-movement "owner-mag"
                 {:action :start
                  :context {:world-id "world"
@@ -316,7 +316,7 @@
 
 (deftest mag-manip-start-executes-no-target-path
   (catalog/initialize!)
-  (let [result (execution/execute!
+  (let [result (combat-skill-runtime/execute! (catalog/catalog)
                 :mag-manip "owner-mag"
                 {:action :start
                  :context {:world-id "world"
@@ -344,7 +344,7 @@
 
 (deftest body-intensify-start-executes-compiled-program
   (catalog/initialize!)
-  (let [result (execution/execute!
+  (let [result (combat-skill-runtime/execute! (catalog/catalog)
                 :body-intensify "owner-body"
                 {:action :start
                  :context {:world-id "world"

@@ -12,8 +12,10 @@
             [cn.li.mcmod.platform.block-manipulation :as blocks]
             [cn.li.mcmod.platform.entity-damage :as damage]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.inventory :as inventory]
             [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.mcmod.platform.potion-effects :as potion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -30,6 +32,20 @@
     [(double (:x value)) (double (:y value)) (double (:z value))]
     (and (vector? value) (= 3 (count value))) (mapv double value)
     :else nil))
+
+(defn- owner-body-position
+  "Owner feet position from the live player entity, or the world's default
+   spawn-ish fallback when raycast isn't wired (e.g. before world load)."
+  [owner]
+  (if-let [pos (and (raycast/available?) (raycast/player-position (str owner)))]
+    {:x (double (:x pos)) :y (double (:y pos)) :z (double (:z pos))}
+    {:x 0.0 :y 64.0 :z 0.0}))
+
+(defn- owner-world-id
+  [owner]
+  (or (when (raycast/available?)
+        (:world-id (raycast/player-position (str owner))))
+      "minecraft:overworld"))
 
 (defn- project-entity [entity projection]
   (let [id (or (:id entity) (:uuid entity) (:entity-id entity))
@@ -1234,6 +1250,204 @@
             broken (scan-x (- x0 r) 0 0)]
         {:status :applied :broken broken}))))
 
+(defn owner-snapshot!
+  "Owner pose/velocity/look/flight-state through the neutral relays."
+  [{:keys [owner]} _frame]
+  (let [owner (str owner)
+        position (when (raycast/available?)
+                   (raycast/player-position owner))
+        velocity (when (player-motion/available?)
+                   (player-motion/get-velocity owner))
+        on-ground? (when (player-motion/available?)
+                     (player-motion/on-ground? owner))
+        look (when (raycast/available?)
+               (raycast/player-look-vector owner))]
+    {:position (when (map? position)
+                 (select-keys position [:x :y :z :eye-y :world-id]))
+     :eye-position (when (map? position)
+                     (let [x (double (or (:x position) 0.0))
+                           y (double (or (:y position) 0.0))
+                           z (double (or (:z position) 0.0))
+                           eye-y (double (or (:eye-y position) (+ y 1.62)))]
+                       {:x x :y eye-y :z z}))
+     :look (or look {:x 0.0 :y 0.0 :z 1.0})
+     :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
+     :on-ground? (boolean on-ground?)
+     :can-fly? (and (player-motion/available?) (player-motion/can-fly? owner))}))
+
+(defn entity-snapshot!
+  "Neutral point-in-time projection of one non-player entity's pose."
+  [{:keys [world-id entity-id projection]} _frame]
+  (when (and world-id entity-id (entity-motion/available?))
+    (when-let [position (entity-motion/entity-position (str world-id) (str entity-id))]
+      (let [x (double (or (:x position) 0.0))
+            y (double (or (:y position) 0.0))
+            z (double (or (:z position) 0.0))
+            eye-height (double (or (:eye-height position) (:height position) 1.62))
+            snapshot {:id (str entity-id)
+                      :type (or (:type position) (:entity-type position))
+                      :entity-type (or (:entity-type position) (:type position))
+                      :x x :y y :z z
+                      :eye-height eye-height
+                      :eye-position {:x x :y (+ y eye-height) :z z}
+                      :alive? (not= false (:alive? position))}]
+        (if (seq projection)
+          (select-keys snapshot
+                       (conj (set projection) :alive? :x :y :z
+                             :eye-height :eye-position))
+          snapshot)))))
+
+(defn lightning!
+  "Strike bounded neutral lightning near the owner (visual-only bolts are the
+   only mode any ability currently requests)."
+  [{:keys [owner world-id position visual-only?]}]
+  (let [p (point position)
+        owner-world (owner-world-id owner)
+        owner-pos (owner-body-position owner)]
+    (if-not (and owner world-id p (= world-id owner-world)
+                 (boolean visual-only?)
+                 (every? #(and (number? %) (Double/isFinite (double %))) p)
+                 (let [[x y z] p
+                       dx (- x (double (:x owner-pos)))
+                       dy (- y (double (:y owner-pos)))
+                       dz (- z (double (:z owner-pos)))]
+                   (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* 64.0 64.0)))
+                 (world-effects/available?))
+      {:status :rejected :reason :invalid-lightning-request}
+      (let [[x y z] p]
+        {:status (if (world-effects/spawn-lightning! world-id x y z true)
+                   :applied :failed)}))))
+
+(defn trigger-behavior!
+  "Fire a scripted entity's configured on-hit behavior through the world
+   relay -- entity type/behavior selection stays EDN-authored."
+  [{:keys [world-id entity]}]
+  (let [entity-id (if (map? entity)
+                    (or (:id entity) (:uuid entity) (:entity-id entity))
+                    entity)]
+    (if (and world-id entity-id (world-effects/available?))
+      {:status (if (world-effects/trigger-behavior-hit! (str world-id) (str entity-id))
+                 :applied :failed)}
+      {:status :rejected :reason :invalid-trigger-behavior-request})))
+
+(defn owner-can-fly!
+  [{:keys [owner enabled?]}]
+  (let [applied? (and owner (player-motion/available?)
+                      (player-motion/set-can-fly! owner (boolean enabled?)))]
+    {:status (if applied? :applied :failed)}))
+
+(defn flight!
+  "Directional hover/flight velocity for the owner -- ground-proximity
+   detection picks between the near-ground hover speed and the airborne one."
+  [{:keys [owner world-id direction speed acceleration
+           hover-near-ground-velocity hover-air-velocity
+           near-ground-distance near-ground-eye-height
+           reset-fall-damage?]}]
+  (let [owner (some-> owner str)
+        position (when (and owner (raycast/available?))
+                   (raycast/player-position owner))
+        current (or (when (and owner (player-motion/available?))
+                      (player-motion/get-velocity owner))
+                    {:x 0.0 :y 0.0 :z 0.0})
+        p (point direction)
+        finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
+        [dx dy dz] (mapv #(double (or % 0.0)) (or p [0.0 0.0 0.0]))
+        len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+        moving? (> len 1.0e-6)
+        nx (if moving? (/ dx len) 0.0)
+        ny (if moving? (/ dy len) 0.0)
+        nz (if moving? (/ dz len) 0.0)
+        speed (double (or speed 0.0))
+        acceleration (double (or acceleration 0.0))
+        near-ground-distance (double (or near-ground-distance 0.8))
+        eye-height (double (or near-ground-eye-height 0.5))
+        hover-near (double (or hover-near-ground-velocity 0.1))
+        hover-air (double (or hover-air-velocity 0.078))
+        cx (double (or (:x current) 0.0))
+        cy (double (or (:y current) 0.0))
+        cz (double (or (:z current) 0.0))
+        approach (fn [from to]
+                   (let [delta (- to from)
+                         step (min (Math/abs (double delta)) acceleration)]
+                     (+ from (if (neg? delta) (- step) step))))
+        valid? (and owner position (player-motion/available?)
+                    (every? finite? [dx dy dz speed acceleration
+                                     near-ground-distance eye-height hover-near hover-air])
+                    (<= 0.0 speed 32.0) (<= 0.0 acceleration 4.0)
+                    (pos? near-ground-distance) (<= near-ground-distance 8.0))]
+    (if-not valid?
+      {:status :rejected :reason :invalid-flight-request}
+      (let [near-ground? (and (raycast/available?)
+                              (raycast/raycast-blocks
+                               (str world-id)
+                               (double (:x position))
+                               (+ (double (:y position)) eye-height)
+                               (double (:z position))
+                               0.0 -1.0 0.0 near-ground-distance))
+            tx (if moving? (approach cx (* nx speed)) cx)
+            ty (if moving? (approach cy (* ny speed))
+                 (if near-ground? hover-near (+ cy hover-air)))
+            tz (if moving? (approach cz (* nz speed)) cz)
+            dismounted? (or (not moving?) (player-motion/dismount-riding! owner))
+            applied? (and dismounted?
+                          (player-motion/set-velocity! owner tx ty tz))]
+        (when (and applied? (not= false reset-fall-damage?))
+          (teleportation/reset-fall-damage! owner))
+        {:status (if applied? :applied :failed)
+         :velocity {:x tx :y ty :z tz}}))))
+
+(defn entity-status!
+  "Apply a status effect, or the powered-creeper special case, to target."
+  [{:keys [world-id target status-id duration-ticks amplifier]}]
+  (if-not target
+    {:status :rejected :reason :invalid-entity-status-request}
+    (if (= :powered-creeper status-id)
+      {:status (if (entity-motion/power-creeper! world-id target) :applied :failed)}
+      {:status (if (potion-effects/apply-effect!
+                    target status-id
+                    (int (max 0 (min 1200 (long (or duration-ticks 0)))))
+                    (int (max 0 (min 255 (long (or amplifier 0))))))
+                 :applied :failed)})))
+
+(defn projectile-redirect!
+  "Redirect a live projectile's velocity, or swap it for a replacement
+   entity type when the ability's EDN program requests one (e.g. a shield
+   reflecting an arrow back as a different projectile)."
+  [{:keys [owner world-id entity target-position velocity replacement-types]}]
+  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
+        entity-type (or (:type entity) (:entity-type entity))
+        target-p (point target-position)
+        velocity-p (point velocity)
+        finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
+        valid? (and owner world-id entity-id target-p velocity-p
+                    (every? finite? (concat target-p velocity-p)))]
+    (if-not valid?
+      {:status :rejected :reason :invalid-projectile-redirect}
+      (let [[vx vy vz] velocity-p
+            replacement? (contains? (set (or replacement-types [])) entity-type)
+            spawn-result (when replacement?
+                           (try
+                             (world-effects/spawn-projectile!
+                              world-id
+                              {:entity-id entity-type
+                               :x (double (or (:x entity) 0.0))
+                               :y (double (or (:y entity) 0.0))
+                               :z (double (or (:z entity) 0.0))
+                               :vx vx :vy vy :vz vz
+                               :owner-uuid (:owner-id entity)
+                               :explosion-power (:explosion-power entity)})
+                             (catch Throwable _ {:success? false})))]
+        (if (and replacement? (:success? spawn-result))
+          (do
+            (when (entity-motion/available?)
+              (entity-motion/discard-entity! world-id entity-id))
+            {:status :applied :replacement-id (:uuid spawn-result)})
+          (if (entity-motion/available?)
+            (do
+              (entity-motion/set-velocity! world-id entity-id vx vy vz)
+              {:status :applied :entity-id entity-id})
+            {:status :unhandled :reason :entity-motion-port-missing}))))))
+
 (defn query-handlers []
   {:raycast raycast!
    :item/held item-held!
@@ -1241,7 +1455,9 @@
    :block/select block-select!
    :terrain/propagate terrain-propagate!
    :interaction/resolve interaction-resolve!
-   :saved-location saved-location!})
+   :saved-location saved-location!
+   :owner/snapshot owner-snapshot!
+   :entity/snapshot entity-snapshot!})
 
 (defn action-handlers []
   {:entity/damage damage!
@@ -1252,7 +1468,9 @@
    :block/break-budget break-budget!
    :world/sound sound!
    :world/explosion explosion!
+   :world/lightning lightning!
    :motion/velocity motion-velocity!
+   :motion/flight flight!
    :entity/reset-fall-damage reset-fall-damage!
    :inventory/consume consume-item!
    :inventory/settle settle-item!
@@ -1262,10 +1480,14 @@
    :entity/configure configure-entity!
    :entity/teleport teleport-entity!
    :entity/teleport-group teleport-group!
+   :entity/trigger-behavior trigger-behavior!
+   :entity/status entity-status!
+   :owner/can-fly owner-can-fly!
    :block/random-break random-break!
    :block/area-break area-break!
    :motion/entity-velocity entity-velocity!
    :motion/entity-velocity-add entity-velocity-add!
+   :projectile/redirect projectile-redirect!
    :projectile/schedule-beam deferred/schedule-action!})
 
 (defn install!

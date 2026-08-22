@@ -6,11 +6,8 @@
             [cn.li.combat.compiler :as compiler]
             [cn.li.combat.skill-runtime :as combat-skill-runtime]
             [cn.li.combat.reactions :as combat-reactions]
-            [cn.li.combat.platform :as combat-platform]
             [cn.li.combat.deferred :as deferred]
             [cn.li.combat.runtime :as combat]
-            [cn.li.combat.targeting :as targeting]
-            [cn.li.combat.vm :as combat-vm]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -25,17 +22,12 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.ac.ability.config :as ability-config]
-            [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
-            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
-            [cn.li.mcmod.platform.item :as platform-item]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as position]
             [cn.li.mcmod.platform.world :as world]
@@ -62,7 +54,6 @@
 ;; would make `random/*` behave identically for repeated activations. Mixing
 ;; in this counter and wall-clock nanos gives every activation its own seed.
 (defonce ^:private activation-seed-counter* (atom 0))
-(defonce ^:private spawned-entity-ids* (atom {}))
 (declare owner-state resolve-slot execute-world-effects! finalize-result! publish-result!)
 
 (defn- generate-activation-seed
@@ -117,7 +108,7 @@
 
     (nil? attacker-id) true
 
-    (not (and (raycast/available?) (motion-effects/entity-motion-available?)))
+    (not (and (raycast/available?) (entity-motion/available?)))
     false
 
     :else
@@ -125,7 +116,7 @@
       (let [position (raycast/player-position (str player-id))
             look (raycast/player-look-vector (str player-id))
             world-id (:world-id position)
-            attacker-pos (motion-effects/entity-position world-id (str attacker-id))]
+            attacker-pos (entity-motion/entity-position world-id (str attacker-id))]
         (boolean
          (when (and (map? position) (map? look) (map? attacker-pos))
            (let [dx (- (double (:x attacker-pos)) (double (:x position)))
@@ -173,43 +164,6 @@
           :seed (long (or (:activation-seed request) 0))
           :event :spawn
           :params payload})))))
-
-(defn- skill-exp-of
-  "Mirror combat-core runtime's own private skill-exp lookup (same paths)
-   for query implementations that need an ability's exp level directly --
-   e.g. to scale a *-dest.clj destination solver's own max-distance."
-  [context ability-id]
-  (double (or (get-in context [:state :ability-data :skill-exps ability-id])
-              (get-in context [:state :skill-exp ability-id])
-              0.0)))
-
-(defn- resolve-scale
-  "Resolve a raw {:op :scale :min :max} node field against exp. Only
-   :distance/:range/:aoe-radius node keys are auto-resolved by combat-core's
-   own :query op before a query-port fn ever sees `node` -- other keys like
-   :max-range arrive as this unresolved expression."
-  [expr exp]
-  (if (and (map? expr) (= :scale (:op expr)))
-    (let [lo (double (:min expr)) hi (double (:max expr))]
-      (+ lo (* (- hi lo) (max 0.0 (min 1.0 (double exp))))))
-    (double (or expr 0.0))))
-
-(defn- nearest-entity-in-range
-  [world-id origin radius excluded]
-  (when (world-effects/available?)
-    (let [candidates (->> (world-effects/find-entities-in-radius
-                            world-id (double (:x origin)) (double (:y origin)) (double (:z origin))
-                            (double radius))
-                           (filter map?)
-                           (remove #(contains? excluded (str (or (:uuid %) (:entity-id %))))))]
-      (when (seq candidates)
-        (apply min-key
-               (fn [{:keys [x y z]}]
-                 (let [dx (- (double (or x 0.0)) (double (:x origin)))
-                       dy (- (double (or y 0.0)) (double (:y origin)))
-                       dz (- (double (or z 0.0)) (double (:z origin)))]
-                   (+ (* dx dx) (* dy dy) (* dz dz))))
-               candidates)))))
 
 ;; `:runtime-interop :get-block-entity-at` is a neutral AC host adapter used
 ;; by the generic energy query/action ports below. It returns an opaque tile
@@ -283,73 +237,19 @@
   ([{:keys [owner-state-fn query-port now-tick ability-resolver damage-pipeline
             domain-event-handler]}]
    (or @engine*
-       (let [catalog (compiler/compile-all!)
-             default-query-port
-             {:raycast (fn [context node]
-                         (if-let [host-query (contract/host-port :query)]
-                           (host-query :raycast context node)
-                           (when (raycast/available?)
-                             (let [owner (:owner context)
-                                   hit (raycast/raycast-from-player
-                                        owner
-                                        (double (or (:distance node) 12.0))
-                                        true)
-                                   position (raycast/player-position owner)]
-                               (cond-> hit
-                                 (and (map? position) (:world-id position))
-                                 (assoc :world-id (:world-id position))
-                                 ;; Caster origin (eye position), so a :vfx step
-                                 ;; can draw a beam from :eye-x/:eye-y/:eye-z to
-                                 ;; the existing hit-x/hit-y/hit-z without a
-                                 ;; second query — player-position already
-                                 ;; fetches this for :world-id above, it was
-                                 ;; just discarded.
-                                 (map? position)
-                                 (assoc :eye-x (:x position)
-                                        :eye-y (:eye-y position)
-                                        :eye-z (:z position)))))))
-              :entities (fn [context node]
-                          (when-let [host-query (contract/host-port :query)]
-                            (host-query :entities context node)))
-               :block-scan (fn [context node]
-                            (if-let [host-query (contract/host-port :query)]
-                              (host-query :block-scan context node)
-                              (let [owner (:owner context)
-                                    world-id (geom/world-id-of owner)
-                                    eye (geom/eye-pos owner)
-                                    look (when (raycast/available?)
-                                           (raycast/player-look-vector owner))
-                                    distance (double (or (:distance node) 10.0))]
-                                (when (and look (block-manipulation/available?))
-                                  (when-let [hit (first (block-manipulation/find-blocks-in-line
-                                                         world-id (:x eye) (:y eye) (:z eye)
-                                                         (double (or (:x look) 0.0))
-                                                         (double (or (:y look) 0.0))
-                                                         (double (or (:z look) 1.0))
-                                                         distance))]
-                                    (assoc hit :world-id world-id))))))
-              :attack (fn [context node]
-                        (if-let [host-query (contract/host-port :query)]
-                          (host-query :attack context node)
-                          (let [owner (:owner context)
-                                range (double (or (:range node) 20.0))
-                                attack-data (attack/resolve-attack-data owner range)
-                                excluded (cond-> #{owner}
-                                           (:target-uuid attack-data)
-                                           (conj (:target-uuid attack-data)))
-                                victims (attack/aoe-victims
-                                         (:world-id attack-data)
-                                         (:impact attack-data)
-                                         (double (or (:aoe-radius node) 8.0))
-                                         excluded)]
-                            (assoc attack-data :victims victims))))
-              }]
+       (let [catalog (compiler/compile-all!)]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
                            {:catalog catalog
                             :initial-owner-state (or owner-state-fn owner-state)
-                            :query-port (merge default-query-port (or query-port {}))
+                            ;; The v1 engine's own :op-keyed program-node
+                            ;; interpreter (which :query-port feeds) has no
+                            ;; registered providers -- every ability is EDN v2,
+                            ;; executed entirely through combat-skill-runtime's
+                            ;; VM instead. :query-port only remains a pass-through
+                            ;; seam for a caller-supplied port map (tests).
+                            :query-port (or query-port {})
                             ;; Explicit `(or now-tick ...)`: create-engine's :or
                             ;; default only fires when the key is absent, and
                             ;; this map always includes :now-tick (possibly
@@ -604,12 +504,14 @@
         resource-data (:resource-data state)
         position (when (raycast/available?)
                    (raycast/player-position (str owner)))
-        eye (geom/eye-pos (str owner))
+        eye (if position
+              {:x (double (:x position)) :y (double (:eye-y position)) :z (double (:z position))}
+              {:x 0.0 :y 65.62 :z 0.0})
         look (when (raycast/available?)
                (raycast/player-look-vector (str owner)))]
     (merge {:owner owner
             :ability-id ability-id
-            :world-id (or (:world-id position) (geom/world-id-of (str owner)))
+            :world-id (or (:world-id position) "minecraft:overworld")
             :eye-pos eye
             :look look
             :activation-seed (long seed)
@@ -647,7 +549,10 @@
         forward {:x (/ lx length) :y (/ ly length) :z (/ lz length)}
         left-length (max 1.0e-9 (Math/sqrt (+ (* lz lz) (* lx lx))))]
     {:caster/eye (:eye-pos context)
-     :caster/body (geom/body-pos (str owner))
+     :caster/body (if-let [position (when (raycast/available?)
+                                       (raycast/player-position (str owner)))]
+                    {:x (double (:x position)) :y (double (:y position)) :z (double (:z position))}
+                    {:x 0.0 :y 64.0 :z 0.0})
      :caster/eye-y (double (or (:y (:eye-pos context)) 0.0))
      :caster/aim look
      :caster/id owner
@@ -672,322 +577,24 @@
      :progression/level (long (or (:ability-level context) 0))
      :rng/seed (long (or (:activation-seed context) 0))}))
 
-(defn- lerp [lo hi t]
-  (let [bounded (max 0.0 (min 1.0 (double t)))]
-    (+ (double lo) (* (- (double hi) (double lo)) bounded))))
+(defn install-ac-host-capabilities!
+  "Link AC's own domain capabilities (resource/progression/energy/mark) to
+   the neutral EDN host table once.
 
+   World-facing capabilities (raycast, damage, entity motion, world effects,
+   ...) are owned and registered entirely by Combat Core -- see
+   `cn.li.combat.platform/install!`, called from `cn.li.ac.core.init/init`
+   ahead of this function. This function only links the handful of ports
+   that are legitimately AC's own domain: player resources (CP/overload),
+   energy items/blocks, and entity marks (which read AC's assembled ability
+   catalog for mark-policy metadata).
 
-(defn- raycast-point
-  [hit key fallback]
-  (double (or (get hit key) fallback 0.0)))
-
-(defn- penetration-destination
-  "Resolve the generic wall-through march against AC's neutral block port.
-
-   The component and marcher carry no skill id or config lookup.  This host
-   adapter only translates the platform collision predicate into the generic
-   targeting function and adds the requested visual anchor offset."
-  [owner {:keys [origin direction distance policy world-id]}]
-  (let [world-id (or (when (and world-id (not= "unknown" (str world-id)))
-                      (str world-id))
-                    (geom/world-id-of (str owner)))
-        result (targeting/march-through-collision
-                origin direction distance
-                (:scan-step policy)
-                (:clearance-steps policy)
-                (fn [x y z]
-                  (or (nil? world-id)
-                      (not (block-manipulation/available?))
-                      (block-manipulation/block-collidable?
-                       world-id (int x) (int y) (int z)))))]
-    (when result
-      (let [position (:position result)
-            offset (double (or (:marker-offset-y policy) 0.0))]
-        (assoc result
-               :marker-position (update position :y + offset)
-               :hit? false)))))
-
-(defn- directional-destination
-  "Adapt the neutral directional landing query to AC raycast/block ports."
-  [owner {:keys [origin look eye-y direction distance policy world-id]}]
-  (let [owner (str owner)
-        world-id (or (when (and world-id (not= "unknown" (str world-id)))
-                       (str world-id))
-                     (geom/world-id-of owner))
-        raycast-fn (fn [sx sy sz dx dy dz max-distance]
-                     (when (and world-id (raycast/available?))
-                       (raycast/raycast-combined-excluding
-                        world-id sx sy sz dx dy dz max-distance owner)))
-        head-blocked? (fn [x y z]
-                        (and world-id
-                             (block-manipulation/available?)
-                             (block-manipulation/block-collidable?
-                              world-id (int (Math/floor (double x)))
-                              (int (Math/floor (+ (double y) 1.0)))
-                              (int (Math/floor (double z))))))]
-    (targeting/directional-destination
-     {:origin origin :look look :eye-y eye-y :direction direction
-      :distance distance :policy policy :raycast raycast-fn
-      :head-blocked? head-blocked?})))
-
-(defn- resolve-raycast-destination
-  "Resolve a neutral raycast hit into a safe landing point.
-
-   This is deliberately a generic host operation: EDN supplies the offsets
-   and minimum-distance policy, while AC supplies only the platform reads
-   needed to test the block above a side-face landing spot.  No ability id or
-   skill-specific branch belongs here."
-  [owner {:keys [hit origin distance policy world-id]}]
-  (let [hit (when (map? hit) hit)
-        origin (or origin {})
-        [ox oy oz] (if (vector? (:vec3 origin))
-                     (:vec3 origin)
-                     [(double (or (:x origin) 0.0))
-                      (double (or (:y origin) 0.0))
-                      (double (or (:z origin) 0.0))])
-        distance (double (or distance 0.0))
-        look (or (:direction policy) {})
-        [dx dy dz] (if (vector? (:vec3 look))
-                     (:vec3 look)
-                     [(double (or (:x look) 0.0))
-                      (double (or (:y look) 0.0))
-                      (double (or (:z look) 0.0))])
-        entity-eye-height (double (or (:eye-height hit)
-                                      (:entity-eye-height policy)
-                                      1.6))
-        block-y (raycast-point hit :y 0.0)
-        hx (raycast-point hit :hit-x (:x hit))
-        hy (raycast-point hit :hit-y (:y hit))
-        hz (raycast-point hit :hit-z (:z hit))
-        kind (:hit-type hit)
-        face (:face hit)
-        head-blocked?
-        (fn [x y z]
-          (let [world-id (or world-id (geom/world-id-of (str owner)))]
-            (and world-id
-                 (block-manipulation/block-collidable?
-                  world-id (int (Math/floor (double x)))
-                  (int (Math/floor (+ (double y) 1.0)))
-                  (int (Math/floor (double z)))))))
-        destination
-        (if (= :entity kind)
-          {:x (raycast-point hit :x hx)
-           :y (+ (raycast-point hit :y hy) entity-eye-height)
-           :z (raycast-point hit :z hz)}
-          (case face
-            :down  {:x hx :y (- hy 1.0) :z hz}
-            :up    {:x hx :y (+ hy 1.8) :z hz}
-            :north {:x hx :y (+ block-y 1.7) :z (- hz 0.6)}
-            :south {:x hx :y (+ block-y 1.7) :z (+ hz 0.6)}
-            :west  {:x (- hx 0.6) :y (+ block-y 1.7) :z hz}
-            :east  {:x (+ hx 0.6) :y (+ block-y 1.7) :z hz}
-            {:x hx :y hy :z hz}))
-        destination
-        (if (and (#{:north :south :west :east} face)
-                 (:head-clearance? policy)
-                 (head-blocked? (:x destination) (:y destination) (:z destination)))
-          (update destination :y - 1.25)
-          destination)
-        miss? (or (nil? hit) (= :miss kind))
-        destination (if miss?
-                      {:x (+ ox (* dx distance))
-                       :y (+ oy (* dy distance))
-                       :z (+ oz (* dz distance))}
-                      destination)
-        ddx (- (double (:x destination)) ox)
-        ddy (- (double (:y destination)) oy)
-        ddz (- (double (:z destination)) oz)
-        resolved-distance (Math/sqrt (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)))
-        minimum-distance (double (or (:minimum-distance policy) 0.0))]
-    {:position destination
-     :distance resolved-distance
-     :hit? (not miss?)
-     :valid? (>= resolved-distance minimum-distance)}))
-
-(defn- neutral-point
-  [value]
-  (cond
-    (and (map? value) (vector? (:vec3 value))) (mapv double (:vec3 value))
-    (and (map? value) (every? #(number? (get value %)) [:x :y :z]))
-    [(double (:x value)) (double (:y value)) (double (:z value))]
-    (and (vector? value) (= 3 (count value))) (mapv double value)
-    :else nil))
-
-(defn- neutral-yaw-degrees [dx dz]
-  (- (Math/toDegrees (Math/atan2 (double dx) (double dz)))))
-
-(defn- neutral-pitch-degrees
-  [dx dy dz denominator]
-  (let [horizontal (case denominator
-                     :z-only (Math/sqrt (+ (* (double dz) (double dz))
-                                           (* (double dz) (double dz))))
-                     (Math/sqrt (+ (* (double dx) (double dx))
-                                   (* (double dz) (double dz)))))]
-    (- (Math/toDegrees (Math/atan2 (double dy) horizontal)))))
-
-(defn- neutral-angle-delta [a b]
-  (let [raw (mod (- (double a) (double b)) 360.0)]
-    (if (> raw 180.0) (- raw 360.0) raw)))
-
-(defn- neutral-cone-aabb
-  [origin direction distance yaw-span pitch-span]
-  ;; The bounded query is deliberately conservative; exact angular filtering
-  ;; below is authoritative. A cube around the origin is orientation-safe and
-  ;; still has a fixed 128-block maximum, so no candidate can be missed by an
-  ;; approximation of the cone's rotated corners.
-  (let [[ox oy oz] origin
-        radius (double distance)]
-    {:min-x (- ox radius) :min-y (- oy radius) :min-z (- oz radius)
-     :max-x (+ ox radius) :max-y (+ oy radius) :max-z (+ oz radius)}))
-
-(defn- project-neutral-entity
-  [entity projection difficulty-map]
-  (let [id (or (:uuid entity) (:entity-id entity))
-        type (or (:entity-type entity) (:type entity))
-        position {:x (double (or (:x entity) 0.0))
-                  :y (double (or (:y entity) 0.0))
-                  :z (double (or (:z entity) 0.0))}]
-    (reduce (fn [result field]
-              (assoc result field
-                     (case field
-                       :id id :type type :position position
-                       :age-ms (long (or (:age-ms entity) 0))
-                       :motion-progress (double (or (:motion-progress entity) 0.0))
-                       :invulnerable-time (long (or (:invulnerable-time entity) 0))
-                       :difficulty (double (or (get difficulty-map type) 0.0))
-                       :velocity (or (:velocity entity)
-                                     {:x (double (or (:vx entity) 0.0))
-                                      :y (double (or (:vy entity) 0.0))
-                                      :z (double (or (:vz entity) 0.0))})
-                       :owner-id (or (:owner-id entity) (:owner-uuid entity))
-                       :item? (boolean (:item? entity))
-                       :living? (boolean (:living? entity))
-                       :mob? (boolean (:mob? entity))
-                       :multipart? (boolean (:multipart? entity))
-                       :eye-height (double (or (:eye-height entity)
-                                               (:height entity) 0.0))
-                       :eye-position {:x (double (or (:x entity) 0.0))
-                                      :y (+ (double (or (:y entity) 0.0))
-                                            (double (or (:eye-height entity)
-                                                        (:height entity) 0.0)))
-                                      :z (double (or (:z entity) 0.0))}
-                       :behavior-hit? (boolean (:behavior-hit? entity))
-                       :explosion-power (:explosion-power entity)
-                       nil)))
-            {} (or projection [:id :type :position]))))
-
-(defn- entity-select-results
-  [{:keys [owner world-id shape filter projection limit]}]
-  (let [origin (neutral-point (or (:origin shape) (:center shape)))
-        eye-origin (neutral-point (or (:eye-origin shape) (:origin shape) (:center shape)))
-        direction (neutral-point (:direction shape))
-        radius (double (or (:radius shape) 0.0))
-        cone? (= :cone (:type shape))
-        distance (double (or (:distance shape) (:range shape) radius))
-        limit (max 0 (min 256 (long (or limit 0))))
-        owner-id (str owner)
-        type-filter (set (or (:entity-types filter) []))
-        id-filter (set (map str (or (:entity-ids filter) [])))
-        excluded-filter (set (map str (or (:excluded-entity-ids filter) [])))
-        entity-owner-filter (some-> (:owner-id filter) str)
-        living-filter (when (contains? filter :living?) (boolean (:living? filter)))
-        difficulty-map (reduce (fn [result entry]
-                                 (if (string? entry)
-                                   (let [index (.lastIndexOf ^String entry ":")]
-                                     (if (pos? index)
-                                       (try (assoc result (subs entry 0 index)
-                                                    (Double/parseDouble (subs entry (inc index))))
-                                            (catch Throwable _ result))
-                                       result))
-                                   result)) {} (or (:difficulty-entries filter) []))
-        type-match? (fn [entity-type]
-                      (or (empty? type-filter)
-                          (contains? type-filter entity-type)
-                          (some (fn [requested]
-                                  (when (and (string? requested)
-                                             (string? entity-type))
-                                    (let [colon (.lastIndexOf ^String requested ":")
-                                          suffix (if (pos? colon)
-                                                   (subs requested (inc colon))
-                                                   requested)]
-                                      (.endsWith ^String entity-type
-                                                 (str "." suffix)))))
-                                type-filter)))
-        valid? (and world-id origin eye-origin (pos? limit)
-                    (if cone?
-                      (and direction (Double/isFinite distance) (<= 0.0 distance 128.0))
-                      (and (Double/isFinite radius) (<= 0.0 radius 64.0))))]
-    (when (and valid? (world-effects/available?))
-      (let [candidates
-            (if cone?
-              (let [{:keys [min-x min-y min-z max-x max-y max-z]}
-                    (neutral-cone-aabb origin direction distance
-                                        (double (or (:yaw-span-degrees shape) 0.0))
-                                        (double (or (:pitch-span-degrees shape) 0.0)))]
-                (world-effects/find-entities-in-aabb world-id min-x min-y min-z
-                                                       max-x max-y max-z))
-              (world-effects/find-entities-in-radius world-id
-                                                     (nth origin 0) (nth origin 1)
-                                                     (nth origin 2) radius))
-            filtered (->> candidates
-                          (filter map?)
-                          (remove #(= owner-id (str (or (:uuid %) (:entity-id %)))))
-                          (filter #(let [entity-id (str (or (:uuid %) (:entity-id %)))
-                                         entity-type (or (:entity-type %) (:type %))
-                                         entity-owner (some-> (or (:owner-id %)
-                                                                  (:owner-uuid %)) str)]
-                                     (and (type-match? entity-type)
-                                          (or (empty? id-filter)
-                                              (contains? id-filter entity-id))
-                                          (not (contains? excluded-filter entity-id))
-                                          (or (nil? entity-owner-filter)
-                                              (= entity-owner-filter entity-owner))
-                                          (or (nil? living-filter)
-                                              (= living-filter (boolean (:living? %))))
-                                          (not (:item? %)))))
-                          (filter (if-not cone?
-                                    identity
-                                    (fn [entity]
-                                      (let [[ox oy oz] origin
-                                            [dx dy dz] direction
-                                            player-yaw (neutral-yaw-degrees dx dz)
-                                            player-pitch (neutral-pitch-degrees dx dy dz
-                                                                                :normal)
-                                            tx (- (double (or (:x entity) 0.0)) ox)
-                                            ty (- (+ (double (or (:y entity) 0.0))
-                                                     (double (or (:eye-height entity)
-                                                                 (:height entity) 0.0)))
-                                                  (double (second eye-origin)))
-                                            tz (- (double (or (:z entity) 0.0)) oz)
-                                            target-yaw (neutral-yaw-degrees tx tz)
-                                            target-pitch (neutral-pitch-degrees tx ty tz
-                                                                                (or (:pitch-denominator shape)
-                                                                                    :normal))]
-                                        (let [yaw-diff (neutral-angle-delta target-yaw player-yaw)
-                                              pitch-diff (- target-pitch player-pitch)
-                                              yaw-abs (if (neg? yaw-diff) (- yaw-diff) yaw-diff)
-                                              pitch-abs (if (neg? pitch-diff) (- pitch-diff) pitch-diff)]
-                                          (and (<= yaw-abs
-                                                   (/ (double (or (:yaw-span-degrees shape) 0.0)) 2.0))
-                                               (<= pitch-abs
-                                                    (double (or (:pitch-span-degrees shape) 0.0)))))))))
-                          (map #(project-neutral-entity % projection difficulty-map))
-                          (take limit)
-                          vec)]
-        filtered))))
-
-(defn install-edn-host-capabilities!
-  "Link the generic EDN host table to neutral AC platform ports once.
-
-  The handlers exchange only maps and UUIDs.  They do not select abilities or
-  contain Arc Gen rules; those remain in EDN.
-
-  Public and called from cn.li.ac.core.init/init, ahead of
-  combat-catalog/initialize!, so capabilities are registered before the catalog
-  ever loads (Design E precondition R9). It also still runs lazily on first
-  dispatch below (compare-and-set! below makes a second call a no-op) as a
-  safety net for any other entry path, but that is no longer the only time
-  it runs."
+   Public and called from cn.li.ac.core.init/init, ahead of
+   combat-catalog/initialize!, so capabilities are registered before the catalog
+   ever loads (Design E precondition R9). It also still runs lazily on first
+   dispatch below (compare-and-set! below makes a second call a no-op) as a
+   safety net for any other entry path, but that is no longer the only time
+   it runs."
   []
   (when (compare-and-set! edn-host-capabilities-installed? false true)
     (try
@@ -1011,134 +618,11 @@
               :status :accepted
               :owner owner
               :vfx-signals [normalized]})))))
-      ;; Atomic combat capabilities are owned by Combat Core.  AC only links
-      ;; the startup registry; mcmod relays each call to platform-src.
-      (doseq [[capability handler] (combat-platform/query-handlers)]
-        (when-not (contains? (:queries (capabilities/snapshot)) capability)
-          (capabilities/register-query! capability handler)))
-      (doseq [[capability handler] (combat-platform/action-handlers)]
-        (when-not (contains? (:actions (capabilities/snapshot)) capability)
-          (capabilities/register-action! capability handler)))
-      (when-not (contains? (:queries (capabilities/snapshot)) :owner/snapshot)
-        (capabilities/register-query!
-         :owner/snapshot
-                 (fn [{:keys [owner]} _frame]
-                   (let [owner (str owner)
-                         position (when (raycast/available?)
-                            (raycast/player-position owner))
-                         velocity (when (motion-effects/player-motion-available?)
-                            (motion-effects/player-velocity owner))
-                         on-ground? (when (motion-effects/player-motion-available?)
-                                      (motion-effects/player-on-ground? owner))
-                         look (when (raycast/available?)
-                                (raycast/player-look-vector owner))]
-             {:position (when (map? position)
-                          (select-keys position [:x :y :z :eye-y :world-id]))
-              :eye-position (when (map? position)
-                             (let [x (double (or (:x position) 0.0))
-                                   y (double (or (:y position) 0.0))
-                                   z (double (or (:z position) 0.0))
-                                   eye-y (double (or (:eye-y position) (+ y 1.62)))]
-                               {:x x :y eye-y :z z}))
-              :look (or look {:x 0.0 :y 0.0 :z 1.0})
-              :velocity (or velocity {:x 0.0 :y 0.0 :z 0.0})
-              :on-ground? (boolean on-ground?)
-              :can-fly? (motion-effects/player-can-fly? owner)}))))
       (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
         (capabilities/register-query!
          :energy/target
          (fn [{:keys [world-id hit]} _frame]
            (energy-target-result world-id hit))))
-      (when-not (contains? (:queries (capabilities/snapshot)) :entity/snapshot)
-        (capabilities/register-query!
-         :entity/snapshot
-         (fn [{:keys [world-id entity-id projection]} _frame]
-           (when (and world-id entity-id (motion-effects/entity-motion-available?))
-             (when-let [position (motion-effects/entity-position
-                                  (str world-id) (str entity-id))]
-               (let [x (double (or (:x position) 0.0))
-                     y (double (or (:y position) 0.0))
-                     z (double (or (:z position) 0.0))
-                     eye-height (double (or (:eye-height position)
-                                            (:height position) 1.62))
-                     snapshot {:id (str entity-id)
-                               :type (or (:type position) (:entity-type position))
-                               :entity-type (or (:entity-type position) (:type position))
-                               :x x :y y :z z
-                               :eye-height eye-height
-                               :eye-position {:x x :y (+ y eye-height) :z z}
-                               :alive? (not= false (:alive? position))}]
-                 (if (seq projection)
-                   (select-keys snapshot
-                                (conj (set projection) :alive? :x :y :z
-                                      :eye-height :eye-position))
-                   snapshot)))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :world/lightning)
-        (capabilities/register-action!
-         :world/lightning
-         (fn [{:keys [owner world-id position visual-only?]}]
-           (let [point (if (and (map? position) (vector? (:vec3 position)))
-                         (:vec3 position)
-                         [(when (map? position) (:x position))
-                          (when (map? position) (:y position))
-                          (when (map? position) (:z position))])
-                 owner-world (geom/world-id-of (str owner))
-                 owner-pos (geom/body-pos (str owner))
-                 [x y z] point
-                 dx (- (double (or x 0.0)) (double (or (:x owner-pos) 0.0)))
-                 dy (- (double (or y 0.0)) (double (or (:y owner-pos) 0.0)))
-                 dz (- (double (or z 0.0)) (double (or (:z owner-pos) 0.0)))]
-             (when (and owner world-id (= world-id owner-world)
-                        (boolean visual-only?) owner-pos
-                        (= 3 (count point))
-                        (every? #(and (number? %) (Double/isFinite (double %))) point)
-                        (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* 64.0 64.0))
-                        (world-effects/available?))
-                        (world-effects/spawn-lightning! world-id (double x) (double y) (double z) true))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :world/explosion)
-        (capabilities/register-action!
-         :world/explosion
-         (fn [{:keys [owner world-id position radius fire? terrain?]}]
-           (let [point (if (and (map? position) (vector? (:vec3 position)))
-                         (:vec3 position)
-                         [(when (map? position) (:x position))
-                          (when (map? position) (:y position))
-                          (when (map? position) (:z position))])
-                 [x y z] point
-                 radius (double (or radius 0.0))
-                 finite? (fn [value]
-                           (and (number? value)
-                                (Double/isFinite (double value))))
-                 owner-world (geom/world-id-of (str owner))
-                 owner-pos (geom/body-pos (str owner))
-                 dx (- (double (or x 0.0)) (double (or (:x owner-pos) 0.0)))
-                 dy (- (double (or y 0.0)) (double (or (:y owner-pos) 0.0)))
-                 dz (- (double (or z 0.0)) (double (or (:z owner-pos) 0.0)))
-                 valid? (and owner world-id (= world-id owner-world) owner-pos
-                             (every? finite? [x y z radius])
-                             (pos? radius) (<= radius 32.0)
-                             (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* 128.0 128.0))
-                             (world-effects/available?))]
-             (if-not valid?
-               {:status :rejected :reason :invalid-explosion-request}
-               (let [result (world-effects/create-explosion!
-                              world-id (double x) (double y) (double z)
-                              radius (boolean fire?)
-                              {:terrain? (boolean terrain?)
-                               :attacker-uuid owner})]
-                 {:status (if (not= false result) :applied :failed)}))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/trigger-behavior)
-        (capabilities/register-action!
-         :entity/trigger-behavior
-         (fn [{:keys [world-id entity]}]
-           (let [entity-id (if (map? entity)
-                             (or (:id entity) (:uuid entity) (:entity-id entity))
-                             entity)]
-             (when (and world-id entity-id (world-effects/available?))
-               {:status (if (world-effects/trigger-behavior-hit!
-                             (str world-id) (str entity-id))
-                          :applied
-                          :failed)})))))
       (when-not (contains? (:actions (capabilities/snapshot)) :entity/mark)
         (capabilities/register-action!
          :entity/mark
@@ -1157,7 +641,7 @@
                (let [duration (long (or duration-ticks 60))
                      policy (mark-policy-for mark-type)
                      position (when world-id
-                                (motion-effects/entity-position
+                                (entity-motion/entity-position
                                  (str world-id) target))]
                  (combat/dispatch-domain-event!
                   (engine)
@@ -1196,199 +680,6 @@
                                                :else false))))
                                  false))]
              {:status (if applied? :applied :failed)}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :owner/can-fly)
-        (capabilities/register-action!
-         :owner/can-fly
-         (fn [{:keys [owner enabled?]}]
-           (let [valid? (and owner (motion-effects/player-motion-available?))
-                 applied? (and valid?
-                               (motion-effects/set-player-can-fly!
-                                (str owner) (boolean enabled?)))]
-             {:status (if applied? :applied :failed)}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :motion/flight)
-        (capabilities/register-action!
-         :motion/flight
-         (fn [{:keys [owner world-id direction speed acceleration
-                      hover-near-ground-velocity hover-air-velocity
-                      near-ground-distance near-ground-eye-height
-                      reset-fall-damage?]}]
-           (let [owner (some-> owner str)
-                 position (when (and owner (raycast/available?))
-                            (raycast/player-position owner))
-                 current (or (when (and owner (motion-effects/player-motion-available?))
-                               (motion-effects/player-velocity owner))
-                             {:x 0.0 :y 0.0 :z 0.0})
-                 point (cond
-                         (and (map? direction) (vector? (:vec3 direction))) (:vec3 direction)
-                         (map? direction) [(:x direction) (:y direction) (:z direction)]
-                         :else nil)
-                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
-                 [dx dy dz] (mapv #(double (or % 0.0)) (or point [0.0 0.0 0.0]))
-                 len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-                 moving? (> len 1.0e-6)
-                 nx (if moving? (/ dx len) 0.0)
-                 ny (if moving? (/ dy len) 0.0)
-                 nz (if moving? (/ dz len) 0.0)
-                 speed (double (or speed 0.0))
-                 acceleration (double (or acceleration 0.0))
-                 near-ground-distance (double (or near-ground-distance 0.8))
-                 eye-height (double (or near-ground-eye-height 0.5))
-                 hover-near (double (or hover-near-ground-velocity 0.1))
-                 hover-air (double (or hover-air-velocity 0.078))
-                 cx (double (or (:x current) 0.0))
-                 cy (double (or (:y current) 0.0))
-                 cz (double (or (:z current) 0.0))
-                 approach (fn [from to]
-                           (let [delta (- to from)
-                                 step (min (Math/abs (double delta)) acceleration)]
-                             (+ from (if (neg? delta) (- step) step))))
-                 valid? (and owner position (motion-effects/player-motion-available?)
-                             (every? finite? [dx dy dz speed acceleration
-                                              near-ground-distance eye-height hover-near hover-air])
-                             (<= 0.0 speed 32.0) (<= 0.0 acceleration 4.0)
-                             (pos? near-ground-distance) (<= near-ground-distance 8.0))]
-             (if-not valid?
-               {:status :rejected :reason :invalid-flight-request}
-               (let [near-ground? (and (raycast/available?)
-                                       (raycast/raycast-blocks
-                                        (str world-id)
-                                        (double (:x position))
-                                        (+ (double (:y position)) eye-height)
-                                        (double (:z position))
-                                        0.0 -1.0 0.0 near-ground-distance))
-                     tx (if moving? (approach cx (* nx speed)) cx)
-                     ty (if moving? (approach cy (* ny speed))
-                          (if near-ground? hover-near (+ cy hover-air)))
-                     tz (if moving? (approach cz (* nz speed)) cz)
-                     dismounted? (or (not moving?)
-                                     (motion-effects/dismount-riding! owner))
-                     applied? (and dismounted?
-                                   (motion-effects/set-player-velocity! owner tx ty tz))]
-                 (when (and applied? (not= false reset-fall-damage?))
-                   (motion-effects/reset-fall-damage! owner))
-                 {:status (if applied? :applied :failed)
-                  :velocity {:x tx :y ty :z tz}}))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/teleport)
-        (capabilities/register-action!
-         :entity/teleport
-         (fn [{:keys [owner world-id target position dismount? reset-fall-damage?]}]
-           (let [point (or position target)
-                 [x y z] (if (and (map? point) (vector? (:vec3 point)))
-                           (:vec3 point)
-                           [(when (map? point) (:x point))
-                            (when (map? point) (:y point))
-                            (when (map? point) (:z point))])
-                 finite? (fn [value]
-                           (and (number? value)
-                                (Double/isFinite (double value))))
-                 valid? (and owner world-id
-                             (every? finite? [x y z])
-                             (teleportation/available?))]
-             (if-not valid?
-               {:status :rejected :reason :invalid-teleport-request}
-               (do
-                 (when dismount?
-                   (motion-effects/dismount-riding! (str owner)))
-                 (let [success (teleportation/teleport-player!
-                                (str owner) (str world-id)
-                                (double x) (double y) (double z))]
-                   (when (and success reset-fall-damage?)
-                     (motion-effects/reset-fall-damage! (str owner)))
-                   {:status (if success :applied :failed)
-                    :position {:x (double x) :y (double y) :z (double z)}})))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/status)
-        (capabilities/register-action!
-         :entity/status
-         (fn [{:keys [world-id target status-id duration-ticks amplifier]}]
-           (when target
-             (if (= :powered-creeper status-id)
-               (motion-effects/power-creeper! world-id target)
-               (potion-effects/apply-effect!
-                target status-id (int (max 0 (min 1200 (long duration-ticks))))
-                (int (max 0 (min 255 (long amplifier))))))))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/spawn)
-        (capabilities/register-action!
-         :entity/spawn
-         (fn [{:keys [world-id owner entity-type position velocity life-ticks]}]
-           (if (and world-id owner (string? entity-type)
-                    (world-effects/available?))
-             (let [entity-id (world-effects/spawn-entity!
-                               world-id owner entity-type position velocity life-ticks)
-                   applied? (boolean entity-id)]
-               (when (and applied? (not (true? entity-id)))
-                 (swap! spawned-entity-ids* update-in
-                        [(str world-id) (str owner) entity-type]
-                        (fnil conj []) entity-id))
-               {:status (if applied? :applied :failed)
-                :entity-id (when (not (true? entity-id)) entity-id)})
-             {:status :rejected :reason :invalid-entity-spawn}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :entity/discard)
-        (capabilities/register-action!
-         :entity/discard
-         (fn [{:keys [world-id entity]}]
-           (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
-                 owner (:owner entity)
-                 entity-type (:entity-type entity)
-                 tracked (when (and world-id owner entity-type)
-                           (get-in @spawned-entity-ids*
-                                   [(str world-id) (str owner) entity-type]))
-                 ids (if entity-id [entity-id] tracked)
-                 discarded (if (and world-id (world-effects/available?))
-                             (count (filter #(world-effects/discard-entity-by-uuid!
-                                             world-id %)
-                                            ids))
-                             0)]
-             (when (and owner entity-type)
-               (swap! spawned-entity-ids* update-in
-                      [(str world-id) (str owner) entity-type]
-                      (constantly [])))
-             {:status (if (pos? discarded) :applied :failed)
-              :discarded discarded}))))
-      (when-not (contains? (:actions (capabilities/snapshot)) :projectile/redirect)
-        (capabilities/register-action!
-         :projectile/redirect
-         (fn [{:keys [owner world-id entity target-position velocity
-                      replacement-types]}]
-           (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
-                 entity-type (or (:type entity) (:entity-type entity))
-                 target (or target-position {})
-                 velocity (or velocity {})
-                 [tx ty tz] (if (vector? (:vec3 target))
-                              (:vec3 target)
-                              [(:x target) (:y target) (:z target)])
-                 [vx vy vz] (if (vector? (:vec3 velocity))
-                              (:vec3 velocity)
-                              [(:x velocity) (:y velocity) (:z velocity)])
-                 finite? (fn [v] (and (number? v) (Double/isFinite (double v))))
-                 valid? (and owner world-id entity-id
-                             (every? finite? [tx ty tz vx vy vz]))]
-             (if-not valid?
-               {:status :rejected :reason :invalid-projectile-redirect}
-               (let [replacement? (contains? (set (or replacement-types []))
-                                              entity-type)
-                     spawn-result (when replacement?
-                                    (try
-                                      (world-effects/spawn-projectile!
-                                       world-id
-                                       {:entity-id entity-type
-                                        :x (double (or (:x entity) 0.0))
-                                        :y (double (or (:y entity) 0.0))
-                                        :z (double (or (:z entity) 0.0))
-                                        :vx (double vx) :vy (double vy) :vz (double vz)
-                                        :owner-uuid (:owner-id entity)
-                                        :explosion-power (:explosion-power entity)})
-                                      (catch Throwable _ {:success? false})))]
-                 (if (and replacement? (:success? spawn-result))
-                   (do
-                     (when (motion-effects/entity-motion-available?)
-                       (motion-effects/discard-entity! world-id entity-id))
-                     {:status :applied :replacement-id (:uuid spawn-result)})
-                   (if (motion-effects/entity-motion-available?)
-                     (do
-                       (motion-effects/set-entity-velocity!
-                        world-id entity-id (double vx) (double vy) (double vz))
-                       {:status :applied :entity-id entity-id})
-                     {:status :unhandled :reason :entity-motion-port-missing}))))))))
       (when-not (contains? (:actions (capabilities/snapshot)) :resource/enforce-floor)
         (capabilities/register-action!
          :resource/enforce-floor
@@ -1461,7 +752,7 @@
                     :ability-id ability-id
                     :status (combat-catalog/migration-status ability-id)}]}
       (do
-        (install-edn-host-capabilities!)
+        (install-ac-host-capabilities!)
         (execute-combat-intent! owner intent)))))
 
 (defn dispatch-trigger!
@@ -1627,7 +918,7 @@
   (let [world-id (or (:world-id damage-source)
                      (some-> (raycast/player-position (str player-id)) :world-id))
         target-position (when world-id
-                          (motion-effects/entity-position world-id (str player-id)))
+                          (entity-motion/entity-position world-id (str player-id)))
         request (apply-combat-damage-reactions
                 (combat/process-damage-request
                  (engine)
@@ -1686,7 +977,7 @@
   (let [world-id (or (:world-id damage-source)
                      (some-> (raycast/player-position (str player-id)) :world-id))
         target-position (when world-id
-                          (motion-effects/entity-position world-id (str player-id)))
+                          (entity-motion/entity-position world-id (str player-id)))
         request (apply-combat-damage-reactions
                 (combat/process-damage-request
                  (engine)

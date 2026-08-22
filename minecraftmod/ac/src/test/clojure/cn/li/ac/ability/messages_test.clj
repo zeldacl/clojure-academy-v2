@@ -14,7 +14,6 @@
 (deftest wire-ids-remain-stable-test
   (is (= "ability:ctx/begin-link" ability-messages/MSG-CTX-BEGIN-LINK))
   (is (= "ability:ctx/channel" ability-messages/MSG-CTX-CHANNEL))
-  (is (= "ability:skill/key-down" ability-messages/MSG-SLOT-KEY-DOWN))
   (is (= "ability:sync/runtime-v2" ability-messages/MSG-SYNC-V2))
   (is (= "ability:req/location-teleport/query" ability-messages/MSG-REQ-SAVED-POS-QUERY))
   (is (= (set (vals ability-messages/message-ids)) ability-messages/all-messages))

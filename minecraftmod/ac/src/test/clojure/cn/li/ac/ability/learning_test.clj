@@ -1,10 +1,16 @@
 (ns cn.li.ac.ability.learning-test
   "Integration checks against loaded skill registry (cn.li.ac.content.ability)."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.registry.skill :as skill-registry]
-            [cn.li.ac.content.ability :as ability-content]))
+            [cn.li.ac.content.ability :as ability-content]
+            [cn.li.mcmod.network.server :as net-srv]))
+
+(use-fixtures :each
+  (fn [f]
+    (net-srv/reset-handlers-for-test!)
+    (f)))
 
 (def ^:private learn-flow-cases
   [{:skill-id :arc-gen
@@ -16,7 +22,7 @@
 
 (deftest integration-registry-learn-flow-table-test
   (testing "learn + optional level-up event shape across representative skills"
-    (ability-content/init-ability-content!)
+    (ability-content/init-combat-ability-content!)
     (doseq [{:keys [skill-id category-id]} learn-flow-cases]
       (let [d0 (-> (ad/new-ability-data)
                    (assoc :category-id category-id :level 3 :level-progress 10.0))

@@ -100,3 +100,9 @@
 
 (defn reset-fall-damage! [entity-id]
   (boolean (call :reset-fall-damage! (str entity-id))))
+
+(defn player-position [owner]
+  (call :get-player-position (str owner)))
+
+(defn player-dimension [owner]
+  (call :get-player-dimension (str owner)))

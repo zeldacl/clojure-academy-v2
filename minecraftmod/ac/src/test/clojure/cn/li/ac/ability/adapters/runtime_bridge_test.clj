@@ -3,7 +3,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.runtime-bridge :as runtime-bridge]
-            [cn.li.ac.ability.service.context-manager :as ctx-mgr]            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
@@ -49,7 +49,7 @@
 (deftest dimension-change-hook-aborts-player-contexts-test
   (runtime-bridge/install-runtime-hooks!)
   (let [aborted (atom [])]
-    (with-redefs [ctx-mgr/abort-player-contexts! (fn [player-uuid]
+    (with-redefs [combat-runtime/abort-owner! (fn [player-uuid]
                                                    (swap! aborted conj player-uuid))]
       (runtime-hooks/on-player-dimension-change! "dimension-player" "minecraft:overworld" "minecraft:the_nether")
       (is (= ["dimension-player"] @aborted)))))

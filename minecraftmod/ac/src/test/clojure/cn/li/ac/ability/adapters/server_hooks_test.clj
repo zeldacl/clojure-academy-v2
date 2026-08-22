@@ -10,10 +10,9 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.combat.deferred :as delayed-projectiles]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -50,13 +49,6 @@
           (f)
           (finally
             (store/reset-store!)))))))
-(use-fixtures :each
-  (fn [f]
-    (ctx/reset-contexts-for-test!)
-    (try
-      (f)
-      (finally
-        (ctx/reset-contexts-for-test!)))))
 (use-fixtures :each
   (fn [f]
     (platform-hooks/reset-platform-fns!)
@@ -142,7 +134,7 @@
 
 (deftest overload-event-aborts-player-contexts-test
   (let [aborted (atom [])]
-    (with-redefs [ctx-mgr/abort-player-contexts!
+    (with-redefs [combat-runtime/abort-owner!
                   (fn [uuid]
                     (swap! aborted conj uuid)
                     nil)]
@@ -156,7 +148,7 @@
 (deftest player-logout-clears-delayed-projectiles-test
   (let [called (atom [])
         logout! (:on-player-logout! (server-hooks/runtime-server-hooks))]
-    (with-redefs [ctx-mgr/abort-player-contexts! (fn [uuid]
+    (with-redefs [combat-runtime/abort-owner! (fn [uuid]
                                                    (swap! called conj [:abort uuid])
                                                    nil)
                   delayed-projectiles/clear-owner! (fn [uuid]
@@ -171,7 +163,7 @@
           [:remove-state :test-session "player-1"]]
            @called))))
 
-;; The manager sweep and mark tick are global work: they run once in
+;; Combat Core's own tick is global work: it runs once in
 ;; :on-server-tick-start!, ahead of the per-player phase.
 (deftest server-tick-start-sweeps-before-player-tick-test
   (let [calls (atom [])
@@ -184,36 +176,25 @@
                   ps-tick/server-tick-player-in-session! (fn [session-id uuid payload]
                                                            (swap! calls conj [:player-state-tick session-id uuid payload])
                                                            nil)
-                  ctx-mgr/tick-player-contexts! (fn [uuid _player]
-                                                 (swap! calls conj [:context-tick uuid])
-                                                 nil)
                   delayed-projectiles/tick-owner! (fn [uuid]
                                                      (swap! calls conj [:projectiles uuid])
                                                      nil)
-                  ctx-mgr/tick-context-manager! (fn []
-                                                 (swap! calls conj [:context-manager])
+                  combat-runtime/tick! (fn [_tick-id]
+                                                 (swap! calls conj [:combat-tick])
                                                  nil)]
       (start! 1)
       (tick! "p1" (Object.))
-            (is (= [[:context-manager]
+            (is (= [[:combat-tick]
               [:ensure-state :test-session "p1"]
               [:player-state-tick :test-session "p1" nil]
-              [:context-tick "p1"]
               [:projectiles "p1"]]
              @calls)))))
 
-(deftest get-context-player-uuid-requires-owner-or-unique-match-test
-  (let [get-player-uuid (:get-context-player-uuid (server-hooks/runtime-server-hooks))
-        owner-a {:logical-side :server :server-session-id :server-a :player-uuid "player-a"}
-        owner-b {:logical-side :server :server-session-id :server-b :player-uuid "player-b"}]
-    (ctx/register-context! (ctx/new-server-context "player-a" :sk "dup-ctx" owner-a))
-    (ctx/register-context! (ctx/new-server-context "player-a" :sk "unique-ctx" owner-a))
-    (ctx/register-context! (ctx/new-server-context "player-b" :sk "dup-ctx" owner-b))
-    (is (= "player-a"
-           (ctx/with-context-owner owner-a
-             (get-player-uuid "dup-ctx"))))
-    (is (= "player-a" (get-player-uuid "unique-ctx")))
-    (is (nil? (get-player-uuid "dup-ctx")))))
+(deftest get-context-player-uuid-is-inert-test
+  (testing "Context network routes were removed from AC -- the neutral hook
+            key stays an inert seam that always returns nil"
+    (let [get-player-uuid (:get-context-player-uuid (server-hooks/runtime-server-hooks))]
+      (is (nil? (get-player-uuid "any-ctx-id"))))))
 
 (deftest server-stop-clears-session-state-test
   (let [called (atom [])
@@ -222,10 +203,7 @@
                                           (fn []
                                             (swap! called conj [:reset-runtimes])
                                             nil))
-    (with-redefs [ctx/clear-store-session-contexts! (fn [session-id]
-                                                      (swap! called conj [:contexts session-id])
-                                                      nil)
-                  store/remove-session! (fn [session-id]
+    (with-redefs [store/remove-session! (fn [session-id]
                                           (swap! called conj [:player-states session-id])
                                           nil)
                   world-registry/clear-session-world-data! (fn [session-id]
@@ -235,8 +213,7 @@
                                                          (swap! called conj [:projectiles])
                                                          nil)]
       (stop! :server-session))
-    (is (= [[:contexts :server-session]
-            [:player-states :server-session]
+    (is (= [[:player-states :server-session]
             [:wireless :server-session]
             [:reset-runtimes]
             [:projectiles]]
@@ -261,7 +238,7 @@
         (let [aborted (atom [])
           commands* (atom [])
          calc-calls (atom [])]
-          (with-redefs [ctx-mgr/abort-player-contexts!
+          (with-redefs [combat-runtime/abort-owner!
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)

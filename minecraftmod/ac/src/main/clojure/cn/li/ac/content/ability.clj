@@ -4,8 +4,7 @@
   Categories are declared here. Executable skills come only from the
   authoritative EDN catalog; the legacy provider is retained as metadata for
   migration/UI discovery and is never installed as an execution provider."
-  (:require [cn.li.ac.ability.dsl :refer [defcategory]]
-            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+  (:require [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.item-actions :as item-actions]
@@ -14,37 +13,44 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
-(defcategory electromaster
-  :id :electromaster
-  :name-key "ability.category.electromaster"
-  :icon (modid/asset-path "textures" "guis/icons/icon_electromaster.png")
-  :color [0.27 0.69 1.0 1.0]
-  :prog-incr-rate 1.0
-  :enabled true)
+(defn- category-map [spec]
+  (assoc spec :ac/content-type :category))
 
-(defcategory meltdowner-category
-  :id :meltdowner
-  :name-key "ability.category.meltdowner"
-  :icon (modid/asset-path "textures" "guis/icons/icon_meltdowner.png")
-  :color [0.1 1.0 0.3 1.0]
-  :prog-incr-rate 1.0
-  :enabled true)
+(def electromaster
+  (category-map
+   {:id :electromaster
+    :name-key "ability.category.electromaster"
+    :icon (modid/asset-path "textures" "guis/icons/icon_electromaster.png")
+    :color [0.27 0.69 1.0 1.0]
+    :prog-incr-rate 1.0
+    :enabled true}))
 
-(defcategory teleporter
-  :id :teleporter
-  :name-key "ability.category.teleporter"
-  :icon (modid/asset-path "textures" "guis/icons/icon_teleporter.png")
-  :color [1.0 1.0 1.0 1.0]
-  :prog-incr-rate 1.0
-  :enabled true)
+(def meltdowner-category
+  (category-map
+   {:id :meltdowner
+    :name-key "ability.category.meltdowner"
+    :icon (modid/asset-path "textures" "guis/icons/icon_meltdowner.png")
+    :color [0.1 1.0 0.3 1.0]
+    :prog-incr-rate 1.0
+    :enabled true}))
 
-(defcategory vecmanip
-  :id :vecmanip
-  :name-key "ability.category.vecmanip"
-  :icon (modid/asset-path "textures" "guis/icons/icon_vecmanip.png")
-  :color [0.0 0.0 0.0 1.0]
-  :prog-incr-rate 1.0
-  :enabled true)
+(def teleporter
+  (category-map
+   {:id :teleporter
+    :name-key "ability.category.teleporter"
+    :icon (modid/asset-path "textures" "guis/icons/icon_teleporter.png")
+    :color [1.0 1.0 1.0 1.0]
+    :prog-incr-rate 1.0
+    :enabled true}))
+
+(def vecmanip
+  (category-map
+   {:id :vecmanip
+    :name-key "ability.category.vecmanip"
+    :icon (modid/asset-path "textures" "guis/icons/icon_vecmanip.png")
+    :color [0.0 0.0 0.0 1.0]
+    :prog-incr-rate 1.0
+    :enabled true}))
 
 (defn register-combat-catalog!
   "Register player-facing metadata and initialize the authoritative EDN catalog.

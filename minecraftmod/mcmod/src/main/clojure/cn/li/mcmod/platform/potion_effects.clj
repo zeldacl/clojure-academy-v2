@@ -1,4 +1,5 @@
-(ns cn.li.ac.ability.effects.potion
+(ns cn.li.mcmod.platform.potion-effects
+  "Minecraft-free relay for neutral potion/status-effect operations."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]))
 
@@ -35,23 +36,3 @@
    (when-let [fw-atom (fw/fw-atom)]
      (platform/call-adapter fw-atom :potion-effects :clear-all-effects!
                             player-uuid))))
-
-(defn- apply-potion!
-  [evt {:keys [target effect-id ticks amplifier]}]
-  (when (and (available?) target)
-    (let [uuid (or (when (map? target) (:uuid target))
-                   (get evt target))]
-      (when uuid
-        (apply-effect! uuid effect-id (int ticks) (int amplifier)))))
-  evt)
-
-(defn execute-potion!
-  [evt {:keys [target effect-id ticks amplifier]}]
-  (apply-potion! evt {:target target :effect-id effect-id :ticks ticks :amplifier amplifier}))
-
-(defn execute-potion-roll!
-  [evt {:keys [chance] :as params}]
-  (if (< (rand) (double (or chance 1.0)))
-    (apply-potion! evt (dissoc params :chance))
-    evt))
-

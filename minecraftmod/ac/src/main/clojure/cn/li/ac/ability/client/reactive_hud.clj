@@ -10,9 +10,7 @@
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
@@ -421,7 +419,7 @@
                 (when (pos? cost) (double cost)))
               (catch Throwable _ nil)))
           [:cost.tick.cp :cost.down.cp :cost.up.cp :cost.release.cp :cost.attack.cp])))
-    (filter ctx/active-context? contexts)))
+    contexts))
 
 (defn- background-mask [resource-data ability-data activated?]
   (let [category-id (:category-id ability-data)
@@ -492,6 +490,10 @@
   (.remove snapshot-cache-by-owner owner-key)
   nil)
 
+(defn- toggle-active? [ctx-data skill-id]
+  (let [toggle-state (get-in ctx-data [:skill-state :toggle skill-id])]
+    (and toggle-state (:active toggle-state))))
+
 (defn- scan-vm-state
   "Reduce over an already-fetched contexts list (see cached-frame-inputs) —
   callers must not re-fetch via read-model here, since build-snapshot's caller
@@ -499,16 +501,14 @@
   [contexts]
   (reduce
     (fn [acc ctx-data]
-      (if (ctx/active-context? ctx-data)
-        (cond-> acc
-          (toggle/is-toggle-active? ctx-data :vec-reflection)
-          (-> (assoc :reflection-active? true)
-              (assoc :reflection-intensity
-                     (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))]
-                       (double (min 1.0 (/ ticks 20.0))))))
-          (toggle/is-toggle-active? ctx-data :vec-deviation)
-          (assoc :deviation-active? true))
-        acc))
+      (cond-> acc
+        (toggle-active? ctx-data :vec-reflection)
+        (-> (assoc :reflection-active? true)
+            (assoc :reflection-intensity
+                   (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))]
+                     (double (min 1.0 (/ ticks 20.0))))))
+        (toggle-active? ctx-data :vec-deviation)
+        (assoc :deviation-active? true)))
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
     contexts))
 

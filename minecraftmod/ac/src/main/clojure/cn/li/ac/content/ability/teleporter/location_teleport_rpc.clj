@@ -11,7 +11,6 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.resource :as resource]
             [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -29,8 +28,8 @@
   (let [name* (str/trim (str (or value "")))]
     (subs name* 0 (min (ti :ui.max-location-name-length) (count name*)))))
 (defn- position [owner]
-  (when (motion-effects/teleportation-available?)
-    (motion-effects/player-position (str owner))))
+  (when (teleportation/available?)
+    (teleportation/player-position (str owner))))
 (defn- exp [owner]
   (double (or (skill-effects/skill-exp (str owner) skill-id) 0.0)))
 (defn- cp-cost [mastery distance cross?]

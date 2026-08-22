@@ -7,8 +7,35 @@
   ["src/main/clojure/cn/li/ac/ability/registry/category.clj"
    "src/main/clojure/cn/li/ac/ability/registry/skill.clj"
    "src/main/clojure/cn/li/ac/ability/registry/event.clj"
-   "src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj"
-   "src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj"])
+   "src/main/clojure/cn/li/ac/ability/spi_lifecycle.clj"])
+
+;; The legacy Context skill runtime (context_dispatcher.clj and its siblings)
+;; was deleted outright, not merely guarded -- its absence is itself the
+;; guarantee, so there is nothing left here to scan for alter-var-root.
+(def ^:private deleted-legacy-context-files
+  ["src/main/clojure/cn/li/ac/ability/service/context_dispatcher.clj"
+   "src/main/clojure/cn/li/ac/ability/service/context_state.clj"
+   "src/main/clojure/cn/li/ac/ability/service/context_manager.clj"
+   "src/main/clojure/cn/li/ac/ability/service/context_skill_state.clj"
+   "src/main/clojure/cn/li/ac/ability/service/context_transport.clj"
+   "src/main/clojure/cn/li/ac/ability/service/context_projection.clj"
+   "src/main/clojure/cn/li/ac/ability/service/context_domain.clj"
+   "src/main/clojure/cn/li/ac/ability/service/skill_callback.clj"
+   "src/main/clojure/cn/li/ac/ability/service/skill_state_commands.clj"
+   "src/main/clojure/cn/li/ac/ability/rules/context_rules.clj"
+   "src/main/clojure/cn/li/ac/ability/effects/state.clj"
+   "src/main/clojure/cn/li/ac/ability/util/toggle.clj"
+   "src/main/clojure/cn/li/ac/ability/util/charge.clj"
+   "src/main/clojure/cn/li/ac/ability/dsl.clj"
+   "src/main/clojure/cn/li/ac/ability/definition_core.clj"
+   "src/main/clojure/cn/li/ac/ability/server/damage/handler.clj"
+   "src/main/clojure/cn/li/ac/ability/server/damage/pipeline.clj"
+   "src/main/clojure/cn/li/ac/ability/server/damage/runtime.clj"
+   "src/main/clojure/cn/li/ac/ability/effects/damage.clj"
+   "src/main/clojure/cn/li/ac/ability/effects/world.clj"
+   "src/main/clojure/cn/li/ac/ability/util/targeting.clj"
+   "src/main/clojure/cn/li/ac/ability/util/balance.clj"
+   "src/main/clojure/cn/li/ac/ability/client/fx_templates/arc_beam.clj"])
 
 (def ^:private reducer-only-forbidden-patterns
   ["command-runtime-ready?"
@@ -89,6 +116,11 @@
 (defn- scan-sources
   [rel-dirs]
   (scan-entry-sources rel-dirs (constantly true)))
+
+(deftest legacy-context-and-dsl-runtime-stays-deleted-guard-test
+  (doseq [rel-path deleted-legacy-context-files]
+    (is (not (.exists (project-file rel-path)))
+        (str "Legacy Context/DSL runtime file resurfaced: " rel-path))))
 
 (deftest runtime-installation-no-alter-var-root-guard-test
   (doseq [rel-path guarded-runtime-install-files]

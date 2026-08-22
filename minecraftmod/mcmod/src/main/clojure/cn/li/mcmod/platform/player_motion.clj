@@ -18,3 +18,18 @@
 
 (defn set-velocity! [owner x y z]
   (boolean (call :set-velocity! (str owner) (double x) (double y) (double z))))
+
+(defn get-velocity [owner]
+  (call :get-velocity (str owner)))
+
+(defn set-on-ground! [owner on-ground?]
+  (boolean (call :set-on-ground! (str owner) (boolean on-ground?))))
+
+(defn on-ground? [owner]
+  (boolean (call :is-on-ground? (str owner))))
+
+(defn can-fly? [owner]
+  (boolean (call :can-fly? (str owner))))
+
+(defn set-can-fly! [owner can-fly?]
+  (boolean (call :set-can-fly! (str owner) (boolean can-fly?))))

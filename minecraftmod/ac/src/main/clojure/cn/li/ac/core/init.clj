@@ -6,6 +6,7 @@
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.combat.platform :as combat-platform]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.command.platform-bridge :as command-bridge]
             [cn.li.ac.config.modid :as modid]
@@ -32,8 +33,11 @@
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
   ;; Capabilities must be registered before the EDN catalog loads (Design E
   ;; precondition R9) -- capability-aware load-time validation can only see
-  ;; what's already registered at the moment it runs.
-  (combat-runtime/install-edn-host-capabilities!)
+  ;; what's already registered at the moment it runs. World-facing
+  ;; capabilities are entirely Combat Core's own; AC only links its own
+  ;; domain ports (resources/progression/energy/marks) after.
+  (combat-platform/install!)
+  (combat-runtime/install-ac-host-capabilities!)
   ;; The EDN catalog is authoritative for migrated abilities.  No legacy
   ;; catalog fallback is consulted when a skill is pending migration.
   (combat-catalog/initialize!)
