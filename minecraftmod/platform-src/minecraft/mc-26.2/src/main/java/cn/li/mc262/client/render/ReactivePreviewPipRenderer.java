@@ -49,6 +49,33 @@ public final class ReactivePreviewPipRenderer
                 perspectiveBuffer.getBuffer(perspective),
                 ProjectionType.PERSPECTIVE);
 
+        if (state.blockRenderState() != null) {
+            // Real block state (tutorial :block-3d): the model is a unit cube
+            // in block space, so bounds are implicit.
+            AABB bounds = new AABB(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
+            Vec3 center = bounds.getCenter();
+            pose.setIdentity();
+            pose.translate(0.0F, -state.yOffset(), -CAMERA_DISTANCE);
+            pose.mulPose(new Quaternionf().rotateAxis(
+                    (float) Math.toRadians(-20.0),
+                    1.0F,
+                    0.0F,
+                    0.1F));
+            pose.mulPose(new Quaternionf().rotateY((float) Math.toRadians(state.yawDegrees())));
+            float modelScale = (float) TARGET_MODEL_SIZE
+                    * Math.max(0.001F, state.modelScale());
+            pose.scale(modelScale, modelScale, modelScale);
+            pose.translate(-center.x, -center.y, -center.z);
+            Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
+            state.blockRenderState().submit(
+                    pose,
+                    submitNodes,
+                    15728880,
+                    OverlayTexture.NO_OVERLAY,
+                    0);
+            return;
+        }
+
         AABB bounds = state.itemRenderState().getModelBoundingBox();
         Vec3 center = bounds.getCenter();
         double largestExtent = Math.max(

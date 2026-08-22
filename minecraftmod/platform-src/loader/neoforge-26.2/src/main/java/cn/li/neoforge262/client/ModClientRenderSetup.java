@@ -11,6 +11,7 @@ import cn.li.mc262.client.render.item.EnergyItemPropertyFunction;
 import cn.li.mc262.client.render.item.FrameItemPropertyFunction;
 import cn.li.mc262.client.render.item.MatterKindItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
@@ -122,7 +123,19 @@ public final class ModClientRenderSetup {
     private static void onRegisterPictureInPictureRenderers(
             RegisterPictureInPictureRenderersEvent event) {
         event.register(ReactivePreviewRenderState.class, ReactivePreviewPipRenderer::new);
-        ReactivePreviewRenderState.markRendererRegistered();
+        // The submission API (submitPictureInPictureRenderState / peekScissorStack)
+        // is a NeoForge patch on GuiGraphicsExtractor, so it is installed here
+        // instead of in the shared mc-26.2 module (which must compile against
+        // the vanilla jar for Fabric).
+        ReactivePreviewRenderState.installSubmitter((graphics, itemRenderState,
+                blockRenderState, x0, y0, x1, y1, modelScale, yawDegrees, yOffset) -> {
+            ScreenRectangle scissorArea = graphics.peekScissorStack();
+            ScreenRectangle bounds = new ScreenRectangle(x0, y0, x1 - x0, y1 - y0);
+            graphics.submitPictureInPictureRenderState(new ReactivePreviewRenderState(
+                    itemRenderState, blockRenderState, x0, y0, x1, y1,
+                    modelScale, yawDegrees, yOffset, scissorArea, bounds));
+            return true;
+        });
     }
 
 }

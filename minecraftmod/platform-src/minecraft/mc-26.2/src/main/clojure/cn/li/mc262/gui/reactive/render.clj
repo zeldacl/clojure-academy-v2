@@ -21,6 +21,7 @@
            [net.minecraft.resources Identifier]
            [net.minecraft.world.item Item ItemStack Items]
            [net.minecraft.world.level.block Block Blocks]
+           [net.minecraft.world.level.block.state BlockState]
            [org.joml Matrix3x2f Matrix3x2fStack]))
 
 (declare draw-tape!)
@@ -817,6 +818,7 @@
 (def ^:private SLOT-P3D-BLOCK 1)
 (def ^:private SLOT-P3D-ITEM 2)
 (def ^:private SLOT-P3D-BAKED 4)
+(def ^:private SLOT-P3D-BLOCK-STATE 5)
 (def ^:private SLOT-P3D-SPEED 0)
 (def ^:private SLOT-P3D-SCALE 1)
 (def ^:private SLOT-P3D-YOFF 2)
@@ -833,6 +835,13 @@
     (when block
       (let [stack (ItemStack. (.asItem block))]
         (when-not (.isEmpty stack) stack)))))
+
+(defn- block-state-of
+  "Resolve the default BlockState of a block id (for real 3D block previews)."
+  ^BlockState [^Identifier id]
+  (let [^Block block (.getValue (registry/builtin "BLOCK") id)]
+    (when block
+      (.defaultBlockState block))))
 
 (defn- resolve-preview-stack
   "Prefer the registry the caller named, but fall back to the other one: a
@@ -904,36 +913,51 @@
   (when (nil? (.getOSlot node SLOT-P3D-BAKED))
     (let [block? (= :block (.getOSlot node SLOT-P3D-TYPE))
           id-value (.getOSlot node (if block? SLOT-P3D-BLOCK SLOT-P3D-ITEM))]
-      (.setOSlot node SLOT-P3D-BAKED (resolve-preview-stack id-value block?)))))
+      (.setOSlot node SLOT-P3D-BAKED (resolve-preview-stack id-value block?))
+      (when block?
+        (.setOSlot node SLOT-P3D-BLOCK-STATE
+                   (try
+                     (block-state-of (ResourceLocations/parse ^String id-value))
+                     (catch Throwable _ nil)))))))
 
 (defn render-preview-3d! [^GuiGraphicsExtractor gg ^INode node]
   (when (.isVisible node)
-    (when-let [^ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
-      (let [requested-scale (double (.getDSlot node SLOT-P3D-SCALE))
-            model-scale (if (pos? requested-scale) requested-scale 1.0)
-            spin (max 0.0 (double (.getDSlot node SLOT-P3D-SPEED)))
-            yaw-degrees (Math/toDegrees (turntable-phase spin))
-            y-off (double (.getDSlot node SLOT-P3D-YOFF))
-            ;; A picture-in-picture is rendered to an offscreen texture and
-            ;; composited back axis-aligned, so a warp cannot reach inside it.
-            ;; Anchoring on the tangent plane at the node's own corner still
-            ;; lands it on the panel at the right place and size.
-            ^Matrix3x2fStack pose (.pose gg)
-            _ (.pushMatrix pose)
-            warped? (GuiGraphicsHelper/anchorWarp gg
-                                                  (float (node-abs-x node))
-                                                  (float (node-abs-y node)))
-            submitted?
-            (try
-              (ReactivePreviewRenderState/submit
-                gg stack
-                (if warped? 0.0 (node-abs-x node))
-                (if warped? 0.0 (node-abs-y node))
-                (scaled-w node) (scaled-h node)
-                model-scale yaw-degrees y-off)
-              (finally
-                (.popMatrix pose)))]
-        (when-not submitted?
+    (let [block? (= :block (.getOSlot node SLOT-P3D-TYPE))
+          requested-scale (double (.getDSlot node SLOT-P3D-SCALE))
+          model-scale (if (pos? requested-scale) requested-scale 1.0)
+          spin (max 0.0 (double (.getDSlot node SLOT-P3D-SPEED)))
+          yaw-degrees (Math/toDegrees (turntable-phase spin))
+          y-off (double (.getDSlot node SLOT-P3D-YOFF))
+          ;; A picture-in-picture is rendered to an offscreen texture and
+          ;; composited back axis-aligned, so a warp cannot reach inside it.
+          ;; Anchoring on the tangent plane at the node's own corner still
+          ;; lands it on the panel at the right place and size.
+          ^Matrix3x2fStack pose (.pose gg)
+          _ (.pushMatrix pose)
+          warped? (GuiGraphicsHelper/anchorWarp gg
+                                                (float (node-abs-x node))
+                                                (float (node-abs-y node)))
+          submitted?
+          (try
+            (if block?
+              (when-let [^BlockState block-state (.getOSlot node SLOT-P3D-BLOCK-STATE)]
+                (ReactivePreviewRenderState/submitBlock
+                  gg block-state
+                  (if warped? 0.0 (node-abs-x node))
+                  (if warped? 0.0 (node-abs-y node))
+                  (scaled-w node) (scaled-h node)
+                  model-scale yaw-degrees y-off))
+              (when-let [^ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
+                (ReactivePreviewRenderState/submit
+                  gg stack
+                  (if warped? 0.0 (node-abs-x node))
+                  (if warped? 0.0 (node-abs-y node))
+                  (scaled-w node) (scaled-h node)
+                  model-scale yaw-degrees y-off)))
+            (finally
+              (.popMatrix pose)))]
+      (when-not submitted?
+        (when-let [^ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
           (render-stack! gg node stack model-scale spin y-off))))))
 
 (def ^:private crosshair-ring-unit-vecs
@@ -1016,9 +1040,27 @@
                     (.clearFlag nd node/FLAG-RENDER-DIRTY))
                   (when-let [render-fn (:render! kdef)]
                     (render-fn gg nd)))
-                (cond (identical? push-clip entry) (.pushMatrix pose)
-                      (identical? pop-clip entry)  (.popMatrix pose)
-                      (identical? push-xf entry)   (.pushMatrix pose)
-                      (identical? pop-xf entry)    (.popMatrix pose))))
+                (cond
+                  (identical? push-clip entry)
+                  (do
+                    (.pushMatrix pose)
+                    ;; Scissor to the following clip-group node's bounds
+                    ;; (abs coords, pose already carries left/top + ancestor
+                    ;; transforms; ScissorStack intersects nested clips).
+                    (when (< (inc i) n)
+                      (let [clip-nd (aget tape (inc i))]
+                        (when (instance? INode clip-nd)
+                          (let [^INode nd clip-nd
+                                x0 (int (Math/floor (node-abs-x nd)))
+                                y0 (int (Math/floor (node-abs-y nd)))
+                                x1 (int (Math/ceil (+ (node-abs-x nd) (scaled-w nd))))
+                                y1 (int (Math/ceil (+ (node-abs-y nd) (scaled-h nd))))]
+                            (.enableScissor gg x0 y0 x1 y1))))))
+                  (identical? pop-clip entry)
+                  (do
+                    (.disableScissor gg)
+                    (.popMatrix pose))
+                  (identical? push-xf entry) (.pushMatrix pose)
+                  (identical? pop-xf entry)  (.popMatrix pose))))
             (recur (unchecked-inc-int i))))
         (.popMatrix pose)))))
