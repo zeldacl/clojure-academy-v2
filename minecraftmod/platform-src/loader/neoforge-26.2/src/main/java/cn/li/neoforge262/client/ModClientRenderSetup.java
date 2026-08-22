@@ -1,5 +1,6 @@
 package cn.li.neoforge262.client;
 
+import cn.li.mc262.client.GuiGraphicsHelper;
 import cn.li.mc262.client.particle.MdParticle;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc262.client.render.GuiRenderPipelines;
@@ -12,6 +13,8 @@ import cn.li.mc262.client.render.item.FrameItemPropertyFunction;
 import cn.li.mc262.client.render.item.MatterKindItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import org.joml.Matrix3x2f;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
@@ -52,6 +55,7 @@ public final class ModClientRenderSetup {
         if (modBus == null) {
             return;
         }
+        installGuiExtractionHooks();
         modBus.addListener(ModClientRenderSetup::onRegisterMenuScreens);
         modBus.addListener(ModClientRenderSetup::onRegisterRenderers);
         modBus.addListener(ModClientRenderSetup::onRegisterFluidModels);
@@ -118,6 +122,25 @@ public final class ModClientRenderSetup {
         event.registerPipeline(PlasmaRenderTypes.plasmaBodyPipeline());
         event.registerPipeline(ModRenderTypes.academyQuadsTranslucentPipeline());
         GuiRenderPipelines.all().forEach(event::registerPipeline);
+    }
+
+    /**
+     * Wire the NeoForge GUI-extraction patches the shared mc-26.2 module
+     * cannot reference (they must compile against the vanilla jar for Fabric).
+     */
+    private static void installGuiExtractionHooks() {
+        // Two-sampler GUI pipelines (skill_progbar / cpbar_overload) sample a
+        // mask from Sampler1; the vanilla extractor blits single textures, so
+        // submit a BlitRenderState carrying the double TextureSetup through
+        // NeoForge's submitGuiElementRenderState.
+        GuiGraphicsHelper.installTwoTextureBlitter((graphics, pipeline, textures,
+                x0, y0, x1, y1, u0, u1, v0, v1, argb) -> {
+            ScreenRectangle scissor = graphics.peekScissorStack();
+            graphics.submitGuiElementRenderState(new BlitRenderState(
+                    pipeline, textures, new Matrix3x2f(graphics.pose()),
+                    x0, y0, x1, y1, u0, u1, v0, v1, argb, scissor));
+            return true;
+        });
     }
 
     private static void onRegisterPictureInPictureRenderers(

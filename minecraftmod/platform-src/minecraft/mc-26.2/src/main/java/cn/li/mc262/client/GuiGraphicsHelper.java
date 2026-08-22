@@ -243,6 +243,29 @@ public final class GuiGraphicsHelper {
                 x0, y0, x1 - x0, y1 - y0, u0, v0, u1, v1);
     }
 
+    @FunctionalInterface
+    public interface TwoTextureBlitFunction {
+        boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
+                       int x0, int y0, int x1, int y1,
+                       float u0, float u1, float v0, float v1, int argb);
+    }
+
+    private static volatile TwoTextureBlitFunction twoTextureBlitter;
+
+    /**
+     * Install the loader's submission path for two-sampler GUI draws.
+     *
+     * <p>The skill/cpbar shaders sample a mask texture from Sampler1, but the
+     * vanilla extractor only blits single textures (Sampler0), so a draw with
+     * those pipelines fails the "Missing sampler Sampler1" check at execute
+     * time. The loader (NeoForge) patches {@code GuiGraphicsExtractor} with
+     * {@code submitGuiElementRenderState} and submits a BlitRenderState that
+     * carries the double TextureSetup.</p>
+     */
+    public static void installTwoTextureBlitter(TwoTextureBlitFunction function) {
+        twoTextureBlitter = function;
+    }
+
     /**
      * Submit a textured quad through a custom extraction-safe GUI pipeline.
      *
@@ -261,15 +284,18 @@ public final class GuiGraphicsHelper {
             return;
         }
         AbstractTexture first = Minecraft.getInstance().getTextureManager().getTexture(texture0);
-        TextureSetup textures;
-        if (texture1 == null) {
-            textures = TextureSetup.singleTexture(first.getTextureView(), first.getSampler());
-        } else {
+        if (texture1 != null) {
             AbstractTexture second = Minecraft.getInstance().getTextureManager().getTexture(texture1);
-            textures = TextureSetup.doubleTexture(
+            TextureSetup textures = TextureSetup.doubleTexture(
                     first.getTextureView(), first.getSampler(),
                     second.getTextureView(), second.getSampler());
+            TwoTextureBlitFunction blitter = twoTextureBlitter;
+            if (blitter != null) {
+                blitter.submit(gge, pipeline, textures, x0, y0, x1, y1, u0, u1, v0, v1, argb);
+            }
+            return;
         }
+        TextureSetup textures = TextureSetup.singleTexture(first.getTextureView(), first.getSampler());
         if (submitWarped(gge, pipeline, textures, x0, y0, x1, y1, u0, u1, v0, v1, argb)) {
             return;
         }
