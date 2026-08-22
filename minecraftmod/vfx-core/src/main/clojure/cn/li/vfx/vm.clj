@@ -12,8 +12,8 @@
    per drawable node reached."
   (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
-            [cn.li.node.expr :as expr])
-  (:import [cn.li.mcmod.math V3]))
+            [cn.li.node.expr :as expr]
+            [cn.li.vfx.ops :as ops]))
 
 ;; ---------------------------------------------------------------------------
 ;; Value resolution
@@ -780,33 +780,18 @@
 ;; introduces are what content should actually author against.
 ;; ---------------------------------------------------------------------------
 
-(defn- ->v3
-  "Accept either a {:x :y :z} map or a positional [x y z] vector -- the same
-   two shapes eval-bounds already tolerates above -- and produce the
-   zero-allocation V3 value presentation_world.clj's emit-line!/emit-quad!
-   require. mcmod's V3 (cn.li.mcmod.math.V3) is a plain Java value type with
-   no Minecraft API surface, so vfx-core constructing it directly here does
-   not cross the neutral/platform dependency boundary (verifyVfxDependencyDirection)."
-  ^V3 [point]
-  (V3. (double (or (:x point) (nth point 0 0.0)))
-       (double (or (:y point) (nth point 1 0.0)))
-       (double (or (:z point) (nth point 2 0.0)))))
-
 (defmethod sample-node! :vfx/line
   [node ctx]
-  (let [{:keys [from to color]} (resolve-fields node ctx)]
+  (let [fields (resolve-fields node ctx)]
     (emit! ctx (stage-of ctx :world-after-translucent) :mesh
-           [{:ops [{:kind :line :p1 (->v3 from) :p2 (->v3 to) :color color}]}]
+           [{:ops [(ops/line-op fields)]}]
            {:material :presentation-world :variant :ops})))
 
 (defmethod sample-node! :vfx/quad
   [node ctx]
-  (let [{:keys [p0 p1 p2 p3 u0 u1 v0 v1 color texture]} (resolve-fields node ctx)]
+  (let [fields (resolve-fields node ctx)]
     (emit! ctx (stage-of ctx :world-after-translucent) :mesh
-           [{:ops [{:kind :quad :p0 (->v3 p0) :p1 (->v3 p1) :p2 (->v3 p2) :p3 (->v3 p3)
-                    :u0 (double (or u0 0.0)) :u1 (double (or u1 1.0))
-                    :v0 (double (or v0 0.0)) :v1 (double (or v1 1.0))
-                    :color color :texture texture}]}]
+           [{:ops [(ops/quad-op fields)]}]
            {:material :presentation-world :variant :ops})))
 
 ;; ---------------------------------------------------------------------------
