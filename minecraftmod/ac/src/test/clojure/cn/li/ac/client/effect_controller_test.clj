@@ -134,3 +134,52 @@
     (is (= before (vfx-level/unmapped-signal-count))
         "a registered production effect-id must never fall into the unmapped-signal path")
     (is (= 1 (count @(:instances (vfx-level/runtime)))))))
+
+;; P3 regression: clear-owner!/clear-world! used to look up "the" instance
+;; of an effect-id via core/instance-for-effect (an arbitrary pick -- see its
+;; own docstring), correct only when :singleton meant "one aggregate
+;; instance per effect-id total". Real :transient/:session effects can have
+;; any number of simultaneous per-owner instances; the old logic only ever
+;; found/cleared one of them, leaking the rest. Both now delegate to
+;; vfx-core's own owner-index/world-index-based clear-owner!/clear-world!.
+(deftest clear-owner-drops-only-that-owners-instances-of-a-shared-effect-test
+  (vfx-level/reset-for-test!)
+  (combat-catalog/initialize!)
+  (vfx-install/install-catalog! (vfx-level/runtime) (:vfx (combat-catalog/catalog)))
+  (vfx-level/dispatch-signal!
+   {:op :spawn :effect-id :beam-session :owner "p1" :world-id "w"
+    :instance-key [:activation "p1" :beam-session] :event-seq 1 :event :spawn
+    :params {}})
+  (vfx-level/dispatch-signal!
+   {:op :spawn :effect-id :beam-session :owner "p2" :world-id "w"
+    :instance-key [:activation "p2" :beam-session] :event-seq 1 :event :spawn
+    :params {}})
+  (is (= 2 (count @(:instances (vfx-level/runtime)))))
+  (vfx-level/clear-owner! "p1")
+  (let [remaining (vals @(:instances (vfx-level/runtime)))]
+    (is (= 1 (count remaining)))
+    (is (= "p2" (:owner (first remaining)))
+        "the other owner's instance of the same effect-id must survive")))
+
+(deftest clear-world-drops-every-instance-tagged-with-that-world-test
+  (vfx-level/reset-for-test!)
+  (combat-catalog/initialize!)
+  (vfx-install/install-catalog! (vfx-level/runtime) (:vfx (combat-catalog/catalog)))
+  (vfx-level/dispatch-signal!
+   {:op :spawn :effect-id :beam-session :owner "p1" :world-id "world-a"
+    :instance-key [:activation "p1" :beam-a] :event-seq 1 :event :spawn
+    :params {}})
+  (vfx-level/dispatch-signal!
+   {:op :spawn :effect-id :beam-session :owner "p2" :world-id "world-a"
+    :instance-key [:activation "p2" :beam-a] :event-seq 1 :event :spawn
+    :params {}})
+  (vfx-level/dispatch-signal!
+   {:op :spawn :effect-id :beam-session :owner "p3" :world-id "world-b"
+    :instance-key [:activation "p3" :beam-b] :event-seq 1 :event :spawn
+    :params {}})
+  (is (= 3 (count @(:instances (vfx-level/runtime)))))
+  (vfx-level/clear-world! "world-a")
+  (let [remaining (vals @(:instances (vfx-level/runtime)))]
+    (is (= 1 (count remaining)))
+    (is (= "p3" (:owner (first remaining)))
+        "an instance from a different world must survive")))

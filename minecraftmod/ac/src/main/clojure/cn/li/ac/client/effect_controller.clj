@@ -262,8 +262,18 @@
             (set-handler-state state kind next-state))))))
   nil)
 
-(defn clear-owner! [owner-key]
+(defn clear-owner!
+  "Drop every VFX Core instance owned by `owner-key` (real per-owner
+   instances, via vfx-core's own owner-index — see core/clear-owner!'s
+   docstring for why this, not instance-for-effect, is the correct lookup
+   for effects with more than one live owner at once) plus the ad-hoc
+   presentation side-channels (screen flash, camera FOV) and the legacy
+   :singleton aggregate-instance :clear-owner-fn sweep some content's
+   :level/:hand handler may still declare."
+  [owner-key]
   (swap! screen-flashes* dissoc (str owner-key))
+  (swap! camera-fov-targets* dissoc (str owner-key))
+  (swap! camera-fov-eased* dissoc (str owner-key))
   (doseq [[effect-id _] @(:registry (runtime))]
     (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
       (core/update-instance-state! (runtime) instance-id
@@ -274,6 +284,7 @@
                                          (clear (handler-state next-state kind) owner-key))
                       next-state))
                   state (effect-handlers effect-id))))))
+  (core/clear-owner! (runtime) owner-key)
   nil)
 
 (defn active? []
@@ -420,29 +431,20 @@
 
 (defn unmapped-signal-count [] @unmapped-signal-count*)
 
-(defn clear-world! [world-id]
-  ;; AC keeps one aggregate instance per descriptor.  Strip only payloads
-  ;; tagged with the unloading world; descriptors and other worlds survive the
-  ;; transition.  This keeps reload/disconnect cleanup O(number of live
-  ;; payloads) without leaking a second platform-owned registry.
-  (letfn [(strip-world [value]
-            (cond
-              (and (map? value) (= world-id (:world-id value))) nil
-              (map? value)
-              (into (empty value)
-                    (keep (fn [[k v]]
-                            (when-let [clean (strip-world v)] [k clean]))) value)
-              (vector? value) (vec (keep strip-world value))
-              (seq? value) (doall (keep strip-world value))
-              :else value))]
-  (doseq [effect-id (core/registered-effects (runtime))]
-    (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
-      (core/update-instance-state! (runtime) instance-id
-        (fn [state]
-          (-> state
-              (update :level strip-world)
-              (update :hand strip-world))))))
-  world-id))
+(defn clear-world!
+  "Drop every VFX Core instance spawned in `world-id` (real per-world
+   instances, via vfx-core's own world-index -- see core/clear-world!).
+
+   A prior version of this function tried to strip world-tagged payloads out
+   of each descriptor's one shared :level/:hand aggregate state map --
+   correct for the old :singleton escape hatch (effect_controller.clj's own
+   register-effect!, one instance per effect-id total), but wrong for real
+   per-owner :transient/:session instances, of which an unloading world can
+   have any number simultaneously: instance-for-effect only ever finds ONE
+   of them, silently leaking the rest."
+  [world-id]
+  (core/clear-world! (runtime) world-id)
+  world-id)
 
 (defn reload-resources! [generation]
   (core/reload-resources! (runtime) generation))

@@ -1,6 +1,13 @@
 (ns cn.li.vfx.components
   "Data-only VFX component registry; all lowering remains Clojure." )
 
+;; Process-global by design: on a combined client+server (single-player /
+;; integrated server) JVM, the logical client and the logical server share
+;; this one registry -- there is exactly one component vocabulary per JVM,
+;; not per side. This is correct as long as `register!` only ever runs
+;; content-defined builtins (idempotent-safe data, no per-session state);
+;; it would be wrong for anything owner- or session-scoped, which is why
+;; VFX *instances* (vfx-core/runtime.clj) are never stored here.
 (defonce ^:private registry*
   (atom {:frozen? false :components {}}))
 
@@ -24,7 +31,12 @@
 
 (defn descriptors [] (:components @registry*))
 
-(defn freeze! []
+(defn freeze!
+  "Idempotent: safe to call more than once (e.g. both client and server
+   bootstrap paths freezing the same process-global registry -- see
+   registry*'s docstring). A second call is a no-op re-assertion of
+   :frozen? true, not an error."
+  []
   (swap! registry* assoc :frozen? true)
   (:components @registry*))
 
