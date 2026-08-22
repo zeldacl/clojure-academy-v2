@@ -172,8 +172,10 @@
   Upstream refuses every subcommand until the player switches cheats on —
   that refusal is the entire observable effect of cheats_on, and without it
   the switch does nothing at all. cheats_on/cheats_off/help stay ungated so
-  the switch remains reachable, and /aimp is left ungated entirely because
-  upstream's CommandAIMP has no such check: it is already OP-only."
+  the switch remains reachable. The gate is defense in depth now that the
+  command itself is permission-level 4 like upstream's CommandAIM; /aimp
+  carries no cheat gate because upstream's CommandAIMP has no such check —
+  it is already level 4."
   [executor-fn]
   (fn [ctx]
     (if (cheats-enabled? ctx)
@@ -217,7 +219,9 @@
     (cmd/register-command!
       (cmd/create-command-spec
         "acach"
-        {:permission-level 2
+        ;; Upstream CommandACACH extends ACCommand which does not override
+        ;; getRequiredPermissionLevel() — vanilla 1.12.2 defaults to 4.
+        {:permission-level 4
          :arguments [{:name "advancement"
                       :type :string
                       :description "Advancement ID to grant"}
@@ -231,14 +235,18 @@
     (cmd/register-command!
       (cmd/create-command-spec
         "aim"
-        {:permission-level 0
+        ;; Upstream CommandAIM extends ACCommand which does not override
+        ;; getRequiredPermissionLevel() — vanilla 1.12.2 defaults to 4, so
+        ;; /aim is an OP-level-4 command there. Keep the same level.
+        {:permission-level 4
          :description "Manage your abilities"
          :subcommands (build-aim-subcommands)}))
 
     (cmd/register-command!
       (cmd/create-command-spec
         "aimp"
-        {:permission-level 2
+        ;; Same: upstream CommandAIMP inherits the vanilla default of 4.
+        {:permission-level 4
          :description "Manage abilities for a player"
          :arguments [{:name "player"
                       :type :player

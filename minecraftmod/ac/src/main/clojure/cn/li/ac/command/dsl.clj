@@ -74,7 +74,9 @@
   ;;
   ;; Fields:
   ;; - id: Unique command identifier (string)
-  ;; - permission-level: Required permission level (0=all, 2=op, 4=console)
+  ;; - permission-level: Required vanilla permission level (0=all, 2=OP,
+  ;;   4=top OP level, as upstream AcademyCraft's ACCommand inherits the
+  ;;   vanilla default of 4). The server console satisfies every level.
   ;; - arguments: Vector of ArgumentSpec records (for simple commands)
   ;; - executor-fn: Function to execute (for simple commands)
   ;; - description: Human-readable description
