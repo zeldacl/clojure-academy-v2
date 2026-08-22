@@ -282,16 +282,14 @@
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
-     (vfx-publish/broadcast-clear-owner! player-uuid)
-     (combat-runtime/abort-owner! player-uuid))
+     (vfx-publish/broadcast-clear-owner! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
-     (vfx-publish/broadcast-clear-owner! player-uuid)
-     (combat-runtime/abort-owner! player-uuid))
+     (vfx-publish/broadcast-clear-owner! player-uuid))
 
    :get-skills-for-category
    (fn [cat-id]
@@ -398,14 +396,10 @@
    (fn [_ctx-id] nil)
 
    :process-damage-interception
-   (fn [player-id attacker-id damage damage-source]
-     (combat-runtime/process-damage-request!
-      player-id attacker-id damage damage-source))
+   combat-runtime/process-damage-request!
 
    :should-cancel-attack-interception?
-   (fn [player-id attacker-id damage damage-source]
-     (combat-runtime/apply-attack-precheck!
-      player-id attacker-id damage damage-source))
+   combat-runtime/apply-attack-precheck!
 
    :run-attack-precheck-side-effects!
    ;; Attack prechecks are now a pure Combat Core decision.  There is no
