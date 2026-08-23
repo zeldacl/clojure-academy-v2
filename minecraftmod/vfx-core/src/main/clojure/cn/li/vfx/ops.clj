@@ -11,11 +11,26 @@
   (:import [cn.li.mcmod.math V3]))
 
 (defn ->v3
-  "Accept either a {:x :y :z} map or a positional [x y z] vector."
+  "Accept a {:x :y :z} map, a positional [x y z] vector, or -- the shape
+   every real vec3 value actually carries once it crosses from combat-core
+   (cn.li.combat.vm/vec3-components, node-core's own :vec3/* expr ops) into
+   a VFX payload -- {:vec3 [x y z]}.
+
+   The {:vec3 [...]} branch is not optional: without it, (:x point) is nil
+   and this used to fall through to (nth point 0 0.0) -- but a map is
+   seqable, so nth walks it as a one-entry seq of MapEntry and returns
+   [:vec3 [x y z]] itself, not a number, and (double ...) on that throws
+   ClassCastException. :vfx/line/:vfx/quad had never been exercised with a
+   real position value (only this session's own {:x :y :z} test fixtures)
+   until this was caught, so every real ability's :effect/vfx position
+   payload would have crashed the instant content actually called them."
   ^V3 [point]
-  (V3. (double (or (:x point) (nth point 0 0.0)))
-       (double (or (:y point) (nth point 1 0.0)))
-       (double (or (:z point) (nth point 2 0.0)))))
+  (if (and (map? point) (vector? (:vec3 point)))
+    (let [[x y z] (:vec3 point)]
+      (V3. (double x) (double y) (double z)))
+    (V3. (double (or (:x point) (nth point 0 0.0)))
+         (double (or (:y point) (nth point 1 0.0)))
+         (double (or (:z point) (nth point 2 0.0))))))
 
 (defn line-op [{:keys [from to color]}]
   {:kind :line :p1 (->v3 from) :p2 (->v3 to) :color color})

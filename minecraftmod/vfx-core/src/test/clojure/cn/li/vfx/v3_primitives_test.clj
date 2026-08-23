@@ -48,6 +48,24 @@
     (is (= 3.0 (.-z ^V3 (:p2 op))))
     (is (= [1 2 3 4] (:color op)))))
 
+(deftest line-impl-accepts-the-real-combat-vec3-literal-shape-test
+  ;; Regression: cn.li.combat.vm/vec3-components (and node-core's own
+  ;; :vec3/* expr ops) represent a point as {:vec3 [x y z]}, not {:x :y :z}
+  ;; -- that is the ONLY shape a real ability's :effect/vfx position payload
+  ;; ever carries. ops/->v3 previously only recognized {:x :y :z} and
+  ;; positional [x y z]; a {:vec3 [...]} point fell through to (nth point 0
+  ;; 0.0), and since a map is seqable, nth returned the single MapEntry
+  ;; [:vec3 [x y z]] itself instead of a number, and (double ...) on that
+  ;; threw ClassCastException. Every real ability would have crashed the
+  ;; instant it called :vfx/line/:vfx/quad with a real position.
+  (let [result (runtime/invoke-primitive!
+                :vfx/line {:from {:vec3 [0.0 64.0 0.0]} :to {:vec3 [1.0 65.0 2.0]} :color [1 1 1 1]}
+                {})
+        op (:op result)]
+    (is (= :line (:kind op)))
+    (is (= 64.0 (.-y ^V3 (:p1 op))))
+    (is (= 2.0 (.-z ^V3 (:p2 op))))))
+
 (deftest quad-impl-defaults-uv-test
   (let [result (runtime/invoke-primitive!
                 :vfx/quad {:p0 {:x 0.0 :y 0.0 :z 0.0} :p1 {:x 1.0 :y 0.0 :z 0.0}
