@@ -192,8 +192,9 @@
    :combat/damage
    {:capability :entity/damage
     :inputs {:target {:type :entity-ref} :amount {:type :double :min 0.0}
-             :damage-type {:type :keyword :default :generic}}
-    :doc "Apply damage to an entity." :category :combat}
+             :damage-type {:type :keyword :default :generic}
+             :damage-pipeline {:type :keyword :default nil}}
+    :doc "Apply damage to an entity. :damage-pipeline (real content sends e.g. :skill alongside :damage-type) selects which reaction/mitigation pipeline the interception boundary runs -- v2's opcode VM passed every field straight through with no schema filtering, so this was reaching the real handler unfiltered; declared here so invoke-primitive! (which DOES filter to declared :inputs) doesn't silently drop it." :category :combat}
 
    :entity/trigger-behavior
    {:capability :entity/trigger-behavior
