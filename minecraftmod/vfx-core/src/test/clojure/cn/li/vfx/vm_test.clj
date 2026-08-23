@@ -200,6 +200,16 @@
     (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
     (is (= 2 (count @batches)) "the repeat body ran twice, each with its own ctx")))
 
+(deftest group-node-renders-every-child-every-tick-test
+  (let [{:keys [sink batches]} (collecting-sink)
+        graph {:component :vfx/group
+               :nodes [{:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 1.0 :y 0.0 :z 0.0} :color [1 1 1 1]}
+                       {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 2.0 :y 0.0 :z 0.0} :color [1 1 1 1]}
+                       {:component :vfx/line :from {:x 0.0 :y 0.0 :z 0.0} :to {:x 3.0 :y 0.0 :z 0.0} :color [1 1 1 1]}]}]
+    (vm/sample! graph {:age 0.0 :input {}} {:sink sink})
+    (is (= 3 (count @batches)))
+    (is (= [1.0 2.0 3.0] (mapv (fn [b] (.-x ^V3 (:p2 (first (:ops (first (:payload b))))))) @batches)))))
+
 ;; --- composite expansion wired into sample-node!'s :default fallback ---
 ;; Proves the R3 architectural reasoning with real code, not just analysis:
 ;; a :layer :mid composite authored using only vfx's native :input idiom

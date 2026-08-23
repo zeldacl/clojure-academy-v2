@@ -23,7 +23,8 @@
   (doseq [id [:combat/area-damage :combat/radial-impulse :combat/teleport-group
               :combat/area-break :combat/release-with-cost :fx/lightning-strike]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite")))
-  (is (= :mid (:layer (node/descriptor :vfx.fx/charge-ring)))))
+  (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress]]
+    (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite"))))
 
 (deftest lightning-strike-composite-actually-executes-test
   (catalog/initialize!)
@@ -72,3 +73,45 @@
       (is (< (Math/abs (- 3.5 (Math/sqrt (+ (Math/pow dx 2) (Math/pow dz 2)))))
              1.0e-9))
       (is (= [1.0 1.0 1.0 1.0] (:color op))))))
+
+(deftest block-progress-composite-simple-box-samples-real-geometry-test
+  (catalog/initialize!)
+  (let [batches (atom [])
+        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        call {:component :vfx.fx/block-progress
+              :target {:vec3 [0.0 64.0 0.0]}
+              :progress 0.5 :color [255.0 0.0 0.0 200.0]
+              :pulse-period 0.0 :width 1.0}]
+    (vfx-vm/sample-node! call {:input {} :state {:age 0.0} :seed 0 :sink sink})
+    ;; box mode: 12 edges, one batch per :vfx/timeline "always on" child
+    (is (= 12 (count @batches)))
+    (let [op (first (:ops (first (:payload (first @batches)))))
+          p1 ^V3 (:p1 op) p2 ^V3 (:p2 op)]
+      ;; shrink = 0.05 * (1 - 0.5) = 0.025; height defaults to width (1.0);
+      ;; depth = width, so every axis shares the same [0.025, 0.975] span.
+      (is (< (Math/abs (- 0.025 (.-x p1))) 1.0e-9))
+      (is (< (Math/abs (- 64.025 (.-y p1))) 1.0e-9))
+      (is (< (Math/abs (- 0.025 (.-z p1))) 1.0e-9))
+      (is (< (Math/abs (- 0.975 (.-x p2))) 1.0e-9))
+      ;; pulse-period 0.0 -> pulse is always 1.0, so alpha == color[3].
+      (is (= [255.0 0.0 0.0 200.0] (:color op))))))
+
+(deftest block-progress-composite-corner-decorated-samples-real-geometry-test
+  (catalog/initialize!)
+  (let [batches (atom [])
+        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        call {:component :vfx.fx/block-progress
+              :target {:vec3 [0.0 64.0 0.0]}
+              :progress 1.0 :color [255.0 255.0 255.0 200.0]
+              :pulse-period 0.0 :width 1.0 :corner-length 0.2}]
+    (vfx-vm/sample-node! call {:input {} :state {:age 0.0} :seed 0 :sink sink})
+    ;; corner mode: 8 corners x 3 stub segments each
+    (is (= 24 (count @batches)))
+    (let [op (first (:ops (first (:payload (first @batches)))))
+          p1 ^V3 (:p1 op) p2 ^V3 (:p2 op)]
+      ;; progress 1.0 -> shrink = 0; corner 0's first segment is the
+      ;; vertical stub at (min-x, min-y, min-z) -> (min-x, min-y+0.2, min-z).
+      (is (< (Math/abs (- 0.0 (.-x p1))) 1.0e-9))
+      (is (< (Math/abs (- 64.0 (.-y p1))) 1.0e-9))
+      (is (< (Math/abs (- 64.2 (.-y p2))) 1.0e-9))
+      (is (< (Math/abs (- (.-x p1) (.-x p2))) 1.0e-9)))))

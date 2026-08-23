@@ -221,6 +221,22 @@
     (when taken
       (sample-node! taken ctx))))
 
+(defmethod sample-node! :vfx/group
+  [node ctx]
+  ;; The plain "render every one of these children, every tick" fan-out --
+  ;; distinct from :vfx/timeline (which gates each child behind its own
+  ;; :at threshold). A composite body assembled from many fixed, always-
+  ;; visible leaves (e.g. a box outline's 12 fixed edges) has nowhere else
+  ;; to put more than one child: :vfx/branch's :then/:else and :vfx/let's/
+  ;; :vfx/curve's/:vfx/repeat's :body are all :kind :single. Added when
+  ;; :vfx.fx/block-progress (R3, mossy-wren plan) needed it and no existing
+  ;; structural primitive fit -- :vfx/timeline's :children shape is
+  ;; {:at :node} per entry, which doesn't match node-core's :seq kind (each
+  ;; :seq element must be an expandable node directly, not wrapped).
+  (doseq [child (:nodes node)]
+    (when (map? child)
+      (sample-node! child ctx))))
+
 (defmethod sample-node! :vfx/repeat
   [node ctx]
   ;; "Seeded loop": the loop's own per-iteration determinism comes from

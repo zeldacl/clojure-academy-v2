@@ -105,4 +105,10 @@
     :inputs {:count {:type :long} :index-as {:type :keyword}}
     :children {:body {:kind :single}}
     :effects #{:mutate}
-    :impl (structural-impl :vfx/repeat)}))
+    :impl (structural-impl :vfx/repeat)})
+  (node/register-primitive!
+   {:id :vfx/group :revision 1 :category :flow
+    :doc "Render every one of :nodes, every tick -- the plain always-on fan-out (native sample-node! structural primitive)."
+    :children {:nodes {:kind :seq}}
+    :effects #{:mutate}
+    :impl (structural-impl :vfx/group)}))
