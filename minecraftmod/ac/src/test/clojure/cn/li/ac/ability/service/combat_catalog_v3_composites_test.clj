@@ -14,7 +14,9 @@
             [cn.li.ac.ability.service.combat-catalog :as catalog]
             [cn.li.node.descriptor :as node]
             [cn.li.node.flow :as node-flow]
-            [cn.li.combat.structural-primitives :as combat-structural]))
+            [cn.li.combat.structural-primitives :as combat-structural]
+            [cn.li.vfx.vm :as vfx-vm])
+  (:import [cn.li.mcmod.math V3]))
 
 (deftest v3-manifests-load-with-no-errors-test
   (catalog/initialize!)
@@ -43,3 +45,22 @@
     (is (some #{:entity/damage} (map first @actions)))
     (is (= 1 (count @vfx-signals)))
     (is (= :lightning-impact (:effect-id (first @vfx-signals))))))
+
+(deftest charge-ring-composite-actually-samples-real-geometry-test
+  (catalog/initialize!)
+  (let [batches (atom [])
+        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        call {:component :vfx.fx/charge-ring
+              :center {:x 0.0 :y 0.0 :z 0.0}
+              :charge-ticks 10 :max-charge-ticks 20
+              :points 8 :base-radius 2.0 :radius-growth 3.0
+              :pulse-amplitude 0.0 :pulse-frequency 0.0
+              :outer-color [1.0 1.0 1.0 1.0] :core-color [1.0 0.0 0.0 1.0]
+              :punched? false}]
+    (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
+    (is (= 8 (count @batches)))
+    (let [op (first (:ops (first (:payload (first @batches)))))
+          p1 ^V3 (:p1 op)]
+      (is (< (Math/abs (- 3.5 (Math/sqrt (+ (Math/pow (.-x p1) 2) (Math/pow (.-z p1) 2)))))
+             1.0e-9))
+      (is (= [1.0 1.0 1.0 1.0] (:color op))))))
