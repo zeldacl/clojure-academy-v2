@@ -7,6 +7,8 @@
   (:require [cn.li.combat.frame :as frame]
             [cn.li.combat.host :as host]
             [cn.li.combat.vm :as vm]
+            [cn.li.node.flow :as node-flow]
+            [cn.li.combat.structural-primitives :as structural]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]))
 
@@ -18,7 +20,13 @@
         :start :start :pulse :pulse :release :release :abort :abort
         :event :events :start)))
 
-(defn- normalize-vfx-signal [owner ability-id execution-context signal]
+(defn normalize-vfx-signal
+  "Public so cn.li.combat.v3-runtime/dispatch! can shape a v3 ability's
+   collected VFX signals into the exact same cn.li.mcmod.runtime.vfx-
+   contract shape this v2 engine already produces -- engine-agnostic
+   (owner/ability-id/execution-context/signal in, one signal out), never
+   touches the opcode VM."
+  [owner ability-id execution-context signal]
   (let [operation (:operation signal)
         op (case operation :spawn :spawn :update :signal :destroy :destroy
              (throw (ex-info "unsupported EDN VFX operation"
@@ -67,15 +75,81 @@
                               {:tunable tunable-id :curve curve})))))
    {} (or (:tunables ability) {})))
 
+(defn- execute-v3!
+  "Run a :engine :v3 ability's :compiled-program (a node tree, not v2's
+   opcode IR) through cn.li.node.flow/execute! + cn.li.combat.structural-
+   primitives/dispatch, and shape the result exactly like vm/execute!'s
+   own contract ({:status :actions :vfx :events}) so execute!'s wrapping
+   code below (schema-version/vfx-signal-normalization/etc.) needs no
+   engine-specific branch at all -- only the two lines that build `result`
+   differ.
+
+   :dispatch-action! COLLECTS into :actions (does not call the real
+   capability handler immediately) -- deliberately matching v2's deferred-
+   commit contract, not cn.li.combat.v3-runtime's immediate-dispatch
+   bridge (built for standalone testing/tooling, a different use case).
+   This lets cn.li.ac.ability.service.combat-runtime's EXISTING
+   finalize-result!/commit-edn-owner-patches!/vfx-publish machinery apply
+   a v3 ability's effects the identical way it already applies a v2
+   ability's, with zero changes to any of that AC-side code.
+
+   :status is unconditionally :accepted for any v3 program that completes
+   without throwing: v3 has no separate 'discard everything collected so
+   far' primitive the way a v2 opcode might -- the program's own
+   :flow/branch/:flow/finish control flow already determines exactly what
+   ended up in :actions/:vfx/:events by the time execution reaches here,
+   so applying 'whatever was collected' is always correct. A v3 ability
+   document is expected to end every reachable phase branch with an
+   explicit :flow/finish :outcome (informational -- feedback/session-
+   lifecycle use it, not this function); one that does not still returns
+   :accepted with whatever the tree collected before running out of
+   nodes, it does not throw or reject."
+  [program capability-state execution-context]
+  (let [vfx-signals* (atom [])
+        actions* (atom [])
+        events* (atom [])
+        world-id (or (get-in execution-context [:from :world/id])
+                     (get-in execution-context [:context :world-id]))
+        ctx {:locals {} :seed (long (or (:activation-seed execution-context) 0))
+             :dispatch structural/dispatch
+             :phase (:phase execution-context) :event (:event execution-context)
+             :owner (:owner execution-context) :world-id world-id
+             :ability-id (:ability-id execution-context)
+             :activation-seed (long (or (:activation-seed execution-context) 0))
+             :session-state (:session-state execution-context)
+             :resources* (atom (or (get-in execution-context [:context :resources]) {}))
+             :env {:caster-facade (:from execution-context)
+                   :tunables (:tunables execution-context)
+                   :costs (:costs execution-context)
+                   :progression (:progression execution-context)
+                   :cooldown (:cooldown execution-context)
+                   :invariants (:invariants execution-context)}
+             :dispatch-query! (fn [capability request]
+                                (when-let [handler (get (:queries capability-state) capability)]
+                                  (handler request nil)))
+             :dispatch-action! (fn [capability request]
+                                (swap! actions* conj (assoc request :capability capability))
+                                {})
+             :emit-vfx! (fn [signal] (swap! vfx-signals* conj signal))
+             :emit-action! (fn [action] (swap! actions* conj action))
+             :emit-event! (fn [event] (swap! events* conj event))}
+        result-ctx (node-flow/execute! program ctx)]
+    {:status :accepted
+     :actions @actions*
+     :vfx @vfx-signals*
+     :events @events*
+     :outcome (:outcome result-ctx)}))
+
 (defn execute!
   [catalog ability-id owner intent]
   (let [ability (get-in catalog [:combat :abilities ability-id])]
     (when-not ability
       (throw (ex-info "ability is not compiled" {:ability-id ability-id})))
-    (let [program (:compiled-program ability)
-          execution-frame (frame/create-frame (:slot-counts ability))
+    (let [v3? (= :v3 (:engine ability))
+          program (:compiled-program ability)
+          execution-frame (when-not v3? (frame/create-frame (:slot-counts ability)))
           capability-state (capabilities/snapshot)
-          host (host/build-host-table-from-capabilities capability-state)
+          host (when-not v3? (host/build-host-table-from-capabilities capability-state))
           query-order (vec (sort (keys (:queries capability-state))))
           results* (volatile! {})
           latches* (volatile! (set (or (:latches intent) #{})))
@@ -114,7 +188,9 @@
                              :latches* latches* :slots* slots*
                              :rng-counter* rng-counter*}
                             :resources* resources*)
-          result (vm/execute! program execution-frame host 0 execution-context)]
+          result (if v3?
+                   (execute-v3! program capability-state execution-context)
+                   (vm/execute! program execution-frame host 0 execution-context))]
       (assoc result
              :schema-version 2 :ability-id ability-id :owner owner
              :vfx-signals (mapv #(normalize-vfx-signal owner ability-id

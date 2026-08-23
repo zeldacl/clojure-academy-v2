@@ -17,6 +17,7 @@
             [cn.li.combat.source-runtime-test]
             [cn.li.combat.end-to-end-ability-test]
             [cn.li.combat.v3-runtime-test]
+            [cn.li.combat.skill-runtime-v3-engine-test]
             [cn.li.combat.dependency-direction-test]))
 
 (defn -main [& _]
@@ -37,6 +38,7 @@
                             'cn.li.combat.source-runtime-test
                             'cn.li.combat.end-to-end-ability-test
                             'cn.li.combat.v3-runtime-test
+                            'cn.li.combat.skill-runtime-v3-engine-test
                             'cn.li.combat.dependency-direction-test)]
     (when (pos? (+ (:fail result) (:error result)))
       (System/exit 1))))
