@@ -31,7 +31,8 @@
             [cn.li.node.value :as value]
             [cn.li.node.runtime :as runtime]
             [cn.li.node.flow :as node-flow]
-            [cn.li.node.composite :as composite]))
+            [cn.li.node.composite :as composite]
+            [cn.li.combat.source-runtime :as source-runtime]))
 
 (defn- resolve-field [node k ctx]
   (value/resolve-value (get node k) (:locals ctx) (:seed ctx)))
@@ -100,12 +101,10 @@
 
 (defn dispatch
   "A ctx :dispatch function combining combat's structural primitives,
-   :layer :mid composite expansion, and leaf-primitive execution via
-   invoke-primitive!. Suitable as (:dispatch ctx) for
-   cn.li.node.flow/execute! -- this is the first piece of what a real
-   combat execute! becomes in R4/R5 (a future version also knows about the
-   :ability/* source nodes, once those are wired into execution rather
-   than only registered as descriptors).
+   :layer :source node execution, :layer :mid composite expansion, and
+   leaf-primitive execution via invoke-primitive!. Suitable as
+   (:dispatch ctx) for cn.li.node.flow/execute! -- this is what a real
+   combat execute! becomes in R4/R5.
 
    Composite expansion needs no vfx-style reconciliation here: combat's
    runtime value language (cn.li.node.value) only ever recognizes :local/
@@ -115,19 +114,28 @@
    this is the case node-core's composite mechanism was designed for
    directly (see the vfx-core equivalent, cn.li.vfx.vm's :default
    fallback, for the domain where that assumption does NOT hold and had
-   to be fixed instead)."
+   to be fixed instead).
+
+   :layer :source nodes (:ability/caster etc.) are checked before the
+   generic primitive branch since they carry no :impl (node-core's
+   registry refuses one, see NODE_LANGUAGE.md section 1) -- their
+   environment tables come from ctx's own :env key
+   (cn.li.combat.source-runtime), never a global, matching every other
+   node's explicit-input discipline."
   [node ctx]
   (if-let [impl (get structural-impls (:component node))]
     (impl node ctx)
-    (let [d (node/descriptor (:component node))]
-      (if (and d (= :mid (:layer d)))
-        (node-flow/execute! (composite/expand node) ctx)
-        (let [resolved (reduce-kv (fn [acc k v] (assoc acc k (value/resolve-value v (:locals ctx) (:seed ctx))))
-                                  {} (dissoc node :component :bind))
-              outputs (runtime/invoke-primitive! (:component node) resolved ctx)]
-          (if-let [binds (:bind node)]
-            (reduce-kv (fn [c port local] (update c :locals assoc local (get outputs port))) ctx binds)
-            ctx))))))
+    (if (source-runtime/source? (:component node))
+      (source-runtime/run node ctx)
+      (let [d (node/descriptor (:component node))]
+        (if (and d (= :mid (:layer d)))
+          (node-flow/execute! (composite/expand node) ctx)
+          (let [resolved (reduce-kv (fn [acc k v] (assoc acc k (value/resolve-value v (:locals ctx) (:seed ctx))))
+                                    {} (dissoc node :component :bind))
+                outputs (runtime/invoke-primitive! (:component node) resolved ctx)]
+            (if-let [binds (:bind node)]
+              (reduce-kv (fn [c port local] (update c :locals assoc local (get outputs port))) ctx binds)
+              ctx)))))))
 
 (defn install!
   "Register combat's own structural primitives. Call once per registry

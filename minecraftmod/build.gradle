@@ -947,7 +947,8 @@ tasks.register("verifyVfxAotBoundary") {
 
 tasks.register("verifyCombatDependencyDirection") {
     group = "verification"
-    description = "Enforce the neutral Combat Core dependency and namespace boundary. Combat Core may depend on VFX Core one-directionally (it produces VFX signals referencing VFX Core effect ids and needs their compiled :audience/:lifecycle metadata to route delivery) -- see verifyVfxDependencyDirection for the matching vfx-core-must-not-depend-on-combat-core half of that rule."
+    description = "Enforce the neutral Combat Core dependency and namespace boundary. Combat Core may depend on VFX Core one-directionally (it produces VFX signals referencing VFX Core effect ids and needs their compiled :audience/:lifecycle metadata to route delivery) -- see verifyVfxDependencyDirection for the matching vfx-core-must-not-depend-on-combat-core half of that rule. The per-.clj-file forbidden-namespace check is cn.li.combat.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping raw file text, which used to flag a docstring merely MENTIONING AC/platform in prose (explaining why the file does NOT depend on it) as an actual dependency."
+    dependsOn ":combat-core:runCombatClojureTests"
     doLast {
         def combatBuild = file("combat-core/build.gradle").text
         def acBuild = file("ac/build.gradle").text
@@ -969,7 +970,7 @@ tasks.register("verifyCombatDependencyDirection") {
             violations << "platform build logic must not mention combat-core"
         }
         fileTree(file("combat-core/src/main")) {
-            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+            include "**/*.java"
         }.files.each { File source ->
             if (source.text =~ /cn\.li\.(?:ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|presentation)\./) {
                 violations << "${source}: combat-core contains forbidden AC/platform/Presentation reference"
