@@ -58,14 +58,29 @@
    the WRONG host handler (basic-raycast, ignoring :hit/:policy entirely)
    -- never caught because nothing had exercised these primitives against
    the real host yet (additive-only strategy), only fake :dispatch-query!
-   callbacks in tests that only assert the outgoing request shape."
+   callbacks in tests that only assert the outgoing request shape.
+
+   A 6th mode -- :penetration -- is not tied to any single component id
+   the way the other 5 are: the old v2 execution path (vm.clj's
+   invoke-query-component!) derives it from the request DATA itself,
+   overriding any component-derived :query-kind whenever
+   (get-in data [:policy :type]) is :penetration, so ANY :target/raycast-
+   family call can opt into penetration mode just by setting that policy
+   field. :target/raycast is the one this composes through
+   (target_penetration_destination.edn's real v2 content calls plain
+   :target/raycast with :policy {:type :penetration ...}, not a dedicated
+   primitive) -- reproduced here as a data-derived override rather than a
+   second static :query-kind, to match the real dispatch rule exactly."
   ([capability output-key] (query-impl capability output-key nil))
   ([capability output-key query-kind]
    (fn [inputs ctx]
      {output-key
       ((:dispatch-query! ctx) capability
-       (cond-> (assoc inputs :capability capability :owner (:owner ctx) :world-id (:world-id ctx))
-         query-kind (assoc :query-kind query-kind)))})))
+       (let [derived-kind (if (= :penetration (get-in inputs [:policy :type]))
+                             :penetration
+                             query-kind)]
+         (cond-> (assoc inputs :capability capability :owner (:owner ctx) :world-id (:world-id ctx))
+           derived-kind (assoc :query-kind derived-kind))))})))
 
 (def ^:private query-primitives
   "component-id -> {:capability :output :inputs :outputs-type :doc :category :query-kind}"
@@ -74,7 +89,8 @@
     :inputs {:origin {:type :vec3} :direction {:type :vec3} :distance {:type :double :min 0.0}
              :include-entities? {:type :boolean :default true}
              :include-blocks? {:type :boolean :default true}
-             :living-only? {:type :boolean :default false}}
+             :living-only? {:type :boolean :default false}
+             :policy {:type :map :default {}}}
     :output-type :hit-result :doc "Cast a ray, return the first hit." :category :targeting}
 
    :target/raycast-fan
@@ -96,17 +112,18 @@
              :policy {:type :map :default {}}}
     :output-type :block-placement :doc "Resolve a block placement/drop plan for a raycast hit." :category :targeting}
 
-   ;; STILL WRONG, not fixed here: :direction below is declared :vec3, but
-   ;; cn.li.combat.platform/directional-raycast wants a KEYWORD
-   ;; (:forward/:back/:left/:right, defaulting to :forward) -- a real type
-   ;; mismatch distinct from the missing-:query-kind bug fixed above.
-   ;; Needs its own pass before any composite calls this primitive; left
-   ;; as-is (not composed by :target/raycast-destination) rather than
-   ;; guessed at.
+   ;; :direction is a neutral movement KEYWORD (:forward/:back/:left/
+   ;; :right, defaulting to :forward server-side when absent/not a
+   ;; keyword) -- cn.li.combat.platform/directional-raycast does
+   ;; (if (keyword? direction) direction :forward), not a vec3 the way
+   ;; every other raycast-family primitive's :direction is. Was
+   ;; incorrectly declared :vec3 until this fix (a real type mismatch,
+   ;; distinct from the missing-:query-kind bug fixed alongside it).
    :target/directional-destination-query
    {:capability :raycast :output :destination :query-kind :directional-destination
     :inputs {:origin {:type :vec3} :look {:type :vec3} :eye-y {:type :double}
-             :direction {:type :vec3} :distance {:type :double} :policy {:type :map :default {}}}
+             :direction {:type :keyword :default :forward} :distance {:type :double}
+             :policy {:type :map :default {}}}
     :output-type :destination :doc "Directional movement landing query (feet-to-eye rays, strafe directions)." :category :targeting}
 
    :target/entities

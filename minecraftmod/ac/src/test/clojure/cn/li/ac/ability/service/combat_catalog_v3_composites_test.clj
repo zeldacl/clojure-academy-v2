@@ -22,7 +22,9 @@
   (catalog/initialize!)
   (doseq [id [:combat/area-damage :combat/radial-impulse :combat/teleport-group
               :combat/area-break :combat/release-with-cost :fx/lightning-strike
-              :combat/break-budget :target/raycast-destination :combat/impact-strike]]
+              :combat/break-budget :target/raycast-destination :combat/impact-strike
+              :target/hold-destination :target/directional-destination
+              :target/penetration-destination]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite")))
   (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress :vfx.fx/trajectory-ribbon]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite"))))
@@ -289,3 +291,69 @@
            (mapv (fn [[cap req]] [cap (select-keys req [:target :amount :damage-type])]) @actions)))
     (is (= 1 (count @vfx-signals)))
     (is (= :scorch-mark (:effect-id (first @vfx-signals))))))
+
+(deftest hold-destination-composite-computes-distance-and-delegates-through-nested-composites-test
+  ;; hold-distance = min(min(0.5*(3+1), 10.0), 100.0/1.0) = min(2.0, 100.0) = 2.0.
+  ;; :target/hold-destination -> :target/raycast-destination -> :target/raycast
+  ;; + :target/resolve-destination is 3 levels of composite/primitive
+  ;; nesting; proves locals stay correctly scoped and outputs propagate
+  ;; all the way back out.
+  (catalog/initialize!)
+  (let [queries (atom [])
+        ctx {:locals {} :seed 0 :dispatch combat-structural/dispatch
+             :world-id "overworld" :owner "player-1"
+             :dispatch-query! (fn [capability request]
+                                (swap! queries conj [capability request])
+                                (if (contains? request :hit)
+                                  {:x 1.0 :y 65.0 :z 0.0}
+                                  {:hit-type :block :x 1.0 :y 64.0 :z 0.0}))}
+        result (node-flow/execute!
+                {:component :target/hold-destination
+                 :origin {:vec3 [0.0 64.0 0.0]}
+                 :direction {:vec3 [0.0 0.0 1.0]}
+                 :hold-ticks 3.0 :range-per-hold-tick 0.5 :maximum-range 10.0
+                 :available-resource 100.0 :resource-per-distance 1.0
+                 :bind {:hit :h :destination :d}}
+                ctx)]
+    (is (= 2.0 (:distance (second (first @queries)))))
+    (is (= {:x 1.0 :y 65.0 :z 0.0} (get-in result [:locals :d])))
+    (is (= {:hit-type :block :x 1.0 :y 64.0 :z 0.0} (get-in result [:locals :h])))))
+
+(deftest directional-destination-composite-tags-the-right-query-kind-test
+  (catalog/initialize!)
+  (let [queries (atom [])
+        ctx {:locals {} :seed 0 :dispatch combat-structural/dispatch
+             :world-id "overworld" :owner "player-1"
+             :dispatch-query! (fn [capability request] (swap! queries conj [capability request]) {:x 0.0 :y 64.0 :z 1.0})}
+        result (node-flow/execute!
+                {:component :target/directional-destination
+                 :origin {:vec3 [0.0 64.0 0.0]} :look {:vec3 [0.0 0.0 1.0]}
+                 :eye-y 65.6 :direction :left :distance 3.0
+                 :bind {:destination :d}}
+                ctx)]
+    (is (= 1 (count @queries)))
+    (is (= :directional-destination (:query-kind (second (first @queries)))))
+    (is (= :left (:direction (second (first @queries)))))
+    (is (= {:x 0.0 :y 64.0 :z 1.0} (get-in result [:locals :d])))))
+
+(deftest penetration-destination-composite-derives-query-kind-from-policy-and-computes-effective-distance-test
+  ;; effective-distance = min(20.0, 100.0/4.0) = min(20.0, 25.0) = 20.0.
+  (catalog/initialize!)
+  (let [queries (atom [])
+        ctx {:locals {} :seed 0 :dispatch combat-structural/dispatch
+             :world-id "overworld" :owner "player-1"
+             :dispatch-query! (fn [capability request] (swap! queries conj [capability request])
+                                {:position {:x 0.0 :y 64.0 :z 20.0} :marker-position {:x 0.0 :y 64.0 :z 20.0}})}
+        result (node-flow/execute!
+                {:component :target/penetration-destination
+                 :origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]}
+                 :distance 20.0 :scan-step 0.5 :clearance-steps 3
+                 :available-resource 100.0 :resource-per-distance 4.0
+                 :bind {:destination :d}}
+                ctx)]
+    (is (= 1 (count @queries)))
+    (is (= :penetration (:query-kind (second (first @queries)))))
+    (is (= 20.0 (:distance (second (first @queries)))))
+    (is (= :penetration (get-in (second (first @queries)) [:policy :type])))
+    (is (= 0.5 (get-in (second (first @queries)) [:policy :scan-step])))
+    (is (some? (get-in result [:locals :d])))))

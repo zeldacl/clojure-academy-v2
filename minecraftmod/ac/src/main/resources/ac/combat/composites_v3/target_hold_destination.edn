@@ -1,0 +1,39 @@
+{:kind :composite
+ :id :target/hold-destination
+ :revision 1
+ :layer :mid
+ :doc "Generic charged/held target selection: combines a linear hold-range growth, a configured maximum range, and an available-resource ceiling into a single ray distance, then delegates to :target/raycast-destination. None of these inputs identify a skill or a resource type. Port of the old v2 :target/hold-destination composite (ac/combat/components/target_hold_destination.edn) into the v3 model."
+ :category :targeting
+ :inputs {:origin {:type :vec3}
+          :direction {:type :vec3}
+          :hold-ticks {:type :double}
+          :range-per-hold-tick {:type :double}
+          :maximum-range {:type :double}
+          :available-resource {:type :double}
+          :resource-per-distance {:type :double}
+          :policy {:type :map :default {}}
+          :include-entities? {:type :boolean :default true}
+          :include-blocks? {:type :boolean :default true}}
+ :outputs {:hit {:type :hit-result :from [:local :hit]}
+           :destination {:type :destination :from [:local :destination]}}
+ :body
+ {:component :flow/sequence
+  :steps
+  [{:component :data/bind
+    :to :hold-distance
+    :value {:expr :math/min
+            :args [{:expr :math/min
+                    :args [{:expr :math/mul
+                            :args [{:ref [:input :range-per-hold-tick]}
+                                   {:expr :math/add :args [{:ref [:input :hold-ticks]} 1.0]}]}
+                           {:ref [:input :maximum-range]}]}
+                   {:expr :math/div
+                    :args [{:ref [:input :available-resource]} {:ref [:input :resource-per-distance]}]}]}}
+   {:component :target/raycast-destination
+    :origin {:ref [:input :origin]}
+    :direction {:ref [:input :direction]}
+    :distance {:ref [:local :hold-distance]}
+    :policy {:ref [:input :policy]}
+    :include-entities? {:ref [:input :include-entities?]}
+    :include-blocks? {:ref [:input :include-blocks?]}
+    :bind {:hit :hit :destination :destination}}]}}

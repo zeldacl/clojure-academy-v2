@@ -111,6 +111,22 @@
     (is (not (contains? (second @seen) :query-kind))
         "plain :target/raycast must fall through to the default handler, not tag a :query-kind")))
 
+(deftest raycast-impl-derives-penetration-query-kind-from-policy-test
+  ;; Regression: the OLD v2 execution path (vm.clj's
+  ;; invoke-query-component!) derives :query-kind :penetration from the
+  ;; request DATA (:policy :type :penetration), not from the component id
+  ;; -- unlike the other 5 :query-kind modes. target_penetration_destination.edn
+  ;; (real v2 content) calls plain :target/raycast this way, never a
+  ;; dedicated primitive.
+  (let [seen (atom nil)
+        ctx (fake-ctx nil (fn [capability request] (reset! seen [capability request]) nil))]
+    (runtime/invoke-primitive!
+     :target/raycast
+     {:origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]} :distance 32.0
+      :policy {:type :penetration :scan-step 0.5 :clearance-steps 3}}
+     ctx)
+    (is (= :penetration (:query-kind (second @seen))))))
+
 (deftest combat-damage-impl-dispatches-action-with-provenance-test
   (let [seen (atom nil)
         ctx (fake-ctx (fn [capability request] (reset! seen [capability request])) nil)
