@@ -10,7 +10,8 @@
             [cn.li.node.flow :as node-flow]
             [cn.li.combat.structural-primitives :as structural]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
-            [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]))
+            [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
+            [clojure.walk :as walk]))
 
 (set! *warn-on-reflection* true)
 
@@ -75,6 +76,27 @@
                               {:tunable tunable-id :curve curve})))))
    {} (or (:tunables ability) {})))
 
+(defn- resolve-tunable-refs
+  "Replace every {:tunable k} found anywhere in `form` with
+   (get materialized-tunables k). An ability's :costs/:progression/
+   :cooldown declarations are static document metadata, not :program node
+   trees value/resolve-value ever sees -- v2's own opcode VM resolves a
+   {:tunable} appearing inside one of these tables inline, at the moment
+   :cost/spend etc. reads it. v3's :ability/budget and friends
+   (cn.li.combat.source-runtime) just return the table entry verbatim, so
+   without this, a real cost/progression/cooldown declaration written the
+   same way v2 content already writes it (curve-scaled via an embedded
+   {:tunable k}, e.g. :costs {:activate {:resources {:cp {:tunable
+   :cost-down-cp}}}}) reaches :cost/spend as a map where a number was
+   expected -- caught converting mine_detect.edn's real mastery-scaled
+   costs, not a hypothetical."
+  [form materialized-tunables]
+  (walk/postwalk
+   (fn [x] (if (and (map? x) (contains? x :tunable) (= 1 (count x)))
+             (get materialized-tunables (:tunable x))
+             x))
+   form))
+
 (defn- execute-v3!
   "Run a :engine :v3 ability's :compiled-program (a node tree, not v2's
    opcode IR) through cn.li.node.flow/execute! + cn.li.combat.structural-
@@ -120,9 +142,9 @@
              :resources* (atom (or (get-in execution-context [:context :resources]) {}))
              :env {:caster-facade (:from execution-context)
                    :tunables (:tunables execution-context)
-                   :costs (:costs execution-context)
-                   :progression (:progression execution-context)
-                   :cooldown (:cooldown execution-context)
+                   :costs (resolve-tunable-refs (:costs execution-context) (:tunables execution-context))
+                   :progression (resolve-tunable-refs (:progression execution-context) (:tunables execution-context))
+                   :cooldown (resolve-tunable-refs (:cooldown execution-context) (:tunables execution-context))
                    :invariants (:invariants execution-context)}
              :dispatch-query! (fn [capability request]
                                 (when-let [handler (get (:queries capability-state) capability)]

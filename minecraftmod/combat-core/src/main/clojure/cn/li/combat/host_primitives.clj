@@ -232,7 +232,8 @@
 
    :combat/status
    {:capability :entity/status
-    :inputs {:target {:type :entity-ref} :status-id {:type :keyword} :duration-ticks {:type :long :min 0}}
+    :inputs {:target {:type :entity-ref} :status-id {:type :keyword} :duration-ticks {:type :long :min 0}
+             :amplifier {:type :long :default 0}}
     :doc "Apply a status effect to an entity." :category :combat}
 
    :entity/teleport

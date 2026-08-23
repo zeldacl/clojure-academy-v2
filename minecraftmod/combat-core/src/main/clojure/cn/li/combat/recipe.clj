@@ -326,7 +326,10 @@
            :compiled? true
            :engine :v3
            :program-hash (content-hash ability)
-           :compiled-program (:program ability))
+           ;; Still namespaced by ability id -- the same cross-ability VFX
+           ;; instance-key collision safety v2 gets at compile time,
+           ;; unrelated to anything v2-pipeline-specific (a plain postwalk).
+           :compiled-program (namespace-vfx-instance-keys (:program ability) (:id ability)))
     (let [;; Schema v2 design D (:fragments): a fragment is a composite scoped
         ;; to this ability's own document instead of a separate shared
         ;; manifest file -- same :inputs/:body shape, same expansion

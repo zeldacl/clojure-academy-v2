@@ -39,3 +39,49 @@
     (is (= :accepted (:status result)))
     (is (empty? (:actions result)))
     (is (empty? (:vfx-signals result)))))
+
+;; --- :mine-detect: a substantial real conversion (cost/spend + branch,
+;; combat/status, effect/vfx, score/mark, cooldown/start, source nodes) ---
+
+(deftest mine-detect-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :mine-detect])]
+    (is (nil? (get-in state [:combat :errors :mine-detect])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :mine-detect))))
+
+(deftest mine-detect-v3-program-spends-budget-and-applies-effects-when-affordable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mine-detect "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                        :world/id "overworld" :progression/mastery 0.9 :progression/level 5}
+                 :tunables {:blindness-duration-ticks 40 :blindness-amplifier 1 :targeting-range 20.0
+                            :cost-down-cp 5.0 :cost-down-overload 0.0 :cooldown-ticks 200 :exp-cast 0.02}
+                 :context {:resources {:cp 10.0}}})]
+    (is (= :accepted (:status result)))
+    (is (some #(and (= :entity/status (:capability %)) (= "owner-1" (:target %))
+                    (= :blindness (:status-id %)) (= 1 (:amplifier %)))
+              (:actions result)))
+    (is (some #(= :owner-patch (:type %)) (:actions result))
+        "cost/spend + score/mark + cooldown/start all emit owner-patch actions")
+    (is (= 1 (count (:vfx-signals result))))
+    (let [signal (first (:vfx-signals result))]
+      (is (= :block-scan-transient (:effect-id signal)))
+      (is (true? (get-in signal [:params :advanced?])) "mastery 0.9 > 0.5 and level 5 >= 4")
+      (is (= 20.0 (get-in signal [:params :range]))))))
+
+(deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mine-detect "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                        :world/id "overworld" :progression/mastery 0.1 :progression/level 1}
+                 :tunables {:blindness-duration-ticks 40 :blindness-amplifier 1 :targeting-range 20.0
+                            :cost-down-cp 5.0 :cost-down-overload 0.0 :cooldown-ticks 200 :exp-cast 0.02}
+                 :context {:resources {:cp 0.0}}})]
+    (is (= :accepted (:status result)) "execute! itself is always :accepted for v3, see execute-v3!")
+    (is (empty? (:actions result)))
+    (is (empty? (:vfx-signals result)))))

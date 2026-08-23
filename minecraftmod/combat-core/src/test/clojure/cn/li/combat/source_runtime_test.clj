@@ -17,7 +17,9 @@
                    :charge/ticks 12
                    :targeting/normal-metal-blocks [:iron :gold]
                    :targeting/weak-metal-blocks [:copper]
-                   :targeting/metal-entities [:iron-golem]}
+                   :targeting/metal-entities [:iron-golem]
+                   :progression/mastery 0.75
+                   :progression/level 3}
    :tunables {:beam-damage 8.5}
    :costs {:release {:resources {:cp 1.0}}}
    :progression {:hit {:per-mark 0.1}}
@@ -40,7 +42,8 @@
               :bind {:eye :eye :body :body :aim :aim :id :owner-id :world-id :wid
                      :creative? :creative :forward :fwd :back :bwd :left :lft :right :rgt
                      :eye-y :ey :charge-ticks :charge
-                     :normal-metal-blocks :nmb :weak-metal-blocks :wmb :metal-entities :me}}
+                     :normal-metal-blocks :nmb :weak-metal-blocks :wmb :metal-entities :me
+                     :mastery :mastery :level :level}}
              (fresh-ctx))]
     (is (= {:x 1.0 :y 65.6 :z 2.0} (get-in ctx [:locals :eye])))
     (is (= {:x 1.0 :y 64.0 :z 2.0} (get-in ctx [:locals :body])))
@@ -56,7 +59,9 @@
     (is (= 12 (get-in ctx [:locals :charge])))
     (is (= [:iron :gold] (get-in ctx [:locals :nmb])))
     (is (= [:copper] (get-in ctx [:locals :wmb])))
-    (is (= [:iron-golem] (get-in ctx [:locals :me])))))
+    (is (= [:iron-golem] (get-in ctx [:locals :me])))
+    (is (= 0.75 (get-in ctx [:locals :mastery])))
+    (is (= 3 (get-in ctx [:locals :level])))))
 
 (deftest ability-caster-with-no-bind-is-a-no-op-test
   (is (= (fresh-ctx) (source-runtime/run {:component :ability/caster} (fresh-ctx)))))

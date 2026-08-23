@@ -2,6 +2,7 @@
  :kind :ability
  :id :mind-course
  :revision 1
+ :engine :v3
  :activation :passive
  :status :migrated
  :category-id :generic

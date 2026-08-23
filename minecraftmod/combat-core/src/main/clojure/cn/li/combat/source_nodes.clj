@@ -39,7 +39,9 @@
      :charge-ticks {:type :long :doc "Ticks the current activation has been held, for hold-to-charge abilities"}
      :normal-metal-blocks {:type [:list-of :keyword] :doc "Configured target registry snapshot, never read from AC config paths directly by EDN"}
      :weak-metal-blocks {:type [:list-of :keyword]}
-     :metal-entities {:type [:list-of :keyword]}}})
+     :metal-entities {:type [:list-of :keyword]}
+     :mastery {:type :double :doc "Raw (pre-curve) skill-exp for this ability -- the v3 rename of the old {:from :progression/mastery} facade lookup."}
+     :level {:type :long :doc "Owner's current ability level -- the v3 rename of the old {:from :progression/level} facade lookup."}}})
 
   (node/register-composite!
    {:id :ability/tunable :revision 1 :layer :source

@@ -33,7 +33,8 @@
    :charge-ticks :charge/ticks
    :normal-metal-blocks :targeting/normal-metal-blocks
    :weak-metal-blocks :targeting/weak-metal-blocks
-   :metal-entities :targeting/metal-entities})
+   :metal-entities :targeting/metal-entities
+   :mastery :progression/mastery :level :progression/level})
 
 (defn- run-caster [node ctx]
   (let [facade (get-in ctx [:env :caster-facade])
