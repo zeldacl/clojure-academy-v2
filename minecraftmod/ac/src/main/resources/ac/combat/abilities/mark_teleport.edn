@@ -1,160 +1,353 @@
 {:schema-version 2
- :kind :ability
- :id :mark-teleport
- :revision 2
- :activation :session
- :status :migrated
- :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]
- :tunables
- {:minimum-distance {:curve :const}
-  :maximum-range {:curve :mastery-lerp}
-  :range-per-hold-tick {:curve :const}
-  :cp-per-block {:curve :mastery-lerp}
-  :release-overload {:curve :mastery-lerp}
-  :cooldown-ticks {:curve :mastery-lerp}
-  :exp-per-distance {:curve :const}
-  :entity-eye-height {:curve :const}}
- :costs
- {:release-cp
-  {:resources
-   {:cp {:expr :math/mul
-         :args [{:ref [:slot :destination :distance]}
-                {:tunable :cp-per-block}]}}}
-  :release-overload
-  {:resources {:overload {:tunable :release-overload}}}}
- :progression
- {:teleport {:per-mark {:tunable :exp-per-distance}}}
- :cooldown
- {:main {:ticks {:tunable :cooldown-ticks}}}
- ;; Ability-local wiring only.  The behavior remains in the generic target
- ;; composites; this fragment prevents three phases from repeating the same
- ;; tunable/resource/policy binding map.
- :fragments
- {:refresh-destination
-  {:inputs {}
-   :body {:component :flow/sequence
-          :steps [{:component :target/hold-destination
-                   :origin {:from :caster/eye}
-                   :direction {:from :caster/aim}
-                   :hold-ticks {:from :charge/ticks}
-                   :range-per-hold-tick {:tunable :range-per-hold-tick}
-                   :maximum-range {:tunable :maximum-range}
-                   :available-resource {:ref [:context :resources :cp]}
-                   :resource-per-distance {:tunable :cp-per-block}
-                   :policy {:direction {:from :caster/aim}
-                            :entity-eye-height {:tunable :entity-eye-height}
-                            :minimum-distance {:tunable :minimum-distance}
-                            :head-clearance? true}}
-                 {:component :session/patch
-                  :entries [{:path [:destination] :mode :assign
-                             :value {:ref [:slot :destination]}}]}]}}
-  :destroy-marker
-  {:inputs {}
-   :body {:component :effect/vfx
-          :effect-id :teleport-marker
-          :operation :destroy
-          :instance-key [:activation :mark-teleport]
-          :payload {}}}}
- :program
- {:component :flow/phases
-  :start
-  {:component :flow/sequence
-   :steps
-   [{:component :refresh-destination}
-    {:component :flow/branch
-     :when {:ref [:slot :destination :valid?]}
-     :then {:component :effect/vfx
+  :kind :ability
+  :id :mark-teleport
+  :revision 2
+  :engine :v3
+  :activation :session
+  :status :migrated
+  :requires [:caster/eye
+    :caster/aim
+    :caster/id
+    :world/id
+    :charge/ticks]
+  :tunables {:minimum-distance {:curve :const}
+    :maximum-range {:curve :mastery-lerp}
+    :range-per-hold-tick {:curve :const}
+    :cp-per-block {:curve :mastery-lerp}
+    :release-overload {:curve :mastery-lerp}
+    :cooldown-ticks {:curve :mastery-lerp}
+    :exp-per-distance {:curve :const}
+    :entity-eye-height {:curve :const}}
+  :progression {:teleport {:per-mark {:tunable :exp-per-distance}}}
+  :cooldown {:main {:ticks {:tunable :cooldown-ticks}}}
+  :session-state {:destination {:type :any
+      :default nil}}
+  :program {:component :flow/phases
+    :start {:component :flow/sequence
+      :steps [{:component :ability/caster
+          :bind {:id :owner-id
+            :eye :eye
+            :aim :aim
+            :world-id :wid
+            :charge-ticks :charge-ticks}}
+        {:component :ability/tunable
+          :name :range-per-hold-tick
+          :bind {:value :range-per-hold-tick}}
+        {:component :ability/tunable
+          :name :maximum-range
+          :bind {:value :maximum-range}}
+        {:component :ability/tunable
+          :name :cp-per-block
+          :bind {:value :cp-per-block}}
+        {:component :ability/tunable
+          :name :entity-eye-height
+          :bind {:value :entity-eye-height}}
+        {:component :ability/tunable
+          :name :minimum-distance
+          :bind {:value :minimum-distance}}
+        {:component :ability/context
+          :name :resources
+          :bind {:value :context-resources}}
+        {:component :target/hold-destination
+          :origin {:ref [:local
+              :eye]}
+          :direction {:ref [:local
+              :aim]}
+          :hold-ticks {:ref [:local
+              :charge-ticks]}
+          :range-per-hold-tick {:ref [:local
+              :range-per-hold-tick]}
+          :maximum-range {:ref [:local
+              :maximum-range]}
+          :available-resource {:ref [:local
+              :context-resources
+              :cp]}
+          :resource-per-distance {:ref [:local
+              :cp-per-block]}
+          :policy {:direction {:ref [:local
+                :aim]}
+            :entity-eye-height {:ref [:local
+                :entity-eye-height]}
+            :minimum-distance {:ref [:local
+                :minimum-distance]}
+            :head-clearance? true}
+          :bind {:destination :destination}}
+        {:component :session/write
+          :key :destination
+          :value {:ref [:local
+              :destination]}}
+        {:component :flow/branch
+          :when {:ref [:local
+              :destination
+              :valid?]}
+          :then {:component :effect/vfx
             :effect-id :teleport-marker
             :operation :spawn
-            :instance-key [:activation :mark-teleport]
-            :audience {:type :nearby :radius 64.0}
-             :payload {:owner {:from :caster/id}
-                       :position {:ref [:slot :destination :position]}
-                       :color [188 252 238 255]
-                       :particle-chance 0.4}}
-     :else nil}
-    {:component :flow/finish :outcome :started}]}
-  :pulse
-  {:component :flow/sequence
-   :steps
-   [{:component :refresh-destination}
-    {:component :flow/branch
-     :when {:ref [:slot :destination :valid?]}
-     :then {:component :effect/vfx
+            :instance-key [:activation
+              :mark-teleport]
+            :payload {:owner {:ref [:local
+                  :owner-id]}
+              :position {:ref [:local
+                  :destination
+                  :position]}
+              :color [188
+                252
+                238
+                255]
+              :particle-chance 0.4}
+            :audience {:type :nearby
+              :radius 64.0}}}
+        {:component :flow/finish
+          :outcome :started}]}
+    :pulse {:component :flow/sequence
+      :steps [{:component :ability/caster
+          :bind {:id :owner-id
+            :eye :eye
+            :aim :aim
+            :world-id :wid
+            :charge-ticks :charge-ticks}}
+        {:component :ability/tunable
+          :name :range-per-hold-tick
+          :bind {:value :range-per-hold-tick}}
+        {:component :ability/tunable
+          :name :maximum-range
+          :bind {:value :maximum-range}}
+        {:component :ability/tunable
+          :name :cp-per-block
+          :bind {:value :cp-per-block}}
+        {:component :ability/tunable
+          :name :entity-eye-height
+          :bind {:value :entity-eye-height}}
+        {:component :ability/tunable
+          :name :minimum-distance
+          :bind {:value :minimum-distance}}
+        {:component :ability/context
+          :name :resources
+          :bind {:value :context-resources}}
+        {:component :target/hold-destination
+          :origin {:ref [:local
+              :eye]}
+          :direction {:ref [:local
+              :aim]}
+          :hold-ticks {:ref [:local
+              :charge-ticks]}
+          :range-per-hold-tick {:ref [:local
+              :range-per-hold-tick]}
+          :maximum-range {:ref [:local
+              :maximum-range]}
+          :available-resource {:ref [:local
+              :context-resources
+              :cp]}
+          :resource-per-distance {:ref [:local
+              :cp-per-block]}
+          :policy {:direction {:ref [:local
+                :aim]}
+            :entity-eye-height {:ref [:local
+                :entity-eye-height]}
+            :minimum-distance {:ref [:local
+                :minimum-distance]}
+            :head-clearance? true}
+          :bind {:destination :destination}}
+        {:component :session/write
+          :key :destination
+          :value {:ref [:local
+              :destination]}}
+        {:component :flow/branch
+          :when {:ref [:local
+              :destination
+              :valid?]}
+          :then {:component :effect/vfx
             :effect-id :teleport-marker
             :operation :update
-            :instance-key [:activation :mark-teleport]
-            :audience {:type :nearby :radius 64.0}
-             :payload {:position {:ref [:slot :destination :position]}
-                       :color [188 252 238 255]
-                       :particle-chance 0.4}}
-     :else nil}
-    {:component :flow/finish :outcome :continue}]}
-  :release
-  {:component :flow/sequence
-   :steps
-   [{:component :refresh-destination}
-    {:component :flow/branch
-     :when {:ref [:slot :destination :valid?]}
-     :then {:component :txn/atomic
-            :guards [{:component :guard/resource
-                      :cost {:cp {:expr :math/mul
-                                   :args [{:ref [:slot :destination :distance]}
-                                          {:tunable :cp-per-block}]}
-                             :overload {:tunable :release-overload}}}]
-            :reservations []
-            :body {:component :flow/sequence
-                   :steps [{:component :cost/spend :budget :release-cp}
-                           {:component :cost/spend :budget :release-overload}
-                           {:component :entity/teleport
-                            :target {:from :caster/id}
-                            :world-id {:from :world/id}
-                            :position {:ref [:slot :destination :position]}
-                            :dismount? true
-                            :reset-fall-damage? true}
-                           {:component :score/mark
-                            :tag :teleport
-                            :weight {:ref [:slot :destination :distance]}}
-                           {:component :cooldown/start :name :main}
-                           {:component :effect/vfx
-                             :effect-id :arc-ring-fade-audio
-                            :operation :spawn
-                            :audience {:type :nearby :radius 64.0}
-                             :payload {:start {:ref [:slot :destination :position]}
-                                       :end {:ref [:slot :destination :position]}
-                                       :ring-center {:ref [:slot :destination :position]}
-                                       :duration-ticks 20 :ring-from 0.25 :ring-to 1.4
-                                       :ring-segments 24
-                                       :ring-color [188 252 238 220]
-                                       :arc-spacing {:min 0.6 :max 1.2}
-                                       :arc-radius {:min 0.08 :max 0.18}
-                                       :arc-count-limit 32 :arc-life-ticks 12
-                                       :fade-at 8 :fade-to-tick 20
-                                       :fade-ring-from 1.4 :fade-ring-to 2.0
-                                       :fade-segments 24
-                                       :fade-color [236 170 93 180]
-                                       :sound-id "academy:em.teleport"
-                                       :sound-volume 0.6 :sound-pitch 1.0
-                                       :sound-position {:ref [:slot :destination :position]}}}
-                           {:component :effect/vfx
-            :effect-id :teleport-marker
-                            :operation :destroy
-                            :instance-key [:activation :mark-teleport]
-                            :payload {}}
-                           {:component :flow/finish
-                            :outcome :teleported
-                            :finish-session? true}]}
-            :on-fail {:component :flow/finish
-                      :outcome :insufficient-resource
-                      :finish-session? true}}
-            :else {:component :flow/sequence
-            :steps [{:component :destroy-marker}
+            :instance-key [:activation
+              :mark-teleport]
+            :payload {:position {:ref [:local
+                  :destination
+                  :position]}
+              :color [188
+                252
+                238
+                255]
+              :particle-chance 0.4}
+            :audience {:type :nearby
+              :radius 64.0}}}
+        {:component :flow/finish
+          :outcome :continue}]}
+    :release {:component :flow/sequence
+      :steps [{:component :ability/caster
+          :bind {:id :owner-id
+            :eye :eye
+            :aim :aim
+            :world-id :wid
+            :charge-ticks :charge-ticks}}
+        {:component :ability/tunable
+          :name :range-per-hold-tick
+          :bind {:value :range-per-hold-tick}}
+        {:component :ability/tunable
+          :name :maximum-range
+          :bind {:value :maximum-range}}
+        {:component :ability/tunable
+          :name :cp-per-block
+          :bind {:value :cp-per-block}}
+        {:component :ability/tunable
+          :name :entity-eye-height
+          :bind {:value :entity-eye-height}}
+        {:component :ability/tunable
+          :name :minimum-distance
+          :bind {:value :minimum-distance}}
+        {:component :ability/context
+          :name :resources
+          :bind {:value :context-resources}}
+        {:component :target/hold-destination
+          :origin {:ref [:local
+              :eye]}
+          :direction {:ref [:local
+              :aim]}
+          :hold-ticks {:ref [:local
+              :charge-ticks]}
+          :range-per-hold-tick {:ref [:local
+              :range-per-hold-tick]}
+          :maximum-range {:ref [:local
+              :maximum-range]}
+          :available-resource {:ref [:local
+              :context-resources
+              :cp]}
+          :resource-per-distance {:ref [:local
+              :cp-per-block]}
+          :policy {:direction {:ref [:local
+                :aim]}
+            :entity-eye-height {:ref [:local
+                :entity-eye-height]}
+            :minimum-distance {:ref [:local
+                :minimum-distance]}
+            :head-clearance? true}
+          :bind {:destination :destination}}
+        {:component :session/write
+          :key :destination
+          :value {:ref [:local
+              :destination]}}
+        {:component :flow/branch
+          :when {:ref [:local
+              :destination
+              :valid?]}
+          :then {:component :flow/sequence
+            :steps [{:component :ability/tunable
+                :name :release-overload
+                :bind {:value :release-overload}}
+              {:component :ability/progression
+                :name :teleport
+                :bind {:progression :teleport-progression}}
+              {:component :ability/cooldown
+                :name :main
+                :bind {:cooldown :main-cooldown}}
+              {:component :cost/spend
+                :budget {:resources {:cp {:expr :math/mul
+                      :args [{:ref [:local
+                            :destination
+                            :distance]}
+                        {:ref [:local
+                            :cp-per-block]}]}
+                    :overload {:ref [:local
+                        :release-overload]}}}
+                :bind {:insufficient? :insufficient?}}
+              {:component :flow/branch
+                :when {:ref [:local
+                    :insufficient?]}
+                :then {:component :flow/finish
+                  :outcome :insufficient-resource
+                  :finish-session? true}
+                :else {:component :flow/sequence
+                  :steps [{:component :entity/teleport
+                      :target {:ref [:local
+                          :owner-id]}
+                      :position {:ref [:local
+                          :destination
+                          :position]}
+                      :dismount? true
+                      :reset-fall-damage? true}
+                    {:component :score/mark
+                      :progression {:ref [:local
+                          :teleport-progression]}
+                      :weight {:ref [:local
+                          :destination
+                          :distance]}}
+                    {:component :cooldown/start
+                      :name :main
+                      :cooldown {:ref [:local
+                          :main-cooldown]}}
+                    {:component :effect/vfx
+                      :effect-id :arc-ring-fade-audio
+                      :operation :spawn
+                      :payload {:start {:ref [:local
+                            :destination
+                            :position]}
+                        :end {:ref [:local
+                            :destination
+                            :position]}
+                        :ring-center {:ref [:local
+                            :destination
+                            :position]}
+                        :duration-ticks 20
+                        :ring-from 0.25
+                        :ring-to 1.4
+                        :ring-segments 24
+                        :ring-color [188
+                          252
+                          238
+                          220]
+                        :arc-spacing {:min 0.6
+                          :max 1.2}
+                        :arc-radius {:min 0.08
+                          :max 0.18}
+                        :arc-count-limit 32
+                        :arc-life-ticks 12
+                        :fade-at 8
+                        :fade-to-tick 20
+                        :fade-ring-from 1.4
+                        :fade-ring-to 2.0
+                        :fade-segments 24
+                        :fade-color [236
+                          170
+                          93
+                          180]
+                        :sound-id "academy:em.teleport"
+                        :sound-volume 0.6
+                        :sound-pitch 1.0
+                        :sound-position {:ref [:local
+                            :destination
+                            :position]}}
+                      :audience {:type :nearby
+                        :radius 64.0}}
+                    {:component :effect/vfx
+                      :effect-id :teleport-marker
+                      :operation :destroy
+                      :instance-key [:activation
+                        :mark-teleport]
+                      :payload {}}
                     {:component :flow/finish
-                     :outcome :too-close
-                     :finish-session? true}]}}
-    {:component :flow/finish :outcome :released :finish-session? true}]}
-  :abort
-  {:component :flow/sequence
-   :steps [{:component :destroy-marker}
-           {:component :flow/finish :outcome :aborted
-            :finish-session? true}]}}}
+                      :outcome :teleported
+                      :finish-session? true}]}}]}
+          :else {:component :flow/sequence
+            :steps [{:component :effect/vfx
+                :effect-id :teleport-marker
+                :operation :destroy
+                :instance-key [:activation
+                  :mark-teleport]
+                :payload {}}
+              {:component :flow/finish
+                :outcome :too-close
+                :finish-session? true}]}}
+        {:component :flow/finish
+          :outcome :released
+          :finish-session? true}]}
+    :abort {:component :flow/sequence
+      :steps [{:component :effect/vfx
+          :effect-id :teleport-marker
+          :operation :destroy
+          :instance-key [:activation
+            :mark-teleport]
+          :payload {}}
+        {:component :flow/finish
+          :outcome :aborted
+          :finish-session? true}]}
+    :events {}}}

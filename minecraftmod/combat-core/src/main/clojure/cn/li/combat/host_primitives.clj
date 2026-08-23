@@ -269,8 +269,9 @@
 
    :entity/teleport
    {:capability :entity/teleport
-    :inputs {:target {:type :entity-ref} :position {:type :vec3}}
-    :doc "Teleport one entity to a position." :category :motion}
+    :inputs {:target {:type :entity-ref} :position {:type :vec3}
+             :dismount? {:type :boolean :default nil} :reset-fall-damage? {:type :boolean :default nil}}
+    :doc "Teleport one entity to a position. :dismount?/:reset-fall-damage? are real optional fields content sends alongside :target/:position -- same gap class found repeatedly this session (e.g. :motion/velocity's identical pair)." :category :motion}
 
    :entity/reset-fall-damage
    {:capability :entity/reset-fall-damage

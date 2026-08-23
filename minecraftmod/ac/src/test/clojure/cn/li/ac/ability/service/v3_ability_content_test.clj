@@ -1190,6 +1190,80 @@
     (is (= :aborted (:outcome result)))
     (is (= 1 (count (:vfx-signals result))))))
 
+;; --- :mark-teleport: 2 v2 :fragments inlined (:refresh-destination
+;; called 3x), :target/hold-destination composite, a program-computed
+;; :costs entry (depends on :destination :distance) bypassing
+;; :ability/budget, and :entity/teleport's newly-fixed :dismount?/
+;; :reset-fall-damage? fields ---
+
+(def ^:private mark-teleport-tunables
+  {:minimum-distance 1.0 :maximum-range 30.0 :range-per-hold-tick 1.0 :cp-per-block 0.5
+   :release-overload 0.0 :cooldown-ticks 40 :exp-per-distance 0.01 :entity-eye-height 1.6})
+
+(deftest mark-teleport-v3-start-phase-marks-when-destination-valid-test
+  (with-fake-raycast-handler
+    {:valid? true :position {:vec3 [0.0 65.0 10.0]} :distance 10.0}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mark-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld" :charge/ticks 0}
+                     :tunables mark-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest mark-teleport-v3-release-phase-teleports-when-affordable-test
+  (with-fake-raycast-handler
+    {:valid? true :position {:vec3 [0.0 65.0 10.0]} :distance 10.0}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mark-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld" :charge/ticks 0}
+                     :tunables mark-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :teleported (:outcome result)))
+        (is (some #(and (= :entity/teleport (:capability %)) (true? (:dismount? %))) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")))))
+
+(deftest mark-teleport-v3-release-phase-rejects-when-insufficient-cp-test
+  (with-fake-raycast-handler
+    {:valid? true :position {:vec3 [0.0 65.0 10.0]} :distance 100.0}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mark-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld" :charge/ticks 0}
+                     :tunables mark-teleport-tunables
+                     :context {:resources {:cp 1.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :insufficient-resource (:outcome result)))
+        (is (not (some #(= :entity/teleport (:capability %)) (:actions result))))))))
+
+(deftest mark-teleport-v3-release-phase-too-close-when-destination-invalid-test
+  (with-fake-raycast-handler
+    {:valid? false :position {:vec3 [0.0 65.0 1.0]} :distance 1.0}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mark-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld" :charge/ticks 0}
+                     :tunables mark-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :too-close (:outcome result)))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
