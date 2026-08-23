@@ -8,6 +8,7 @@
             [cn.li.combat.host :as host]
             [cn.li.combat.vm :as vm]
             [cn.li.node.flow :as node-flow]
+            [cn.li.node.expr :as expr]
             [cn.li.combat.structural-primitives :as structural]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
@@ -78,23 +79,38 @@
 
 (defn- resolve-tunable-refs
   "Replace every {:tunable k} found anywhere in `form` with
-   (get materialized-tunables k). An ability's :costs/:progression/
-   :cooldown declarations are static document metadata, not :program node
-   trees value/resolve-value ever sees -- v2's own opcode VM resolves a
-   {:tunable} appearing inside one of these tables inline, at the moment
-   :cost/spend etc. reads it. v3's :ability/budget and friends
+   (get materialized-tunables k), and evaluate every {:expr op :args
+   [...]} found anywhere in `form` via cn.li.node.expr (postwalk is
+   bottom-up, so by the time an :expr node itself is visited, any
+   {:tunable} refs nested in its own :args have already been replaced by
+   this same pass -- a single postwalk resolves both forms correctly in
+   one bottom-up sweep). An ability's :costs/:progression/:cooldown
+   declarations are static document metadata, not :program node trees
+   value/resolve-value ever sees -- v2's own opcode VM resolves a
+   {:tunable}/{:expr} appearing inside one of these tables inline, at the
+   moment :cost/spend etc. reads it. v3's :ability/budget and friends
    (cn.li.combat.source-runtime) just return the table entry verbatim, so
    without this, a real cost/progression/cooldown declaration written the
    same way v2 content already writes it (curve-scaled via an embedded
    {:tunable k}, e.g. :costs {:activate {:resources {:cp {:tunable
-   :cost-down-cp}}}}) reaches :cost/spend as a map where a number was
-   expected -- caught converting mine_detect.edn's real mastery-scaled
-   costs, not a hypothetical."
-  [form materialized-tunables]
+   :cost-down-cp}}}}, or a computed {:expr :math/mul :args [{:tunable
+   :exp-base} {:tunable :exp-hit-factor}]} per-mark formula) reaches
+   :cost/spend or :score/mark as a map where a number was expected --
+   the {:tunable} case caught converting mine_detect.edn's real
+   mastery-scaled costs, the {:expr} case caught converting
+   threatening_teleport.edn's real per-mark formula, neither
+   hypothetical."
+  [form materialized-tunables seed]
   (walk/postwalk
-   (fn [x] (if (and (map? x) (contains? x :tunable) (= 1 (count x)))
-             (get materialized-tunables (:tunable x))
-             x))
+   (fn [x]
+     (cond
+       (and (map? x) (contains? x :tunable) (= 1 (count x)))
+       (get materialized-tunables (:tunable x))
+
+       (and (map? x) (keyword? (:expr x)) (contains? x :args))
+       (expr/evaluate (:expr x) (vec (:args x)) (long (or seed 0)))
+
+       :else x))
    form))
 
 (defn- execute-v3!
@@ -142,9 +158,12 @@
              :resources* (atom (or (get-in execution-context [:context :resources]) {}))
              :env {:caster-facade (:from execution-context)
                    :tunables (:tunables execution-context)
-                   :costs (resolve-tunable-refs (:costs execution-context) (:tunables execution-context))
-                   :progression (resolve-tunable-refs (:progression execution-context) (:tunables execution-context))
-                   :cooldown (resolve-tunable-refs (:cooldown execution-context) (:tunables execution-context))
+                   :costs (resolve-tunable-refs (:costs execution-context) (:tunables execution-context)
+                                                 (:activation-seed execution-context))
+                   :progression (resolve-tunable-refs (:progression execution-context) (:tunables execution-context)
+                                                        (:activation-seed execution-context))
+                   :cooldown (resolve-tunable-refs (:cooldown execution-context) (:tunables execution-context)
+                                                     (:activation-seed execution-context))
                    :invariants (:invariants execution-context)
                    :context (:context execution-context)}
              :dispatch-query! (fn [capability request]

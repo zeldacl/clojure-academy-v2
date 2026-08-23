@@ -1322,6 +1322,87 @@
         (is (= :unavailable (:outcome result)))
         (is (not (some #(= :entity/teleport (:capability %)) (:actions result))))))))
 
+;; --- :threatening-teleport: 1 v2 :fragment inlined (:refresh-trace
+;; called 3x), :inventory/settle, and the FIRST real content to exercise
+;; the just-fixed {:expr ...}-wrapping-{:tunable} case in
+;; resolve-tunable-refs (its :progression :hit/:miss entries are exactly
+;; that shape) ---
+
+(def ^:private threatening-teleport-tunables
+  {:maximum-range 20.0 :damage 10.0 :needle-damage-multiplier 2.0 :release-cp 4.0
+   :release-overload 0.0 :cooldown-ticks 40 :exp-base 0.1 :exp-hit-factor 1.0 :exp-miss-factor 0.5
+   :drop-prob-hit 0.5 :drop-prob-miss 0.9})
+
+(defn- with-fake-threatening-teleport [{:keys [held-item trace]} f]
+  (let [previous-item (get (:queries (capabilities/snapshot)) :item/held)
+        previous-raycast (get (:queries (capabilities/snapshot)) :raycast)]
+    (try
+      (capabilities/register-query! :item/held (fn [_request _frame] held-item))
+      (capabilities/register-query! :raycast (fn [_request _frame] trace))
+      (f)
+      (finally
+        (when previous-item (capabilities/register-query! :item/held previous-item))
+        (when previous-raycast (capabilities/register-query! :raycast previous-raycast))))))
+
+(deftest threatening-teleport-v3-start-phase-marks-when-item-present-test
+  (with-fake-threatening-teleport
+    {:held-item {:present? true :item-id "minecraft:trident"}
+     :trace {:attacked? true :position {:vec3 [0.0 65.0 10.0]} :target-width 0.6 :target-height 1.8}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :threatening-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :world/id "overworld"}
+                     :tunables threatening-teleport-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest threatening-teleport-v3-release-phase-hits-and-damages-when-attacked-test
+  (with-fake-threatening-teleport
+    {:held-item {:present? true :item-id "academy:needle"}
+     :trace {:attacked? true :target-id "zombie-1" :position {:vec3 [0.0 65.0 10.0]}
+             :target-width 0.6 :target-height 1.8 :drop-position {:vec3 [0.0 65.0 9.5]}}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :threatening-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :caster/creative? false :world/id "overworld"}
+                     :tunables threatening-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :performed (:outcome result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %)) (= 20.0 (:amount %)))
+                  (:actions result))
+            "needle multiplies base damage 10.0 by 2.0")
+        (is (some #(= :inventory/settle (:capability %)) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")))))
+
+(deftest threatening-teleport-v3-release-phase-misses-and-scores-miss-when-not-attacked-test
+  (with-fake-threatening-teleport
+    {:held-item {:present? true :item-id "minecraft:trident"}
+     :trace {:attacked? false :position {:vec3 [0.0 65.0 10.0]}
+             :target-width 0.6 :target-height 1.8 :drop-position {:vec3 [0.0 65.0 9.5]}}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :threatening-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :caster/creative? false :world/id "overworld"}
+                     :tunables threatening-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :performed (:outcome result)))
+        (is (not (some #(= :entity/damage (:capability %)) (:actions result))))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!

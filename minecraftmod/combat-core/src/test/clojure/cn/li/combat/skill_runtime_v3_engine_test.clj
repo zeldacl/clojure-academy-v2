@@ -92,6 +92,36 @@
     (is (empty? (:vfx-signals result)))
     (is (some? previous-cp-cost) "sanity: the ability really does declare a cp cost")))
 
+(def ^:private v3-ability-with-expr-progression
+  {:engine :v3
+   :progression {:hit {:per-mark {:expr :math/mul :args [{:tunable :exp-base} {:tunable :exp-hit-factor}]}}}
+   :compiled-program
+   {:component :flow/sequence
+    :steps [{:component :ability/progression :name :hit :bind {:progression :hit-progression}}
+            {:component :score/mark :progression {:ref [:local :hit-progression]}}
+            {:component :flow/finish :outcome :performed}]}})
+
+(deftest v3-ability-resolves-an-expr-wrapped-tunable-ref-inside-progression-test
+  ;; :costs/:progression/:cooldown are static document metadata, not
+  ;; :program node trees -- v2's own opcode VM resolves both a bare
+  ;; {:tunable k} AND a computed {:expr op :args [...]} found inside one
+  ;; of these tables inline; a real ability (threatening_teleport.edn)
+  ;; declares exactly this shape for its per-mark formula. Regression for
+  ;; skill_runtime.clj's resolve-tunable-refs, which used to only replace
+  ;; bare {:tunable k} maps and left a wrapping {:expr ...} untouched,
+  ;; reaching :score/mark as a map where a number was expected.
+  (fresh-node-registry!)
+  (let [result (skill-runtime/execute!
+                (catalog-with v3-ability-with-expr-progression) :test/v3-ability "owner-1"
+                {:action :start :from {:caster/id "owner-1"}
+                 :tunables {:exp-base 0.1 :exp-hit-factor 2.0}})]
+    (is (= :accepted (:status result)))
+    (is (= :performed (:outcome result)))
+    (is (some #(and (= :owner-patch (:type %))
+                    (= 0.2 (:value (first (:entries %)))))
+              (:actions result))
+        "0.1 * 2.0 = 0.2, not a raw {:expr ...} map")))
+
 (deftest v2-ability-execution-is-unaffected-by-the-engine-branch-test
   ;; A minimal, ordinary v2 ability (no :engine key) proves the v2 branch
   ;; (execution-frame/host construction, vm/execute!) still runs exactly
