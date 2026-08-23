@@ -230,6 +230,14 @@
 
     (cmd/register-command!
       (cmd/create-command-spec
+        "acdiag"
+        {:permission-level 2
+         :arguments []
+         :executor-fn (resolve-handler "handle-acdiag")
+         :description "Show EDN ability/VFX effect compile errors (content Design E silently disabled)"}))
+
+    (cmd/register-command!
+      (cmd/create-command-spec
         "aim"
         {:permission-level 0
          :description "Manage your abilities"

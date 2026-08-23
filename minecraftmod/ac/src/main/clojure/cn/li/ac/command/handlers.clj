@@ -20,6 +20,7 @@
     {:action :enable-cheats :player player-obj}
     {:action :disable-cheats :player player-obj}"
   (:require [cn.li.ac.ability.registry.category :as cat]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.registry.skill :as skill]
             [clojure.string :as str]))
@@ -263,3 +264,39 @@
   (let [target-player (get-target-player ctx)]
     {:action :disable-cheats
      :player target-player}))
+
+;; ============================================================================
+;; /acdiag Command Handler
+;; ============================================================================
+
+(defn- format-catalog-errors
+  "One 'kind/id: message' line per compile error -- kind distinguishes a
+   combat ability failure from a VFX effect failure, since both share one
+   id-keyed error map shape ({:message :data}, see
+   cn.li.combat.recipe/load-catalog! and cn.li.vfx.recipe/load-catalog!)."
+  [kind errors]
+  (map (fn [[id {:keys [message]}]] (str "  " kind "/" (name id) ": " message))
+       (sort-by (comp name key) errors)))
+
+(defn handle-acdiag
+  "Dump combat-catalog's compile errors -- previously only reachable via
+   server logs (Design E: a bad ability/effect document is dropped and
+   logged, never crashes the whole catalog, so there was no other way to
+   see which content is currently silently disabled without grepping the
+   log). :translate? false sends this as literal text (the platform
+   command feedback action already supports a non-translated path) since
+   the content -- ids and messages the catalog itself produced -- is
+   inherently dynamic, not a fixed set of i18n strings."
+  [_ctx]
+  (let [state (combat-catalog/state)
+        combat-errors (get-in state [:combat :errors])
+        vfx-errors (get-in state [:vfx :errors])
+        lines (concat (format-catalog-errors "combat" combat-errors)
+                      (format-catalog-errors "vfx" vfx-errors))]
+    (if (empty? lines)
+      {:action :send-message :message "No EDN compile errors." :args [] :translate? false}
+      {:action :send-message
+       :message (str "EDN compile errors (" (count lines) "):\n" (str/join "\n" lines))
+       :args []
+       :translate? false
+       :error? true})))

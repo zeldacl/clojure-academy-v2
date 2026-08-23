@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.command.handlers :as h]
             [cn.li.ac.ability.registry.category :as cat]
-            [cn.li.ac.ability.registry.skill :as skill]))
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]))
 
 (deftest get-target-player-test
   (is (= :tp (h/get-target-player {:target-player :tp :player :p})))
@@ -97,3 +98,19 @@
          (h/handle-aim-help {})))
   (is (= {:action :enable-cheats :player :c} (h/handle-aim-cheats-on {:player :c})))
   (is (= {:action :disable-cheats :player :c} (h/handle-aim-cheats-off {:player :c}))))
+
+(deftest handle-acdiag-reports-no-errors-test
+  (with-redefs [combat-catalog/state (fn [] {:combat {:errors {}} :vfx {:errors {}}})]
+    (is (= {:action :send-message :message "No EDN compile errors." :args [] :translate? false}
+           (h/handle-acdiag {})))))
+
+(deftest handle-acdiag-reports-combat-and-vfx-errors-test
+  (with-redefs [combat-catalog/state (fn [] {:combat {:errors {:railgun {:message "bad shape" :data {}}}}
+                                             :vfx {:errors {:beam-arc-fade {:message "unknown field" :data {}}}}})]
+    (let [result (h/handle-acdiag {})]
+      (is (= :send-message (:action result)))
+      (is (false? (:translate? result)))
+      (is (true? (:error? result)))
+      (is (re-find #"EDN compile errors \(2\):" (:message result)))
+      (is (re-find #"combat/railgun: bad shape" (:message result)))
+      (is (re-find #"vfx/beam-arc-fade: unknown field" (:message result))))))
