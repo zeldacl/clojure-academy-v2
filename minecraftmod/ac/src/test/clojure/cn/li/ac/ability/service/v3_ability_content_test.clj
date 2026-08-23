@@ -1918,6 +1918,91 @@
     (is (true? (:finish-session? result)))
     (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:op %))) (:vfx-signals result)))))
 
+;; --- :flesh-ripping: 4 v2 fragments inlined (:refresh-trace called 3x,
+;; :marker-payload called 2x, :destroy-marker called 4x, :impact-vfx
+;; called 2x -- same shape as threatening-teleport's marker/trace family) ---
+
+(def ^:private flesh-ripping-tunables
+  {:targeting-range 10.0 :damage 6.0 :nausea-chance 0.3 :nausea-duration-ticks 60
+   :nausea-amplifier 0 :release-cp 3.0 :release-overload 0.0 :cooldown-ticks 40 :exp-hit 0.02})
+
+(deftest flesh-ripping-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :flesh-ripping])]
+    (is (nil? (get-in state [:combat :errors :flesh-ripping])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :flesh-ripping))))
+
+(deftest flesh-ripping-v3-start-phase-marks-the-trace-test
+  (with-fake-raycast-handler {:attacked? false :position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :flesh-ripping "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/creative? false :world/id "overworld"}
+                     :tunables flesh-ripping-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest flesh-ripping-v3-release-phase-hits-and-damages-when-attacked-test
+  (with-fake-raycast-handler {:attacked? true :position {:vec3 [0.0 65.0 10.0]} :target-id "zombie-1"
+                               :target-width 0.6 :target-height 1.8}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :flesh-ripping "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/creative? false :world/id "overworld"}
+                     :tunables flesh-ripping-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :performed (:outcome result)))
+        (is (true? (:finish-session? result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %)) (= 6.0 (:amount %)))
+                  (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "cost/spend + score/mark + cooldown/start")))))
+
+(deftest flesh-ripping-v3-release-phase-misses-when-not-attacked-test
+  (with-fake-raycast-handler {:attacked? false :position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :flesh-ripping "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/creative? false :world/id "overworld"}
+                     :tunables flesh-ripping-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :miss (:outcome result)))
+        (is (true? (:finish-session? result)))
+        (is (not (some #(= :entity/damage (:capability %)) (:actions result))))))))
+
+(deftest flesh-ripping-v3-pulse-phase-rejects-when-insufficient-resource-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flesh-ripping "owner-1"
+                {:action :pulse
+                 :from {:caster/id "owner-1" :caster/creative? false}
+                 :tunables flesh-ripping-tunables
+                 :context {:resources {:cp 0.0}}})]
+    (is (= :accepted (:status result)))
+    (is (= :insufficient-resource (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
+(deftest flesh-ripping-v3-abort-phase-cleans-up-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flesh-ripping "owner-1"
+                {:action :abort :from {:caster/id "owner-1"} :tunables flesh-ripping-tunables})]
+    (is (= :accepted (:status result)))
+    (is (= :aborted (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
 (deftest mag-movement-v3-abort-phase-cleans-up-test
   (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
     (fn []
