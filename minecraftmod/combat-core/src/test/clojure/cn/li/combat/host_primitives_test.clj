@@ -78,6 +78,39 @@
     (is (= "player-1" (:owner (second @seen))))
     (is (= {:hit {:vec3 [1.0 2.0 3.0]}} result))))
 
+(deftest resolve-destination-impl-tags-the-right-query-kind-test
+  ;; Regression: cn.li.combat.platform/raycast! is a single :raycast
+  ;; capability multiplexed by :query-kind into 6 different handlers.
+  ;; :target/resolve-destination and :target/block-placement were
+  ;; registered without one, so both silently called the DEFAULT handler
+  ;; (basic-raycast, which ignores :hit/:policy entirely) instead of
+  ;; resolve-destination -- never caught because nothing had exercised
+  ;; these primitives against a query-kind-aware fake host until now, only
+  ;; against a fake that ignores query-kind and just echoes the request
+  ;; shape back (see raycast-impl-shapes-query-request-and-returns-typed-
+  ;; output-test above, which never asserted on :query-kind at all).
+  (let [seen (atom nil)
+        ctx (fake-ctx nil (fn [capability request] (reset! seen [capability request]) nil))]
+    (runtime/invoke-primitive!
+     :target/resolve-destination
+     {:hit {:hit-type :block} :origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]} :distance 5.0}
+     ctx)
+    (is (= :resolve-destination (:query-kind (second @seen)))))
+  (let [seen (atom nil)
+        ctx (fake-ctx nil (fn [capability request] (reset! seen [capability request]) nil))]
+    (runtime/invoke-primitive!
+     :target/block-placement
+     {:hit {:hit-type :block} :origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]} :distance 5.0}
+     ctx)
+    (is (= :block-placement (:query-kind (second @seen)))))
+  (let [seen (atom nil)
+        ctx (fake-ctx nil (fn [capability request] (reset! seen [capability request]) {:vec3 [1.0 2.0 3.0]}))]
+    (runtime/invoke-primitive!
+     :target/raycast {:origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]} :distance 32.0}
+     ctx)
+    (is (not (contains? (second @seen) :query-kind))
+        "plain :target/raycast must fall through to the default handler, not tag a :query-kind")))
+
 (deftest combat-damage-impl-dispatches-action-with-provenance-test
   (let [seen (atom nil)
         ctx (fake-ctx (fn [capability request] (reset! seen [capability request])) nil)

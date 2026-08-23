@@ -46,41 +46,67 @@
 
 (defn- query-impl
   "Build the :impl for a component that dispatches to `capability` through
-   ctx's query pipeline and returns its single result under `output-key`."
-  [capability output-key]
-  (fn [inputs ctx]
-    {output-key
-     ((:dispatch-query! ctx) capability
-      (assoc inputs :capability capability :owner (:owner ctx) :world-id (:world-id ctx)))}))
+   ctx's query pipeline and returns its single result under `output-key`.
+   `query-kind`, when given, is baked into every request unconditionally
+   (never a caller-supplied field) -- cn.li.combat.platform/raycast! is a
+   single :raycast capability multiplexed by :query-kind into 6 different
+   handlers (basic/raycast-fan/directional-destination/resolve-destination/
+   block-placement/penetration); a query-primitive that omits :query-kind
+   falls through to the default (plain) handler. Three of the four raycast-
+   family primitives below were registered without one, meaning
+   :target/resolve-destination and :target/block-placement silently called
+   the WRONG host handler (basic-raycast, ignoring :hit/:policy entirely)
+   -- never caught because nothing had exercised these primitives against
+   the real host yet (additive-only strategy), only fake :dispatch-query!
+   callbacks in tests that only assert the outgoing request shape."
+  ([capability output-key] (query-impl capability output-key nil))
+  ([capability output-key query-kind]
+   (fn [inputs ctx]
+     {output-key
+      ((:dispatch-query! ctx) capability
+       (cond-> (assoc inputs :capability capability :owner (:owner ctx) :world-id (:world-id ctx))
+         query-kind (assoc :query-kind query-kind)))})))
 
 (def ^:private query-primitives
-  "component-id -> {:capability :output :inputs :outputs-type :doc :category}"
+  "component-id -> {:capability :output :inputs :outputs-type :doc :category :query-kind}"
   {:target/raycast
    {:capability :raycast :output :hit
-    :inputs {:origin {:type :vec3} :direction {:type :vec3} :distance {:type :double :min 0.0}}
+    :inputs {:origin {:type :vec3} :direction {:type :vec3} :distance {:type :double :min 0.0}
+             :include-entities? {:type :boolean :default true}
+             :include-blocks? {:type :boolean :default true}
+             :living-only? {:type :boolean :default false}}
     :output-type :hit-result :doc "Cast a ray, return the first hit." :category :targeting}
 
    :target/raycast-fan
-   {:capability :raycast :output :hits
+   {:capability :raycast :output :hits :query-kind :raycast-fan
     :inputs {:origin {:type :vec3} :direction {:type :vec3} :distance {:type :double :min 0.0}
              :pitch-angles {:type [:list-of :double]} :yaw-range-degrees {:type :double}
              :limit {:type :long :min 0}}
     :output-type [:list-of :hit-result] :doc "Bounded fan of block rays around a direction." :category :targeting}
 
    :target/resolve-destination
-   {:capability :raycast :output :destination
-    :inputs {:hit {:type :hit-result} :origin {:type :vec3} :direction {:type :vec3} :distance {:type :double}}
+   {:capability :raycast :output :destination :query-kind :resolve-destination
+    :inputs {:hit {:type :hit-result} :origin {:type :vec3} :direction {:type :vec3} :distance {:type :double}
+             :policy {:type :map :default {}}}
     :output-type :destination :doc "Resolve the neutral landing point for a raycast hit." :category :targeting}
 
    :target/block-placement
-   {:capability :raycast :output :destination
-    :inputs {:hit {:type :hit-result} :origin {:type :vec3} :direction {:type :vec3} :distance {:type :double}}
+   {:capability :raycast :output :destination :query-kind :block-placement
+    :inputs {:hit {:type :hit-result} :origin {:type :vec3} :direction {:type :vec3} :distance {:type :double}
+             :policy {:type :map :default {}}}
     :output-type :block-placement :doc "Resolve a block placement/drop plan for a raycast hit." :category :targeting}
 
+   ;; STILL WRONG, not fixed here: :direction below is declared :vec3, but
+   ;; cn.li.combat.platform/directional-raycast wants a KEYWORD
+   ;; (:forward/:back/:left/:right, defaulting to :forward) -- a real type
+   ;; mismatch distinct from the missing-:query-kind bug fixed above.
+   ;; Needs its own pass before any composite calls this primitive; left
+   ;; as-is (not composed by :target/raycast-destination) rather than
+   ;; guessed at.
    :target/directional-destination-query
-   {:capability :raycast :output :destination
+   {:capability :raycast :output :destination :query-kind :directional-destination
     :inputs {:origin {:type :vec3} :look {:type :vec3} :eye-y {:type :double}
-             :direction {:type :vec3} :distance {:type :double}}
+             :direction {:type :vec3} :distance {:type :double} :policy {:type :map :default {}}}
     :output-type :destination :doc "Directional movement landing query (feet-to-eye rays, strafe directions)." :category :targeting}
 
    :target/entities
@@ -146,7 +172,8 @@
 
    :combat/damage
    {:capability :entity/damage
-    :inputs {:target {:type :entity-ref} :amount {:type :double :min 0.0}}
+    :inputs {:target {:type :entity-ref} :amount {:type :double :min 0.0}
+             :damage-type {:type :keyword :default :generic}}
     :doc "Apply damage to an entity." :category :combat}
 
    :entity/trigger-behavior
@@ -276,11 +303,11 @@
   "Register every confirmed true-primitive query/action component. Call
    once per registry lifetime, before node/freeze!."
   []
-  (doseq [[id {:keys [capability output inputs output-type doc category]}] query-primitives]
+  (doseq [[id {:keys [capability output inputs output-type doc category query-kind]}] query-primitives]
     (node/register-primitive!
      {:id id :revision 1 :doc doc :category category
       :inputs inputs :outputs {output {:type output-type}} :effects #{:query}
-      :impl (query-impl capability output)}))
+      :impl (query-impl capability output query-kind)}))
   (doseq [[id {:keys [capability inputs doc category]}] action-primitives]
     (node/register-primitive!
      {:id id :revision 1 :doc doc :category category
