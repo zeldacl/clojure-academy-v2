@@ -23,7 +23,7 @@
   (doseq [id [:combat/area-damage :combat/radial-impulse :combat/teleport-group
               :combat/area-break :combat/release-with-cost :fx/lightning-strike]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite")))
-  (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress]]
+  (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress :vfx.fx/trajectory-ribbon]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite"))))
 
 (deftest lightning-strike-composite-actually-executes-test
@@ -148,3 +148,61 @@
       (is (< (Math/abs (- 3.05 (.-x p1))) 1.0e-9))
       (is (< (Math/abs (- 70.05 (.-y p1))) 1.0e-9))
       (is (< (Math/abs (- -4.95 (.-z p1))) 1.0e-9)))))
+
+(deftest trajectory-ribbon-composite-samples-real-geometry-test
+  ;; Expected coordinates computed from the SAME closed form vfx-core's own
+  ;; cn.li.vfx.trajectory-ribbon-math-test already proved numerically
+  ;; matches the original per-tick loop -- drag=0.9, gravity=9.8, dt=0.02,
+  ;; vx0=2.0, vy0=5.0, vz0=0.0, origin=(0,64,0), 5 segments -> 4 lines.
+  (catalog/initialize!)
+  (let [batches (atom [])
+        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        call {:component :vfx.fx/trajectory-ribbon
+              :origin {:vec3 [0.0 64.0 0.0]}
+              :initial-velocity {:vec3 [2.0 5.0 0.0]}
+              :look-dir {:vec3 [0.0 0.0 1.0]}
+              :drag 0.9 :gravity 9.8 :dt 0.02 :segments 5
+              :can-perform? true}]
+    (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
+    (is (= 4 (count @batches)) "5 segments -> 4 connecting lines")
+    (let [first-op (first (:ops (first (:payload (first @batches)))))
+          last-op (first (:ops (first (:payload (last @batches)))))
+          p1 ^V3 (:p1 first-op) p2-first ^V3 (:p2 first-op)
+          from-last ^V3 (:p1 last-op) to-last ^V3 (:p2 last-op)]
+      ;; point[0] == origin (all offsets zero)
+      (is (< (Math/abs (- 0.0 (.-x p1))) 1.0e-9))
+      (is (< (Math/abs (- 64.0 (.-y p1))) 1.0e-9))
+      ;; point[1]
+      (is (< (Math/abs (- 0.036 (.-x p2-first))) 1.0e-9))
+      (is (< (Math/abs (- 64.09 (.-y p2-first))) 1.0e-9))
+      ;; the 4th (last) line connects point[3] -> point[4]
+      (is (< (Math/abs (- 0.09756 (.-x from-last))) 1.0e-6))
+      (is (< (Math/abs (- 64.23366879999999 (.-y from-last))) 1.0e-6))
+      (is (< (Math/abs (- 0.12380400000000004 (.-x to-last))) 1.0e-6))
+      (is (< (Math/abs (- 64.28971792 (.-y to-last))) 1.0e-6))
+      ;; no ready-color/blocked-color/style-color supplied -> falls all
+      ;; the way through the (or ...) chain to the hardcoded default.
+      (is (= [255.0 255.0 255.0 255.0] (:color first-op))))))
+
+(deftest trajectory-ribbon-composite-resolves-origin-through-a-caller-scope-reference-test
+  ;; Same regression shape as block-progress's caller-scope test: real
+  ;; content (trajectory_ribbon_session.edn) calls this composite with
+  ;; :origin {:ref [:input :origin]}, an unresolved reference into the
+  ;; effect's own spawn payload, never a literal.
+  (catalog/initialize!)
+  (let [batches (atom [])
+        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        call {:component :vfx/let
+              :bindings {:spawn-origin {:vec3 [8.0 65.0 -3.0]}}
+              :child {:component :vfx.fx/trajectory-ribbon
+                      :origin {:ref [:input :spawn-origin]}
+                      :initial-velocity {:vec3 [0.0 0.0 0.0]}
+                      :look-dir {:vec3 [0.0 0.0 1.0]}
+                      :drag 1.0 :segments 2}}]
+    (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
+    (is (= 1 (count @batches)))
+    (let [op (first (:ops (first (:payload (first @batches)))))
+          p1 ^V3 (:p1 op)]
+      (is (< (Math/abs (- 8.0 (.-x p1))) 1.0e-9))
+      (is (< (Math/abs (- 65.0 (.-y p1))) 1.0e-9))
+      (is (< (Math/abs (- -3.0 (.-z p1))) 1.0e-9)))))

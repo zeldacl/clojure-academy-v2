@@ -112,6 +112,20 @@
        :collection/first (first (or (nth args 0) []))
        :collection/nonempty (boolean (seq (nth args 0)))
 
+       ;; A generic runtime map-key read -- needed anywhere a composite's
+       ;; own :inputs declares a :map (or :any) parameter and must reach a
+       ;; nested field of it: a NESTED-PATH {:ref [:input k ...path]} on a
+       ;; composite's own declared input resolves at composite EXPAND time
+       ;; (compile time), against whatever the call site supplied for k --
+       ;; but a real caller almost always supplies an unresolved reference
+       ;; of its own ({:ref [:input :style]}, not a literal map), and
+       ;; get-in-ing into that reference silently returns nil. Wrapping the
+       ;; read in {:expr :map/get ...} defers it to SAMPLE time instead, by
+       ;; which point the argument has already been resolved against the
+       ;; real runtime :input (the same reasoning as :vec3/x|y|z, added for
+       ;; the identical bug class one property earlier).
+       :map/get (get (nth args 0) (nth args 1))
+
        :bool/and (and (boolean (nth args 0)) (boolean (nth args 1)))
        :bool/or (or (boolean (nth args 0)) (boolean (nth args 1)))
        :bool/not (not (boolean (nth args 0)))

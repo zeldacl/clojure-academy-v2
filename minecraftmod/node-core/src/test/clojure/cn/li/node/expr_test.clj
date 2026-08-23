@@ -20,6 +20,10 @@
   (is (= 2.0 (expr/evaluate :vec3/y [{:vec3 [1.0 2.0 3.0]}])))
   (is (= 3.0 (expr/evaluate :vec3/z [{:vec3 [1.0 2.0 3.0]}]))))
 
+(deftest map-get-test
+  (is (= 42 (expr/evaluate :map/get [{:a 1 :b 42} :b])))
+  (is (nil? (expr/evaluate :map/get [{:a 1} :missing]))))
+
 (deftest unsupported-opcode-throws-test
   (is (thrown? clojure.lang.ExceptionInfo (expr/evaluate :math/nonexistent [1.0]))))
 
