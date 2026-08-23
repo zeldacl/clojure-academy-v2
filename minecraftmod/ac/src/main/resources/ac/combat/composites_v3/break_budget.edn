@@ -1,0 +1,32 @@
+{:kind :composite
+ :id :combat/break-budget
+ :revision 1
+ :layer :mid
+ :doc "Break blocks from a pre-queried :blocks list (each {:position :hardness}, e.g. from :target/blocks or the beam-trace query) in order, spending :energy as it goes -- a block is broken only while its hardness fits the remaining budget. Faithful port of cn.li.combat.actions/commit-block-break-budget!'s energy-accounting loop, expressed via :flow/foreach's existing accumulator threading (:data/bind inside a foreach body carries forward into the next iteration's locals; node-core/flow.clj's own :flow/foreach docstring documents this) -- no new engine primitive was needed. Not a byte-for-byte port of the original's per-block RNG: :random/chance is evaluated once per candidate via node-core's shared seed-advance-per-node scheme rather than the original's index-derived seed, which is an acceptable difference for a statistical drop-chance roll (no ability or test reads this composite's outputs; none are declared)."
+ :category :world
+ :inputs {:blocks {:type [:list-of :map]}
+          :energy {:type :double}
+          :limit {:type :long :default 4096}
+          :drop-chance {:type :double :default 0.0}}
+ :outputs {}
+ :body
+ {:component :flow/sequence
+  :steps
+  [{:component :data/bind :to :remaining :value {:ref [:input :energy]}}
+   {:component :flow/foreach
+    :items {:ref [:input :blocks]}
+    :as :candidate
+    :limit {:ref [:input :limit]}
+    :body
+    {:component :flow/branch
+     :when {:expr :bool/and
+            :args [{:expr :math/gte :args [{:ref [:local :candidate :hardness]} 0.0]}
+                   {:expr :math/lte :args [{:ref [:local :candidate :hardness]} {:ref [:local :remaining]}]}]}
+     :then
+     {:component :flow/sequence
+      :steps
+      [{:component :block/break
+        :position {:ref [:local :candidate :position]}
+        :drop? {:expr :random/chance :args [{:ref [:input :drop-chance]}]}}
+       {:component :data/bind :to :remaining
+        :value {:expr :math/sub :args [{:ref [:local :remaining]} {:ref [:local :candidate :hardness]}]}}]}}}]}}

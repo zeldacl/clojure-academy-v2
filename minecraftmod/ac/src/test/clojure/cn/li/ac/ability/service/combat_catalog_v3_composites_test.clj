@@ -21,7 +21,8 @@
 (deftest v3-manifests-load-with-no-errors-test
   (catalog/initialize!)
   (doseq [id [:combat/area-damage :combat/radial-impulse :combat/teleport-group
-              :combat/area-break :combat/release-with-cost :fx/lightning-strike]]
+              :combat/area-break :combat/release-with-cost :fx/lightning-strike
+              :combat/break-budget]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite")))
   (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress :vfx.fx/trajectory-ribbon]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite"))))
@@ -206,3 +207,33 @@
       (is (< (Math/abs (- 8.0 (.-x p1))) 1.0e-9))
       (is (< (Math/abs (- 65.0 (.-y p1))) 1.0e-9))
       (is (< (Math/abs (- -3.0 (.-z p1))) 1.0e-9)))))
+
+(deftest break-budget-composite-spends-energy-in-order-and-skips-unaffordable-blocks-test
+  ;; Regression-style proof that :flow/foreach's accumulator threading
+  ;; (each iteration's :data/bind carries into the next iteration's
+  ;; locals -- see node-core/flow.clj's own docstring) is enough to port
+  ;; cn.li.combat.actions/commit-block-break-budget!'s energy-accounting
+  ;; loop with no new engine primitive. energy=5.0, blocks cost
+  ;; [3.0 10.0 2.0]: block 0 fits (remaining -> 2.0), block 1 (cost 10.0)
+  ;; does NOT fit the remaining 2.0 and is skipped WITHOUT stopping the
+  ;; loop, block 2 (cost 2.0) exactly fits the remaining 2.0.
+  (catalog/initialize!)
+  (let [actions (atom [])
+        ctx {:locals {} :seed 0 :dispatch combat-structural/dispatch
+             :world-id "overworld" :ability-id :test :activation-seed 1
+             :dispatch-action! (fn [capability request] (swap! actions conj [capability request]))
+             :dispatch-query! (fn [_ _] nil)}
+        result (node-flow/execute!
+                {:component :combat/break-budget
+                 :blocks [{:position {:vec3 [0.0 64.0 0.0]} :hardness 3.0}
+                          {:position {:vec3 [1.0 64.0 0.0]} :hardness 10.0}
+                          {:position {:vec3 [2.0 64.0 0.0]} :hardness 2.0}]
+                 :energy 5.0}
+                ctx)
+        broken-positions (mapv #(:position (second %)) @actions)]
+    (is (not (:finished? result)))
+    (is (= [{:vec3 [0.0 64.0 0.0]} {:vec3 [2.0 64.0 0.0]}] broken-positions)
+        "block index 1 (cost 10.0) should be skipped, not stop the loop")
+    (is (every? #(= :block/break (first %)) @actions))
+    (is (every? #(false? (:drop? (second %))) @actions)
+        "default :drop-chance 0.0 never drops")))

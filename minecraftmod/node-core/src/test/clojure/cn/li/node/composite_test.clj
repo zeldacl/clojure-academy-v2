@@ -139,6 +139,29 @@
     (is (= as-name read-name)
         "the renamed :as binding and the renamed reader ref must be the SAME local name")))
 
+(deftest data-bind-to-binding-stays-in-sync-with-its-readers-after-renaming-test
+  ;; Same bug class as the :flow/foreach :as test above, one component
+  ;; later: :data/bind's :to field introduces a new local the same way
+  ;; :flow/foreach's :as does, but :data/bind's own registration lacked
+  ;; :binds-locals -- so a write via :to stayed unrenamed while every
+  ;; {:ref [:local ...]} read of that name WAS renamed. Caught by
+  ;; :combat/break-budget's accumulator-threading composite (:data/bind
+  ;; :to :remaining, read back one :flow/foreach iteration later), which
+  ;; got nil for :remaining on the very first iteration.
+  (registry/register-composite!
+   {:id :test/uses-data-bind :revision 1 :layer :mid
+    :inputs {}
+    :outputs {}
+    :body {:component :flow/sequence
+           :steps [{:component :data/bind :to :acc :value 1.0}
+                   {:component :test/emit :value {:ref [:local :acc]}}]}})
+  (let [expanded (composite/expand {:component :test/uses-data-bind})
+        bind-to-name (get-in expanded [:steps 0 :to])
+        read-name (second (get-in expanded [:steps 1 :value :ref]))]
+    (is (some? bind-to-name))
+    (is (= bind-to-name read-name)
+        "the renamed :data/bind :to and the renamed reader ref must be the SAME local name")))
+
 (deftest cycle-detection-throws-test
   (registry/register-composite!
    {:id :test/cyclic :revision 1 :layer :mid :inputs {} :outputs {}

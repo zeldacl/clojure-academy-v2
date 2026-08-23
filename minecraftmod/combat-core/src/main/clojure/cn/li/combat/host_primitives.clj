@@ -234,8 +234,8 @@
 
    :block/break
    {:capability :block/break
-    :inputs {:position {:type :vec3}}
-    :doc "Break one block." :category :world}
+    :inputs {:position {:type :vec3} :drop? {:type :boolean :default true}}
+    :doc "Break one block, dropping its item unless :drop? is false." :category :world}
 
    :block/set
    {:capability :block/set

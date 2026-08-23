@@ -129,6 +129,19 @@
     :category :flow
     :inputs {:to {:type :keyword} :value {:type :any}}
     :effects #{:mutate}
+    ;; :to introduces a new local by a plain keyword field, the same
+    ;; pattern :flow/foreach's :as/:index-as use (see that registration's
+    ;; own comment on the bug this fixed for foreach) -- without
+    ;; :binds-locals here, cn.li.node.composite/rename-locals renames every
+    ;; {:ref [:local X ...]} READ of a :data/bind-introduced local (its
+    ;; first cond branch renames ANY {:ref [:local ...]} unconditionally)
+    ;; but leaves the :data/bind node's own :to WRITE unrenamed, since only
+    ;; :binds-locals-declared fields go through the second branch. A write
+    ;; to the literal name and reads of the renamed name never meet: caught
+    ;; by :combat/break-budget's accumulator-threading composite, which
+    ;; wrote :remaining via :data/bind and read it back via
+    ;; {:ref [:local :remaining]} one step later and got nil.
+    :binds-locals #{:to}
     :impl run-bind})
   (registry/register-primitive!
    {:id :flow/finish :revision 1
