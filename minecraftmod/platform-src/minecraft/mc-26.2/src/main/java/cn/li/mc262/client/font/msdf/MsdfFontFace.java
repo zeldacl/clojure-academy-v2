@@ -1,7 +1,6 @@
 package cn.li.mc262.client.font.msdf;
 
 import com.mojang.blaze3d.font.GlyphProvider;
-import com.mojang.blaze3d.font.TrueTypeGlyphProvider;
 import net.minecraft.client.gui.font.providers.FreeTypeUtil;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.stb.STBTTFontinfo;
@@ -31,6 +30,7 @@ public final class MsdfFontFace implements AutoCloseable {
     private final STBTTFontinfo fontInfo;
     private final ByteBuffer fontData;
     private final float scale;
+    private final float stbEquivalentScale;
     private final int ascent;
 
     public MsdfFontFace(final Path fontPath, final float pixelHeight) throws IOException {
@@ -56,8 +56,10 @@ public final class MsdfFontFace implements AutoCloseable {
             STBTruetype.stbtt_GetFontVMetrics(fontInfo, ascentBuf, descentBuf, lineGapBuf);
             this.ascent = ascentBuf.get(0);
         }
-        // 26.2 FreeType-backed provider, constructed exactly like vanilla
-        // TrueTypeGlyphProviderDefinition.load (size, oversample, shift, skip).
+        // FreeType-backed provider, constructed exactly like vanilla
+        // TrueTypeGlyphProviderDefinition.load (size, oversample, shift, skip),
+        // but with hinting disabled so bitmap tops match the unhinted STB
+        // reference 1.20.1 used (see MsdfFreeTypeGlyphProvider).
         final PointerBuffer facePtr = PointerBuffer.allocateDirect(1);
         synchronized (FreeTypeUtil.LIBRARY_LOCK) {
             FreeTypeUtil.assertError(
@@ -90,8 +92,15 @@ public final class MsdfFontFace implements AutoCloseable {
         final float stbEquivalentSize = vMetric > 0.0f
                 ? pixelHeight * face.units_per_EM() / vMetric
                 : pixelHeight;
+        // STB metrics for the vertical placement conversion must be measured
+        // at the same size as the FreeType provider (stbEquivalentSize), not
+        // at the nominal 32px: stbGlyphTop/descenderPixels are added to the
+        // FreeType bearingTop in MSDFAwareGlyph's shift, and mixing the two
+        // scales makes every glyph land at a slightly different height.
+        this.stbEquivalentScale =
+                STBTruetype.stbtt_ScaleForPixelHeight(fontInfo, stbEquivalentSize);
         this.glyphProvider =
-                new TrueTypeGlyphProvider(data, face, stbEquivalentSize, 1.0f, 0.0f, 0.0f, "");
+                new MsdfFreeTypeGlyphProvider(data, face, stbEquivalentSize, 1.0f, 0.0f, 0.0f, "");
     }
 
     public STBTTFontinfo fontInfo() {
@@ -137,9 +146,10 @@ public final class MsdfFontFace implements AutoCloseable {
     }
 
     /**
-     * Baseline-to-em-bottom distance in pixels (the descender share of the
-     * 32px em). 1.20.1's quad math anchored glyphs with
-     * pixelHeight - descenderPixels; see MSDFAwareGlyph's vertical formula.
+     * Baseline-to-em-bottom distance in pixels at the nominal (32px) scale —
+     * the value 1.20.1's quad math used. MSDFAwareGlyph rescales it with
+     * {@link #stbEquivalentFactor()} before combining with the FreeType
+     * bearingTop, keeping every term of the 1.20.1 formula in its own scale.
      */
     public float descenderPixels() {
         final int hheaAsc;
@@ -157,8 +167,8 @@ public final class MsdfFontFace implements AutoCloseable {
 
     /**
      * STB bitmap-top y-coordinate relative to the baseline for a code point,
-     * in scaled pixels (negative above the baseline — the signed value
-     * 1.20.1's provider used to position glyphs, see MSDFAwareGlyph).
+     * at the nominal (32px) scale — exactly the signed value 1.20.1's
+     * provider used to position glyphs (see MSDFAwareGlyph).
      */
     public float stbGlyphTop(final int codePoint) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -169,6 +179,36 @@ public final class MsdfFontFace implements AutoCloseable {
             STBTruetype.stbtt_GetCodepointBitmapBox(
                     fontInfo, codePoint, scale, scale, x0, y0, x1, y1);
             return y0.get(0);
+        }
+    }
+
+    /**
+     * Ratio of the FreeType provider's raster size to the nominal 32px
+     * (stbEquivalentSize / pixelHeight). 1.20.1's vertical placement formula
+     * is defined at 32px; the FreeType bearingTop the shift is combined with
+     * lives at the provider size, so the 32px terms are rescaled by this
+     * factor before summing.
+     */
+    public float stbEquivalentFactor() {
+        return stbEquivalentScale / scale;
+    }
+
+    /**
+     * STB bitmap-left x-coordinate relative to the baseline for a code point,
+     * at the nominal (32px) scale — the grid-aligned value 1.20.1's provider
+     * used (negative when the glyph sits left of the baseline). Added to the
+     * FreeType bearingLeft in MSDFAwareGlyph so the horizontal placement uses
+     * the same reference grid as the vertical one.
+     */
+    public float stbGlyphLeft(final int codePoint) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            final IntBuffer x0 = stack.mallocInt(1);
+            final IntBuffer y0 = stack.mallocInt(1);
+            final IntBuffer x1 = stack.mallocInt(1);
+            final IntBuffer y1 = stack.mallocInt(1);
+            STBTruetype.stbtt_GetCodepointBitmapBox(
+                    fontInfo, codePoint, scale, scale, x0, y0, x1, y1);
+            return x0.get(0);
         }
     }
 
