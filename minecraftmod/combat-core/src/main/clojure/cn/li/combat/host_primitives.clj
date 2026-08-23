@@ -341,8 +341,10 @@
 
    :world/explosion
    {:capability :world/explosion
-    :inputs {:position {:type :vec3} :radius {:type :double :min 0.0}}
-    :doc "Trigger a neutral terrain/entity explosion." :category :world}
+    :inputs {:position {:type :vec3} :radius {:type :double :min 0.0}
+             :owner {:type :string :default nil} :fire? {:type :boolean :default nil}
+             :terrain? {:type :boolean :default nil}}
+    :doc "Trigger a neutral terrain/entity explosion. :owner/:fire?/:terrain? are real optional fields content sends alongside :position/:radius -- same gap class found repeatedly this session." :category :world}
 
    :projectile/redirect
    {:capability :projectile/redirect

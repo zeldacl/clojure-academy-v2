@@ -6,6 +6,7 @@
  :inputs {:center {:type :vec3}
           :radius {:type :double :min 0.0}
           :amount {:type :double :min 0.0}
+          :damage-type {:type :keyword :default :generic}
           :limit {:type :long :default 128}}
  :outputs {}
  :body
@@ -21,4 +22,5 @@
     :as :target
     :body {:component :combat/damage
            :target {:ref [:local :target :id]}
-           :amount {:ref [:input :amount]}}}]}}
+           :amount {:ref [:input :amount]}
+           :damage-type {:ref [:input :damage-type]}}}]}}

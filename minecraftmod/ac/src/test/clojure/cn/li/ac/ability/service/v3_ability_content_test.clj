@@ -853,6 +853,113 @@
     (is (= :released (:outcome result)))
     (is (= 2 (count (:vfx-signals result))))))
 
+;; --- :plasma-cannon: the largest ability converted this session -- 9 v2
+;; :fragments inlined (some, like :charge-vfx-update, called 3 times), a
+;; multi-tick session-state flight simulation (:advance re-invoked every
+;; :pulse while :mode=1), :target/resolve-destination, :combat/area-damage
+;; (extended with :damage-type), :world/explosion (extended with :owner/
+;; :fire?/:terrain?) -- built with the Python EDN constructor, not by hand ---
+
+(def ^:private plasma-cannon-tunables
+  {:charge-time 20 :cost-tick-cp 0.05 :overload-keep 5.0 :targeting-distance 30.0
+   :block-hit-extra-distance 0.5 :max-flight-ticks 100 :damage 20.0 :damage-radius 3.0
+   :explosion-radius 2.0 :cooldown-ticks 60 :exp-use 0.02 :eye-height 1.6
+   :spawn-y-offset 1.0 :destination-epsilon 1.5 :sync-interval-ticks 5 :ground-search-distance 10.0})
+
+(defn- with-fake-plasma-raycast [{:keys [basic resolve-destination]} f]
+  (let [previous (get (:queries (capabilities/snapshot)) :raycast)]
+    (try
+      (capabilities/register-query!
+       :raycast (fn [request _frame]
+                  (if (= :resolve-destination (:query-kind request)) resolve-destination basic)))
+      (f)
+      (finally (when previous (capabilities/register-query! :raycast previous))))))
+
+(deftest plasma-cannon-v3-start-phase-charges-and-spawns-vfx-test
+  (with-fake-plasma-raycast {:basic {:hit? true :position {:vec3 [0.0 60.0 0.0]}}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :plasma-cannon "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/body {:x 0.0 :y 64.0 :z 0.0} :world/id "overworld"
+                            :rng/seed 3}
+                     :tunables plasma-cannon-tunables
+                     :context {:resources {:overload 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (some #(= :resource/add (:capability %)) (:actions result)))
+        (is (= 3 (count (:vfx-signals result))) "energy-orb + vortex-column + audio-loop spawn")))))
+
+(deftest plasma-cannon-v3-pulse-phase-charging-continues-when-affordable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :plasma-cannon "owner-1"
+                {:action :pulse
+                 :from {:caster/id "owner-1" :world/id "overworld" :charge/ticks 5}
+                 :tunables plasma-cannon-tunables
+                 :context {:resources {:cp 10.0}}
+                 :session-state {:mode 0}})]
+    (is (= :accepted (:status result)))
+    (is (= :charging (:outcome result)))))
+
+(deftest plasma-cannon-v3-release-phase-fires-when-fully-charged-test
+  (with-fake-plasma-raycast
+    {:basic {:entity-id "zombie-1" :position {:vec3 [0.0 65.0 10.0]}}
+     :resolve-destination {:position {:vec3 [0.0 65.0 10.0]}}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :plasma-cannon "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld" :charge/ticks 25}
+                     :tunables plasma-cannon-tunables
+                     :session-state {:mode 0}})]
+        (is (= :accepted (:status result)))
+        (is (= :released (:outcome result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")
+        (is (some #(= :session-patch (:type %)) (:actions result)) "session/write mode/destination/etc")))))
+
+(deftest plasma-cannon-v3-pulse-phase-flight-advances-without-impact-when-far-from-target-test
+  (with-fake-plasma-raycast {:basic {:hit? false}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :plasma-cannon "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :world/id "overworld"}
+                     :tunables plasma-cannon-tunables
+                     :session-state {:mode 1 :position {:vec3 [0.0 65.0 0.0]}
+                                     :destination {:position {:vec3 [0.0 65.0 50.0]}}
+                                     :flight-ticks 0 :sync-ticks 5}})]
+        (is (= :accepted (:status result)))
+        (is (= :flight (:outcome result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))))))
+
+(deftest plasma-cannon-v3-pulse-phase-flight-impacts-when-close-to-destination-test
+  (with-fake-plasma-raycast {:basic {:hit? false}}
+    (fn []
+      (let [previous-entities (get (:queries (capabilities/snapshot)) :entity/select)]
+        (try
+          (capabilities/register-query!
+           :entity/select (fn [_request _frame] [{:id "zombie-1"}]))
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :plasma-cannon "owner-1"
+                        {:action :pulse
+                         :from {:caster/id "owner-1" :world/id "overworld"}
+                         :tunables plasma-cannon-tunables
+                         :session-state {:mode 1 :position {:vec3 [0.0 65.0 0.0]}
+                                         :destination {:position {:vec3 [0.0 65.0 0.5]}}
+                                         :flight-ticks 0 :sync-ticks 5}})]
+            (is (= :accepted (:status result)))
+            (is (= :performed (:outcome result)))
+            (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %))) (:actions result)))
+            (is (some #(= :world/explosion (:capability %)) (:actions result))))
+          (finally
+            (when previous-entities (capabilities/register-query! :entity/select previous-entities))))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
