@@ -1264,6 +1264,64 @@
         (is (= :accepted (:status result)))
         (is (= :too-close (:outcome result)))))))
 
+;; --- :penetrate-teleport: 2 v2 :fragments inlined (:refresh-destination
+;; called 3x, :marker-signal called 4x with different args), the
+;; :target/penetration-destination composite ---
+
+(def ^:private penetrate-teleport-tunables
+  {:max-distance 30.0 :cp-per-block 0.5 :release-overload 0.0 :cooldown-ticks 40
+   :exp-per-distance 0.01 :scan-step 0.5})
+
+(deftest penetrate-teleport-v3-start-phase-marks-available-destination-test
+  (with-fake-raycast-handler
+    {:available? true :distance 10.0 :marker-position {:vec3 [0.0 65.0 10.0]} :position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :penetrate-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables penetrate-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (= 1 (count (:vfx-signals result))))
+        (is (= [255 255 255 255] (get-in (first (:vfx-signals result)) [:params :color])))))))
+
+(deftest penetrate-teleport-v3-release-phase-teleports-when-affordable-test
+  (with-fake-raycast-handler
+    {:available? true :distance 10.0 :marker-position {:vec3 [0.0 65.0 10.0]} :position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :penetrate-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables penetrate-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :teleported (:outcome result)))
+        (is (some #(= :entity/teleport (:capability %)) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)))))))
+
+(deftest penetrate-teleport-v3-release-phase-unavailable-when-not-teleportable-test
+  (with-fake-raycast-handler
+    {:available? false :distance 0.0 :marker-position {:vec3 [0.0 65.0 0.5]} :position {:vec3 [0.0 65.0 0.5]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :penetrate-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables penetrate-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :unavailable (:outcome result)))
+        (is (not (some #(= :entity/teleport (:capability %)) (:actions result))))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
