@@ -22,6 +22,8 @@
    friends with synthetic content)."
   (:require [clojure.test :refer [deftest is]]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
+            [cn.li.node.flow :as node-flow]
+            [cn.li.combat.structural-primitives :as structural]
             [cn.li.ac.ability.service.combat-catalog :as catalog]
             [cn.li.combat.skill-runtime :as skill-runtime]))
 
@@ -149,6 +151,36 @@
         (is (not (some #(= :entity/damage (:capability %)) (:actions result))))
         (is (some #(= :world/block-impact (:type %)) (:events result)))
         (is (some #(= :owner-patch (:type %)) (:actions result)))))))
+
+;; --- :combat/beam-strike: the real shipped R4 composite completing the
+;; R2 audit's last downgraded component (:host/beam-trace) -- proven
+;; directly here since no ability has been converted to use it yet
+;; (railgun.edn, the real caller, also needs :guard/resource/:txn/atomic
+;; item-consumption handling ported first; left for a follow-up) ---
+
+(deftest combat-beam-strike-composite-damages-in-axis-entities-through-real-manifest-test
+  (catalog/initialize!)
+  (let [actions (atom [])
+        dispatch-query!
+        (fn [capability _request]
+          (case capability
+            :entity/select [{:id "zombie-1" :type "zombie" :position {:x 0.0 :y 64.0 :z 5.0} :eye-height 0.0}]
+            :block/select []
+            nil))
+        ctx {:locals {} :seed 0 :dispatch structural/dispatch
+             :world-id "overworld" :owner "owner-1" :ability-id :test-beam :activation-seed 1
+             :dispatch-action! (fn [capability request] (swap! actions conj [capability request]))
+             :dispatch-query! dispatch-query!}
+        result (node-flow/execute!
+                {:component :combat/beam-strike
+                 :origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]}
+                 :length 10.0 :radius 1.0 :damage 15.0 :damage-type :skill
+                 :bind {:beam :beam}}
+                ctx)]
+    (is (= "zombie-1" (get-in result [:locals :beam :entities 0 :id])))
+    (is (some #(and (= :entity/damage (first %)) (= "zombie-1" (:target (second %)))
+                    (= 15.0 (:amount (second %))))
+              @actions))))
 
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)

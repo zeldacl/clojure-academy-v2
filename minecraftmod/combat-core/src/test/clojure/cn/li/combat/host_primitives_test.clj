@@ -21,7 +21,7 @@
   #{:target/raycast :target/raycast-fan :target/resolve-destination :target/block-placement
     :target/directional-destination-query :target/entities :target/entity-snapshot
     :owner/snapshot :target/item-held :target/saved-location :energy/target
-    :target/blocks :terrain/propagate})
+    :target/blocks :terrain/propagate :target/beam-trace})
 
 (def ^:private action-ids
   #{:inventory/consume :inventory/settle :inventory/place-or-drop :combat/damage
@@ -50,7 +50,7 @@
     (is (nil? (node/descriptor id)) (str id " must not be registered as a primitive -- it is a confirmed R4 composite"))))
 
 (deftest query-count-matches-audit-test
-  (is (= 13 (count query-ids)))
+  (is (= 14 (count query-ids)))
   (is (= (count query-ids)
          (count (filter #(contains? (:effects (node/descriptor %)) :query) query-ids)))))
 
@@ -145,6 +145,37 @@
     (runtime/invoke-primitive! :world/lightning {:position {:vec3 [1.0 64.0 1.0]}} ctx)
     (is (= :world/lightning (first @seen)))
     (is (= {:vec3 [1.0 64.0 1.0]} (:position (second @seen))))))
+
+(deftest beam-trace-impl-computes-falloff-and-excludes-out-of-radius-entities-test
+  ;; Same geometry cn.li.combat.beam/trace-core has always computed (shared
+  ;; with v2's :host/beam-trace via trace!) -- entity A sits dead-center on
+  ;; the beam axis 5 blocks out (radial 0 -> full falloff); entity B is 5
+  ;; blocks off-axis, well past radius*1.2, and must be excluded entirely.
+  (let [queries (atom [])
+        dispatch-query!
+        (fn [capability request]
+          (swap! queries conj [capability request])
+          (case capability
+            :entity/select
+            [{:id "entity-a" :type "zombie" :position {:x 0.0 :y 64.0 :z 5.0} :eye-height 0.0}
+             {:id "entity-b" :type "zombie" :position {:x 5.0 :y 64.0 :z 5.0} :eye-height 0.0}]
+            :block/select [{:position {:x 0.0 :y 63.0 :z 1.0} :hardness 1.0 :block-id :stone}]
+            nil))
+        ctx (fake-ctx nil dispatch-query!)
+        result (runtime/invoke-primitive!
+                :target/beam-trace
+                {:origin {:vec3 [0.0 64.0 0.0]} :direction {:vec3 [0.0 0.0 1.0]}
+                 :length 10.0 :radius 1.0 :damage 20.0 :damage-type :skill}
+                ctx)
+        beam (:beam result)]
+    (is (= 1 (count (:entities beam))))
+    (is (= "entity-a" (:id (first (:entities beam)))))
+    (is (= 20.0 (:damage (first (:entities beam))))
+        "radial 0 on-axis -> falloff 1.0 -> full damage")
+    (is (= :skill (:damage-type (first (:entities beam)))))
+    (is (pos? (count (:blocks beam))))
+    (is (some #(= :block/select (first %)) @queries))
+    (is (some #(= :entity/select (first %)) @queries))))
 
 (deftest impl-only-receives-declared-inputs-test
   ;; invoke-primitive! filters unresolved/extraneous fields away -- proves

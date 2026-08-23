@@ -28,7 +28,8 @@
    node-core's runtime; the old vm.clj execute-component!/emit-component!
    keeps running every existing ability unchanged until R5's cutover (see
    source_nodes.clj's docstring for the same note)."
-  (:require [cn.li.node.descriptor :as node]))
+  (:require [cn.li.node.descriptor :as node]
+            [cn.li.combat.beam :as beam]))
 
 (defn- action-impl
   "Build the :impl for a component that dispatches to `capability` through
@@ -323,6 +324,21 @@
     :inputs {:resource {:type :keyword} :amount {:type :double}}
     :doc "Add to a resource." :category :resource}})
 
+(defn- beam-trace-impl
+  "Port of cn.li.combat.beam/trace! for v3: same cn.li.combat.beam/trace-core
+   geometry/falloff/reflection/block-sampling computation (unchanged, shared
+   with v2), driven through ctx's :dispatch-query! instead of a HostTable --
+   :block/select, :entity/select and (when :reflection-policy is set)
+   :interaction/resolve are all plain registered query capabilities, not a
+   single host call, which is why this stays :layer :primitive rather than
+   an EDN composite (R2 audit; NODE_LANGUAGE.md's three-layer rule only
+   requires a primitive be implemented as Clojure, not that it make exactly
+   one host call)."
+  [inputs ctx]
+  (let [query! (fn [query] ((:dispatch-query! ctx) (:capability query) query))
+        request (assoc inputs :owner (:owner ctx) :world-id (:world-id ctx))]
+    {:beam (beam/trace-core query! request)}))
+
 (defn install!
   "Register every confirmed true-primitive query/action component. Call
    once per registry lifetime, before node/freeze!."
@@ -336,4 +352,17 @@
     (node/register-primitive!
      {:id id :revision 1 :doc doc :category category
       :inputs inputs :outputs {} :effects #{:mutate}
-      :impl (action-impl capability)})))
+      :impl (action-impl capability)}))
+  (node/register-primitive!
+   {:id :target/beam-trace :revision 1 :category :targeting
+    :doc "Trace a bounded beam: entities within :radius of the beam's axis (falloff-weighted damage, optional :reflection-policy) and blocks sampled along it. Not decomposable into a single host call -- see beam-trace-impl."
+    :inputs {:origin {:type :vec3} :trace-origin {:type :vec3 :default nil}
+             :direction {:type :vec3} :length {:type :double :min 0.0}
+             :visual-length {:type :double :default nil} :radius {:type :double :min 0.0}
+             :query-radius {:type :double :default nil} :entity-limit {:type :long :default 256}
+             :damage {:type :double :default 0.0} :damage-type {:type :keyword :default :generic}
+             :block-limit {:type :long :default 4096} :reflection-policy {:type :map :default nil}
+             :step {:type :double :default nil}}
+    :outputs {:beam {:type :map}}
+    :effects #{:query}
+    :impl beam-trace-impl}))

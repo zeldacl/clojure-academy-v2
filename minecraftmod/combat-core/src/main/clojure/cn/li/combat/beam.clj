@@ -27,8 +27,14 @@
                :projection [:position :hardness :block-id]
                :limit 4096}) []))
 
-(defn trace!
-  [^HostTable host capability-order ^ExecutionFrame frame request]
+(defn trace-core
+  "The pure beam-trace computation: geometry, entity falloff/reflection, and
+   bounded block sampling, driven entirely through `query!` (fn [query-map]
+   -> query-result). Shared by v2's trace! (query! built from a HostTable)
+   and v3's cn.li.combat.host-primitives/beam-trace-impl (query! built from
+   ctx's :dispatch-query!) -- extracted so the two calling conventions never
+   duplicate this math."
+  [query! request]
   (let [{:keys [owner world-id origin trace-origin direction length visual-length radius
                 query-radius entity-limit damage damage-type block-limit
                 reflection-policy step]} request
@@ -40,11 +46,7 @@
         radius (double (or radius 0.0))
         query-radius (double (or query-radius length))
         step (double (or step 0.9))
-        entity-limit (max 0 (min 256 (long (or entity-limit 256))))
-        query! (fn [query]
-                 (host/invoke-query-capability!
-                  host capability-order (:capability query)
-                  (effect-contract/query-request query) frame))]
+        entity-limit (max 0 (min 256 (long (or entity-limit 256))))]
     (when (and origin direction world-id (pos? length) (pos? entity-limit))
       (let [[ox oy oz] origin
             [tx ty tz] trace-origin
@@ -128,3 +130,12 @@
                :z (+ oz (* dz (min length visual-length)))}
          :entities entities
          :blocks blocks}))))
+
+(defn trace!
+  [^HostTable host capability-order ^ExecutionFrame frame request]
+  (trace-core
+   (fn [query]
+     (host/invoke-query-capability!
+      host capability-order (:capability query)
+      (effect-contract/query-request query) frame))
+   request))

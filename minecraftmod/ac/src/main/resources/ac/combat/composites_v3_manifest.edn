@@ -11,4 +11,5 @@
   {:kind :composite :id :combat/impact-strike :resource "ac/combat/composites_v3/impact_strike.edn"}
   {:kind :composite :id :target/hold-destination :resource "ac/combat/composites_v3/target_hold_destination.edn"}
   {:kind :composite :id :target/directional-destination :resource "ac/combat/composites_v3/target_directional_destination.edn"}
-  {:kind :composite :id :target/penetration-destination :resource "ac/combat/composites_v3/target_penetration_destination.edn"}]}
+  {:kind :composite :id :target/penetration-destination :resource "ac/combat/composites_v3/target_penetration_destination.edn"}
+  {:kind :composite :id :combat/beam-strike :resource "ac/combat/composites_v3/beam_strike.edn"}]}
