@@ -166,7 +166,33 @@
    :terrain/propagate
    {:capability :terrain/propagate :output :plan
     :inputs {:origin {:type :vec3} :direction {:type :vec3} :max-iterations {:type :long :min 0}
-             :initial-energy {:type :double} :spread {:type :double} :energy-cost {:type :double}}
+             :initial-energy {:type :double}
+             :entity-search-radius {:type :double :default nil}
+             ;; v2's own component schema (components.clj) only ever marked
+             ;; :origin/:direction/:max-iterations/:initial-energy/:spread/
+             ;; :energy-cost :required -- and even got :spread/:energy-cost's
+             ;; TYPE wrong relative to real content (both are maps, not
+             ;; doubles). v2's opcode VM never filtered a component's fields
+             ;; down to a declared schema, so the one real ability that
+             ;; calls this has always sent a much larger real field set
+             ;; straight through unfiltered; declared
+             ;; here so invoke-primitive! (which DOES filter) doesn't
+             ;; silently drop them -- the same gap class found repeatedly
+             ;; this session (:projectile/schedule-beam's selector fields,
+             ;; :target/entities' :filter, :motion/velocity's :dismount?/
+             ;; :reset-fall-damage?).
+             :spread {:type :map}
+             :energy-cost {:type :map}
+             :block-transforms {:type :map :default nil}
+             :ground-break-probability {:type :double :default nil}
+             :drop-probability {:type :double :default nil}
+             :launch-base {:type :double :default nil}
+             :launch-span {:type :double :default nil}
+             :seed {:type :long :default nil}
+             :mastery {:type :double :default nil}
+             :mastery-threshold {:type :double :default nil}
+             :mastery-radius {:type :long :default nil}
+             :mastery-hardness-cap {:type :double :default nil}}
     :output-type :terrain-plan
     :doc "Bounded dynamic-frontier terrain propagation; the host returns a deterministic mutation plan, EDN decides how to apply it. Not decomposable into :flow/foreach -- each step's candidate set depends on the previous step's result, which a static-length loop cannot express."
     :category :world}})
@@ -294,8 +320,9 @@
 
    :block/set
    {:capability :block/set
-    :inputs {:position {:type :vec3} :block-id {:type :keyword}}
-    :doc "Set one block." :category :world}
+    :inputs {:position {:type :vec3} :block-id {:type :keyword}
+             :expected-block-ids {:type [:list-of :any] :default nil}}
+    :doc "Set one block, optionally guarded by :expected-block-ids (only apply if the current block still matches, e.g. a terrain-propagation plan computed a step ago)." :category :world}
 
    :world/sound
    {:capability :world/sound
