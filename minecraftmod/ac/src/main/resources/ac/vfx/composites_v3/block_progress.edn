@@ -2,7 +2,7 @@
  :id :vfx.fx/block-progress
  :revision 1
  :layer :mid
- :doc "A shrinking, pulsing box outline around a block-sized target position -- the generic progress indicator used by block_progress_session.edn and (with :corner-length > 0) target_box_session.edn. Faithful port of the old :vfx/block-progress Clojure component's box-corner/edge/pulse math into real :vfx/line geometry, composed in pure EDN. :height defaults to :width when omitted (matches the original component's (or height width)). :vfx/group (not :vfx/timeline) fans out to all 12/24 fixed edges every tick -- see cn.li.vfx.vm's own :vfx/group docstring for why :vfx/timeline's {:at :node}-wrapped :children shape does not fit node-core's :seq expansion kind."
+ :doc "A shrinking, pulsing box outline around a block-sized target position -- the generic progress indicator used by block_progress_session.edn and (with :corner-length > 0) target_box_session.edn. Faithful port of the old :vfx/block-progress Clojure component's box-corner/edge/pulse math into real :vfx/line geometry, composed in pure EDN. :height defaults to :width when omitted (matches the original component's (or height width)). :vfx/group (not :vfx/timeline) fans out to all 12/24 fixed edges every tick -- see cn.li.vfx.vm's own :vfx/group docstring for why :vfx/timeline's {:at :node}-wrapped :children shape does not fit node-core's :seq expansion kind. :tx/:ty/:tz extract :target's x/y/z via {:expr :vec3/x|y|z ...}, NOT {:ref [:input :target :vec3 0]} -- composite expansion substitutes a composite's own declared :inputs at EXPAND TIME (compile time), before the caller's own {:ref [:input :position]}-style argument has a real value; a nested-path :ref tries to (get-in ...) into that argument's LITERAL shape immediately and silently returns nil when the argument is itself still an unresolved reference (which is what every real ability actually passes -- target_box_session.edn's call site is :target {:ref [:input :position]}, never a literal). Wrapping the extraction in {:expr ...} defers it to SAMPLE time instead, by which point resolve-value has already resolved the argument against the real runtime :input. A first version of this file used the nested-path shortcut and passed every test here only because the tests happened to call the composite directly with a literal {:vec3 [...]} -- never through a caller-scope reference the way real content does; see this file's own composite-loader test coverage for the regression that catches it now."
  :category :indicator
  :inputs {:target {:type :vec3}
           :progress {:type :double :default 0.0}
@@ -15,9 +15,9 @@
  :body
  {:component :vfx/let
   :bindings
-  {:tx {:ref [:input :target :vec3 0]}
-   :ty {:ref [:input :target :vec3 1]}
-   :tz {:ref [:input :target :vec3 2]}
+  {:tx {:expr :vec3/x :args [{:ref [:input :target]}]}
+   :ty {:expr :vec3/y :args [{:ref [:input :target]}]}
+   :tz {:expr :vec3/z :args [{:ref [:input :target]}]}
    :progress-c {:expr :math/clamp :args [{:ref [:input :progress]} 0.0 1.0]}
    :age {:ref [:state :age]}
    :corner-decorated? {:expr :math/gt :args [{:ref [:input :corner-length]} 0.0]}

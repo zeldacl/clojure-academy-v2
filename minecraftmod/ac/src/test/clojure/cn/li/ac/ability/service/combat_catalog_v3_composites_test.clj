@@ -115,3 +115,36 @@
       (is (< (Math/abs (- 64.0 (.-y p1))) 1.0e-9))
       (is (< (Math/abs (- 64.2 (.-y p2))) 1.0e-9))
       (is (< (Math/abs (- (.-x p1) (.-x p2))) 1.0e-9)))))
+
+(deftest block-progress-composite-resolves-target-through-a-caller-scope-reference-test
+  ;; Regression: a first version of block_progress.edn extracted :target's
+  ;; x/y/z via {:ref [:input :target :vec3 0]} -- a nested-path :ref, which
+  ;; cn.li.node.composite/substitute-inputs resolves at composite EXPAND
+  ;; time (compile time) against whatever value the CALL SITE supplied.
+  ;; Every earlier test here called the composite directly with a literal
+  ;; {:vec3 [...]}, which masked the bug -- but target_box_session.edn (the
+  ;; real content) calls it as :target {:ref [:input :position]}, an
+  ;; UNRESOLVED reference into the caller's own scope, only resolvable once
+  ;; sampling actually runs. get-in-ing into that reference map at expand
+  ;; time silently returned nil, so :tx/:ty/:tz all came out 0.0 regardless
+  ;; of the real target position. This test reproduces the real call shape
+  ;; -- a :vfx/let binding a real position under :position, with the
+  ;; composite call referencing {:ref [:input :position]} for :target,
+  ;; exactly like target_box_session.edn's own :graph -- to prove the
+  ;; {:expr :vec3/x|y|z ...} fix actually resolves at sample time instead.
+  (catalog/initialize!)
+  (let [batches (atom [])
+        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        call {:component :vfx/let
+              :bindings {:position {:vec3 [3.0 70.0 -5.0]}}
+              :child {:component :vfx.fx/block-progress
+                      :target {:ref [:input :position]}
+                      :progress 0.0 :color [1.0 1.0 1.0 1.0] :width 1.0}}]
+    (vfx-vm/sample-node! call {:input {} :state {:age 0.0} :seed 0 :sink sink})
+    (is (= 12 (count @batches)))
+    (let [op (first (:ops (first (:payload (first @batches)))))
+          p1 ^V3 (:p1 op)]
+      ;; shrink = 0.05 * (1 - 0.0) = 0.05; min corner = target + shrink.
+      (is (< (Math/abs (- 3.05 (.-x p1))) 1.0e-9))
+      (is (< (Math/abs (- 70.05 (.-y p1))) 1.0e-9))
+      (is (< (Math/abs (- -4.95 (.-z p1))) 1.0e-9)))))

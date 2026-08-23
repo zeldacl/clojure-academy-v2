@@ -91,6 +91,7 @@
        :math/abs (double (Math/abs (double (nth args 0))))
        :math/floor (double (Math/floor (double (nth args 0))))
        :math/sqrt (double (Math/sqrt (double (nth args 0))))
+       :math/pow (double (Math/pow (double (nth args 0)) (double (nth args 1))))
        :math/sin (double (Math/sin (double (nth args 0))))
        :math/cos (double (Math/cos (double (nth args 0))))
        :math/clamp (let [v (double (nth args 0)) lo (double (nth args 1)) hi (double (nth args 2))]
@@ -138,6 +139,9 @@
        :vec3/length
        (let [[x y z] (vec3-components (nth args 0))]
          (Math/sqrt (+ (* (double x) (double x)) (* (double y) (double y)) (* (double z) (double z)))))
+       :vec3/x (double (nth (vec3-components (nth args 0)) 0))
+       :vec3/y (double (nth (vec3-components (nth args 0)) 1))
+       :vec3/z (double (nth (vec3-components (nth args 0)) 2))
        :vec3/normalize
        (let [[x y z] (vec3-components (nth args 0))
              len (Math/sqrt (+ (* (double x) (double x)) (* (double y) (double y)) (* (double z) (double z))))]
