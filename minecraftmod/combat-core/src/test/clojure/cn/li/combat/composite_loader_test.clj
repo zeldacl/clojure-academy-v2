@@ -57,3 +57,15 @@
     (is (= 0.0 vx))
     (is (= 0.0 vy))
     (is (= 10.0 vz))))
+
+(deftest status-id-and-max-amplifier-ops-parse-the-colon-encoded-effect-string-test
+  ;; Real content encodes a status effect as one string, "effect:amplifier"
+  ;; (the same plain, unnamespaced :status-id convention :combat/status
+  ;; content already uses elsewhere, e.g. :slowness/:blindness) -- ported
+  ;; from v2's own (non-shared) :value/status-id/:value/status-max-
+  ;; amplifier opcodes.
+  (composite-loader/install-expr-ops!)
+  (is (= :speed (expr/evaluate :value/status-id ["speed:2"])))
+  (is (= 2 (expr/evaluate :value/status-max-amplifier ["speed:2"])))
+  (is (= 0 (expr/evaluate :value/status-max-amplifier ["speed"]))
+      "a missing amplifier defaults to 0"))

@@ -51,6 +51,14 @@
     (is (= :done (:outcome result)))
     (is (not (contains? (:locals result) :should-not-run)))))
 
+(deftest finish-defaults-finish-session-to-false-but-carries-it-when-set-test
+  (let [default-result (flow/execute! {:component :flow/finish :outcome :done}
+                                      {:locals {} :seed 0 :dispatch dispatch-noop})
+        flagged-result (flow/execute! {:component :flow/finish :outcome :done :finish-session? true}
+                                      {:locals {} :seed 0 :dispatch dispatch-noop})]
+    (is (false? (:finish-session? default-result)))
+    (is (true? (:finish-session? flagged-result)))))
+
 (deftest dispatch-handles-unknown-component-test
   (let [seen (atom nil)
         program {:component :test/custom :x 1}

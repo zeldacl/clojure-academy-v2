@@ -556,6 +556,86 @@
         (is (= :miss (:outcome result)))
         (is (not (some #(= :entity/damage (:capability %)) (:actions result))))))))
 
+;; --- :body-intensify: 3 v2 :fragments (:stop-charge, :fail, :apply-buffs)
+;; inlined at their call sites (no v3 local-composite mechanism exists),
+;; plus the new :value/status-id/:value/status-max-amplifier domain expr
+;; ops and a nested {:ref [:context :resources :overload]} multi-segment
+;; path (read via :ability/context :name :resources then an ordinary
+;; nested :local ref, not a change to :ability/context itself) ---
+
+(def ^:private body-intensify-tunables
+  {:charge-min-ticks 5 :charge-max-ticks 100 :charge-max-tolerant-ticks 140
+   :effect-probability-offset-ticks 20.0 :effect-probability-divisor 20.0
+   :effect-duration-multiplier 1.0 :effect-hunger-multiplier 0.5 :effect-hunger-amplifier 0
+   :effect-available-effects ["speed:2"]
+   :cost-down-overload 5.0 :cost-tick-cp 0.1 :cooldown-ticks 40.0 :progression-exp-use 0.01})
+
+(deftest body-intensify-v3-start-phase-initializes-session-and-spawns-vfx-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :body-intensify "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables body-intensify-tunables
+                 :context {:resources {:overload 20.0}}})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (some #(= :session-patch (:type %)) (:actions result)))
+    (is (= 2 (count (:vfx-signals result))) "arc-channel-session + audio-loop-session spawn")))
+
+(deftest body-intensify-v3-pulse-phase-charges-when-affordable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :body-intensify "owner-1"
+                {:action :pulse
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables body-intensify-tunables
+                 :context {:resources {:cp 10.0 :overload 20.0}}
+                 :session-state {:hold-ticks 0 :overload-floor 15.0}})]
+    (is (= :accepted (:status result)))
+    (is (= :continue (:outcome result)))
+    (is (some #(= :session-patch (:type %)) (:actions result)))))
+
+(deftest body-intensify-v3-pulse-phase-rejects-when-insufficient-cp-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :body-intensify "owner-1"
+                {:action :pulse
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables body-intensify-tunables
+                 :context {:resources {:cp 0.0 :overload 20.0}}
+                 :session-state {:hold-ticks 0 :overload-floor 15.0}})]
+    (is (= :accepted (:status result)))
+    (is (= :insufficient-resource (:outcome result)))
+    (is (true? (:finish-session? result))
+        "a :pulse-phase early termination must set :finish-session? or the session lingers forever")))
+
+(deftest body-intensify-v3-release-phase-applies-hunger-and-scores-when-charged-enough-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :body-intensify "owner-1"
+                {:action :release
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables body-intensify-tunables
+                 :session-state {:hold-ticks 30}})]
+    (is (= :accepted (:status result)))
+    (is (= :performed (:outcome result)))
+    (is (some #(and (= :entity/status (:capability %)) (= :hunger (:status-id %))) (:actions result)))
+    (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")
+    (is (= 3 (count (:vfx-signals result))) "arc-channel destroy + audio-loop destroy + endpoint-burst spawn")))
+
+(deftest body-intensify-v3-release-phase-rejects-when-not-charged-enough-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :body-intensify "owner-1"
+                {:action :release
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables body-intensify-tunables
+                 :session-state {:hold-ticks 1}})]
+    (is (= :accepted (:status result)))
+    (is (= :not-ready (:outcome result)))
+    (is (not (some #(= :entity/status (:capability %)) (:actions result))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!

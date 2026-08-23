@@ -161,7 +161,8 @@
      :actions @actions*
      :vfx @vfx-signals*
      :events @events*
-     :outcome (:outcome result-ctx)}))
+     :outcome (:outcome result-ctx)
+     :finish-session? (boolean (:finish-session? result-ctx))}))
 
 (defn execute!
   [catalog ability-id owner intent]

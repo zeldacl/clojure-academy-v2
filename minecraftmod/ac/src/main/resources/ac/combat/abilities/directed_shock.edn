@@ -101,7 +101,7 @@
         :operation :destroy
         :instance-key [:activation :directed-shock-hand]
         :payload {}}
-       {:component :flow/finish :outcome :aborted}]}
+       {:component :flow/finish :outcome :aborted :finish-session? true}]}
      :else
      {:component :flow/sequence
       :steps
@@ -118,7 +118,7 @@
            :operation :destroy
            :instance-key [:activation :directed-shock-hand]
            :payload {}}
-          {:component :flow/finish :outcome :performed}]}
+          {:component :flow/finish :outcome :performed :finish-session? true}]}
         :else {:component :flow/finish :outcome :charging}}]}}]}
   :release
   {:component :flow/sequence
@@ -156,7 +156,7 @@
            :operation :destroy
            :instance-key [:activation :directed-shock-hand]
            :payload {}}
-          {:component :flow/finish :outcome :insufficient-resource}]}
+          {:component :flow/finish :outcome :insufficient-resource :finish-session? true}]}
         :else
         {:component :flow/sequence
          :steps
@@ -243,7 +243,7 @@
              {:component :session/write :key :punch-ticks :value 0}
              {:component :score/mark :progression {:ref [:local :hit-progression]}}
              {:component :cooldown/start :name :main :cooldown {:ref [:local :main-cooldown]}}
-             {:component :flow/finish :outcome :punched}]}
+             {:component :flow/finish :outcome :punched :finish-session? true}]}
            :else
            {:component :flow/sequence
             :steps
@@ -253,7 +253,7 @@
               :operation :destroy
               :instance-key [:activation :directed-shock-hand]
               :payload {}}
-             {:component :flow/finish :outcome :miss}]}}]}}]}
+             {:component :flow/finish :outcome :miss :finish-session? true}]}}]}}]}
      :else
      {:component :flow/sequence
       :steps
@@ -262,7 +262,7 @@
         :operation :destroy
         :instance-key [:activation :directed-shock-hand]
         :payload {}}
-       {:component :flow/finish :outcome :undercharged}]}}]}
+       {:component :flow/finish :outcome :undercharged :finish-session? true}]}}]}
   :abort
   {:component :flow/sequence
    :steps
@@ -271,5 +271,5 @@
      :operation :destroy
      :instance-key [:activation :directed-shock-hand]
      :payload {}}
-    {:component :flow/finish :outcome :aborted}]}
+    {:component :flow/finish :outcome :aborted :finish-session? true}]}
   :events {}}}
