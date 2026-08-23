@@ -22,7 +22,7 @@
   (catalog/initialize!)
   (doseq [id [:combat/area-damage :combat/radial-impulse :combat/teleport-group
               :combat/area-break :combat/release-with-cost :fx/lightning-strike
-              :combat/break-budget]]
+              :combat/break-budget :target/raycast-destination]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite")))
   (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress :vfx.fx/trajectory-ribbon]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite"))))
@@ -237,3 +237,34 @@
     (is (every? #(= :block/break (first %)) @actions))
     (is (every? #(false? (:drop? (second %))) @actions)
         "default :drop-chance 0.0 never drops")))
+
+(deftest raycast-destination-composite-exposes-both-outputs-and-tags-the-right-query-kind-test
+  ;; Proves the composite :outputs mechanism itself (:from [:local ...] ->
+  ;; a :data/bind step appended after the body) against REAL shipped
+  ;; content, not just node-core's own synthetic fixtures -- and proves
+  ;; :target/resolve-destination's :query-kind fix (43117928c) actually
+  ;; reaches the second host call this composite makes.
+  (catalog/initialize!)
+  (let [queries (atom [])
+        ctx {:locals {} :seed 0 :dispatch combat-structural/dispatch
+             :world-id "overworld" :owner "player-1"
+             :dispatch-query! (fn [capability request]
+                                (swap! queries conj [capability request])
+                                (if (= capability :raycast)
+                                  (if (contains? request :hit)
+                                    {:x 5.0 :y 65.0 :z 0.0}
+                                    {:hit-type :block :x 4.0 :y 64.0 :z 0.0})
+                                  nil))}
+        result (node-flow/execute!
+                {:component :target/raycast-destination
+                 :origin {:vec3 [0.0 64.0 0.0]}
+                 :direction {:vec3 [0.0 0.0 1.0]}
+                 :distance 8.0
+                 :bind {:hit :h :destination :d}}
+                ctx)]
+    (is (= 2 (count @queries)))
+    (is (nil? (:query-kind (second (first @queries))))
+        "the first call (:target/raycast) must NOT tag a :query-kind")
+    (is (= :resolve-destination (:query-kind (second (second @queries)))))
+    (is (= {:hit-type :block :x 4.0 :y 64.0 :z 0.0} (get-in result [:locals :h])))
+    (is (= {:x 5.0 :y 65.0 :z 0.0} (get-in result [:locals :d])))))
