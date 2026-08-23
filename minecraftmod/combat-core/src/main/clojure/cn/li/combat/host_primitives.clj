@@ -229,8 +229,9 @@
 
    :entity/mark
    {:capability :entity/mark
-    :inputs {:target {:type :entity-ref} :mark-type {:type :keyword}}
-    :doc "Apply a neutral entity mark." :category :entity}
+    :inputs {:target {:type :entity-ref} :mark-type {:type :keyword}
+             :duration-ticks {:type :long :default nil} :requires-ability {:type :keyword :default nil}}
+    :doc "Apply a neutral entity mark. :duration-ticks/:requires-ability are real optional fields content sends alongside :target/:mark-type -- same gap class found repeatedly this session (v2's opcode VM never filtered a component's fields down to a declared schema)." :category :entity}
 
    :energy/charge
    {:capability :energy/charge

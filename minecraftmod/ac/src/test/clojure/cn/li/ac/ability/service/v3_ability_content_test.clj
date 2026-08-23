@@ -422,6 +422,67 @@
     (is (= :not-performable (:outcome result)))
     (is (not (some #(= :motion/velocity (:capability %)) (:actions result))))))
 
+;; --- :ray-barrage: raycast + two-stage :target/entities (sphere then
+;; cone) + a behavior-triggered fan branch vs. a plain single-target
+;; branch, all using the ordinary static :ability/budget|progression|
+;; cooldown source nodes (unlike location-teleport's dynamic case) ---
+
+(defn- with-fake-ray-barrage-queries [{:keys [hit silbarn-candidates scatter-targets]} f]
+  (let [previous-raycast (get (:queries (capabilities/snapshot)) :raycast)
+        previous-entity (get (:queries (capabilities/snapshot)) :entity/select)]
+    (try
+      (capabilities/register-query! :raycast (fn [_request _frame] hit))
+      (capabilities/register-query!
+       :entity/select
+       (fn [request _frame]
+         (if (= :sphere (get-in request [:shape :type])) silbarn-candidates scatter-targets))
+       )
+      (f)
+      (finally
+        (when previous-raycast (capabilities/register-query! :raycast previous-raycast))
+        (when previous-entity (capabilities/register-query! :entity/select previous-entity))))))
+
+(def ^:private ray-barrage-fixture
+  {:action :start
+   :from {:caster/id "owner-1" :caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+          :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+   :tunables {:plain-damage 10.0 :scattered-damage 4.0 :targeting-range 32.0 :scatter-cone-angle 20.0
+              :cost-down-cp 3.0 :cost-down-overload 0.0 :cooldown-ticks 60 :exp-hit 0.02}
+   :context {:resources {:cp 10.0}}})
+
+(deftest ray-barrage-v3-triggers-fan-branch-when-silbarn-found-and-not-behavior-hit-test
+  (with-fake-ray-barrage-queries
+    {:hit {:entity-id "silbarn-1" :position {:vec3 [0.0 65.6 10.0]}}
+     :silbarn-candidates [{:id "silbarn-1" :type "academy:entity_silbarn" :position {:vec3 [0.0 65.6 10.0]}
+                           :behavior-hit? false}]
+     :scatter-targets [{:id "victim-1" :type "zombie" :position {:vec3 [1.0 65.6 10.0]} :eye-height 0.0}]}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute! state :ray-barrage "owner-1" ray-barrage-fixture)]
+        (is (= :accepted (:status result)))
+        (is (= :performed (:outcome result)))
+        (is (some #(and (= :entity/trigger-behavior (:capability %))) (:actions result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "victim-1" (:target %)) (= 4.0 (:amount %)))
+                  (:actions result)))
+        (is (some #(= :entity/mark (:capability %)) (:actions result)))
+        (is (= 4 (count (:vfx-signals result)))
+            "beam + audio + fan + audio")))))
+
+(deftest ray-barrage-v3-falls-back-to-plain-damage-when-no-silbarn-test
+  (with-fake-ray-barrage-queries
+    {:hit {:entity-id "zombie-1" :position {:vec3 [0.0 65.6 10.0]}}
+     :silbarn-candidates []
+     :scatter-targets []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute! state :ray-barrage "owner-1" ray-barrage-fixture)]
+        (is (= :accepted (:status result)))
+        (is (= :performed (:outcome result)))
+        (is (not (some #(= :entity/trigger-behavior (:capability %)) (:actions result))))
+        (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %)) (= 10.0 (:amount %)))
+                  (:actions result)))
+        (is (= 2 (count (:vfx-signals result))) "beam + audio, no fan")))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
