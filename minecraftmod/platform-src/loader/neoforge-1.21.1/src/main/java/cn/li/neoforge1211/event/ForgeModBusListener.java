@@ -6,7 +6,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.data.event.GatherDataEvent;
 
-@EventBusSubscriber(modid = AcademyCraft1211.MODID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = AcademyCraft1211.MODID)
 public final class ForgeModBusListener {
     private ForgeModBusListener() {
     }

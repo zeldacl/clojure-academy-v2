@@ -1,11 +1,12 @@
 package cn.li.neoforge1211.shim;
 
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.neoforged.neoforge.fluids.FluidType;
 
-import java.util.function.Consumer;
-
+/**
+ * Fluid type carrying the texture/tint data consumed by RegisterClientExtensionsEvent
+ * (the 1.21.1 replacement for the removed {@code initializeClient} hook).
+ */
 public final class ForgeFlowingFluidType extends FluidType {
     private final ResourceLocation stillTexture;
     private final ResourceLocation flowingTexture;
@@ -24,29 +25,19 @@ public final class ForgeFlowingFluidType extends FluidType {
         this.tintColor = tintColor;
     }
 
-    @Override
-    public void initializeClient(Consumer<IClientFluidTypeExtensions> consumer) {
-        consumer.accept(new IClientFluidTypeExtensions() {
-            @Override
-            public ResourceLocation getStillTexture() {
-                return stillTexture;
-            }
+    public ResourceLocation getStillTexture() {
+        return stillTexture;
+    }
 
-            @Override
-            public ResourceLocation getFlowingTexture() {
-                return flowingTexture;
-            }
+    public ResourceLocation getFlowingTexture() {
+        return flowingTexture;
+    }
 
-            @Override
-            public ResourceLocation getOverlayTexture() {
-                return overlayTexture;
-            }
+    public ResourceLocation getOverlayTexture() {
+        return overlayTexture;
+    }
 
-            @Override
-            public int getTintColor() {
-                return tintColor;
-            }
-        });
+    public int getTintColor() {
+        return tintColor;
     }
 }
-

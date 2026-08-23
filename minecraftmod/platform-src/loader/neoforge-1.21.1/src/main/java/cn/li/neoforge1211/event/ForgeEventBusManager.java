@@ -10,7 +10,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@EventBusSubscriber(modid = AcademyCraft1211.MODID, bus = EventBusSubscriber.Bus.GAME)
+@EventBusSubscriber(modid = AcademyCraft1211.MODID)
 public final class ForgeEventBusManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModId.ID);
 

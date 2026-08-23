@@ -10,7 +10,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 
 import java.io.IOException;
 
-@EventBusSubscriber(modid = AcademyCraft1211.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = AcademyCraft1211.MODID, value = Dist.CLIENT)
 public final class ModShaders {
     private ModShaders() {
     }
