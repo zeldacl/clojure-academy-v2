@@ -1802,6 +1802,122 @@
         (is (= :aborted (:outcome result)))
         (is (true? (:finish-session? result)))))))
 
+;; --- :flashing: 3 v2 fragments inlined via Python-helper parameterization
+;; (:refresh-destination + :preview called 6x across 2 direction/operation
+;; args, :perform called 4x) -- 12 :events handlers total, each a direct
+;; :preview/:perform call. :blink-overload is NOT creative-scaled (only
+;; :blink-cp is, via a select baked into v2's own document-table value),
+;; so its :cost/spend budget is built inline (bypassing :ability/budget's
+;; uniform :scale) rather than using the usual creative-scale shortcut ---
+
+(def ^:private flashing-tunables
+  {:blink-distance 3.0 :blink-interval-ticks 4 :max-active-ticks 100
+   :post-blink-fall-protect-ticks 20 :activate-overload 0.0 :activate-cp 1.0
+   :blink-cp 0.5 :blink-overload 0.0 :deactivate-cooldown-ticks 40 :exp-per-blink 0.01})
+
+(def ^:private flashing-caster-facade
+  {:caster/eye {:x 0.0 :y 65.6 :z 0.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+   :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/id "owner-1" :caster/creative? false :world/id "overworld"})
+
+(deftest flashing-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :flashing])]
+    (is (nil? (get-in state [:combat :errors :flashing])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :flashing))))
+
+(deftest flashing-v3-start-phase-starts-when-affordable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flashing "owner-1"
+                {:action :start :from flashing-caster-facade :tunables flashing-tunables
+                 :context {:resources {:cp 5.0 :overload 0.0}}})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))))
+
+(deftest flashing-v3-start-phase-rejects-when-insufficient-resource-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flashing "owner-1"
+                {:action :start :from flashing-caster-facade :tunables flashing-tunables
+                 :context {:resources {:cp 0.0 :overload 0.0}}})]
+    (is (= :accepted (:status result)))
+    (is (= :insufficient-resource (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
+(deftest flashing-v3-forward-press-event-previews-marker-when-affordable-test
+  (with-fake-raycast-handler {:position {:vec3 [0.0 64.0 3.0]} :from {:vec3 [0.0 64.0 0.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :flashing "owner-1"
+                    {:action :event :event :movement/forward-press
+                     :from flashing-caster-facade :tunables flashing-tunables
+                     :context {:resources {:cp 5.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= 1 (count (:vfx-signals result))))
+        (is (= :teleport-marker (:effect-id (first (:vfx-signals result)))))
+        (is (= :spawn (:op (first (:vfx-signals result)))))))))
+
+(deftest flashing-v3-forward-release-event-teleports-when-affordable-test
+  (with-fake-raycast-handler {:position {:vec3 [0.0 64.0 3.0]} :from {:vec3 [0.0 64.0 0.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :flashing "owner-1"
+                    {:action :event :event :movement/forward-release
+                     :from flashing-caster-facade :tunables flashing-tunables
+                     :context {:resources {:cp 5.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :teleported (:outcome result)))
+        (is (some #(= :entity/teleport (:capability %)) (:actions result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark emits an owner-patch")))))
+
+(deftest flashing-v3-forward-release-event-destroys-marker-when-insufficient-resource-test
+  (with-fake-raycast-handler {:position {:vec3 [0.0 64.0 3.0]} :from {:vec3 [0.0 64.0 0.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :flashing "owner-1"
+                    {:action :event :event :movement/forward-release
+                     :from flashing-caster-facade :tunables flashing-tunables
+                     :context {:resources {:cp 0.0}}})]
+        (is (= :accepted (:status result)))
+        (is (not= :teleported (:outcome result)))
+        (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:op %))) (:vfx-signals result)))))))
+
+(deftest flashing-v3-pulse-phase-expires-after-max-active-ticks-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flashing "owner-1"
+                {:action :pulse :from flashing-caster-facade :tunables flashing-tunables
+                 :session-state {:active-ticks 999}})]
+    (is (= :accepted (:status result)))
+    (is (= :expired (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
+(deftest flashing-v3-pulse-phase-continues-and-decays-fall-protection-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flashing "owner-1"
+                {:action :pulse :from flashing-caster-facade :tunables flashing-tunables
+                 :session-state {:active-ticks 0 :fall-protect-ticks 5 :overload-floor 0.0}})]
+    (is (= :accepted (:status result)))
+    (is (= :continue (:outcome result)))
+    (is (some #(= :entity/reset-fall-damage (:capability %)) (:actions result)))))
+
+(deftest flashing-v3-abort-phase-cleans-up-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :flashing "owner-1"
+                {:action :abort :from flashing-caster-facade :tunables flashing-tunables
+                 :session-state {}})]
+    (is (= :accepted (:status result)))
+    (is (= :aborted (:outcome result)))
+    (is (true? (:finish-session? result)))
+    (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:op %))) (:vfx-signals result)))))
+
 (deftest mag-movement-v3-abort-phase-cleans-up-test
   (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
     (fn []
