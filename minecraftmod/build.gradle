@@ -804,7 +804,8 @@ tasks.register("verifyPresentationDependencyDirection") {
 
 tasks.register("verifyVfxDependencyDirection") {
     group = "verification"
-    description = "Enforce the zero-platform-reference VFX dependency direction. The combat-core/vfx-core relationship is one-directional -- combat-core may depend on vfx-core (see verifyCombatDependencyDirection), but vfx-core must never depend back on combat-core."
+    description = "Enforce the zero-platform-reference VFX dependency direction. The combat-core/vfx-core relationship is one-directional -- combat-core may depend on vfx-core (see verifyCombatDependencyDirection), but vfx-core must never depend back on combat-core. The per-.clj-file forbidden-namespace check is cn.li.vfx.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping file text (even comment-stripped), which used to flag a docstring merely MENTIONING combat-core/platform/AC in prose (explaining why the file does NOT depend on it) as an actual dependency."
+    dependsOn ":vfx-core:runVfxClojureTests"
     doLast {
         def vfxBuild = file("vfx-core/build.gradle").text
         def mcmodBuild = file("mcmod/build.gradle").text
@@ -855,19 +856,10 @@ tasks.register("verifyVfxDependencyDirection") {
             }
         }
         fileTree(file("vfx-core/src/main")) {
-            include "**/*.clj"
-            include "**/*.cljc"
             include "**/*.java"
         }.files.each { File source ->
-            if (source.text =~ /(?:net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(?:platform|mcbase|mc1201|mc1211|mc262|ac|presentation))\./) {
-                violations << "${source}: vfx-core contains a platform/AC/Presentation reference"
-            }
-            // Comments stripped: a docstring may legitimately mention where a
-            // *caller* (combat-core) gets an argument from (see install.clj)
-            // without vfx-core itself requiring combat-core.
-            def sourceWithoutComments = source.text.replaceAll(/(?m);.*$/, "")
-            if (sourceWithoutComments =~ /cn\.li\.combat\./) {
-                violations << "${source}: vfx-core must not depend back on combat-core (one-directional dependency)"
+            if (source.text =~ /(?:net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(?:platform|mcbase|mc1201|mc1211|mc262|ac|presentation|combat))\./) {
+                violations << "${source}: vfx-core contains a platform/AC/Presentation/combat-core reference"
             }
         }
         [file("ac/src/main/clojure"), file("platform-src")].findAll { it.directory }.each { File root ->
@@ -1000,7 +992,8 @@ tasks.register("verifyCombatDependencyDirection") {
 
 tasks.register("verifyNodeCoreDependencyDirection") {
     group = "verification"
-    description = "node-core is the shared node-language kernel (descriptor registry, expression evaluator, scope checker, composite expansion) used by both combat-core and vfx-core. It must have zero dependency on Minecraft, mcmod, or either domain module -- see NODE_LANGUAGE.md section 2.1."
+    description = "node-core is the shared node-language kernel (descriptor registry, expression evaluator, scope checker, composite expansion) used by both combat-core and vfx-core. It must have zero dependency on Minecraft, mcmod, or either domain module -- see NODE_LANGUAGE.md section 2.1. The per-.clj-file check is cn.li.node.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping the whole file text, which used to flag a docstring merely MENTIONING a forbidden namespace in prose (explaining why the file does NOT depend on it) as if it were an actual dependency."
+    dependsOn ":node-core:runNodeCoreClojureTests"
     doLast {
         def nodeCoreBuild = file("node-core/build.gradle").text
         def combatBuild = file("combat-core/build.gradle").text
@@ -1016,7 +1009,7 @@ tasks.register("verifyNodeCoreDependencyDirection") {
             violations << "vfx-core must depend on node-core (shared node-language kernel)"
         }
         fileTree(file("node-core/src/main")) {
-            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+            include "**/*.java"
         }.files.each { File source ->
             if (source.text =~ /(?:net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(?:mcmod|ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|presentation|combat|vfx))\./) {
                 violations << "${source}: node-core contains a Minecraft/mcmod/AC/platform/Presentation/combat-core/vfx-core reference"
@@ -1141,36 +1134,8 @@ tasks.register("verifyCombatProviderClosure") {
 }
 tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
-    description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled."
-    doLast {
-        // Migration status is each ability document's own :status field
-        // (combat_catalog.clj/initialize! reads it the same way) -- there is
-        // no separate migration_status.edn to drift out of sync with it.
-        def abilitiesDir = file("ac/src/main/resources/ac/combat/abilities")
-        def migrated = [] as Set
-        abilitiesDir.eachFile { File abilityFile ->
-            if (abilityFile.name.endsWith(".edn")) {
-                def text = abilityFile.text
-                def idMatch = (text =~ /:id\s+(:[A-Za-z0-9!?*-]+)/)
-                def statusMatch = (text =~ /:status\s+:([A-Za-z0-9!?*-]+)/)
-                if (idMatch.find() && statusMatch.find() && statusMatch.group(1) == "migrated") {
-                    migrated << idMatch.group(1)
-                }
-            }
-        }
-        def manifest = file("ac/src/main/resources/ac/combat/manifest.edn").text
-        def manifestIds = [] as Set
-        // A shared EDN document may be exposed under several public ability
-        // ids.  `:source-id` is the manifest's explicit coverage declaration
-        // for that shared migrated document, so count both public aliases and
-        // their source id here.
-        (manifest =~ /:(?:id|source-id)\s+(:[A-Za-z0-9!?*-]+)/).each { match -> manifestIds << match[1].toString() }
-        def missing = migrated - manifestIds
-        if (!missing.isEmpty()) {
-            throw new GradleException("Migrated abilities missing from EDN manifest: ${missing.sort().join(', ')}")
-        }
-        logger.lifecycle("[verifyCombatSkillCoverage] ok (${migrated.size()} migrated; pending abilities remain disabled)")
-    }
+    description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
+    dependsOn ":ac:runAcEdnCoverageTests"
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:runCombatClojureTests" }
 
@@ -1182,27 +1147,8 @@ tasks.register("verifyNodeCoreLanguageKernel") {
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
-    description = "Every effect emitted by migrated EDN abilities must be present in the EDN VFX manifest."
-    dependsOn ":vfx-core:runVfxClojureTests"
-    doLast {
-        def abilityFiles = fileTree("ac/src/main/resources/ac/combat/abilities") {
-            include "*.edn"
-        }.files
-        def vfxManifest = file("ac/src/main/resources/ac/vfx/manifest.edn").text
-        def emitted = [] as Set
-        abilityFiles.each { ability ->
-            (ability.text =~ /:effect-id\s+(:[A-Za-z0-9!?*-]+)/).each { m -> emitted << m[1].toString() }
-        }
-        def registered = [] as Set
-        (vfxManifest =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { m -> registered << m[1].toString() }
-        def missing = emitted - registered
-        if (!missing.isEmpty()) {
-            throw new GradleException(
-                "Migrated EDN abilities emit VFX effect-id(s) absent from the VFX manifest: " +
-                missing.sort().join(", "))
-        }
-        logger.lifecycle("[verifyAbilityVfxRegistryCoverage] ok (${emitted.size()} EDN effect ids)")
-    }
+    description = "Every effect emitted by an EDN ability must be present in the EDN VFX manifest. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
+    dependsOn ":vfx-core:runVfxClojureTests", ":ac:runAcEdnCoverageTests"
 }
 
 tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
