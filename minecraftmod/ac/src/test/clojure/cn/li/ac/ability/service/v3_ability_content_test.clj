@@ -754,6 +754,105 @@
     (is (= 3 (count (:vfx-signals result))) "beam + block-progress + audio-loop destroy")
     (is (some #(= :owner-patch (:type %)) (:actions result)) "cooldown/start")))
 
+;; --- :current-charging: 4 v2 :fragments (:stop-channel, :insufficient,
+;; :update-audio, :update-channel) all inlined by hand at every call site
+;; (this one has the most call sites of any ability converted so far) ---
+
+(def ^:private current-charging-tunables
+  {:visual-max-ticks 100 :targeting-range 20.0 :charge-amount 10.0
+   :cost-down-overload 3.0 :cost-tick-cp 0.05 :exp-effective 0.02 :exp-ineffective 0.01})
+
+(defn- with-fake-item-held [held-item f]
+  (let [previous (get (:queries (capabilities/snapshot)) :item/held)]
+    (try
+      (capabilities/register-query! :item/held (fn [_request _frame] held-item))
+      (f)
+      (finally (when previous (capabilities/register-query! :item/held previous))))))
+
+(defn- with-fake-energy-target [energy-target f]
+  (let [previous (get (:queries (capabilities/snapshot)) :energy/target)]
+    (try
+      (capabilities/register-query! :energy/target (fn [_request _frame] energy-target))
+      (f)
+      (finally (when previous (capabilities/register-query! :energy/target previous))))))
+
+(deftest current-charging-v3-start-phase-item-mode-test
+  (with-fake-item-held {:present? true}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :current-charging "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables current-charging-tunables
+                     :context {:resources {:overload 20.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (= 2 (count (:vfx-signals result))))))))
+
+(deftest current-charging-v3-pulse-phase-item-mode-charges-supported-item-test
+  (with-fake-item-held {:present? true :supported? true}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :current-charging "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables current-charging-tunables
+                     :context {:resources {:cp 10.0}}
+                     :session-state {:overload-floor 0.0 :charge-ticks 0 :is-item true :style {:beam {}}}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))
+        (is (some #(and (= :energy/charge (:capability %)) (= :item (:mode %))) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark")))))
+
+(deftest current-charging-v3-pulse-phase-item-mode-stops-when-item-dropped-test
+  (with-fake-item-held {:present? false}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :current-charging "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables current-charging-tunables
+                     :context {:resources {:cp 10.0}}
+                     :session-state {:overload-floor 0.0 :charge-ticks 0 :is-item true :style {:beam {}}}})]
+        (is (= :accepted (:status result)))
+        (is (= 2 (count (:vfx-signals result))) "arc-channel + audio-loop destroy, no :flow/finish reached")))))
+
+(deftest current-charging-v3-pulse-phase-block-mode-charges-when-chargeable-test
+  (with-fake-raycast-handler
+    {:entity-id nil :position {:vec3 [1.0 65.0 5.0]}}
+    (fn []
+      (with-fake-energy-target
+        {:chargeable? true}
+        (fn []
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :current-charging "owner-1"
+                        {:action :pulse
+                         :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                                :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                         :tunables current-charging-tunables
+                         :context {:resources {:cp 10.0}}
+                         :session-state {:overload-floor 0.0 :charge-ticks 0 :is-item false :style {:beam {}}}})]
+            (is (= :accepted (:status result)))
+            (is (= :continue (:outcome result)))
+            (is (some #(and (= :energy/charge (:capability %)) (= :block (:mode %))) (:actions result)))))))))
+
+(deftest current-charging-v3-release-phase-cleans-up-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :current-charging "owner-1"
+                {:action :release :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables current-charging-tunables})]
+    (is (= :accepted (:status result)))
+    (is (= :released (:outcome result)))
+    (is (= 2 (count (:vfx-signals result))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
