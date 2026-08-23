@@ -1087,6 +1087,109 @@
     (is (= :aborted (:outcome result)))
     (is (= 1 (count (:vfx-signals result))) "only :stop-mark, phase was :marking")))
 
+;; --- :shift-teleport: 2 v2 :fragments inlined (:refresh-trace called 3x,
+;; :destroy-target-markers called 4x), :target/block-placement +
+;; :inventory/place-or-drop, and another dynamic (program-computed)
+;; :progression -- :score/mark's :progression built inline like
+;; location-teleport's, not via :ability/progression ---
+
+(def ^:private shift-teleport-tunables
+  {:maximum-range 30.0 :damage 6.0 :release-cp 4.0 :release-overload 0.0
+   :cooldown-ticks 60 :exp-base 0.01})
+
+(defn- with-fake-shift-teleport-queries [{:keys [held-item block-hit block-placement entities]} f]
+  (let [previous-item (get (:queries (capabilities/snapshot)) :item/held)
+        previous-raycast (get (:queries (capabilities/snapshot)) :raycast)
+        previous-entity (get (:queries (capabilities/snapshot)) :entity/select)]
+    (try
+      (capabilities/register-query! :item/held (fn [_request _frame] held-item))
+      (capabilities/register-query!
+       :raycast (fn [request _frame]
+                  (case (:query-kind request)
+                    :block-placement block-placement
+                    block-hit)))
+      (capabilities/register-query! :entity/select (fn [_request _frame] entities))
+      (f)
+      (finally
+        (when previous-item (capabilities/register-query! :item/held previous-item))
+        (when previous-raycast (capabilities/register-query! :raycast previous-raycast))
+        (when previous-entity (capabilities/register-query! :entity/select previous-entity))))))
+
+(deftest shift-teleport-v3-start-phase-marks-destination-when-item-placeable-test
+  (with-fake-shift-teleport-queries
+    {:held-item {:present? true :placeable? true}
+     :block-hit {:position {:vec3 [0.0 65.0 10.0]}}
+     :block-placement {:valid? true :position {:vec3 [0.0 65.0 10.0]}}
+     :entities []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :shift-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                            :world/id "overworld"}
+                     :tunables shift-teleport-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest shift-teleport-v3-start-phase-rejects-when-no-placeable-item-test
+  (with-fake-shift-teleport-queries
+    {:held-item {:present? false} :block-hit {:position {:vec3 [0.0 65.0 10.0]}}
+     :block-placement {:valid? false :position {:vec3 [0.0 65.0 10.0]}} :entities []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :shift-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                            :world/id "overworld"}
+                     :tunables shift-teleport-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :no-item (:outcome result)))
+        (is (true? (:finish-session? result)))))))
+
+(deftest shift-teleport-v3-release-phase-places-and-damages-line-targets-test
+  (with-fake-shift-teleport-queries
+    {:held-item {:present? true :placeable? true}
+     :block-hit {:position {:vec3 [0.0 65.0 10.0]}}
+     :block-placement {:valid? true :position {:vec3 [0.0 65.0 10.0]} :line-position {:vec3 [0.0 65.0 9.0]}}
+     :entities [{:id "zombie-1" :position {:vec3 [0.0 65.0 5.0]} :width 0.6 :height 1.8}]}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :shift-teleport "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                            :caster/creative? false :world/id "overworld"}
+                     :tunables shift-teleport-tunables
+                     :context {:resources {:cp 10.0}}})]
+        (is (= :accepted (:status result)))
+        ;; :performed, not :released -- the ability's own final top-level
+        ;; {:flow/finish :outcome :released} is unreachable dead code in
+        ;; both v2 and v3 (every branch of the guarded release already
+        ;; finishes with :performed/:insufficient-resource/:no-item before
+        ;; reaching it), ported byte-for-byte rather than "fixed".
+        (is (= :performed (:outcome result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %))) (:actions result)))
+        (is (some #(= :inventory/place-or-drop (:capability %)) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")))))
+
+(deftest shift-teleport-v3-abort-phase-cleans-up-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :shift-teleport "owner-1"
+                {:action :abort :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables shift-teleport-tunables
+                 :session-state {:targets []}})]
+    (is (= :accepted (:status result)))
+    (is (= :aborted (:outcome result)))
+    (is (= 1 (count (:vfx-signals result))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!

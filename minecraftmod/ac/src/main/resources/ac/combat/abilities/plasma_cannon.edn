@@ -373,8 +373,6 @@
                       {:component :effect/vfx
                         :effect-id :endpoint-burst
                         :operation :spawn
-                        :instance-key [:activation
-                          :impact-burst-unused]
                         :payload {:from {:ref [:local
                               :destination
                               :position]}
