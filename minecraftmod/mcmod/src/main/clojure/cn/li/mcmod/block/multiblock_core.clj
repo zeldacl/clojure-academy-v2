@@ -17,10 +17,15 @@
      [(pos/pos-x b) (pos/pos-y b) (pos/pos-z b)]))
 
 (defn- state-empty?
+  "A structure slot is free when the block is air or replaceable — snow
+  layers, tall grass, fluids and the like count as free space, so a
+  multiblock (e.g. the Developer) can displace them the way a normal block
+  placement does."
   [state]
   (or (nil? state)
       (try
-        (world/block-state-is-air state)
+        (or (world/block-state-is-air state)
+            (world/block-state-is-replaceable? state))
         (catch Throwable _
           false))))
 

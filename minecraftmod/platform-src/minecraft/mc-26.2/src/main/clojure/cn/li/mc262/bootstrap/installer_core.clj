@@ -96,6 +96,7 @@
   (install/framework-once! ::block-state-protocols-installed
     (fn []
       (let [bs-ops {:block-state-is-air               (fn [^BlockState this] (.isAir this))
+                    :block-state-is-replaceable?      (fn [^BlockState this] (.canBeReplaced this))
                     :block-state-get-block            (fn [^BlockState this] (.getBlock this))
                     :block-state-get-state-definition (fn [^BlockState this] (.getStateDefinition (.getBlock this)))
                     :block-state-get-property         (fn [_this ^StateDefinition state-def prop-name]

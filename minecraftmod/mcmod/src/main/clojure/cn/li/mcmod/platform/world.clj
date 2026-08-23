@@ -10,8 +10,8 @@
     :world-get-players :world-is-raining :world-is-client-side :world-can-see-sky})
 
 (def block-state-keys
-  #{:block-state-is-air :block-state-get-block :block-state-get-state-definition
-    :block-state-get-property :block-state-set-property})
+  #{:block-state-is-air :block-state-is-replaceable? :block-state-get-block
+    :block-state-get-state-definition :block-state-get-property :block-state-set-property})
 
 (defn install-world-ops!
   "Install world ops to [:platform :world-ops]."
@@ -71,6 +71,7 @@
 
 ;; BlockState wrappers — use separate [:platform :block-state-ops]
 (defn block-state-is-air               [bs]       (bs-call :block-state-is-air bs))
+(defn block-state-is-replaceable?      [bs]       (bs-call :block-state-is-replaceable? bs))
 (defn block-state-get-block            [bs]       (bs-call :block-state-get-block bs))
 (defn block-state-get-state-definition [bs]       (bs-call :block-state-get-state-definition bs))
 (defn block-state-get-property         [bs sd pn] (bs-call :block-state-get-property bs sd pn))
