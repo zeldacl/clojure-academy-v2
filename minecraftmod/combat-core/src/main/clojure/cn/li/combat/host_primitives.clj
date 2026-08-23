@@ -317,8 +317,11 @@
 
    :block/break
    {:capability :block/break
-    :inputs {:position {:type :vec3} :drop? {:type :boolean :default true}}
-    :doc "Break one block, dropping its item unless :drop? is false." :category :world}
+    :inputs {:position {:type :vec3} :drop? {:type :boolean :default true}
+             :expected-block-id {:type :any :default nil}
+             :fortune-level {:type :long :default nil}
+             :tool-tier-capped? {:type :boolean :default nil}}
+    :doc "Break one block, dropping its item unless :drop? is false. :expected-block-id/:fortune-level/:tool-tier-capped? are real optional fields content sends alongside :position/:drop? -- same gap class found repeatedly this session." :category :world}
 
    :block/set
    {:capability :block/set

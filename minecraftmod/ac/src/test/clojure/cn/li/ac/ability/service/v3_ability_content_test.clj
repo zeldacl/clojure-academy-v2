@@ -665,6 +665,95 @@
       (is (some? (:settlement-vfx beam-action))))
     (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")))
 
+;; --- :mine-ray: another session ability with 1 v2 :fragment (:cleanup,
+;; used 3x) inlined, exercising :target/blocks + :block/break's newly
+;; fixed fields, and a nested {:ref [:context :ability-runtime ...]}
+;; multi-segment path read the same way as :resources earlier ---
+
+(def ^:private mine-ray-tunables
+  {:targeting-range 20.0 :break-speed 5.0 :cost-down-overload 3.0 :cost-tick-cp 0.05
+   :cooldown-ticks 40 :exp-block 0.02})
+
+(def ^:private mine-ray-runtime
+  {:beam-style {:texture "x"} :progress-color [255 255 255 255] :loop-sound-id "loop"
+   :startup-sound-id "start" :particle {:material :additive} :fortune-level 0 :tool-tier-capped? false})
+
+(defn- with-fake-mine-ray-blocks [blocks f]
+  (let [previous (get (:queries (capabilities/snapshot)) :block/select)]
+    (try
+      (capabilities/register-query! :block/select (fn [_request _frame] blocks))
+      (f)
+      (finally (when previous (capabilities/register-query! :block/select previous))))))
+
+
+(deftest mine-ray-v3-start-phase-initializes-session-and-spawns-vfx-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mine-ray-basic "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                        :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                        :world/id "overworld"}
+                 :tunables mine-ray-tunables
+                 :context {:resources {:overload 20.0} :ability-runtime mine-ray-runtime}})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (= 4 (count (:vfx-signals result))) "beam + block-progress + audio-loop + audio-one-shot")))
+
+(deftest mine-ray-v3-pulse-phase-starts-targeting-a-new-breakable-block-test
+  (with-fake-mine-ray-blocks
+    [{:position {:x 1.0 :y 65.0 :z 5.0} :hardness 30.0 :block-id "minecraft:stone"
+      :breakable? true :requires-high-tier-tool? false}]
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mine-ray-basic "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :world/id "overworld"}
+                     :tunables mine-ray-tunables
+                     :context {:resources {:cp 10.0} :ability-runtime mine-ray-runtime}
+                     :session-state {:overload-floor 0.0 :target nil :hardness-left nil :starting-hardness nil}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))
+        (is (not (some #(= :block/break (:capability %)) (:actions result))))))))
+
+(deftest mine-ray-v3-pulse-phase-breaks-the-same-target-when-hardness-runs-out-test
+  (with-fake-mine-ray-blocks
+    [{:position {:x 1.0 :y 65.0 :z 5.0} :hardness 30.0 :block-id "minecraft:stone"
+      :breakable? true :requires-high-tier-tool? false}]
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mine-ray-basic "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :world/id "overworld"}
+                     :tunables mine-ray-tunables
+                     :context {:resources {:cp 10.0} :ability-runtime mine-ray-runtime}
+                     :session-state {:overload-floor 0.0 :target {:x 1.0 :y 65.0 :z 5.0}
+                                     :hardness-left 3.0 :starting-hardness 30.0}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))
+        (is (some #(and (= :block/break (:capability %)) (= "minecraft:stone" (:expected-block-id %)))
+                  (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark")))))
+
+(deftest mine-ray-v3-release-phase-cleans-up-and-starts-cooldown-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mine-ray-basic "owner-1"
+                {:action :release
+                 :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables mine-ray-tunables})]
+    (is (= :accepted (:status result)))
+    (is (= :released (:outcome result)))
+    (is (= 3 (count (:vfx-signals result))) "beam + block-progress + audio-loop destroy")
+    (is (some #(= :owner-patch (:type %)) (:actions result)) "cooldown/start")))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
