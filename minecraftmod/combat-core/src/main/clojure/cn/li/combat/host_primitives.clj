@@ -129,8 +129,9 @@
 
    :target/entities
    {:capability :entity/select :output :entities
-    :inputs {:shape {:type :map} :projection {:type :map} :limit {:type :long :min 0}}
-    :output-type :entity-list :doc "Query entities matching a neutral shape/projection." :category :targeting}
+    :inputs {:shape {:type :map} :projection {:type :map} :limit {:type :long :min 0}
+             :filter {:type :map :default nil}}
+    :output-type :entity-list :doc "Query entities matching a neutral shape/projection, optionally narrowed by :filter (e.g. {:entity-types [...]}) -- v2's own opcode VM never filtered a component's fields down to a declared schema, so real ability content has always sent :filter straight to the real :entity/select handler even though neither version's descriptor ever marked it :required." :category :targeting}
 
    :target/entity-snapshot
    {:capability :entity/snapshot :output :snapshot

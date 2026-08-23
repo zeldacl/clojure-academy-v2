@@ -182,6 +182,96 @@
                     (= 15.0 (:amount (second %))))
               @actions))))
 
+;; --- :railgun: a :session ability exercising :flow/phases, :txn/atomic
+;; (item-guard + :inventory/consume reservation), :ability/budget +
+;; explicit :cost/spend branching inside the txn body, and the new
+;; :combat/beam-strike + :combat/break-budget composites together ---
+
+(def ^:private railgun-fixture
+  {:from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+          :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+   :tunables {:beam-damage 25.0 :beam-radius 1.0 :beam-query-radius 10.0
+              :beam-step 0.9 :beam-block-energy 5.0 :beam-visual-distance 30.0
+              :max-distance 30.0 :charge-ticks 20 :cost-down-cp 6.0 :cost-down-overload 0.0}})
+
+(defn- with-fake-railgun-queries [{:keys [held-item beam-entities blocks]} f]
+  (let [previous-item (get (:queries (capabilities/snapshot)) :item/held)
+        previous-entity (get (:queries (capabilities/snapshot)) :entity/select)
+        previous-block (get (:queries (capabilities/snapshot)) :block/select)]
+    (try
+      (capabilities/register-query! :item/held (fn [_request _frame] held-item))
+      (capabilities/register-query!
+       :entity/select
+       (fn [request _frame]
+         ;; The coin query at :start (projection [:id :age-ms :motion-progress])
+         ;; and the beam-trace entity query inside :combat/beam-strike
+         ;; (projection [:id :type :position :eye-height]) both hit
+         ;; :entity/select -- discriminate on :projection like a real host
+         ;; would discriminate on the request shape.
+         (if (= [:id :type :position :eye-height] (:projection request))
+           beam-entities
+           []))
+       )
+      (capabilities/register-query! :block/select (fn [_request _frame] blocks))
+      (f)
+      (finally
+        (when previous-item (capabilities/register-query! :item/held previous-item))
+        (when previous-entity (capabilities/register-query! :entity/select previous-entity))
+        (when previous-block (capabilities/register-query! :block/select previous-block))))))
+
+(deftest railgun-v3-start-phase-spawns-charge-vfx-test
+  (with-fake-railgun-queries {:held-item nil :beam-entities [] :blocks []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :railgun "owner-1" (assoc railgun-fixture :action :start))]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest railgun-v3-release-phase-fires-when-affordable-test
+  (with-fake-railgun-queries
+    {:held-item {:item-id "minecraft:iron_ingot"}
+     :beam-entities [{:id "zombie-1" :type "zombie" :position {:x 0.0 :y 65.6 :z 10.0} :eye-height 0.0}]
+     :blocks []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :railgun "owner-1"
+                    (assoc railgun-fixture :action :release
+                           :context {:resources {:cp 10.0}}))]
+        (is (= :accepted (:status result)))
+        (is (= :committed (:outcome result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %))) (:actions result)))
+        (is (some #(and (= :inventory/consume (:capability %)) (= :main-hand (:source %))) (:actions result)))
+        (is (some #(= :world/sound (:capability %)) (:actions result)))))))
+
+(deftest railgun-v3-release-phase-rejects-when-insufficient-resource-test
+  (with-fake-railgun-queries
+    {:held-item {:item-id "minecraft:iron_ingot"} :beam-entities [] :blocks []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :railgun "owner-1"
+                    (assoc railgun-fixture :action :release
+                           :context {:resources {:cp 0.0}}))]
+        (is (= :accepted (:status result)))
+        (is (= :insufficient-resource (:outcome result)))
+        (is (not (some #(= :entity/damage (:capability %)) (:actions result))))))))
+
+(deftest railgun-v3-release-phase-rejects-when-wrong-item-held-test
+  (with-fake-railgun-queries
+    {:held-item {:item-id "minecraft:stick"} :beam-entities [] :blocks []}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :railgun "owner-1"
+                    (assoc railgun-fixture :action :release
+                           :context {:resources {:cp 10.0}}))]
+        (is (= :accepted (:status result)))
+        (is (= :insufficient-resource (:outcome result)))
+        (is (not (some #(= :inventory/consume (:capability %)) (:actions result))))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!

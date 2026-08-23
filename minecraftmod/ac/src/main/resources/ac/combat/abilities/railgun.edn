@@ -2,6 +2,7 @@
  :kind :ability
  :id :railgun
  :revision 4
+ :engine :v3
  :activation :session
  :status :migrated
  :requires [:caster/eye :caster/aim :caster/id]
@@ -28,12 +29,13 @@
  {:component :flow/phases
   :start
   {:component :flow/sequence
-   :steps [{:component :target/entities
-            :shape {:type :sphere :center {:from :caster/eye} :radius 4.0}
+   :steps [{:component :ability/caster :bind {:eye :eye}}
+           {:component :target/entities
+            :shape {:type :sphere :center {:ref [:local :eye]} :radius 4.0}
             :filter {:entity-types ["academy:entity_coin_throwing"]}
             :projection [:id :age-ms :motion-progress]
             :limit 8
-            :result :coins}
+            :bind {:entities :coins}}
            {:component :effect/vfx
             :effect-id :billboard-session
             :operation :spawn
@@ -48,76 +50,80 @@
   ;; the beam every pulse tick, as this used to, fired the shot effect the
   ;; whole time the trigger was held down, and there was no :combat/damage
   ;; node anywhere in the file, so nothing the beam passed through was ever
-  ;; actually damaged). :aim-hit is unused by :release below (:host/beam-trace
-  ;; there reads :caster/eye/:caster/aim directly) -- :pulse has nothing left
-  ;; to compute.
+  ;; actually damaged). :pulse has nothing left to compute.
   :pulse {:component :flow/finish :outcome :continue}
   :release
   {:component :flow/sequence
-   :steps [{:component :effect/vfx
+   :steps [{:component :ability/caster :bind {:eye :eye :aim :aim :world-id :wid}}
+           {:component :ability/tunable :name :max-distance :bind {:value :max-distance}}
+           {:component :ability/tunable :name :beam-visual-distance :bind {:value :beam-visual-distance}}
+           {:component :ability/tunable :name :beam-radius :bind {:value :beam-radius}}
+           {:component :ability/tunable :name :beam-query-radius :bind {:value :beam-query-radius}}
+           {:component :ability/tunable :name :beam-step :bind {:value :beam-step}}
+           {:component :ability/tunable :name :beam-damage :bind {:value :beam-damage}}
+           {:component :ability/tunable :name :beam-block-energy :bind {:value :beam-block-energy}}
+           {:component :ability/budget :name :fire :bind {:budget :fire-budget}}
+           {:component :effect/vfx
             :effect-id :billboard-session
             :operation :destroy
             :instance-key [:activation :railgun-charge]
             :payload {}}
-           {:component :target/item-held :source :main-hand :result :hand-item}
+           {:component :target/item-held :source :main-hand :bind {:held-item :hand-item}}
            {:component :txn/atomic
             :guards [{:component :guard/value-in
-                     :value {:ref [:slot :hand-item :item-id]}
+                     :value {:ref [:local :hand-item :item-id]}
                      :one-of ["minecraft:iron_ingot" "minecraft:iron_block"]}]
             :reservations [{:component :inventory/consume
                             :source :main-hand
                             :count 1}]
             :body {:component :flow/sequence
                    :steps [{:component :cost/spend
-                            :budget :fire
-                            :on-insufficient {:component :flow/finish
-                                              :outcome :insufficient-resource}}
-                           {:component :host/beam-trace
-                            :origin {:from :caster/eye}
-                            :direction {:from :caster/aim}
-                            :length {:tunable :max-distance}
-                            :visual-length {:tunable :beam-visual-distance}
-                            :radius {:tunable :beam-radius}
-                            :query-radius {:tunable :beam-query-radius}
-                            :step {:tunable :beam-step}
-                            :damage {:tunable :beam-damage}
-                            :damage-type :skill :entity-limit 256
-                            :block-limit 4096
-                            :result :beam-result}
-                           {:component :flow/foreach
-                            :items {:ref [:slot :beam-result :entities]}
-                            :as :target :limit 256
-                            :body {:component :combat/damage
-                                   :target {:ref [:slot :target :id]}
-                                   :amount {:ref [:slot :target :damage]}
-                                   :damage-type :skill}}
-                           {:component :block/break-budget
-                            :world-id {:from :world/id}
-                            :blocks {:ref [:slot :beam-result :blocks]}
-                            :energy {:tunable :beam-block-energy}
-                            :limit 4096
-                            :seed {:from :rng/seed}}
-                           {:component :effect/vfx
-                            :effect-id :beam-arc-fade
-                            :operation :spawn
-                            :payload {:start {:ref [:slot :beam-result :start]}
-                                      :end {:ref [:slot :beam-result :end]}
-                                      :duration-ticks 50 :beam-at 0 :grow-ticks 3
-                                      :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
-                                               {:shape :tube :radius 0.09 :color [241 240 222 200]}
-                                               {:shape :line :width 0.02 :color [165 230 255 160]}]
-                                      :arc-at 3 :arc-spacing {:min 1.0 :max 2.0}
-                                      :arc-radius {:min 0.1 :max 0.25}
-                                      :arc-count-limit 64 :arc-life-ticks 30
-                                      :fade-at 30 :fade-from-tick 30 :fade-to-tick 50
-                                      :fade-from-alpha 1.0 :fade-to-alpha 0.0
-                                      :ring-radius 0.34 :ring-segments 12
-                                      :ring-color [188 252 238 180]}}
-                           {:component :world/sound
-                            :world-id {:from :world/id}
-                            :sound-id "academy:em.railgun"
-                            :position {:from :caster/eye}}
-                           {:component :flow/finish :outcome :committed}]}
+                            :budget {:ref [:local :fire-budget]}
+                            :bind {:insufficient? :insufficient?}}
+                           {:component :flow/branch
+                            :when {:ref [:local :insufficient?]}
+                            :then {:component :flow/finish :outcome :insufficient-resource}
+                            :else
+                            {:component :flow/sequence
+                             :steps
+                             [{:component :combat/beam-strike
+                               :origin {:ref [:local :eye]}
+                               :direction {:ref [:local :aim]}
+                               :length {:ref [:local :max-distance]}
+                               :visual-length {:ref [:local :beam-visual-distance]}
+                               :radius {:ref [:local :beam-radius]}
+                               :query-radius {:ref [:local :beam-query-radius]}
+                               :step {:ref [:local :beam-step]}
+                               :damage {:ref [:local :beam-damage]}
+                               :damage-type :skill
+                               :entity-limit 256
+                               :block-limit 4096
+                               :bind {:beam :beam-result}}
+                              {:component :combat/break-budget
+                               :blocks {:ref [:local :beam-result :blocks]}
+                               :energy {:ref [:local :beam-block-energy]}
+                               :limit 4096}
+                              {:component :effect/vfx
+                               :effect-id :beam-arc-fade
+                               :operation :spawn
+                               :payload {:start {:ref [:local :beam-result :start]}
+                                         :end {:ref [:local :beam-result :end]}
+                                         :duration-ticks 50 :beam-at 0 :grow-ticks 3
+                                         :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
+                                                  {:shape :tube :radius 0.09 :color [241 240 222 200]}
+                                                  {:shape :line :width 0.02 :color [165 230 255 160]}]
+                                         :arc-at 3 :arc-spacing {:min 1.0 :max 2.0}
+                                         :arc-radius {:min 0.1 :max 0.25}
+                                         :arc-count-limit 64 :arc-life-ticks 30
+                                         :fade-at 30 :fade-from-tick 30 :fade-to-tick 50
+                                         :fade-from-alpha 1.0 :fade-to-alpha 0.0
+                                         :ring-radius 0.34 :ring-segments 12
+                                         :ring-color [188 252 238 180]}}
+                              {:component :world/sound
+                               :world-id {:ref [:local :wid]}
+                               :sound-id "academy:em.railgun"
+                               :position {:ref [:local :eye]}}
+                              {:component :flow/finish :outcome :committed}]}}]}
             :on-fail {:component :flow/finish
                       :outcome :insufficient-resource}}]}
   :abort
