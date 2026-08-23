@@ -1,9 +1,10 @@
 (ns cn.li.combat.source-nodes-test
-  "Registration-shape coverage for the six source nodes (NODE_LANGUAGE.md
-   section 5). Not execution coverage -- these aren't wired into vm.clj's
-   dispatch yet (see source_nodes.clj's docstring); this only proves the
-   descriptors themselves are well-formed against node-core's v3 registry
-   and show up in the schema export a future editor would consume."
+  "Registration-shape coverage for the seven source nodes (NODE_LANGUAGE.md
+   section 5, plus :ability/context added later for v2's {:ref [:context
+   ...]} value form). Not execution coverage (see source_runtime_test.clj
+   for that) -- this only proves the descriptors themselves are well-formed
+   against node-core's v3 registry and show up in the schema export a
+   future editor would consume."
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojure.set :as set]
             [cn.li.node.descriptor :as node]
@@ -19,7 +20,7 @@
 
 (def ^:private expected-ids
   #{:ability/caster :ability/tunable :ability/budget
-    :ability/progression :ability/cooldown :ability/invariant})
+    :ability/progression :ability/cooldown :ability/invariant :ability/context})
 
 (deftest all-six-registered-as-source-layer-test
   (doseq [id expected-ids]
@@ -36,7 +37,7 @@
     (is (contains? (:outputs d) :charge-ticks))))
 
 (deftest name-scoped-sources-declare-reads-environment-test
-  (doseq [id #{:ability/tunable :ability/budget :ability/progression :ability/cooldown :ability/invariant}]
+  (doseq [id #{:ability/tunable :ability/budget :ability/progression :ability/cooldown :ability/invariant :ability/context}]
     (let [d (node/descriptor id)]
       (is (contains? (:inputs d) :name))
       (is (seq (:reads-environment d)) (str id " must declare which document-level table it reads")))))

@@ -52,17 +52,25 @@
                        :declared (vec (keys table))})))
     (bind-outputs ctx (:bind node) {output-port (get table name)})))
 
+(defn- run-context [node ctx]
+  (let [name (resolve-name node ctx)
+        table (get-in ctx [:env :context])]
+    (bind-outputs ctx (:bind node) {:value (get table name)})))
+
 (defn source? [component]
   (contains? #{:ability/caster :ability/tunable :ability/budget
-               :ability/progression :ability/cooldown :ability/invariant}
+               :ability/progression :ability/cooldown :ability/invariant
+               :ability/context}
              component))
 
 (defn run
   "Execute one :layer :source node against ctx's :env tables. `node` is
    the (already-known-to-be-a-source) node; throws if `:name` (for the
-   five name-keyed sources) is not a key of the corresponding :env table
-   -- a source reading past what its OWN ability document declared is a
-   real bug, not a nil to silently propagate."
+   five schema-declared sources) is not a key of the corresponding :env
+   table -- a source reading past what its OWN ability document declared
+   is a real bug, not a nil to silently propagate. :ability/context is
+   the one exception (see its own descriptor doc): its table has no
+   static schema, so an absent name is just nil."
   [node ctx]
   (case (:component node)
     :ability/caster (run-caster node ctx)
@@ -71,4 +79,5 @@
     :ability/progression (run-single-value-source :progression :progression node ctx)
     :ability/cooldown (run-single-value-source :cooldown :cooldown node ctx)
     :ability/invariant (run-single-value-source :invariants :value node ctx)
+    :ability/context (run-context node ctx)
     (throw (ex-info "not a source node" {:component (:component node)}))))

@@ -145,7 +145,8 @@
                    :costs (resolve-tunable-refs (:costs execution-context) (:tunables execution-context))
                    :progression (resolve-tunable-refs (:progression execution-context) (:tunables execution-context))
                    :cooldown (resolve-tunable-refs (:cooldown execution-context) (:tunables execution-context))
-                   :invariants (:invariants execution-context)}
+                   :invariants (:invariants execution-context)
+                   :context (:context execution-context)}
              :dispatch-query! (fn [capability request]
                                 (when-let [handler (get (:queries capability-state) capability)]
                                   (handler request nil)))

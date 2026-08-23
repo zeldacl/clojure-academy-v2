@@ -94,6 +94,18 @@
          (get-in (source-runtime/run {:component :ability/invariant :name :max-range :bind {:value :v}} (fresh-ctx))
                  [:locals :v]))))
 
+(deftest ability-context-resolves-a-present-key-and-nils-an-absent-one-test
+  (let [ctx (assoc (fresh-ctx) :env (assoc (:env (fresh-ctx)) :context {:location-name "home"}))]
+    (is (= "home"
+           (get-in (source-runtime/run
+                    {:component :ability/context :name :location-name :bind {:value :loc}}
+                    ctx)
+                   [:locals :loc])))
+    (is (nil? (get-in (source-runtime/run
+                       {:component :ability/context :name :not-present :bind {:value :v}}
+                       ctx)
+                      [:locals :v])))))
+
 (deftest name-is-resolved-via-value-resolve-value-not-just-a-literal-test
   ;; :name can itself be a {:ref [:local ...]}/{:expr ...} form like any
   ;; other field -- proves run doesn't special-case literal keywords only.

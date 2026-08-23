@@ -12,6 +12,14 @@
   (is (= {:vec3 [4.0 6.0 8.0]}
          (expr/evaluate :vec3/add [{:vec3 [1.0 2.0 3.0]} {:vec3 [3.0 4.0 5.0]}]))))
 
+(deftest vec3-distance-accepts-the-real-host-query-xyz-shape-test
+  ;; :owner/snapshot's :position projection, :target/saved-location's
+  ;; resolved point, and every raycast hit position are real {:x :y :z}
+  ;; maps, not node-core's own {:vec3 [...]} convention -- vec3-components
+  ;; must accept both.
+  (is (= 5.0 (expr/evaluate :vec3/distance
+                            [{:x 0.0 :y 0.0 :z 0.0} {:x 3.0 :y 4.0 :z 0.0}]))))
+
 (deftest vec3-normalize-zero-length-test
   (is (= {:vec3 [0.0 0.0 0.0]} (expr/evaluate :vec3/normalize [{:vec3 [0.0 0.0 0.0]}]))))
 

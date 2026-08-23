@@ -82,4 +82,12 @@
     :category :source
     :inputs {:name {:type :keyword :doc "Must match a key in this document's own :invariants"}}
     :outputs {:value {:type :any}}
-    :reads-environment #{:invariants}}))
+    :reads-environment #{:invariants}})
+
+  (node/register-composite!
+   {:id :ability/context :revision 1 :layer :source
+    :doc "One ad hoc field from this activation's caller-supplied :context map (e.g. a UI-selected :location-name, the old v2 {:ref [:context ...]} value form) -- unlike :tunable/:budget/:progression/:cooldown/:invariant, :context has no static per-ability schema (the caller may pass different keys on different activations), so an absent name resolves to nil instead of being a compile-time or runtime error."
+    :category :source
+    :inputs {:name {:type :keyword :doc "A key the caller's own :context map may or may not provide"}}
+    :outputs {:value {:type :any}}
+    :reads-environment #{:context}}))

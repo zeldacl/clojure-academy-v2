@@ -272,6 +272,83 @@
         (is (= :insufficient-resource (:outcome result)))
         (is (not (some #(= :inventory/consume (:capability %)) (:actions result))))))))
 
+;; --- :location-teleport: :costs/:progression/:cooldown are entirely
+;; program-computed (depend on :distance, only known after :destination
+;; resolves), so the program bypasses :ability/budget|progression|cooldown
+;; and builds those maps inline -- also the first real content to use the
+;; new :ability/context source node for {:ref [:context :location-name]} ---
+
+(defn- with-fake-teleport-queries [{:keys [owner-position destination]} f]
+  (let [previous-owner (get (:queries (capabilities/snapshot)) :owner/snapshot)
+        previous-location (get (:queries (capabilities/snapshot)) :saved-location)
+        previous-entity (get (:queries (capabilities/snapshot)) :entity/select)]
+    (try
+      (capabilities/register-query! :owner/snapshot (fn [_request _frame] {:position owner-position}))
+      (capabilities/register-query! :saved-location (fn [_request _frame] destination))
+      (capabilities/register-query! :entity/select (fn [_request _frame] []))
+      (f)
+      (finally
+        (when previous-owner (capabilities/register-query! :owner/snapshot previous-owner))
+        (when previous-location (capabilities/register-query! :saved-location previous-location))
+        (when previous-entity (capabilities/register-query! :entity/select previous-entity))))))
+
+(deftest location-teleport-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :location-teleport])]
+    (is (nil? (get-in state [:combat :errors :location-teleport])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :location-teleport))))
+
+(deftest location-teleport-v3-teleports-when-destination-found-and-affordable-test
+  (with-fake-teleport-queries
+    {:owner-position {:x 0.0 :y 64.0 :z 0.0 :world-id "overworld"}
+     ;; :value/eq's raw equality (both here and in v2's own opcode VM) makes
+     ;; the ability's own :cross-dimension? local true exactly when the two
+     ;; world-ids ARE equal -- inverted from what the name suggests, but
+     ;; this is v2's real, existing formula (ac/combat/abilities/
+     ;; location_teleport.edn ported byte-for-byte), not something to
+     ;; silently "fix" while porting. Using a different world-id here
+     ;; makes :cross-dimension? false, satisfying the branch2 guard
+     ;; ((not cross-dimension?) or mastery > threshold) unconditionally
+     ;; rather than depending on the mastery/threshold tunable values.
+     :destination {:x 100.0 :y 70.0 :z 100.0 :world-id "the_nether"}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :location-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :world/id "overworld" :progression/mastery 0.5}
+                     :tunables {:cross-dimension-exp-threshold 0.9 :teleport-radius 3.0
+                                :cp-base [2.0 8.0] :overload 0.0 :cross-dimension-multiplier 2.0
+                                :min-distance-multiplier 1.0 :distance-cap 200.0
+                                :cooldown-ticks [40.0 100.0] :long-distance-threshold 50.0
+                                :exp-short 0.01 :exp-long 0.03}
+                     :context {:location-name "home" :resources {:cp 100.0 :overload 100.0}}})]
+        (is (= :accepted (:status result)))
+        (is (= :teleported (:outcome result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result))
+            "cost/spend + score/mark + cooldown/start all emit owner-patch actions")
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest location-teleport-v3-rejects-when-location-not-found-test
+  (with-fake-teleport-queries
+    {:owner-position {:x 0.0 :y 64.0 :z 0.0 :world-id "overworld"} :destination nil}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :location-teleport "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :world/id "overworld" :progression/mastery 0.5}
+                     :tunables {:cross-dimension-exp-threshold 0.9 :teleport-radius 3.0
+                                :cp-base [2.0 8.0] :overload 0.0 :cross-dimension-multiplier 2.0
+                                :min-distance-multiplier 1.0 :distance-cap 200.0
+                                :cooldown-ticks [40.0 100.0] :long-distance-threshold 50.0
+                                :exp-short 0.01 :exp-long 0.03}
+                     :context {:location-name "nowhere" :resources {}}})]
+        (is (= :accepted (:status result)))
+        (is (= :location-not-found (:outcome result)))
+        (is (empty? (:actions result)))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
