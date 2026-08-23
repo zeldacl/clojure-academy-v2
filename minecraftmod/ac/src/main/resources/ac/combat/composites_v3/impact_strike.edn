@@ -1,0 +1,19 @@
+{:kind :composite
+ :id :combat/impact-strike
+ :revision 1
+ :layer :mid
+ :doc "Apply damage to a single target, then run an arbitrary caller-supplied follow-up subtree (VFX, status effects, secondary triggers, ...). :on-impact is a callback-typed input with an empty :scope -- it sees nothing beyond its own enclosing ability scope, no new locals are introduced by this composite. Port of the old v2 :combat/impact-strike composite (ac/combat/components/impact_strike.edn) into the v3 model."
+ :category :combat
+ :inputs {:target {:type :entity-ref}
+          :amount {:type :double :min 0.0}
+          :damage-type {:type :keyword :default :generic}
+          :on-impact {:type :node :scope {}}}
+ :outputs {}
+ :body
+ {:component :flow/sequence
+  :steps
+  [{:component :combat/damage
+    :target {:ref [:input :target]}
+    :amount {:ref [:input :amount]}
+    :damage-type {:ref [:input :damage-type]}}
+   {:ref [:input :on-impact]}]}}

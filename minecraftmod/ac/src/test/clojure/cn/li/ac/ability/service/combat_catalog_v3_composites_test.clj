@@ -22,7 +22,7 @@
   (catalog/initialize!)
   (doseq [id [:combat/area-damage :combat/radial-impulse :combat/teleport-group
               :combat/area-break :combat/release-with-cost :fx/lightning-strike
-              :combat/break-budget :target/raycast-destination]]
+              :combat/break-budget :target/raycast-destination :combat/impact-strike]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite")))
   (doseq [id [:vfx.fx/charge-ring :vfx.fx/block-progress :vfx.fx/trajectory-ribbon]]
     (is (= :mid (:layer (node/descriptor id))) (str id " should be a registered :mid composite"))))
@@ -268,3 +268,24 @@
     (is (= :resolve-destination (:query-kind (second (second @queries)))))
     (is (= {:hit-type :block :x 4.0 :y 64.0 :z 0.0} (get-in result [:locals :h])))
     (is (= {:x 5.0 :y 65.0 :z 0.0} (get-in result [:locals :d])))))
+
+(deftest impact-strike-composite-applies-damage-then-runs-the-caller-supplied-callback-test
+  (catalog/initialize!)
+  (let [actions (atom [])
+        vfx-signals (atom [])
+        ctx {:locals {} :seed 0 :dispatch combat-structural/dispatch
+             :world-id "overworld" :ability-id :test :activation-seed 1
+             :dispatch-action! (fn [capability request] (swap! actions conj [capability request]))
+             :dispatch-query! (fn [_ _] nil)
+             :emit-vfx! (fn [signal] (swap! vfx-signals conj signal))}
+        result (node-flow/execute!
+                {:component :combat/impact-strike
+                 :target "zombie-1" :amount 7.0 :damage-type :fire
+                 :on-impact {:component :effect/vfx :effect-id :scorch-mark :operation :spawn
+                             :payload {}}}
+                ctx)]
+    (is (not (:finished? result)))
+    (is (= [[:entity/damage {:target "zombie-1" :amount 7.0 :damage-type :fire}]]
+           (mapv (fn [[cap req]] [cap (select-keys req [:target :amount :damage-type])]) @actions)))
+    (is (= 1 (count @vfx-signals)))
+    (is (= :scorch-mark (:effect-id (first @vfx-signals))))))
