@@ -2,7 +2,6 @@ package cn.li.mc1211.client.font.msdf;
 
 import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.font.GlyphProvider;
-import com.mojang.blaze3d.font.TrueTypeGlyphProvider;
 import net.minecraft.client.gui.font.providers.FreeTypeUtil;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.stb.STBTTFontinfo;
@@ -20,10 +19,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * STB TrueType font face loaded from a system font file (no AWT).
+ * FreeType font face loaded from a system font file (no AWT).
  *
- * <p>The glyph provider is 1.21.1's FreeType-backed {@link TrueTypeGlyphProvider}
- * (the same class vanilla uses for {@code "type": "ttf"} font definitions);
+ * <p>The glyph provider is {@link MsdfFreeTypeGlyphProvider}, a copy of
+ * 1.21.1's FreeType-backed {@link com.mojang.blaze3d.font.TrueTypeGlyphProvider}
+ * (the class vanilla uses for {@code "type": "ttf"} font definitions) with
+ * hinting disabled so the bitmap metrics match the 1.20.1 STB reference;
  * STB is kept only for the MSDF monospace metrics helpers.</p>
  */
 public final class MsdfFontFace implements AutoCloseable {
@@ -32,6 +33,7 @@ public final class MsdfFontFace implements AutoCloseable {
     private final STBTTFontinfo fontInfo;
     private final ByteBuffer fontData;
     private final float scale;
+    private final float stbEquivalentScale;
     private final int ascent;
 
     public MsdfFontFace(final Path fontPath, final float pixelHeight) throws IOException {
@@ -57,8 +59,10 @@ public final class MsdfFontFace implements AutoCloseable {
             STBTruetype.stbtt_GetFontVMetrics(fontInfo, ascentBuf, descentBuf, lineGapBuf);
             this.ascent = ascentBuf.get(0);
         }
-        // 1.21.1 FreeType-backed provider, constructed exactly like vanilla
-        // TrueTypeGlyphProviderDefinition.load (size, oversample, shift, skip).
+        // FreeType-backed provider, constructed exactly like vanilla
+        // TrueTypeGlyphProviderDefinition.load (size, oversample, shift, skip),
+        // but with hinting disabled so bitmap tops/lefts match the unhinted
+        // STB reference 1.20.1 used (see MsdfFreeTypeGlyphProvider).
         final PointerBuffer facePtr = PointerBuffer.allocateDirect(1);
         synchronized (FreeTypeUtil.LIBRARY_LOCK) {
             FreeTypeUtil.assertError(
@@ -91,8 +95,15 @@ public final class MsdfFontFace implements AutoCloseable {
         final float stbEquivalentSize = vMetric > 0.0f
                 ? pixelHeight * face.units_per_EM() / vMetric
                 : pixelHeight;
+        // STB metrics for the vertical placement conversion must be measured
+        // at the same size as the FreeType provider (stbEquivalentSize), not
+        // at the nominal 32px: descenderPixels/stbGlyphTop are combined with
+        // the FreeType bearingTop in MSDFAwareGlyph's shift, and mixing the
+        // two scales makes every glyph land at a slightly different height.
+        this.stbEquivalentScale =
+                STBTruetype.stbtt_ScaleForPixelHeight(fontInfo, stbEquivalentSize);
         this.glyphProvider =
-                new TrueTypeGlyphProvider(data, face, stbEquivalentSize, 1.0f, 0.0f, 0.0f, "");
+                new MsdfFreeTypeGlyphProvider(data, face, stbEquivalentSize, 1.0f, 0.0f, 0.0f, "");
     }
 
     public STBTTFontinfo fontInfo() {
@@ -171,6 +182,17 @@ public final class MsdfFontFace implements AutoCloseable {
                     fontInfo, codePoint, scale, scale, x0, y0, x1, y1);
             return y0.get(0);
         }
+    }
+
+    /**
+     * Ratio of the FreeType provider's raster size to the nominal 32px
+     * (stbEquivalentSize / pixelHeight). 1.20.1's vertical placement formula
+     * is defined at 32px; the FreeType bearingTop the shift is combined with
+     * lives at the provider size, so the 32px terms are rescaled by this
+     * factor before summing.
+     */
+    public float stbEquivalentFactor() {
+        return stbEquivalentScale / scale;
     }
 
     public GlyphProvider glyphProvider() {

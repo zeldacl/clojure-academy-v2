@@ -30,7 +30,6 @@ public final class MonospaceAwareGlyphProvider implements GlyphProvider {
         return new MSDFAwareGlyph(original,
                 MsdfFontManager.isMonospace(),
                 MsdfFontManager.monospaceAdvance(),
-                codePoint,
                 face);
     }
 

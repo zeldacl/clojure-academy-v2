@@ -17,14 +17,13 @@ import java.util.function.Function;
  *
  * <p>Vertical placement reproduces the 1.20.1 convention exactly:</p>
  * <pre>
- *   1.20.1 quad top = y + (pixelHeight - descenderPx - 3) + y0_stb
- *                     (3 = 1.20.1 BakedGlyph.render constant)
- *   1.21.1 quad top = y + (7 - bitmap_top)                  (7 = 1.21.1 ascent)
+ *   1.20.1 quad top = y + bearingY - 3
+ *                     (bearingY = ascentPx - inkTop; 3 = render constant)
+ *   1.21.1 quad top = y + (7 - bitmap_top)   (7 = 1.21.1 ascent; no -3)
  * </pre>
- * The per-glyph compensation is therefore
- * {@code (pixelHeight - descenderPx - 3) - 7 + y0_stb + bitmap_top}, where
- * {@code y0_stb} is the STB rasterizer's bitmap top and {@code bitmap_top}
- * the FreeType one — no measured magic numbers, exact for every glyph.
+ * With the unhinted provider the two per-glyph terms (bearingY, bitmap_top)
+ * cancel, so the compensation is the CONSTANT
+ * {@code ascentPx - (7 + 3) = ascentPx - 10} (see verticalShift()).
  */
 public class MSDFAwareGlyph implements GlyphInfo {
 
@@ -36,16 +35,13 @@ public class MSDFAwareGlyph implements GlyphInfo {
     private final GlyphInfo original;
     private final boolean monospace;
     private final float monospaceAdvance;
-    private final int codePoint;
     private final MsdfFontFace face;
 
     public MSDFAwareGlyph(final GlyphInfo original, final boolean monospace,
-                          final float monospaceAdvance, final int codePoint,
-                          final MsdfFontFace face) {
+                          final float monospaceAdvance, final MsdfFontFace face) {
         this.original = original;
         this.monospace = monospace;
         this.monospaceAdvance = monospaceAdvance;
-        this.codePoint = codePoint;
         this.face = face;
     }
 
@@ -62,19 +58,16 @@ public class MSDFAwareGlyph implements GlyphInfo {
     @Override
     public BakedGlyph bake(final Function<SheetGlyphInfo, BakedGlyph> baker) {
         return original.bake(sgi -> baker.apply(
-                new VerticallyShiftedSheetGlyph(sgi, codePoint, face)));
+                new VerticallyShiftedSheetGlyph(sgi, face)));
     }
 
     private static final class VerticallyShiftedSheetGlyph implements SheetGlyphInfo {
         private final SheetGlyphInfo delegate;
-        private final int codePoint;
         private final MsdfFontFace face;
 
         VerticallyShiftedSheetGlyph(final SheetGlyphInfo delegate,
-                                    final int codePoint,
                                     final MsdfFontFace face) {
             this.delegate = delegate;
-            this.codePoint = codePoint;
             this.face = face;
         }
 
@@ -113,18 +106,43 @@ public class MSDFAwareGlyph implements GlyphInfo {
             return delegate.getBottom() + verticalShift();
         }
 
+        // Horizontal placement deliberately uses the rasterizer's native
+        // metrics (no per-glyph adjustment): the provider rasterizes
+        // unhinted, whose bitmap_left equals the 1.20.1 STB reference grid
+        // exactly, so the quad left edge lands on the glyph's content left.
+        // SheetGlyphInfo's bearing defaults are 0.0F/7.0F, so they MUST be
+        // forwarded to the delegate — vanilla's default getLeft() derives
+        // from getBearingLeft() (26.2's GlyphBitmap makes them abstract and
+        // forces this; 1.21.1's defaults would silently zero the quad).
+        @Override
+        public float getBearingLeft() {
+            return delegate.getBearingLeft();
+        }
+
+        @Override
+        public float getBearingTop() {
+            return delegate.getBearingTop();
+        }
+
         /**
-         * Standard 1.20.1 -> 1.21.1 placement conversion, per glyph:
-         *  1.20.1 top = y + (pixelHeight - descenderPx - 3) + y0_stb
-         *  1.21.1 top = y + 7 - bitmap_top
-         * shift 1.21.1's top down by the difference of the two formulas.
+         * Constant shift for every glyph, derived from matching 1.20.1
+         * exactly (the reference for vertical placement):
+         * <pre>
+         *   1.20.1 quad top = y + bearingY - 3   (render subtracts 3)
+         *   1.21.1 quad top = y + 7 - bearingTop + shift   (render does not)
+         * </pre>
+         * 1.20.1's STB provider measures bearingY downward from the em top
+         * (bearingY = ascentPx - inkTop; diagnostic logs: e = 11.65 =
+         * 25.65 - 14, R = 6.65 = 25.65 - 19). The provider rasterizes
+         * unhinted, whose bitmap_top equals the STB ink top (same scale —
+         * the diagnostic logs confirm the metrics match per glyph), so the
+         * two per-glyph terms cancel and the compensation is the CONSTANT
+         * {@code ascentPx - (7 + 3) = ascentPx - 10} — exact for every
+         * glyph. (26.2's shift formula is calibrated for its own GUI's y
+         * semantics and must not be copied here.)
          */
         private float verticalShift() {
-            return (MsdfFontManager.DESIGN_PIXEL_HEIGHT
-                    - face.descenderPixels() - LEGACY_RENDER_SHIFT)
-                    - VANILLA_ASCENT
-                    + face.stbGlyphTop(codePoint)
-                    + delegate.getBearingTop();
+            return face.ascentPixels() - (VANILLA_ASCENT + LEGACY_RENDER_SHIFT);
         }
     }
 }
