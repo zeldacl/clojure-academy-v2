@@ -483,6 +483,79 @@
                   (:actions result)))
         (is (= 2 (count (:vfx-signals result))) "beam + audio, no fan")))))
 
+;; --- :directed-shock: charge/punch session animation state + a release-
+;; time vec3 knockback-math chain, gated on mastery, using :session/
+;; read|write for both charge-ticks and the punched?/punch-ticks pair ---
+
+(def ^:private directed-shock-tunables
+  {:charge-min-ticks 2 :charge-max-accepted-ticks 40 :charge-max-tolerant-ticks 60
+   :punch-animation-ticks 6 :targeting-distance 5.0 :target-eye-height 1.6
+   :hit-impulse 0.4 :knockback-y-adjust 0.1 :knockback-scale 0.6 :knockback-exp-threshold 0.9
+   :damage 8.0 :release-cp 3.0 :release-overload 0.0 :cooldown-ticks 40 :exp-hit 0.02 :exp-miss 0.01})
+
+(deftest directed-shock-v3-start-phase-initializes-session-and-spawns-vfx-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :directed-shock "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables directed-shock-tunables})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (some #(= :session-patch (:type %)) (:actions result)))
+    (is (= 1 (count (:vfx-signals result))))))
+
+(deftest directed-shock-v3-pulse-phase-charges-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :directed-shock "owner-1"
+                {:action :pulse
+                 :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables directed-shock-tunables
+                 :session-state {:charge-ticks 0 :punched? false :punch-ticks 0}})]
+    (is (= :accepted (:status result)))
+    (is (= :charging (:outcome result)))
+    (is (some #(= :session-patch (:type %)) (:actions result)))))
+
+(deftest directed-shock-v3-release-phase-hits-with-knockback-when-mastery-above-threshold-test
+  (with-fake-raycast-handler
+    {:entity-id "zombie-1" :position {:vec3 [0.0 65.0 5.0]} :eye-height 1.6}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :directed-shock "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :world/id "overworld" :progression/mastery 0.95}
+                     :tunables directed-shock-tunables
+                     :context {:resources {:cp 10.0}}
+                     :session-state {:charge-ticks 10}})]
+        (is (= :accepted (:status result)))
+        (is (= :punched (:outcome result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %))) (:actions result)))
+        (is (some #(= :entity/teleport (:capability %)) (:actions result))
+            "high mastery routes through the teleport + full-velocity knockback branch")
+        (is (some #(= :session-patch (:type %)) (:actions result)))))))
+
+(deftest directed-shock-v3-release-phase-misses-when-raycast-finds-no-entity-test
+  (with-fake-raycast-handler
+    {:entity-id nil}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :directed-shock "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/body {:x 0.0 :y 64.0 :z 0.0}
+                            :world/id "overworld" :progression/mastery 0.1}
+                     :tunables directed-shock-tunables
+                     :context {:resources {:cp 10.0}}
+                     :session-state {:charge-ticks 10}})]
+        (is (= :accepted (:status result)))
+        (is (= :miss (:outcome result)))
+        (is (not (some #(= :entity/damage (:capability %)) (:actions result))))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
