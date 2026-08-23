@@ -2,6 +2,7 @@
  :kind :ability
  :id :arc-gen
  :revision 2
+ :engine :v3
  :activation :instant
  :status :migrated
  :requires [:caster/eye :caster/aim :world/id]
@@ -26,66 +27,82 @@
  :program
  {:component :flow/sequence
   :steps
-  [{:component :cost/spend
-    :budget :activate
-    :on-insufficient {:component :flow/finish
-                      :outcome :insufficient-resource
-                      :finish-session? true}}
-   {:component :target/raycast
-    :origin {:from :caster/eye}
-    :direction {:from :caster/aim}
-    :distance {:tunable :max-distance}
-    :include-entities? true :include-blocks? true
-    :result :aim-hit}
-   {:component :effect/vfx
-    :effect-id :beam-arc-fade :operation :spawn
-    :instance-key [:activation :arc-fired]
-    :audience {:type :nearby :radius 32.0}
-    :payload {:start {:from :caster/eye}
-              :end {:ref [:slot :aim-hit :position]}
-              :duration-ticks 10 :beam-at 0 :grow-ticks 2
-              :layers [{:shape :tube :radius 0.08 :color [236 170 93 60]}
-                       {:shape :tube :radius 0.05 :color [241 240 222 200]}
-                       {:shape :line :width 0.015 :color [165 230 255 160]}]
-              :arc-at 0 :arc-spacing {:min 1.0 :max 2.0}
-              :arc-radius {:min 0.06 :max 0.14}
-              :arc-count-limit 32 :arc-life-ticks 8
-              :fade-at 3 :fade-from-tick 3 :fade-to-tick 10
-              :fade-from-alpha 1.0 :fade-to-alpha 0.0
-              :ring-radius {:from 0.12 :to 0.28}
-              :ring-segments 10 :ring-color [188 252 238 180]}}
+  [{:component :ability/caster
+    :bind {:eye :eye :aim :aim :world-id :wid :mastery :mastery :seed :seed}}
+   {:component :ability/tunable :name :max-distance :bind {:value :max-distance}}
+   {:component :ability/tunable :name :damage :bind {:value :damage}}
+   {:component :ability/tunable :name :creeper-charge-chance :bind {:value :creeper-charge-chance}}
+   {:component :ability/tunable :name :ignite-probability :bind {:value :ignite-probability}}
+   {:component :ability/tunable :name :fishing-probability :bind {:value :fishing-probability}}
+   {:component :ability/tunable :name :fishing-exp-threshold :bind {:value :fishing-exp-threshold}}
+   {:component :ability/budget :name :activate :bind {:budget :activate-budget}}
+   {:component :ability/progression :name :hit-entity :bind {:progression :hit-entity-progression}}
+   {:component :ability/progression :name :hit-block :bind {:progression :hit-block-progression}}
+   {:component :ability/cooldown :name :main :bind {:cooldown :main-cooldown}}
+   {:component :cost/spend :budget {:ref [:local :activate-budget]} :bind {:insufficient? :insufficient?}}
    {:component :flow/branch
-    :when {:ref [:slot :aim-hit :entity-id]}
-    :then {:component :flow/sequence
-           :steps [{:component :combat/impact-strike
-                    :target {:ref [:slot :aim-hit :entity-id]}
-                    :amount {:tunable :damage}
-                    :damage-type :skill
-                    :on-impact {:component :flow/branch
-                                :when {:expr :bool/and
-                                       :args [{:ref [:slot :aim-hit :creeper?]}
-                                              {:expr :random/chance
-                                               :args [{:tunable :creeper-charge-chance}]}]}
-                                :then {:component :combat/status
-                                       :target {:ref [:slot :aim-hit :entity-id]}
-                                       :status-id :powered-creeper
-                                       :duration-ticks 1 :amplifier 0}}}
-                   {:component :score/mark :tag :hit-entity}
-                   {:component :domain/event
-                    :event-type :achievement/trigger
-                    :payload {:id "electromaster.arc_gen"}}]}
-    :else {:component :flow/sequence
-           :steps [{:component :domain/event
-                    :event-type :world/block-impact
-                    :payload {:world-id {:from :world/id}
-                              :position {:ref [:slot :aim-hit :position]}
-                              :block-position {:ref [:slot :aim-hit :block-position]}
-                              :water? {:ref [:slot :aim-hit :water?]}
-                              :skill-exp {:from :progression/mastery}
-                              :seed {:from :rng/seed}
-                              :ignite-probability {:tunable :ignite-probability}
-                              :fishing-probability {:tunable :fishing-probability}
-                              :fishing-exp-threshold {:tunable :fishing-exp-threshold}}}
-                   {:component :score/mark :tag :hit-block}]}}
-   {:component :cooldown/start :name :main}
-   {:component :flow/finish :outcome :performed :finish-session? true}]}}
+    :when {:ref [:local :insufficient?]}
+    :then {:component :flow/finish :outcome :insufficient-resource}
+    :else
+    {:component :flow/sequence
+     :steps
+     [{:component :target/raycast
+       :origin {:ref [:local :eye]} :direction {:ref [:local :aim]} :distance {:ref [:local :max-distance]}
+       :include-entities? true :include-blocks? true
+       :bind {:hit :aim-hit}}
+      {:component :effect/vfx
+       :effect-id :beam-arc-fade :operation :spawn
+       :instance-key [:activation :arc-fired]
+       :audience {:type :nearby :radius 32.0}
+       :payload {:start {:ref [:local :eye]}
+                 :end {:ref [:local :aim-hit :position]}
+                 :duration-ticks 10 :beam-at 0 :grow-ticks 2
+                 :layers [{:shape :tube :radius 0.08 :color [236 170 93 60]}
+                          {:shape :tube :radius 0.05 :color [241 240 222 200]}
+                          {:shape :line :width 0.015 :color [165 230 255 160]}]
+                 :arc-at 0 :arc-spacing {:min 1.0 :max 2.0}
+                 :arc-radius {:min 0.06 :max 0.14}
+                 :arc-count-limit 32 :arc-life-ticks 8
+                 :fade-at 3 :fade-from-tick 3 :fade-to-tick 10
+                 :fade-from-alpha 1.0 :fade-to-alpha 0.0
+                 :ring-radius {:from 0.12 :to 0.28}
+                 :ring-segments 10 :ring-color [188 252 238 180]}}
+      {:component :flow/branch
+       :when {:ref [:local :aim-hit :entity-id]}
+       :then
+       {:component :flow/sequence
+        :steps
+        [{:component :combat/impact-strike
+          :target {:ref [:local :aim-hit :entity-id]}
+          :amount {:ref [:local :damage]}
+          :damage-type :skill
+          :on-impact
+          {:component :flow/branch
+           :when {:expr :bool/and
+                  :args [{:ref [:local :aim-hit :creeper?]}
+                         {:expr :random/chance :args [{:ref [:local :creeper-charge-chance]}]}]}
+           :then {:component :combat/status
+                  :target {:ref [:local :aim-hit :entity-id]}
+                  :status-id :powered-creeper
+                  :duration-ticks 1 :amplifier 0}}}
+         {:component :score/mark :progression {:ref [:local :hit-entity-progression]}}
+         {:component :domain/event
+          :event-type :achievement/trigger
+          :payload {:id "electromaster.arc_gen"}}]}
+       :else
+       {:component :flow/sequence
+        :steps
+        [{:component :domain/event
+          :event-type :world/block-impact
+          :payload {:world-id {:ref [:local :wid]}
+                    :position {:ref [:local :aim-hit :position]}
+                    :block-position {:ref [:local :aim-hit :block-position]}
+                    :water? {:ref [:local :aim-hit :water?]}
+                    :skill-exp {:ref [:local :mastery]}
+                    :seed {:ref [:local :seed]}
+                    :ignite-probability {:ref [:local :ignite-probability]}
+                    :fishing-probability {:ref [:local :fishing-probability]}
+                    :fishing-exp-threshold {:ref [:local :fishing-exp-threshold]}}}
+         {:component :score/mark :progression {:ref [:local :hit-block-progression]}}]}}
+      {:component :cooldown/start :name :main :cooldown {:ref [:local :main-cooldown]}}
+      {:component :flow/finish :outcome :performed}]}}]}}

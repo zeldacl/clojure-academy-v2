@@ -21,8 +21,18 @@
    covered thoroughly by cn.li.combat.skill-runtime-v3-engine-test and
    friends with synthetic content)."
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.ac.ability.service.combat-catalog :as catalog]
             [cn.li.combat.skill-runtime :as skill-runtime]))
+
+(defn- with-fake-raycast-handler [hit f]
+  (let [previous (get (:queries (capabilities/snapshot)) :raycast)]
+    (try
+      (capabilities/register-query! :raycast (fn [_request _frame] hit))
+      (f)
+      (finally
+        (when previous
+          (capabilities/register-query! :raycast previous))))))
 
 (deftest brain-course-compiles-with-engine-v3-and-is-available-test
   (let [state (catalog/initialize!)
@@ -103,6 +113,42 @@
     (is (nil? (get-in state [:combat :errors :space-fluct])))
     (is (= :v3 (:engine ability)))
     (is (= :accepted (:status result)))))
+
+;; --- :arc-gen: raycast query + entity/block branch + :combat/impact-strike
+;; composite (:on-impact callback) + :domain/event ---
+
+(def ^:private arc-gen-fixture
+  {:action :start
+   :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+          :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld" :progression/mastery 0.5}
+   :tunables {:damage 12.0 :max-distance 32.0 :ignite-probability 0.2
+              :fishing-probability 0.1 :fishing-exp-threshold 0.5 :creeper-charge-chance 0.0
+              :cost-cp 3.0 :cost-overload 0.0 :cooldown-ticks 40 :exp-entity 0.05 :exp-block 0.02}
+   :context {:resources {:cp 10.0}}})
+
+(deftest arc-gen-v3-program-strikes-an-entity-when-raycast-hits-one-test
+  (with-fake-raycast-handler
+    {:entity-id "target-1" :position {:vec3 [0.0 65.6 5.0]} :creeper? false}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute! state :arc-gen "owner-1" arc-gen-fixture)]
+        (is (= :accepted (:status result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= "target-1" (:target %)) (= 12.0 (:amount %)))
+                  (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)))
+        (is (= 1 (count (:vfx-signals result))))
+        (is (= :achievement/trigger (:type (first (filter #(= :achievement/trigger (:type %)) (:events result))))))))))
+
+(deftest arc-gen-v3-program-triggers-block-impact-when-raycast-misses-entities-test
+  (with-fake-raycast-handler
+    {:entity-id nil :position {:vec3 [0.0 65.6 5.0]} :block-position {:vec3 [0 65 5]} :water? false}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute! state :arc-gen "owner-1" arc-gen-fixture)]
+        (is (= :accepted (:status result)))
+        (is (not (some #(= :entity/damage (:capability %)) (:actions result))))
+        (is (some #(= :world/block-impact (:type %)) (:events result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)))))))
 
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)

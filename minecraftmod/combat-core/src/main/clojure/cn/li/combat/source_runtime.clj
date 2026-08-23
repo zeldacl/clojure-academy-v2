@@ -34,7 +34,8 @@
    :normal-metal-blocks :targeting/normal-metal-blocks
    :weak-metal-blocks :targeting/weak-metal-blocks
    :metal-entities :targeting/metal-entities
-   :mastery :progression/mastery :level :progression/level})
+   :mastery :progression/mastery :level :progression/level
+   :seed :rng/seed})
 
 (defn- run-caster [node ctx]
   (let [facade (get-in ctx [:env :caster-facade])

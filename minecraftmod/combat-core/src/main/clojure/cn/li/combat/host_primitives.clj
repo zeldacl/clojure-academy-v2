@@ -273,9 +273,15 @@
 
    :projectile/schedule-beam
    {:capability :projectile/schedule-beam
-    :inputs {:origin {:type :vec3} :destination {:type :vec3} :damage {:type :double}
-             :damage-type {:type :keyword} :delay-ticks {:type :long :min 0}}
-    :doc "Schedule a delayed beam impact. Not decomposable: the VM is a synchronous tree-walker with no wait/scheduled-continuation node type." :category :combat}
+    :inputs {:owner {:type :string} :origin {:type :vec3} :destination {:type :vec3}
+             :damage {:type :double} :damage-type {:type :keyword} :delay-ticks {:type :long :min 0}
+             :origin-selector {:type :map :default nil}
+             :destination-selector {:type :map :default nil}
+             :exclude-owner? {:type :boolean :default false}
+             :settlement-vfx {:type :map :default nil}
+             :seed {:type :long :default 0}
+             :instance-key {:type [:list-of :any] :default nil}}
+    :doc "Schedule a delayed beam impact. Not decomposable: the VM is a synchronous tree-walker with no wait/scheduled-continuation node type. :origin-selector/:destination-selector/:exclude-owner?/:settlement-vfx/:seed/:instance-key are optional fields cn.li.combat.deferred/schedule-action! (the real capability handler) reads beyond the required :origin/:destination/:damage/:damage-type/:delay-ticks -- see that namespace's schedule-action!/settle!." :category :combat}
 
    :block/break
    {:capability :block/break

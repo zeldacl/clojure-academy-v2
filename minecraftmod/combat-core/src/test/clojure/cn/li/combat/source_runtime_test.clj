@@ -19,7 +19,8 @@
                    :targeting/weak-metal-blocks [:copper]
                    :targeting/metal-entities [:iron-golem]
                    :progression/mastery 0.75
-                   :progression/level 3}
+                   :progression/level 3
+                   :rng/seed 42}
    :tunables {:beam-damage 8.5}
    :costs {:release {:resources {:cp 1.0}}}
    :progression {:hit {:per-mark 0.1}}
@@ -43,7 +44,7 @@
                      :creative? :creative :forward :fwd :back :bwd :left :lft :right :rgt
                      :eye-y :ey :charge-ticks :charge
                      :normal-metal-blocks :nmb :weak-metal-blocks :wmb :metal-entities :me
-                     :mastery :mastery :level :level}}
+                     :mastery :mastery :level :level :seed :seed}}
              (fresh-ctx))]
     (is (= {:x 1.0 :y 65.6 :z 2.0} (get-in ctx [:locals :eye])))
     (is (= {:x 1.0 :y 64.0 :z 2.0} (get-in ctx [:locals :body])))
@@ -61,7 +62,8 @@
     (is (= [:copper] (get-in ctx [:locals :wmb])))
     (is (= [:iron-golem] (get-in ctx [:locals :me])))
     (is (= 0.75 (get-in ctx [:locals :mastery])))
-    (is (= 3 (get-in ctx [:locals :level])))))
+    (is (= 3 (get-in ctx [:locals :level])))
+    (is (= 42 (get-in ctx [:locals :seed])))))
 
 (deftest ability-caster-with-no-bind-is-a-no-op-test
   (is (= (fresh-ctx) (source-runtime/run {:component :ability/caster} (fresh-ctx)))))
