@@ -1675,6 +1675,133 @@
     (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %)) (= 8.0 (:amount %)))
               (:actions result)))))
 
+;; --- :electron-missile: 1 v2 fragment (:cleanup) inlined at every call
+;; site (pulse's insufficient-resource and timeout, release, abort),
+;; :combat/damage's real :reset-invulnerable-time? field (fixed in
+;; host_primitives.clj this session), and a locals-threading pattern for
+;; a :session-state counter (:balls) that both a "maybe spawn" branch and
+;; a separate "maybe fire" branch independently adjust in the same tick
+;; -- see build_electron_missile.py's :balls-out comment ---
+
+(def ^:private electron-missile-tunables
+  {:seek-range 16.0 :max-hold-ticks 200 :max-balls 3 :spawn-interval-ticks 10
+   :fire-interval-ticks 20 :damage 4.0 :cost-down-overload 0.0 :cost-attack-cp 0.5
+   :cost-attack-overload 0.0 :cost-tick-cp 0.2 :cooldown-ticks 60 :exp-hit 0.02})
+
+(def ^:private electron-missile-caster-facade
+  {:caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/id "owner-1" :world/id "overworld"})
+
+(deftest electron-missile-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :electron-missile])]
+    (is (nil? (get-in state [:combat :errors :electron-missile])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :electron-missile))))
+
+(deftest electron-missile-v3-start-phase-starts-charging-when-affordable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :electron-missile "owner-1"
+                {:action :start :from electron-missile-caster-facade :tunables electron-missile-tunables
+                 :context {:resources {:overload 0.0}}})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (= 2 (count (:vfx-signals result))) "particle-session spawn + audio-one-shot spawn")))
+
+(deftest electron-missile-v3-start-phase-rejects-when-insufficient-overload-budget-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :electron-missile "owner-1"
+                {:action :start :from electron-missile-caster-facade
+                 :tunables (assoc electron-missile-tunables :cost-down-overload 10.0)
+                 :context {:resources {:overload 0.0}}})]
+    (is (= :accepted (:status result)))
+    (is (= :insufficient-resource (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
+(deftest electron-missile-v3-pulse-phase-cleans-up-when-charging-cp-insufficient-test
+  (with-fake-entity-select []
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :electron-missile "owner-1"
+                    {:action :pulse :from electron-missile-caster-facade :tunables electron-missile-tunables
+                     :context {:resources {:cp 0.0}}
+                     :session-state {:ticks 5 :balls 0 :next-spawn-tick 0 :next-fire-tick 20 :overload-floor 0.0}})]
+        (is (= :accepted (:status result)))
+        (is (= :insufficient-resource (:outcome result)))
+        (is (true? (:finish-session? result)))))))
+
+(deftest electron-missile-v3-pulse-phase-cleans-up-on-timeout-test
+  (with-fake-entity-select []
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :electron-missile "owner-1"
+                    {:action :pulse :from electron-missile-caster-facade :tunables electron-missile-tunables
+                     :context {:resources {:cp 5.0}}
+                     :session-state {:ticks 999 :balls 0 :next-spawn-tick 0 :next-fire-tick 20 :overload-floor 0.0}})]
+        (is (= :accepted (:status result)))
+        (is (= :timeout (:outcome result)))
+        (is (true? (:finish-session? result)))))))
+
+(deftest electron-missile-v3-pulse-phase-spawns-a-ball-when-under-the-cap-test
+  (with-fake-entity-select []
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :electron-missile "owner-1"
+                    {:action :pulse :from electron-missile-caster-facade :tunables electron-missile-tunables
+                     :context {:resources {:cp 5.0}}
+                     :session-state {:ticks 0 :balls 0 :next-spawn-tick 0 :next-fire-tick 20 :overload-floor 0.0}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))
+        (is (some #(= :entity/spawn (:capability %)) (:actions result)))))))
+
+(deftest electron-missile-v3-pulse-phase-fires-at-a-target-when-a-ball-and-target-exist-test
+  ;; the single fake :entity/select handler answers BOTH the balls-list
+  ;; query and the targets query, so the fixture needs every field either
+  ;; call site's projection could read (:eye-height is only meaningful
+  ;; for the targets query, but harmless on the balls-list side).
+  (with-fake-entity-select [{:id "ball-1" :type :entity :position {:vec3 [0.0 64.0 0.0]} :eye-height 1.6 :living? true}]
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :electron-missile "owner-1"
+                    {:action :pulse :from electron-missile-caster-facade :tunables electron-missile-tunables
+                     :context {:resources {:cp 5.0}}
+                     :session-state {:ticks 20 :balls 1 :next-spawn-tick 999 :next-fire-tick 20 :overload-floor 0.0}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))
+        (is (some #(and (= :entity/damage (:capability %)) (= 4.0 (:amount %))) (:actions result)))
+        (is (some #(= :entity/discard (:capability %)) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark emits an owner-patch")))))
+
+(deftest electron-missile-v3-release-phase-discards-balls-and-starts-cooldown-test
+  (with-fake-entity-select [{:id "ball-1" :type :entity :position {:vec3 [0.0 64.0 0.0]}}]
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :electron-missile "owner-1"
+                    {:action :release :from electron-missile-caster-facade :tunables electron-missile-tunables
+                     :session-state {}})]
+        (is (= :accepted (:status result)))
+        (is (= :released (:outcome result)))
+        (is (true? (:finish-session? result)))
+        (is (some #(= :entity/discard (:capability %)) (:actions result)))))))
+
+(deftest electron-missile-v3-abort-phase-cleans-up-test
+  (with-fake-entity-select []
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :electron-missile "owner-1"
+                    {:action :abort :from electron-missile-caster-facade :tunables electron-missile-tunables
+                     :session-state {}})]
+        (is (= :accepted (:status result)))
+        (is (= :aborted (:outcome result)))
+        (is (true? (:finish-session? result)))))))
+
 (deftest mag-movement-v3-abort-phase-cleans-up-test
   (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
     (fn []

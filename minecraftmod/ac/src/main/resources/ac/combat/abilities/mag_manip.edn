@@ -341,11 +341,11 @@
                       :to :body-id
                       :value {:ref [:local
                           :held-bodies
-                          0
-                          :id]}}
+                          0]}}
                     {:component :target/entity-snapshot
                       :entity-id {:ref [:local
-                          :body-id]}
+                          :body-id
+                          :id]}
                       :projection [:id
                         :position
                         :alive?]
@@ -522,11 +522,11 @@
                 :to :body-id
                 :value {:ref [:local
                     :held-bodies
-                    0
-                    :id]}}
+                    0]}}
               {:component :target/entity-snapshot
                 :entity-id {:ref [:local
-                    :body-id]}
+                    :body-id
+                    :id]}
                 :projection [:id
                   :position
                   :alive?]
@@ -579,7 +579,8 @@
                             :bind {:value :body-id}}
                           {:component :target/entity-snapshot
                             :entity-id {:ref [:local
-                                :body-id]}
+                                :body-id
+                                :id]}
                             :projection [:id
                               :position
                               :alive?]
@@ -720,7 +721,8 @@
                             :bind {:value :body-id}}
                           {:component :target/entity-snapshot
                             :entity-id {:ref [:local
-                                :body-id]}
+                                :body-id
+                                :id]}
                             :projection [:id
                               :position
                               :alive?]
