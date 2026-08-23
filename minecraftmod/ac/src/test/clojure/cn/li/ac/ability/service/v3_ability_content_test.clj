@@ -349,6 +349,79 @@
         (is (= :location-not-found (:outcome result)))
         (is (empty? (:actions result)))))))
 
+;; --- :vec-accel: a :session ability using :session/read|write (not raw
+;; :session/patch) and the new :vec3/launch domain expr op ---
+
+(defn- with-fake-ground-raycast [hit f]
+  (let [previous (get (:queries (capabilities/snapshot)) :raycast)]
+    (try
+      (capabilities/register-query! :raycast (fn [_request _frame] hit))
+      (f)
+      (finally
+        (when previous (capabilities/register-query! :raycast previous))))))
+
+(def ^:private vec-accel-tunables
+  {:max-charge-ticks 40 :max-velocity 3.0 :speed-progress [0.1 1.0]
+   :pitch-offset-radians 0.0 :ground-check-distance 5.0 :groundless-exp-threshold 0.9
+   :release-cp 4.0 :release-overload 0.0 :cooldown-ticks 60 :exp-use 0.02})
+
+(deftest vec-accel-v3-start-phase-initializes-session-and-spawns-vfx-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :vec-accel "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                        :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                 :tunables vec-accel-tunables})]
+    (is (= :accepted (:status result)))
+    (is (= :started (:outcome result)))
+    (is (some #(= :session-patch (:type %)) (:actions result)))
+    (is (= 1 (count (:vfx-signals result))))))
+
+(deftest vec-accel-v3-pulse-phase-charges-and-updates-session-test
+  (with-fake-ground-raycast nil
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :vec-accel "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0}
+                            :caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                            :world/id "overworld" :progression/mastery 0.95}
+                     :tunables vec-accel-tunables
+                     :session-state {:charge-ticks 0 :can-perform? true}})]
+        (is (= :accepted (:status result)))
+        (is (= :charging (:outcome result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))))))
+
+(deftest vec-accel-v3-release-phase-launches-when-affordable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :vec-accel "owner-1"
+                {:action :release
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables vec-accel-tunables
+                 :context {:resources {:cp 10.0}}
+                 :session-state {:can-perform? true :init-vel {:vec3 [0.0 0.5 1.0]}}})]
+    (is (= :accepted (:status result)))
+    (is (= :launched (:outcome result)))
+    (is (some #(= :motion/velocity (:capability %)) (:actions result)))
+    (is (= 2 (count (:vfx-signals result)))
+        "audio-one-shot spawn + trajectory-ribbon-session destroy")))
+
+(deftest vec-accel-v3-release-phase-rejects-when-not-performable-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :vec-accel "owner-1"
+                {:action :release
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.0 :z 0.0} :world/id "overworld"}
+                 :tunables vec-accel-tunables
+                 :context {:resources {:cp 10.0}}
+                 :session-state {:can-perform? false :init-vel {:vec3 [0.0 0.5 1.0]}}})]
+    (is (= :accepted (:status result)))
+    (is (= :not-performable (:outcome result)))
+    (is (not (some #(= :motion/velocity (:capability %)) (:actions result))))))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!

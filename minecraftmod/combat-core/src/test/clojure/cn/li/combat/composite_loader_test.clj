@@ -12,6 +12,7 @@
    neutral module's test suite never depends on the content-owning one)."
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.node.descriptor :as node]
+            [cn.li.node.expr :as expr]
             [cn.li.node.flow :as node-flow]
             [cn.li.combat.host-primitives :as host-primitives]
             [cn.li.combat.structural-primitives :as structural]
@@ -44,3 +45,15 @@
     (is (not (:finished? result)))
     (is (= #{:world/lightning :entity/damage} (set (map first @actions))))
     (is (= 9.0 (:amount (second (first (filter #(= :entity/damage (first %)) @actions))))))))
+
+(deftest vec3-launch-op-registers-and-computes-a-launch-velocity-test
+  ;; Looking straight along +z (horizontal, no pitch offset): the launch
+  ;; velocity should point straight along +z at the requested speed, with
+  ;; zero vertical component -- ballistic port of v2's own (previously
+  ;; non-shared) :vec3/launch opcode, exercised by vec-accel/vec-deviation/
+  ;; vec-reflection-family abilities.
+  (composite-loader/install-expr-ops!)
+  (let [{[vx vy vz] :vec3} (expr/evaluate :vec3/launch [{:vec3 [0.0 0.0 1.0]} 10.0 0.0])]
+    (is (= 0.0 vx))
+    (is (= 0.0 vy))
+    (is (= 10.0 vz))))

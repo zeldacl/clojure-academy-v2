@@ -225,8 +225,9 @@
 
    :motion/velocity
    {:capability :motion/velocity
-    :inputs {:velocity {:type :vec3}}
-    :doc "Set the caster's own velocity, through the shared safe-physics boundary." :category :motion}
+    :inputs {:velocity {:type :vec3} :dismount? {:type :boolean :default false}
+             :reset-fall-damage? {:type :boolean :default false}}
+    :doc "Set the caster's own velocity, through the shared safe-physics boundary. :dismount?/:reset-fall-damage? are optional fields real launch-shaped content sends alongside :velocity -- v2's opcode VM never filtered a component's fields down to a declared schema, so these reached the real handler unfiltered; declared here so invoke-primitive! doesn't silently drop them (the same gap class as :projectile/schedule-beam's selector fields and :target/entities' :filter, found earlier this session)." :category :motion}
 
    :owner/can-fly
    {:capability :owner/can-fly

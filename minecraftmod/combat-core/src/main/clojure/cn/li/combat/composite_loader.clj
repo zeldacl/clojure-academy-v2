@@ -13,13 +13,47 @@
    cn.li.combat.recipe/load-composites!) -- combat-core owns the loading
    engine, AC owns the content."
   (:require [cn.li.mcmod.runtime.safe-edn :as safe-edn]
+            [cn.li.node.expr :as expr]
             [cn.li.node.composite-loader :as loader]))
+
+(defn- launch-op
+  "[look speed pitch-offset] -> a launch-velocity {:vec3 [...]} pointed
+   along `look`'s horizontal heading, pitched by `pitch-offset` radians
+   relative to look's own current pitch, at magnitude `speed`. Faithful
+   port of v2's own (non-shared) expr evaluator's :vec3/launch opcode
+   (cn.li.combat.vm/evaluate) -- a ballistic launch-velocity helper real
+   content reaches for -- combat-only, so it registers through node-core's
+   domain-extension point rather than living in node-core's shared
+   baseline."
+  [args _seed]
+  (let [[look-x look-y look-z] (expr/vec3-components (nth args 0))
+        speed (double (nth args 1))
+        pitch-offset (double (nth args 2))
+        horiz-len (Math/sqrt (+ (* (double look-x) (double look-x))
+                                (* (double look-z) (double look-z))))
+        safe-h (if (pos? horiz-len) horiz-len 1.0)
+        current-pitch (Math/atan2 (- (double look-y)) safe-h)
+        pitch (+ current-pitch pitch-offset)
+        cos-p (Math/cos pitch)
+        sin-p (Math/sin pitch)
+        hx (/ (double look-x) safe-h)
+        hz (/ (double look-z) safe-h)]
+    {:vec3 [(* cos-p hx speed) (- (* sin-p speed)) (* cos-p hz speed)]}))
+
+(defn install-expr-ops!
+  "Register combat-core's domain-specific expression opcodes (currently
+   :vec3/launch). Idempotent (register-op! always overwrites); call before
+   loading any composite/ability program whose body references one."
+  []
+  (expr/register-op! :vec3/launch launch-op))
 
 (defn install!
   "Load and register every :layer :mid composite `manifest-resource`
-   lists. Returns {:registered [...] :errors [...]}, see
+   lists, and ensure combat's own expr opcodes are registered first.
+   Returns {:registered [...] :errors [...]}, see
    cn.li.node.composite-loader/install!."
   ([manifest-resource]
    (install! manifest-resource safe-edn/read-resource!))
   ([manifest-resource document-loader]
+   (install-expr-ops!)
    (loader/install! {:manifest-resource manifest-resource :document-loader document-loader})))
