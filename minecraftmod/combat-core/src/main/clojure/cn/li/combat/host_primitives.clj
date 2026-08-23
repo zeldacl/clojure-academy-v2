@@ -279,8 +279,9 @@
 
    :entity/spawn
    {:capability :entity/spawn
-    :inputs {:entity-type {:type :keyword} :owner {:type :string} :position {:type :vec3}}
-    :doc "Spawn a behavior-driven entity owned by the caster." :category :entity}
+    :inputs {:entity-type {:type :keyword} :owner {:type :string} :position {:type :vec3}
+             :velocity {:type :vec3 :default nil} :life-ticks {:type :long :default nil}}
+    :doc "Spawn a behavior-driven entity owned by the caster. :velocity/:life-ticks are optional fields every real caller (electron-bomb/electron-missile/light-shield/mag-manip/scatter-bomb-shaped content) sends alongside the 3 required fields -- same gap class found repeatedly this session (v3's :inputs were built from v2's :required schema set, not real content's actual field usage)." :category :entity}
 
    :entity/discard
    {:capability :entity/discard

@@ -636,6 +636,35 @@
     (is (= :not-ready (:outcome result)))
     (is (not (some #(= :entity/status (:capability %)) (:actions result))))))
 
+;; --- :electron-bomb: :entity/spawn (:velocity/:life-ticks fields, the
+;; 9th real host-primitive gap this session) + :projectile/schedule-beam's
+;; selector fields (fixed earlier), no :costs at all (a free cast) ---
+
+(deftest electron-bomb-v3-program-spawns-ball-and-schedules-beam-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :electron-bomb "owner-1"
+                {:action :start
+                 :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                        :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"
+                        :progression/mastery 0.5 :rng/seed 7}
+                 :tunables {:damage 15.0 :cooldown-ticks 100 :exp-hit 0.02
+                            :settle-ticks 20 :settle-ticks-improved 10 :improved-exp-threshold 0.9}})]
+    (is (= :accepted (:status result)))
+    (is (= :performed (:outcome result)))
+    (is (some #(and (= :entity/spawn (:capability %)) (= "academy:entity_md_ball" (:entity-type %))
+                    (= {:vec3 [0.0 0.0 0.0]} (:velocity %)) (= 20 (:life-ticks %)))
+              (:actions result))
+        "mastery 0.5 < improved-exp-threshold 0.9 -> plain settle-ticks (20)")
+    (let [beam-action (first (filter #(= :projectile/schedule-beam (:capability %)) (:actions result)))]
+      (is (some? beam-action))
+      (is (true? (:exclude-owner? beam-action)))
+      (is (== 18.0 (:delay-ticks beam-action)))
+      (is (some? (:origin-selector beam-action)))
+      (is (some? (:destination-selector beam-action)))
+      (is (some? (:settlement-vfx beam-action))))
+    (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
