@@ -6,6 +6,7 @@
             [cn.li.node.flow-test]
             [cn.li.node.scope-test]
             [cn.li.node.composite-test]
+            [cn.li.node.composite-loader-test]
             [cn.li.node.validate-test]
             [cn.li.node.schema-export-test]))
 
@@ -16,6 +17,7 @@
                             'cn.li.node.flow-test
                             'cn.li.node.scope-test
                             'cn.li.node.composite-test
+                            'cn.li.node.composite-loader-test
                             'cn.li.node.validate-test
                             'cn.li.node.schema-export-test)]
     (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))

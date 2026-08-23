@@ -1,0 +1,50 @@
+{:kind :composite
+ :id :vfx.fx/charge-ring
+ :revision 1
+ :layer :mid
+ :doc "Generic radial charge indicator: a ring of :points line segments whose radius grows and pulses with :charge-ticks toward :max-charge-ticks, recolored to :core-color once :punched?. Replaces the old monolithic :vfx/charge-ring Clojure component with the same parameter surface, expressed as node-core primitives (:vfx/let, :vfx/repeat, :vfx/line) composed in pure EDN."
+ :category :charge
+ :inputs {:center {:type :vec3}
+          :charge-ticks {:type :long}
+          :max-charge-ticks {:type :long}
+          :points {:type :long}
+          :base-radius {:type :double}
+          :radius-growth {:type :double}
+          :pulse-amplitude {:type :double}
+          :pulse-frequency {:type :double}
+          :outer-color {:type :color}
+          :core-color {:type :color}
+          :punched? {:type :boolean}}
+ :outputs {}
+ :body
+ {:component :vfx/let
+  :bindings
+  {:progress {:expr :math/clamp
+              :args [{:expr :math/div :args [{:ref [:input :charge-ticks]} {:ref [:input :max-charge-ticks]}]}
+                     0.0 1.0]}}
+  :child
+  {:component :vfx/let
+   :bindings
+   {:radius {:expr :math/add
+             :args [{:expr :math/add
+                     :args [{:ref [:input :base-radius]}
+                            {:expr :math/mul :args [{:ref [:input :radius-growth]} {:ref [:input :progress]}]}]}
+                    {:expr :math/mul
+                     :args [{:ref [:input :pulse-amplitude]}
+                            {:expr :math/sin
+                             :args [{:expr :math/mul
+                                     :args [{:ref [:input :pulse-frequency]} {:ref [:input :charge-ticks]}]}]}]}]}
+    :ring-color {:expr :math/select
+                 :args [{:ref [:input :punched?]} {:ref [:input :core-color]} {:ref [:input :outer-color]}]}}
+   :child
+   {:component :vfx/repeat
+    :count {:ref [:input :points]}
+    :index-as :i
+    :body
+    {:component :vfx/line
+     :from {:expr :vfx/ring-point
+            :args [{:ref [:input :center]} {:ref [:input :radius]} {:ref [:input :i]} {:ref [:input :points]}]}
+     :to {:expr :vfx/ring-point
+          :args [{:ref [:input :center]} {:ref [:input :radius]}
+                 {:expr :math/add :args [{:ref [:input :i]} 1]} {:ref [:input :points]}]}
+     :color {:ref [:input :ring-color]}}}}}}

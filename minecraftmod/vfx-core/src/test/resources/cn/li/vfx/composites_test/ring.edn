@@ -1,0 +1,22 @@
+{:kind :composite
+ :id :test/ring
+ :revision 1
+ :layer :mid
+ :doc "Test fixture composite for cn.li.vfx.composite-loader's own test suite: a ring of :segments line points."
+ :inputs {:center {:type :vec3}
+          :radius {:type :double}
+          :segments {:type :long}
+          :color {:type :color}}
+ :outputs {}
+ :body
+ {:component :vfx/repeat
+  :count {:ref [:input :segments]}
+  :index-as :i
+  :body
+  {:component :vfx/line
+   :from {:expr :vfx/ring-point
+          :args [{:ref [:input :center]} {:ref [:input :radius]} {:ref [:input :i]} {:ref [:input :segments]}]}
+   :to {:expr :vfx/ring-point
+        :args [{:ref [:input :center]} {:ref [:input :radius]}
+               {:expr :math/add :args [{:ref [:input :i]} 1]} {:ref [:input :segments]}]}
+   :color {:ref [:input :color]}}}}

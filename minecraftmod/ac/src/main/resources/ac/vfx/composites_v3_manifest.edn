@@ -1,0 +1,3 @@
+{:schema-version 1
+ :documents
+ [{:kind :composite :id :vfx.fx/charge-ring :resource "ac/vfx/composites_v3/charge_ring.edn"}]}

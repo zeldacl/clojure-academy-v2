@@ -1,0 +1,8 @@
+{:schema-version 1
+ :documents
+ [{:kind :composite :id :combat/area-damage :resource "ac/combat/composites_v3/area_damage.edn"}
+  {:kind :composite :id :combat/radial-impulse :resource "ac/combat/composites_v3/radial_impulse.edn"}
+  {:kind :composite :id :combat/teleport-group :resource "ac/combat/composites_v3/teleport_group.edn"}
+  {:kind :composite :id :combat/area-break :resource "ac/combat/composites_v3/area_break.edn"}
+  {:kind :composite :id :combat/release-with-cost :resource "ac/combat/composites_v3/release_with_cost.edn"}
+  {:kind :composite :id :fx/lightning-strike :resource "ac/combat/composites_v3/lightning_strike.edn"}]}

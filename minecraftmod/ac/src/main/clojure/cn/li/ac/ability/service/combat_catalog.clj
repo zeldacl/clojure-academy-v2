@@ -4,6 +4,14 @@
             [cn.li.combat.passives :as combat-passives]
             [cn.li.vfx.install :as vfx-install]
             [cn.li.vfx.recipe :as vfx-recipe]
+            [cn.li.node.flow :as node-flow]
+            [cn.li.combat.source-nodes :as combat-source-nodes]
+            [cn.li.combat.host-primitives :as combat-host-primitives]
+            [cn.li.combat.policy-primitives :as combat-policy-primitives]
+            [cn.li.combat.structural-primitives :as combat-structural-primitives]
+            [cn.li.combat.composite-loader :as combat-composite-loader]
+            [cn.li.vfx.v3-primitives :as vfx-v3-primitives]
+            [cn.li.vfx.composite-loader :as vfx-composite-loader]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.util.log :as log]))
 
@@ -13,6 +21,40 @@
          :combat nil
          :vfx nil
          :trigger-index {}}))
+
+;; --- v3 node-core vocabulary bootstrap -----------------------------------
+;; Mossy-wren plan, R2/R3/R4: registers the new node-core-backed vocabulary
+;; (source nodes, true primitives, structural primitives, and the :mid
+;; composites authored as real EDN under ac/combat/composites_v3 and
+;; ac/vfx/composites_v3) into node-core's shared, process-wide registry.
+;; ADDITIVE ONLY -- nothing here changes what combat-recipe/vfx-recipe's
+;; existing v2 catalog executes; no v2 ability or effect document references
+;; any v3 id yet (that's R5's cutover). This exists so v3 content compiles
+;; and can be exercised by tests/tools ahead of the real execution wiring.
+;;
+;; Guarded by a defonce flag, not folded into initialize!'s own idempotency:
+;; node-core's registry (cn.li.node.descriptor) rejects a duplicate :id, but
+;; initialize! itself is called repeatedly in production (every /reload-type
+;; path) and across many independent test namespaces in the same JVM, so
+;; registering this vocabulary must happen exactly once per process
+;; regardless of how many times initialize! runs.
+(defonce ^:private v3-installed?* (atom false))
+
+(defn- install-v3-vocabulary! []
+  (when (compare-and-set! v3-installed?* false true)
+    (node-flow/install!)
+    (combat-source-nodes/install!)
+    (combat-host-primitives/install!)
+    (combat-policy-primitives/install!)
+    (combat-structural-primitives/install!)
+    (vfx-v3-primitives/install!)
+    (let [combat-result (combat-composite-loader/install! "ac/combat/composites_v3_manifest.edn")
+          vfx-result (vfx-composite-loader/install! "ac/vfx/composites_v3_manifest.edn")]
+      (doseq [{:keys [id error data]} (:errors combat-result)]
+        (log/error "v3 combat composite" id "failed to load:" error data))
+      (doseq [{:keys [id error data]} (:errors vfx-result)]
+        (log/error "v3 vfx composite" id "failed to load:" error data))
+      {:combat combat-result :vfx vfx-result})))
 
 (defn- build-trigger-index [abilities]
   (reduce (fn [index ability]
@@ -53,6 +95,7 @@
         (:abilities combat)))
 
 (defn initialize! []
+  (install-v3-vocabulary!)
   (let [combat (combat-recipe/load-catalog!
                  {:manifest-resource "ac/combat/manifest.edn"
                   :composites-manifest-resource
