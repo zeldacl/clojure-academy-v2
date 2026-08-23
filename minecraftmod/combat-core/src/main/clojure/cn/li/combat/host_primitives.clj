@@ -130,8 +130,9 @@
    :target/entities
    {:capability :entity/select :output :entities
     :inputs {:shape {:type :map} :projection {:type :map} :limit {:type :long :min 0}
-             :filter {:type :map :default nil}}
-    :output-type :entity-list :doc "Query entities matching a neutral shape/projection, optionally narrowed by :filter (e.g. {:entity-types [...]}) -- v2's own opcode VM never filtered a component's fields down to a declared schema, so real ability content has always sent :filter straight to the real :entity/select handler even though neither version's descriptor ever marked it :required." :category :targeting}
+             :filter {:type :map :default nil}
+             :sort {:type [:list-of :map] :default nil}}
+    :output-type :entity-list :doc "Query entities matching a neutral shape/projection, optionally narrowed by :filter (e.g. {:entity-types [...]}) and ordered by :sort (e.g. [{:by :distance-squared :order :ascending}], real usage in electron-missile/mag-manip) -- v2's own opcode VM never filtered a component's fields down to a declared schema, so real ability content has always sent :filter/:sort straight to the real :entity/select handler even though neither version's descriptor ever marked them :required." :category :targeting}
 
    :target/entity-snapshot
    {:capability :entity/snapshot :output :snapshot
@@ -291,8 +292,14 @@
 
    :entity/configure
    {:capability :entity/configure
-    :inputs {:entity {:type :entity-ref}}
-    :doc "Apply neutral configuration to a spawned entity." :category :entity}
+    :inputs {:entity {:type :entity-ref}
+             :world-id {:type :string :default nil}
+             :block-id {:type :keyword :default nil}
+             :place-when-collide? {:type :boolean :default nil}
+             :velocity {:type :vec3 :default nil}
+             :projectile-damage {:type :double :default nil}
+             :add-tags {:type [:list-of :string] :default nil}}
+    :doc "Apply neutral configuration to a spawned entity. :world-id/:block-id/:place-when-collide? (mag-manip's held magnetic block body) and :velocity/:projectile-damage/:add-tags (vec-deviation's deviated projectile) are real optional fields both real callers send alongside :entity -- same gap class found repeatedly this session (v3's :inputs were built from v2's :required schema set, not real content's actual field usage)." :category :entity}
 
    :motion/entity-velocity
    {:capability :motion/entity-velocity

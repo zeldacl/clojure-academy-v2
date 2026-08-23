@@ -1531,6 +1531,150 @@
         (is (true? (:finish-session? result)))
         (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark emits an owner-patch")))))
 
+;; --- :mag-manip: 4 v2 :fragments inlined (:start-holding called 2x,
+;; :release-body called 5x, :throw-body called 2x, :hold-pulse called
+;; once as the :pulse phase body directly), :target/entities with a real
+;; :sort field and :entity/configure with real :world-id/:block-id/
+;; :place-when-collide? fields (both gaps fixed in host_primitives.clj
+;; this session -- v3's :inputs were built from v2's :required schema
+;; set, not real content's actual field usage), and a real :events
+;; handler (:block-body-hit) using :ability/context for {:ref [:context
+;; :target-id]}, matching railgun's already-established :events pattern ---
+
+(def ^:private mag-manip-tunables
+  {:targeting-grab-range 6.0 :targeting-throw-range 20.0 :targeting-max-hold-distance 10.0
+   :movement-hold-distance 3.0 :movement-hold-head-y-offset 0.2 :movement-throw-speed 2.0
+   :cost-up-cp 0.5 :cost-up-overload 0.0 :cooldown-ticks 40
+   :progression-exp-throw 0.03 :throw-damage 8.0})
+
+(def ^:private mag-manip-caster-facade
+  {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+   :caster/body {:x 0.0 :y 64.0 :z 0.0} :caster/creative? false :world/id "overworld"
+   :targeting/normal-metal-blocks ["minecraft:iron_block"]
+   :targeting/weak-metal-blocks ["minecraft:copper_block"]})
+
+(defn- with-fake-entity-select [entities f]
+  (let [previous (get (:queries (capabilities/snapshot)) :entity/select)]
+    (try
+      (capabilities/register-query! :entity/select (fn [_request _frame] entities))
+      (f)
+      (finally (when previous (capabilities/register-query! :entity/select previous))))))
+
+(deftest mag-manip-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :mag-manip])]
+    (is (nil? (get-in state [:combat :errors :mag-manip])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :mag-manip))))
+
+(deftest mag-manip-v3-start-phase-grabs-metal-item-in-hand-test
+  (with-fake-item-held {:present? true :block-id "minecraft:iron_block"}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mag-manip "owner-1"
+                    {:action :start :from mag-manip-caster-facade :tunables mag-manip-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (some #(= :inventory/consume (:capability %)) (:actions result))
+            "consumed the held metal item from the main hand")
+        (is (= 2 (count (:vfx-signals result))) "arc-channel-session spawn + audio-loop-session spawn")))))
+
+(deftest mag-manip-v3-start-phase-no-target-when-nothing-metal-test
+  (with-fake-item-held {:present? false}
+    (fn []
+      (with-fake-raycast-handler {:hit-type :block :block-id "minecraft:stone"}
+        (fn []
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :mag-manip "owner-1"
+                        {:action :start :from mag-manip-caster-facade :tunables mag-manip-tunables})]
+            (is (= :accepted (:status result)))
+            (is (= :no-target (:outcome result)))
+            (is (true? (:finish-session? result)))))))))
+
+(deftest mag-manip-v3-pulse-phase-stops-holding-when-insufficient-resource-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mag-manip "owner-1"
+                {:action :pulse :from mag-manip-caster-facade :tunables mag-manip-tunables
+                 :context {:resources {:cp 0.0 :overload 100.0}}
+                 :session-state {:body-id "body-1"}})]
+    (is (= :accepted (:status result)))
+    (is (= :insufficient-resource (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
+(deftest mag-manip-v3-pulse-phase-homes-the-held-body-when-affordable-test
+  (with-fake-entity-select [{:id "body-1" :type :entity :position {:vec3 [1.0 64.0 1.0]}}]
+    (fn []
+      (with-fake-entity-snapshot {:id "body-1" :position {:vec3 [1.0 64.0 1.0]} :alive? true}
+        (fn []
+          (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]} :eye-position {:vec3 [0.0 65.6 0.0]}}
+            (fn []
+              (let [state (catalog/initialize!)
+                    result (skill-runtime/execute!
+                            state :mag-manip "owner-1"
+                            {:action :pulse :from mag-manip-caster-facade :tunables mag-manip-tunables
+                             :context {:resources {:cp 5.0 :overload 0.0}}
+                             :session-state {:held-block-id "minecraft:iron_block"
+                                              :held-source-position {:vec3 [1.0 64.0 1.0]} :hold-ticks 3}})]
+                (is (= :accepted (:status result)))
+                (is (= :continue (:outcome result)))
+                (is (some #(= :motion/entity-velocity (:capability %)) (:actions result)))
+                (is (some #(= :session-patch (:type %)) (:actions result)))))))))))
+
+(deftest mag-manip-v3-release-phase-throws-when-close-enough-test
+  (with-fake-entity-select [{:id "body-1" :type :entity :position {:vec3 [0.5 64.0 0.5]}}]
+    (fn []
+      (with-fake-entity-snapshot {:id "body-1" :position {:vec3 [0.5 64.0 0.5]} :alive? true}
+        (fn []
+          (with-fake-raycast-handler {:hit? true :hit-type :block :position {:vec3 [0.0 64.0 10.0]}}
+            (fn []
+              (let [state (catalog/initialize!)
+                    result (skill-runtime/execute!
+                            state :mag-manip "owner-1"
+                            {:action :release :from mag-manip-caster-facade :tunables mag-manip-tunables
+                             :session-state {}})]
+                (is (= :accepted (:status result)))
+                (is (= :thrown (:outcome result)))
+                (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")
+                (is (some #(= :motion/entity-velocity (:capability %)) (:actions result)))))))))))
+
+(deftest mag-manip-v3-release-phase-too-far-when-body-out-of-range-test
+  (with-fake-entity-select [{:id "body-1" :type :entity :position {:vec3 [50.0 64.0 50.0]}}]
+    (fn []
+      (with-fake-entity-snapshot {:id "body-1" :position {:vec3 [50.0 64.0 50.0]} :alive? true}
+        (fn []
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :mag-manip "owner-1"
+                        {:action :release :from mag-manip-caster-facade :tunables mag-manip-tunables
+                         :session-state {}})]
+            (is (= :accepted (:status result)))
+            (is (= :too-far (:outcome result)))
+            (is (true? (:finish-session? result)))))))))
+
+(deftest mag-manip-v3-abort-phase-releases-the-held-body-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mag-manip "owner-1"
+                {:action :abort :from mag-manip-caster-facade :tunables mag-manip-tunables
+                 :session-state {:body-id "body-1"}})]
+    (is (= :accepted (:status result)))
+    (is (= :aborted (:outcome result)))
+    (is (true? (:finish-session? result)))))
+
+(deftest mag-manip-v3-block-body-hit-event-damages-the-struck-entity-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :mag-manip "owner-1"
+                {:action :event :event :block-body-hit :from mag-manip-caster-facade
+                 :tunables mag-manip-tunables :context {:target-id "zombie-1"}})]
+    (is (= :accepted (:status result)))
+    (is (= :hit (:outcome result)))
+    (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %)) (= 8.0 (:amount %)))
+              (:actions result)))))
+
 (deftest mag-movement-v3-abort-phase-cleans-up-test
   (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
     (fn []
