@@ -312,7 +312,22 @@
           {:id (:id ability) :activation (:activation ability)}))
   (when-not (map? (:program ability))
     (fail "ability requires :program" {:id (:id ability)}))
-  (let [;; Schema v2 design D (:fragments): a fragment is a composite scoped
+  (if (= :v3 (:engine ability))
+    ;; v3 abilities skip the entire v2 pipeline below (composite/fragment
+    ;; expansion, :slot-namespace dataflow checking, opcode IR encoding --
+    ;; none of it understands v3's :local/:bind scoping or its :layer :mid
+    ;; composites, which expand lazily at EXECUTION time inside
+    ;; cn.li.combat.structural-primitives/dispatch, not here). The raw
+    ;; :program tree IS the :compiled-program; cn.li.combat.skill-runtime/
+    ;; execute!'s :engine :v3 branch is what actually interprets it. See
+    ;; NODE_LANGUAGE.md and the mossy-wren plan's R5 section -- v3 content
+    ;; is intentionally not required to keep the v2 pipeline happy.
+    (assoc ability
+           :compiled? true
+           :engine :v3
+           :program-hash (content-hash ability)
+           :compiled-program (:program ability))
+    (let [;; Schema v2 design D (:fragments): a fragment is a composite scoped
         ;; to this ability's own document instead of a separate shared
         ;; manifest file -- same :inputs/:body shape, same expansion
         ;; mechanism (expand-composite-tree already resolves any
@@ -361,7 +376,7 @@
            :program-hash (content-hash expanded-ability)
            :compiled-ir (:ir compiler)
            :slot-counts (:slots compiler)
-           :compiled-program (ir/encode (:ir compiler) (:slots compiler))))))
+           :compiled-program (ir/encode (:ir compiler) (:slots compiler)))))))
 
 (defn load-manifest! [resource-path]
   (safe-edn/read-resource! resource-path))
