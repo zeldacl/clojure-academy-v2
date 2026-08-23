@@ -1416,3 +1416,131 @@
     (is (= :accepted (:status result)) "execute! itself is always :accepted for v3, see execute-v3!")
     (is (empty? (:actions result)))
     (is (empty? (:vfx-signals result)))))
+
+;; --- :mag-movement: no :fragments (v2 :begin/:move/:finalize/
+;; :finalize-no-target are 4 v2 fragments, all inlined at every call site),
+;; :ability/caster's :normal-metal-blocks/:weak-metal-blocks/:metal-entities
+;; output ports (replacing v2's {:from :targeting/...} facade reads),
+;; :value/normalize-id (a new combat-only expr op ported from v2's own
+;; (non-shared) evaluator -- this ability is its first real user), a
+;; resource-floor pattern where a tunable only clamps a resource rather
+;; than being spent via :cost/spend, and another dynamic (program-computed)
+;; :progression (per-mark depends on {:ref [:local :traveled]}, built
+;; inline like location-teleport's, not via :ability/progression) ---
+
+(def ^:private mag-movement-tunables
+  {:targeting-range 20.0 :acceleration 0.3 :weak-metal-exp-threshold 0.5
+   :cost-down-overload 5.0 :cost-tick-cp 0.5 :exp-min 0.01 :exp-distance-scale 0.002})
+
+(defn- with-fake-entity-snapshot [snapshot f]
+  (let [previous (get (:queries (capabilities/snapshot)) :entity/snapshot)]
+    (try
+      (capabilities/register-query! :entity/snapshot (fn [_request _frame] snapshot))
+      (f)
+      (finally (when previous (capabilities/register-query! :entity/snapshot previous))))))
+
+(def ^:private mag-movement-caster-facade
+  {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+   :caster/creative? false :world/id "overworld"
+   :targeting/normal-metal-blocks ["minecraft:iron_block"]
+   :targeting/weak-metal-blocks ["minecraft:copper_block"]
+   :targeting/metal-entities ["minecraft:iron_golem"]})
+
+(deftest mag-movement-compiles-with-engine-v3-test
+  (let [state (catalog/initialize!)
+        ability (get-in state [:combat :abilities :mag-movement])]
+    (is (nil? (get-in state [:combat :errors :mag-movement])))
+    (is (= :v3 (:engine ability)))
+    (is (catalog/available? :mag-movement))))
+
+(deftest mag-movement-v3-start-phase-locks-onto-a-normal-metal-block-test
+  (with-fake-raycast-handler
+    {:hit-type :block :block-id "minecraft:iron_block" :position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]} :velocity {:vec3 [0.0 0.0 0.0]}}
+        (fn []
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :mag-movement "owner-1"
+                        {:action :start :from mag-movement-caster-facade
+                         :tunables mag-movement-tunables
+                         :context {:resources {:overload 0.0}}})]
+            (is (= :accepted (:status result)))
+            (is (= :started (:outcome result)))
+            (is (some #(= :session-patch (:type %)) (:actions result)))
+            (is (= 2 (count (:vfx-signals result))) "arc-channel-session spawn + audio-loop-session spawn")))))))
+
+(deftest mag-movement-v3-start-phase-no-target-when-block-is-not-metal-test
+  (with-fake-raycast-handler
+    {:hit-type :block :block-id "minecraft:stone" :position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mag-movement "owner-1"
+                    {:action :start :from mag-movement-caster-facade
+                     :tunables mag-movement-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :no-target (:outcome result)))
+        (is (true? (:finish-session? result)))
+        (is (empty? (:vfx-signals result)))))))
+
+(deftest mag-movement-v3-pulse-phase-block-target-moves-owner-test
+  (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]} :velocity {:vec3 [0.0 0.0 0.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mag-movement "owner-1"
+                    {:action :pulse :from mag-movement-caster-facade
+                     :tunables mag-movement-tunables
+                     :context {:resources {:cp 5.0}}
+                     :session-state {:target-kind :block :target-position {:vec3 [0.0 65.0 10.0]}
+                                      :motion {:vec3 [0.0 0.0 0.0]} :movement-ticks 3 :overload-floor 0.0}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))
+        (is (some #(= :motion/velocity (:capability %)) (:actions result)))
+        (is (= 2 (count (:vfx-signals result))) "arc-channel-session update + audio-loop-session update")))))
+
+(deftest mag-movement-v3-pulse-phase-entity-target-lost-when-dead-test
+  (with-fake-entity-snapshot {:id "zombie-1" :alive? false}
+    (fn []
+      (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
+        (fn []
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :mag-movement "owner-1"
+                        {:action :pulse :from mag-movement-caster-facade
+                         :tunables mag-movement-tunables
+                         :session-state {:target-kind :entity :target-id "zombie-1"
+                                          :start-position {:vec3 [0.0 64.0 0.0]}
+                                          :motion {:vec3 [0.0 0.0 0.0]} :movement-ticks 5 :overload-floor 0.0}})]
+            (is (= :accepted (:status result)))
+            (is (= :target-lost (:outcome result)))
+            (is (true? (:finish-session? result)))))))))
+
+(deftest mag-movement-v3-release-phase-finalizes-and-scores-distance-test
+  (with-fake-owner-snapshot {:position {:vec3 [3.0 64.0 4.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mag-movement "owner-1"
+                    {:action :release :from mag-movement-caster-facade
+                     :tunables mag-movement-tunables
+                     :session-state {:start-position {:vec3 [0.0 64.0 0.0]}}})]
+        (is (= :accepted (:status result)))
+        (is (= :released (:outcome result)))
+        (is (true? (:finish-session? result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark emits an owner-patch")))))
+
+(deftest mag-movement-v3-abort-phase-cleans-up-test
+  (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :mag-movement "owner-1"
+                    {:action :abort :from mag-movement-caster-facade
+                     :tunables mag-movement-tunables
+                     :session-state {:start-position {:vec3 [0.0 64.0 0.0]}}})]
+        (is (= :accepted (:status result)))
+        (is (= :aborted (:outcome result)))
+        (is (true? (:finish-session? result)))
+        (is (= 2 (count (:vfx-signals result))) "arc-channel-session destroy + audio-loop-session destroy")))))

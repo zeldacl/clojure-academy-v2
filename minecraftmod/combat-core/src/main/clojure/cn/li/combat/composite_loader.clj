@@ -67,15 +67,34 @@
   [args _seed]
   (parse-status-amplifier (nth args 0)))
 
+(defn- normalize-id-op
+  "Normalizes a block/item/entity id string to Minecraft's namespaced
+   \"namespace:path\" form. Faithful port of v2's own (non-shared) expr
+   evaluator's :value/normalize-id opcode (cn.li.combat.vm/evaluate):
+   already-namespaced ids (contain a colon) pass through unchanged;
+   dotted registry-name ids (\"block.minecraft.iron_block\") have their
+   dots after the first segment folded into a single colon; anything
+   else passes through as-is."
+  [args _seed]
+  (let [id (some-> (nth args 0) str str/lower-case)]
+    (cond
+      (nil? id) nil
+      (str/includes? id ":") id
+      (re-matches #"(?:block|item|entity)\.[^.]+\..+" id)
+      (let [[_ namespace path] (re-matches #"(?:block|item|entity)\.([^.]+)\.(.+)" id)]
+        (str namespace ":" path))
+      :else id)))
+
 (defn install-expr-ops!
   "Register combat-core's domain-specific expression opcodes (:vec3/launch,
-   :value/status-id, :value/status-max-amplifier). Idempotent (register-
-   op! always overwrites); call before loading any composite/ability
-   program whose body references one."
+   :value/status-id, :value/status-max-amplifier, :value/normalize-id).
+   Idempotent (register-op! always overwrites); call before loading any
+   composite/ability program whose body references one."
   []
   (expr/register-op! :vec3/launch launch-op)
   (expr/register-op! :value/status-id status-id-op)
-  (expr/register-op! :value/status-max-amplifier status-max-amplifier-op))
+  (expr/register-op! :value/status-max-amplifier status-max-amplifier-op)
+  (expr/register-op! :value/normalize-id normalize-id-op))
 
 (defn install!
   "Load and register every :layer :mid composite `manifest-resource`
