@@ -50,8 +50,13 @@
   (catalog/initialize!)
   (let [batches (atom [])
         sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
+        ;; A real ability's :effect/vfx position payload always arrives as
+        ;; {:vec3 [x y z]} (cn.li.combat.vm/vec3-components' own literal
+        ;; shape), never {:x :y :z} -- using that shape here, off-origin,
+        ;; is what actually caught ops/->v3 and :vfx/ring-point silently
+        ;; mishandling it (see those namespaces' own fix commits).
         call {:component :vfx.fx/charge-ring
-              :center {:x 0.0 :y 0.0 :z 0.0}
+              :center {:vec3 [10.0 5.0 -10.0]}
               :charge-ticks 10 :max-charge-ticks 20
               :points 8 :base-radius 2.0 :radius-growth 3.0
               :pulse-amplitude 0.0 :pulse-frequency 0.0
@@ -60,7 +65,10 @@
     (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
     (is (= 8 (count @batches)))
     (let [op (first (:ops (first (:payload (first @batches)))))
-          p1 ^V3 (:p1 op)]
-      (is (< (Math/abs (- 3.5 (Math/sqrt (+ (Math/pow (.-x p1) 2) (Math/pow (.-z p1) 2)))))
+          p1 ^V3 (:p1 op)
+          dx (- (.-x p1) 10.0)
+          dz (- (.-z p1) -10.0)]
+      (is (= 5.0 (.-y p1)))
+      (is (< (Math/abs (- 3.5 (Math/sqrt (+ (Math/pow dx 2) (Math/pow dz 2)))))
              1.0e-9))
       (is (= [1.0 1.0 1.0 1.0] (:color op))))))

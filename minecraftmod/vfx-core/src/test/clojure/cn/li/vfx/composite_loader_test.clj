@@ -42,3 +42,19 @@
     (let [op (first (:ops (first (:payload (first @batches)))))]
       (is (< (Math/abs (- 3.0 (Math/sqrt (+ (Math/pow (.-x ^V3 (:p1 op)) 2) (Math/pow (.-z ^V3 (:p1 op)) 2)))))
              1.0e-9)))))
+
+(deftest a-loaded-composite-samples-correctly-around-the-real-combat-vec3-shape-test
+  ;; Regression: :vfx/ring-point's center used to only read {:x :y :z},
+  ;; silently treating a real {:vec3 [x y z]} center (the only shape a real
+  ;; ability's :effect/vfx position payload ever carries) as (0,0,0)
+  ;; instead of throwing -- so this bug would never show up as a test
+  ;; failure unless the center under test happened to be off-origin.
+  (composite-loader/install! "cn/li/vfx/composites_test/manifest.edn")
+  (let [{:keys [sink batches]} (collecting-sink)
+        call {:component :test/ring :center {:vec3 [10.0 5.0 -10.0]} :radius 3.0 :segments 6 :color [1 1 1 1]}]
+    (vm/sample-node! call {:input {} :seed 0 :sink sink})
+    (let [op (first (:ops (first (:payload (first @batches)))))
+          dx (- (.-x ^V3 (:p1 op)) 10.0)
+          dz (- (.-z ^V3 (:p1 op)) -10.0)]
+      (is (= 5.0 (.-y ^V3 (:p1 op))))
+      (is (< (Math/abs (- 3.0 (Math/sqrt (+ (Math/pow dx 2) (Math/pow dz 2))))) 1.0e-9)))))

@@ -14,6 +14,26 @@
             [cn.li.node.expr :as expr]
             [cn.li.node.composite-loader :as loader]))
 
+(defn- point-components
+  "Extract [x y z] from any of the three vec3 shapes this codebase uses:
+   {:x :y :z} (this session's own test fixtures/ops/->v3's primary case),
+   positional [x y z], or {:vec3 [x y z]} -- the ONLY shape a real
+   ability's :effect/vfx position payload ever carries
+   (cn.li.combat.vm/vec3-components, node-core's own :vec3/* expr ops).
+   Mirrors ops/->v3's shape handling; this exists separately because
+   ring-point-op needs plain doubles to do trig with, not a V3 instance.
+   Missing this branch previously meant a real {:vec3 [...]} center
+   silently read as (0,0,0) via (:x center) => nil => (or nil 0.0) --
+   wrong, not crashing, so no test caught it until traced through what
+   shape real content actually sends (see ops.clj's ->v3 fix, the same
+   root cause)."
+  [point]
+  (if (and (map? point) (vector? (:vec3 point)))
+    (:vec3 point)
+    [(or (:x point) (nth point 0 0.0))
+     (or (:y point) (nth point 1 0.0))
+     (or (:z point) (nth point 2 0.0))]))
+
 (defn- ring-point-op
   "[center radius index count] -> {:x :y :z} at angle (index/count * 2pi)
    around center in the XZ plane (Y held constant) -- vfx-core's own
@@ -26,7 +46,7 @@
   [args _seed]
   (let [[center radius index count] args
         angle (* 2.0 Math/PI (/ (double index) (double (max 1 count))))
-        cx (double (or (:x center) 0.0)) cy (double (or (:y center) 0.0)) cz (double (or (:z center) 0.0))
+        [cx cy cz] (mapv double (point-components center))
         r (double radius)]
     {:x (+ cx (* r (Math/cos angle))) :y cy :z (+ cz (* r (Math/sin angle)))}))
 
