@@ -960,6 +960,133 @@
           (finally
             (when previous-entities (capabilities/register-query! :entity/select previous-entities))))))))
 
+;; --- :jet-engine: a two-phase (:marking then :triggering) session state
+;; machine, 3 v2 :fragments inlined, a nested {:ref [:context :resources
+;; :cp]} multi-segment path, and :owner/snapshot used inside :pulse itself
+;; (not just :start/:release) ---
+
+(def ^:private jet-engine-tunables
+  {:target-range 20.0 :damage 12.0 :hold-required-cp 1.0 :release-cp 5.0
+   :release-overload 0.0 :cooldown-ticks 60 :progression-exp-use 0.02})
+
+(defn- with-fake-owner-snapshot [snapshot f]
+  (let [previous (get (:queries (capabilities/snapshot)) :owner/snapshot)]
+    (try
+      (capabilities/register-query! :owner/snapshot (fn [_request _frame] snapshot))
+      (f)
+      (finally (when previous (capabilities/register-query! :owner/snapshot previous))))))
+
+(deftest jet-engine-v3-start-phase-marks-a-target-test
+  (with-fake-raycast-handler
+    {:position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :jet-engine "owner-1"
+                    {:action :start
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables jet-engine-tunables})]
+        (is (= :accepted (:status result)))
+        (is (= :started (:outcome result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))
+        (is (= 1 (count (:vfx-signals result))))))))
+
+(deftest jet-engine-v3-pulse-phase-marking-holds-when-affordable-test
+  (with-fake-raycast-handler
+    {:position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :jet-engine "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables jet-engine-tunables
+                     :context {:resources {:cp 5.0}}
+                     :session-state {:phase :marking :hold-ticks 0}})]
+        (is (= :accepted (:status result)))
+        (is (= :continue (:outcome result)))))))
+
+(deftest jet-engine-v3-pulse-phase-marking-stops-when-insufficient-cp-test
+  (with-fake-raycast-handler
+    {:position {:vec3 [0.0 65.0 10.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :jet-engine "owner-1"
+                    {:action :pulse
+                     :from {:caster/id "owner-1" :caster/eye {:x 0.0 :y 65.6 :z 0.0}
+                            :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+                     :tunables jet-engine-tunables
+                     :context {:resources {:cp 0.0}}
+                     :session-state {:phase :marking :hold-ticks 0}})]
+        (is (= :accepted (:status result)))
+        (is (= :insufficient-resource (:outcome result)))
+        (is (true? (:finish-session? result)))))))
+
+(deftest jet-engine-v3-release-phase-marking-fires-when-affordable-test
+  (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
+    (fn []
+      (let [state (catalog/initialize!)
+            result (skill-runtime/execute!
+                    state :jet-engine "owner-1"
+                    {:action :release
+                     :from {:caster/id "owner-1" :world/id "overworld"}
+                     :tunables jet-engine-tunables
+                     :context {:resources {:cp 10.0}}
+                     :session-state {:phase :marking :target-position {:vec3 [0.0 65.0 10.0]}}})]
+        (is (= :accepted (:status result)))
+        (is (= :triggering (:outcome result)))
+        (is (some #(= :session-patch (:type %)) (:actions result)))
+        (is (some #(= :owner-patch (:type %)) (:actions result)) "score/mark + cooldown/start")
+        (is (= 6 (count (:vfx-signals result)))
+            "stop-mark destroy + trail/particles/shield/impact/flash spawn")))))
+
+(deftest jet-engine-v3-pulse-phase-triggering-damages-entity-hit-test
+  (with-fake-owner-snapshot {:position {:vec3 [0.0 64.0 0.0]}}
+    (fn []
+      (with-fake-raycast-handler
+        {:hit-type :entity :entity-id "zombie-1"}
+        (fn []
+          (let [state (catalog/initialize!)
+                result (skill-runtime/execute!
+                        state :jet-engine "owner-1"
+                        {:action :pulse
+                         :from {:caster/id "owner-1" :world/id "overworld"}
+                         :tunables jet-engine-tunables
+                         :session-state {:phase :triggering :start-position {:vec3 [0.0 64.0 0.0]}
+                                         :last-position {:vec3 [0.0 64.0 0.0]} :velocity {:vec3 [0.0 0.0 1.0]}
+                                         :trigger-ticks 0}})]
+            (is (= :accepted (:status result)))
+            (is (= :continue (:outcome result)))
+            (is (some #(and (= :entity/damage (:capability %)) (= "zombie-1" (:target %))) (:actions result)))
+            (is (some #(= :motion/velocity (:capability %)) (:actions result)))))))))
+
+(deftest jet-engine-v3-pulse-phase-triggering-completes-after-15-ticks-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :jet-engine "owner-1"
+                {:action :pulse
+                 :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables jet-engine-tunables
+                 :session-state {:phase :triggering :trigger-ticks 15}})]
+    (is (= :accepted (:status result)))
+    (is (= :completed (:outcome result)))
+    (is (true? (:finish-session? result)))
+    (is (= 5 (count (:vfx-signals result))))))
+
+(deftest jet-engine-v3-abort-phase-cleans-up-based-on-phase-test
+  (let [state (catalog/initialize!)
+        result (skill-runtime/execute!
+                state :jet-engine "owner-1"
+                {:action :abort :from {:caster/id "owner-1" :world/id "overworld"}
+                 :tunables jet-engine-tunables
+                 :session-state {:phase :marking}})]
+    (is (= :accepted (:status result)))
+    (is (= :aborted (:outcome result)))
+    (is (= 1 (count (:vfx-signals result))) "only :stop-mark, phase was :marking")))
+
 (deftest mine-detect-v3-program-rejects-blindness-when-insufficient-resource-test
   (let [state (catalog/initialize!)
         result (skill-runtime/execute!
