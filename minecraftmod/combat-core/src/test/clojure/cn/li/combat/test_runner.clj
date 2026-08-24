@@ -18,27 +18,8 @@
             [cn.li.combat.end-to-end-ability-test]
             [cn.li.combat.v3-runtime-test]
             [cn.li.combat.skill-runtime-v3-engine-test]
+            [cn.li.combat.final-engine-test]
             [cn.li.combat.dependency-direction-test]))
-
 (defn -main [& _]
-  (let [result (t/run-tests 'cn.li.combat.runtime-test
-                            'cn.li.combat.recipe-test
-                            'cn.li.combat.dataflow-test
-                            'cn.li.combat.targeting-test
-                            'cn.li.combat.reactions-test
-                            'cn.li.combat.capability-coverage-test
-                            'cn.li.combat.impact-event-test
-                            'cn.li.combat.interception-test
-                            'cn.li.combat.vfx-publish-test
-                            'cn.li.combat.source-nodes-test
-                            'cn.li.combat.host-primitives-test
-                            'cn.li.combat.policy-primitives-test
-                            'cn.li.combat.structural-primitives-test
-                            'cn.li.combat.composite-loader-test
-                            'cn.li.combat.source-runtime-test
-                            'cn.li.combat.end-to-end-ability-test
-                            'cn.li.combat.v3-runtime-test
-                            'cn.li.combat.skill-runtime-v3-engine-test
-                            'cn.li.combat.dependency-direction-test)]
-    (when (pos? (+ (:fail result) (:error result)))
-      (System/exit 1))))
+  (let [result (t/run-tests 'cn.li.combat.runtime-test 'cn.li.combat.recipe-test 'cn.li.combat.dataflow-test 'cn.li.combat.targeting-test 'cn.li.combat.reactions-test 'cn.li.combat.capability-coverage-test 'cn.li.combat.impact-event-test 'cn.li.combat.interception-test 'cn.li.combat.vfx-publish-test 'cn.li.combat.source-nodes-test 'cn.li.combat.host-primitives-test 'cn.li.combat.policy-primitives-test 'cn.li.combat.structural-primitives-test 'cn.li.combat.composite-loader-test 'cn.li.combat.source-runtime-test 'cn.li.combat.end-to-end-ability-test 'cn.li.combat.v3-runtime-test 'cn.li.combat.skill-runtime-v3-engine-test 'cn.li.combat.final-engine-test 'cn.li.combat.dependency-direction-test)]
+    (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))
