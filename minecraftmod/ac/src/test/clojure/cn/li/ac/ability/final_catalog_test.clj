@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.final-catalog-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.final-catalog :as catalog]))
+            [cn.li.ac.ability.final-catalog :as catalog]
+            [cn.li.ac.ability.final-catalog-service :as service]))
 
 (deftest complete-resource-catalog-test
   (let [result (catalog/assemble)]
@@ -29,3 +30,12 @@
                        (= id (:id descriptor))
                        (contains? descriptor :parameters)))
                 (get-in result [:vfx :effects])))))
+
+(deftest final-service-exposes-explicit-migration-state-test
+  (let [result (service/initialize!)]
+    (is (= :ready (:status result)))
+    (is (= 50 (+ (:ready-count result) (:pending-count result))))
+    (is (pos? (:pending-count result)))
+    (is (string? (service/content-hash)))
+    (is (map? (service/migration-status)))
+    (is (false? (service/available? :ability/electron-missile)))))
