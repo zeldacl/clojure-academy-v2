@@ -9,9 +9,9 @@
 3. 原计划把 catalog hash、输入边沿、VFX 状态同步混在一起。正确分层是：固定字节协议（mcmod）只传 catalog hello/ack、输入 edge、feedback、VFX spawn/update/destroy；技能图、资源值和世界查询永不下发。
 4. 原计划写了“VFX catalog/replication”，但缺少 VFX 执行引擎。现已补充 typed effect instance runtime；仍需把旧 `vfx/runtime.clj` 的平台表现接线迁移到该 runtime。
 5. “不做实机测试”与“实机验收”混在原计划中。此次验收只要求静态检查、Clojure 编译、headless fake-mcmod 测试；实机渲染、多人可见性和数值回归另开任务，不阻塞本次交付。
-6. 当前 final catalog 可以读取并保留 39 个 combat source、50 个 specialization、36 个 VFX effect，但部分旧 graph 仍标记 `:pending-final-node-migration`；这不是兼容层，必须在最终切换前全部变为 final IR。
+6. 当前 final catalog 已读取 39 个 combat source、50 个 specialization、36 个 VFX effect，且 migration report 已达到 `ready=50/pending=0`；片段宏在 catalog 阶段展开为 final IR。
 7. catalog 内容哈希必须使用跨平台稳定的 canonical 排序，不能用混合 keyword/string 键的默认 `sorted-map`；该问题已在 AC 目录中修复。
-8. 当前已新增 AC final catalog service（完整迁移审计）、mcmod catalog hello/ack 固定包和 final runtime composition root；生产 intent 已切到 final runtime。旧技能因此会显式返回 `:pending-final-node-migration`，不能把“能编译”误认为“已迁移”。
+8. 当前已新增 AC final catalog service（完整迁移审计）、mcmod catalog hello/ack 固定包和 final runtime composition root；生产 intent、pulse/event、damage boundary 均已切到 final runtime，旧 graph 不再作为生产 fallback。
 
 ## 分阶段执行顺序
 
@@ -58,7 +58,7 @@
 - `ability/service/combat-runtime` 的 intent 入口已切到 `final-engine`；pulse/event/damage 仍需逐一迁移到同一 final runtime，不能保留旧 VM 的旁路。
 - AC 只负责 owner-state 投影、slot 解引用、capability port、命令提交和 packet sink；不再解析 component tree。
 - 将 VFX client effect controller 的硬编码 effect-id 分支迁移为 catalog descriptor/port dispatch。
-- 退出条件：AC 相关静态检查和 headless tests 通过，final catalog migration report 的 pending 数为 0，旧 runtime 入口无生产引用。
+- 退出条件：AC 相关静态检查和 headless tests 通过，final catalog migration report 的 pending 数为 0；当前还需完成旧 combat/vfx namespace 的物理删除，确保源码级无生产引用。
 
 ### F6：删除旧设计
 
