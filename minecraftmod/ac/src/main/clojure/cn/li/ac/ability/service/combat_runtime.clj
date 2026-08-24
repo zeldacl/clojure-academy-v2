@@ -773,18 +773,37 @@
     (dispatch-result-domain-events! player-id request))
   nil)
 
+(defn- final-damage-request
+  [player-id attacker-id original-damage damage-source precheck?]
+  (let [runtime (final-runtime/production-runtime)
+        event {:world-id (or (:world-id damage-source) "unknown")
+               :source (or attacker-id :environment)
+               :target player-id
+               :base (double original-damage)
+               :type (or (:damage-type damage-source) :generic)
+               :seed (long (or (:seed damage-source) @last-known-tick*))}
+        result (final-runtime/resolve-damage! runtime event)]
+    (assoc result
+           :precheck? precheck?
+           :reaction-damage-applied? false
+           :base (double (:amount result))
+           :cancelled? (boolean (:cancelled? result)))))
+
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
 
    Combat Core returns the transformed neutral request; the platform writes
    only the resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
-  (let [request (intercept-damage!
-                 player-id attacker-id original-damage damage-source false)]
-    (commit-intercepted-request! player-id attacker-id request)
-    (if (:cancelled? request)
-      0.0
-      (double (:base request)))))
+  (if (final-runtime/production-runtime)
+    (let [request (final-damage-request player-id attacker-id original-damage damage-source false)]
+      (if (:cancelled? request) 0.0 (double (:base request))))
+    (let [request (intercept-damage!
+                   player-id attacker-id original-damage damage-source false)]
+      (commit-intercepted-request! player-id attacker-id request)
+      (if (:cancelled? request)
+        0.0
+        (double (:base request))))))
 
 (defn apply-attack-precheck!
   "Whether the native hit must not land: either Combat Core's reaction
@@ -793,10 +812,13 @@
    boundary before cancellation; ordinary requests stay pure and continue to
    live damage."
   [player-id attacker-id original-damage damage-source]
-  (let [request (intercept-damage!
-                 player-id attacker-id original-damage damage-source true)]
-    (commit-intercepted-request! player-id attacker-id request)
-    (boolean (or (:cancelled? request) (:reaction-damage-applied? request)))))
+  (if (final-runtime/production-runtime)
+    (let [request (final-damage-request player-id attacker-id original-damage damage-source true)]
+      (boolean (or (:cancelled? request) (:reaction-damage-applied? request))))
+    (let [request (intercept-damage!
+                   player-id attacker-id original-damage damage-source true)]
+      (commit-intercepted-request! player-id attacker-id request)
+      (boolean (or (:cancelled? request) (:reaction-damage-applied? request))))))
 
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary: commit its

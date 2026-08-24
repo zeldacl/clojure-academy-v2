@@ -56,6 +56,26 @@
   (let [status (resolve-var 'cn.li.ac.ability.final-catalog-service/migration-status)]
     (if @(:catalog runtime) (status) {:status :cold})))
 
+(defn damage-reaction-migration-pending?
+  "Whether any loaded source still contains the pre-final reaction program.
+   Production damage must fail closed until that reaction graph is lowered."
+  [runtime]
+  (boolean (some :reactions (vals (get-in @(:catalog runtime) [:combat :sources])))))
+
+(defn resolve-damage!
+  "Resolve a neutral damage event through final-damage.  Legacy reaction
+   programs are never interpreted here; until they are lowered, the boundary
+   returns an explicit pending result rather than applying an unreviewed hit."
+  [runtime raw-event]
+  (if (damage-reaction-migration-pending? runtime)
+    {:status :pending-final-node-migration
+     :reason :damage-reactions
+     :event raw-event
+     :amount 0.0
+     :cancelled? true}
+    (let [resolve-event (resolve-var 'cn.li.combat.final-damage/resolve-event)]
+      (assoc (resolve-event [] raw-event) :status :accepted))))
+
 (defn- registration [runtime ability-id]
   ((resolve-var 'cn.li.ac.ability.final-catalog-service/registration) ability-id))
 
