@@ -2,13 +2,8 @@
   "AC composition root for the neutral combat engine.
 
    Combat Core itself never knows about AC, Minecraft or VFX."
-  (:require [cn.li.combat.registry :as registry]
-            [cn.li.combat.compiler :as compiler]
-            [cn.li.combat.skill-runtime :as combat-skill-runtime]
-            [cn.li.combat.interception :as combat-interception]
-            [cn.li.combat.vfx-publish :as vfx-publish]
+  (:require [cn.li.combat.vfx-publish :as vfx-publish]
             [cn.li.combat.deferred :as deferred]
-            [cn.li.combat.runtime :as combat]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -56,7 +51,8 @@
 ;; would make `random/*` behave identically for repeated activations. Mixing
 ;; in this counter and wall-clock nanos gives every activation its own seed.
 (defonce ^:private activation-seed-counter* (atom 0))
-(declare owner-state resolve-slot finalize-result!)
+(declare owner-state resolve-slot finalize-result! initialize-final-runtime!
+         dispatch-domain-event!)
 
 (defn- generate-activation-seed
   "Produce a fresh per-activation RNG seed. Never deterministic across
@@ -177,40 +173,16 @@
 
 (defn initialize!
   ([] (initialize! {}))
-  ([{:keys [owner-state-fn query-port now-tick ability-resolver damage-pipeline
-            domain-event-handler]}]
-   (or @engine*
-       (let [catalog (compiler/compile-all!)]
-         (when-not (registry/frozen?) (registry/freeze!))
-         (reset! catalog* catalog)
-         (reset! engine* (combat/create-engine
-                           {:catalog catalog
-                            :initial-owner-state (or owner-state-fn owner-state)
-                            ;; The v1 engine's own :op-keyed program-node
-                            ;; interpreter (which :query-port feeds) has no
-                            ;; registered providers -- every ability is EDN v2,
-                            ;; executed entirely through combat-skill-runtime's
-                            ;; VM instead. :query-port only remains a pass-through
-                            ;; seam for a caller-supplied port map (tests).
-                            :query-port (or query-port {})
-                            ;; Explicit `(or now-tick ...)`: create-engine's :or
-                            ;; default only fires when the key is absent, and
-                            ;; this map always includes :now-tick (possibly
-                            ;; nil when initialize! is called with {}), so an
-                            ;; unguarded pass-through here silently binds the
-                            ;; engine's now-tick to nil.
-                            :now-tick (or now-tick (fn [] @last-known-tick*))
-                            :ability-resolver (or ability-resolver resolve-slot)
-                            :domain-event-handler domain-event-handler
-                            :damage-pipeline damage-pipeline}))
-         @engine*))))
+  ([_options]
+   (initialize-final-runtime!)
+   @final-runtime*))
 
-(defn engine [] (or @engine* (initialize!)))
-(defn catalog [] @catalog*)
+(defn engine [] (:engine (or @final-runtime* (initialize!))))
+(defn catalog [] (or @catalog* (some-> @final-runtime* :catalog deref)))
 (defn content-hash [] (:content-hash @catalog*))
-(defn domain-state [] (combat/domain-state (engine)))
+(defn domain-state [] {})
 (defn register-provider! [provider]
-  (registry/register-provider! provider))
+  (throw (ex-info "final combat runtime has no dynamic providers" {:provider provider})))
 
 (defn- server-session-id []
   (runtime-hooks/player-state-server-session-id))
@@ -273,10 +245,12 @@
    handlers. This is the only runtime used after the final dispatch cutover."
   []
   (or @final-runtime*
-      (reset! final-runtime*
-              (final-runtime/install-production!
-               {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
-                :commit-state! commit-final-state!}))))
+      (let [runtime (final-runtime/install-production!
+                     {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
+                      :commit-state! commit-final-state!})]
+        (reset! final-runtime* runtime)
+        (reset! catalog* @(:catalog runtime))
+        runtime)))
 
 (defn final-runtime [] @final-runtime*)
 
@@ -496,9 +470,8 @@
                      position (when world-id
                                 (entity-motion/entity-position
                                  (str world-id) target))]
-                 (combat/dispatch-domain-event!
-                  (engine)
-                  {:type :entity-mark
+                (dispatch-domain-event!
+                 {:type :entity-mark
                    :source-player-id owner
                    :target-id target
                    :mark-type mark-type
@@ -563,30 +536,6 @@
         ;; registry state authoritative; missing ports surface as :unhandled.
         (reset! edn-host-capabilities-installed? false)))
   (capabilities/snapshot)))
-
-(defn- execute-combat-intent!
-  "Delegate the complete EDN lifecycle operation to Combat Core.
-
-   AC supplies only session/state/platform callbacks; it does not inspect
-   component trees or execute the VM."
-  [owner intent]
-  (combat-skill-runtime/dispatch!
-   {:catalog (combat-catalog/catalog)
-    :owner owner
-    :intent intent
-    :now-tick-fn #(long (or @last-known-tick* 0))
-    :seed-fn generate-activation-seed
-    :owner-view-fn owner-state
-    :activation-context-fn activation-context
-    :caster-facade-fn caster-facade
-    :session-port
-    {:current combat-sessions/session
-     :resolve-slot-fn resolve-slot
-     :start! combat-sessions/start!
-     :context combat-sessions/context-for
-     :apply-actions! (fn [owner actions]
-                       (combat-sessions/apply-actions! owner actions))
-     :remove! combat-sessions/remove!}}))
 
 (defn dispatch-intent! [owner intent]
   ;; Final runtime is the sole production dispatch path.  Pending source
@@ -706,7 +655,7 @@
 
 (defn dispatch-domain-event! [event]
   (or (handle-neutral-domain-event! event)
-      (combat/dispatch-domain-event! (engine) event)))
+      {:status :unhandled :event event}))
 
 (defn dispatch-result-domain-events!
   "Dispatch explicit domain events from one CombatResult.
@@ -723,55 +672,6 @@
               results))
           []
           (:events result)))
-
-(defn- intercept-damage!
-  "Delegate the whole damage-interception decision to Combat Core: fact-
-   gathering, the declarative reaction pipeline, and applying any resulting
-   reaction damage through the registered :entity/damage capability all
-   happen there now. AC only injects what it alone owns -- the compiled
-   catalog's :reactions, the session/player-state accessors, and the config-
-   sourced front-cone threshold -- and, below, commits whatever comes back."
-  [player-id attacker-id original-damage damage-source precheck?]
-  (combat-interception/intercept!
-   {:target-id player-id :attacker-id attacker-id :base original-damage
-    :damage-type (:damage-type damage-source) :damage-source damage-source
-    :reactions (vals (get-in (combat-catalog/catalog) [:combat :abilities]))
-    :session-fn #(combat-sessions/session (str %))
-    :state-fn owner-state
-    :domain-state (combat/domain-state (engine))
-    :tunables-fn
-    (fn [ability-id _session state]
-      (let [ability (get-in (combat-catalog/catalog)
-                            [:combat :abilities ability-id])
-            skill-exp (double (or (get-in state
-                                          [:ability-data :skill-exps ability-id])
-                                  0.0))]
-        (combat-skill-runtime/materialize-tunables ability skill-exp)))
-    :now-tick @last-known-tick*
-    :front-cone-degrees (skill-config/tunable-double
-                         :light-shield :combat.front-cone-degrees)
-    :precheck? precheck?}))
-
-(defn- commit-intercepted-request!
-  [player-id attacker-id request]
-  (when (seq (:state-patch request))
-    (commit-edn-owner-patches!
-     player-id [{:type :owner-patch :entries (:state-patch request)}]))
-  (when (and attacker-id (seq (:source-state-patch request)))
-    (commit-edn-owner-patches!
-     (str attacker-id) [{:type :owner-patch :entries (:source-state-patch request)}]))
-  (when (seq (:session-patch request))
-    (combat-sessions/apply-actions!
-     player-id [{:type :session-patch :entries (:session-patch request)}]))
-  (when (seq (:vfx-signals request))
-    (vfx-publish/publish-combat-result!
-     (:vfx (combat-catalog/catalog))
-     {:schema-version 2 :status :accepted :owner player-id
-      :ability-id :combat-damage
-      :vfx-signals (:vfx-signals request)}))
-  (when (seq (:events request))
-    (dispatch-result-domain-events! player-id request))
-  nil)
 
 (defn- final-damage-request
   [player-id attacker-id original-damage damage-source precheck?]
@@ -795,15 +695,8 @@
    Combat Core returns the transformed neutral request; the platform writes
    only the resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
-  (if (final-runtime/production-runtime)
-    (let [request (final-damage-request player-id attacker-id original-damage damage-source false)]
-      (if (:cancelled? request) 0.0 (double (:base request))))
-    (let [request (intercept-damage!
-                   player-id attacker-id original-damage damage-source false)]
-      (commit-intercepted-request! player-id attacker-id request)
-      (if (:cancelled? request)
-        0.0
-        (double (:base request))))))
+  (let [request (final-damage-request player-id attacker-id original-damage damage-source false)]
+    (if (:cancelled? request) 0.0 (double (:base request)))))
 
 (defn apply-attack-precheck!
   "Whether the native hit must not land: either Combat Core's reaction
@@ -812,13 +705,8 @@
    boundary before cancellation; ordinary requests stay pure and continue to
    live damage."
   [player-id attacker-id original-damage damage-source]
-  (if (final-runtime/production-runtime)
-    (let [request (final-damage-request player-id attacker-id original-damage damage-source true)]
-      (boolean (or (:cancelled? request) (:reaction-damage-applied? request))))
-    (let [request (intercept-damage!
-                   player-id attacker-id original-damage damage-source true)]
-      (commit-intercepted-request! player-id attacker-id request)
-      (boolean (or (:cancelled? request) (:reaction-damage-applied? request))))))
+  (let [request (final-damage-request player-id attacker-id original-damage damage-source true)]
+    (boolean (or (:cancelled? request) (:reaction-damage-applied? request)))))
 
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary: commit its
@@ -826,20 +714,8 @@
    explicit domain events. Acknowledgements remain attached to the immutable
    result for publication and diagnostics."
   [owner result]
-  (let [result (if (and (= 2 (:schema-version result))
-                        (= :accepted (:status result)))
-                 (let [actions (vec (:actions result))
-                       patch-results (commit-edn-owner-patches! owner actions)
-                       action-results
-                 (combat-skill-runtime/commit-actions!
-                        owner
-                        (vec (remove #(#{:owner-patch :session-patch}
-                                       (:type %)) actions))
-                        (:actions (capabilities/snapshot)))]
-                   (assoc (update result :vfx-signals into
-                                  (mapcat :vfx-signals action-results))
-                          :patch-results (vec patch-results)
-                          :action-results action-results))
+  (let [result (if (= :accepted (:status result))
+                 (assoc result :patch-results [] :action-results [])
                  result)
         domain-results (if (= :accepted (:status result))
                          (dispatch-result-domain-events! owner result)
@@ -864,32 +740,16 @@
     result))
 
 (defn tick!
-  "Advance sessions, execute their world effects, and publish each result."
+  "Advance scheduled final graph work and publish its neutral result."
   [tick]
   (reset! last-known-tick* (long tick))
   (if-let [runtime (final-runtime/production-runtime)]
     (final-runtime/tick! runtime tick)
-    (do
-  (when (zero? (mod (long tick) persistent-replay-interval-ticks))
-    (vfx-publish/replay-persistent-signals! (:vfx (combat-catalog/catalog))))
-  (let [edn-results
-        (mapv (fn [[owner session]]
-                (execute-combat-intent!
-                 owner
-                 {:op :pulse
-                  :action :pulse
-                  :ability-id (:ability-id session)
-                  :server-tick (long tick)}))
-              (combat-sessions/tick! tick))
-        ]
-    (mapv (fn [result]
-            (vfx-publish/publish-combat-result!
-             (:vfx (combat-catalog/catalog)) (finalize-result! (:owner result) result)))
-          edn-results)))))
+    {:status :rejected :reason :final-runtime-not-installed :tick tick}))
 (defn abort-owner! [owner]
   (if-let [runtime (final-runtime/production-runtime)]
     (final-runtime/abort-owner! runtime owner)
-    (do (combat-sessions/remove! owner) nil)))
+    {:status :rejected :reason :final-runtime-not-installed :owner owner}))
 (defn snapshot-owner [owner]
   {:combat-session (combat-sessions/session owner)})
 
@@ -898,5 +758,4 @@
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
   (vfx-publish/reset-for-test!)
-  (combat-sessions/reset-for-test!)
   nil)

@@ -1,225 +1,121 @@
 (ns cn.li.ac.ability.service.combat-catalog
-  "Authoritative first-phase EDN catalog. Unmigrated skills have no runtime fallback."
-  (:require [cn.li.combat.recipe :as combat-recipe]
-            [cn.li.combat.passives :as combat-passives]
-            [cn.li.ac.ability.final-catalog :as final-catalog]
-            [cn.li.node.flow :as node-flow]
-            [cn.li.combat.source-nodes :as combat-source-nodes]
-            [cn.li.combat.host-primitives :as combat-host-primitives]
-            [cn.li.combat.policy-primitives :as combat-policy-primitives]
-            [cn.li.combat.structural-primitives :as combat-structural-primitives]
-            [cn.li.combat.composite-loader :as combat-composite-loader]
-            [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.mcmod.util.log :as log]))
+  "Compatibility-free AC view over the final typed catalog.
 
-(defonce ^:private state*
-  (atom {:initialized? false
-         :migration {}
-         :combat nil
-         :vfx nil
-         :trigger-index {}}))
+   The namespace name is retained because AC UI/config callers consume the
+   catalog service, but no legacy recipe, VM, composite loader, or VFX loader
+   is required. Every ability entry is a final compiled registration.")
 
-;; --- v3 node-core vocabulary bootstrap -----------------------------------
-;; Mossy-wren plan, R2/R3/R4: registers the new node-core-backed vocabulary
-;; (source nodes, true primitives, structural primitives, and the :mid
-;; composites authored as real EDN under ac/combat/composites_v3 and
-;; ac/vfx/composites_v3) into node-core's shared, process-wide registry.
-;; ADDITIVE ONLY -- nothing here changes what combat-recipe/vfx-recipe's
-;; existing v2 catalog executes; no v2 ability or effect document references
-;; any v3 id yet (that's R5's cutover). This exists so v3 content compiles
-;; and can be exercised by tests/tools ahead of the real execution wiring.
-;;
-;; Guarded by a defonce flag, not folded into initialize!'s own idempotency:
-;; node-core's registry (cn.li.node.descriptor) rejects a duplicate :id, but
-;; initialize! itself is called repeatedly in production (every /reload-type
-;; path) and across many independent test namespaces in the same JVM, so
-;; registering this vocabulary must happen exactly once per process
-;; regardless of how many times initialize! runs.
-(defonce ^:private v3-installed?* (atom false))
+(defonce ^:private state* (atom {:initialized? false :status :cold}))
+(defn- final-var [symbol]
+  (or (requiring-resolve symbol)
+      (throw (ex-info "final catalog service unavailable" {:symbol symbol}))))
+(defn- skill-definitions []
+  (or (some-> (requiring-resolve 'cn.li.ac.ability.skill-config/skill-definitions-by-id) deref)
+      {}))
 
-(defn- install-v3-vocabulary! []
-  (when (compare-and-set! v3-installed?* false true)
-    (node-flow/install!)
-    (combat-source-nodes/install!)
-    (combat-host-primitives/install!)
-    (combat-policy-primitives/install!)
-    (combat-structural-primitives/install!)
-    (let [combat-result (combat-composite-loader/install! "ac/combat/composites_v3_manifest.edn")]
-      (doseq [{:keys [id error data]} (:errors combat-result)]
-        (log/error "v3 combat composite" id "failed to load:" error data))
-      {:combat combat-result})))
-
-(defn- build-trigger-index [abilities]
-  (reduce (fn [index ability]
-            (reduce (fn [acc trigger]
-                      (let [source (:source trigger)
-                            dispatch (:dispatch trigger)]
-                        (if (and source (map? dispatch))
-                          (update acc source (fnil conj [])
-                                  {:filter (:filter trigger)
-                                   :dispatch dispatch})
-                          acc)))
-                    index (:external-triggers ability)))
-          {} abilities))
-
-(defn- materialize-combat-document [document]
-  (if (= :ability (:kind document))
-    (-> document
-        skill-config/overlay-edn-parameters
-        skill-config/overlay-edn-tunables)
-    document))
-
-(defn- vfx-contract-errors
-  "Every ability whose compiled :program asks a VFX effect for a payload
-   that effect's own :inputs doesn't support -- unknown fields, missing
-   required ones, an effect-id nothing compiled, or a non-empty :destroy
-   payload. combat-core only knows what its abilities send (recipe.clj's
-   vfx-signal-requirements); vfx-core (cn.li.vfx.install/validate-
-   requirements!) is the one that owns the contract those requests are
-   judged against -- this function is pure wiring between the two."
-  [combat vfx]
-  ;; Final catalog assembly validates the typed VFX ABI before combat
-  ;; registration. No legacy recipe/install validator is consulted here.
-  {})
+(defn- source-map [assembled]
+  (get-in assembled [:combat :sources] {}))
+(defn- registration-map [assembled]
+  (into {} (map (juxt :id identity)) (get-in assembled [:combat :registrations])))
+(defn- ability-map [assembled]
+  (into {}
+        (map (fn [[id entry]]
+               [id (merge (get (source-map assembled) (:source-id entry) {})
+                          {:id id :source-id (:source-id entry)
+                           :program (:compiled entry)
+                           :status (if (= :ready (:status entry)) :migrated :pending)
+                           :engine :final})]))
+        (registration-map assembled)))
 
 (defn initialize! []
-  (install-v3-vocabulary!)
-  (let [combat (combat-recipe/load-catalog!
-                 {:manifest-resource "ac/combat/manifest.edn"
-                  :composites-manifest-resource
-                  "ac/combat/components_manifest.edn"
-                  :document-transform materialize-combat-document})
-        vfx (:vfx (final-catalog/assemble))
-        ;; A VFX contract violation disables only the offending ability,
-        ;; the same Design E fail-closed granularity as a compile error --
-        ;; every other ability still loads.
-        vfx-errors (vfx-contract-errors combat vfx)
-        combat (-> combat
-                   (update :abilities #(apply dissoc % (keys vfx-errors)))
-                   (update :errors merge vfx-errors))
-        ;; Migration status is each ability's own :status field, not a
-        ;; separately-maintained file -- a second place to update, and one
-        ;; that can drift from the EDN it's supposedly describing. An
-        ;; ability absent here (no EDN file, or one that failed to compile
-        ;; or failed its VFX contract and was dropped from :combat's
-        ;; :abilities) falls through migration-status's own :pending
-        ;; default below.
-        migration (into {} (map (fn [[id ability]] [id (:status ability)]))
-                        (:abilities combat))]
-    ;; A single ability failing to compile (bad EDN, a dataflow violation,
-    ;; ...) does not fail the whole catalog load -- combat-recipe/load-catalog!
-    ;; already dropped it from :abilities and carries the reason here so it
-    ;; is loud, not silent, while every other ability still boots normally.
-    ;; vfx-recipe/load-catalog! carries the same per-effect isolation.
-    (doseq [[ability-id error] (:errors combat)]
-      (log/error "EDN ability" ability-id "failed to compile and is disabled:"
-                 (:message error) (:data error)))
-    (doseq [[effect-id error] (:errors vfx)]
-      (log/error "EDN VFX effect" effect-id "failed to compile and is disabled:"
-                 (:message error) (:data error)))
-    (reset! state* {:initialized? true
-                    :migration migration
-                    :combat combat
-                    :vfx vfx
-                    :passive-index (combat-passives/build-index
-                                    {:combat combat})
-                    :trigger-index (build-trigger-index
-                                     (vals (:abilities combat)))})
-    @state*))
+  (let [assembled ((final-var 'cn.li.ac.ability.final-catalog-service/initialize!))
+        abilities (ability-map assembled)
+        trigger-index (reduce (fn [index source]
+                                (reduce (fn [result trigger]
+                                          (if (and (:source trigger) (:dispatch trigger))
+                                            (update result (:source trigger) (fnil conj []) trigger)
+                                            result))
+                                        index (:external-triggers source)))
+                              {} (vals (source-map assembled)))
+        combat (assoc (:combat assembled)
+                      :abilities abilities
+                      :by-id (registration-map assembled)
+                      :trigger-index trigger-index
+                      :errors {})
+        value {:initialized? true
+               :status :ready
+               :migration (into {} (map (fn [[id ability]] [id (:status ability)])) abilities)
+               :combat combat
+               :vfx (:vfx assembled)
+               :content-hash (:content-hash assembled)}]
+    (reset! state* value)
+    value))
 
 (defn state [] @state*)
 (defn catalog [] @state*)
-
 (defn migration-status [ability-id]
   (get-in @state* [:migration ability-id] :pending))
-
 (defn available? [ability-id]
   (and (= :migrated (migration-status ability-id))
        (contains? (get-in @state* [:combat :abilities]) ability-id)))
-
 (defn ui-state [ability-id]
-  {:ability-id ability-id
-   :migrated? (available? ability-id)
-   :enabled? (available? ability-id)
-   :status (migration-status ability-id)})
+  {:ability-id ability-id :migrated? (available? ability-id)
+   :enabled? (available? ability-id) :status (migration-status ability-id)})
 
-(defn resolve-trigger
-  "Resolve a server-side external trigger without accepting client mappings."
-  [source facts]
-  (some (fn [{:keys [filter dispatch]}]
-          (let [item-ids (:item-ids filter)
+(defn resolve-trigger [source facts]
+  (some (fn [trigger]
+          (let [filter (:filter trigger) dispatch (:dispatch trigger)
                 item-id (:item-id facts)]
-            (when (and (or (nil? item-ids) (some #{item-id} item-ids))
+            (when (and (or (nil? (:item-ids filter))
+                           (some #{item-id} (:item-ids filter)))
                        (or (not (contains? filter :ability-mode?))
-                           (= (:ability-mode? filter)
-                              (:ability-mode? facts)))
+                           (= (:ability-mode? filter) (:ability-mode? facts)))
                        (available? (:ability dispatch)))
               dispatch)))
-        (get-in @state* [:trigger-index source])))
+        (get-in @state* [:combat :trigger-index source])))
 
 (defn require-available [ability-id]
   (when-not (available? ability-id)
     (throw (ex-info "ability-not-migrated"
-                    {:reason :ability-not-migrated
-                     :ability-id ability-id
+                    {:reason :ability-not-migrated :ability-id ability-id
                      :status (migration-status ability-id)})))
   (get-in @state* [:combat :abilities ability-id]))
 
-(defn- normalize-translations
-  "Convert safe-EDN keyword message keys to the registry's string-key map."
-  [translations]
+(defn apply-passive-resource-modifiers [_ability-data values]
+  ;; Passive resource effects are represented as final policy data. Resource
+  ;; settlement is performed by the final combat transaction; this catalog
+  ;; view never executes a second evaluator.
+  values)
+
+(defn- normalize-translations [translations]
   (into {}
         (map (fn [[locale entries]]
-               [locale
-                (into {}
-                      (map (fn [[key value]]
-                             [(if (keyword? key) (name key) (str key)) value])
-                           entries))]))
+               [locale (into {} (map (fn [[key value]]
+                                       [(if (keyword? key) (name key) (str key)) value])
+                                     entries))]))
         (or translations {})))
 
-(defn apply-passive-resource-modifiers
-  "Apply learned passive resource effects declared by the Combat Core catalog.
-
-   AC supplies the neutral ability-data snapshot; the effect evaluator and
-   all effect semantics remain in Combat Core."
-  [ability-data values]
-  (combat-passives/apply-resource-modifiers @state* ability-data values))
-
-(defn migrated-skill-specs
-  "Player-facing metadata derived from AC config plus migration state.
-
-  This intentionally does not load the legacy combat provider.  A pending
-  skill has no registry entry and is represented by `ui-state` instead."
-  []
-  (mapv (fn [ability-id]
-          (let [ability (get-in @state* [:combat :abilities ability-id])
-                configured (get skill-config/skill-definitions-by-id ability-id)
-                category-id (or (:category-id ability) (:category-id configured))
-                level (or (:level ability) (:level configured))
-                controllable? (if (contains? ability :controllable?)
-                                (:controllable? ability)
-                                (:controllable? configured))
-                pattern (or (:pattern ability) :hold-channel)]
-            {:id ability-id
-             :category-id category-id
-             :level level
-             :controllable? controllable?
+(defn migrated-skill-specs []
+  (mapv (fn [[ability-id ability]]
+          (let [configured (get (skill-definitions) ability-id)
+                category-id (or (:category-id ability) (:category-id configured))]
+            {:id ability-id :category-id category-id
+             :level (or (:level ability) (:level configured))
+             :controllable? (if (contains? ability :controllable?)
+                              (:controllable? ability)
+                              (:controllable? configured))
              :name-key (or (:name-key ability)
                            (str "ability.skill." (name category-id) "." (name ability-id)))
              :description-key (or (:description-key ability)
-                                  (str "ability.skill." (name category-id) "." (name ability-id) ".desc"))
+                                  (str "ability.skill." (name category-id) "."
+                                       (name ability-id) ".desc"))
              :icon (or (:icon ability)
-                       (str "textures/abilities/" (name category-id) "/skills/" (name ability-id) ".png"))
+                       (str "textures/abilities/" (name category-id) "/skills/"
+                            (name ability-id) ".png"))
              :ctrl-id (or (:ctrl-id ability) ability-id)
-             :pattern pattern
+             :pattern (or (:pattern ability) :hold-channel)
              :actions (or (:actions ability) {})
              :translations (normalize-translations (:translations ability))
-             ;; The registry field is metadata only; execution and cooldown
-             ;; settlement remain in the EDN VM.  `:manual` keeps the
-             ;; existing player-facing schema valid without installing a
-             ;; legacy callback path.
-             :cooldown {:mode :manual}
-             :execution :edn}) )
-        (sort (for [[ability-id status] (:migration @state*)
-                    :when (and (= :migrated status) (available? ability-id))]
-                ability-id))))
+             :cooldown {:mode :final} :execution :final}))
+        (sort-by first (filter (fn [[id _]] (available? id))
+                               (get-in @state* [:combat :abilities])))))

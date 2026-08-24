@@ -7,8 +7,8 @@
 
    The caller (AC) owns the network transport and the compiled VFX
    catalog's lifespan; this namespace only needs the catalog data itself
-   (cn.li.vfx.recipe/load-catalog!'s return value) passed in explicitly per
-   call -- it never loads, caches, or knows where the catalog comes from.")
+   the final typed VFX catalog passed in explicitly per call -- it never
+   loads, caches, or knows where the catalog comes from.")
 (defonce ^:private result-sink* (atom nil))
 ;; :self signals go to the caster alone (same per-owner transport as
 ;; result-sink*, just a different message id so the client can register one

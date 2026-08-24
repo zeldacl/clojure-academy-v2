@@ -273,7 +273,7 @@
   "One 'kind/id: message' line per compile error -- kind distinguishes a
    combat ability failure from a VFX effect failure, since both share one
    id-keyed error map shape ({:message :data}, see
-   cn.li.combat.recipe/load-catalog! and cn.li.vfx.recipe/load-catalog!)."
+   the final typed combat/VFX catalog service."
   [kind errors]
   (map (fn [[id {:keys [message]}]] (str "  " kind "/" (name id) ": " message))
        (sort-by (comp name key) errors)))

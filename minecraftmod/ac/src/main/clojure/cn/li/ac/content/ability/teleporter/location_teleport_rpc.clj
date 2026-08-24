@@ -12,7 +12,6 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.resource :as resource]
             [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.combat.skill-runtime :as combat-skill-runtime]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -32,15 +31,15 @@
 (defn- exp [owner]
   (double (or (skill-effects/skill-exp (str owner) skill-id) 0.0)))
 (defn- materialized-tunables
-  "The ability's own compiled :tunables, curve-resolved against `mastery` the
-   same way the real dispatch resolves them (combat-skill-runtime/dispatch!'s
-   :tunables key) -- the single source every cost/limit preview below reads,
-   so a config or curve change can never drift the preview from the real
-   activation."
-  [mastery]
-  (combat-skill-runtime/materialize-tunables
-   (get-in (combat-catalog/catalog) [:combat :abilities skill-id])
-   mastery))
+  "Resolve preview tunables from the same AC config registry used by the
+   final graph.  Preview code never invokes a combat interpreter."
+  [_mastery]
+  {:cross-dimension-exp-threshold (skill-config/tunable-double skill-id :targeting.cross-dimension-exp-threshold)
+   :cp-base (skill-config/tunable-double-list skill-id :cost.perform.cp-base)
+   :overload (skill-config/tunable-double skill-id :cost.perform.overload)
+   :cross-dimension-multiplier (skill-config/tunable-double skill-id :cost.perform.cross-dimension-multiplier)
+   :min-distance-multiplier (skill-config/tunable-double skill-id :cost.perform.min-distance-multiplier)
+   :distance-cap (skill-config/tunable-double skill-id :cost.perform.distance-cap)})
 (defn- cp-cost
   "Mirror location_teleport.edn's own :cp-cost bind (the real dispatch runs
    this same formula, not this function) -- only the (identical, trivially
