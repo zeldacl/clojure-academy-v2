@@ -611,26 +611,12 @@
   provide ability/event mappings." 
   [owner trigger context]
   (when (and (map? trigger) (:ability trigger) (:event trigger))
-    ;; An external event is a terminal interruption for the owner session.
-    ;; Run the generic EDN abort phase first so session-scoped VFX and other
-    ;; cleanup actions are finalized through the same commit boundary.
-    (when-let [session (combat-sessions/session owner)]
-      (let [abort-result (execute-combat-intent!
-                          owner
-                          {:op :abort
-                           :action :abort
-                           :ability-id (:ability-id session)
-                           :context (:context session)
-                           :parameter-snapshot (:parameter-snapshot session)
-                           :activation-seed (:activation-seed session)})]
-        (when (= :accepted (:status abort-result))
-          (vfx-publish/publish-combat-result!
-           (:vfx (combat-catalog/catalog)) (finalize-result! owner abort-result)))))
     (dispatch-intent! owner
                       {:op :event
                        :action :event
                        :ability-id (:ability trigger)
                        :event (:event trigger)
+                       :server-tick @last-known-tick*
                        :context context})))
 (defn- handle-neutral-domain-event!
   "Apply the two generic domain events emitted by the migrated Arc recipe.
@@ -859,6 +845,9 @@
   "Advance sessions, execute their world effects, and publish each result."
   [tick]
   (reset! last-known-tick* (long tick))
+  (if-let [runtime (final-runtime/production-runtime)]
+    (final-runtime/tick! runtime tick)
+    (do
   (when (zero? (mod (long tick) persistent-replay-interval-ticks))
     (vfx-publish/replay-persistent-signals! (:vfx (combat-catalog/catalog))))
   (let [edn-results
@@ -874,10 +863,11 @@
     (mapv (fn [result]
             (vfx-publish/publish-combat-result!
              (:vfx (combat-catalog/catalog)) (finalize-result! (:owner result) result)))
-          edn-results)))
+          edn-results)))))
 (defn abort-owner! [owner]
-  (combat-sessions/remove! owner)
-  nil)
+  (if-let [runtime (final-runtime/production-runtime)]
+    (final-runtime/abort-owner! runtime owner)
+    (do (combat-sessions/remove! owner) nil)))
 (defn snapshot-owner [owner]
   {:combat-session (combat-sessions/session owner)})
 

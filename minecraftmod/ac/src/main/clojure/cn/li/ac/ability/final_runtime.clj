@@ -101,6 +101,15 @@
                                  (assoc frame :tick tick)))
                       @due)})))
 
+(defn abort-owner!
+  "Cancel scheduled final work for one owner.  This is the shared lifecycle
+   boundary for disconnect/death/dimension-change/gui-close."
+  [runtime owner]
+  (swap! (:scheduled runtime)
+         (fn [scheduled]
+           (vec (remove #(= owner (get-in % [:frame :owner])) scheduled))))
+  {:status :aborted :owner owner})
+
 (defonce ^:private production-runtime* (atom nil))
 
 (defn install-production!

@@ -30,7 +30,9 @@
     :flow/foreach (if (:body node) [(:body node)] [])
     :flow/after (if (:body node) [(:body node)] [])
     :flow/once (if (:body node) [(:body node)] [])
-    :flow/phases (vec (keep identity (map #(get node %) [:start :pulse :release :abort])))
+    :flow/phases (vec (concat
+                       (keep identity (map #(get node %) [:start :pulse :release :abort]))
+                       (vals (:events node))))
     []))
 (defn- compile-node [node path flags]
   (when-not (map? node) (fail :not-a-node {:path path :node node}))

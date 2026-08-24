@@ -68,10 +68,11 @@
     (case component
       :flow/sequence (run-sequence engine (:steps node) context path)
       :flow/phases
-      (let [phase (or (get-in context [:frame :input :phase])
-                      (get-in context [:frame :input :action])
-                      :start)
-            phase-node (get node phase)]
+      (let [input (:input (:frame context))
+            event (:event input)
+            phase (or (:phase input) (:action input) (when event :event) :start)
+            phase-node (or (when event (get-in node [:events event]))
+                           (get node phase))]
         (if phase-node
           (run-node engine phase-node context (conj path phase))
           context))
