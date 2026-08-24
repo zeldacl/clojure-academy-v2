@@ -589,24 +589,20 @@
      :remove! combat-sessions/remove!}}))
 
 (defn dispatch-intent! [owner intent]
-  ;; The migration table is authoritative at the server boundary.  Pending
-  ;; skills never reach the legacy engine and therefore have no compatibility
-  ;; fallback; once their EDN catalog entry is migrated this gate naturally
-  ;; opens without changing the core runtime.
-  (let [;; Slot resolution is server-owned preset data, never a client
-        ;; ability/event mapping.  The resolved id is then checked against the
-        ;; migrated EDN catalog before execution.
-        ability-id (edn-ability-id owner intent)]
-    (if-not (combat-catalog/available? ability-id)
-      {:schema-version 2
-        :status :rejected
-        :reason :ability-not-migrated
-        :feedback [{:type :ability-not-migrated
-                    :ability-id ability-id
-                    :status (combat-catalog/migration-status ability-id)}]}
-      (do
-        (install-ac-host-capabilities!)
-        (execute-combat-intent! owner intent)))))
+  ;; Final runtime is the sole production dispatch path.  Pending source
+  ;; graphs return an explicit migration status; there is no legacy VM or
+  ;; catalog fallback at this boundary.
+  (let [ability-id (edn-ability-id owner intent)]
+    (assoc (final-runtime/dispatch-production! owner ability-id
+                                               (assoc intent
+                                                      :activation-seed
+                                                      (or (:activation-seed intent)
+                                                          (generate-activation-seed
+                                                           owner ability-id
+                                                           (long (or (:server-tick intent)
+                                                                     @last-known-tick*))))))
+           :schema-version 1
+           :ability-id ability-id)))
 
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
