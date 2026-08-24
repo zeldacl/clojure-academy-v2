@@ -926,9 +926,9 @@ tasks.register("verifyVfxAotBoundary") {
             violations << "vfx-core compileClojure must remain disabled unless -PfullAot=true"
         }
         if (!rootProject.ext.fullAotEnabled) {
-            def neutralVfxSource = file("build/neutral/ac/neutral-runtime-sources/cn/li/vfx/runtime.clj")
+            def neutralVfxSource = file("build/neutral/ac/neutral-runtime-sources/cn/li/vfx/final_client.clj")
             if (!neutralVfxSource.file) {
-                violations << "default neutral runtime must publish vfx-core source-first runtime.clj"
+                violations << "default neutral runtime must publish vfx-core source-first final_client.clj"
             }
             fileTree(file("build")) { include "**/*__init.class" }.files.each { File classFile ->
                 def normalized = classFile.absolutePath.replace('\\', '/')
@@ -1029,7 +1029,7 @@ tasks.register("verifyNodeLayerDiscipline") {
         def violations = []
         [
             [dir: file("ac/src/main/resources/ac/combat/components"), vm: file("combat-core/src/main/clojure/cn/li/combat/vm.clj")],
-            [dir: file("ac/src/main/resources/ac/vfx/components"), vm: file("vfx-core/src/main/clojure/cn/li/vfx/vm.clj")]
+            [dir: file("ac/src/main/resources/ac/vfx/components"), vm: file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")]
         ].each { pair ->
             if (pair.dir.directory && pair.vm.file) {
                 def vmSourceWithoutComments = pair.vm.text.replaceAll(/(?m);.*$/, "")
@@ -2012,9 +2012,9 @@ def effectRuntimeClojureRoots = [
     file("combat-core/src/main/clojure/cn/li/combat/recipe.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/host.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/vm.clj"),
-    file("vfx-core/src/main/clojure/cn/li/vfx/components.clj"),
-    file("vfx-core/src/main/clojure/cn/li/vfx/recipe.clj"),
-    file("vfx-core/src/main/clojure/cn/li/vfx/instance_table.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/effect_schema.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/final_client.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/effect_contract.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
 ]

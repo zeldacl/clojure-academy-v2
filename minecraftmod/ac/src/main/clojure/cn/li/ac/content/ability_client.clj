@@ -11,8 +11,7 @@
             [cn.li.ac.client.combat-vfx-adapter :as combat-vfx]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.vfx.install :as vfx-install]))
+            [cn.li.mcmod.util.log :as log]))
 
 (defn init-client-fx!
   "Ensure all client FX registrations have been loaded.
@@ -22,13 +21,8 @@
   (fn []
     (keybinds/freeze-keybind-registries!)
     (vfx/warmup!)
-    ;; Register every compiled EDN VFX effect as a real vfx-core descriptor
-    ;; before the registry freezes -- until this call, an EDN ability's
-    ;; :effect/vfx signals compiled fine but had no registered effect-id to
-    ;; land on, so they were silently dropped (see effect_controller.clj's
-    ;; unmapped-signal-count*). combat-catalog/initialize! (ac/core/init.clj)
-    ;; must already have run by the time client init reaches here.
-    (vfx-install/install-catalog! (vfx/runtime) (:vfx (combat-catalog/catalog)))
+    ;; Register every final typed VFX effect before the client registry freezes.
+    (vfx/register-catalog! (:vfx (combat-catalog/catalog)))
     (vfx/freeze!)
     (combat-vfx/install-dispatch! vfx/dispatch-signal!)
     (log/info "Ability client FX content initialized"))))

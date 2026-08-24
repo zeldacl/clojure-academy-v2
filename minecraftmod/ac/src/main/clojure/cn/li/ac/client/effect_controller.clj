@@ -5,7 +5,7 @@
    the only AC-owned state adapter; it stores no renderer or Minecraft object."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.runtime.vfx-contract :as contract]
-            [cn.li.vfx.runtime :as core])
+            [cn.li.vfx.final-client :as core])
   (:import [java.util ArrayDeque]))
 
 (defonce ^:private runtime* (atom nil))
@@ -194,6 +194,18 @@
   (let [frame (core/sample-frame! (runtime) {:frame-id -1 :partial-tick 0.0})]
     (core/release-frame! (runtime) -1)
     (boolean frame)))
+
+(defn register-catalog!
+  "Register the final typed VFX catalog before the client registry freezes.
+   Rendering descriptors are owned by the final engine; this adapter only
+   creates the neutral state slots used by the AC presentation bridge."
+  [catalog]
+  (doseq [[effect-id descriptor] (:effects catalog)]
+    (when-not (contains? (core/registered-effects (runtime)) effect-id)
+      (register-effect! effect-id
+                        {:lifecycle (:lifecycle descriptor)
+                         :level {:initial-state (fn [] {})}})))
+  nil)
 
 (defn freeze! []
   (core/freeze-registry! (runtime))

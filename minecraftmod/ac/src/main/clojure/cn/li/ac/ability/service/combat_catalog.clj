@@ -2,16 +2,13 @@
   "Authoritative first-phase EDN catalog. Unmigrated skills have no runtime fallback."
   (:require [cn.li.combat.recipe :as combat-recipe]
             [cn.li.combat.passives :as combat-passives]
-            [cn.li.vfx.install :as vfx-install]
-            [cn.li.vfx.recipe :as vfx-recipe]
+            [cn.li.ac.ability.final-catalog :as final-catalog]
             [cn.li.node.flow :as node-flow]
             [cn.li.combat.source-nodes :as combat-source-nodes]
             [cn.li.combat.host-primitives :as combat-host-primitives]
             [cn.li.combat.policy-primitives :as combat-policy-primitives]
             [cn.li.combat.structural-primitives :as combat-structural-primitives]
             [cn.li.combat.composite-loader :as combat-composite-loader]
-            [cn.li.vfx.v3-primitives :as vfx-v3-primitives]
-            [cn.li.vfx.composite-loader :as vfx-composite-loader]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.util.log :as log]))
 
@@ -47,14 +44,10 @@
     (combat-host-primitives/install!)
     (combat-policy-primitives/install!)
     (combat-structural-primitives/install!)
-    (vfx-v3-primitives/install!)
-    (let [combat-result (combat-composite-loader/install! "ac/combat/composites_v3_manifest.edn")
-          vfx-result (vfx-composite-loader/install! "ac/vfx/composites_v3_manifest.edn")]
+    (let [combat-result (combat-composite-loader/install! "ac/combat/composites_v3_manifest.edn")]
       (doseq [{:keys [id error data]} (:errors combat-result)]
         (log/error "v3 combat composite" id "failed to load:" error data))
-      (doseq [{:keys [id error data]} (:errors vfx-result)]
-        (log/error "v3 vfx composite" id "failed to load:" error data))
-      {:combat combat-result :vfx vfx-result})))
+      {:combat combat-result})))
 
 (defn- build-trigger-index [abilities]
   (reduce (fn [index ability]
@@ -85,14 +78,9 @@
    requirements!) is the one that owns the contract those requests are
    judged against -- this function is pure wiring between the two."
   [combat vfx]
-  (into {}
-        (keep (fn [[ability-id ability]]
-                (let [requirements (combat-recipe/vfx-signal-requirements ability)
-                      failures (vfx-install/validate-requirements! vfx requirements)]
-                  (when (seq failures)
-                    [ability-id {:message "VFX contract violation"
-                                 :data {:failures failures}}]))))
-        (:abilities combat)))
+  ;; Final catalog assembly validates the typed VFX ABI before combat
+  ;; registration. No legacy recipe/install validator is consulted here.
+  {})
 
 (defn initialize! []
   (install-v3-vocabulary!)
@@ -101,10 +89,7 @@
                   :composites-manifest-resource
                   "ac/combat/components_manifest.edn"
                   :document-transform materialize-combat-document})
-        vfx (vfx-recipe/load-catalog!
-              {:manifest-resource "ac/vfx/manifest.edn"
-               :composites-manifest-resource
-               "ac/vfx/components_manifest.edn"})
+        vfx (:vfx (final-catalog/assemble))
         ;; A VFX contract violation disables only the offending ability,
         ;; the same Design E fail-closed granularity as a compile error --
         ;; every other ability still loads.
