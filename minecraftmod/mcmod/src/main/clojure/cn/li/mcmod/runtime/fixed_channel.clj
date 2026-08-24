@@ -34,3 +34,70 @@
   (when-not (contains? packet-types packet-type) (throw (ex-info "unknown fixed packet type" {:packet-type packet-type})))
   (let [^bytes payload (byte-array payload) ^ByteBuffer buffer (doto (ByteBuffer/allocate (+ 4 (alength payload))) (.order ByteOrder/BIG_ENDIAN) (.put (byte protocol-version)) (.put (byte (get packet-types packet-type))) (.putShort (short (alength payload))) (.put payload)) result (byte-array (.position buffer))]
     (.flip buffer) (.get buffer result) result))
+
+(defn- encode-catalog-payload [{:keys [schema-version content-hash] :as catalog}]
+  (when-not (and (integer? schema-version) (<= 0 schema-version 65535))
+    (throw (ex-info "invalid catalog schema version" {:catalog catalog})))
+  (let [^bytes hash-bytes (bounded-string-bytes content-hash 128)
+        ^ByteBuffer buffer (doto (ByteBuffer/allocate (+ 4 (alength hash-bytes)))
+                             (.order ByteOrder/BIG_ENDIAN)
+                             (.putShort (short schema-version))
+                             (.putShort (short (alength hash-bytes)))
+                             (.put hash-bytes))
+        result (byte-array (.position buffer))]
+    (.flip buffer) (.get buffer result) result))
+
+(defn- decode-catalog-payload [^bytes payload]
+  (let [^ByteBuffer buffer (doto (ByteBuffer/wrap payload) (.order ByteOrder/BIG_ENDIAN))
+        schema-version (bit-and 0xffff (int (.getShort buffer)))
+        hash-length (bit-and 0xffff (int (.getShort buffer)))]
+    (when (> hash-length 128)
+      (throw (ex-info "catalog hash exceeds bound" {:length hash-length})))
+    (when-not (= hash-length (.remaining buffer))
+      (throw (ex-info "catalog hash length mismatch" {:declared hash-length :actual (.remaining buffer)})))
+    (let [^bytes hash-bytes (byte-array hash-length)]
+      (.get buffer hash-bytes)
+      {:schema-version schema-version :content-hash (String. hash-bytes StandardCharsets/UTF_8)})))
+
+(defn encode-catalog-hello [catalog]
+  (frame :catalog-hello (encode-catalog-payload catalog)))
+
+(defn decode-catalog-hello [^bytes packet]
+  (let [^ByteBuffer buffer (doto (ByteBuffer/wrap packet) (.order ByteOrder/BIG_ENDIAN))
+        version (bit-and 0xff (int (.get buffer)))
+        type (bit-and 0xff (int (.get buffer)))
+        payload-length (bit-and 0xffff (int (.getShort buffer)))]
+    (when-not (= protocol-version version)
+      (throw (ex-info "protocol version mismatch" {:expected protocol-version :actual version})))
+    (when-not (= (:catalog-hello packet-types) type)
+      (throw (ex-info "packet is not a catalog hello" {:type type})))
+    (when-not (= payload-length (.remaining buffer))
+      (throw (ex-info "catalog hello length mismatch" {:declared payload-length :actual (.remaining buffer)})))
+    (let [payload (byte-array payload-length)]
+      (.get buffer payload)
+      (assoc (decode-catalog-payload payload) :type :catalog-hello))))
+
+(defn encode-catalog-ack [{:keys [accepted? schema-version content-hash]}]
+  (let [identity (encode-catalog-payload {:schema-version schema-version :content-hash content-hash})
+        payload (byte-array (concat [(byte (if accepted? 1 0))] (seq identity)))]
+    (frame :catalog-ack payload)))
+
+(defn decode-catalog-ack [^bytes packet]
+  (let [^ByteBuffer buffer (doto (ByteBuffer/wrap packet) (.order ByteOrder/BIG_ENDIAN))
+        version (bit-and 0xff (int (.get buffer)))
+        type (bit-and 0xff (int (.get buffer)))
+        payload-length (bit-and 0xffff (int (.getShort buffer)))
+        accepted-tag (bit-and 0xff (int (.get buffer)))]
+    (when-not (= protocol-version version)
+      (throw (ex-info "protocol version mismatch" {:expected protocol-version :actual version})))
+    (when-not (= (:catalog-ack packet-types) type)
+      (throw (ex-info "packet is not a catalog ack" {:type type})))
+    (when-not (contains? #{0 1} accepted-tag)
+      (throw (ex-info "invalid catalog ack tag" {:tag accepted-tag})))
+    (when-not (= payload-length (inc (.remaining buffer)))
+      (throw (ex-info "catalog ack length mismatch" {:declared payload-length :actual (inc (.remaining buffer))})))
+    (let [payload (byte-array (.remaining buffer))]
+      (.get buffer payload)
+      (assoc (decode-catalog-payload payload)
+             :type :catalog-ack
+             :accepted? (= 1 accepted-tag)))))

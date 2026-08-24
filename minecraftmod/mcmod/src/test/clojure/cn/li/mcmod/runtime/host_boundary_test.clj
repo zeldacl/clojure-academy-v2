@@ -16,3 +16,13 @@
 (deftest input-edge-roundtrip-is-bounded-test
   (let [packet (channel/encode-intent {:seq 12 :control-id 4 :edge :press :choice "ac:fire" :client-tick 99}) decoded (channel/decode-intent packet)]
     (is (= :input-edge (:type decoded))) (is (= "ac:fire" (:choice decoded))) (is (<= (alength packet) 64))))
+
+(deftest catalog-handshake-roundtrip-is-fixed-and-bounded-test
+  (let [identity {:schema-version 1 :content-hash "0123456789abcdef"}
+        hello (channel/decode-catalog-hello (channel/encode-catalog-hello identity))
+        ack (channel/decode-catalog-ack
+             (channel/encode-catalog-ack (assoc identity :accepted? false)))]
+    (is (= identity (select-keys hello [:schema-version :content-hash])))
+    (is (= identity (select-keys ack [:schema-version :content-hash])))
+    (is (false? (:accepted? ack)))
+    (is (<= (alength (channel/encode-catalog-hello identity)) 140))))
