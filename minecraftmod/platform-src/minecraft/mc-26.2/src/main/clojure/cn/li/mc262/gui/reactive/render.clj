@@ -816,7 +816,23 @@
           w (unchecked-int (scaled-w node))
           h (unchecked-int (scaled-h node))
           m (max 1 (unchecked-int (.getDSlot node SLOT-NS-MARGIN)))]
-      (GuiGraphicsHelper/blit9 gg rl x y w h 0 0 w h w h m m m m))))
+      ;; blend_quad tint: AcademyCraft draws it with Colors.monoBlend(0, 0.5) =
+      ;; black @ 0.5 alpha (a translucent dark panel). White (0xFFFFFFFF) would
+      ;; show the raw (light) texture — the "pure white" background bug.
+      (GuiGraphicsHelper/blit9 gg rl x y w h 0 0 w h w h m m m m
+                               (unchecked-int 0x80000000))
+      ;; Top & bottom decorative lines (matching upstream lineTex rendering
+      ;; and 1.20.1/1.21.1's render-nine-slice!): drawn at full white.
+      (when-let [^Identifier line-tex (.getOSlot node SLOT-NS-LINE)]
+        (let [lm 3.2
+              lt -8.6 lh 12.0
+              lb (- h 2.0) lbh 8.0]
+          (GuiGraphicsHelper/blitTexturedQuad gg line-tex
+            (float (- x lm)) (float (+ y lt)) (float (+ x w lm)) (float (+ y lt lh)) 0.0
+            0.0 1.0 0.0 1.0)
+          (GuiGraphicsHelper/blitTexturedQuad gg line-tex
+            (float (- x lm)) (float (+ y lb)) (float (+ x w lm)) (float (+ y lb lbh)) 0.0
+            0.0 1.0 0.0 1.0))))))
 
 (defn render-glow-line! [^GuiGraphicsExtractor gg ^INode node]
   (render-line! gg node))

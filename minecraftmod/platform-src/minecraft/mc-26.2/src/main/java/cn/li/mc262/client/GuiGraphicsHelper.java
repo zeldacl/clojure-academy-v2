@@ -5,6 +5,7 @@ import cn.li.mc262.client.render.PerspectiveQuadRenderState;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
@@ -108,42 +109,58 @@ public final class GuiGraphicsHelper {
                              int x, int y, int w, int h,
                              int u, int v, int regionW, int regionH,
                              int texW, int texH,
-                             int borderL, int borderT, int borderR, int borderB) {
+                             int borderL, int borderT, int borderR, int borderB,
+                             int color) {
         if (!(graphics instanceof GuiGraphicsExtractor gge)) {
             return;
         }
-        int left = Math.min(Math.max(0, borderL), Math.min(w, regionW));
-        int top = Math.min(Math.max(0, borderT), Math.min(h, regionH));
-        int right = Math.min(Math.max(0, borderR), Math.min(w - left, regionW - left));
-        int bottom = Math.min(Math.max(0, borderB), Math.min(h - top, regionH - top));
+        // The caller's region/tex sizes were the destination size (100×177)
+        // rather than the texture's (48×48), so every slice UV fraction was
+        // wrong: the border slices sampled only the outer ~2px of the 48px
+        // texture (the soft alpha gradient stretched blocky by NEAREST — the
+        // "mosaic" panel) and the center sampled an off-center band. The
+        // GpuTexture's real dimensions are authoritative for both the source
+        // region and the UV divisor.
+        int realTexW = texW;
+        int realTexH = texH;
+        AbstractTexture abstractTex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        GpuTexture gpuTex = abstractTex != null ? abstractTex.getTexture() : null;
+        if (gpuTex != null && gpuTex.getWidth(0) > 0 && gpuTex.getHeight(0) > 0) {
+            realTexW = gpuTex.getWidth(0);
+            realTexH = gpuTex.getHeight(0);
+        }
+        int left = Math.min(Math.max(0, borderL), Math.min(w, realTexW));
+        int top = Math.min(Math.max(0, borderT), Math.min(h, realTexH));
+        int right = Math.min(Math.max(0, borderR), Math.min(w - left, realTexW - left));
+        int bottom = Math.min(Math.max(0, borderB), Math.min(h - top, realTexH - top));
         int centerW = Math.max(0, w - left - right);
         int centerH = Math.max(0, h - top - bottom);
-        int sourceCenterW = Math.max(0, regionW - left - right);
-        int sourceCenterH = Math.max(0, regionH - top - bottom);
+        int sourceCenterW = Math.max(0, realTexW - left - right);
+        int sourceCenterH = Math.max(0, realTexH - top - bottom);
 
-        blitSlice(gge, texture, x, y, left, top, u, v, left, top, texW, texH);
+        blitSlice(gge, texture, x, y, left, top, u, v, left, top, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left, y, centerW, top,
-                u + left, v, sourceCenterW, top, texW, texH);
+                u + left, v, sourceCenterW, top, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left + centerW, y, right, top,
-                u + regionW - right, v, right, top, texW, texH);
+                u + realTexW - right, v, right, top, realTexW, realTexH, color);
         blitSlice(gge, texture, x, y + top, left, centerH,
-                u, v + top, left, sourceCenterH, texW, texH);
+                u, v + top, left, sourceCenterH, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left, y + top, centerW, centerH,
-                u + left, v + top, sourceCenterW, sourceCenterH, texW, texH);
+                u + left, v + top, sourceCenterW, sourceCenterH, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left + centerW, y + top, right, centerH,
-                u + regionW - right, v + top, right, sourceCenterH, texW, texH);
+                u + realTexW - right, v + top, right, sourceCenterH, realTexW, realTexH, color);
         blitSlice(gge, texture, x, y + top + centerH, left, bottom,
-                u, v + regionH - bottom, left, bottom, texW, texH);
+                u, v + realTexH - bottom, left, bottom, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left, y + top + centerH, centerW, bottom,
-                u + left, v + regionH - bottom, sourceCenterW, bottom, texW, texH);
+                u + left, v + realTexH - bottom, sourceCenterW, bottom, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left + centerW, y + top + centerH, right, bottom,
-                u + regionW - right, v + regionH - bottom, right, bottom, texW, texH);
+                u + realTexW - right, v + realTexH - bottom, right, bottom, realTexW, realTexH, color);
     }
 
     private static void blitSlice(GuiGraphicsExtractor graphics, Identifier texture,
                                   int x, int y, int width, int height,
                                   int u, int v, int sourceWidth, int sourceHeight,
-                                  int textureWidth, int textureHeight) {
+                                  int textureWidth, int textureHeight, int color) {
         if (width <= 0 || height <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {
             return;
         }
@@ -151,12 +168,12 @@ public final class GuiGraphicsHelper {
                 x, y, x + width, y + height,
                 (float) u / textureWidth, (float) (u + sourceWidth) / textureWidth,
                 (float) v / textureHeight, (float) (v + sourceHeight) / textureHeight,
-                -1)) {
+                color)) {
             return;
         }
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture,
                 x, y, (float) u, (float) v,
-                width, height, sourceWidth, sourceHeight, textureWidth, textureHeight);
+                width, height, sourceWidth, sourceHeight, textureWidth, textureHeight, color);
     }
 
     public static void blitTexturedQuad(Object graphics, Identifier texture,
@@ -173,7 +190,14 @@ public final class GuiGraphicsHelper {
                 x, y, x + w, y + h, u0, u1, v0, v1, -1)) {
             return;
         }
-        gge.blit(texture, x, y, w, h, u0, v0, u1, v1);
+        // blit's signature is (x0, y0, x1, y1, u0, u1, v0, v1) — the END
+        // coordinates and the UVs in order. Passing (w, h) here put the width
+        // and height in the x1/y1 slots (an inverted rect) and shuffled the UVs
+        // into a degenerate span (u1 got v0), which sampled the texture's
+        // bottom-left texel — transparent for line.png — so the quad was
+        // discarded (the nine-slice decorative lines and any cropped sprite
+        // region rendered nothing).
+        gge.blit(texture, x, y, x + w, y + h, u0, u1, v0, v1);
     }
 
     /** Compatibility overload matching older float-free call sites. */
