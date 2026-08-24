@@ -17,6 +17,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.ability.final-runtime :as final-runtime]
             [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.registry.event :as ability-event]
@@ -40,6 +41,7 @@
 
 (defonce ^:private engine* (atom nil))
 (defonce ^:private catalog* (atom nil))
+(defonce ^:private final-runtime* (atom nil))
 ;; How often (in server ticks) tick! resends active :session/:persistent VFX
 ;; instances through cn.li.combat.vfx-publish/replay-persistent-signals! so a
 ;; player who enters tracking range after an effect started still sees it.
@@ -242,6 +244,41 @@
      :position (when (map? position)
                  [(:x position) (:y position) (:z position)])
      :world-id (:world-id position)}))
+
+(defn commit-final-state!
+  "Commit only neutral final-engine resource/cooldown deltas through AC's
+   reducer boundary. Unsupported state paths fail explicitly so a migrated
+   graph cannot silently mutate an unpersisted field."
+  [entries]
+  (doseq [{:keys [owner base-state state]} entries]
+    (let [base-cp (double (or (get-in base-state [:resources :cp]) 0.0))
+          next-cp (double (or (get-in state [:resources :cp]) 0.0))
+          base-overload (double (or (get-in base-state [:resources :overload]) 0.0))
+          next-overload (double (or (get-in state [:resources :overload]) 0.0))
+          cp-delta (- next-cp base-cp)
+          overload-delta (- next-overload base-overload)
+          commands (cond-> []
+                     (neg? cp-delta) (conj {:command :consume-resource :cp (- cp-delta) :overload 0.0})
+                     (neg? overload-delta) (conj {:command :consume-resource :cp 0.0 :overload (- overload-delta)}))]
+      (when (or (pos? cp-delta) (pos? overload-delta))
+        (throw (ex-info "final state contains unsupported resource credit" {:owner owner :base base-state :state state})))
+      (when (seq commands)
+        (let [result (command-runtime/run-commands-in-session!
+                      (server-session-id) (str owner) commands)]
+          (when-not (:success? result)
+            (throw (ex-info "final state resource commit rejected" {:owner owner :result result}))))))))
+
+(defn initialize-final-runtime!
+  "Install AC's production final runtime against mcmod neutral capability
+   handlers. This is the only runtime used after the final dispatch cutover."
+  []
+  (or @final-runtime*
+      (reset! final-runtime*
+              (final-runtime/install-production!
+               {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
+                :commit-state! commit-final-state!}))))
+
+(defn final-runtime [] @final-runtime*)
 
 (defn resolve-slot
   "Resolve a client slot only against the server-authoritative preset." 

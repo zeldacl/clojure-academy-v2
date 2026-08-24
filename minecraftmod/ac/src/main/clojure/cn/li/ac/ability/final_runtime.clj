@@ -22,6 +22,31 @@
      :catalog (atom nil)
      :scheduled (atom [])}))
 
+(defn create-from-capabilities
+  "Build the final host from mcmod's neutral capability snapshot.
+
+   Query handlers receive plain request maps.  Action handlers are wrapped so
+   the final host can preflight every command without invoking a mutating
+   Minecraft operation; only the apply phase crosses the mcmod boundary."
+  [{:keys [state-provider commit-state!] :as options}]
+  (let [snapshot ((resolve-var 'cn.li.mcmod.runtime.capabilities/snapshot))
+        create-host (resolve-var 'cn.li.mcmod.runtime.host/create)
+        host (create-host
+              {:queries (:queries snapshot)
+               :actions (into {}
+                              (map (fn [[capability handler]]
+                                     [capability
+                                      (fn [phase command context]
+                                        (if (= :preflight phase)
+                                          true
+                                          (handler (merge (:args command)
+                                                          {:owner (:owner command)
+                                                           :world-id (:world-id command)}))))]))
+                              (:actions snapshot))})]
+    (create-runtime {:host host
+                     :state-provider state-provider
+                     :commit-state! commit-state!})))
+
 (defn initialize! [runtime]
   (let [initialize-catalog (resolve-var 'cn.li.ac.ability.final-catalog-service/initialize!)]
     (reset! (:catalog runtime) (initialize-catalog))
@@ -75,3 +100,29 @@
                                  (compile {:component :flow/sequence :steps [node]})
                                  (assoc frame :tick tick)))
                       @due)})))
+
+(defonce ^:private production-runtime* (atom nil))
+
+(defn install-production!
+  "Install the one server-side final runtime instance used by AC's
+   composition root.  The caller supplies neutral state callbacks; this
+   function owns no Minecraft objects and is safe to invoke once at startup."
+  [{:keys [state-provider commit-state!]}]
+  (let [runtime (create-from-capabilities {:state-provider state-provider
+                                           :commit-state! commit-state!})]
+    (initialize! runtime)
+    (reset! production-runtime* runtime)
+    runtime))
+
+(defn production-runtime [] @production-runtime*)
+
+(defn dispatch-production! [owner ability-id intent]
+  (if-let [runtime @production-runtime*]
+    (dispatch! runtime ability-id
+               {:owner owner
+                :world (or (:world-id intent) "minecraft:overworld")
+                :tick (long (or (:server-tick intent) (:tick intent) 0))
+                :seed (long (or (:activation-seed intent)
+                                (hash [owner ability-id (:server-tick intent)])))
+                :input (dissoc intent :owner :ability-id)})
+    {:status :rejected :reason :final-runtime-not-installed}))

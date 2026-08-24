@@ -48,6 +48,7 @@
   ;; domain ports (resources/progression/energy/marks) after.
   (combat-platform/install!)
   (combat-runtime/install-ac-host-capabilities!)
+  (combat-runtime/initialize-final-runtime!)
   ;; The EDN catalog is authoritative for migrated abilities.  No legacy
   ;; catalog fallback is consulted when a skill is pending migration.
   (combat-catalog/initialize!)
