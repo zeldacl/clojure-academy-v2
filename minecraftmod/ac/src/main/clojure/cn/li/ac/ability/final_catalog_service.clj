@@ -16,14 +16,19 @@
   (requiring-resolve 'cn.li.combat.final-compiler/compile-program))
 
 (defn- compile-registration [registration]
-  (try
+  (if-not (= :final (:engine registration))
     (assoc registration
-           :status :ready
-           :compiled ((compiler-api) (:graph registration)))
-    (catch clojure.lang.ExceptionInfo error
+           :status :pending-final-node-migration
+           :compile-error {:reason :source-engine-not-final
+                           :engine (:engine registration)})
+    (try
       (assoc registration
-             :status :pending-final-node-migration
-             :compile-error (ex-data error)))))
+             :status :ready
+             :compiled ((compiler-api) (:graph registration)))
+      (catch clojure.lang.ExceptionInfo error
+        (assoc registration
+               :status :pending-final-node-migration
+               :compile-error (ex-data error))))))
 
 (defn initialize!
   "Load and index the immutable final catalog.
