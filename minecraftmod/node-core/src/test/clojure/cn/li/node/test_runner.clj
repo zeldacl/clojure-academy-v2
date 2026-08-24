@@ -9,6 +9,7 @@
             [cn.li.node.composite-loader-test]
             [cn.li.node.validate-test]
             [cn.li.node.schema-export-test]
+            [cn.li.node.schema-contracts-test]
             [cn.li.node.dependency-direction-test]))
 
 (defn -main [& _]
@@ -21,5 +22,6 @@
                             'cn.li.node.composite-loader-test
                             'cn.li.node.validate-test
                             'cn.li.node.schema-export-test
+                            'cn.li.node.schema-contracts-test
                             'cn.li.node.dependency-direction-test)]
     (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))
