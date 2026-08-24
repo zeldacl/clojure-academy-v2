@@ -65,3 +65,16 @@
 
 (defn migration-status []
   (select-keys @catalog-state [:status :ready-count :pending-count :content-hash]))
+
+(defn migration-report
+  "Return a deterministic audit of every registration and its first final
+   compiler failure.  This is intentionally data-only so CI can require the
+   pending set to reach zero before old runtime deletion."
+  []
+  (let [registrations (get-in @catalog-state [:combat :registrations])]
+    {:total (count registrations)
+     :ready (count (filter #(= :ready (:status %)) registrations))
+     :pending (count (filter #(= :pending-final-node-migration (:status %)) registrations))
+     :entries (mapv (fn [entry]
+                      (select-keys entry [:id :source-id :status :compile-error]))
+                    (sort-by (comp str :id) registrations))}))

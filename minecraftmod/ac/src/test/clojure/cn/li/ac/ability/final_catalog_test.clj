@@ -39,3 +39,11 @@
     (is (string? (service/content-hash)))
     (is (map? (service/migration-status)))
     (is (false? (service/available? :ability/electron-missile)))))
+
+(deftest final-service-migration-report-is-complete-test
+  (service/initialize!)
+  (let [report (service/migration-report)]
+    (is (= 50 (:total report)))
+    (is (= 50 (+ (:ready report) (:pending report))))
+    (is (= 50 (count (:entries report))))
+    (is (every? #(contains? % :status) (:entries report)))))
