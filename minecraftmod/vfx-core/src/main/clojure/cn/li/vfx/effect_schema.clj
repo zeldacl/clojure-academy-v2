@@ -24,7 +24,7 @@
   (when-not (contains? #{:transient :session :persistent} lifecycle) (throw (ex-info "invalid VFX lifecycle" {:id id :lifecycle lifecycle})))
   (when (> (count parameters) 256) (throw (ex-info "VFX effects support at most 256 parameters" {:id id})))
   (when-not (every? render-primitives (or primitives #{})) (throw (ex-info "unsupported VFX render primitive" {:id id :primitives primitives})))
-  (assoc descriptor :schema-version schema-version :parameters (mapv (fn [[name spec]] (parameter name spec)) (sort-by key (or parameters {}))) :primitives (set primitives)))
+  (assoc descriptor :schema-version schema-version :parameters (mapv (fn [[name spec]] (parameter name spec)) (sort-by first (or parameters {}))) :primitives (set primitives)))
 (defn catalog [descriptors]
   (let [effects (into (sorted-map) (map (fn [descriptor] (let [d (effect-descriptor descriptor)] [(:id d) d])) descriptors))]
     {:schema-version schema-version :effects effects :hash (sha256 effects)}))
