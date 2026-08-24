@@ -2,7 +2,7 @@
  :kind :ability
  :id :directed-shock
  :revision 2
- :engine :v3
+ :engine :final
  :activation :session
  :status :migrated
  :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id

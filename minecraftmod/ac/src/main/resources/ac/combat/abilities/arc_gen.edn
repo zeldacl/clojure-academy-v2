@@ -2,7 +2,7 @@
  :kind :ability
  :id :arc-gen
  :revision 2
- :engine :v3
+ :engine :final
  :activation :instant
  :status :migrated
  :requires [:caster/eye :caster/aim :world/id]

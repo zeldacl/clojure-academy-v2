@@ -2,7 +2,7 @@
  :kind :ability
  :id :location-teleport
  :revision 2
- :engine :v3
+ :engine :final
  :activation :instant
  :status :migrated
  :requires [:caster/id :world/id :caster/creative? :rng/seed

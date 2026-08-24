@@ -2,7 +2,7 @@
   :kind :ability
   :id :flesh-ripping
   :revision 2
-  :engine :v3
+  :engine :final
   :activation :session
   :status :migrated
   :requires [:caster/id

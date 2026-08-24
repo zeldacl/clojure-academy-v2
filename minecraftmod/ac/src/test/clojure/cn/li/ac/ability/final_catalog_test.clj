@@ -42,15 +42,18 @@
   (let [result (service/initialize!)]
     (is (= :ready (:status result)))
     (is (= 50 (+ (:ready-count result) (:pending-count result))))
-    (is (pos? (:pending-count result)))
+    (is (= 50 (:ready-count result)))
+    (is (zero? (:pending-count result)))
     (is (string? (service/content-hash)))
     (is (map? (service/migration-status)))
-    (is (false? (service/available? :ability/electron-missile)))))
+    (is (true? (service/available? :electron-missile)))))
 
 (deftest final-service-migration-report-is-complete-test
   (service/initialize!)
   (let [report (service/migration-report)]
     (is (= 50 (:total report)))
+    (is (= 50 (:ready report)))
+    (is (zero? (:pending report)))
     (is (= 50 (+ (:ready report) (:pending report))))
     (is (= 50 (count (:entries report))))
     (is (every? #(contains? % :status) (:entries report)))))

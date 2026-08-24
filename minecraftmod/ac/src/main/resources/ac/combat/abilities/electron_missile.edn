@@ -2,7 +2,7 @@
   :kind :ability
   :id :electron-missile
   :revision 2
-  :engine :v3
+  :engine :final
   :activation :session
   :status :migrated
   :requires [:caster/body

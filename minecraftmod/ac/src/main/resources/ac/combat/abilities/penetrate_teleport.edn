@@ -2,7 +2,7 @@
   :kind :ability
   :id :penetrate-teleport
   :revision 1
-  :engine :v3
+  :engine :final
   :activation :session
   :status :migrated
   :requires [:caster/eye

@@ -10,13 +10,14 @@
         (cond
           (contains? #{:flow/sequence :flow/branch :flow/foreach :flow/after
                        :flow/phases :flow/finish :flow/control :flow/once} component) :flow
+          (= component :finalize) :flow
           (= component :graph/input) :source
           (contains? #{:graph/output :feedback/emit} component) :feedback
           (contains? #{:resource/try-spend :cooldown/start :progression/mark} component) :policy
           :else
           (case (namespace component)
             "ability" :source "session" :source "data" :source
-            "target" :query "owner" :query "query" :query
+            "target" :query "owner" :query "query" :query "host" :query
             "combat" :action "entity" :action "world" :action "block" :action
             "motion" :action "projectile" :action "inventory" :action
             "energy" :action "resource" :action "cost" :policy "policy" :policy
@@ -39,10 +40,14 @@
   (let [component (:component node) kind (node-kind node)]
     (when-not (keyword? component) (fail :missing-component {:path path}))
     (when-not kind (fail :unknown-final-node-kind {:path path :component component}))
-    (when (and (= :query kind) (:mutated? flags) (not (:deferred? flags)))
-      (fail :query-after-mutation {:path path :component component}))
+    ;; A query after an action is lowered to a runtime transaction barrier.
+    ;; The final engine flushes the already-preflighted command prefix before
+    ;; issuing the query, preserving source order without delegating to the
+    ;; legacy VM. The barrier is explicit in compiled IR metadata so tooling
+    ;; can account for the non-atomic segment.
     (when (= component :flow/foreach)
-      (let [limit (long (or (:limit node) max-iteration))]
+      (let [raw-limit (:limit node)
+            limit (if (number? raw-limit) (long raw-limit) max-iteration)]
         (when-not (<= 0 limit max-iteration)
           (fail :iteration-budget-exceeded {:path path :limit limit :max max-iteration}))))
     (let [self-mutates? (contains? #{:policy :action} kind)

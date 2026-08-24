@@ -2,7 +2,7 @@
  :kind :ability
  :id :rad-intensify
  :revision 2
- :engine :v3
+ :engine :final
  :activation :passive
  :status :migrated
  :requires [:world/id]

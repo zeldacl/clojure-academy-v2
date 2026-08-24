@@ -141,6 +141,31 @@
       (throw (ex-info "AC manifest contains duplicate ids" {:kind kind}))))
   manifest)
 
+(defn- expand-fragments
+  "Inline a source's named fragment bodies before final compilation.
+
+   Fragments are authoring-time macros only; the final IR contains ordinary
+   typed nodes and never dispatches a legacy fragment interpreter. Expansion
+   is recursive so fragments may share other fragments, while a cycle fails
+   loudly during catalog assembly."
+  [program fragments]
+  (letfn [(expand [value stack]
+            (cond
+              (map? value)
+              (if-let [component (:component value)]
+                (if-let [fragment (get fragments component)]
+                  (do
+                    (when (some #{component} stack)
+                      (throw (ex-info "cyclic combat fragment"
+                                      {:fragment component :stack stack})))
+                    (expand (:body fragment) (conj stack component)))
+                  (into {} (map (fn [[k v]] [k (expand v stack)]) value)))
+                (into {} (map (fn [[k v]] [k (expand v stack)]) value)))
+              (vector? value) (mapv #(expand % stack) value)
+              (seq? value) (doall (map #(expand % stack) value))
+              :else value))]
+    (expand program [])))
+
 (defn- load-combat [combat-manifest]
   (let [manifest (validate-manifest (read-resource combat-manifest) :combat)
         sources (reduce (fn [result {:keys [id resource kind source-id]}]
@@ -156,6 +181,9 @@
                                          (-> source
                                              (dissoc :reactions)
                                              (assoc :damage-policies reactions))
+                                         source)
+                                source (if-let [fragments (:fragments source)]
+                                         (update source :program expand-fragments fragments)
                                          source)
                                 source-key (or source-id id)]
                             (when-not (or (= source-key (:id source))

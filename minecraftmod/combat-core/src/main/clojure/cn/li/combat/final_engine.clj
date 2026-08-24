@@ -18,6 +18,16 @@
 (defn- command-id [engine path]
   (let [n (swap! (:next-command engine) inc)] [:combat (vec path) n]))
 (declare run-node)
+(defn- flush-command-prefix [engine context]
+  (if (seq (:commands context))
+    (let [result (host/execute! (:host engine) (:commands context)
+                                {:frame (:frame context) :barrier? true})]
+      (if (:ok? result)
+        (-> context
+            (assoc :commands [])
+            (update :barriers (fnil conj []) result))
+        (assoc context :host-error result)))
+    context))
 (defn- bind-result [context bind value]
   (if (map? bind)
     (reduce-kv (fn [ctx output local]
@@ -77,6 +87,7 @@
           (run-node engine phase-node context (conj path phase))
           context))
       :flow/finish (assoc-in context [:locals :outcome] (:outcome node))
+      :finalize (assoc-in context [:locals :outcome] (:outcome node))
       :flow/once (if (get-in context [:locals :once-complete?])
                    context
                    (assoc-in (run-node engine (:body node) context (conj path :once))
@@ -109,9 +120,12 @@
       (let [kind (compiler/node-kind node)]
         (case kind
           :query
-          (let [request (resolve-value (dissoc node :component :kind :bind) context)
-            result (host/query! (:host engine) (:capability node) request)]
-            (bind-result context (:bind node) result))
+          (let [context (flush-command-prefix engine context)]
+            (if (:host-error context)
+              context
+              (let [request (resolve-value (dissoc node :component :kind :bind) context)
+                    result (host/query! (:host engine) (:capability node) request)]
+                (bind-result context (:bind node) result))))
           :source
           (bind-result context (:bind node) (source-value node context))
           :policy
@@ -143,12 +157,14 @@
         supplied ((:state-provider engine) owner)
         owner-record (if (contains? supplied :state) supplied {:revision 0 :state supplied})
         txn (contracts/state-txn-set {owner owner-record})
-        initial {:frame frame :locals {} :txn txn :commands [] :outbox (contracts/outbox) :scheduled []}
+        initial {:frame frame :locals {} :txn txn :commands [] :barriers []
+                 :outbox (contracts/outbox) :scheduled []}
         result (run-node engine (:program compiled) initial [:program])
-        host-result (host/execute! (:host engine) (:commands result) {:frame frame})]
+        host-result (or (:host-error result)
+                        (host/execute! (:host engine) (:commands result) {:frame frame}))]
     (if-not (:ok? host-result)
       {:status :rejected :reason (:reason (:error host-result)) :host host-result}
       (do
         ((:commit-state! engine) (contracts/txn-entries (:txn result)))
         {:status :accepted :txn (contracts/txn-entries (:txn result)) :outbox (:outbox result)
-         :scheduled (:scheduled result) :host host-result}))))
+         :scheduled (:scheduled result) :barriers (:barriers result) :host host-result}))))
