@@ -31,6 +31,13 @@
                        (contains? descriptor :parameters)))
                 (get-in result [:vfx :effects])))))
 
+(deftest damage-reactions-are-lowered-to-final-policies-test
+  (let [sources (get-in (catalog/assemble) [:combat :sources])
+        policy-sources (filter #(seq (:damage-policies %)) (vals sources))]
+    (is (= 6 (count policy-sources)))
+    (is (every? #(nil? (:reactions %)) (vals sources)))
+    (is (every? #(seq (:damage-policies %)) policy-sources))))
+
 (deftest final-service-exposes-explicit-migration-state-test
   (let [result (service/initialize!)]
     (is (= :ready (:status result)))

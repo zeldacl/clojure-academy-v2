@@ -58,7 +58,8 @@
 
 (defn damage-reaction-migration-pending?
   "Whether any loaded source still contains the pre-final reaction program.
-   Production damage must fail closed until that reaction graph is lowered."
+   Catalog assembly lowers :reactions to typed :damage-policies, so seeing
+   this key here is a hard migration error rather than a compatibility path."
   [runtime]
   (boolean (some :reactions (vals (get-in @(:catalog runtime) [:combat :sources])))))
 
@@ -73,8 +74,10 @@
      :event raw-event
      :amount 0.0
      :cancelled? true}
-    (let [resolve-event (resolve-var 'cn.li.combat.final-damage/resolve-event)]
-      (assoc (resolve-event [] raw-event) :status :accepted))))
+    (let [resolve-event (resolve-var 'cn.li.combat.final-damage/resolve-event)
+          policies (vec (mapcat :damage-policies
+                                (vals (get-in @(:catalog runtime) [:combat :sources]))))]
+      (assoc (resolve-event policies raw-event) :status :accepted))))
 
 (defn- registration [runtime ability-id]
   ((resolve-var 'cn.li.ac.ability.final-catalog-service/registration) ability-id))

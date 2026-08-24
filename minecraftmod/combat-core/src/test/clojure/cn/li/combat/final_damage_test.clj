@@ -15,6 +15,17 @@
                   :contributions [{:kind :reflection :ratio 1.0}]}
         result (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 2 :type :skill :depth 8})]
     (is (empty? (:reflections result)))))
+
+(deftest lowered-policy-program-is-executed-test
+  (let [result (damage/resolve-event
+                [{:ability-id :shield :reaction-id :absorb :priority 10
+                  :on :combat/damage
+                  :when {:expr :math/gt :args [{:ref [:request :base]} 0.0]}
+                  :program {:component :damage/absorb :cap 3.0}}]
+                {:world-id "w" :source :a :target :b :base 10 :type :skill :seed 4})]
+    (is (= 7.0 (:amount result)))
+    (is (= [{:ability-id :shield :reaction-id :absorb}]
+           (:matched result)))))
 (deftest boundary-commits-only-after-actual-apply-test
   (let [committed (atom nil)]
     (damage/install-boundary! {:reactions [] :commit-state! #(reset! committed %)})

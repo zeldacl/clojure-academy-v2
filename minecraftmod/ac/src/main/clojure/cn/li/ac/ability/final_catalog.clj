@@ -148,6 +148,15 @@
                             (throw (ex-info "combat manifest contains non-ability"
                                             {:id id :kind kind})))
                           (let [source (read-resource resource)
+                                ;; Lower the legacy damage reaction container
+                                ;; at catalog load. The final runtime never
+                                ;; interprets :reactions; policies are plain
+                                ;; data consumed by combat-core/final-damage.
+                                source (if-let [reactions (:reactions source)]
+                                         (-> source
+                                             (dissoc :reactions)
+                                             (assoc :damage-policies reactions))
+                                         source)
                                 source-key (or source-id id)]
                             (when-not (or (= source-key (:id source))
                                           (= id (:id source)))
