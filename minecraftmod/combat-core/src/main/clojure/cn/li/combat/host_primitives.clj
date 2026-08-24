@@ -345,8 +345,11 @@
 
    :world/lightning
    {:capability :world/lightning
-    :inputs {:position {:type :vec3}}
-    :doc "Strike lightning at a position." :category :world}
+    :inputs {:position {:type :vec3}
+             :world-id {:type :string :default nil}
+             :owner {:type :string :default nil}
+             :visual-only? {:type :boolean :default nil}}
+    :doc "Strike lightning at a position. :world-id/:owner/:visual-only? are real fields the actual handler (platform.clj's lightning!) requires -- :owner and world-id==owner's-own-world are enforced by the handler (bounded to 64 blocks of the owner), and :visual-only? must be true (the only mode any real ability requests; the handler's own docstring says so) or the whole call is rejected. Same gap class found repeatedly this session (v3's :inputs were built from v2's :required schema set, not real content's actual field usage, nor the real handler's actual validation)." :category :world}
 
    :world/explosion
    {:capability :world/explosion
