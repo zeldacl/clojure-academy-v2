@@ -33,4 +33,17 @@
     (is (= :accepted
            (:status (runtime/dispatch! rt :electromaster/brain-course
                                        {:owner "alice" :world "w" :tick 0
-                                        :seed 1 :input {:phase :start}}))))))
+                                       :seed 1 :input {:phase :start}}))))))
+
+(deftest final-runtime-executes-course-family-smoke-test
+  (let [rt (runtime/create-runtime
+            {:host (host/create {:queries {} :actions {}})
+             :state-provider (fn [_] {})
+             :commit-state! (fn [_] nil)})]
+    (runtime/initialize! rt)
+    (doseq [ability-id [:electromaster/mind-course
+                        :electromaster/brain-course-advanced]]
+      (is (= :accepted
+             (:status (runtime/dispatch! rt ability-id
+                                         {:owner "alice" :world "w" :tick 0
+                                          :seed 1 :input {:phase :start}})))))))
