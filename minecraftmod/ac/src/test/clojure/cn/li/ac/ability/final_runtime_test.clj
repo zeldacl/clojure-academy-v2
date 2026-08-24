@@ -23,3 +23,14 @@
                                     {:owner "alice" :world "w" :tick 0 :seed 1 :input {}})]
       (is (= :pending-final-node-migration (:status result)))
       (is (= :ready (:status (runtime/catalog-status rt)))))))
+
+(deftest final-runtime-executes-migrated-passive-smoke-skill-test
+  (let [rt (runtime/create-runtime
+            {:host (host/create {:queries {} :actions {}})
+             :state-provider (fn [_] {})
+             :commit-state! (fn [_] nil)})]
+    (runtime/initialize! rt)
+    (is (= :accepted
+           (:status (runtime/dispatch! rt :electromaster/brain-course
+                                       {:owner "alice" :world "w" :tick 0
+                                        :seed 1 :input {:phase :start}}))))))
