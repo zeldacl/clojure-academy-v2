@@ -79,9 +79,10 @@ dependencies {
     // combat-core's own vocabulary (components.clj) registers against it.
     implementation project(":node-core")
     // VFX is a transport-level signal ABI. Combat emits neutral effect ids and
-    // audiences; AC composes the VFX catalog and mcmod routes packets. Keeping
-    // this edge out makes combat-core independently compilable and prevents a
-    // hidden combat<->VFX runtime cycle.
+    // audiences; AC composes the VFX catalog and mcmod routes packets. The
+    // dependency is one-way: combat may read typed lifecycle/audience metadata,
+    // while vfx-core never depends back on combat-core.
+    implementation project(":vfx-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }
