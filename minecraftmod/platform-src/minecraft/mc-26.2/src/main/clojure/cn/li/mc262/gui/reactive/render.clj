@@ -788,7 +788,7 @@
     ;; instead). Falls back to the axis-aligned fills when the loader has no
     ;; element submitter.
     (if (GuiGraphicsHelper/blitRotated
-          gg (resolve-tex-loc :tex-line) color
+          gg (or (resolve-tex-loc :tex-line) (resolve-tex-loc "tex-line")) color
           (double x1) (double y1) (double x2) (double y2) (double thick))
       nil
       (if (< (Math/abs (- x2 x1)) (Math/abs (- y2 y1)))

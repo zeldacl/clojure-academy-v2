@@ -2,6 +2,8 @@ package cn.li.mc262.client;
 
 import cn.li.mc262.client.render.GuiPerspectiveWarp;
 import cn.li.mc262.client.render.PerspectiveQuadRenderState;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -300,26 +302,43 @@ public final class GuiGraphicsHelper {
             return false;
         }
         double angle = Math.atan2(dy, dx);
-        // Unit rectangle → [0,len]×[0,thick] centered on the axis, rotated
-        // onto p1→p2, translated to p1. Then compose with the extractor's
-        // current pose (draw-tape's left/top translate + ancestor pushes) so
-        // the quad lands in screen space like every other element's abs
-        // coordinates.
+        // Unit rectangle → [0,len]×[0,thick] anchored at p1 and rotated onto
+        // p1→p2: u=0 at p1, u=1 at p2, v centered across the thickness — the
+        // same mapping 1.20.1/1.21.1 use for the tex-line gradient quad. (The
+        // earlier translate(-0.5F, -0.5F) centered the quad on p1, so it
+        // spanned ±len/2 around the parent: half the line stuck out behind
+        // the node and the child end was never reached, and with the node
+        // icons drawn on top the skill-tree connections read as missing
+        // entirely.) Then compose with the extractor's current pose
+        // (draw-tape's left/top translate + ancestor pushes) so the quad
+        // lands in screen space like every other element's abs coordinates.
         Matrix3x2f lineTransform = new Matrix3x2f()
                 .translate((float) x1, (float) y1)
                 .rotate((float) angle)
                 .scale((float) len, (float) thickness)
-                .translate(-0.5F, -0.5F);
+                .translate(0.0F, -0.5F);
         Matrix3x2f pose = new Matrix3x2f(gge.pose()).mul(lineTransform);
         AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
         // Dedicated line pipeline: created last, so its sort key puts the line
         // after every background/blit pipeline in the sorted GUI mesh (a line
         // through vanilla GUI_TEXTURED could sort before the background that
         // covers it and vanish).
+        //
+        // The unit rect [0,1]² must be UV-mapped 0..1 along both axes (u0..u1,
+        // v0..v1) so the tex-line gradient spans the full quad — u=0 at p1,
+        // u=1 at p2, v across the thickness. A collapsed span (u0==u1) samples
+        // a single texel; line.png's bottom row is transparent, so the
+        // fragment shader's alpha cutoff would discard the whole quad.
+        //
+        // Sample with a LINEAR clamp sampler rather than the texture's default:
+        // AbstractTexture's default is NEAREST minification, and the 16×16
+        // tex-line is minified along the thickness (v) axis, which renders the
+        // diagonal as hard pixel steps instead of 1.20.1/1.21.1's smooth bar.
         return submitter.submit(gge, cn.li.mc262.client.render.GuiRenderPipelines.lineTextured(),
-                TextureSetup.singleTexture(tex.getTextureView(), tex.getSampler()),
+                TextureSetup.singleTexture(tex.getTextureView(),
+                        RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR)),
                 pose, 0, 0, 1, 1,
-                0.0F, 0.0F, 1.0F, 1.0F, argb);
+                0.0F, 1.0F, 0.0F, 1.0F, argb);
     }
 
     private static volatile TwoTextureBlitFunction twoTextureBlitter;
