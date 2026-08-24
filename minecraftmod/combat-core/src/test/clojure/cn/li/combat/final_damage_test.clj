@@ -1,0 +1,26 @@
+(ns cn.li.combat.final-damage-test
+  (:require [clojure.test :refer [deftest is]]
+            [cn.li.combat.final-damage :as damage]
+            [cn.li.mcmod.runtime.damage-boundary :as boundary]))
+(deftest fixed-order-damage-resolution-test
+  (let [result (damage/resolve-event [{:ability-id :a :reaction-id :m :priority 1 :match {:types #{:skill}}
+                                       :contributions [{:kind :multiplier :value 2.0}
+                                                       {:kind :reduction :value 0.25}
+                                                       {:kind :absorption :value 1.0}]}]
+                                {:world-id "w" :source :a :target :b :base 10 :type :skill :seed 4})]
+    (is (= 14.0 (:amount result)))
+    (is (= 1 (count (:matched result))))))
+(deftest reflection-depth-is-bounded-test
+  (let [reaction {:ability-id :reflector :reaction-id :r :match {:types #{:skill}}
+                  :contributions [{:kind :reflection :ratio 1.0}]}
+        result (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 2 :type :skill :depth 8})]
+    (is (empty? (:reflections result)))))
+(deftest boundary-commits-only-after-actual-apply-test
+  (let [committed (atom nil)]
+    (damage/install-boundary! {:reactions [] :commit-state! #(reset! committed %)})
+    (let [resolution (boundary/begin! {:world-id "w" :source :a :target :b :base 2 :type :skill})]
+      (boundary/complete! resolution false 0.0)
+      (is (nil? @committed))
+      (boundary/complete! resolution true 2.0)
+      (is (= 2.0 (:amount @committed))))
+    (boundary/clear!)))
