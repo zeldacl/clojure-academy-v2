@@ -2,7 +2,7 @@
  :kind :ability
  :id :brain-course
  :revision 1
- :engine :final
+ :engine :v3
  :activation :passive
  :status :migrated
  :category-id :generic
