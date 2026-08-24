@@ -6,20 +6,31 @@
 (defn- fail [reason data] (throw (ex-info (name reason) (assoc data :reason reason))))
 (defn node-kind [node]
   (or (:kind node)
-      (case (:component node)
-        (:flow/sequence :flow/branch :flow/foreach :flow/after) :flow
-        :graph/input :source :graph/output :feedback :feedback/emit :feedback
-        :resource/try-spend :policy :cooldown/start :policy :progression/mark :policy
-        (case (namespace (:component node))
-          "target" :query "query" :query "combat" :action "entity" :action
-          "world" :action "block" :action "motion" :action "projectile" :action
-          "vfx" :vfx nil))))
+      (let [component (:component node)]
+        (cond
+          (contains? #{:flow/sequence :flow/branch :flow/foreach :flow/after
+                       :flow/phases :flow/finish :flow/control :flow/once} component) :flow
+          (= component :graph/input) :source
+          (contains? #{:graph/output :feedback/emit} component) :feedback
+          (contains? #{:resource/try-spend :cooldown/start :progression/mark} component) :policy
+          :else
+          (case (namespace component)
+            "ability" :source "session" :source "data" :source
+            "target" :query "owner" :query "query" :query
+            "combat" :action "entity" :action "world" :action "block" :action
+            "motion" :action "projectile" :action "inventory" :action
+            "energy" :action "resource" :action "cost" :policy "policy" :policy
+            "cooldown" :policy "progression" :policy "score" :policy
+            "guard" :policy "txn" :flow "effect" :vfx "vfx" :vfx
+            "domain" :feedback "feedback" :feedback nil)))))
 (defn- children-of [component node]
   (case component
     :flow/sequence (vec (:steps node))
     :flow/branch (vec (remove nil? [(:then node) (:else node)]))
     :flow/foreach (if (:body node) [(:body node)] [])
     :flow/after (if (:body node) [(:body node)] [])
+    :flow/once (if (:body node) [(:body node)] [])
+    :flow/phases (vec (keep node (map #(get node %) [:start :pulse :release :abort])))
     []))
 (defn- compile-node [node path flags]
   (when-not (map? node) (fail :not-a-node {:path path :node node}))
