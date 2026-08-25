@@ -3,8 +3,10 @@
    decoding the physical channel; no Clojure map is retained as a wire ABI.")
 
 (import '(java.util UUID))
-(import '(cn.li.mcmod.runtime.vfx VfxPacketKind VfxLifecyclePacket VfxCatalogHello VfxCatalogAck VfxPacket))
+(import '(cn.li.mcmod.runtime.vfx VfxPacketKind VfxLifecyclePacket VfxCatalogHello VfxCatalogAck VfxPacket VfxChannels))
 
+(def ^:const server-to-client-channel VfxChannels/SERVER_TO_CLIENT)
+(def ^:const client-to-server-channel VfxChannels/CLIENT_TO_SERVER)
 (def ^:const protocol-version 1)
 (def ^:const max-packet-bytes 32768)
 (def ^:const max-parameters 64)
