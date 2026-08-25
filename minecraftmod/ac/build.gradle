@@ -73,8 +73,11 @@ tasks.named('compileClojure').configure { task ->
     def targetDirFile = targetDirProvider.get().asFile
     task.forkOptions.memoryMaximumSize = '512m'
     // Ensure Java classes are on the Clojure compile classpath.
-    dependsOn 'compileJava'
+    dependsOn 'compileJava', ':node-core:compileClojure', ':vfx-core:compileClojure', ':combat-core:compileClojure'
     classpath.from(files(layout.buildDirectory.dir('classes/java/main')))
+    classpath.from(files(rootProject.layout.buildDirectory.dir('neutral/node-core/clojure/main')))
+    classpath.from(files(rootProject.layout.buildDirectory.dir('neutral/vfx-core/clojure/main')))
+    classpath.from(files(rootProject.layout.buildDirectory.dir('neutral/combat-core/clojure/main')))
     if (task.metaClass.hasProperty(task, 'destinationDirectory')) {
         task.destinationDirectory = targetDirProvider
     } else if (task.metaClass.hasProperty(task, 'destinationDir')) {

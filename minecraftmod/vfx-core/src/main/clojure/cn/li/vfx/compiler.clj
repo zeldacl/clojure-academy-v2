@@ -1,7 +1,8 @@
 (ns cn.li.vfx.compiler
   "Pure VFX graph lowering.  Composite expansion is deliberately independent
    of the combat/node-core compiler: VFX uses only EDN descriptors and keeps
-   its four-stage execution contract explicit." )
+   its four-stage execution contract explicit."
+  (:require [clojure.walk :as walk]))
 
 (def ^:const max-depth 16)
 (def ^:const max-nodes 4096)
@@ -10,7 +11,7 @@
   (throw (ex-info message data)))
 
 (defn- substitute-inputs [value inputs]
-  (clojure.walk/postwalk
+  (walk/postwalk
    (fn [form]
      (if (and (map? form) (vector? (:ref form)) (= :input (first (:ref form))))
        (let [[_ key & path] (:ref form)]

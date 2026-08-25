@@ -1,5 +1,11 @@
 # Combat Core / VFX Core 平台缺口工单
 
+> **当前状态（2026-08-25）**：本文保留为历史审计记录，不再定义生产架构或剩余任务。
+> 最终重构已采用单一 final VFX 路径：AC `effect_controller` 不再有 `:singleton`/handlers/level-hand
+> 旁路，Combat 发布层执行 dirty-mask 与乱序过滤，服务端/客户端通过 mcmod fixed VFX packet 编解码。
+> 以 [FINAL_REFACTOR_EXECUTION_PLAN_CN.md](FINAL_REFACTOR_EXECUTION_PLAN_CN.md) 的 F0-F7 和生产门禁为准；
+> 本文中“11 个 singleton”“Batch 0-7 尚未迁移”等段落仅说明当时发现的问题，不能作为当前代码状态结论。
+
 ## 这是什么
 
 这是一份**未完成工作清单**，不是系统架构文档（架构说明见 [COMBAT_CORE.md](COMBAT_CORE.md)、[VFX_CORE.md](VFX_CORE.md)）。记录的是 2026-08-17 一轮 combat-core/vfx-core/presentation-core 执行会话中发现、但因为需要新写 touch 真实 Minecraft API 的平台代码、或需要本仓库里找不到答案的游戏设计判断，因而**明确推迟未做**的条目。每一条都已经定位到具体文件和函数，接手时不需要重新排查"这一层到底有没有 wired"——已经排查过了，结论写在下面。

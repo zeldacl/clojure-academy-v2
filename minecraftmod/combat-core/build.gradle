@@ -50,7 +50,7 @@ tasks.named("processResources").configure {
 
 tasks.named("compileClojure").configure { task ->
     onlyIf { rootProject.ext.fullAotEnabled }
-    dependsOn ":mcmod:compileClojure", ":node-core:compileClojure"
+    dependsOn ":mcmod:compileClojure", ":node-core:compileClojure", ":vfx-core:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
         task.destinationDirectory = targetDir
