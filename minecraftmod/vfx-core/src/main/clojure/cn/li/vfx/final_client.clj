@@ -3,7 +3,8 @@
 
    It owns only neutral effect instances and frame batches.  Minecraft and
    renderer objects stay outside this namespace; platform code consumes the
-   returned batches through the opaque VFX host ABI.")
+   returned batches through the opaque VFX host ABI."
+  (:require [cn.li.vfx.final-engine :as engine]))
 
 (defn create-runtime
   [{:keys [max-instances max-batches]
@@ -31,18 +32,23 @@
   (swap! (:registry runtime) assoc (:id descriptor) descriptor)
   nil)
 
-(defn- new-instance [runtime effect-id owner world-id]
+(defn- new-instance [runtime effect-id owner world-id instance-key instance-id]
   (let [descriptor (get @(:registry runtime) effect-id)
+        _ (when-not descriptor
+            (throw (ex-info "unknown final VFX effect"
+                            {:effect-id effect-id :reason :unknown-effect})))
         id (allocate-id runtime)
         state ((or (:init descriptor) (constantly {})) {})]
-    {:id id :effect-id effect-id :owner owner :world-id world-id
-     :descriptor descriptor :state state :events []}))
+    {:id id :instance-id instance-id :effect-id effect-id :owner owner :world-id world-id
+     :instance-key instance-key :event-seq -1
+     :descriptor descriptor :state state :params {} :age 0 :events []}))
 
-(defn ensure-instance! [runtime effect-id {:keys [owner]}]
+(defn ensure-instance! [runtime effect-id {:keys [owner instance-key]}]
   (or (some (fn [[id instance]]
               (when (and (= effect-id (:effect-id instance))
-                         (= owner (:owner instance))) id)) @(:instances runtime))
-      (let [instance (new-instance runtime effect-id owner nil)]
+                         (= owner (:owner instance))
+                         (= instance-key (:instance-key instance))) id)) @(:instances runtime))
+      (let [instance (new-instance runtime effect-id owner nil instance-key nil)]
         (swap! (:instances runtime) assoc (:id instance) instance)
         (:id instance))))
 
@@ -66,23 +72,58 @@
          (fnil conj []) {:event event :payload (or params {})})
   nil)
 
-(defn dispatch-signal! [runtime signal]
-  (let [{:keys [op effect-id owner world-id event params]} signal
-        instance-id (or (some (fn [[id instance]]
-                                (when (and (= effect-id (:effect-id instance))
-                                           (= owner (:owner instance))
-                                           (= world-id (:world-id instance))) id))
-                              @(:instances runtime))
-                        (when (= :spawn op)
-                          (let [instance (new-instance runtime effect-id owner world-id)]
-                            (swap! (:instances runtime) assoc (:id instance) instance)
-                            (:id instance))))]
-    (case op
-      :destroy (when instance-id (swap! (:instances runtime) dissoc instance-id))
-      (:spawn :signal :update)
-      (when instance-id (signal! runtime {:instance instance-id} event params))
-      :clear-owner (clear-owner! runtime owner)
-      nil)
+(defn- signal-instance-id [runtime effect-id owner world-id instance-key instance-id]
+  (some (fn [[id instance]]
+          (when (or (and instance-id (= instance-id (:instance-id instance))
+                         (= effect-id (:effect-id instance))
+                         (or (nil? owner) (= owner (:owner instance)))
+                         (or (nil? world-id) (= world-id (:world-id instance))))
+                    (and (nil? instance-id)
+                         (= effect-id (:effect-id instance))
+                         (= owner (:owner instance))
+                         (= world-id (:world-id instance))
+                         (= instance-key (:instance-key instance))))
+            id))
+        @(:instances runtime)))
+
+(defn dispatch-signal!
+  "Route a typed signal by stable instance-key and monotonic event-seq.
+
+   The key is part of the final VFX ABI: effect-id/owner/world alone is not a
+   unique instance because one owner may have several concurrent casts of the
+   same effect. Older or duplicate packets are ignored, which makes periodic
+   persistent replay safe without re-running a stale update."
+  [runtime signal]
+  (let [{:keys [op effect-id owner world-id instance-key instance-id event-seq event params]} signal]
+    (cond
+      (= :clear-owner op)
+      (clear-owner! runtime owner)
+
+      :else
+      (let [_ (when-not (get @(:registry runtime) effect-id)
+                (throw (ex-info "unknown final VFX effect"
+                                {:effect-id effect-id :reason :unknown-effect})))
+            event-seq (long (or event-seq 0))
+            internal-id (or (signal-instance-id runtime effect-id owner world-id instance-key instance-id)
+                            (when (contains? #{:spawn :snapshot} op)
+                              (let [instance (new-instance runtime effect-id owner world-id instance-key instance-id)]
+                                (swap! (:instances runtime) assoc (:id instance)
+                                       (assoc instance :params (or params {})
+                                              :event-seq event-seq))
+                                (:id instance))))
+            instance (when internal-id (get @(:instances runtime) internal-id))]
+        (when (and instance (> event-seq (long (:event-seq instance))))
+          (case op
+            :destroy (swap! (:instances runtime) dissoc internal-id)
+            (:spawn :update :trigger :snapshot)
+            (do
+              (swap! (:instances runtime) update internal-id
+                     (fn [current]
+                       (cond-> (assoc current :event-seq event-seq)
+                         (contains? #{:update :snapshot :trigger} op)
+                         (update :params merge (or params {})))))
+              (signal! runtime {:instance internal-id} event params))
+            nil))))
     nil))
 
 (defn- tick-instance [instance context]
@@ -98,7 +139,8 @@
 (defn tick! [runtime context]
   (let [next (into {}
                    (keep (fn [[id instance]]
-                           (let [updated (tick-instance instance context)]
+                           (let [updated (some-> (tick-instance instance context)
+                                                 (update :age (fnil inc 0)))]
                              (when updated [id updated])))
                     @(:instances runtime)))]
     (reset! (:instances runtime) next)
@@ -108,8 +150,15 @@
   (let [batches (atom [])
         sink {:emit! #(swap! batches conj %)}]
     (doseq [[_ instance] @(:instances runtime)]
-      (when-let [sample (:sample (:descriptor instance))]
-        (sample (assoc context :instance instance :sink sink))))
+      (if-let [sample (:sample (:descriptor instance))]
+        (sample (assoc context :instance instance :sink sink))
+        (when (:control-graph (:descriptor instance))
+          (doseq [op (engine/sample-graph (:descriptor instance)
+                                          (:params instance)
+                                          (:state instance)
+                                          (:age instance)
+                                          (long (or (:seed instance) 0)))]
+            (swap! batches conj (assoc op :instance-id (:id instance)))))))
     (let [frame {:frame-id (:frame-id context) :stages (group-by :stage @batches)}]
       (swap! (:frames runtime) assoc (:frame-id frame) frame)
       (reset! (:latest-frame runtime) frame)

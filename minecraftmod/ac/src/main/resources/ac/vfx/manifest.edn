@@ -1,109 +1,109 @@
 {:schema-version 1
- :documents [{:kind :vfx-effect
+ :documents [{:kind :vfx/system
               :id :beam-arc-fade
               :resource "ac/vfx/effects/beam_arc_fade.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :ray-beam-transient
               :resource "ac/vfx/effects/ray_beam_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :ray-fan-transient
               :resource "ac/vfx/effects/ray_fan_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :arc-strike-transient
               :resource "ac/vfx/effects/arc_strike_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :arc-channel-session
               :resource "ac/vfx/effects/arc_channel_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :beam-fade-audio
               :resource "ac/vfx/effects/beam_fade_audio.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :endpoint-burst
               :resource "ac/vfx/effects/endpoint_burst.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :arc-ring-fade-audio
               :resource "ac/vfx/effects/arc_ring_fade_audio.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :ring-fade-audio
               :resource "ac/vfx/effects/ring_fade_audio.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :arc-ring-session
               :resource "ac/vfx/effects/arc_ring_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :billboard-session
               :resource "ac/vfx/effects/billboard_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :particle-session
               :resource "ac/vfx/effects/particle_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :audio-one-shot
               :resource "ac/vfx/effects/audio_one_shot.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :audio-loop-session
               :resource "ac/vfx/effects/audio_loop_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :ring-particle-field
               :resource "ac/vfx/effects/ring_particle_field.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
              :id :teleport-marker
               :resource "ac/vfx/effects/teleport_marker.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
              :id :energy-orb-session
               :resource "ac/vfx/effects/energy_orb_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :vortex-column-session
               :resource "ac/vfx/effects/vortex_column_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :block-scan-transient
               :resource "ac/vfx/effects/block_scan_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :screen-flash-session
               :resource "ac/vfx/effects/screen_flash_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :camera-fov-session
               :resource "ac/vfx/effects/camera_fov_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :beam-session
               :resource "ac/vfx/effects/beam_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :block-progress-session
               :resource "ac/vfx/effects/block_progress_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :particle-burst
               :resource "ac/vfx/effects/particle_burst.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :target-mark-session
               :resource "ac/vfx/effects/target_mark_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :trajectory-ribbon-session
               :resource "ac/vfx/effects/trajectory_ribbon_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :blood-retrograde-charge
               :resource "ac/vfx/effects/blood_retrograde_charge.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
              :id :blood-retrograde-impact
               :resource "ac/vfx/effects/blood_retrograde_impact.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :directed-blastwave-charge
               :resource "ac/vfx/effects/directed_blastwave_charge.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :directed-blastwave-wave
               :resource "ac/vfx/effects/directed_blastwave_wave.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
              :id :first-person-motion-session
               :resource "ac/vfx/effects/first_person_motion_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :terrain-shockwave-transient
               :resource "ac/vfx/effects/terrain_shockwave_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :target-box-session
               :resource "ac/vfx/effects/target_box_session.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :teleport-trail-transient
               :resource "ac/vfx/effects/teleport_trail_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :particle-trail-audio-transient
               :resource "ac/vfx/effects/particle_trail_audio_transient.edn"}
-             {:kind :vfx-effect
+             {:kind :vfx/system
               :id :particle-burst-trail-transient
               :resource "ac/vfx/effects/particle_burst_trail_transient.edn"}]}

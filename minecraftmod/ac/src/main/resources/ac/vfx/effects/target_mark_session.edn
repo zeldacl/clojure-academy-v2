@@ -1,5 +1,7 @@
 {:schema-version 2
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :target-mark-session
  :revision 1
  :lifecycle :transient
@@ -11,7 +13,7 @@
           :color :object
           :seed :long}}
  :state-slots {:age :double :seed :long}
- :graph {:component :vfx/timeline
+ :control-graph {:component :vfx/timeline
          :duration-ticks 60
          :children [{:at 0
                      :node {:component :vfx/mark-sparks

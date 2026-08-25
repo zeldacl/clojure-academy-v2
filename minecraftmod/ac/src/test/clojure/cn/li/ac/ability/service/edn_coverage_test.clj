@@ -14,7 +14,14 @@
             [clojure.java.io :as io]
             [clojure.edn :as edn]
             [clojure.set :as set]
-            [cn.li.mcmod.runtime.safe-edn :as safe-edn]))
+            [cn.li.mcmod.runtime.safe-edn :as safe-edn]
+            [cn.li.ac.ability.final-catalog :as final-catalog]
+            [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
+            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.ability.final-vocabulary :as final-vocabulary]
+            [cn.li.node.descriptor :as node-descriptors]
+            [cn.li.ac.client.effect-controller :as effect-controller]
+            [cn.li.ac.ability.registry.skill :as skill-registry]))
 
 (defn- read-file!
   "Plain clojure.edn/read, deliberately NOT safe-edn's stricter reader --
@@ -43,6 +50,47 @@
                          (mapcat (partial collect-values-for-key k) (vals form)))
     (sequential? form) (mapcat (partial collect-values-for-key k) form)
     :else nil))
+
+(defn- compatibility-residue [form path]
+  (cond
+    (map? form)
+    (let [legacy-from (when (and (contains? form :from)
+                                  (keyword? (:from form)))
+                         {:path path :reason :legacy-from})
+          legacy-binding (when (or (contains? form :tunable)
+                                   (contains? form :invariant))
+                           {:path path :reason :legacy-binding})
+          ref (:ref form)
+          legacy-ref (when (and (vector? ref)
+                                (contains? #{:slot :context :request :param} (first ref)))
+                       {:path path :reason :legacy-ref})
+          component (:component form)
+          legacy-component (when (contains? #{:session/patch :txn/atomic :guard/resource} component)
+                             {:path path :reason :legacy-component :component component})]
+      (or legacy-from legacy-binding legacy-ref legacy-component
+          (some identity (map (fn [[k v]] (compatibility-residue v (conj path k))) form))))
+    (sequential? form)
+    (some identity (map-indexed (fn [i v] (compatibility-residue v (conj path i))) form))
+    :else nil))
+
+(deftest physical-final-edn-format-gate-test
+  (let [files (edn-files "src/main/resources/ac/combat")
+        docs (map (juxt identity read-file!) files)
+        manifest (read-file! (io/file "src/main/resources/ac/combat/manifest.edn"))
+        residues (keep (fn [[file doc]]
+                         (when-let [hit (compatibility-residue doc [])]
+                           {:file (.getPath ^java.io.File file) :hit hit})) docs)
+        abilities (filter #(= :ability (:kind (second %))) docs)]
+    (is (= 39 (count (filter #(= :ability (:kind %))
+                             (map read-file! (edn-files "src/main/resources/ac/combat/abilities")))))
+        "all combat ability documents must be physically migrated")
+    (is (empty? residues) (str "legacy final-graph syntax remains: " residues))
+    (is (every? #(= :final (:engine (second %))) abilities)
+        "every ability document must declare the final engine")
+    (is (every? #(contains? % :bindings) (:documents manifest))
+        "every registration must use explicit bindings")
+    (is (not-any? #(contains? % :overrides) (:documents manifest))
+        "legacy deep overrides must be absent from the manifest")))
 
 (deftest every-migrated-ability-file-is-in-the-combat-manifest-test
   ;; Real-parsing replacement for verifyCombatSkillCoverage. Migration
@@ -94,3 +142,85 @@
                       (edn-files "src/main/resources/ac/combat/abilities"))]
     (is (>= (count migrated-ids) 30))
     (is (>= (count emitted) 20))))
+
+(deftest final-catalog-is-strictly-lowered-test
+  (let [assembled (final-catalog/assemble)
+        result (final-catalog-service/initialize!)]
+    (is (= 39 (get-in assembled [:counts :combat-sources])))
+    (is (= 50 (get-in assembled [:counts :combat-registrations])))
+    (is (= 36 (get-in assembled [:counts :vfx-effects])))
+    (is (not-any? #(= :singleton (:lifecycle %))
+                  (vals (get-in assembled [:vfx :effects])))
+        "final VFX catalog must not contain the removed singleton lifecycle")
+    (is (= 50 (:ready-count result)))
+    (is (pos? (get-in result [:node-schema :descriptor-count])))
+    (is (every? #(= :ready (:status %))
+                (get-in result [:combat :registrations])))))
+
+(deftest final-catalog-has-no-unexpanded-composites-test
+  (let [assembled (final-catalog/assemble)
+        composite-ids (set (concat (keys (get-in assembled [:combat :composites]))
+                                   (keys (get-in assembled [:vfx :composites]))))
+        components (fn components [value]
+                     (cond
+                       (map? value)
+                       (into (cond-> #{}
+                               (:component value) (conj (:component value)))
+                             (mapcat components (vals value)))
+                       (sequential? value) (into #{} (mapcat components value))
+                       :else #{}))
+        graphs (concat (map :graph (vals (get-in assembled [:combat :sources])))
+                       (map :control-graph (vals (get-in assembled [:vfx :effects]))))]
+    (is (empty? (set/intersection composite-ids
+                                  (apply set/union #{} (map components graphs)))))))
+
+(deftest final-catalog-projected-skill-metadata-is-registerable-test
+  ;; Startup must be able to populate the player-facing progression index
+  ;; from final registrations. This exercises the metadata projection that
+  ;; is separate from graph execution and catches missing specialization
+  ;; category/prerequisite bindings before a real server boot.
+  (combat-catalog/initialize!)
+  (let [specs (combat-catalog/migrated-skill-specs)]
+    (is (= 50 (count specs)))
+    (is (= :electromaster
+           (:category-id (some #(when (= :electromaster/brain-course (:id %)) %) specs))))
+    (skill-registry/reset-skill-registry-for-test!)
+    (doseq [spec specs]
+      (skill-registry/register-skill! spec))
+    (is (= 50 (count (skill-registry/raw-skills))))
+    (skill-registry/reset-skill-registry-for-test!)))
+
+(deftest final-vfx-signal-reaches-ac-draw-batch-test
+  ;; The AC composition root must retain the final source graph; registering
+  ;; only an empty legacy state slot would make a server-confirmed VFX signal
+  ;; silently produce no render operation.
+  (effect-controller/reset-for-test!)
+  (let [catalog (:vfx (combat-catalog/initialize!))]
+    (effect-controller/register-catalog! catalog)
+    (effect-controller/dispatch-signal!
+     {:op :spawn :effect-id :beam-session :owner "p1" :world-id "w"
+      :instance-key [:probe "p1"] :event-seq 1 :params {:start [0.0 0.0 0.0]
+                            :end [1.0 0.0 0.0]
+                            :life-ticks 20 :grow-ticks 2
+                            :style {}}})
+    ((:tick! (effect-controller/vfx-host-api))
+     {:tick-id 1 :delta-seconds 0.05})
+    (let [frame ((:sample-frame! (effect-controller/vfx-host-api))
+                 {:frame-id 1 :partial-tick 0.0})
+          ops (mapcat val (:stages frame))]
+      (is (some #(= :draw-batch (:operation %)) ops))))
+  (effect-controller/reset-for-test!))
+
+(deftest final-vocabulary-descriptor-abi-test
+  (let [descriptors (filter #(= :final (:category %))
+                            (final-vocabulary/register!))]
+    (is (pos? (count descriptors)))
+    (is (every? #(every? (fn [k] (contains? % k))
+                         [:id :revision :layer :category :doc :inputs :outputs :children])
+                descriptors))
+    (is (every? (fn [descriptor]
+                  (every? #(contains? % :default)
+                          (concat (vals (:inputs descriptor))
+                                  (vals (:outputs descriptor)))))
+                descriptors))
+    (is (every? #(contains? #{:primitive :mid :source} (:layer %)) descriptors))))

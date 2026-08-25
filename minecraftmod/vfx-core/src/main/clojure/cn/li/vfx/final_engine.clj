@@ -145,10 +145,10 @@
         []))))
 
 (defn sample-graph [descriptor params state age seed]
-  (sample-node (:source-graph descriptor)
+  (sample-node (:control-graph descriptor)
                {:params params :state state :age (long age)
                 :duration (or (get params :duration-ticks)
-                              (get-in descriptor [:source-graph :duration-ticks]) 1)
+                              (get-in descriptor [:control-graph :duration-ticks]) 1)
                 :seed (long seed) :locals {}}))
 
 (defn create-runtime
@@ -169,7 +169,7 @@
 
 (defn- render-batches [instance]
   (let [{:keys [descriptor params state age seed handle]} instance]
-    (let [ops (if (:source-graph descriptor)
+    (let [ops (if (:control-graph descriptor)
                 (sample-graph descriptor params state age seed)
                 (mapv (fn [primitive]
                         {:operation :draw-batch :stage :world :primitive primitive

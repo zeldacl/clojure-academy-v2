@@ -1,12 +1,14 @@
 {:schema-version 2
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :directed-blastwave-wave
  :revision 1
  :lifecycle :transient
  :inputs {:spawn {:position :vec3 :direction :vec3 :seed :long}
           :destroy {}}
  :state-slots {:age :double :seed :long}
- :graph {:component :vfx/directional-wave
+ :control-graph {:component :vfx/directional-wave
          :position {:ref [:input :position]}
          :direction {:ref [:input :direction]}
          :ring-count-min 2

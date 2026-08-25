@@ -1,5 +1,7 @@
 {:schema-version 1
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :ray-fan-transient
  :revision 1
  :lifecycle :transient
@@ -9,7 +11,7 @@
                   :grow-ticks :long :style :object :seed :long
                   :bounds-radius :double}}
  :state-slots {:age :double :seed :long}
- :graph {:component :vfx/ray-fan
+ :control-graph {:component :vfx/ray-fan
          :origin {:ref [:input :origin]}
          :direction {:ref [:input :direction]}
          :length {:ref [:input :length]}

@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.final-catalog-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.set :as set]
+            [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.final-catalog :as catalog]
             [cn.li.ac.ability.final-catalog-service :as service]))
 
@@ -37,6 +38,24 @@
     (is (= 6 (count policy-sources)))
     (is (every? #(nil? (:reactions %)) (vals sources)))
     (is (every? #(seq (:damage-policies %)) policy-sources))))
+
+(deftest catalog-uses-node-core-composite-expander-test
+  (testing "AC never leaves a mid-layer composite in an executable graph"
+    (let [assembled (catalog/assemble)
+          composite-ids (set (concat (keys (get-in assembled [:combat :composites]))
+                                     (keys (get-in assembled [:vfx :composites]))))
+          components (fn components [value]
+                       (cond
+                         (map? value)
+                         (into (cond-> #{}
+                                 (:component value) (conj (:component value)))
+                               (mapcat components (vals value)))
+                         (sequential? value) (into #{} (mapcat components value))
+                         :else #{}))
+          graphs (concat (map :graph (vals (get-in assembled [:combat :sources])))
+                         (map :control-graph (vals (get-in assembled [:vfx :effects]))))]
+      (is (empty? (set/intersection composite-ids
+                                    (apply set/union #{} (map components graphs))))))))
 
 (deftest final-service-exposes-explicit-migration-state-test
   (let [result (service/initialize!)]

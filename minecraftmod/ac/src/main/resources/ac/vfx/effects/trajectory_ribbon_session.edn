@@ -1,5 +1,7 @@
 {:schema-version 2
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :trajectory-ribbon-session
  :revision 1
  :lifecycle :session
@@ -18,7 +20,7 @@
            :style {:type :object}}
   :destroy {}}
  :state-slots {:age :double :seed :long}
- :graph {:component :vfx/trajectory-ribbon
+ :control-graph {:component :vfx/trajectory-ribbon
          :origin {:ref [:input :origin]}
          :initial-velocity {:ref [:input :init-vel]}
          :look-dir {:ref [:input :look-dir]}

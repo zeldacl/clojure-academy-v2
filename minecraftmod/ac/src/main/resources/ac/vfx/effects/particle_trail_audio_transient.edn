@@ -1,5 +1,7 @@
 {:schema-version 2
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :particle-trail-audio-transient
  :revision 1
  :lifecycle :transient
@@ -11,8 +13,7 @@
           :sound-id :string :sound-position :vec3
           :sound-volume :double :sound-pitch :double}}
  :state-slots {:age :double :seed :long}
- :graph
- {:component :vfx/timeline
+ :control-graph {:component :vfx/timeline
   :duration-ticks 20
   :children [{:at 0
               :node {:component :vfx/particle-trail

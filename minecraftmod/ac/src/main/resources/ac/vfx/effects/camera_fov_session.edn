@@ -1,5 +1,7 @@
 {:schema-version 1
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :camera-fov-session
  :revision 1
  :lifecycle :session
@@ -10,7 +12,7 @@
           :update {:offset :double}
           :destroy {}}
  :state-slots {:offset :double}
- :graph {:component :vfx/timeline
+ :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
                      :node {:component :vfx/camera

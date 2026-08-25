@@ -1,5 +1,7 @@
 {:schema-version 1
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :block-scan-transient
  :revision 1
  :lifecycle :transient
@@ -11,7 +13,7 @@
           :life-ticks :long :rescan-interval :long :max-results :long
           :texture :string :base-color :object :tier-colors :object}}
  :state-slots {:age :double :seed :long}
- :graph {:component :vfx/block-scan
+ :control-graph {:component :vfx/block-scan
          :origin {:ref [:input :origin]}
          :range {:ref [:input :range]}
          :max-range {:ref [:input :max-range]}

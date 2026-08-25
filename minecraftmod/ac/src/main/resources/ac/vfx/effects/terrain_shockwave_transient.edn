@@ -1,5 +1,7 @@
 {:schema-version 2
- :kind :vfx-effect
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
  :id :terrain-shockwave-transient
  :revision 1
  :lifecycle :transient
@@ -8,7 +10,7 @@
           :sound-id :string :sound-volume :double :sound-pitch :double}
   :destroy {}}
  :state-slots {:age :double :seed :long}
- :graph {:component :vfx/timeline
+ :control-graph {:component :vfx/timeline
          :duration-ticks 20
          :children [{:at 0
                      :node {:component :vfx/directional-wave
