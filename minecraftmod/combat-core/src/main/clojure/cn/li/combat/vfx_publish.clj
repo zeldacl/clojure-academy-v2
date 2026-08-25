@@ -231,11 +231,15 @@
    while a client that just entered tracking range creates the instance
    fresh. No per-viewer bookkeeping needed."
   [vfx-catalog]
-  (when-let [sink @vfx-broadcast-sink*]
-    (doseq [[owner signals] @active-persistent-signals*
-            signal (vals signals)]
-      (let [{:keys [scope radius]} (normalize-signal-audience vfx-catalog signal)]
-        (sink owner signal (when (not= :world scope) radius)))))
+  (doseq [[owner signals] @active-persistent-signals*
+          signal (vals signals)]
+    (let [{:keys [scope radius]} (normalize-signal-audience vfx-catalog signal)
+          typed (typed-packet (assoc signal :asset-id (or (:asset-id signal)
+                                                          (bit-and 0x7fffffff (hash (:effect-id signal))))))]
+      (if-let [sink @vfx-typed-broadcast-sink*]
+        (sink owner typed (when (not= :world scope) radius))
+        (when-let [sink @vfx-broadcast-sink*]
+          (sink owner signal (when (not= :world scope) radius))))))
   nil)
 
 (defn publish-combat-result!
@@ -262,8 +266,12 @@
   [owner]
   (forget-owner-persistent-signals! owner)
   (swap! latest-signals* dissoc owner)
-  (when-let [sink @vfx-broadcast-sink*]
-    (sink owner {:op :clear-owner :owner owner :event-seq 0} nil))
+  (let [signal {:op :clear-owner :owner owner :event-seq 0}
+        typed (typed-packet signal)]
+    (if-let [sink @vfx-typed-broadcast-sink*]
+      (sink owner typed nil)
+      (when-let [sink @vfx-broadcast-sink*]
+        (sink owner signal nil))))
   nil)
 
 (defn reset-for-test! []

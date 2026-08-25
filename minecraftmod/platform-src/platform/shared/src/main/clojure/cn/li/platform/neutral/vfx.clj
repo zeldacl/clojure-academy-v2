@@ -36,6 +36,12 @@
 (defn sample-frame! [context]
   (when-let [api (host)] ((:sample-frame! api) context)))
 
+(defn sample-java-frame! [context]
+  (when-let [api (host)]
+    (if-let [sample (:sample-java-frame! api)]
+      (sample context)
+      (:java-frame ((:sample-frame! api) context)))))
+
 (defn frame-stage [frame-id stage]
   (when-let [api (host)] ((:frame-stage api) frame-id stage)))
 

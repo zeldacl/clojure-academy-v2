@@ -104,6 +104,8 @@
 
 (defn sample-frame! [context]
   (core/sample-frame! (runtime) (merge {:partial-tick 0.0} context)))
+(defn sample-java-frame! [context]
+  (:java-frame (sample-frame! context)))
 (defn frame-stage [frame-id stage] (core/frame-stage (runtime) frame-id stage))
 (defn latest-frame-stage [stage] (core/latest-frame-stage (runtime) stage))
 (defn release-frame! [frame-id] (core/release-frame! (runtime) frame-id))
@@ -166,6 +168,7 @@
     :required-anchors required-anchors
     :tick! tick!
     :sample-frame! sample-frame!
+    :sample-java-frame! sample-java-frame!
     :frame-stage frame-stage
     :latest-frame-stage latest-frame-stage
     :release-frame! release-frame!
