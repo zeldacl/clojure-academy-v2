@@ -103,6 +103,29 @@
                              :event-seq (:event-seq instance)}) exited)))))
           [] @(:active service)))
 
+(defn tracking-enter!
+  "Send a baseline Snapshot to one recipient entering an anchor." 
+  [service recipient anchor]
+  (reduce (fn [packets [id instance]]
+            (if (and (= anchor (:anchor instance))
+                     (not (contains? (:recipients instance) recipient)))
+              (do (swap! (:active service) update-in [id :recipients] conj recipient)
+                  (conj packets (assoc (packet :snapshot instance)
+                                       :recipient recipient :baseline? true)))
+              packets)) [] @(:active service)))
+
+(defn tracking-leave!
+  "Send a recipient-local Release without creating a tombstone." 
+  [service recipient anchor]
+  (reduce (fn [packets [id instance]]
+            (if (and (= anchor (:anchor instance))
+                     (contains? (:recipients instance) recipient))
+              (do (swap! (:active service) update-in [id :recipients] disj recipient)
+                  (conj packets {:op :release :instance-id id :effect-id (:effect-id instance)
+                                 :recipient recipient :state-seq (:state-seq instance)
+                                 :event-seq (:event-seq instance)}))
+              packets)) [] @(:active service)))
+
 (defn snapshot-for [service recipient]
   (->> @(:active service)
        vals

@@ -95,29 +95,29 @@
                   (mapv #(assoc-in % [:material :alpha]
                                    (* alpha (double (or (get-in % [:material :alpha]) 1.0))))
                         (sample-node (:child node) context)))
-      :vfx/ring [{:operation :draw-batch :stage :world :primitive :line
+      :vfx/ring [{:operation :draw-batch :stage :world-after-translucent :primitive :line
                   :geometry {:kind :ring :center (graph-value (:center node) context)
                              :radius (graph-value (or (:radius node) 0.0) context)
                              :segments (long (or (graph-value (:segments node) context) 16))}
                   :material {:color (graph-value (:color node) context)
                              :alpha (double (or (:alpha context) 1.0))}}]
-      :vfx/beam [{:operation :draw-batch :stage :world :primitive :line
+      :vfx/beam [{:operation :draw-batch :stage :world-after-translucent :primitive :line
                   :geometry {:kind :beam :start (graph-value (:start node) context)
                              :end (graph-value (:end node) context)
                              :radius (graph-value (:radius node) context)}
                   :material (graph-value (:material node) context)}]
-      :vfx/ray-beam [{:operation :draw-batch :stage :world :primitive :line
+      :vfx/ray-beam [{:operation :draw-batch :stage :world-after-translucent :primitive :line
                       :geometry {:kind :beam :start (graph-value (:start node) context)
                                  :end (graph-value (:end node) context)
                                  :radius (double (or (graph-value (:radius node) context) 0.02))}
                       :material (graph-value (:style node) context)}]
-      :vfx/line [{:operation :draw-batch :stage :world :primitive :line
+      :vfx/line [{:operation :draw-batch :stage :world-after-translucent :primitive :line
                   :geometry (graph-value (or (:geometry node) node) context)
                   :material (graph-value (:material node) context)}]
-      :vfx/quad [{:operation :draw-batch :stage :world :primitive :quad
+      :vfx/quad [{:operation :draw-batch :stage :world-after-translucent :primitive :quad
                   :geometry (graph-value (or (:geometry node) node) context)
                   :material (graph-value (:material node) context)}]
-      :vfx/emitter [{:operation :draw-batch :stage :particles :primitive :quad
+      :vfx/emitter [{:operation :draw-batch :stage :world-translucent :primitive :quad
                     :geometry {:kind :emitter :anchor (graph-value (:anchor node) context)
                                :rate-per-tick (graph-value (:rate-per-tick node) context)
                                :limit (graph-value (:limit node) context)}
@@ -138,7 +138,7 @@
       ;; fields; this is an explicit neutral ABI payload, not a silent drop or
       ;; a compatibility interpreter.  Presentation may specialize it later.
       (if (and (keyword? component) (= "vfx" (namespace component)))
-        [{:operation :draw-batch :stage :world :primitive :quad
+        [{:operation :draw-batch :stage :world-after-translucent :primitive :quad
           :geometry {:kind :typed-vfx :component component
                      :fields (graph-value (dissoc node :component) context)}
           :material {:variant :typed-vfx}}]
@@ -172,7 +172,7 @@
     (let [ops (if (:control-graph descriptor)
                 (sample-graph descriptor params state age seed)
                 (mapv (fn [primitive]
-                        {:operation :draw-batch :stage :world :primitive primitive
+                        {:operation :draw-batch :stage :world-after-translucent :primitive primitive
                          :handle handle :effect-id (:id descriptor)
                          :age-ticks age :params params})
                       (:primitives descriptor)))]

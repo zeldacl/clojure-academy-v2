@@ -3,18 +3,24 @@
   (:import [java.nio ByteBuffer]))
 
 (def schema-version 1)
-(def stages #{:world-after-sky :world-before-translucent
-              :world-after-translucent :world-always-on-top :world-glow
-              :first-person :hud-underlay :hud-overlay :screen-post})
+(def stages #{:world-translucent :world-additive
+              :world-after-translucent :first-person :screen})
 (def primitives #{:billboard :particle :beam :ribbon :line :mesh
                   :first-person :camera :post-process :audio})
 
-(def signal-ops #{:spawn :signal :destroy :clear-owner})
+(def signal-ops #{:spawn :update :trigger :destroy :release :clear-owner :snapshot})
 
 (defn- require-key [m k]
   (when-not (contains? m k)
     (throw (ex-info "missing VFX ABI field" {:field k :value m})))
   m)
+
+(defn- require-instance-identity [value]
+  (when-not (or (contains? value :instance-key)
+                (contains? value :instance-id))
+    (throw (ex-info "VFX signal requires instance-key or instance-id"
+                    {:value value})))
+  value)
 
 (defn tick-context [context]
   (let [context (-> context (require-key :tick-id) (require-key :delta-seconds))
@@ -66,9 +72,15 @@
 (defn signal [{:keys [op] :as value}]
   (when-not (contains? signal-ops op)
     (throw (ex-info "unknown VFX signal operation" {:value value})))
-  (when (#{:spawn :signal} op)
-    (doseq [k [:effect-id :instance-key :owner :event-seq]]
+  (when (#{:spawn :update :trigger :snapshot :release} op)
+    (doseq [k [:effect-id :owner :event-seq]]
       (require-key value k)))
+  (when (#{:spawn :update :trigger :snapshot :release} op)
+    (require-instance-identity value))
+  (when (= :destroy op)
+    (doseq [k [:effect-id :event-seq]]
+      (require-key value k))
+    (require-instance-identity value))
   (when (and (contains? value :event-seq)
              (not (integer? (:event-seq value))))
     (throw (ex-info "VFX event-seq must be an integer" {:value value})))

@@ -3,7 +3,8 @@
             [cn.li.vfx.effect-schema :as schema]
             [cn.li.vfx.replication :as replication]
             [cn.li.vfx.final-engine :as engine]
-            [cn.li.vfx.final-client :as client]))
+            [cn.li.vfx.final-client :as client])
+  (:import [cn.li.mcmod.runtime.vfx ParticleBuffer ParticleKernel]))
 
 (def catalog
   (schema/catalog [{:id :ring
@@ -133,3 +134,19 @@
       (is (= 1 (count instances)))
       (is (= 2.0 (get-in (first instances) [:params :radius])))
       (is (= 41 (:instance-id (first instances)))))))
+
+
+(deftest java-particle-kernel-compacts-expired-particles-test
+  (let [^ParticleBuffer particles (ParticleBuffer. 4)
+        start (.reserve particles 2)
+        ages (.age particles)
+        lifetimes (.lifetime particles)
+        velocities (.velocityX particles)]
+    (aset ages start 0.0)
+    (aset lifetimes start 0.01)
+    (aset ages (inc start) 0.0)
+    (aset lifetimes (inc start) 1.0)
+    (aset velocities (inc start) 2.0)
+    (is (= 1 (ParticleKernel/integrate particles start (.reservedEnd particles) 0.05)))
+    (is (= 1 (.size particles)))
+    (is (< (Math/abs (- 0.05 (double (aget (.age particles) 0)))) 1.0e-5))))

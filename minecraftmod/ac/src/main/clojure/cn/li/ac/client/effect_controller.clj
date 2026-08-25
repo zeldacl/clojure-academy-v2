@@ -60,14 +60,14 @@
           (swap! screen-flashes* assoc owner
                  {:alpha (double (or (:alpha params) 0.0))
                   :remaining-ticks (long (or (:duration-ticks params) 1))})
-          (:destroy :clear-owner) (swap! screen-flashes* dissoc owner)
+          (:destroy :release :clear-owner) (swap! screen-flashes* dissoc owner)
           nil))
       (when (= :camera-fov-session (:effect-id signal))
         (case (:op signal)
           (:spawn :update :trigger :snapshot)
           (swap! camera-fov-targets* assoc owner
                  (double (or (:offset params) 0.0)))
-          (:destroy :clear-owner) (swap! camera-fov-targets* dissoc owner)
+          (:destroy :release :clear-owner) (swap! camera-fov-targets* dissoc owner)
           nil)))))
 
 (defn dispatch-signal! [signal]

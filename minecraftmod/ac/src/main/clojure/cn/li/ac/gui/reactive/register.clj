@@ -119,7 +119,9 @@
 ;; effects) are ever emitted by effect-controller's sample-plan!/sample-hand!
 ;; today; extend this if a new stage is wired into VFX sampling.
 (def ^:private vfx-stage->render-stage
-  {:world-after-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
+  {:world-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
+   :world-additive RenderStage/WORLD_AFTER_TRANSLUCENT
+   :world-after-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
    :first-person RenderStage/FIRST_PERSON})
 
 (defn- batch->render-command [batch]

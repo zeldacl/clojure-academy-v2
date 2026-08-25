@@ -248,11 +248,24 @@
 
 (defn- vfx-emitter-stages
   "Compile the mandatory Niagara-style four-stage emitter contract.
-   Empty stages are valid; a pure audio/camera/screen System has no emitter."
-  [emitter-id capacity]
-  {:id emitter-id
-   :capacity (long (max 1 capacity))
-   :stages {:spawn [] :initialize [] :update [] :output []}})
+   Modules are explicit data with stable numeric opcodes; execution order is
+   the stage vector order, never inferred from node traversal." 
+  [emitter-id capacity components]
+  (let [particle? (some components #{:vfx/emitter :vfx/particle :vfx/particle-field
+                                      :vfx/ring-particle-field :vfx/particle-trail})
+        spawn (cond-> []
+                (some components #{:vfx/emitter})
+                (conj {:opcode 100 :module :emission/rate :component :vfx/emitter})
+                particle? (conj {:opcode 110 :module :particle/allocate :component :vfx/particle}))
+        initialize (if particle? [{:opcode 200 :module :particle/initialize}] [])
+        update (if particle? [{:opcode 300 :module :particle/integrate}
+                              {:opcode 310 :module :particle/compact}] [])
+        output (if particle? [{:opcode 400 :module :particle/output}] [])]
+    (when (and (seq spawn) (not= (map :opcode spawn) (sort (map :opcode spawn))))
+      (throw (ex-info "VFX emitter stage order is not monotonic" {:emitter emitter-id})))
+    {:id emitter-id
+     :capacity (long (max 1 capacity))
+     :stages {:spawn spawn :initialize initialize :update update :output output}}))
 
 (defn- vfx-descriptor [{:keys [id lifecycle inputs control-graph state-slots bounds revision] :as effect}]
   (let [parameters (into {}
@@ -264,7 +277,7 @@
         components (graph-components control-graph)
         particle? (boolean (some components #{:vfx/emitter :vfx/particle :vfx/particle-field
                                                :vfx/ring-particle-field :vfx/particle-trail}))
-        emitter (when particle? (vfx-emitter-stages :default 1024))
+        emitter (when particle? (vfx-emitter-stages :default 1024 components))
         snapshot-mode (case lifecycle
                         :transient :none
                         :session :restart
