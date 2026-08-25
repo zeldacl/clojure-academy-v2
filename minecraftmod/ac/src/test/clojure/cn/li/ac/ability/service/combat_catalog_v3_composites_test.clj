@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.service.combat-catalog-v3-composites-test
   "Proves the REAL v3 manifests -- ac/combat/composites_v3_manifest.edn and
    ac/vfx/composites_v3_manifest.edn, the shipped content the composite-
-   loader mechanism (combat-core's and vfx-core's own composite_loader_test
+   loader mechanism (combat-core's and vfx-core's own compiler tests
    namespaces, tested against self-contained synthetic fixtures) exists to
    serve -- actually load with zero errors when combat-catalog/initialize!
    runs, and that at least one loaded composite genuinely executes. The
@@ -14,9 +14,7 @@
             [cn.li.ac.ability.service.combat-catalog :as catalog]
             [cn.li.node.descriptor :as node]
             [cn.li.node.flow :as node-flow]
-            [cn.li.combat.structural-primitives :as combat-structural]
-            [cn.li.vfx.vm :as vfx-vm])
-  (:import [cn.li.mcmod.math V3]))
+            [cn.li.combat.structural-primitives :as combat-structural]))
 
 (deftest v3-manifests-load-with-no-errors-test
   (catalog/initialize!)
@@ -49,166 +47,6 @@
     (is (some #{:entity/damage} (map first @actions)))
     (is (= 1 (count @vfx-signals)))
     (is (= :lightning-impact (:effect-id (first @vfx-signals))))))
-
-(deftest charge-ring-composite-actually-samples-real-geometry-test
-  (catalog/initialize!)
-  (let [batches (atom [])
-        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
-        ;; A real ability's :effect/vfx position payload always arrives as
-        ;; {:vec3 [x y z]} (cn.li.combat.vm/vec3-components' own literal
-        ;; shape), never {:x :y :z} -- using that shape here, off-origin,
-        ;; is what actually caught ops/->v3 and :vfx/ring-point silently
-        ;; mishandling it (see those namespaces' own fix commits).
-        call {:component :vfx.fx/charge-ring
-              :center {:vec3 [10.0 5.0 -10.0]}
-              :charge-ticks 10 :max-charge-ticks 20
-              :points 8 :base-radius 2.0 :radius-growth 3.0
-              :pulse-amplitude 0.0 :pulse-frequency 0.0
-              :outer-color [1.0 1.0 1.0 1.0] :core-color [1.0 0.0 0.0 1.0]
-              :punched? false}]
-    (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
-    (is (= 8 (count @batches)))
-    (let [op (first (:ops (first (:payload (first @batches)))))
-          p1 ^V3 (:p1 op)
-          dx (- (.-x p1) 10.0)
-          dz (- (.-z p1) -10.0)]
-      (is (= 5.0 (.-y p1)))
-      (is (< (Math/abs (- 3.5 (Math/sqrt (+ (Math/pow dx 2) (Math/pow dz 2)))))
-             1.0e-9))
-      (is (= [1.0 1.0 1.0 1.0] (:color op))))))
-
-(deftest block-progress-composite-simple-box-samples-real-geometry-test
-  (catalog/initialize!)
-  (let [batches (atom [])
-        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
-        call {:component :vfx.fx/block-progress
-              :target {:vec3 [0.0 64.0 0.0]}
-              :progress 0.5 :color [255.0 0.0 0.0 200.0]
-              :pulse-period 0.0 :width 1.0}]
-    (vfx-vm/sample-node! call {:input {} :state {:age 0.0} :seed 0 :sink sink})
-    ;; box mode: 12 edges, one batch per :vfx/timeline "always on" child
-    (is (= 12 (count @batches)))
-    (let [op (first (:ops (first (:payload (first @batches)))))
-          p1 ^V3 (:p1 op) p2 ^V3 (:p2 op)]
-      ;; shrink = 0.05 * (1 - 0.5) = 0.025; height defaults to width (1.0);
-      ;; depth = width, so every axis shares the same [0.025, 0.975] span.
-      (is (< (Math/abs (- 0.025 (.-x p1))) 1.0e-9))
-      (is (< (Math/abs (- 64.025 (.-y p1))) 1.0e-9))
-      (is (< (Math/abs (- 0.025 (.-z p1))) 1.0e-9))
-      (is (< (Math/abs (- 0.975 (.-x p2))) 1.0e-9))
-      ;; pulse-period 0.0 -> pulse is always 1.0, so alpha == color[3].
-      (is (= [255.0 0.0 0.0 200.0] (:color op))))))
-
-(deftest block-progress-composite-corner-decorated-samples-real-geometry-test
-  (catalog/initialize!)
-  (let [batches (atom [])
-        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
-        call {:component :vfx.fx/block-progress
-              :target {:vec3 [0.0 64.0 0.0]}
-              :progress 1.0 :color [255.0 255.0 255.0 200.0]
-              :pulse-period 0.0 :width 1.0 :corner-length 0.2}]
-    (vfx-vm/sample-node! call {:input {} :state {:age 0.0} :seed 0 :sink sink})
-    ;; corner mode: 8 corners x 3 stub segments each
-    (is (= 24 (count @batches)))
-    (let [op (first (:ops (first (:payload (first @batches)))))
-          p1 ^V3 (:p1 op) p2 ^V3 (:p2 op)]
-      ;; progress 1.0 -> shrink = 0; corner 0's first segment is the
-      ;; vertical stub at (min-x, min-y, min-z) -> (min-x, min-y+0.2, min-z).
-      (is (< (Math/abs (- 0.0 (.-x p1))) 1.0e-9))
-      (is (< (Math/abs (- 64.0 (.-y p1))) 1.0e-9))
-      (is (< (Math/abs (- 64.2 (.-y p2))) 1.0e-9))
-      (is (< (Math/abs (- (.-x p1) (.-x p2))) 1.0e-9)))))
-
-(deftest block-progress-composite-resolves-target-through-a-caller-scope-reference-test
-  ;; Regression: a first version of block_progress.edn extracted :target's
-  ;; x/y/z via {:ref [:input :target :vec3 0]} -- a nested-path :ref, which
-  ;; cn.li.node.composite/substitute-inputs resolves at composite EXPAND
-  ;; time (compile time) against whatever value the CALL SITE supplied.
-  ;; Every earlier test here called the composite directly with a literal
-  ;; {:vec3 [...]}, which masked the bug -- but target_box_session.edn (the
-  ;; real content) calls it as :target {:ref [:input :position]}, an
-  ;; UNRESOLVED reference into the caller's own scope, only resolvable once
-  ;; sampling actually runs. get-in-ing into that reference map at expand
-  ;; time silently returned nil, so :tx/:ty/:tz all came out 0.0 regardless
-  ;; of the real target position. This test reproduces the real call shape
-  ;; -- a :vfx/let binding a real position under :position, with the
-  ;; composite call referencing {:ref [:input :position]} for :target,
-  ;; exactly like target_box_session.edn's own :graph -- to prove the
-  ;; {:expr :vec3/x|y|z ...} fix actually resolves at sample time instead.
-  (catalog/initialize!)
-  (let [batches (atom [])
-        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
-        call {:component :vfx/let
-              :bindings {:position {:vec3 [3.0 70.0 -5.0]}}
-              :child {:component :vfx.fx/block-progress
-                      :target {:ref [:input :position]}
-                      :progress 0.0 :color [1.0 1.0 1.0 1.0] :width 1.0}}]
-    (vfx-vm/sample-node! call {:input {} :state {:age 0.0} :seed 0 :sink sink})
-    (is (= 12 (count @batches)))
-    (let [op (first (:ops (first (:payload (first @batches)))))
-          p1 ^V3 (:p1 op)]
-      ;; shrink = 0.05 * (1 - 0.0) = 0.05; min corner = target + shrink.
-      (is (< (Math/abs (- 3.05 (.-x p1))) 1.0e-9))
-      (is (< (Math/abs (- 70.05 (.-y p1))) 1.0e-9))
-      (is (< (Math/abs (- -4.95 (.-z p1))) 1.0e-9)))))
-
-(deftest trajectory-ribbon-composite-samples-real-geometry-test
-  ;; Expected coordinates computed from the SAME closed form vfx-core's own
-  ;; cn.li.vfx.trajectory-ribbon-math-test already proved numerically
-  ;; matches the original per-tick loop -- drag=0.9, gravity=9.8, dt=0.02,
-  ;; vx0=2.0, vy0=5.0, vz0=0.0, origin=(0,64,0), 5 segments -> 4 lines.
-  (catalog/initialize!)
-  (let [batches (atom [])
-        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
-        call {:component :vfx.fx/trajectory-ribbon
-              :origin {:vec3 [0.0 64.0 0.0]}
-              :initial-velocity {:vec3 [2.0 5.0 0.0]}
-              :look-dir {:vec3 [0.0 0.0 1.0]}
-              :drag 0.9 :gravity 9.8 :dt 0.02 :segments 5
-              :can-perform? true}]
-    (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
-    (is (= 4 (count @batches)) "5 segments -> 4 connecting lines")
-    (let [first-op (first (:ops (first (:payload (first @batches)))))
-          last-op (first (:ops (first (:payload (last @batches)))))
-          p1 ^V3 (:p1 first-op) p2-first ^V3 (:p2 first-op)
-          from-last ^V3 (:p1 last-op) to-last ^V3 (:p2 last-op)]
-      ;; point[0] == origin (all offsets zero)
-      (is (< (Math/abs (- 0.0 (.-x p1))) 1.0e-9))
-      (is (< (Math/abs (- 64.0 (.-y p1))) 1.0e-9))
-      ;; point[1]
-      (is (< (Math/abs (- 0.036 (.-x p2-first))) 1.0e-9))
-      (is (< (Math/abs (- 64.09 (.-y p2-first))) 1.0e-9))
-      ;; the 4th (last) line connects point[3] -> point[4]
-      (is (< (Math/abs (- 0.09756 (.-x from-last))) 1.0e-6))
-      (is (< (Math/abs (- 64.23366879999999 (.-y from-last))) 1.0e-6))
-      (is (< (Math/abs (- 0.12380400000000004 (.-x to-last))) 1.0e-6))
-      (is (< (Math/abs (- 64.28971792 (.-y to-last))) 1.0e-6))
-      ;; no ready-color/blocked-color/style-color supplied -> falls all
-      ;; the way through the (or ...) chain to the hardcoded default.
-      (is (= [255.0 255.0 255.0 255.0] (:color first-op))))))
-
-(deftest trajectory-ribbon-composite-resolves-origin-through-a-caller-scope-reference-test
-  ;; Same regression shape as block-progress's caller-scope test: real
-  ;; content (trajectory_ribbon_session.edn) calls this composite with
-  ;; :origin {:ref [:input :origin]}, an unresolved reference into the
-  ;; effect's own spawn payload, never a literal.
-  (catalog/initialize!)
-  (let [batches (atom [])
-        sink {:emit! (fn [batch] (swap! batches conj batch) batch)}
-        call {:component :vfx/let
-              :bindings {:spawn-origin {:vec3 [8.0 65.0 -3.0]}}
-              :child {:component :vfx.fx/trajectory-ribbon
-                      :origin {:ref [:input :spawn-origin]}
-                      :initial-velocity {:vec3 [0.0 0.0 0.0]}
-                      :look-dir {:vec3 [0.0 0.0 1.0]}
-                      :drag 1.0 :segments 2}}]
-    (vfx-vm/sample-node! call {:input {} :seed 0 :sink sink})
-    (is (= 1 (count @batches)))
-    (let [op (first (:ops (first (:payload (first @batches)))))
-          p1 ^V3 (:p1 op)]
-      (is (< (Math/abs (- 8.0 (.-x p1))) 1.0e-9))
-      (is (< (Math/abs (- 65.0 (.-y p1))) 1.0e-9))
-      (is (< (Math/abs (- -3.0 (.-z p1))) 1.0e-9)))))
 
 (deftest break-budget-composite-spends-energy-in-order-and-skips-unaffordable-blocks-test
   ;; Regression-style proof that :flow/foreach's accumulator threading

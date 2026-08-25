@@ -120,7 +120,8 @@
       :vfx/emitter [{:operation :draw-batch :stage :world-translucent :primitive :quad
                     :geometry {:kind :emitter :anchor (graph-value (:anchor node) context)
                                :rate-per-tick (graph-value (:rate-per-tick node) context)
-                               :limit (graph-value (:limit node) context)}
+                               :limit (graph-value (:limit node) context)
+                               :particle (graph-value (:particle node) context)}
                     :material {:particle (graph-value (:particle node) context)}}]
       :vfx/audio [{:operation :audio :stage :audio
                    :sound-id (graph-value (:sound-id node) context)

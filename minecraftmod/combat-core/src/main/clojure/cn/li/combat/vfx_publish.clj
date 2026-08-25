@@ -36,8 +36,6 @@
 ;; result-sink*, just a different message id so the client can register one
 ;; push handler per concern); :tracking/:world signals broadcast to every
 ;; nearby client, caster included.
-(defonce ^:private vfx-self-sink* (atom nil))
-(defonce ^:private vfx-broadcast-sink* (atom nil))
 (defonce ^:private vfx-typed-self-sink* (atom nil))
 (defonce ^:private vfx-typed-broadcast-sink* (atom nil))
 (defonce ^:private active-persistent-signals* (atom {}))
@@ -62,47 +60,25 @@
 
    The sink receives `[owner result]`. The payload never carries
    :vfx-signals -- those are published separately, per-signal, by audience
-   (see install-vfx-self-sink!/install-vfx-broadcast-sink!)."
+   (see install-vfx-typed-self-sink!/install-vfx-typed-broadcast-sink!)."
   [sink]
   (when-not (ifn? sink)
     (throw (ex-info "combat result sink must be callable" {:value sink})))
   (reset! result-sink* sink)
   sink)
 
-(defn install-vfx-self-sink!
-  "Install the network sink for VFX signals whose audience is :self
-   (camera/screen-post-process effects, or an ability's own :audience
-   {:type :owner} declaration). The sink receives `[owner signal]`."
-  [sink]
-  (when-not (ifn? sink)
-    (throw (ex-info "vfx self-sink must be callable" {:value sink})))
-  (reset! vfx-self-sink* sink)
-  sink)
-
 (defn install-vfx-typed-self-sink!
-  "Install typed S2C sink receiving [owner VfxPacket]."
+  "Install typed S2C sink receiving [owner VfxPacket signal]."
   [sink]
   (when-not (ifn? sink) (throw (ex-info "typed VFX self sink must be callable" {:value sink})))
   (reset! vfx-typed-self-sink* sink)
   sink)
 
 (defn install-vfx-typed-broadcast-sink!
-  "Install typed S2C tracking sink receiving [owner VfxPacket radius]."
+  "Install typed S2C tracking sink receiving [owner VfxPacket signal radius]."
   [sink]
   (when-not (ifn? sink) (throw (ex-info "typed VFX broadcast sink must be callable" {:value sink})))
   (reset! vfx-typed-broadcast-sink* sink)
-  sink)
-
-(defn install-vfx-broadcast-sink!
-  "Install the network sink for VFX signals whose audience is :tracking or
-   :world -- broadcast to every nearby client, the caster included
-   (Psi-style: server executes, everyone who can see it happen gets the
-   visual). The sink receives `[owner signal radius]`; radius nil means no
-   distance cap."
-  [sink]
-  (when-not (ifn? sink)
-    (throw (ex-info "vfx broadcast sink must be callable" {:value sink})))
-  (reset! vfx-broadcast-sink* sink)
   sink)
 
 (defn- normalize-signal-audience
@@ -112,7 +88,7 @@
    declaration on the :effect/vfx node that emitted this signal -- authored
    per-activation-site, so the same effect can be :self in one ability's use
    and broadcast in another's; (2) the VFX effect document's own :audience
-   default (vfx-recipe/effect-audience, e.g. camera/screen-post-process
+   default (the catalog effect audience, e.g. camera/screen-post-process
    effects that are never meaningfully broadcastable); (3) the global
    tracking default."
   [vfx-catalog signal]
@@ -212,16 +188,13 @@
                                                    (bit-and 0x7fffffff (hash (:effect-id signal)))))]
         (case scope
           :self (if-let [sink @vfx-typed-self-sink*]
-                  (sink owner (typed-packet typed-signal))
-                  (when-let [sink @vfx-self-sink*] (sink owner signal)))
+                  (sink owner (typed-packet typed-signal) signal)
+                  (throw (ex-info "typed VFX self sink is not installed" {:owner owner})))
           (do (track-persistent-signal! vfx-catalog owner signal)
               (if-let [sink @vfx-typed-broadcast-sink*]
-                (sink owner (typed-packet typed-signal)
+                (sink owner (typed-packet typed-signal) signal
                       (when (not= :world scope) radius))
-                (when-let [sink @vfx-broadcast-sink*]
-                  (sink owner signal (when (not= :world scope) radius))))))))
-
-))
+                (throw (ex-info "typed VFX broadcast sink is not installed" {:owner owner})))))))))
 (defn replay-persistent-signals!
   "Every persistent-replay-interval-ticks (the caller decides the cadence),
    resend each owner's active :session/:persistent VFX :spawn signals
@@ -237,10 +210,9 @@
           typed (typed-packet (assoc signal :asset-id (or (:asset-id signal)
                                                           (bit-and 0x7fffffff (hash (:effect-id signal))))))]
       (if-let [sink @vfx-typed-broadcast-sink*]
-        (sink owner typed (when (not= :world scope) radius))
-        (when-let [sink @vfx-broadcast-sink*]
-          (sink owner signal (when (not= :world scope) radius))))))
-  nil)
+        (sink owner typed signal (when (not= :world scope) radius))
+        (throw (ex-info "typed VFX broadcast sink is not installed" {:owner owner}))))
+  nil))
 
 (defn publish-combat-result!
   "The single entry point for delivering a finalized combat result: routes
@@ -269,15 +241,14 @@
   (let [signal {:op :clear-owner :owner owner :event-seq 0}
         typed (typed-packet signal)]
     (if-let [sink @vfx-typed-broadcast-sink*]
-      (sink owner typed nil)
-      (when-let [sink @vfx-broadcast-sink*]
-        (sink owner signal nil))))
+      (sink owner typed signal nil)
+      (throw (ex-info "typed VFX broadcast sink is not installed" {:owner owner}))))
   nil)
 
 (defn reset-for-test! []
   (reset! result-sink* nil)
-  (reset! vfx-self-sink* nil)
-  (reset! vfx-broadcast-sink* nil)
+  (reset! vfx-typed-self-sink* nil)
+  (reset! vfx-typed-broadcast-sink* nil)
   (reset! active-persistent-signals* {})
   (reset! latest-signals* {})
   nil)

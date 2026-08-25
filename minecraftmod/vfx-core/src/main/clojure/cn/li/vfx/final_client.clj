@@ -36,11 +36,26 @@
   (swap! (:registry runtime) assoc (:id descriptor) descriptor)
   nil)
 
+(defn- validated-params [descriptor params]
+  (let [parameters (vec (:parameters descriptor))
+        params (or params {})]
+    (if (and (empty? parameters) (nil? (:schema-version descriptor)))
+      params
+      (let [declared (into {} (map (juxt :name identity) parameters))
+            unknown (seq (remove #(contains? declared %) (keys params)))]
+        (when unknown
+          (throw (ex-info "unknown VFX parameter" {:effect-id (:id descriptor)
+                                                    :parameters (vec unknown)})))
+        (merge (into {} (keep (fn [{:keys [name default]}]
+                                (when (some? default) [name default])) parameters))
+               params)))))
 (defn- new-instance [runtime effect-id owner world-id instance-key instance-id]
   (let [descriptor (get @(:registry runtime) effect-id)
         _ (when-not descriptor
             (throw (ex-info "unknown final VFX effect"
                             {:effect-id effect-id :reason :unknown-effect})))
+        _ (when (>= (count @(:instances runtime)) (:max-instances runtime))
+            (throw (ex-info "VFX instance budget exceeded" {:limit (:max-instances runtime)})))
         id (allocate-id runtime)
         state ((or (:init descriptor) (constantly {})) {})]
     {:id id :instance-id instance-id :effect-id effect-id :owner owner :world-id world-id
@@ -121,9 +136,13 @@
       (clear-owner! runtime owner)
 
       :else
-      (let [_ (when-not (get @(:registry runtime) effect-id)
+      (let [descriptor (get @(:registry runtime) effect-id)
+            _ (when-not descriptor
                 (throw (ex-info "unknown final VFX effect"
                                 {:effect-id effect-id :reason :unknown-effect})))
+            params (if (contains? #{:spawn :update :trigger :snapshot} op)
+                     (validated-params descriptor params)
+                     params)
             tombstone (tombstone-seq runtime signal)
             internal-id (signal-instance-id runtime effect-id owner world-id instance-key instance-id)
             create? (and (contains? #{:spawn :snapshot} op)
@@ -133,7 +152,7 @@
                             (when create?
                               (let [instance (new-instance runtime effect-id owner world-id instance-key instance-id)]
                                 (swap! (:instances runtime) assoc (:id instance)
-                                       (assoc instance :params (or params {})
+                                       (assoc instance :params (validated-params descriptor params)
                                               :event-seq event-seq :state-seq state-seq
                                               :age (long (or (:age-ticks signal) 0))))
                                 (:id instance))))
@@ -156,7 +175,7 @@
               (swap! (:instances runtime) update internal-id
                      (fn [current]
                        (assoc current :state-seq state-seq
-                              :params (merge (:params current) (or params {})))))
+                              :params (validated-params descriptor (merge (:params current) (or params {}))))))
               (when event-new?
                 (swap! (:instances runtime) update internal-id assoc :event-seq event-seq)
                 (signal! runtime {:instance internal-id} event params)))
@@ -179,11 +198,44 @@
               (signal! runtime {:instance internal-id} event params))
             nil))))
     nil))
+(defn- vec3-components [value]
+  (cond
+    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
+    (vector? value) value
+    :else [0.0 0.0 0.0]))
+
+(defn- emit-particle-op! [instance op]
+  (when-let [^ParticleBuffer particles (:particle-buffer instance)]
+    (let [geometry (:geometry op)]
+      (when (= :emitter (:kind geometry))
+        (let [spec (or (:particle geometry) {})
+              rate (long (max 0 (or (:rate-per-tick geometry) 0)))
+              limit (long (max 0 (or (:limit geometry) (.capacity particles))))
+              accepted (min rate limit (- (.capacity particles) (.size particles)))
+              start (.reserve particles (int accepted))
+              [x y z] (vec3-components (:anchor geometry))
+              [vx vy vz] (vec3-components (:velocity spec))
+              lifetime (float (max 0.001 (double (or (:life-ticks spec) (:lifetime spec) 1.0))))]
+          (doseq [offset (range accepted)]
+            (let [index (+ start offset)]
+              (aset-float (.positionX particles) index (float x))
+              (aset-float (.positionY particles) index (float y))
+              (aset-float (.positionZ particles) index (float z))
+              (aset-float (.velocityX particles) index (float vx))
+              (aset-float (.velocityY particles) index (float vy))
+              (aset-float (.velocityZ particles) index (float vz))
+              (aset-float (.age particles) index 0.0)
+              (aset-float (.lifetime particles) index lifetime)
+              (aset-int (.color particles) index (int (or (:color spec) 0xffffffff))))))))))
 (defn- tick-instance [instance context]
   (when-let [^ParticleBuffer particles (:particle-buffer instance)]
     (ParticleKernel/integrate particles 0 (.size particles)
                               (float (or (:delta-seconds context) 0.0))))
   (let [descriptor (:descriptor instance)
+        sampled (when (:control-graph descriptor)
+                  (engine/sample-graph descriptor (:params instance) (:state instance)
+                                       (:age instance) (long (or (:seed instance) 0))))
+        _ (doseq [op sampled] (emit-particle-op! instance op))
         next-state (when-let [update (:update descriptor)]
                      (update (:state instance)
                              (assoc context :instance instance :events (:events instance))))]
@@ -191,7 +243,6 @@
              (= :transient (:lifecycle descriptor)))
       nil
       (assoc instance :state (or next-state (:state instance)) :events []))))
-
 (defn tick! [runtime context]
   (let [next (into {}
                    (keep (fn [[id instance]]
@@ -213,10 +264,12 @@
   {:billboard 1 :particle 2 :beam 3 :ribbon 4 :line 5 :mesh 6 :quad 7})
 
 (defn- op->java-batch [op]
-  (VfxBatch. (or (get stage->java (:stage op)) VfxRenderStage/WORLD_TRANSLUCENT)
-             (int (hash (or (:material op) :default)))
-             (int (get primitive->java (:primitive op) 0))
-             0 nil))
+  (let [^ParticleBuffer particles (:particle-buffer op)]
+    (VfxBatch. (or (get stage->java (:stage op)) VfxRenderStage/WORLD_TRANSLUCENT)
+               (int (hash (or (:material op) :default)))
+               (int (get primitive->java (:primitive op) 0))
+               (if particles (.size particles) 0)
+               particles)))
 
 (defn- op->java-output [op]
   (let [kind (case (:operation op)
@@ -248,8 +301,13 @@
                                           (:state instance)
                                           (:age instance)
                                           (long (or (:seed instance) 0)))]
-            (swap! batches conj (assoc op :instance-id (:id instance)))))))
-    (let [ops @batches
+            (swap! batches conj
+                   (cond-> (assoc op :instance-id (:id instance))
+                     (and (:particle-buffer instance)
+                          (= :emitter (get-in op [:geometry :kind])))
+                     (assoc :particle-buffer (:particle-buffer instance)
+                             :primitive :particle)))))))
+    (let [ops (vec (take (:max-batches runtime) @batches))
           draw-ops (filterv #(= :draw-batch (:operation %)) ops)
           outputs (filterv #(not= :draw-batch (:operation %)) ops)
           base-frame {:frame-id (:frame-id context)

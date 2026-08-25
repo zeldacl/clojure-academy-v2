@@ -2,7 +2,7 @@
  :id :test/ring
  :revision 1
  :layer :mid
- :doc "Test fixture composite for cn.li.vfx.composite-loader's own test suite: a ring of :segments line points."
+ :doc "Test fixture composite for cn.li.vfx.compiler's own test suite: a ring of :segments line points."
  :inputs {:center {:type :vec3}
           :radius {:type :double}
           :segments {:type :long}

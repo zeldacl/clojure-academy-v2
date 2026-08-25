@@ -10,17 +10,18 @@
             [cn.li.combat.vfx-publish :as vfx-publish]))
 
 (def ^:private vfx-catalog
-  {:effects {:beam-session {:lifecycle :session}
+  {:effects {:beam-session {:lifecycle :session
+                            :parameters [{:name :length} {:name :width}]}
              :terrain-shockwave-transient {:lifecycle :transient}}})
 
 (defn- with-fake-sinks [f]
   (vfx-publish/reset-for-test!)
   (let [self-calls (atom [])
-        broadcast-calls (atom [])]
-    (vfx-publish/install-vfx-self-sink!
-     (fn [owner signal] (swap! self-calls conj [owner signal])))
-    (vfx-publish/install-vfx-broadcast-sink!
-     (fn [owner signal radius] (swap! broadcast-calls conj [owner signal radius])))
+        broadcast-calls (atom [])]'
+    (vfx-publish/install-vfx-typed-self-sink!
+     (fn [owner _packet signal] (swap! self-calls conj [owner signal])))
+    (vfx-publish/install-vfx-typed-broadcast-sink!
+     (fn [owner _packet signal radius] (swap! broadcast-calls conj [owner signal radius])))'
     (f self-calls broadcast-calls)))
 
 (deftest self-audience-signal-routes-to-self-sink-only-test
@@ -135,6 +136,24 @@
         (is (not (contains? result :vfx-signals))
             "the RPC reply must never re-carry signals a push already sent")))))
 
+(deftest typed-sink-receives-identity-and-complete-signal-test
+  (vfx-publish/reset-for-test!)
+  (let [calls (atom [])]
+    (vfx-publish/install-vfx-typed-broadcast-sink!
+     (fn [owner packet signal radius]
+       (swap! calls conj [owner packet signal radius])))
+    (vfx-publish/publish-combat-result!
+     vfx-catalog
+     {:owner "owner-typed" :status :accepted
+      :vfx-signals [{:op :spawn :effect-id :beam-session
+                     :instance-key [:typed 1] :event-seq 1
+                     :params {:length 2.0}
+                     :audience {:type :nearby :radius 48.0}}]})
+    (let [[owner packet signal radius] (first @calls)]
+      (is (= "owner-typed" owner))
+      (is packet)
+      (is (= {:length 2.0} (:params signal)))
+      (is (= 48.0 radius)))))
 (deftest install-result-sink-receives-status-without-vfx-signals-test
   (with-fake-sinks
     (fn [_self-calls _broadcast-calls]
@@ -149,3 +168,26 @@
                           :audience {:type :owner}}]})
         (is (= "owner-1" (first @received)))
         (is (not (contains? (second @received) :vfx-signals)))))))
+
+(deftest update-signal-is-dirty-projected-and-out-of-order-dropped-test
+  (with-fake-sinks
+    (fn [_self-calls broadcast-calls]
+      (let [base {:owner "owner-1" :status :accepted
+                  :vfx-signals [{:op :spawn :effect-id :beam-session
+                                 :instance-key [:beam 8] :event-seq 10
+                                 :params {:length 1.0 :width 2.0}}]}
+            update-result {:owner "owner-1" :status :accepted
+                           :vfx-signals [{:op :update :effect-id :beam-session
+                                          :instance-key [:beam 8] :event-seq 11
+                                          :params {:length 3.0}}]}
+            stale-result {:owner "owner-1" :status :accepted
+                          :vfx-signals [{:op :update :effect-id :beam-session
+                                         :instance-key [:beam 8] :event-seq 10
+                                         :params {:width 9.0}}]}]
+        (vfx-publish/publish-combat-result! vfx-catalog base)
+        (vfx-publish/publish-combat-result! vfx-catalog update-result)
+        (vfx-publish/publish-combat-result! vfx-catalog stale-result)
+        (is (= 2 (count @broadcast-calls)))
+        (let [signal (second (first (drop 1 @broadcast-calls)))]
+          (is (= {:length 3.0} (:params signal)))
+          (is (= [0] (get-in signal [:mask :indices]))))))))

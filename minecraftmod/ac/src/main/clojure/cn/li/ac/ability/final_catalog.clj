@@ -292,6 +292,7 @@
      ;; graph shape. Runtime execution consumes :control-graph and these
      ;; explicit stages, never an untyped node-core program.
      :emitters (vec (remove nil? [emitter]))
+     :particle-capacity (some-> emitter :capacity long)
      :system-outputs (vec (keep (fn [component]
                                   (case component
                                     :vfx/audio :audio

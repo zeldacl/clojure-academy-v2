@@ -1,67 +1,60 @@
 # VFX Core 维护手册
 
-> 语言本体的完整规格见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md)（§9 是 vfx 层的专属规则）——本文只讲 vfx-core 如何使用这套语言、实例生命周期、模块边界与排障。
-
-## 系统职责
-
-`vfx-core` 加载 `node-core` 语言之上的**渲染词汇表**（原语 + 中层 composite），执行全部技能视觉/听觉效果，并管理特效实例的生命周期（spawn/signal/destroy、`instance-key` 幂等去重、`event-seq` 排序、tombstone、seed 确定性、`bounds` 剔除）。它独占这组"实例/生命周期"职责；具体怎么画（顶点、材质）留给平台渲染器——vfx-core 的输出是中立的渲染 op 批次。
+本文描述当前唯一的 final VFX 路径。旧的 `vm.clj`、`recipe.clj`、`runtime.clj`、component registry 和 singleton 聚合模型不属于当前生产架构；源码级检查不允许它们重新成为入口。
 
 ## 模块边界
 
-- `vfx-core/src/main/clojure/cn/li/vfx/components.clj`：渲染词汇表——底层原语（`:layer :primitive`，产出 `:line`/`:quad`/`:plasma-body`/`:audio`/`:camera`/`:post` op，见 NODE_LANGUAGE.md §9）与结构原语（`:vfx/timeline`/`:repeat`/`:transform`/`:let`/`:curve`/`:branch`）。
-- `vfx-core/src/main/clojure/cn/li/vfx/vm.clj`：树遍历采样器，每帧对每个存活实例求值一次图，把叶子节点的输出送进 `sink`。
-- `vfx-core/src/main/clojure/cn/li/vfx/recipe.clj`：effect 文档加载/编译，composite 展开。
-- `vfx-core/src/main/clojure/cn/li/vfx/runtime.clj`：唯一的实例运行时——注册表冻结、`:lifecycle`（`:transient`/`:session`/`:persistent`）、per-instance 状态机、`tick!`/`sample-frame!`。
-- `ac/src/main/clojure/cn/li/ac/client/effect_controller.clj`：AC 侧安装点，`install-catalog!` 登记 descriptor，把采样结果喂给 Presentation 帧合并（`register.clj` 的 `merge-vfx-passes`）。
+- `mcmod/src/main/java/cn/li/mcmod/runtime/vfx/`：Java ABI 与热路径。包含 `ParticleBuffer` SoA 存储、`ParticleKernel`、system/emitter carrier、render frame/batch/output、packet identity、wire codec 和 channel 常量。
+- `vfx-core/src/main/clojure/cn/li/vfx/compiler.clj`：独立的 composite 展开器。VFX 不依赖 combat/node-core 的运行时解释器。
+- `vfx-core/src/main/clojure/cn/li/vfx/final-engine.clj`：headless/fake-host 的 final graph sampler 与生命周期测试端口。
+- `vfx-core/src/main/clojure/cn/li/vfx/final-client.clj`：客户端 per-instance runtime、四阶段采样、Java frame 投影、乱序/墓碑处理。
+- `vfx-core/src/main/clojure/cn/li/vfx/replication.clj`：服务端 tracking、baseline、snapshot/replay、release/destroy 生命周期。
+- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：读取 final VFX system EDN、展开 composite、生成 emitter stages 和静态 descriptor。
+- `ac/src/main/clojure/cn/li/ac/client/effect_controller.clj`：AC composition root；只安装 catalog、转发 signal、采样 frame，不持有旧 handler 或 singleton aggregate。
+- `combat-core/src/main/clojure/cn/li/combat/vfx_publish.clj`：按 self/tracking/world audience 发布 typed VFX 生命周期信号。
 
-## 渲染 op 契约（关键——决定一个原语是否真的会显示）
+## 执行模型
 
-vfx 底层原语必须产出平台渲染器已经认识的 op 形状：`{:kind :line|:quad|:plasma-body}` + 材质标志（`:texture :additive? :no-fog? :no-depth-test? :no-depth-write? :translucent?`），对应 `platform-src/.../client/effects/presentation_world.clj` 的 `sort-ops`/`render-presentation-geometry!`。六个 loader 的 `:draw-batch!` 按 `:primitive` 分派——**只有产出这个契约认识的形状，效果才会被画出来**；产出任意其它 payload 形状（例如旧 `:mesh`/`:variant` 语义节点直接吐参数 map）不会报错，只会静默不渲染。新增原语或改渲染契约时，先确认改动同时覆盖了三条平台目录（mc-1.20.1/mc-1.21.1/mc-26.2）× loader 那一侧的分派。
+每个 VFX system 明确包含：
 
-## 词汇表分层（详见 NODE_LANGUAGE.md §1、§9）
-
+```text
+System
+ └─ Emitter*
+     ├─ Spawn stage       emission / allocation
+     ├─ Initialize stage  initial attributes
+     ├─ Update stage      modules / integration / compaction
+     └─ Output stage      render batches / audio / camera / post
 ```
-:layer :primitive   Clojure 函数，产出上面的渲染 op       components.clj 的 register-primitive!
-:layer :mid          纯 EDN composite（"释放闪电"的视觉部分就是这层）   ac/src/main/resources/ac/vfx/components/*.edn
-:layer :ability       纯 EDN 效果文档                              ac/src/main/resources/ac/vfx/effects/*.edn
+
+阶段顺序由 catalog 生成的 opcode/stage vector 固定，不依赖 map 遍历顺序。粒子数据在 Java `ParticleBuffer` 中以 SoA 保存；`ParticleKernel` 使用有界容量和原地 compact，禁止热路径隐式扩容。
+
+## 生命周期与网络
+
+信号操作只有 `spawn/update/trigger/destroy/release/clear-owner/snapshot`。实例身份由 `effect-id + owner + world-id + instance-key` 或远端 `instance-id` 组成；`state-seq` 和 `event-seq` 独立检查。`snapshot` 只建立 baseline，不重放历史 event；`release` 只删除 tracking client 的本地副本；`destroy` 写入 tombstone，阻止延迟 update 复活。
+
+网络分两层：
+
+1. `VfxPacketKind`/`VfxLifecyclePacket` 提供 Java typed identity 和方向验证；
+2. mcmod fixed channel 对完整 signal 做 bounded binary encoding，服务端只发送 catalog hello、VFX 生命周期和 combat feedback，客户端先解码/校验再进入 final-client。
+
+服务端必须先完成 catalog schema/hash 握手；客户端不能提交技能图、目标、伤害或 VFX recipient。参数 update 只能携带 dirty mask 指示的变化字段。
+
+## 扩展规则
+
+1. 新效果必须是 `ac/vfx/effects/*.edn` 中的 `:vfx/system`，并登记到 manifest。
+2. 可复用结构必须是 EDN composite，由 `cn.li.vfx.compiler/expand-graph` 展开；不得增加第二套运行时 composite loader。
+3. 参数必须声明 type/scope/mutability/default；网络字段必须进入 catalog schema，不能通过任意 map 字段绕过校验。
+4. 新输出必须映射到 neutral `draw-batch`、audio、camera 或 post operation，并能投影到 Java `VfxFrame`。
+5. Java carrier 直接写 Java；不得在 VFX ABI 中新增 `deftype`、`defrecord` 或 `definterface`。
+
+## 验收门
+
+```text
+verifyNoGeneratedClojureTypes
+verifyVfxJavaBoundary
+vfx-core:checkClojure
+vfx-core:runVfxClojureTests
+ac:runAcEdnCoverageTests
 ```
 
-## 实例模型
-
-三种 `:lifecycle`：
-
-- **`:transient`**——一次性效果，一个 (owner, 一次触发) 对应一个真实实例，走 `instance-key`/`event-seq`/tombstone 幂等分派。
-- **`:session`**——跨多个 tick 存活的效果（充能/引导/持续光束），由技能显式 `:destroy` 信号结束。
-- **`:persistent`**——按 world-id + 位置/方块实体身份索引，机器/方块挂载特效用。
-
-不再有 `:singleton`（旧版本"所有玩家共用一个聚合实例"的形态，已随旧客户端栈一起删除）——每个实例天然按 owner/world 索引，`clear-owner!`/`clear-world!` 精确清理匹配实例，不会误伤其他玩家的实例。
-
-## 运行时流程
-
-combat-core 的 `:effect/vfx` 节点产出携带 `instance-key`/`audience`/`payload` 的信号 → `combat-core/vfx-publish` 按 audience（`{:scope :self|:tracking :radius}`，唯一拼写）广播 → 客户端 `effect_controller/dispatch-signal!` → `vfx-core/runtime` 的幂等分派（`instance-key`/`event-seq`/tombstone）→ 每帧 `tick!` 推进状态机、`sample-frame!` 对可见实例（`bounds` 剔除后）求值图产出 op 批次 → `register.clj` 的 `merge-vfx-passes` 并入同一个 Presentation `FramePacket`。
-
-## 扩展点
-
-- 新增底层渲染原语：在 `components.clj` 登记完整 v3 描述符，`:impl` 产出的 op 必须落在上面"渲染 op 契约"描述的形状里；同时检查 loader 侧的 `:draw-batch!` 分派确实会处理这个 `:primitive`。
-- 新增中层视觉语义（如"环形爆发"、"闪电冲击视觉"）：在 `ac/src/main/resources/ac/vfx/components/*.edn` 加一个 `:layer :mid` composite，登记进 `vfx/components_manifest.edn`。**禁止**给它写 Clojure 实现。
-- 新增效果文档：在 `ac/src/main/resources/ac/vfx/effects/*.edn` 加文档，登记进 `vfx/manifest.edn`，声明 `:lifecycle`/`:audience`/类型化 `:inputs`（按 `:spawn`/`:update`/`:destroy` 分组）/`:state-slots`。
-
-## 排障手册
-
-- 效果编译通过但屏幕上什么都没有 → 先检查它的底层原语是否真的产出"渲染 op 契约"里的形状；旧的 `:mesh`/`:variant` 语义节点是这类问题的历史根源（详见迁移计划 R3）。
-- `unknown VFX effect` → combat-core 发出的 `:effect-id` 未在 `vfx/manifest.edn` 注册。
-- 效果实例好像永远不消失 → 检查 `:destroy` 信号是否真的被发出；`:transient` 效果没有显式 `:duration-ticks`/`:life-ticks` 就不会自然结束。
-- 同一效果被两个玩家同时触发时互相干扰 → 确认 `:instance-key` 确实按 owner 命名空间化（技能编译时会自动加 ability-id 前缀，但效果文档自己不应该硬编码一个跨 owner 共享的字面量 key）。
-- 远处效果不显示 → 检查该效果编译后的 `:bounds` 是否返回了 `nil`（等价于永不可见）。
-
-## 变更风险
-
-- `:layer :mid` 组件不得有 `:impl`——`verifyNodeLayerDiscipline` 强制。
-- 中层/底层节点不得读取环境形式（`{:from …}`/`{:tunable …}`/环境 `ctx :modifiers` 传播）——`verifyNoImplicitDependency` 强制；alpha/scale 之类的调制必须用显式 `:vfx/transform` 包裹。
-- `vfx-core` 不得直接依赖 presentation-core；两者唯一交汇点是 AC 侧 `register.clj`/`effect_controller.clj`。
-- `verifyVfxSingleTickPath`：每帧只允许一条 tick 路径驱动实例状态机。
-
-## 兼容性约束
-
-- `vfx-core` 依赖 `node-core` 与 `mcmod`，不引用 presentation-core/combat-core/AC 的具体类型，由 `verifyVfxDependencyDirection` 强制。
-- `node-core` 不得依赖 `vfx-core`，由 `verifyNodeCoreDependencyDirection` 强制。
+实机渲染、多人可见性、材质数值和 loader datagen 属于后续运行时任务；它们不能反向引入旧 VFX runtime 或兼容 facade。

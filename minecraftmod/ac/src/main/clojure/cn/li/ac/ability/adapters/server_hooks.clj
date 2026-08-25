@@ -16,6 +16,7 @@
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.combat.deferred :as deferred]
             [cn.li.combat.vfx-publish :as vfx-publish]
+            [cn.li.vfx.network :as vfx-network]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.session :as dev-session]
@@ -23,6 +24,7 @@
             [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
@@ -32,6 +34,12 @@
 (def ^:private fn-held-portable-dev-energy :ability/held-portable-dev-energy)
 (def ^:private fn-pull-portable-dev-energy :ability/pull-portable-dev-energy!)
 (def ^:private fn-resolve-awaken-category :ability/resolve-awaken-category!)
+
+;; Persistent/session VFX are replayed periodically so a client that enters
+;; tracking range after an effect started receives its current baseline.  The
+;; replay is intentionally coarse: updates still use dirty masks, while this
+;; cadence bounds bookkeeping and mirrors the fixed 20-tick input window.
+(def ^:private vfx-replay-interval-ticks 20)
 
 (defn- runtime-get-player-state
   [player-uuid]
@@ -248,11 +256,15 @@
   []
   {:on-player-login!
    (fn [player-uuid]
-     (runtime-get-or-create-player-state! player-uuid))
+     (runtime-get-or-create-player-state! player-uuid)
+     (network/clear-input-admission! player-uuid)
+     (network/send-catalog-hello! player-uuid))
 
    :on-player-logout!
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
+     (network/clear-catalog-handshake! player-uuid)
+     (network/clear-input-admission! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
      (vfx-publish/broadcast-clear-owner! player-uuid)
@@ -271,7 +283,9 @@
      (combat-runtime/dispatch-domain-event!
       {:type :entity-marks-clear-all
        :owner :system
-       :event-id [:lifecycle :entity-marks-clear-all session-id]}) )
+       :event-id [:lifecycle :entity-marks-clear-all session-id]})
+     (network/clear-all-catalog-handshakes!)
+     (network/clear-all-input-admission!))
 
    :on-player-clone!
    (fn [_old-player-uuid _new-player-uuid]
@@ -314,7 +328,13 @@
      (deferred/tick-owner! player-uuid))
 
    :on-server-tick-end!
-   (fn [_tick-id] nil)
+   (fn [tick-id]
+     (when (and (integer? tick-id)
+                (not (neg? (long tick-id)))
+                (zero? (mod (long tick-id) vfx-replay-interval-ticks)))
+       (vfx-publish/replay-persistent-signals!
+        (:vfx (combat-catalog/catalog))))
+     nil)
 
    :list-player-uuids
    (fn []
@@ -380,14 +400,20 @@
      (when-let [to-client (:to-client fns-map)]
        (vfx-publish/install-result-sink!
         (fn [owner result]
-          (to-client owner ability-messages/MSG-COMBAT-RESULT result)))
-       (vfx-publish/install-vfx-self-sink!
-        (fn [owner signal]
-          (to-client owner ability-messages/MSG-COMBAT-VFX signal))))
+          (to-client owner ability-messages/MSG-COMBAT-RESULT
+                     {:wire (fixed-channel/encode-combat-feedback result)})))
+       (vfx-publish/install-vfx-typed-self-sink!
+        (fn [owner packet signal]
+          (vfx-network/validate-direction! :s2c packet)
+          (to-client owner ability-messages/MSG-COMBAT-VFX
+                     {:wire (fixed-channel/encode-vfx-signal signal)}))))
      (when-let [to-nearby (:to-nearby fns-map)]
-       (vfx-publish/install-vfx-broadcast-sink!
-        (fn [owner signal radius]
-          (to-nearby owner ability-messages/MSG-COMBAT-VFX signal radius)))))
+       (vfx-publish/install-vfx-typed-broadcast-sink!
+        (fn [owner packet signal radius]
+          (vfx-network/validate-direction! :s2c packet)
+          (to-nearby owner ability-messages/MSG-COMBAT-VFX
+                     {:wire (fixed-channel/encode-vfx-signal signal)}
+                     radius)))))
 
    :get-context-player-uuid
    ;; Context ids are no longer authoritative combat handles.  Returning nil
