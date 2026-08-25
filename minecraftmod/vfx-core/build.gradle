@@ -9,12 +9,8 @@ layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${proje
 
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes", ":node-core:classes"
+    checkTask.dependsOn ":mcmod:classes"
     // See the matching comment in combat-core/build.gradle: node-core is
-    // source-first, and the standard project(":node-core") compileClasspath
-    // resolution does not surface its resources/main .clj sources here.
-    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
-    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
@@ -23,9 +19,6 @@ tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" 
 
 // See the matching comment in combat-core/build.gradle.
 tasks.named("compileTestClojure").configure {
-    dependsOn ":node-core:classes"
-    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
-    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
 tasks.named("processResources").configure {
@@ -40,7 +33,7 @@ tasks.named("processResources").configure {
 
 tasks.named("compileClojure").configure { task ->
     onlyIf { rootProject.ext.fullAotEnabled }
-    dependsOn ":mcmod:compileClojure", ":node-core:compileClojure"
+    dependsOn ":mcmod:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
         task.destinationDirectory = targetDir
@@ -72,10 +65,6 @@ tasks.register("runVfxClojureTests", JavaExec) {
 
 dependencies {
     implementation project(":mcmod")
-    // Shared node-language kernel -- see verifyNodeCoreDependencyDirection
-    // and NODE_LANGUAGE.md section 2.1. vfx-core's own vocabulary
-    // (components.clj) registers against it.
-    implementation project(":node-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }
