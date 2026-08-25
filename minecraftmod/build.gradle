@@ -1781,6 +1781,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyVfxSingleTickPath",
               "verifyVfxDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
+              "verifyVfxJavaBoundary",
               "verifyVfxAotBoundary",
               "verifyNeutralSourceAotXor",
               "verifyPresentationLoaderHooks",
@@ -2019,6 +2020,32 @@ def effectRuntimeClojureRoots = [
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
 ]
 
+tasks.register("verifyVfxJavaBoundary") {
+    group = "verification"
+    description = "Enforce the hand-written Java boundary for VFX structural types."
+    doLast {
+        def forbidden = ~/(?m)\(\s*(deftype|defrecord|definterface|defprotocol|gen-class|proxy|reify)\b/
+        def roots = [file("vfx-core/src/main/clojure"),
+                     file("ac/src/main/clojure/cn/li/ac/client"),
+                     file("ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj")]
+        roots.findAll { it.exists() }.each { root ->
+            def sources = root.isFile() ? [root] : fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.files
+            sources.each { source ->
+                if (forbidden.matcher(source.text).find()) {
+                    throw new GradleException("VFX Clojure cannot generate JVM structural types: ${source}")
+                }
+            }
+        }
+        def javaRoot = file("mcmod/src/main/java/cn/li/mcmod/runtime/vfx")
+        if (!javaRoot.directory) throw new GradleException("missing Java VFX ABI directory")
+        fileTree(javaRoot) { include "**/*.java" }.files.each { source ->
+            if (source.text =~ /net\\.minecraft|net\\.minecraftforge|net\\.fabricmc|net\\.neoforged/) {
+                throw new GradleException("platform API leaked into neutral Java VFX ABI: ${source}")
+            }
+        }
+        logger.lifecycle("[verifyVfxJavaBoundary] ok")
+    }
+}
 tasks.register("verifyNoGeneratedClojureTypes") {
     group = "verification"
     description = "Reject JVM type-generation forms in the new effect runtime."
