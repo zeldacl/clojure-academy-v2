@@ -8,6 +8,7 @@
    the combat catalog can depend on a stable VFX ABI first."
   (:require [cn.li.node.composite :as composite]
             [cn.li.node.descriptor :as descriptors]
+            [cn.li.vfx.compiler :as vfx-compiler]
             [cn.li.ac.ability.final-vocabulary :as vocabulary]))
 (def ^:const schema-version 1)
 (def ^:const expected-combat-sources 39)
@@ -215,7 +216,7 @@
               (map? value)
               (do
                 (when-let [component (:component value)]
-                  (when-not (descriptors/descriptor component)
+                  (when-not (= "vfx" (namespace component))
                     (throw (ex-info "VFX graph references unknown final node"
                                     {:effect-id effect-id :component component :path path}))))
                 (doseq [[k v] value]
@@ -228,23 +229,9 @@
     graph))
 
 (defn- expand-vfx-graph
-  "Expand composites at every VFX graph position, including timeline's
-   {:at ... :node ...} wrappers which are ordinary input data rather than a
-   node-core :children port."
+  "Expand VFX composites with the standalone VFX compiler."
   [graph composites]
-  (letfn [(walk [value]
-            (cond
-              (map? value)
-              (let [expanded (if (:component value)
-                               (composite/expand-with-descriptors value composites)
-                               value)]
-                (if (and (map? expanded) (not= expanded value))
-                  (walk expanded)
-                  (into (empty expanded)
-                        (map (fn [[k v]] [k (walk v)]) expanded))))
-              (sequential? value) (mapv walk value)
-              :else value))]
-    (walk graph)))
+  (vfx-compiler/expand-graph graph composites))
 
 (defn- vfx-emitter-stages
   "Compile the mandatory Niagara-style four-stage emitter contract.
