@@ -79,4 +79,6 @@
         {:selected next-idx
          :lines (initial-lines)
          :status (str "Selected item " (inc next-idx))}))
-    nil))
+    nil
+    :screen
+    :academy.app/settings))

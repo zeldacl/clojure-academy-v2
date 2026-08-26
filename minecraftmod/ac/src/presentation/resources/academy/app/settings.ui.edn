@@ -1,16 +1,25 @@
 {:view/id :academy.app/settings
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
- :state-schema {:title :string
-                :enabled? :boolean}
+ :state-schema {:title :string :lines :vector :status :string :selected :number
+                :button-left :map :button-right :map}
  :root {:type :column
         :layout {:x 16 :y 16 :width 288 :height 208}
-        :children [{:type :text
-                    :layout {:height 18}
+        :children [{:type :text :layout {:height 18}
                     :bind {:text [:state :title]}
                     :semantics {:role :heading}}
-                   {:type :button
-                    :key :save
-                    :layout {:width 96 :height 20}
-                    :bind {:enabled? [:state :enabled?]}
-                    :on {:activate :settings/save}
-                    :semantics {:role :button :label "Save"}}]}}
+                   {:type :scroll :key :settings/lines :layout {:height 140}
+                    :bind {:items [:state :lines]}
+                    :semantics {:role :list}}
+                   {:type :text :key :settings/status
+                    :bind {:text [:state :status]}}
+                   {:type :row :key :settings/navigation
+                    :children [{:type :button :key :settings/left
+                                :layout {:width 96 :height 20}
+                                :bind {:text [:state :button-left]}
+                                :on {:activate :application/left}
+                                :semantics {:role :button}}
+                               {:type :button :key :settings/right
+                                :layout {:width 96 :height 20}
+                                :bind {:text [:state :button-right]}
+                                :on {:activate :application/right}
+                                :semantics {:role :button}}]}]}}

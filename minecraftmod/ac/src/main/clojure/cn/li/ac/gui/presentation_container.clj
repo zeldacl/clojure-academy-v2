@@ -40,12 +40,15 @@
                                  "IDLE")}}))
 
 (defn mount-container!
-  [_runtime menu-bridge snapshot-fn dispatch-action!]
+  ([runtime menu-bridge snapshot-fn dispatch-action!]
+   (mount-container! runtime menu-bridge snapshot-fn dispatch-action!
+                    :academy.app/machine-container))
+  ([_runtime menu-bridge snapshot-fn dispatch-action! view-id]
   (let [state-fn (fn []
                    (let [snapshot (snapshot-fn)]
                      (merge (:values snapshot {}) snapshot)))
         vm (v2/mount-view!
-             {:view-id :academy.app/machine-container
+             {:view-id view-id
               :host-kind :container
               :state (state-fn)
               :dispatch-action!
@@ -57,7 +60,7 @@
            :refresh! (fn []
                        (let [next (state-fn)]
                          (reset! (:snapshot vm) next)
-                         (v2/present! vm next))))))
+                         (v2/present! vm next)))))))
 
 (defn open-screen!
   [menu-bridge snapshot-fn dispatch-action! on-close]
@@ -99,7 +102,7 @@
      :menu menu
      :player player
      :mount-fn (fn [_]
-                 (let [vm (mount-container! nil bridge snapshot-fn dispatch-action!)]
+                 (let [vm (mount-container! nil bridge snapshot-fn dispatch-action! template-id)]
                    {:mount (:mount vm)
                     :on-close (fn []
                                 (when-let [close (or (:presentation-close-fn container)

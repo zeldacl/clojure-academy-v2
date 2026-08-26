@@ -1,6 +1,15 @@
 # Presentation Runtime Next 断代重构计划（实施约束版）
 
 本文是 Presentation Runtime Next 的唯一实施约束文档。旧 UI、XML、kind renderer、overlay plan 和 script-render 链不作为新 Runtime 的 API 兼容目标；完成迁移后原子删除。
+## 当前实现审计基线（2026-08-26）
+
+以下内容是代码事实，优先于本文后面的历史实施记录：
+
+- `presentation-core` 当前只保留 `artifact.clj`、`host_v2.clj`、`paint_v2.clj`、`runtime_v2.clj`；负责 artifact 装载、Runtime v2、Host 生命周期、状态提取和中立绘制 IR，不再包含旧 retained tree、dirty/layout/frame graph 或 Java ViewModel 类型。
+- `presentation-compiler` 当前只保留 `artifact.clj` 与 `main.clj`，构建期将 `.ui.edn` 编译成严格校验的规范化 EDN artifact/manifest；不存在 `CompiledTemplate` 或运行时 `render.clj` 解释器。
+- AC 当前有 7 个生产 artifact：`application`、`combat_hud`、`machine_container`、`settings`、`terminal`、`wireless_matrix`、`wireless_node`。屏幕、容器、HUD 和终端控制器均通过 `presentation-v2` 挂载。
+- 帧路径是：AC snapshot → `presentation-core` Runtime v2 → `mcmod` 中立 `Ui*` Render IR → 各版本 backend；版本 backend 不读取 Core 私有状态。
+- 每次变更必须验证六个真实目标的 `:platform:compileClojure`：`forge-1.20.1`、`fabric-1.20.1`、`fabric-1.21.1`、`neoforge-1.21.1`、`fabric-26.2`、`neoforge-26.2`，再执行根 `verifyCurrentPlatforms`。
 
 ## 铁律：语言边界
 
@@ -13,11 +22,11 @@
 
 ```mermaid
 flowchart LR
-    AC["ac\nViewModel / Action / Effect Controller / EDN\n组合 combat-core + vfx-core + presentation-core"] --> MM["mcmod\n版本中立 Minecraft 领域桥接\nHostDescriptor / sealed RenderCommand ABI\n(cn.li.mcmod.runtime)"]
+    AC["ac\nViewModel / Action / Effect Controller / EDN\n组合 combat-core + vfx-core + presentation-core"] --> MM["mcmod\n版本中立 Minecraft 领域桥接\nHostDescriptor / neutral Ui* Render IR\n(cn.li.mcmod.runtime)"]
     MM --> BASE["minecraft/base\nHost 生命周期 / 公共 MC 桥接"]
     BASE --> VER["minecraft/mc-*\n1.20.1 / 1.21.1 / 26.2 Render Backend"]
     LOADER["loader/*\nScreen/HUD/World stage + reload 注册"] --> BASE
-    COMP["presentation-compiler\nClojure schema compiler + render.clj 解释器"] --> CORE["presentation-core\nJava data contracts + Clojure runtime"]
+    COMP["presentation-compiler\nClojure .ui.edn artifact compiler"] --> CORE["presentation-core\nRuntime v2 + artifact loader"]
     MM --> CORE
     CORE -->|一条帧提交路径| MM
     MM --> VER
@@ -25,8 +34,8 @@ flowchart LR
     VFX["vfx-core\n特效实例生命周期运行时"] --> MM
 ```
 
-- `presentation-core`：Clojure 事务、组件树、布局、事件、Frame Graph、帧记忆化（`runtime.clj`）；Java 侧只剩接口/协议签名（`HostDescriptor`、`FrameContext`、`PresentationViewModel` 等）——帧 ABI 本身（`RenderCommand`/`RenderStage`/`RenderPass`/`FramePacket`）已上提到 `mcmod`，见下方"本轮重构落地摘要"。
-- `presentation-compiler`：Clojure 编译 `*.ui.edn` 模板；构建期把 binding/action 解析为数值 ID；`render.clj` 是纯 Clojure 渲染解释器，读取编译产物 + `PresentationViewModel` 绑定表，产出 `RenderCommand`。
+- `presentation-core`：Clojure Runtime v2、artifact 装载、Host 生命周期、状态提取和绘制 IR；Java 侧仅保留 `HostGeometry`、`MountHandle` 等数据契约。
+- `presentation-compiler`：Clojure 编译 `*.ui.edn`，构建期完成 schema/binding/action 校验并输出规范化 artifact/manifest；运行时不解释模板。
 - `ac`：Clojure ViewModel、Action、Effect Controller 和 EDN 内容；组合 combat-core（技能数据程序）+ vfx-core（客户端特效实例）+ presentation-core（HUD/GUI 呈现），不直接调用 Minecraft 渲染 API。
 - `mcmod`：版本中立的 Minecraft 领域桥接层，也是帧 ABI（`cn.li.mcmod.runtime.RenderCommand`/`RenderStage`/`RenderPass`/`FramePacket`，sealed + typed record）的唯一持有者；presentation-core 与 vfx-core 都只依赖 `mcmod`，互不依赖。负责 Host 描述、服务端权威 snapshot/delta、MenuBridge 的 slot anchor 数据、Action codec/长度限制/校验，以及 AC 与 Presentation Runtime 的中立协议。不得引用具体 loader 或版本类。
 - `minecraft/base`：公共 Minecraft 生命周期和桥接；将游戏线程/资源重载/渲染阶段映射为 Runtime 调用。仅在确实需要 Minecraft 类型继承或注解时使用 Java。
@@ -43,8 +52,8 @@ Gradle 依赖铁律：`presentation-core -> mcmod`、`minecraft/base -> mcmod`�
 
 - 普通方块、物品和实体模型继续使用 Minecraft 原生渲染器。
 - 战斗 HUD 接入 `HudHost`，默认穿透输入；技能轮、HUD 编辑或明确交互模式才捕获输入。
-- World UI、VFX、First Person、Camera、Post FX 与 HUD 共用事务、Frame Graph 和 FramePacket，但拥有独立 Host。
-- 客户端线程拥有 ViewModel、组件树和 Effect 生命周期；渲染线程只消费不可变 FramePacket；邮箱容量为 2，丢弃旧帧，不允许无界排队。
+- World UI、VFX、First Person、Camera、Post FX 与 HUD 共用 Runtime v2 的 snapshot/IR 提交流程，但拥有独立 Host。
+- 客户端线程拥有 AC snapshot 与 Runtime v2 状态；版本渲染线程只消费不可变中立 IR，平台桥接不持有业务状态。
 
 ## 实施顺序
 
@@ -54,15 +63,15 @@ Gradle 依赖铁律：`presentation-core -> mcmod`、`minecraft/base -> mcmod`�
 4. 按 HUD/Screen/Container/VFX/手部相机/后处理迁移；只复用业务规则和资源，不复用旧 renderer、节点或 facade。
 5. 所有目标构建和关键场景通过后，原子切换入口并删除旧 Runtime、XML loader、overlay plan、script-render runtime/compiler/executor/registry、level-effect draw-plan 和双引擎开关。
 
-当前已落地：Core/Compiler 模块骨架（Devtools 已删除，见下方摘要）、事务/Host Runtime、`.ui.edn` 编译校验、三版本 backend profile 数据、per-frame 记忆化（帧邮箱已删除，记忆化取而代之）、分层 dirty 状态、战斗 HUD ViewModel/Action 样板、Terminal ViewModel/Screen 模板、Container/Slot MenuBridge 与机器 GUI 样板、统一 Effect owner 生命周期、capture/target/bubble 输入、pointer capture、焦点和 IME 状态、`minecraft/base` Host 生命周期协议和依赖方向门禁。原子切换已完成，旧 HUD/Overlay/Script Render 入口已删除，Presentation Runtime 是唯一自定义表现入口。
+当前已落地：artifact 编译与装载、Runtime v2、Host/paint 提取、战斗 HUD、Terminal、Container/Slot MenuBridge、Settings、Wireless Matrix/Node 等 AC surface 迁移，以及六目标编译门禁。原子切换已完成，旧 HUD/Overlay/Script Render/XML 入口已删除，Presentation Runtime 是唯一自定义表现入口。
 
 当前帧提交链：loader 初始化时只注册对应 `minecraft/mc-*` 的不透明 backend；HUD 和世界阶段回调经 `platform/neutral` 提取 `FramePacket`，再通过 `:submit!` 交给版本 backend。`mcmod` 只保存中立 profile、能力和诊断提交记录，不能读取 Core 的 Render IR；实际 GuiGraphics/BufferBuilder/后处理映射留在版本 backend 的 Clojure 桥接与允许的 Minecraft API 边界内。
 
-Core 到版本 backend 的转换消费 `mcmod.runtime` 的 sealed `RenderCommand`（`Quad`/`GlyphRun`/`Image`/`Mesh`/`Batch`/`Beam`/`Billboard`/`ParticleBatch`/`Ribbon`/... 等 typed record，见 `RenderCommand.java` 的 permits 列表）。版本 backend 用 `condp instance?` 对 sealed 接口分派，不再是字符串 `case`；因此 `minecraft/base` 和 `minecraft/mc-*` 不需要、也不得导入 `presentation-core`——它们只导入 `mcmod`。
+Core 到版本 backend 的转换消费 `mcmod` 的中立 `Ui*` Render IR；版本 backend 只做平台绘制映射，`minecraft/base` 和 `minecraft/mc-*` 不导入 `presentation-core`。
 
 Effect 纵向样板：AC 创建 Runtime 时编译并注册 `body_intensify.fx.edn`，每帧在客户端线程 tick，按 owner 清理，提取后的 Beam/Ribbon/Particle 等命令与 HUD 同批进入 `PresentationFrame`；旧 level-effect draw-plan 已删除。
 
-Screen/Container 迁移边界已增加：AC host API 只返回不透明 mount token，Terminal 文本/IME/Modal 状态和 Menu/Slot 快照仍留在 AC 与服务端权威桥接内；loader/base 不接触 ViewModel、节点树或业务状态。各版本 Screen 只把键盘、字符和鼠标事件规范化为中立 map，经 `platform/neutral` 转交 AC，再由 Clojure 构造 `PresentationInputEvent` 并 dispatch；版本边界不直接依赖 Core 类型。
+Screen/Container 迁移边界已增加：AC host API 只返回不透明 mount token，Terminal 文本/IME/Modal 状态和 Menu/Slot 快照仍留在 AC 与服务端权威桥接内；loader/base 不接触 ViewModel、节点树或业务状态。各版本 Screen 只把键盘、字符和鼠标事件规范化为中立 map，经 `platform/neutral` 转交 AC，再由 Clojure 将中立 map dispatch 到 Runtime v2；版本边界不直接依赖 Core 类型。
 
 六平台构建门禁：每次 Presentation Runtime 变更都必须完成以下六个目标的完整
 Gradle `:platform:compileClojure` 构建（使用目标对应的 Gradle/toolchain profile），
@@ -73,8 +82,12 @@ Gradle `:platform:compileClojure` 构建（使用目标对应的 Gradle/toolchai
 ## 验收门槛
 
 - Java 纯度检查：核心 Java 仅数据/契约；Minecraft 特例 Java 必须位于桥接层并有明确注解/继承理由。
-- 核心行为测试：Signal 事务、keyed reconcile、布局、事件 capture/target/bubble、IME、Effect owner 清理、Frame Graph、Render IR 三版本 conformance。
+- 核心行为测试：artifact schema、Runtime v2 状态提取、Host mount/unmount、Action dispatch、MenuBridge、Render IR 与六目标编译。
 - 性能：中端机器战斗场景 Presentation CPU p95 ≤ 1 ms，压力场景 ≤ 2 ms；静态 HUD 热身后 ≤ 256 B/frame；动态 HUD ≤ 8 KiB/frame；普通 HUD ≤ 8 draw calls，技能轮 ≤ 16。
+
+# 历史实施记录（仅作审计证据，不是当前模块清单）
+
+下文保留此前迁移阶段的决策、门禁和性能目标；若与“当前实现审计基线”冲突，以当前代码和基线为准。
 
 # Implementation invariants (locked)
 

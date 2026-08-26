@@ -34,8 +34,8 @@ platform-builds/
 |------|------|
 | `:api` | 对外 Java API 与互操作接口 |
 | `:mcmod` | DSL、协议、生命周期、平台抽象和不依赖 Minecraft 类的运行契约；也是 sealed `RenderCommand`/`RenderStage`/`RenderPass`/`FramePacket` 帧 ABI 的唯一持有者（`cn.li.mcmod.runtime`），presentation-core 与 vfx-core 都只依赖 `:mcmod`，互不依赖 |
-| `:presentation-core` | 帧管线 + Host 生命周期：模板挂载、输入分发、per-frame 提取与记忆化、脏位失效、（未接入生产的）保留树/布局引擎 |
-| `:presentation-compiler` | `.ui.edn` → `CompiledTemplate` 编译器 + 纯 Clojure 渲染解释器（`render.clj`），产出 `RenderCommand` |
+| `:presentation-core` | Runtime v2 + artifact 装载 + Host 生命周期 + 状态提取/中立绘制 IR；不包含旧 retained tree/layout 引擎 |
+| `:presentation-compiler` | 严格校验 `.ui.edn` → 规范化 artifact/manifest 编译器；无运行时模板解释器 |
 | `:vfx-core` | 最终 VFX System/Emitter/Module/Stage/Parameter 运行时：显式四阶段图采样、生命周期/序列幂等、SoA 粒子缓冲与 Java 帧 ABI；无旧 VM/recipe/runtime 兼容层 |
 | `:combat-core` | 纯数据技能程序引擎：`:sequence`/`:query`/`:damage`/`:vfx`/`:world-effect`/`:domain-event` op 编译与执行，永不认识 Minecraft/渲染/VFX 运行时 |
 | `:ac` | AcademyCraft 内容与领域逻辑；组合 combat-core（技能数据）+ vfx-core（客户端特效）+ presentation-core（HUD/GUI 呈现） |
@@ -69,7 +69,8 @@ platform-builds/
 
 构建剖面（`buildProfiles`）按 `toolchain` 分组：
 
-- `loom` — Architectury Loom + Gradle 8.8（`forge-1.20.1` / `fabric-1.20.1` / `neoforge-1.21.1`）
+- `loom` — Architectury Loom + Gradle 8.8（`forge-1.20.1` / `fabric-1.20.1` / `fabric-1.21.1` / `neoforge-1.21.1`）
+- `loom-26.2` — Fabric Loom 1.17.18 + Gradle 9.5.1（`fabric-26.2`）
 - `mdg` — ModDevGradle + Gradle 9.2 + Java 25（`neoforge-26.2`），隔离 wrapper 在 `platform-builds/gradle-9.2/`
 
 当前生产目标（摘要）：
@@ -78,9 +79,10 @@ platform-builds/
 |-----------|--------|-----------|-------------------|
 | `forge-1.20.1` | Forge | 1.20.1 | `minecraft-base`, `minecraft-1.20.1`, `forge-1.20.1` |
 | `fabric-1.20.1` | Fabric | 1.20.1 | `minecraft-base`, `minecraft-1.20.1`, `fabric-1.20.1` |
+| `fabric-1.21.1` | Fabric | 1.21.1 | `minecraft-base`, `minecraft-1.21.1`, `fabric-1.21.1` |
 | `neoforge-1.21.1` | NeoForge | 1.21.1 | `minecraft-base`, `minecraft-1.21.1`, `neoforge-shared`, `neoforge-1.21.1` |
+| `fabric-26.2` | Fabric | 26.2 | `minecraft-base`, `minecraft-26.2`, `fabric-26.2` |
 | `neoforge-26.2` | NeoForge | 26.2 | `minecraft-base`, `minecraft-26.2`, `neoforge-shared`, `neoforge-26.2` |
-
 ## 依赖边界
 
 - `mcmod` 与 `ac` 不引用 `net.minecraft.*`、Forge、Fabric 或 NeoForge API
@@ -96,6 +98,16 @@ platform-builds/
 .\gradlew.bat verifyCurrentPlatforms
 .\scripts\target-gradle.ps1 forge-1.20.1
 .\scripts\target-gradle.ps1 fabric-1.20.1
+.\scripts\target-gradle.ps1 fabric-1.21.1
 .\scripts\target-gradle.ps1 neoforge-1.21.1
+.\scripts\target-gradle.ps1 fabric-26.2
 .\scripts\target-gradle.ps1 neoforge-26.2
+
+# UI 变更的最低编译门禁
+.\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-1.21.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-26.2 :platform:compileClojure
+.\scripts\target-gradle.ps1 neoforge-26.2 :platform:compileClojure
 ```

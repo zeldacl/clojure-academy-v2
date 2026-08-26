@@ -10,7 +10,7 @@
 
 - 管理玩家是否已安装终端、已安装哪些终端应用（独立 NBT 键 `academy_terminal`，不经 ability runtime-store）。
 - 通过固定线协议（`terminal.messages`）处理安装终端、安装/卸载应用、查询状态。
-- 在客户端用 CGui XML（`assets/academy/guis/terminal.xml`）展示应用网格，按 catalog 元数据分页；已安装应用通过 launcher 表打开各 app GUI。
+- 客户端主终端使用 `ac/src/presentation/resources/academy/app/terminal.ui.edn` 和 `client/presentation_terminal.clj` 的 Presentation Runtime v2 artifact；按 catalog 元数据分页，已安装应用通过 launcher 表打开各 app GUI。
 - 与无线频率发射器等玩法通过 catalog 中的 `:freq-transmitter` 等条目关联，不在服务端持有 GUI 函数。
 
 ## 模块边界
@@ -32,7 +32,8 @@
 
 | 命名空间 | 职责 |
 |----------|------|
-| `cn.li.ac.terminal.client.shell` | 主终端 GUI、RPC、`create-terminal-gui`、`install-ui-hooks!`（`:ac/terminal-gui` widget 工厂） |
+| `cn.li.ac.terminal.client.shell` | 主终端状态、RPC、`:ac/terminal` screen 生命周期与 `install-ui-hooks!` |
+| `cn.li.ac.terminal.client.presentation-terminal` | terminal artifact 的 snapshot、action 与 v2 mount 适配 |
 | `cn.li.ac.terminal.client.runtime` | 按玩家 owner-key 的终端 UI 状态（分页、loading、已安装集合、媒体播放事件） |
 | `cn.li.ac.terminal.client.apps` | `launchers` 映射：catalog `:id` → `open!` |
 | `cn.li.ac.terminal.client.apps.*` | 各应用 GUI（static_pages、media、skill_tree、freq） |

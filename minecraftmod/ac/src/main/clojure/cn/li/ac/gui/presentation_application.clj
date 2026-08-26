@@ -14,13 +14,15 @@
   ([owner title snapshot dispatch-action! on-close]
    (mount! owner title snapshot dispatch-action! on-close :screen))
   ([owner title snapshot dispatch-action! on-close host-kind]
+   (mount! owner title snapshot dispatch-action! on-close host-kind :academy.app/application))
+  ([owner title snapshot dispatch-action! on-close host-kind view-id]
    (let [state (merge {:title title :lines [] :status "" :scroll 0.0
                        :modal nil :input ""}
                       snapshot)
          dispatch (fn [action _payload current]
                    (let [result (dispatch-action! action current)]
                      (if (map? result) result current)))
-         vm (v2/mount-view! {:view-id :academy.app/application
+         vm (v2/mount-view! {:view-id view-id
                              :host-kind host-kind
                              :state state
                              :dispatch-action! dispatch

@@ -4,7 +4,9 @@ Current supported targets are declared in `platform-catalog.json`:
 
 - `forge-1.20.1` (Loom / Gradle 8.8)
 - `fabric-1.20.1` (Loom / Gradle 8.8)
+- `fabric-1.21.1` (Loom / Gradle 8.8)
 - `neoforge-1.21.1` (Loom / Gradle 8.8)
+- `fabric-26.2` (Fabric Loom 1.17.18 / Gradle 9.5.1 / Java 25)
 - `neoforge-26.2` (ModDevGradle / Gradle 9.2 / Java 25; isolated wrapper under `platform-builds/mdg-gradle-9.2/`)
 
 Required local gate:
@@ -18,8 +20,21 @@ For target-specific checks, run a single selected target (including per-target C
 ```text
 .\scripts\target-gradle.ps1 forge-1.20.1 lintClojureNative
 .\scripts\target-gradle.ps1 fabric-1.20.1 lintClojureNative
+.\scripts\target-gradle.ps1 fabric-1.21.1 lintClojureNative
 .\scripts\target-gradle.ps1 neoforge-1.21.1 lintClojureNative
+.\scripts\target-gradle.ps1 fabric-26.2 lintClojureNative
 .\scripts\target-gradle.ps1 neoforge-26.2 lintClojureNative
+```
+
+For a Presentation/UI change, the minimum compile gate is:
+
+```text
+.\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-1.21.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-26.2 :platform:compileClojure
+.\scripts\target-gradle.ps1 neoforge-26.2 :platform:compileClojure
 ```
 
 Compile / build smoke examples:
@@ -36,7 +51,9 @@ Run the target-local Clojure test suite for every production target:
 ```text
 .\scripts\target-gradle.ps1 forge-1.20.1 :platform:runPlatformClojureTests
 .\scripts\target-gradle.ps1 fabric-1.20.1 :platform:runPlatformClojureTests
+.\scripts\target-gradle.ps1 fabric-1.21.1 :platform:runPlatformClojureTests
 .\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:runPlatformClojureTests
+.\scripts\target-gradle.ps1 fabric-26.2 :platform:runPlatformClojureTests
 .\scripts\target-gradle.ps1 neoforge-26.2 :platform:runPlatformClojureTests
 ```
 
