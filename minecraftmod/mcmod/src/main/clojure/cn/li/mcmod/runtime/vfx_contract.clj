@@ -5,7 +5,7 @@
 (def schema-version 1)
 (def stages #{:world-translucent :world-additive
               :world-after-translucent :first-person :screen})
-(def primitives #{:billboard :particle :beam :ribbon :line :mesh
+(def primitives #{:billboard :particle :beam :ribbon :line :mesh :quad
                   :first-person :camera :post-process :audio})
 
 (def signal-ops #{:spawn :update :trigger :destroy :release :clear-owner :snapshot})
@@ -55,7 +55,7 @@
   (when-not (and (integer? count) (<= 0 count))
     (throw (ex-info "VFX batch count must be non-negative" {:value value})))
   (when (and payload (not (or (instance? ByteBuffer payload)
-                              (vector? payload) (sequential? payload))))
+                              (map? payload) (vector? payload) (sequential? payload))))
     (throw (ex-info "unsupported VFX batch payload" {:class (class payload)})))
   {:schema-version schema-version :stage stage :primitive primitive
    :material material :variant variant :layout-version (long (or layout-version 1))

@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.mcmod.runtime.host :as host]
             [cn.li.mcmod.runtime.damage-boundary :as damage]
-            [cn.li.mcmod.runtime.fixed-channel :as channel]))
+            [cn.li.mcmod.runtime.fixed-channel :as channel]
+            [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]))
 (deftest host-preflight-is-atomic-before-apply-test
   (let [applied (atom []) h (host/create {:queries {} :actions {:entity/damage (fn [phase command _] (if (= :preflight phase) (not= :reject (:mode (:args command))) (swap! applied conj (:id command))))}})]
     (is (= {:ok? false :phase :preflight} (select-keys (host/execute! h [{:id :a :capability :entity/damage :args {:mode :ok}} {:id :b :capability :entity/damage :args {:mode :reject}}] {}) [:ok? :phase])))
@@ -33,6 +34,13 @@
     (is (= identity (select-keys ack [:schema-version :content-hash])))
     (is (false? (:accepted? ack)))
     (is (<= (alength (channel/encode-catalog-hello identity)) 140))))
+
+(deftest vfx-contract-accepts-neutral-quad-test
+  (is (= :quad (:primitive (vfx-contract/batch
+                            {:stage :world-after-translucent
+                             :primitive :quad
+                             :count 1
+                             :payload {:operation :draw-batch}})))))
 
 (deftest vfx-fixed-packet-roundtrip-and-operation-tag-test
   (let [signal {:op :update
