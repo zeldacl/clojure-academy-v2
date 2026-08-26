@@ -74,12 +74,13 @@
                       :let [source (edn/read-string (slurp file :encoding "UTF-8"))
                             artifact (compile-source source (.getPath ^java.io.File file))
                             view-id (:view-id artifact)
-                            relative (str (name (or (namespace view-id) "academy")) "/"
+                            relative (str "assets/academy/presentation-compiled/"
+                                          (name (or (namespace view-id) "academy")) "/"
                                           (name view-id) ".uic.edn")
                             target (.resolve output-root relative)]]
                   (do
                     (write-edn! target artifact)
-                    [view-id {:resource (str "assets/academy/presentation-compiled/" relative)
+                    [view-id {:resource relative
                               :source-hash (:source-hash artifact)
                               :schema artifact-schema
                               :host (:host artifact)}]))
