@@ -12,6 +12,7 @@
             [cn.li.ac.client.vfx-host :as vfx-host]
             [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.presentation.core.host :as presentation-host]
+            [cn.li.presentation.core.host-v2 :as presentation-host-v2]
             [cn.li.presentation.compiler.core :as presentation-compiler]
             [cn.li.presentation.compiler.render :as presentation-render]
             [cn.li.mcmod.util.log :as log])
@@ -37,6 +38,19 @@
       (throw (ex-info "Unknown presentation input event" {:event event})))))
 
 (defonce ^:private presentation-runtime* (atom nil))
+(defonce ^:private presentation-runtime-v2* (atom nil))
+
+(defn presentation-runtime-v2
+  "The retained Runtime v2 instance exposed through the generic host map." 
+  []
+  (or @presentation-runtime-v2*
+      (let [runtime (presentation-host-v2/create-runtime)]
+        (or (compare-and-set! presentation-runtime-v2* nil runtime)
+            @presentation-runtime-v2*))))
+
+(defn presentation-host-api-v2 []
+  (presentation-host-v2/api (presentation-runtime-v2)))
+
 (defonce ^:private template-cache* (atom {}))
 (defonce ^:private combat-hud* (atom nil))
 (defonce ^:private terminal* (atom nil))
@@ -255,6 +269,7 @@
     (bridge/merge-client-bridge!
       {:presentation-runtime presentation-runtime
        :presentation-host-api presentation-host-api
+       :presentation-host-api-v2 presentation-host-api-v2
        ;; VFX Core's OWN host installation (tick!/fov-offset/hand transforms)
        ;; is still installed independently by ac.client.vfx-host — this
        ;; bridge never re-exports that host API key (verifyVfxDirectHostBoundary

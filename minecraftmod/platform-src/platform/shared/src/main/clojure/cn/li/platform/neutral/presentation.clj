@@ -162,3 +162,31 @@
     (when-let [unmount-all! (:unmount-all! (lifecycle/host-api registry host-id))]
       (unmount-all!))
     nil))
+
+;; Presentation Runtime v2 opaque API. These functions intentionally traffic
+;; only in maps and opaque mount tokens; platform code does not import core
+;; classes or the build-time compiler.
+(defn mount-view! [spec]
+  (when-let [mount! (:mount-view! (lifecycle/host-api (ensure-registered!) host-id))]
+    (mount! spec)))
+
+(defn present-view! [mount state]
+  (when-let [present! (:present-view! (lifecycle/host-api (ensure-registered!) host-id))]
+    (present! mount state)))
+
+(defn update-host! [mount geometry]
+  (when-let [update! (:update-host! (lifecycle/host-api (ensure-registered!) host-id))]
+    (update! mount geometry)))
+
+(defn extract-stage-v2! [stage frame-context]
+  (when-let [extract! (:extract-stage! (lifecycle/host-api (ensure-registered!) host-id))]
+    (extract! stage frame-context)))
+
+(defn semantics! [mount]
+  (when-let [semantics (:semantics! (lifecycle/host-api (ensure-registered!) host-id))]
+    (semantics mount)))
+
+(defn invalidate-render-resources-v2! []
+  (when-let [invalidate! (:invalidate-render-resources!
+                          (lifecycle/host-api (ensure-registered!) host-id))]
+    (invalidate!)))
