@@ -1,5 +1,7 @@
 package cn.li.mcmod.runtime;
 
+import java.util.List;
+
 /**
  * Single neutral Render IR shared by the Presentation frame pipeline and
  * VFX Core. Sealed so every version backend's dispatch is exhaustive at
@@ -7,6 +9,8 @@ package cn.li.mcmod.runtime;
  */
 public sealed interface RenderCommand
         permits RenderCommand.Quad, RenderCommand.Image, RenderCommand.GlyphRun,
+                RenderCommand.UiQuadBatch, RenderCommand.UiImageBatch, RenderCommand.UiText,
+                RenderCommand.UiItemPreview, RenderCommand.UiModelPreview,
                 RenderCommand.PushClip, RenderCommand.PopClip, RenderCommand.Layer,
                 RenderCommand.Mesh, RenderCommand.Billboard, RenderCommand.ParticleBatch,
                 RenderCommand.Ribbon, RenderCommand.Beam, RenderCommand.ItemPreview,
@@ -16,6 +20,24 @@ public sealed interface RenderCommand
     record Image(int textureId, float x, float y, float width, float height, int rgba) implements RenderCommand {}
     record GlyphRun(int fontId, String text, float x, float y, int rgba) implements RenderCommand {
         public GlyphRun { text = text == null ? "" : text; }
+    }
+record UiQuad(float x, float y, float width, float height, int rgba) {}
+    record UiQuadBatch(List<UiQuad> quads) implements RenderCommand {
+        public UiQuadBatch { quads = List.copyOf(quads == null ? List.of() : quads); }
+    }
+    record UiImage(float x, float y, float width, float height, int rgba) {}
+    record UiImageBatch(UiResourceRef resource, List<UiImage> images) implements RenderCommand {
+        public UiImageBatch {
+            if (resource == null) throw new NullPointerException("resource");
+            images = List.copyOf(images == null ? List.of() : images);
+        }
+    }
+    record UiText(int fontId, String text, float x, float y, int rgba) implements RenderCommand {
+        public UiText { text = text == null ? "" : text; }
+    }
+    record UiItemPreview(int itemId, float x, float y, float scale) implements RenderCommand {}
+    record UiModelPreview(String modelId, float x, float y, float width, float height) implements RenderCommand {
+        public UiModelPreview { modelId = modelId == null ? "" : modelId; }
     }
     record PushClip(float x, float y, float width, float height) implements RenderCommand {}
     record PopClip() implements RenderCommand {}

@@ -1,10 +1,10 @@
-package cn.li.presentation.core;
+package cn.li.mcmod.runtime;
 
 import java.util.Objects;
 
-/** Stable UI resource identity; version backends resolve it to native handles. */
-public record ResourceRef(String namespace, String path, Kind kind) {
-    public ResourceRef {
+/** Neutral resource identity used by UI Render IR; resolved by each MC backend. */
+public record UiResourceRef(String namespace, String path, Kind kind) {
+    public UiResourceRef {
         namespace = require(namespace, "namespace");
         path = require(path, "path");
         kind = Objects.requireNonNull(kind, "kind");
@@ -15,5 +15,5 @@ public record ResourceRef(String namespace, String path, Kind kind) {
         return value;
     }
 
-    public enum Kind { TEXTURE, FONT, MODEL, SOUND }
+    public enum Kind { TEXTURE, FONT, MODEL }
 }

@@ -1,6 +1,7 @@
 (ns cn.li.presentation.core.runtime-v2-test
   (:require [clojure.test :refer :all]
-            [cn.li.presentation.core.runtime-v2 :as runtime])
+            [cn.li.presentation.core.runtime-v2 :as runtime]
+            [cn.li.presentation.core.paint-v2 :as paint])
   (:import [cn.li.presentation.core HostGeometry]))
 
 (def sample-artifact
@@ -32,3 +33,20 @@
   (let [foreign-thread (Thread.)
         rt (runtime/create-runtime {:owner-thread foreign-thread})]
     (is (thrown? IllegalStateException (runtime/unmount-all! rt)))))
+(deftest runtime-extracts-new-ui-render-ir
+  (let [rt (runtime/create-runtime)
+        artifact {:magic :pui2 :schema 2 :view-id :academy/test/paint
+                  :nodes {:id :root :type :rect :layout {}
+                          :style {:rgba (unchecked-int 0xFF00FF00)}}}
+        mount (runtime/mount!
+                rt {:host {:stage :screen}
+                    :view-id :academy/test/paint
+                    :artifact artifact
+                    :state {}
+                    :paint-fn paint/paint-view})
+        packet (runtime/extract-stage! rt :screen {:time-nanos 2})
+        command (-> packet :mounts first :commands first)]
+    (is (= 1 (count (:mounts packet))))
+    (is (instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))
+    (is (= 1 (count (.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))))
+    (runtime/unmount! rt mount)))

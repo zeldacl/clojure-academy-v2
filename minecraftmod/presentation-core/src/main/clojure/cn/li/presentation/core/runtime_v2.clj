@@ -25,7 +25,7 @@
 (defn- runtime-state [^UiRuntime runtime] @(:state runtime))
 
 (defn mount!
-  [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close!]
+  [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close! paint-fn]
                      :or {state {}
                           reduce (fn [state _action _payload]
                                    {:state state :effects [] :event-result :pass})}}]
@@ -41,6 +41,7 @@
                   :reduce reduce
                   :run-effect! (or run-effect! (fn [_] nil))
                   :close! (or close! (fn [_] nil))
+                  :paint-fn (or paint-fn (fn [_ _ _] []))
                   :geometry (HostGeometry/identity 0 0)
                   :dirty #{:structure :layout :paint :semantics}}]
     (vswap! (:state runtime)
@@ -113,7 +114,13 @@
    :mounts (->> (:mounts (runtime-state runtime))
                 vals
                 (filter #(= stage (get-in % [:host :stage])))
-                (mapv #(select-keys % [:handle :view-id :geometry :dirty])))} )
+                (mapv (fn [instance]
+                        (assoc (select-keys instance [:handle :view-id :geometry :dirty])
+                               :commands (vec ((:paint-fn instance)
+                                               (:artifact instance)
+                                               (:view-state instance)
+                                               (:geometry instance)))))
+                 ))})
 
 (defn semantics [^UiRuntime runtime mount]
   (get-in (instance! runtime mount) [:artifact :semantics]))
