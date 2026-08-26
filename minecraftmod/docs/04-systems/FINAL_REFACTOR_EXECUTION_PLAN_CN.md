@@ -50,6 +50,7 @@
 33. 本次生产链路复核发现 `replay-persistent-signals!` 原先只有定义和单元测试，没有 server hook 调用；现由 AC `:on-server-tick-end!` 在非负整数 tick 的每 20 tick 调度一次，并从最终 Combat catalog 取得 VFX catalog 后走既有 fixed-channel broadcast sink。回归覆盖周期、非周期和非法 tick，避免持久/会话效果在 tracking enter 后只靠偶然事件恢复。
 34. 本次 `--rerun-tasks` clean-path 审计发现 `dispatch-result-domain-events!` 的括号使 `reduce` 形成错误的单参数调用，增量构建未触发该问题；现已修正为标准 `[rf coll]` 调用。`lintClojureNative` 重跑通过（11 source roots），随后 `verifyCurrentPlatforms` 通过，确保这是生产修复而非仅缓存状态变化。
 35. 本次最终代码审计又闭合三处边界：`audio-one-shot`/`audio-loop`/`camera` 已有显式 final lowering；`typed-vfx` 在 presentation adapter 中按 line/point-chain/ring/marker 规则有界落地，不再产生空计划；VFX fixed-channel 编解码统一执行 32 KiB 上限，并修复 payload 长度写入的 signed-short 溢出。VFX 回归为 16/45，mcmod 全量为 191/569，均为 0 failures / 0 errors。
+36. 网络分层再次明确：`VfxPacket/VfxWireCodec` 只负责 Minecraft-free 的生命周期身份、方向和 catalog 控制面测试；真正跨 AC/loader 的完整参数、dirty-mask 和 payload 只允许经过 mcmod `fixed-channel`。两者不是第二套运行时传输协议，生产入口只有 fixed-channel sink/handler。
 
 ## 分阶段执行顺序
 
