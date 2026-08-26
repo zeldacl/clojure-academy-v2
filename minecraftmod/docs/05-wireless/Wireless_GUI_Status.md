@@ -27,12 +27,12 @@ flowchart LR
 
 ## 维护检查
 
-- [ ] artifact 的 `:view/id` 与 `presentation-screen-data` 的 template id 一致。
-- [ ] Matrix/Node snapshot 至少提供 `network-state`、`network-owner`、`network-range`、`network-bandwidth`、`network-load` 及对应的文本字段。
-- [ ] `:presentation-buttons` 的 0/1 按钮 label 能映射到 `button-left`/`button-right`。
-- [ ] Menu/Slot schema、quick-move 和权限校验仍由 `mcmod/gui` 与 AC controller 负责。
-- [ ] 新增 UI 字段时同时更新 `.ui.edn` 的 `:state-schema`、controller snapshot 和 compiler 校验。
-- [ ] 不新增 XML、CGui renderer 或第二套 screen painter。
+- [x] artifact 的 `:view/id` 与 `presentation-screen-data` 的 template id 一致。
+- [x] Matrix/Node snapshot 至少提供 `network-state`、`network-owner`、`network-range`、`network-bandwidth`、`network-load` 及对应的文本字段。
+- [x] `:presentation-buttons` 的 0/1 按钮 label 能映射到 `button-left`/`button-right`。
+- [x] Menu/Slot schema、quick-move 和权限校验仍由 `mcmod/gui` 与 AC controller 负责。
+- [x] 新增 UI 字段时同时更新 `.ui.edn` 的 `:state-schema`、controller snapshot 和 compiler 校验。
+- [x] 不新增 XML、CGui renderer 或第二套 screen painter。
 
 ## 验证命令
 
