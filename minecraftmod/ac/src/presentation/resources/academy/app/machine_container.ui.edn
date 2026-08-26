@@ -1,6 +1,6 @@
 {:view/id :academy.app/machine-container
  :host {:kind :container :design-width 176 :design-height 166 :scale-policy :fit}
- :state-schema {:slots :vector :machine-state :string :energy-ratio :number :progress-ratio :number}
+ :state-schema {:slots :vector :machine-state :string :energy-ratio :number :progress-ratio :number :button-left :map :button-right :map}
  :root {:type :column :key :container/root :layout {:x 8 :y 8 :width 160 :height 150}
         :children [{:type :scroll :key :container/slots :layout {:height 72} :bind {:items [:state :slots]} :semantics {:role :list}}
                    {:type :text :key :container/state :bind {:text [:state :machine-state]}}

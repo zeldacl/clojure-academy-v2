@@ -1,6 +1,6 @@
 {:view/id :academy.app/wireless-matrix
  :host {:kind :screen :design-width 220 :design-height 180 :scale-policy :fit}
- :state-schema {:network-state :string :network-owner :string :network-range :string :network-bandwidth :string :network-load :number :network-ssid :string :network-password :string}
+ :state-schema {:network-state :string :network-owner :string :network-range :string :network-bandwidth :string :network-load :number :network-ssid :string :network-password :string :button-left :map :button-right :map}
  :root {:type :column :key :matrix/root :layout {:x 8 :y 8 :width 204 :height 164}
         :children [{:type :text :key :matrix/title :bind {:text [:state :network-state]}}
                    {:type :text :key :matrix/owner :bind {:text [:state :network-owner]}}

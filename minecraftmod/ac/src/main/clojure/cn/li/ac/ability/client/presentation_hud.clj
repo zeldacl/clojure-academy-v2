@@ -8,9 +8,8 @@
    reactive-hud/build-snapshot's fields land here as flat bindings. Fields
    shaped as heterogeneous overlays (toasts, coin-qte, movement hints, ...)
    are flattened into :composite-list items — {:kind :quad|:image|:text ...}
-   maps that presentation-compiler's render.clj already knows how to turn
-   into Quad/Image/GlyphRun commands generically, so this namespace stays
-   the only place that understands what any of these fields mean."
+   maps that the neutral Presentation painter consumes as typed UI IR, so this
+   namespace stays the only place that understands what any of these fields mean."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.gui.presentation-v2 :as v2])
 )
@@ -46,7 +45,7 @@
 ;; ---------------------------------------------------------------------------
 ;; Color packing — reactive-hud/hud.clj builders use two conventions
 ;; (0.0-1.0 doubles for background-mask, 0-255 ints/vectors everywhere else).
-;; render.clj's composite-list expects a single packed ARGB int per item, so
+;; the neutral UI painter expects a single packed ARGB int per item, so
 ;; the conversion lives here rather than teaching the neutral renderer both
 ;; game-specific conventions.
 ;; ---------------------------------------------------------------------------
@@ -95,7 +94,7 @@
 
 ;; ---------------------------------------------------------------------------
 ;; Field adapters — each turns one reactive-hud/build-snapshot field into
-;; either a rect map (for the :quad node type) or a vector of composite-list
+;; either a rect map (for the :quad node type) or a vector of UI primitive
 ;; items ({:kind :quad, :x :y :w :h :rgba} / {:kind :image :src :x :y :w :h
 ;; :rgba} / {:kind :text :text :x :y :rgba}).
 ;; ---------------------------------------------------------------------------

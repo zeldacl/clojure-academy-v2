@@ -1,6 +1,6 @@
 {:view/id :academy.app/wireless-node
  :host {:kind :screen :design-width 220 :design-height 180 :scale-policy :fit}
- :state-schema {:network-state :string :network-owner :string :network-range :string :network-bandwidth :string :network-load :number :node-name :string :network-password :string}
+ :state-schema {:network-state :string :network-owner :string :network-range :string :network-bandwidth :string :network-load :number :node-name :string :network-password :string :button-left :map :button-right :map}
  :root {:type :column :key :node/root :layout {:x 8 :y 8 :width 204 :height 164}
         :children [{:type :text :key :node/title :bind {:text [:state :network-state]}}
                    {:type :text :key :node/owner :bind {:text [:state :network-owner]}}

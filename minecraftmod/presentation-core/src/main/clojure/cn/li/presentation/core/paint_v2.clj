@@ -40,7 +40,7 @@
   (let [type (:type node)
         bind (:bind node)
         value (state-value state (get bind :text))
-        rgba (int (or (get-in node [:style :rgba]) 0xFFFFFFFF))
+        rgba (unchecked-int (or (get-in node [:style :rgba]) 0xFFFFFFFF))
         x (float (:x rect)) y (float (:y rect))
         width (float (:width rect)) height (float (:height rect))]
     (case type
@@ -54,8 +54,12 @@
       :text [(RenderCommand$UiText. 0 (str (or value "")) x y rgba)]
       :button [(RenderCommand$UiQuadBatch.
                  [(RenderCommand$UiQuad. x y width height rgba)])
-               (RenderCommand$UiText. 0 (str (or (get-in node [:semantics :label]) ""))
-                                       (+ x 4.0) (+ y 4.0) 0xFFFFFFFF)]
+               (RenderCommand$UiText. 0
+                                       (str (or (when (map? value) (:label value))
+                                                value
+                                                (get-in node [:semantics :label])
+                                                ""))
+                                       (+ x 4.0) (+ y 4.0) (unchecked-int 0xFFFFFFFF))]
       :image (when-let [resource (get-in node [:style :resource])]
                [(RenderCommand$UiImageBatch.
                   (UiResourceRef. (str (or (:namespace resource) "academy"))

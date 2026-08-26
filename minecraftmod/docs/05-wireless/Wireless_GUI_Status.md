@@ -1,50 +1,47 @@
-# Wireless GUI 状态与缺陷报告
+# Wireless GUI 状态与维护手册
 
-> 状态标签：**现行**（运维排障参考）
+> 状态标签：**现行**（Presentation Runtime v2）
 
-本文档合并自：Matrix & Wireless 完整性检查报告（V1/V2）、Wireless Matrix GUI 完整性分析、Wireless Node GUI 修复报告。路径与命名空间以当前项目为准（`academy`、`assets/academy/guis/`、`academy:textures/guis/` 等）。
+Wireless Matrix 和 Wireless Node 的菜单协议仍由 `mcmod/gui` 的 Menu/Slot schema 管理；最终屏幕呈现统一由 AC 的 `.ui.edn` artifact 和 `presentation-v2` 控制器完成，不再使用 XML GUI。
 
----
+## 现行资源与入口
 
-## 一、资源与路径现状
+| Surface | Artifact | Controller |
+|---|---|---|
+| Wireless Matrix | `ac/src/presentation/resources/academy/app/wireless_matrix.ui.edn` | `ac/src/main/clojure/cn/li/ac/block/wireless_matrix/gui_reactive.clj` |
+| Wireless Node | `ac/src/presentation/resources/academy/app/wireless_node.ui.edn` | `ac/src/main/clojure/cn/li/ac/block/wireless_node/gui_reactive.clj` |
 
-### 1.1 路径约定
+数据流：
 
-- **布局/XML**：项目中使用 `assets/academy/guis/`、`academy:guis/rework/`（如 `page_wireless.xml`）；不再使用 `gui/layouts/` 等旧路径。
-- **纹理**：代码中可能使用 `academy:textures/gui/` 或 `academy:textures/guis/`；实际资源在 `assets/academy/textures/guis/` 等，需与代码引用一致。
+```mermaid
+flowchart LR
+  M[Menu/Slot schema] --> C[AC container controller]
+  N[network snapshot] --> C
+  A[wireless_matrix.ui.edn / wireless_node.ui.edn] --> R[Presentation Runtime v2]
+  C --> R
+  R --> I[neutral Ui* IR]
+  I --> P[version backend]
+```
 
-### 1.2 已知资源缺口（待补齐）
+控制器负责网络状态快照、按钮 action、文本字段提交和权限判断；artifact 只负责结构、绑定和语义，不直接访问 TileEntity 或网络 API。
 
-- **Node GUI**：若仍引用以下路径，需确保文件存在或改为占位/默认纹理：  
-  `node_background.png`、`ui_inventory.png`、`ui_wireless_node.png`、`effect_node.png`、`wireless_node.png` 等。
-- **Matrix GUI**：`wireless_matrix.png`、Matrix 用 XML 布局（若使用 `page_wireless_matrix`）需放在 `academy` 资源下。
-- **XML 布局**：`page_wireless_matrix.xml` 等应在 **`ac/src/main/resources/assets/academy/guis/`**（或项目约定的 guis 子路径）下，与对应 `gui.clj` / XML 加载路径一致。
+## 维护检查
 
----
+- [ ] artifact 的 `:view/id` 与 `presentation-screen-data` 的 template id 一致。
+- [ ] Matrix/Node snapshot 至少提供 `network-state`、`network-owner`、`network-range`、`network-bandwidth`、`network-load` 及对应的文本字段。
+- [ ] `:presentation-buttons` 的 0/1 按钮 label 能映射到 `button-left`/`button-right`。
+- [ ] Menu/Slot schema、quick-move 和权限校验仍由 `mcmod/gui` 与 AC controller 负责。
+- [ ] 新增 UI 字段时同时更新 `.ui.edn` 的 `:state-schema`、controller snapshot 和 compiler 校验。
+- [ ] 不新增 XML、CGui renderer 或第二套 screen painter。
 
-## 二、Node GUI 修复摘要
+## 验证命令
 
-- **容量同步**：NodeContainer 已支持 `capacity`、`max-capacity`，直方图等组件可正确显示。
-- **快速移动**：通过元数据/槽位配置修正 shift-click 行为。
-- **性能**：网络轮询与充电相关逻辑已降频（如轮询 0.2 TPS、充电 2 TPS），避免每 tick 执行。
-- **容器生命周期**：容器关闭时清理，避免泄漏。
-- **架构**：协议与分发在 `mcmod`/`ac` 中初始化，Forge 层做 API 适配；能量相关使用 **`cn.li.ac.energy.operations`**。
-
----
-
-## 三、Matrix GUI 缺陷与待办
-
-- **同步与 Container**：MatrixContainer 需完整提供直方图所需字段（如 `max-capacity`），make-sync-packet / MatrixStatePacket 需包含这些字段，避免直方图崩溃。
-- **生命周期与性能**：建议与 Node 一致：容器 on-close 清理、ticker 节流，避免内存泄漏与过高 TPS。
-- **GUI 元数据**：槽位与 GUI 元数据需支持 `max-capacity` 等字段，与 Node 对齐。
-- **资源**：Matrix 所需 XML 与纹理统一放在 `academy` 资源下，路径与代码引用一致。
-
----
-
-## 四、检查清单（维护用）
-
-- [ ] 所有 Wireless GUI 相关 XML 位于 `assets/academy/guis/`（或项目约定路径）。
-- [ ] 纹理路径（`academy:textures/gui/` 或 `guis/`）与实际文件一致；缺失项已补齐或降级处理。
-- [ ] Node/Matrix Container 与 sync packet 包含直方图与 UI 所需全部字段。
-- [ ] 容器 on-close 与 ticker 节流已实现，无泄漏与性能问题。
-- [ ] 文档内交叉引用已更新为 `05-wireless/Node_GUI.md`、`05-wireless/Matrix_GUI.md`、`05-wireless/Wireless_GUI_Status.md`。
+```powershell
+cmd /c .\gradlew.bat :ac:checkClojure verifyPresentationArtifacts
+.\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-1.21.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileClojure
+.\scripts\target-gradle.ps1 fabric-26.2 :platform:compileClojure
+.\scripts\target-gradle.ps1 neoforge-26.2 :platform:compileClojure
+```

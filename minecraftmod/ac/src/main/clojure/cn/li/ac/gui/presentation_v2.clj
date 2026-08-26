@@ -32,6 +32,7 @@
       "academy:combat_hud" :academy.app/combat-hud
       "academy:terminal" :academy.app/terminal
       "academy:application" :academy.app/application
+      "academy:settings" :academy.app/settings
       "academy:machine_container" :academy.app/machine-container
       "academy:wireless_matrix" :academy.app/wireless-matrix
       "academy:wireless_node" :academy.app/wireless-node

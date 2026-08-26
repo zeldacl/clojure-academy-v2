@@ -50,3 +50,13 @@
     (is (instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))
     (is (= 1 (count (.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))))
     (runtime/unmount! rt mount)))
+(deftest painter-uses-button-binding-label
+  (let [artifact {:magic :pui2 :schema 2 :view-id :academy/test/button
+                  :nodes {:id :root :type :button :layout {:width 80 :height 20}
+                          :bind {:text [:state :button]}
+                          :semantics {:role :button}}}
+        commands (paint/paint-view artifact {:button {:label "Save"}}
+                                    {:viewport-width 100 :viewport-height 40})
+        label-command (second commands)]
+    (is (instance? cn.li.mcmod.runtime.RenderCommand$UiText label-command))
+    (is (= "Save" (.text ^cn.li.mcmod.runtime.RenderCommand$UiText label-command)))))

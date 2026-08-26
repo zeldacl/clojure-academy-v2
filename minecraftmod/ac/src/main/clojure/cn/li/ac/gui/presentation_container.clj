@@ -87,7 +87,14 @@
                             extra-values (if-let [snapshot! (:presentation-snapshot-fn container)]
                                            (or (snapshot! container player) {})
                                            {})
-                            values (merge base-values extra-values)]
+                            button-values (into {}
+                                           (mapcat (fn [{:keys [button-id label]}]
+                                                     (case (int (or button-id -1))
+                                                       0 [[:button-left {:label (str (or label ""))}]]
+                                                       1 [[:button-right {:label (str (or label ""))}]]
+                                                       []))
+                                                   (or (:presentation-buttons container) [])))
+                            values (merge base-values extra-values button-values)]
                         (menu-bridge/update-snapshot! bridge @revision values)
                         (menu-bridge/snapshot bridge)))
         dispatch-action! (fn [action payload]
