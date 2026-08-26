@@ -46,7 +46,7 @@
     RenderCommand$UiText
     (let [^RenderCommand$UiText c command
           ^Minecraft mc (Minecraft/getInstance)]
-      .text graphics (.-font mc) (.text c) (int (.x c)) (int (.y c)) (.rgba c)))
+       (.text graphics (.-font mc) (.text c) (int (.x c)) (int (.y c)) (.rgba c)))
 
     RenderCommand$UiItemPreview
     (let [^RenderCommand$UiItemPreview c command]
