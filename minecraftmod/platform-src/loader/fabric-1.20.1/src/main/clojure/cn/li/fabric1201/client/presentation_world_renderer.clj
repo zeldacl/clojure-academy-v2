@@ -2,6 +2,7 @@
   "CLIENT-ONLY world Presentation Runtime submission adapter."
   (:require [cn.li.mc1201.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.vfx :as vfx]
+            [cn.li.platform.neutral.vfx-render-plan :as vfx-plan]
             [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
@@ -41,8 +42,8 @@
                  :backend-context
                  {:draw-batch!
                   (fn [_g _stage prim _mat _var _cnt payload]
-                    (when (= "mesh" prim)
-                      (doseq [plan (or payload [])]
+                    (when (or (= "mesh" prim) (#{"line" "quad"} prim))
+                      (doseq [plan (if (= "mesh" prim) (or payload []) [(vfx-plan/neutral-op->plan payload)])]
                         (geometry/render-presentation-geometry!
                           {:player player :pose-stack pose-stack
                            :buffer-source buffer-source :camera-pos cam-pos

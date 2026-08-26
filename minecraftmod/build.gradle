@@ -708,7 +708,7 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
 
 tasks.register("verifyPresentationJavaPurity") {
     group = "verification"
-    description = "Ensure Presentation Java contracts stay free of Minecraft APIs and logic modules stay in Clojure."
+    description = "Ensure Presentation Java contracts stay free of Minecraft APIs; allow explicit neutral VFX ABI and particle-kernel Java classes."
     doLast {
         def roots = [file("presentation-core/src/main/java"),
                      file("presentation-compiler/src/main/java"),
@@ -727,10 +727,11 @@ tasks.register("verifyPresentationJavaPurity") {
                 // classes (primitive arrays plus constructor assignment),
                 // which is the approved fixed-layout exception to the
                 // presentation ABI purity rule.
-                def effectCarrier = source.name in ["HostTable.java", "EntityBatch.java",
+                def vfxJavaAbi = source.path.replace("\\", "/").contains("/mcmod/src/main/java/cn/li/mcmod/runtime/vfx/")
+                def effectCarrier = vfxJavaAbi || source.name in ["HostTable.java", "EntityBatch.java",
                                      "BlockBatch.java", "CompiledProgram.java",
-                                     "ExecutionFrame.java",
-                                     "SlotArena.java", "BatchArena.java", "SignalRing.java"]
+                                     "ExecutionFrame.java", "SlotArena.java",
+                                     "BatchArena.java", "SignalRing.java"]
                 if (text =~ /import\s+(net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged)\./) {
                     violations << "${source}: presentation Java may not import Minecraft/loader APIs"
                 }
@@ -738,8 +739,8 @@ tasks.register("verifyPresentationJavaPurity") {
                     violations << "${source}: presentation Java classes must be records/interfaces or data exceptions"
                 }
                 if (!effectCarrier && text =~ /\b(class|interface|record|enum)\s+[^\{]+\{[\s\S]*(for\s*\(|while\s*\(|switch\s*\(|\.submit\s*\(|\.run\s*\()/) {
-                    // Data records and contracts may contain accessors/defaults;
-                    // runtime loops/dispatch belong in Clojure.
+                    // Data records/contracts may contain accessors/defaults; neutral VFX particle and wire kernels
+                    // are explicit Java ABI implementations because they must be stable generated-class boundaries.
                     violations << "${source}: executable loop/dispatch logic must be Clojure"
                 }
             }
@@ -993,7 +994,7 @@ tasks.register("verifyCombatDependencyDirection") {
 
 tasks.register("verifyNodeCoreDependencyDirection") {
     group = "verification"
-    description = "node-core is the shared node-language kernel (descriptor registry, expression evaluator, scope checker, composite expansion) used by both combat-core and vfx-core. It must have zero dependency on Minecraft, mcmod, or either domain module -- see NODE_LANGUAGE.md section 2.1. The per-.clj-file check is cn.li.node.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping the whole file text, which used to flag a docstring merely MENTIONING a forbidden namespace in prose (explaining why the file does NOT depend on it) as if it were an actual dependency."
+    description = "node-core is the shared node-language kernel (descriptor registry, expression evaluator, scope checker, composite expansion) used by combat-core. VFX owns its standalone expression runtime and must not depend on node-core. It must have zero dependency on Minecraft, mcmod, or either domain module -- see NODE_LANGUAGE.md section 2.1. The per-.clj-file check is cn.li.node.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping the whole file text, which used to flag a docstring merely MENTIONING a forbidden namespace in prose (explaining why the file does NOT depend on it) as if it were an actual dependency."
     dependsOn ":node-core:runNodeCoreClojureTests"
     doLast {
         def nodeCoreBuild = file("node-core/build.gradle").text
@@ -1005,9 +1006,6 @@ tasks.register("verifyNodeCoreDependencyDirection") {
         }
         if (!(combatBuild =~ /project\([\"']:?node-core[\"']\)/)) {
             violations << "combat-core must depend on node-core (shared node-language kernel)"
-        }
-        if (!(vfxBuild =~ /project\([\"']:?node-core[\"']\)/)) {
-            violations << "vfx-core must depend on node-core (shared node-language kernel)"
         }
         fileTree(file("node-core/src/main")) {
             include "**/*.java"
