@@ -9,8 +9,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Item model predicate for the frame animation of filled matter units
  * (upstream ItemMatterUnit: {@code frame = (int)(GameTimer.getTime()*4) % 4}
- * — the flowing-liquid texture advances one frame every 0.25s, 4 frames over
- * 80 ticks). Registered as {@code <modid>:frame} for
+ * — the flowing-liquid texture advances one frame every 0.25s, 4 frames per
+ * second). Registered as {@code <modid>:frame} for
  * {@code :item-model-damage-frame} items.
  */
 public enum FrameItemPropertyFunction implements ItemPropertyFunction {
@@ -21,6 +21,9 @@ public enum FrameItemPropertyFunction implements ItemPropertyFunction {
         if (level == null) {
             return 0.0F;
         }
-        return (level.getGameTime() % 80) / 20.0F;
+        // Upstream: frame = (int)(GameTimer.getTime() * 4) % 4 — one frame
+        // every 0.25s, the full 4-frame loop per second. Game time advances
+        // 20 ticks/s, so a 20-tick cycle at 5 ticks/frame matches it.
+        return (level.getGameTime() % 20) / 5.0F;
     }
 }

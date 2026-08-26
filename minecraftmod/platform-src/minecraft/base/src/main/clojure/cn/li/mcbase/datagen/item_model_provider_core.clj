@@ -38,10 +38,15 @@
    units stack to 16, so they carry no durability). Upstream keys its
    per-damage models off the same damage field.
 
-   Overrides are emitted in ASCENDING threshold order — vanilla's
-   ItemOverrides.resolve walks the array backwards, and the Forge datagen
-   builder reverses on write, so ascending survives both loaders to the same
-   'largest threshold first' match.
+   Overrides are emitted in ASCENDING threshold order. This is the order
+   vanilla's loader pipeline needs: BlockModel hands the JSON list to
+   ItemOverrides, whose constructor iterates it BACKWARDS (1.20.1/1.21.1
+   bytecode: i = size-1 → 0), and resolve() walks the resulting array
+   FORWARD picking the FIRST override whose value >= threshold. Ascending
+   JSON therefore yields a descending array = 'largest threshold first'
+   match. The Forge/NeoForge datagen builders must NOT re-reverse when
+   writing (older providers did, producing descending JSON — the frame
+   animation froze on the lowest-threshold override).
 
    Returns the animation frames first, then the filled model, then the base
    model LAST — the Forge/NeoForge datagen builders construct
@@ -95,10 +100,13 @@
      {:model-name base
       :json {:parent "item/generated"
              :textures {:layer0 (texture-path empty-texture)}
-             :overrides [{:predicate {(str mod-id ":energy") 1.0}
-                          :model (str mod-id ":item/" full-model)}
-                         {:predicate {(str mod-id ":energy") 0.5}
-                          :model (str mod-id ":item/" half-model)}]}}]))
+             ;; ASCENDING thresholds — see damage-frame-model-entries for why
+             ;; the JSON must list ascending (ItemOverrides bakes reversed,
+             ;; resolve walks forward, first match = highest threshold).
+             :overrides [{:predicate {(str mod-id ":energy") 0.5}
+                          :model (str mod-id ":item/" half-model)}
+                         {:predicate {(str mod-id ":energy") 1.0}
+                          :model (str mod-id ":item/" full-model)}]}}]))
 
 (defn- fluid-bucket-model-entries
   "Generate item model entries for fluid bucket items from the fluid DSL.
@@ -117,6 +125,45 @@
                                                still-texture
                                                (str modid/mod-id ":item/" still-texture))}}})))))
         (registry-metadata/get-all-fluid-ids)))
+
+(defn flatten-nested-override-chains
+  "Legacy-loaders-only transform: flatten nested single-chain overrides into
+  one flat override list with COMBINED predicates.
+
+  Vanilla 1.20.1/1.21.1 ItemOverrides.resolve resolves exactly ONE override
+  level — the model selected by an override is returned as-is and its own
+  overrides are never applied. The damage-frame pattern (base model →
+  filled model → per-frame models) therefore freezes on the filled model's
+  base frame: `matter_kind` resolves and picks the filled model, but the
+  filled model's `frame` overrides never run.
+
+  This flattens that chain onto the base model: each frame override becomes
+  an entry whose predicate merges the parent's (matter_kind) with its own
+  (frame). The entries are ordered most-specific LAST: the ItemOverrides
+  constructor bakes the JSON list in reverse and resolve() walks the array
+  forward picking the first all-matchers-pass, so the last JSON entry (frame
+  3) is checked first.
+
+  The 26.2 providers must NOT use this — their minecraft:range_dispatch
+  trees resolve recursively and need the nested structure."
+  [models]
+  (let [by-name (into {} (map (fn [s] [(str (:model-name s)) s])) models)
+        basename (fn [s] (some-> s str (str/split #"/") last))]
+    (mapv
+      (fn [{:keys [model-name json] :as spec}]
+        (let [overrides (:overrides json)
+              single (when (= 1 (count overrides)) (first overrides))
+              target (when single (get by-name (basename (:model single))))]
+          (if (and target (seq (:overrides (:json target))))
+            (let [frame-overrides (:overrides (:json target))]
+              (assoc-in spec [:json :overrides]
+                        (vec (concat overrides
+                                     (mapv (fn [{:keys [predicate model]}]
+                                             {:predicate (merge (:predicate single) predicate)
+                                              :model model})
+                                           frame-overrides)))))
+            spec)))
+      models)))
 
 (defn item-model-tree
   "Recursively build a 1.21.4+ item-model tree for a model spec: each override

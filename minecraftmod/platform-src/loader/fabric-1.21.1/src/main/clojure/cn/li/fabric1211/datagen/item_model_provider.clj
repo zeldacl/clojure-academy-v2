@@ -41,6 +41,7 @@
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [{:keys [all-item-count energy-tier-count simple-count models]} (item-model-core/gather-model-specs)
+              models (item-model-core/flatten-nested-override-chains models)
               writes (atom [])]
           (doseq [{:keys [model-name] :as spec} models
                   :let [json (model-json mod-id spec)]]

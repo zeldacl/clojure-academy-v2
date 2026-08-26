@@ -41,6 +41,11 @@
 (def magnetic-coil-item-id (modid/namespaced-path "magnetic_coil"))
 (def ^:private matter-unit-item-id (modid/namespaced-path "matter_unit"))
 (def ^:private imag-phase-block-id (modid/namespaced-path "imag_phase"))
+;; place-block-by-id! resolves against the DSL-id-keyed block snapshot
+;; ("imag-phase"), NOT the registry id: `imag-phase-block-id` is the registry
+;; id returned by raytraces (the fill-branch comparison above needs it), while
+;; placement needs the block's DSL id.
+(def ^:private imag-phase-block-dsl-id "imag-phase")
 (def ^:private mag-hook-entity-id (modid/namespaced-path "entity_mag_hook"))
 
 (defn matter-unit-overlay-data
@@ -161,7 +166,7 @@
                     [place-block-pos place-replaceable? may-edit-place?])]
               (if (and target-replaceable?
                        may-edit?
-                       (world/place-block-by-id! level imag-phase-block-id target-pos 3))
+                       (world/place-block-by-id! level imag-phase-block-dsl-id target-pos 3))
                 (do
                   (mutate-or-convert-main-hand! player item-stack :none)
                   {:consume? true})
