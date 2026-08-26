@@ -12,7 +12,8 @@
    into Quad/Image/GlyphRun commands generically, so this namespace stays
    the only place that understands what any of these fields mean."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
-            [cn.li.presentation.core.host :as bridge])
+            [cn.li.presentation.core.host :as bridge]
+            [cn.li.ac.gui.presentation-v2 :as v2])
   (:import [cn.li.presentation.core ActionId ActionPayload ActionResult BindingTable
             PresentationViewModel]))
 
@@ -313,10 +314,22 @@
                  @snapshot)}))
 
 (defn mount-combat-hud!
-  "Mount the HUD through the version-neutral bridge. The bridge owns host
-   lifecycle and Runtime state; AC only supplies template/model/content."
   [runtime player-uuid screen-w screen-h opts dispatch-action!]
-  (let [{:keys [model refresh!] :as vm} (combat-view-model player-uuid dispatch-action!)
+  (let [{:keys [snapshot refresh!]} (combat-view-model player-uuid dispatch-action!)
         _ (refresh! screen-w screen-h opts)
-        handle (bridge/mount-host! runtime :combat-hud :hud "academy:combat_hud" model)]
-    (assoc vm :mount handle)))
+        vm (v2/mount-view!
+             {:view-id :academy/app/combat-hud
+              :host-kind :hud
+              :state @snapshot
+              :dispatch-action!
+              (fn [action payload _current]
+                (dispatch-action! action payload)
+                (refresh! screen-w screen-h opts)
+                @snapshot)})]
+    (assoc vm
+           :snapshot snapshot
+           :refresh! (fn
+                       ([] (refresh! screen-w screen-h opts))
+                       ([width height next-opts]
+                        (refresh! width height next-opts)
+                        (v2/present! vm @snapshot))))))

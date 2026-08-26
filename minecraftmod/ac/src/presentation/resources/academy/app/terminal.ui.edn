@@ -1,0 +1,9 @@
+{:view/id :academy/app/terminal
+ :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :state-schema {:apps :vector :page :string :query :string :modal :map :loading? :boolean}
+ :root {:type :column :key :terminal/root :layout {:x 8 :y 8 :width 304 :height 224}
+        :children [{:type :scroll :key :terminal/apps :layout {:height 150} :bind {:items [:state :apps]} :semantics {:role :list}}
+                   {:type :text :key :terminal/page :bind {:text [:state :page]}}
+                   {:type :text-input :key :terminal/query-input :layout {:height 20} :bind {:text [:state :query]} :semantics {:role :textbox}}
+                   {:type :portal :key :terminal/modal :bind {:visible [:state :modal]} :semantics {:role :dialog}}
+                   {:type :progress :key :terminal/loading :layout {:height 6} :bind {:value [:state :loading?]} :semantics {:role :progress}}]}}

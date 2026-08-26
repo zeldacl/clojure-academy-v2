@@ -9,6 +9,7 @@
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
+            [cn.li.ac.gui.presentation-v2 :as presentation-v2]
             [cn.li.ac.client.vfx-host :as vfx-host]
             [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.presentation.core.host :as presentation-host]
@@ -48,220 +49,103 @@
         (or (compare-and-set! presentation-runtime-v2* nil runtime)
             @presentation-runtime-v2*))))
 
-(defn presentation-host-api-v2 []
-  (presentation-host-v2/api (presentation-runtime-v2)))
-
-(defonce ^:private template-cache* (atom {}))
 (defonce ^:private combat-hud* (atom nil))
 (defonce ^:private terminal* (atom nil))
-(defonce ^:private effects-tick-installed* (atom false))
 
-(def ^:private template-files
-  {"academy:combat_hud" "combat_hud.ui.edn"
-   "academy:terminal" "terminal.ui.edn"
-   "academy:application" "application.ui.edn"
-   "academy:machine_container" "machine_container.ui.edn"
-   "academy:wireless_matrix" "wireless_matrix.ui.edn"
-   "academy:wireless_node" "wireless_node.ui.edn"})
-
-(defn- qualified-name
-  "Match presentation-compiler.core/ref-name: a namespaced keyword's string
-   form is \"ns/name\", not just (name kw) — actions here are namespaced
-   (:combat/select-skill etc.) and (name kw) silently drops the namespace,
-   which the compiler's own symbol lookup does NOT drop."
-  [kw]
-  (if-let [ns (namespace kw)] (str ns "/" (name kw)) (name kw)))
-
-(defn- symbols-for
-  "Derive a compiler symbol table straight from a ViewModel's own
-   `binding-ids` (keyword -> id) and `action-ids` (id -> keyword) maps,
-   instead of hand-copying a second literal table here that has to be kept
-   numerically in sync by hand. A name/number typo in either now fails at
-   compile-edn time (unknown binding/action) instead of silently drifting."
-  [binding-ids action-ids]
-  {:binding (into {} (map (fn [[k v]] [(qualified-name k) v])) binding-ids)
-   :action (into {} (map (fn [[id k]] [(qualified-name k) id])) action-ids)})
-
-(def ^:private template-symbols
-  {"academy:combat_hud" (symbols-for presentation-hud/binding-ids presentation-hud/action-ids)
-   "academy:terminal" (symbols-for presentation-terminal/binding-ids presentation-terminal/action-ids)
-   "academy:application" (symbols-for presentation-application/binding-ids presentation-application/action-ids)
-   "academy:machine_container" (symbols-for presentation-container/binding-ids presentation-container/action-ids)
-   "academy:wireless_matrix" (symbols-for presentation-container/binding-ids presentation-container/action-ids)
-   "academy:wireless_node" (symbols-for presentation-container/binding-ids presentation-container/action-ids)})
-
-(defn- resolve-template [template-id]
-  (let [id (if (instance? cn.li.presentation.core.TemplateId template-id)
-             (.value ^cn.li.presentation.core.TemplateId template-id)
-             (str template-id))]
-    (or (get @template-cache* id)
-        (when-let [file (get template-files id)]
-          (let [resource (io/resource (str "assets/academy/presentation/" file))]
-            (when-not resource
-              (throw (ex-info "Presentation template resource missing" {:template-id id :file file})))
-            (let [compiled (presentation-compiler/compile-edn
-                             (cn.li.presentation.core.TemplateId. id)
-                             (slurp resource)
-                             (get template-symbols id {}))]
-              (swap! template-cache* assoc id compiled)
-              compiled))))))
-
-(defn- create-presentation-runtime []
-  (let [runtime (presentation-host/create
-                  {:template-resolver resolve-template
-                   :template-renderer presentation-render/render-template})
-        _resource-reader (fn [path]
-                           (if-let [resource (io/resource path)]
-                             (slurp resource)
-                             (throw (ex-info "Presentation resource missing"
-                                             {:resource path}))))]
-    runtime))
+(defn presentation-runtime []
+  (presentation-runtime-v2))
 
 (defn- ensure-combat-hud! [runtime player-uuid width height]
   (or @combat-hud*
       (let [vm (presentation-hud/mount-combat-hud!
                  runtime player-uuid width height {}
-                 ;; combat-view-model already owns :selected-skill/:skill-wheel-open?
-                 ;; (updates its own snapshot atom on dispatch); this callback is a
-                 ;; pure observer hook for any future cross-module side effect.
-                 (fn [action payload]
-                   (log/debug "Combat HUD action " action " " payload)))]
+                 (fn [_action _payload] nil))]
         (or (compare-and-set! combat-hud* nil vm)
             @combat-hud*))))
 
-;; Only :world-after-translucent (level effects) and :first-person (hand
-;; effects) are ever emitted by effect-controller's sample-plan!/sample-hand!
-;; today; extend this if a new stage is wired into VFX sampling.
-(def ^:private vfx-stage->render-stage
-  {:world-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
-   :world-additive RenderStage/WORLD_AFTER_TRANSLUCENT
-   :world-after-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
-   :first-person RenderStage/FIRST_PERSON})
-
-(defn- batch->render-command [batch]
-  (RenderCommand$Batch.
-    (or (get vfx-stage->render-stage (:stage batch))
-        (throw (ex-info "unmapped VFX stage for Presentation frame merge"
-                        {:stage (:stage batch)})))
-    (name (:primitive batch))
-    (some-> (:material batch) name)
-    (some-> (:variant batch) name)
-    (long (or (:layout-version batch) 1))
-    ;; Neutral VFX draw ops have no legacy :count field; one op is a valid batch.
-    (long (or (:count batch)
-              (when-let [particles (:particle-buffer batch)]
-                (.size ^cn.li.mcmod.runtime.vfx.ParticleBuffer particles))
-              1))
-    (name (or (:sort-mode batch) :stable))
-    ;; Keep the neutral op intact for a future loader-owned typed renderer.
-    (or (:payload batch) batch)))
-(defn- vfx-render-passes [vfx-context frame-id partial-tick]
-  (let [frame (effect-controller/sample-frame!
-                (merge vfx-context {:frame-id frame-id :partial-tick partial-tick}))]
-    (for [[stage batches] (:stages frame)
-          :when (seq batches)]
-      (RenderPass. (get vfx-stage->render-stage stage) (mapv batch->render-command batches)))))
-
-(defn- merge-vfx-passes
-  "Fold VFX Core's sampled world/first-person batches into the same
-   FramePacket the UI template interpreter produced, so a world-stage loader
-   submits one packet through the unified pipeline instead of maintaining a
-   second submission path through cn.li.platform.neutral.vfx.
-
-   vfx-context is nil for HUD/Screen calls (they never pass a
-   :presentation-context), so this is a no-op for the common case; only a
-   world-stage submit-current-frame! call supplies one."
-  [^FramePacket packet vfx-context frame-id partial-tick]
-  (if-not vfx-context
-    packet
-    (try
-      (let [extra (vfx-render-passes vfx-context frame-id partial-tick)]
-        (if (seq extra)
-          (FramePacket. (.frameId packet) (into (vec (.passes packet)) extra))
-          packet))
-      (catch Throwable throwable
-        (log/error "VFX-to-Presentation frame merge failed" throwable)
-        packet))))
-
 (defn- ensure-terminal! [runtime owner dispatch-action!]
   (or @terminal*
-      (let [vm (presentation-terminal/mount-terminal!
-                 runtime owner dispatch-action!)]
+      (let [vm (presentation-terminal/mount-terminal! owner dispatch-action!)]
         (or (compare-and-set! terminal* nil vm)
             @terminal*))))
 
-(defn presentation-runtime
-  "Return the single client Presentation Runtime for the current Framework
-   lifetime. Loader code receives it as an opaque bridge value."
-  []
-  (or @presentation-runtime*
-      (let [runtime (create-presentation-runtime)]
-        (or (compare-and-set! presentation-runtime* nil runtime)
-            @presentation-runtime*))))
+(defn- merge-vfx-passes
+  [_vfx-context _frame-id _partial-tick packet]
+  packet)
+(defn presentation-host-api-v2 []
+  (presentation-host-v2/api (presentation-runtime-v2)))
+
+(def ^:private stage->render-stage
+  {:world-before-translucent RenderStage/WORLD_BEFORE_TRANSLUCENT
+   :world-after-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
+   :first-person RenderStage/FIRST_PERSON
+   :hud-underlay RenderStage/HUD_UNDERLAY
+   :hud RenderStage/HUD
+   :hud-overlay RenderStage/HUD_OVERLAY
+   :screen RenderStage/SCREEN
+   :post-process RenderStage/POST_PROCESS})
+
+(defn- v2-frame
+  [frame-id stage frame-context]
+  (let [api (presentation-host-api-v2)
+        extracted ((:extract-stage! api) stage frame-context)
+        commands (vec (mapcat :commands (:mounts extracted)))]
+    (FramePacket. (long frame-id)
+                  [(RenderPass. (or (get stage->render-stage stage)
+                                    RenderStage/SCREEN)
+                                commands)])))
 
 (defn presentation-host-api
-  "Opaque bridge contract consumed by platform/base and loader callbacks.
-
-   The map deliberately contains functions rather than Presentation Core
-   classes. Platform code can extract and dispose frames without depending on
-   presentation-core; AC remains the only owner of the typed runtime object."
+  "Single AC host contract. All view mounts and frame extraction use Runtime v2;
+   no template resolver or interpreter is exposed across the bridge."
   []
-  (let [runtime (presentation-runtime)]
-    {:mount! (fn [id kind template model]
-               (presentation-host/mount-host! runtime id kind template model))
-     :frame! (fn [frame-id delta-seconds width height]
+  (let [runtime (presentation-runtime-v2)
+        v2-api (presentation-host-api-v2)]
+    {:mount! (fn [owner host-kind _view-id _model]
+               (presentation-v2/mount-view!
+                {:view-id :academy/app/application
+                 :host-kind host-kind
+                 :state (if (map? _model) _model {})
+                 :dispatch-action! (fn [_ _ current] current)
+                 :on-close nil}))
+     :frame! (fn [frame-id _delta-seconds width height]
                (when-let [refresh! (:refresh! @combat-hud*)]
                  (refresh! width height {}))
                (when-let [refresh! (:refresh! @terminal*)]
                  (refresh!))
-               (presentation-host/frame! runtime frame-id delta-seconds width height))
-     ;; Called for every stage (HUD/Screen/world/...); vfx-context is nil
-     ;; except for a world-stage submit-current-frame! call, so this behaves
-     ;; exactly like :frame! above for HUD/Screen and additionally folds VFX
-     ;; Core's sampled world/first-person batches in for the world stage.
+               (v2-frame frame-id :screen {:width width :height height}))
      :frame-with-context! (fn [frame-id delta-seconds width height vfx-context]
-                            (when-let [refresh! (:refresh! @combat-hud*)]
-                              (refresh! width height {}))
-                            (when-let [refresh! (:refresh! @terminal*)]
-                              (refresh!))
-                            (-> (presentation-host/frame! runtime frame-id delta-seconds width height)
-                                (merge-vfx-passes vfx-context frame-id delta-seconds)))
+                            (let [frame (v2-frame frame-id :screen
+                                                  {:width width :height height})]
+                              (merge-vfx-passes vfx-context frame-id delta-seconds frame)))
      :mount-combat-hud! (fn [player-uuid width height]
-                          (ensure-combat-hud! runtime player-uuid width height))
+                          (:mount (ensure-combat-hud! runtime player-uuid width height)))
      :mount-terminal! (fn [owner dispatch-action!]
                         (:mount (ensure-terminal! runtime owner dispatch-action!)))
      :mount-application! (fn [owner title snapshot dispatch-action! on-close]
                            (:mount (presentation-application/mount!
-                                     owner title snapshot dispatch-action! on-close)))
+                                    owner title snapshot dispatch-action! on-close)))
      :mount-container! (fn [menu-bridge snapshot-fn dispatch-action!]
                          (:mount (presentation-container/mount-container!
-                                   runtime menu-bridge snapshot-fn dispatch-action!)))
+                                  runtime menu-bridge snapshot-fn dispatch-action!)))
      :unmount! (fn [mount]
-                  (presentation-host/unmount! runtime mount)
-                  (when (= mount (:mount @combat-hud*))
-                    (reset! combat-hud* nil))
-                  (when (= mount (:mount @terminal*))
-                    (reset! terminal* nil)))
-     :reload-resources! (fn [generation]
-                          (reset! template-cache* {})
-                          (vfx-host/reload-resources! generation))
+                 ((:unmount! v2-api) mount)
+                 (when (= mount (:mount @combat-hud*))
+                   (reset! combat-hud* nil))
+                 (when (= mount (:mount @terminal*))
+                   (reset! terminal* nil)))
+     :reload-resources! (fn [_generation]
+                          ((:invalidate-render-resources! v2-api)))
      :dispatch! (fn [mount event]
-                  (.dispatch ^cn.li.presentation.core.PresentationRuntime
-                             (:api runtime) mount event))
+                  ((:dispatch-input! v2-api) mount event))
      :dispatch-input! (fn [mount event]
-                        (let [result (presentation-host/dispatch-input!
-                                       runtime mount (presentation-input-event event))]
-                          (cond
-                            (= result cn.li.presentation.core.EventResult/CONSUME) :consume
-                            (= result cn.li.presentation.core.EventResult/CAPTURE_POINTER) :capture-pointer
-                            :else :pass)))
-     :set-input-handler! (fn [mount handler]
-                           (presentation-host/set-input-handler! runtime mount handler))
+                        ((:dispatch-input! v2-api) mount event))
+     :set-input-handler! (fn [_mount _handler]
+                           (log/warn "Runtime v2 uses reducer routing; legacy input handler ignored"))
      :unmount-all! (fn []
                      (reset! combat-hud* nil)
                      (reset! terminal* nil)
-                     (presentation-host/unmount-all! runtime))}))
-
+                     ((:unmount-all! v2-api)))}))
 (defn install-bridge!
   "Install the Presentation Runtime bridge into the neutral client boundary."
   []

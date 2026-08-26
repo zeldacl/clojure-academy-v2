@@ -6,6 +6,7 @@
   (:require [cn.li.mcmod.gui.presentation-menu-bridge :as menu-bridge]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.gui.container.common :as container-common]
+            [cn.li.ac.gui.presentation-v2 :as v2]
             [cn.li.presentation.core.host :as host]
             [cn.li.mcmod.client.platform-bridge :as client-bridge])
   (:import [cn.li.presentation.core ActionId ActionPayload ActionResult BindingTable
@@ -64,22 +65,30 @@
      :refresh! (fn [] (reset! snapshot (snapshot-fn)) @snapshot)}))
 
 (defn mount-container!
-  [runtime menu-bridge snapshot-fn dispatch-action!]
-  (let [{:keys [model refresh!] :as vm}
-        (container-view-model menu-bridge snapshot-fn dispatch-action!)]
-    (refresh!)
-    (assoc vm :mount (host/mount-host! runtime :container :screen
-                                       "academy:machine_container" model))))
+  [_runtime menu-bridge snapshot-fn dispatch-action!]
+  (let [state-fn (fn []
+                   (let [snapshot (snapshot-fn)]
+                     (merge (:values snapshot {}) snapshot)))
+        vm (v2/mount-view!
+             {:view-id :academy/app/machine-container
+              :host-kind :container
+              :state (state-fn)
+              :dispatch-action!
+              (fn [action payload _current]
+                (menu-bridge/dispatch-action menu-bridge action payload dispatch-action!)
+                (state-fn))})]
+    (assoc vm :snapshot (atom (state-fn))
+           :refresh! (fn []
+                       (let [next (state-fn)]
+                         (reset! (:snapshot vm) next)
+                         (v2/present! vm next))))))
 
 (defn open-screen!
-  "Mount a container ViewModel and open the opaque version Screen boundary."
   [menu-bridge snapshot-fn dispatch-action! on-close]
-  (let [api (client-bridge/call-adapter :presentation-host-api)
-        mount ((:mount-container! api) menu-bridge snapshot-fn dispatch-action!)]
+  (let [vm (mount-container! nil menu-bridge snapshot-fn dispatch-action!)]
     (client-bridge/call-adapter :presentation-open-screen!
-                                 mount "Container" on-close)
-    mount))
-
+                                 (:mount vm) "Container" on-close)
+    vm))
 (defn- value-of [value]
   (if (instance? clojure.lang.IDeref value) @value value))
 

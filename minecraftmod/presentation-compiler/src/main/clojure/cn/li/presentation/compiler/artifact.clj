@@ -20,7 +20,7 @@
     :button :text-input :item-preview :model-preview :slot-anchor})
 
 (def semantic-roles
-  #{:generic :heading :button :textbox :dialog :list :list-item :image :slot})
+  #{:generic :heading :button :textbox :dialog :list :list-item :image :slot :progress})
 
 (defn- canonicalize [value]
   (cond

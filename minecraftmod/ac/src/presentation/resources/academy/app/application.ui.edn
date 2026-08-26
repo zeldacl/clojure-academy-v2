@@ -1,0 +1,13 @@
+{:view/id :academy/app/application
+ :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :lines :vector :input :string :scroll :number :modal :map}
+ :root {:type :column :key :application/root :layout {:x 8 :y 8 :width 304 :height 224}
+        :children [{:type :text :key :application/title :bind {:text [:state :title]} :semantics {:role :heading}}
+                   {:type :row :key :application/navigation
+                    :children [{:type :button :key :application/left :layout {:width 72 :height 20} :bind {:text [:state :button-left]} :on {:activate :application/left} :semantics {:role :button}}
+                               {:type :button :key :application/right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :application/right} :semantics {:role :button}}]}
+                   {:type :scroll :key :application/lines :layout {:height 120} :bind {:items [:state :lines]} :semantics {:role :list}}
+                   {:type :text :key :application/status :bind {:text [:state :status]}}
+                   {:type :text-input :key :application/input :layout {:height 20} :bind {:text [:state :input]} :semantics {:role :textbox}}
+                   {:type :progress :key :application/scroll :layout {:height 6} :bind {:value [:state :scroll]} :semantics {:role :progress}}
+                   {:type :portal :key :application/modal :bind {:visible [:state :modal]} :semantics {:role :dialog}}]}}
