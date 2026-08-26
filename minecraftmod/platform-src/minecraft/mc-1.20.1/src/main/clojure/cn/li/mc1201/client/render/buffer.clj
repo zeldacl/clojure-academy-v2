@@ -23,6 +23,23 @@
   [^MultiBufferSource buffer-source ^ResourceLocation texture]
   (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucent texture)))
 
+(defn get-translucent-see-through-target-buffer
+  "Same as `get-translucent-see-through-buffer` but rendered into the
+  translucent render target, so the geometry composites WITH the translucent
+  terrain (fluid surfaces) instead of being covered by the target's final blit
+  into the main framebuffer."
+  [^MultiBufferSource buffer-source ^ResourceLocation texture]
+  (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucentTarget texture)))
+
+(defn get-additive-buffer
+  "Additive translucent QUADS (SRC_ALPHA/ONE — light adds to whatever is
+  behind), depth-tested (LEQUAL) but never written, no cull. The imag-phase
+  :surface-flash mode uses it so the flash reads over the opaque black pool
+  surface while the pool's own surface and terrain still occlude from the
+  side."
+  [^MultiBufferSource buffer-source ^ResourceLocation texture]
+  (.getBuffer buffer-source (ModRenderTypes/academyQuadsAdditive texture)))
+
 (defn get-entity-buffer
   [buffer-source render-mode texture]
   (case render-mode

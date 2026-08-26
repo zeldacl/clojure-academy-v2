@@ -52,6 +52,31 @@
   (when-let [f (buffer-op :translucent-see-through)]
     (f buffer-source texture)))
 
+;; See-through translucent that renders into the translucent render target —
+;; the fluid surface lives there and is blitted over the main buffer at the
+;; end of the level pass, covering any main-target draw beneath it. The
+;; imag-phase flash needs this variant to composite over the pool.
+(defn translucent-see-through-target-available? []
+  (boolean (and (buffer-op :translucent-see-through-target)
+                (buffer-op :submit-vertex-no-overlay))))
+
+(defn get-translucent-see-through-target-buffer [buffer-source texture]
+  (when-let [f (buffer-op :translucent-see-through-target)]
+    (f buffer-source texture)))
+
+;; Additive translucent QUADS (SRC_ALPHA/ONE — light ADDS to whatever is
+;; behind) with depth TESTED (LEQUAL) and never written. The imag-phase
+;; :surface-flash mode uses it so the flash reads over the opaque black pool
+;; surface while terrain still occludes from the side. Optional like the
+;; see-through ops: a loader without it degrades to the depth-tested buffer.
+(defn additive-buffer-available? []
+  (boolean (and (buffer-op :additive-buffer)
+                (buffer-op :submit-vertex-no-overlay))))
+
+(defn get-additive-buffer [buffer-source texture]
+  (when-let [f (buffer-op :additive-buffer)]
+    (f buffer-source texture)))
+
 (defn submit-vertex-no-overlay [vertex-consumer pose-stack x y z r g b a u v uv2]
   (let [submit-fn (or (buffer-op :submit-vertex-no-overlay)
                       (throw (ex-info "No platform submit-vertex-no-overlay function bound"

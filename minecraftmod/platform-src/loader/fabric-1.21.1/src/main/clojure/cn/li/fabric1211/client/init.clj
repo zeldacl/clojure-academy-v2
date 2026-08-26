@@ -124,6 +124,7 @@
   ;; (ac's :reactive-overlay-build/update — see forge init note).
   (client-bridge/merge-client-bridge!
     {:camera-position player-state/camera-position
+     :camera-raycast-visible? player-state/camera-raycast-visible?
      :open-screen open-screen-dispatcher
      :open-reactive-screen open-reactive-screen-handler
      :client-overlay-activated-override

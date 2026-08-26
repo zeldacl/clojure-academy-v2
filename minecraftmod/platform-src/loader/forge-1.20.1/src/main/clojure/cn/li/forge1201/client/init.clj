@@ -34,6 +34,7 @@
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
+            [cn.li.forge1201.client.imag-phase-stage :as imag-phase-stage]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc1201.gui.reactive.host :as reactive-host]
             [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
@@ -135,6 +136,8 @@
     :cutout-no-cull buffer-impl/get-cutout-no-cull-buffer
     :submit-vertex pose-impl/submit-vertex
     :translucent-see-through buffer-impl/get-translucent-see-through-buffer
+    :translucent-see-through-target buffer-impl/get-translucent-see-through-target-buffer
+    :additive-buffer buffer-impl/get-additive-buffer
     :submit-vertex-no-overlay pose-impl/submit-vertex-no-overlay
     :triangle-vertex-order (fn [] [0 1 2 2])}
    "forge-client")
@@ -207,6 +210,7 @@
      :camera-position runtime-bridge/camera-position
      :local-player-look-end runtime-bridge/local-player-look-end
      :local-player-block-aim runtime-bridge/local-player-block-aim
+     :camera-raycast-visible? runtime-bridge/camera-raycast-visible?
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
      :client-overlay-activated-override
      (fn [_owner]
@@ -448,6 +452,7 @@
       ;; Runtime client systems
       (runtime-bridge/init!)
       (overlay-renderer/init!)
+      (imag-phase-stage/init!)
       (msdf-setup/init!)
       (particle/init!)
       (sound/init!)

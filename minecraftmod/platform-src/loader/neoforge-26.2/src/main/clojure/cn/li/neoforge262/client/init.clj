@@ -187,6 +187,7 @@
      :camera-position runtime-bridge/camera-position
      :local-player-look-end runtime-bridge/local-player-look-end
      :local-player-block-aim runtime-bridge/local-player-block-aim
+     :camera-raycast-visible? runtime-bridge/camera-raycast-visible?
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
      :client-overlay-activated-override
      (fn [_owner]

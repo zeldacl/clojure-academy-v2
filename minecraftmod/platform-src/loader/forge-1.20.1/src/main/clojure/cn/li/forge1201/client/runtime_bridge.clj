@@ -32,6 +32,8 @@
 (defn camera-position [] (player-state/camera-position))
 (defn local-player-look-end [distance] (player-state/local-player-look-end distance))
 (defn local-player-block-aim [distance] (player-state/local-player-block-aim distance))
+(defn camera-raycast-visible? [from-x from-y from-z to-x to-y to-z]
+  (player-state/camera-raycast-visible? from-x from-y from-z to-x to-y to-z))
 
 (defn clear-client-activated-overlay! []
   (if-let [owner (client-session/current-local-player-owner)]

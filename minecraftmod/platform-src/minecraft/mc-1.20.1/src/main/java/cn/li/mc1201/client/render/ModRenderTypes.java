@@ -75,6 +75,37 @@ public final class ModRenderTypes extends RenderType {
                             .setWriteMaskState(COLOR_WRITE)
                             .createCompositeState(false)));
 
+    /**
+     * Same as {@link #academyQuadsTranslucent} but writes into the translucent
+     * render target. The fluid surface (and all translucent terrain) renders
+     * into that target, which is blitted into the main framebuffer at the end
+     * of the level pass — a main-target draw underneath it gets covered. The
+     * imag-phase flash must composite WITH the surface, so it renders into the
+     * translucent target too.
+     */
+    private static final Function<ResourceLocation, RenderType> ACADEMY_QUADS_TRANSLUCENT_TARGET_BY_TEXTURE =
+            Util.memoize(texture -> create(
+                    "academy_quads_translucent_target",
+                    DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP,
+                    VertexFormat.Mode.QUADS,
+                    256,
+                    false,
+                    true,
+                    CompositeState.builder()
+                            .setShaderState(RENDERTYPE_TEXT_SHADER)
+                            .setTextureState(new TextureStateShard(texture, false, false))
+                            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                            .setCullState(NO_CULL)
+                            .setLightmapState(LIGHTMAP)
+                            .setDepthTestState(NO_DEPTH_TEST)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .setOutputState(TRANSLUCENT_TARGET)
+                            .createCompositeState(false)));
+
+    public static RenderType academyQuadsTranslucentTarget(ResourceLocation texture) {
+        return ACADEMY_QUADS_TRANSLUCENT_TARGET_BY_TEXTURE.apply(texture);
+    }
+
     public static RenderType academyQuadsTranslucent(ResourceLocation texture) {
         return ACADEMY_QUADS_TRANSLUCENT_BY_TEXTURE.apply(texture);
     }
