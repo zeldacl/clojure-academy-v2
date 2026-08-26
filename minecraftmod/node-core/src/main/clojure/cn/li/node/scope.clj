@@ -31,6 +31,9 @@
 (defn- fail [reason data]
   (throw (ex-info (name reason) (assoc data :reason reason))))
 
+(defn- declared-local-fields [node d]
+  (set (:binds-locals d)))
+
 (defn- collect-local-refs [value acc]
   (cond
     (and (map? value) (vector? (:ref value))
@@ -66,7 +69,34 @@
           unknown (remove declared (keys binds))]
       (when (seq unknown)
         (fail :unknown-output-port {:component (:component node) :ports (vec unknown)}))))
-  (set (vals (:bind node))))
+  ;; Some structural primitives introduce a local through a plain keyword
+  ;; field rather than :bind.  A node with child ports (notably foreach) owns
+  ;; that name only inside its closed child; a leaf binder such as data/bind
+  ;; carries it to the following sibling.
+  (let [field-binds (if (seq (:children d))
+                      #{}
+                      (set (keep (fn [key]
+                                   (let [value (get node key)]
+                                     (when (keyword? value) value)))
+                                 (set (concat (declared-local-fields node d)
+                                              [:result :ratio-slot])))))
+        ;; Query/source nodes use the compact `:result :local-name` ABI in
+        ;; addition to the explicit `:bind {port local}` form.  The runtime
+        ;; already normalizes both through node-bind; scope checking must do
+        ;; the same or it will reject every result-based ability graph.
+        result-bind (when (keyword? (:result node)) #{(:result node)})]
+    (set/union (set (vals (:bind node))) field-binds (or result-bind #{}))))
+
+(defn- child-local-binds
+  "Names introduced by a node for its closed child ports.  Values are
+   declarative keyword local names, never runtime data."
+  [node d child-key]
+  (set/union
+   (set (keep (fn [key]
+                (let [value (get node key)]
+                  (when (keyword? value) value)))
+              (declared-local-fields node d)))
+   (get-in d [:child-binds-locals child-key] #{})))
 
 (declare check-node)
 
@@ -99,21 +129,35 @@
   (let [component (:component node)
         d (registry/descriptor component)]
     (when-not d (fail :unknown-component {:path path :component component}))
-    (let [missing (remove bound (value-refs node d))]
+    (let [node-local-binds (set (keep (fn [key]
+                                       (let [value (get node key)]
+                                         (when (keyword? value) value)))
+                                     (set (concat (declared-local-fields node d)
+                                                  [:result :ratio-slot]))))
+          missing* (remove (into bound node-local-binds) (value-refs node d))
+          missing missing*]
       (when (seq missing)
         (fail :unbound-local {:path path :component component :missing (vec missing)})))
     (let [ports (:children d)
           sequential (filterv #(= :sequential (:flow (val %))) ports)
           branch (filterv #(= :branch (:flow (val %))) ports)
           closed (filterv #(= :closed (:flow (val %))) ports)
-          after-sequential (reduce (fn [acc [key {:keys [kind]}]] (run-sequential-port node acc path key kind))
-                                    bound sequential)]
+          after-sequential (reduce (fn [acc [key {:keys [kind]}]]
+                                     (run-sequential-port node
+                                                           (into acc (child-local-binds node d key))
+                                                           path key kind))
+                                    bound sequential)
+          ]
       (doseq [[key {:keys [kind]}] closed]
-        (run-port node after-sequential path key kind))
+        (run-port node (into after-sequential (child-local-binds node d key)) path key kind))
       (doseq [[key {:keys [scope]}] (callback-inputs d)]
         (when-let [child (get node key)]
           (check-node child (into after-sequential (keys scope)) (conj path key))))
-      (let [results (mapcat (fn [[key {:keys [kind]}]] (run-port node after-sequential path key kind)) branch)
+      (let [results (mapcat (fn [[key {:keys [kind]}]]
+                              (run-port node
+                                        (into after-sequential (child-local-binds node d key))
+                                        path key kind))
+                            branch)
             merged (if (seq results) (reduce set/intersection results) after-sequential)]
         (into merged (own-binds node d))))))
 

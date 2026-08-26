@@ -3,16 +3,13 @@
 
    The namespace name is retained because AC UI/config callers consume the
    catalog service, but no legacy recipe, VM, composite loader, or VFX loader
-   is required. Every ability entry is a final compiled registration.")
+   is required. Every ability entry is a final compiled registration."
+  (:require [cn.li.ac.ability.skill-config :as skill-config]))
 
 (defonce ^:private state* (atom {:initialized? false :status :cold}))
 (defn- final-var [symbol]
   (or (requiring-resolve symbol)
       (throw (ex-info "final catalog service unavailable" {:symbol symbol}))))
-(defn- skill-definitions []
-  (or (some-> (requiring-resolve 'cn.li.ac.ability.skill-config/skill-definitions-by-id) deref)
-      {}))
-
 (defn- source-map [assembled]
   (get-in assembled [:combat :sources] {}))
 (defn- registration-map [assembled]
@@ -20,11 +17,33 @@
 (defn- ability-map [assembled]
   (into {}
         (map (fn [[id entry]]
-               [id (merge (get (source-map assembled) (:source-id entry) {})
-                          {:id id :source-id (:source-id entry)
-                           :program (:compiled entry)
-                           :status (if (= :ready (:status entry)) :migrated :pending)
-                           :engine :final})]))
+               (let [source (get (source-map assembled) (:source-id entry) {})
+                     bindings (:bindings entry)
+                     metadata (or (:metadata bindings) {})
+                     ;; The final graph owns execution. This typed table is
+                     ;; consulted only for progression/UI identity fields
+                     ;; absent from a source graph; it never selects or
+                     ;; evaluates a program.
+                     progression (select-keys
+                                  (get skill-config/skill-definitions-by-id id)
+                                  [:category-id :level :controllable?])]
+                 [id (merge source
+                            ;; Registration metadata is part of the final
+                            ;; catalog ABI.  It must be projected here before
+                            ;; the AC progression/UI registry is populated;
+                            ;; otherwise specialization entries lose their
+                            ;; category/prerequisite identity at startup.
+                            progression
+                            metadata
+                            {:id id :source-id (:source-id entry)
+                             :bindings bindings
+                             :presentation (:presentation bindings)
+                             :program (:compiled entry)
+                             ;; final-catalog-service aborts initialization
+                             ;; unless every entry is ready, so a successful
+                             ;; projection has one execution status only.
+                             :status :migrated
+                             :engine :final})])))
         (registration-map assembled)))
 
 (defn initialize! []
@@ -44,6 +63,7 @@
                       :errors {})
         value {:initialized? true
                :status :ready
+               :schema-version (:schema-version assembled)
                :migration (into {} (map (fn [[id ability]] [id (:status ability)])) abilities)
                :combat combat
                :vfx (:vfx assembled)
@@ -97,25 +117,19 @@
 
 (defn migrated-skill-specs []
   (mapv (fn [[ability-id ability]]
-          (let [configured (get (skill-definitions) ability-id)
-                category-id (or (:category-id ability) (:category-id configured))]
+          (let [category-id (or (:category-id ability) :generic)]
             {:id ability-id :category-id category-id
-             :level (or (:level ability) (:level configured))
-             :controllable? (if (contains? ability :controllable?)
-                              (:controllable? ability)
-                              (:controllable? configured))
-             :name-key (or (:name-key ability)
-                           (str "ability.skill." (name category-id) "." (name ability-id)))
-             :description-key (or (:description-key ability)
-                                  (str "ability.skill." (name category-id) "."
-                                       (name ability-id) ".desc"))
-             :icon (or (:icon ability)
-                       (str "textures/abilities/" (name category-id) "/skills/"
-                            (name ability-id) ".png"))
+             :level (:level ability)
+             :controllable? (:controllable? ability)
+             :name-key (:name-key ability)
+             :description-key (:description-key ability)
+             :icon (:icon ability)
              :ctrl-id (or (:ctrl-id ability) ability-id)
-             :pattern (or (:pattern ability) :hold-channel)
+             :pattern (or (:pattern ability) :passive)
              :actions (or (:actions ability) {})
              :translations (normalize-translations (:translations ability))
-             :cooldown {:mode :final} :execution :final}))
+             ;; Registry schema validates this as a presentation/progression
+             ;; field; actual cooldown policy is owned by the final graph.
+             :cooldown {:mode :default} :execution :final}))
         (sort-by first (filter (fn [[id _]] (available? id))
                                (get-in @state* [:combat :abilities])))))

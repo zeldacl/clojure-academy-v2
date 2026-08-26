@@ -13,12 +13,21 @@
           (= component :finalize) :flow
           (= component :graph/input) :source
           (contains? #{:graph/output :feedback/emit} component) :feedback
-          (contains? #{:resource/try-spend :cooldown/start :progression/mark} component) :policy
+          (contains? #{:resource/try-spend :cooldown/start :progression/mark
+                       :score/mark} component) :policy
+          (contains? #{:energy/target :target/raycast :target/raycast-fan
+                       :target/beam-trace :target/entities :target/blocks
+                       :target/entity-snapshot :target/item-held
+                       :target/saved-location :target/resolve-destination
+                       :target/block-placement :target/directional-destination-query
+                       :owner/snapshot :terrain/propagate} component) :query
+          (contains? #{:owner/can-fly :energy/charge :resource/add
+                       :resource/enforce-floor} component) :action
           :else
           (case (namespace component)
             "ability" :source "session" :source "data" :source
             "target" :query "owner" :query "query" :query "host" :query
-            "combat" :action "entity" :action "world" :action "block" :action
+            "combat" :action "entity" :action "world" :action "block" :action "terrain" :query
             "motion" :action "projectile" :action "inventory" :action
             "energy" :action "resource" :action "cost" :policy "policy" :policy
             "cooldown" :policy "progression" :policy "score" :policy
@@ -30,7 +39,7 @@
     :flow/branch (vec (remove nil? [(:then node) (:else node)]))
     :flow/foreach (if (:body node) [(:body node)] [])
     :flow/after (if (:body node) [(:body node)] [])
-    :flow/once (if (:body node) [(:body node)] [])
+    :flow/once (vec (keep identity [(:body node) (:on-first node)]))
     :flow/phases (vec (concat
                        (keep identity (map #(get node %) [:start :pulse :release :abort]))
                        (vals (:events node))))

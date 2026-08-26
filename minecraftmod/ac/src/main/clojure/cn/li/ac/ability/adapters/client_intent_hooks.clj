@@ -21,6 +21,7 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log]))
 
@@ -45,15 +46,18 @@
 
 (defn send-combat-intent! [player-uuid slot op]
   (let [intent-id (swap! intent-seq* inc)
-        key (slot-key player-uuid slot)]
+        key (slot-key player-uuid slot)
+        edge (case op :start :press :release :release :abort :abort)]
     (case op
       :start (swap! active-slots* conj key)
       (:release :abort) (swap! active-slots* disj key)
       nil)
     (net-client/send-to-server
      (client-owner player-uuid) messages/MSG-COMBAT-INTENT
-     {:schema-version 1 :intent-id intent-id :op op :slot (long slot)
-      :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))}
+     {:wire (fixed-channel/encode-intent
+             {:seq intent-id :control-id (long slot) :edge edge
+              :choice nil
+              :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))})}
      ;; VFX arrives exclusively through the MSG-COMBAT-VFX push channel now
      ;; (audience-routed on the server, self or nearby-broadcast) -- the RPC
      ;; reply itself never carries :vfx-signals, so there is nothing to
@@ -73,10 +77,12 @@
     (let [intent-id (swap! intent-seq* inc)]
       (net-client/send-to-server
        (client-owner player-uuid) messages/MSG-COMBAT-INTENT
-       {:schema-version 1 :intent-id intent-id :op :movement
-        :slot (long slot) :movement-key movement-key
-        :movement-transition transition
-        :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))}
+       {:wire (fixed-channel/encode-intent
+               {:seq intent-id :control-id (long slot)
+                :edge (case transition
+                        :press :press :release :release :tick :press)
+                :choice (str (name movement-key) ":" (name transition))
+                :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))})}
        nil)
       intent-id)))
 
@@ -102,18 +108,48 @@
 
 (defn- register-push-handlers! []
   (when (compare-and-set! handlers-registered?* false true)
+    (net-client/register-push-handler! messages/MSG-CATALOG-HELLO
+      (fn [{:keys [wire]}]
+        (when (and (instance? (Class/forName "[B") wire)
+                   (client-bridge/local-player-uuid))
+          (let [remote (fixed-channel/decode-catalog-hello wire)
+                local (select-keys (combat-catalog/catalog)
+                                   [:schema-version :content-hash])
+                accepted? (= local (select-keys remote
+                                                [:schema-version :content-hash]))]
+            (net-client/send-to-server
+             (client-owner (client-bridge/local-player-uuid))
+             messages/MSG-CATALOG-ACK
+             {:wire (fixed-channel/encode-catalog-ack
+                     (assoc local :accepted? accepted?))}
+             nil)
+            (when-not accepted?
+              (log/warn "Final catalog handshake rejected"
+                        {:local local :remote remote}))))))
     (net-client/register-push-handler! messages/MSG-COMBAT-RESULT
-      (fn [result]
-        (doseq [[idx feedback] (map-indexed vector (:feedback result))]
-          (combat-notice/show-notice! @notice-component*
-                                      (current-session)
-                                      (keyword (str "combat-" idx))
-                                      (or feedback {:text "Combat rejected"})))))
+      (fn [{:keys [wire]}]
+        (when (instance? (Class/forName "[B") wire)
+          (try
+            (let [result (fixed-channel/decode-combat-feedback wire)]
+              (doseq [[idx feedback] (map-indexed vector (:feedback result))]
+                (combat-notice/show-notice! @notice-component*
+                                            (current-session)
+                                            (keyword (str "combat-" idx))
+                                            (or feedback {:text "Combat rejected"}))))
+            (catch Throwable error
+              (log/warn "Rejected malformed fixed combat feedback packet"
+                        {:error (.getMessage error)}))))))
     ;; The one and only VFX delivery channel: audience-routed on the server
     ;; (self, or nearby-broadcast including the caster), so every recipient
     ;; -- caster or bystander -- always receives exactly one push per signal.
     (net-client/register-push-handler! messages/MSG-COMBAT-VFX
-      (fn [signal] (combat-vfx/dispatch-signal! signal)))
+      (fn [{:keys [wire]}]
+        (when (instance? (Class/forName "[B") wire)
+          (try
+            (combat-vfx/dispatch-signal! (fixed-channel/decode-vfx-signal wire))
+            (catch Throwable error
+              (log/warn "Rejected malformed fixed VFX packet"
+                        {:error (.getMessage error)}))))))
     (net-client/register-push-handler! messages/MSG-SYNC-V2 apply-client-runtime-v2!)
     (log/info "CombatIntent push handlers registered")))
 

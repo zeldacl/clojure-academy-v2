@@ -58,3 +58,13 @@
 
 (deftest unsupported-type-throws-test
   (is (thrown? clojure.lang.ExceptionInfo (codec/encode (Object.)))))
+
+(deftest malformed-payloads-are-rejected-test
+  (let [encoded (codec/encode {:ok true})
+        trailing (byte-array (inc (alength encoded)))
+        negative-string (byte-array [5 -1 -1 -1 -1])
+        negative-vector (byte-array [8 -1 -1 -1 -1])]
+    (System/arraycopy encoded 0 trailing 0 (alength encoded))
+    (is (thrown? clojure.lang.ExceptionInfo (codec/decode trailing)))
+    (is (thrown? clojure.lang.ExceptionInfo (codec/decode negative-string)))
+    (is (thrown? clojure.lang.ExceptionInfo (codec/decode negative-vector)))))

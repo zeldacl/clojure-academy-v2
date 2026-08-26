@@ -14,6 +14,8 @@
    :combat-intent "ability:combat/intent"
    :combat-result "ability:combat/result"
    :combat-vfx "ability:combat/vfx"
+   :catalog-hello "ability:catalog/hello"
+   :catalog-ack "ability:catalog/ack"
 
    :sync-v2 "ability:sync/runtime-v2"
 
@@ -37,6 +39,8 @@
 (def MSG-COMBAT-INTENT (:combat-intent message-ids))
 (def MSG-COMBAT-RESULT (:combat-result message-ids))
 (def MSG-COMBAT-VFX (:combat-vfx message-ids))
+(def MSG-CATALOG-HELLO (:catalog-hello message-ids))
+(def MSG-CATALOG-ACK (:catalog-ack message-ids))
 
 (def MSG-SYNC-V2 (:sync-v2 message-ids))
 

@@ -1,18 +1,1 @@
-{:kind :composite
- :id :combat/release-with-cost
- :revision 1
- :layer :mid
- :doc "Spend :budget; run :body when affordable, otherwise finish with :outcome :insufficient-resource. Collapses the txn/atomic + cost-guard cluster duplicated across the release-cost family of abilities into one call."
- :inputs {:budget {:type :map}
-          :body {:type :node :scope {}}}
- :outputs {}
- :body
- {:component :flow/sequence
-  :steps
-  [{:component :cost/spend
-    :budget {:ref [:input :budget]}
-    :bind {:insufficient? :insufficient?}}
-   {:component :flow/branch
-    :when {:ref [:local :insufficient?]}
-    :then {:component :flow/finish :outcome :insufficient-resource}
-    :else {:ref [:input :body]}}]}}
+{:kind :composite, :id :combat/release-with-cost, :revision 1, :layer :mid, :doc "Spend :budget; run :body when affordable, otherwise finish with :outcome :insufficient-resource. Collapses the txn/atomic + cost-guard cluster duplicated across the release-cost family of abilities into one call.", :inputs {:budget {:type :map}, :body {:type :node, :scope {}}}, :outputs {}, :body {:component :flow/sequence, :steps [{:component :cost/spend, :budget {:ref [:input :budget]}, :bind {:insufficient? :insufficient?}} {:component :flow/branch, :when {:ref [:local :insufficient?]}, :then {:component :flow/finish, :outcome :insufficient-resource}, :else {:ref [:input :body]}}]}}

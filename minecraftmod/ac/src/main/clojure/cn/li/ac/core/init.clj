@@ -49,8 +49,8 @@
   (combat-platform/install!)
   (combat-runtime/install-ac-host-capabilities!)
   (combat-runtime/initialize-final-runtime!)
-  ;; The EDN catalog is authoritative for migrated abilities.  No legacy
-  ;; catalog fallback is consulted when a skill is pending migration.
+  ;; The final EDN catalog is authoritative.  Catalog initialization fails
+  ;; closed if any source is not a compiled final program.
   (combat-catalog/initialize!)
   (ability-messages/install!)
   (entity-hook-catalog/install-resolvers!)

@@ -85,74 +85,7 @@
 ;; the AC/config side so the data document never reaches backwards into the
 ;; config registry.  The values are materialized once while the catalog is
 ;; loaded, before combat-core compiles the program.
-(def edn-parameter-bindings
-  "Bindings for the legacy schema-version-1 :parameters/:param path.
-  railgun/arc-gen/thunder-clap are fully schema v2 now (see
-  edn-tunable-bindings below) and no longer declare :parameters at all.
-  Only vec-reflection still has an entry here, for the 5 fields its damage
-  :reactions block reads (see the comment on its entry)."
-  {;; vec-reflection is schema v2 (see :tunables/edn-tunable-bindings below)
-   ;; except for its damage :reactions block, which is a separate subsystem
-   ;; (combat_runtime's apply-combat-damage-reactions) not yet folded into the
-   ;; :costs/:progression policy evaluator -- deferred, see the plan's
-   ;; Phase 6. Its 5 fields still go through this legacy :parameters path
-   ;; unchanged.
-   :vec-reflection
-   {:damage-multiplier :combat.damage-multiplier
-    :min-reflected-damage :combat.min-reflected-damage
-    :damage-cp :cost.damage.cp
-    :exp-damage-scale :progression.exp-damage-scale
-    :max-reflections :combat.max-reflections}})
-
 (declare tunable-double tunable-int tunable-double-list tunable-string-list)
-
-(defn- read-edn-parameter
-  [skill-id parameter-id field-id type]
-  (case type
-    :double (tunable-double skill-id field-id)
-    :long (tunable-int skill-id field-id)
-    :string-list (tunable-string-list skill-id field-id)
-    [:tuple :double 2] (tunable-double-list skill-id field-id)
-    (throw (ex-info "unsupported EDN parameter type"
-                    {:ability-id skill-id
-                     :parameter parameter-id
-                     :field-id field-id
-                     :type type}))))
-
-(defn overlay-edn-parameters
-  "Materialize config values into an ability before combat-core compilation.
-
-  EDN remains a pure declarative program: it has no config paths or config
-  readers.  A missing binding is rejected so a migrated ability cannot compile
-  with a silently invented parameter value.
-
-  A schema v2 ability with no :parameters key at all (using :tunables
-  instead, see overlay-edn-tunables) passes through unchanged: :parameters
-  is a schema-version-1 mechanism, not something every ability must have."
-  [{:keys [id parameters] :as ability}]
-  (if (nil? parameters)
-    ability
-    (let [bindings (get edn-parameter-bindings id)]
-    (when-not (map? parameters)
-      (throw (ex-info "ability parameters must be a map" {:ability-id id})))
-    (when-not (map? bindings)
-      (throw (ex-info "missing EDN parameter bindings"
-                      {:ability-id id})))
-    (when-not (= (set (keys parameters)) (set (keys bindings)))
-      (throw (ex-info "EDN parameter binding mismatch"
-                      {:ability-id id
-                       :declared (set (keys parameters))
-                       :bound (set (keys bindings))})))
-    (assoc ability :parameters
-           (reduce-kv
-             (fn [result parameter-id declaration]
-               (let [field-id (get bindings parameter-id)
-                     type (:type declaration)]
-                 (assoc result parameter-id
-                        (assoc declaration
-                               :value (read-edn-parameter id parameter-id field-id type)))))
-             {}
-             parameters)))))
 
 (def edn-tunable-bindings
   "Field-id overrides for schema v2 :tunables (design B) whose name doesn't
@@ -160,9 +93,8 @@
   :foo reads config field :foo by default, so this only needs an entry when
   that doesn't hold -- in practice, every tunable here, because field-ids
   are dotted/sectioned (:combat.damage, :targeting.range, ...) while a
-  readable EDN tunable name generally isn't. Compare to
-  edn-parameter-bindings above: this is still a single table entry per
-  ability, not five separate places to keep in sync."
+  readable EDN tunable name generally isn't. This remains a single table
+  entry per ability, not five separate places to keep in sync."
   {:railgun
    {:beam-damage :beam.damage
     :beam-radius :beam.radius
@@ -638,9 +570,8 @@
   "Materialize config-driven values into an ability's :tunables block before
   combat-core compilation (schema v2 design B).
 
-  Additive and safe for content that doesn't declare :tunables: no
-  schema-version-1 ability (the only abilities shipped so far) has a
-  :tunables key, so this is a no-op for all of them today."
+  Additive for final content that does not declare :tunables; final programs
+  with an explicit :tunables map receive only the named, typed bindings above."
   [{:keys [id tunables] :as ability}]
   (if-not (map? tunables)
     ability

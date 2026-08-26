@@ -205,11 +205,11 @@
      ;; {ability-id {sub-id ticks}} -- keyed by BOTH ctrl-id and sub-id, unlike
      ;; the flattened {ctrl-id ticks} this used to project, which silently
      ;; collapsed an ability with more than one named cooldown onto a single
-     ;; value. Combat Core's cooldown gate (skill_runtime/dispatch!) reads
-     ;; this shape directly.
+     ;; value. Combat Core's final engine reads this shape directly.
      :cooldowns (reduce (fn [acc [[ctrl-id sub-id] value]]
-                          (assoc-in acc [ctrl-id sub-id]
-                                    (long (or (:ticks value) 0))))
+                          (assoc acc [ctrl-id sub-id]
+                                 {:ticks (long (or (:ticks value) value 0))
+                                  :max (long (or (:max value) (:ticks value) value 0))}))
                         {} cooldown-data)
      :ability-data (:ability-data state)
      :preset-data (:preset-data state)
@@ -229,7 +229,22 @@
           next-overload (double (or (get-in state [:resources :overload]) 0.0))
           cp-delta (- next-cp base-cp)
           overload-delta (- next-overload base-overload)
-          commands (cond-> []
+          cooldowns (merge (or (get base-state :cooldowns) {})
+                           (or (get state :cooldowns) {}))
+          cooldown-commands
+          (mapv (fn [[[ctrl-id sub-id] value]]
+                  (let [base (get-in base-state [:cooldowns [ctrl-id sub-id]])
+                        base-ticks (long (or (:ticks base) base 0))
+                        ticks (long (or (:ticks value) value 0))
+                        max-ticks (long (or (:max value) (:max base) ticks))]
+                    (when (neg? ticks)
+                      (throw (ex-info "final state contains negative cooldown"
+                                      {:owner owner :ctrl-id ctrl-id :sub-id sub-id :ticks ticks})))
+                    (when (not= base-ticks ticks)
+                      {:command :set-cooldown :ctrl-id ctrl-id :sub-id sub-id
+                       :ticks ticks :max max-ticks})))
+                cooldowns)
+          commands (cond-> (vec (remove nil? cooldown-commands))
                      (neg? cp-delta) (conj {:command :consume-resource :cp (- cp-delta) :overload 0.0})
                      (neg? overload-delta) (conj {:command :consume-resource :cp 0.0 :overload (- overload-delta)}))]
       (when (or (pos? cp-delta) (pos? overload-delta))
@@ -240,6 +255,8 @@
           (when-not (:success? result)
             (throw (ex-info "final state resource commit rejected" {:owner owner :result result}))))))))
 
+(defn current-tick [] @last-known-tick*)
+
 (defn initialize-final-runtime!
   "Install AC's production final runtime against mcmod neutral capability
    handlers. This is the only runtime used after the final dispatch cutover."
@@ -247,7 +264,16 @@
   (or @final-runtime*
       (let [runtime (final-runtime/install-production!
                      {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
-                      :commit-state! commit-final-state!})]
+                      :commit-state! commit-final-state!
+                      :session-provider (fn [owner]
+                                          (or (combat-sessions/session (str owner)) {}))
+                      :commit-session! (fn [owner patches]
+                                         (when (seq patches)
+                                           (combat-sessions/apply-actions!
+                                            (str owner)
+                                            [{:type :session-patch :entries patches}])))
+                      :remove-session! (fn [owner]
+                                         (combat-sessions/remove! (str owner)))} )]
         (reset! final-runtime* runtime)
         (reset! catalog* @(:catalog runtime))
         runtime)))
@@ -363,7 +389,7 @@
   not wired yet (the former needs a new cross-platform held-item port, the
   latter needs the same session-presence check the damage-reaction path
   already computes at combat_runtime.clj ~2394). Referencing either from
-  EDN fails closed (`combat-core/vm.clj`'s :from resolution throws) rather
+  EDN fails closed when a capability is absent from the final host table rather
   than silently resolving to nil; both get added in Phase 5 alongside the
   abilities that actually need them."
   [owner context]
@@ -397,11 +423,49 @@
    ;; Raw (pre-curve) mastery and RNG seed: legitimate exceptions to design
    ;; B/E folding skill-exp/seed away. Some content hands both to an AC-side
    ;; domain-event handler that isn't itself an EDN node (arc-gen's ignite/
-   ;; fishing resolution) -- that handler needs the same inputs the VM's own
-   ;; :expr evaluator would have used, just not through a lerp/random/* node.
+   ;; fishing resolution) -- that handler needs the same inputs the final
+   ;; expression evaluator would have used, just not through a lerp/random/* node.
    :progression/mastery (double (or (:skill-exp context) 0.0))
-     :progression/level (long (or (:ability-level context) 0))
-     :rng/seed (long (or (:activation-seed context) 0))}))
+      :progression/level (long (or (:ability-level context) 0))
+      :rng/seed (long (or (:activation-seed context) 0))}))
+
+(defn- materialize-final-tunables
+  "Resolve config declarations to neutral values for a final graph input."
+  [ability-id skill-exp]
+  (let [source (get-in @catalog* [:combat :sources ability-id])
+        declarations (:tunables source)]
+    (if-not (map? declarations)
+      {}
+      (try
+        (let [materialized (:tunables (skill-config/overlay-edn-tunables source))]
+          (reduce-kv
+           (fn [result key spec]
+             (assoc result key
+                    (cond
+                      (contains? spec :value) (:value spec)
+                      (contains? spec :range)
+                      (let [[lo hi] (:range spec)]
+                        (+ (double lo) (* (double skill-exp)
+                                          (- (double hi) (double lo)))))
+                      :else nil)))
+           {} materialized))
+        (catch Throwable e
+          (throw (ex-info "final tunable materialization failed"
+                          {:ability-id ability-id
+                           :skill-exp skill-exp}
+                          e)))))))
+
+(defn- final-input [owner ability-id intent seed]
+  (let [context (activation-context owner ability-id intent seed)
+        source (get-in @catalog* [:combat :sources ability-id])]
+    (merge intent
+           {:context context
+            :capabilities (caster-facade owner context)
+            :tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
+            :budgets (:costs source)
+            :cooldowns (:cooldown source)
+            :progression (:progression source)
+            :invariants (:invariants source)})))
 
 (defn install-ac-host-capabilities!
   "Link AC's own domain capabilities (resource/progression/energy/mark) to
@@ -537,21 +601,37 @@
         (reset! edn-host-capabilities-installed? false)))
   (capabilities/snapshot)))
 
+(defn- cooldown-active?
+  [owner ability-id]
+  (let [state (runtime-store/get-player-state (server-session-id) (str owner))
+        value (get-in state [:cooldown-data [ability-id :main]])
+        ticks (long (or (:ticks value) value 0))]
+    (pos? ticks)))
+
 (defn dispatch-intent! [owner intent]
   ;; Final runtime is the sole production dispatch path.  Pending source
-  ;; graphs return an explicit migration status; there is no legacy VM or
-  ;; catalog fallback at this boundary.
-  (let [ability-id (edn-ability-id owner intent)]
-    (assoc (final-runtime/dispatch-production! owner ability-id
-                                               (assoc intent
-                                                      :activation-seed
-                                                      (or (:activation-seed intent)
-                                                          (generate-activation-seed
-                                                           owner ability-id
-                                                           (long (or (:server-tick intent)
-                                                                     @last-known-tick*))))))
-           :schema-version 1
-           :ability-id ability-id)))
+  ;; Final graphs return an explicit execution status; there is no alternate
+  ;; evaluator or catalog fallback at this boundary.
+  (let [ability-id (edn-ability-id owner intent)
+        seed (long (or (:activation-seed intent)
+                       (generate-activation-seed owner ability-id
+                                                 (long (or (:server-tick intent)
+                                                           @last-known-tick*)))))
+        source (get-in @catalog* [:combat :sources ability-id])
+        prepared (final-input owner ability-id (assoc intent :activation-seed seed) seed)]
+    (if (and (= :start (:op intent))
+             (cooldown-active? owner ability-id))
+      {:status :rejected :reason :cooldown
+       :schema-version 1 :ability-id ability-id
+       :feedback [{:type :cooldown-active :ability-id ability-id}]}
+      (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
+                          :schema-version 1 :ability-id ability-id)]
+        (when (and (= :accepted (:status result))
+                   (= :start (:op intent))
+                   (= :session (:activation source))
+                   (not (combat-sessions/active? (str owner))))
+          (combat-sessions/start! (str owner) ability-id prepared))
+        result))))
 
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
@@ -567,8 +647,30 @@
                        :event (:event trigger)
                        :server-tick @last-known-tick*
                        :context context})))
+(defn- handle-progression-event!
+  [event]
+  (let [owner (:owner event)
+        ability-id (:ability-id event)
+        raw (if (= :progression/mark (:type event))
+              (:progression event)
+              (or (:progression event) (:score event)))
+        amount (cond
+                 (number? raw) (double raw)
+                 (map? raw) (double (or (:amount raw) (:value raw)
+                                        (:per-mark raw) 0.0))
+                 :else 0.0)
+        weighted (* amount (double (or (:weight event) 1.0)))]
+    (if (and owner ability-id (Double/isFinite weighted) (pos? weighted))
+      (let [result (command-runtime/run-commands-in-session!
+                    (server-session-id) (str owner)
+                    [{:command :add-skill-exp :skill-id ability-id
+                      :amount weighted :source :combat-core}])]
+        {:status (if (:success? result) :applied :failed)
+         :type (:type event) :amount weighted})
+      {:status :applied :type (:type event) :amount 0.0})))
+
 (defn- handle-neutral-domain-event!
-  "Apply the two generic domain events emitted by the migrated Arc recipe.
+  "Apply the two generic domain events emitted by the Arc final graph.
 
   The event contains only a bounded impact fact and probabilities from the
   activation snapshot.  We re-read the target block immediately before a
@@ -595,6 +697,9 @@
                                 :args (vec (or args []))
                                 :translate? (boolean (if (nil? translate?) true translate?))}))
       {:status :applied :type (:type event)})
+
+    :progression/mark (handle-progression-event! event)
+    :score/mark (handle-progression-event! event)
 
     :world/block-impact
     (let [{:keys [world-id position block-position water? ignite-probability
@@ -668,7 +773,9 @@
             (if (and (map? event) (not= :query (:type event)))
               (conj results
                     (dispatch-domain-event!
-                     (assoc event :owner (or (:owner event) owner))))
+                     (assoc event :owner (or (:owner event) owner)
+                            :ability-id (or (:ability-id event)
+                                            (:ability-id result)))))
               results))
           []
           (:events result)))
@@ -720,7 +827,8 @@
         domain-results (if (= :accepted (:status result))
                          (dispatch-result-domain-events! owner result)
                          [])]
-    (assoc result :domain-event-results (vec domain-results))))
+    (assoc result :owner owner
+           :domain-event-results (vec domain-results))))
 (defn dispatch-and-publish-event!
   "Dispatch a one-shot ability event (no active session required -- a fresh
    activation context is generated the same way a :start intent would) and

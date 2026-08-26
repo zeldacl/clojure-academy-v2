@@ -12,7 +12,9 @@
     (world/install-world-ops! {:world-is-raining (fn [_] false)} "test")
     (is (false? (world/raining? (Object.))))))
 
-(deftest missing-world-op-returns-nil-test
-  (testing "wrapper returns nil (no throw) when the op key was not installed"
+(deftest missing-world-op-fails-closed-test
+  (testing "wrapper fails closed when the required op key was not installed"
     (world/install-world-ops! {:world-is-raining (fn [_] false)} "test")
-    (is (nil? (world/get-tile-entity (Object.) :pos)))))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Required world operation is not installed"
+                          (world/get-tile-entity (Object.) :pos)))))

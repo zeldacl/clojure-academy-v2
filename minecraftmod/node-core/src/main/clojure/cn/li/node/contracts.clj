@@ -26,14 +26,15 @@
 (defn entry-frame
   "Immutable input sampled once at entry. Queries use this frame and may add
    explicit results, but cannot mutate it."
-  [{:keys [owner world tick seed input] :as frame}]
+  [{:keys [owner world tick seed input ability-id] :as frame}]
   (doseq [k [:owner :world :tick :seed :input]] (require-key frame k))
   (when-not (integer? tick)
     (throw (ex-info "entry frame tick must be an integer" {:frame frame})))
   (when-not (integer? seed)
     (throw (ex-info "entry frame seed must be an integer" {:frame frame})))
-  {:schema-version schema-version :owner owner :world world :tick (long tick)
-   :seed (long seed) :input input})
+  (cond-> {:schema-version schema-version :owner owner :world world :tick (long tick)
+           :seed (long seed) :input input}
+    (some? ability-id) (assoc :ability-id ability-id)))
 
 (defn state-txn-set
   "Create a transaction set. Each owner has an independent optimistic

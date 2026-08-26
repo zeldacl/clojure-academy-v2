@@ -1,10 +1,9 @@
 (ns cn.li.node.composite
   "Compile-time expansion of :layer :mid composite invocations into the
-   caller's tree. A composite is macro-substituted at its call site -- it
-   is data-shape sugar, not a runtime function call, exactly like combat-
-   core's pre-existing composite mechanism (recipe.clj), generalized here
-   to also produce typed :outputs instead of leaking hardcoded slot names
-   (see NODE_LANGUAGE.md section 7).
+   caller's tree. A composite is macro-substituted at its call site: it is
+   data-shape sugar, not a runtime function call, and can expose typed
+   :outputs without leaking hardcoded slot names (see NODE_LANGUAGE.md
+   section 7).
 
    expand is the ONLY place a :mid id can be resolved away: after it runs,
    every :component in the tree (below the ability's own top-level source
@@ -20,8 +19,8 @@
 (defn- fail [reason data]
   (throw (ex-info (name reason) (assoc data :reason reason))))
 
-(defn- composite? [id]
-  (when-let [d (registry/descriptor id)] (= :mid (:layer d))))
+(defn- composite? [descriptor-of id]
+  (when-let [d (descriptor-of id)] (= :mid (:layer d))))
 
 (defn- resolve-inputs
   "Build {input-key -> supplied-value-or-subtree} for one call site,
@@ -62,7 +61,7 @@
    its readers silently pointed at two different local names post-
    expansion (caught by combat-core's :combat/area-damage composite test,
    which returned nil for the loop-bound entity id)."
-  [body ns-prefix]
+  [descriptor-of body ns-prefix]
   (let [rename (fn [n] (keyword (str (name ns-prefix) "$" (name n))))]
     (walk/postwalk
      (fn [form]
@@ -71,9 +70,15 @@
          (update-in form [:ref 1] rename)
 
          (and (map? form) (:component form))
-         (let [d (registry/descriptor (:component form))
+           (let [d (descriptor-of (:component form))
                form (if (map? (:bind form))
                       (update form :bind (fn [binds] (into {} (map (fn [[port local]] [port (rename local)]) binds))))
+                      form)
+               form (if (keyword? (:result form))
+                      (update form :result rename)
+                      form)
+               form (if (keyword? (:ratio-slot form))
+                      (update form :ratio-slot rename)
                       form)]
            (reduce (fn [f field] (cond-> f (keyword? (get f field)) (update field rename)))
                    form (:binds-locals d)))
@@ -130,7 +135,7 @@
                :value {:ref [:local (keyword (str (name ns-prefix) "$" (name (second from))))]}}))
           binds)))
 
-(defn- expand-node [node stack budget path]
+(defn- expand-node [descriptor-of node stack budget path]
   (vswap! budget inc)
   (when (> (long @budget) max-nodes)
     (fail :expansion-node-budget-exceeded {:path path :max max-nodes}))
@@ -139,14 +144,14 @@
   (if-not (map? node)
     node
     (let [component (:component node)]
-      (if (composite? component)
+      (if (composite? descriptor-of component)
         (do
           (when (contains? stack component)
             (fail :composite-expansion-cycle {:path path :component component :stack (vec stack)}))
-          (let [d (registry/descriptor component)
+          (let [d (descriptor-of component)
                 inputs (resolve-inputs d node path)
                 ns-prefix (gensym (str (name component) "__"))
-                renamed-body (rename-locals (:body d) ns-prefix)
+                renamed-body (rename-locals descriptor-of (:body d) ns-prefix)
                 substituted (substitute-inputs renamed-body inputs)
                 extra-binds (output-binds d node ns-prefix path)
                 ;; Flatten into the body's own :flow/sequence when it already
@@ -159,8 +164,8 @@
                                 (= :flow/sequence (:component substituted))
                                 (update substituted :steps into extra-binds)
                                 :else {:component :flow/sequence :steps (into [substituted] extra-binds)})]
-            (expand-node expanded-body (conj stack component) budget path)))
-        (let [d (registry/descriptor component)]
+            (expand-node descriptor-of expanded-body (conj stack component) budget path)))
+        (let [d (descriptor-of component)]
           (when-not d (fail :unknown-component {:path path :component component}))
           (when (and (= :source (:layer d)) (seq stack))
             (fail :source-node-outside-ability {:path path :component component}))
@@ -168,16 +173,16 @@
             (reduce (fn [n [key {:keys [kind]}]]
                       (case kind
                         :single (if (map? (get n key))
-                                  (assoc n key (expand-node (get n key) stack budget (conj path key)))
+                                  (assoc n key (expand-node descriptor-of (get n key) stack budget (conj path key)))
                                   n)
                         :seq (if (vector? (get n key))
-                               (assoc n key (mapv #(if (map? %) (expand-node % stack budget (conj path key)) %)
+                               (assoc n key (mapv #(if (map? %) (expand-node descriptor-of % stack budget (conj path key)) %)
                                                    (get n key)))
                                n)
                         :case-map (if (map? (get n key))
                                     (assoc n key (into {} (map (fn [[k v]]
                                                                   [k (if (map? v)
-                                                                       (expand-node v stack budget (conj path [key k]))
+                                                                       (expand-node descriptor-of v stack budget (conj path [key k]))
                                                                        v)])
                                                                 (get n key))))
                                     n)
@@ -185,7 +190,7 @@
                     node* (:children d))
             (reduce (fn [n [key _]]
                       (if (map? (get n key))
-                        (assoc n key (expand-node (get n key) stack budget (conj path key)))
+                        (assoc n key (expand-node descriptor-of (get n key) stack budget (conj path key)))
                         n))
                     node*
                     (filter (fn [[_ spec]] (= :node (:type spec))) (:inputs d)))))))))
@@ -200,4 +205,16 @@
    on unknown component/input, missing required input, cycles, or budget
    overrun."
   [root]
-  (expand-node root #{} (volatile! 0) [:program]))
+  (expand-node registry/descriptor root #{} (volatile! 0) [:program]))
+
+(defn expand-with-descriptors
+  "Expand a graph using an external map of final composite descriptors.
+
+   The supplied descriptors are consulted before the frozen node registry;
+   primitive/source descriptors still come from the registry. This lets AC
+   load EDN composite documents without installing mutable runtime entries or
+   maintaining a second expansion algorithm in the content catalog."
+  [root composites]
+  (let [composites (or composites {})
+        descriptor-of (fn [id] (or (get composites id) (registry/descriptor id)))]
+    (expand-node descriptor-of root #{} (volatile! 0) [:program])))

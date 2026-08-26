@@ -52,16 +52,10 @@
     (+ lo (long (Math/floor (* (unit-double seed) (double span)))))))
 
 (defn vec3-components
-  "Accepts every vec3 shape this codebase actually produces: {:vec3 [x y
-   z]} (node-core's own :vec3/* op outputs and combat-core's
-   cn.li.combat.vm/vec3-components convention), a plain [x y z] vector, or
-   {:x :y :z} (the shape real host query results carry -- :owner/snapshot's
-   :position projection, :target/saved-location's resolved point, raycast
-   hit positions, etc.; the same third shape cn.li.vfx.ops/->v3 and
-   cn.li.vfx.composite-loader's point-components already special-case for
-   the identical reason). Public so domain register-op! extensions (e.g.
-   cn.li.combat.composite-loader's :vec3/launch) share this instead of
-   each re-implementing the same shape dispatch."
+  "Accepts every vec3 shape in the final language: {:vec3 [x y z]}, a plain
+   [x y z] vector, or {:x :y :z} (the shape carried by neutral host query
+   results). Public so domain expression extensions share one shape dispatch
+   instead of re-implementing it."
   [value]
   (cond
     (and (map? value) (vector? (:vec3 value))) (:vec3 value)

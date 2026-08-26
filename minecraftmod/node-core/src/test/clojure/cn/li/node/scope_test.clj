@@ -23,6 +23,22 @@
     (registry/register-primitive!
      {:id :test/loop :revision 1 :children {:body {:kind :single :flow :closed}} :impl (fn [_ _] {})})
     (registry/register-primitive!
+     {:id :test/field-loop :revision 1
+      :inputs {:as {:type :keyword} :index-as {:type :keyword :default nil}}
+      :children {:body {:kind :single :flow :closed}}
+      :binds-locals #{:as :index-as}
+      :impl (fn [_ _] {})})
+    (registry/register-primitive!
+     {:id :test/field-bind :revision 1
+      :inputs {:to {:type :keyword} :value {:type :any}}
+      :binds-locals #{:to}
+      :impl (fn [_ _] {})})
+    (registry/register-primitive!
+     {:id :test/result-bind :revision 1
+      :inputs {:result {:type :keyword}}
+      :outputs {:value {:type :any}}
+      :impl (fn [_ _] {})})
+    (registry/register-primitive!
      {:id :test/with-callback :revision 1
       :inputs {:on-each {:type :node :scope {:item {:type :double}}}}
       :impl (fn [_ _] {})})
@@ -75,7 +91,35 @@
         {:component :test/seq
          :steps [{:component :test/loop
                   :body {:component :test/produce :bind {:result :r}}}
-                 {:component :test/emit :value {:ref [:local :r]}}]}))))
+       {:component :test/emit :value {:ref [:local :r]}}]}))))
+
+(deftest closed-field-binding-is-visible-inside-loop-test
+  (is (nil? (scope/check!
+             {:component :test/field-loop :as :item
+              :body {:component :test/emit
+                     :value {:ref [:local :item]}}}))))
+
+(deftest closed-field-binding-does-not-leak-test
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"unbound-local"
+       (scope/check!
+        {:component :test/seq
+         :steps [{:component :test/field-loop :as :item
+                  :body {:component :test/emit
+                         :value {:ref [:local :item]}}}
+                 {:component :test/emit :value {:ref [:local :item]}}]}))))
+
+(deftest leaf-field-binding-threads-to-next-sibling-test
+  (is (nil? (scope/check!
+             {:component :test/seq
+              :steps [{:component :test/field-bind :to :value :value 1}
+                      {:component :test/emit :value {:ref [:local :value]}}]}))))
+
+(deftest compact-result-binding-threads-to-next-sibling-test
+  (is (nil? (scope/check!
+             {:component :test/seq
+              :steps [{:component :test/result-bind :result :value}
+                      {:component :test/emit :value {:ref [:local :value]}}]}))))
 
 (deftest callback-input-sees-declared-scope-test
   (is (nil? (scope/check!

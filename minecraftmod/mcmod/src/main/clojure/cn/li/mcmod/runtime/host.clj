@@ -7,10 +7,18 @@
     (when-let [bad (seq (remove (comp ifn? val) table))]
       (throw (ex-info "host table contains a non-callable handler" {:kind kind :capabilities (mapv key bad)}))))
   {:schema-version schema-version :queries (or queries {}) :actions (or actions {})})
-(defn query! [host capability request]
+(defn query!
+  ([host capability request]
+   (query! host capability request nil))
+  ([host capability request context]
   (let [handler (get-in host [:queries capability])]
     (when-not (ifn? handler) (throw (ex-info "missing host query capability" {:capability capability})))
-    (handler request)))
+    (if (nil? context)
+      (handler request)
+      (try
+        (handler request context)
+        (catch clojure.lang.ArityException _
+          (handler request)))))))
 (defn- command-id [command index] (or (:id command) [:command index]))
 (defn- check-command [handler command index context]
   (try
@@ -30,19 +38,27 @@
   (try {:ok? true :value (handler :apply command context)}
        (catch Throwable error {:ok? false :error error})))
 (defn apply! [host commands context]
-  (loop [remaining (vec commands) applied []]
+  (loop [remaining (vec commands) applied [] results []]
     (if-let [command (first remaining)]
       (let [handler (get-in host [:actions (:capability command)]) attempt (apply-command handler command context)]
         (if-not (:ok? attempt)
           {:ok? false :reason :host-apply-error :applied-ids applied :failed-id (:id command) :message (.getMessage ^Throwable (:error attempt))}
           (let [result (:value attempt)]
-            (if (or (= true result) (map? result))
-              (recur (subvec remaining 1) (conj applied (:id command)))
+            (if (or (= true result)
+                    (and (map? result)
+                         (not (contains? #{:failed :rejected :unhandled}
+                                         (:status result)))))
+              (recur (subvec remaining 1)
+                     (conj applied (:id command))
+                     (conj results {:id (:id command)
+                                    :capability (:capability command)
+                                    :value result}))
               {:ok? false :reason :host-apply-rejected :applied-ids applied :failed-id (:id command) :detail result}))))
-      {:ok? true :applied-ids applied})))
+      {:ok? true :applied-ids applied :results results})))
 (defn execute! [host commands context]
   (let [preflight (preflight! host commands context)]
     (if-not (:ok? preflight) {:ok? false :phase :preflight :error preflight}
       (let [applied (apply! host commands context)]
-        (if (:ok? applied) {:ok? true :phase :apply :applied-ids (:applied-ids applied)}
+        (if (:ok? applied) {:ok? true :phase :apply :applied-ids (:applied-ids applied)
+                            :results (:results applied)}
           {:ok? false :phase :apply :error applied})))))

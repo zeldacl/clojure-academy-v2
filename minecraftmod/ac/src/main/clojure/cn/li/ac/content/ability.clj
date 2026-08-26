@@ -2,8 +2,8 @@
   "Ability content bootstrap.
 
   Categories are declared here. Executable skills come only from the
-  authoritative EDN catalog; the legacy provider is retained as metadata for
-  migration/UI discovery and is never installed as an execution provider."
+  authoritative EDN catalog; player-facing skill metadata is projected from
+  the final catalog and never installed as an alternate execution provider."
   (:require [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -59,18 +59,16 @@
   []
   (combat-catalog/initialize!)
   (doseq [skill-spec (combat-catalog/migrated-skill-specs)]
-    ;; Only migrated entries enter the executable skill registry.  Pending
-    ;; entries are represented by combat-catalog/ui-state and never receive a
-    ;; legacy callback or fallback registration.
+    ;; Final entries enter the executable skill registry; the registry is a
+    ;; UI/progression index and never an alternate graph evaluator.
     (skill-registry/register-skill! skill-spec))
   true)
 
 (defn init-combat-ability-content!
   "Production composition root for ability content.
 
-  Registers player-facing metadata, then installs only migrated EDN abilities.
-  Pending skills remain visible but disabled and are rejected at the server
-  boundary; legacy Context execution is not installed."
+  Registers player-facing metadata from the final EDN catalog and installs no
+  alternate Context or callback execution path."
   []
   (install/framework-once! ::combat-ability-content-installed
     (fn []
@@ -78,7 +76,7 @@
         (category/register-category! (dissoc cat :ac/content-type)))
       (register-combat-catalog!)
       ;; The saved-name screen is only a persistence/RPC bridge. Teleport
-      ;; execution itself is the migrated Combat Core EDN program.
+      ;; execution itself is the final Combat Core EDN program.
       (loc-teleport-rpc/init!)
       (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
       (category/freeze-category-registry!)

@@ -27,6 +27,13 @@
     (throw (ex-info "missing combat contract field" {:field k :value m})))
   m)
 
+(defn- require-instance-identity [value]
+  (when-not (or (contains? value :instance-key)
+                (contains? value :instance-id))
+    (throw (ex-info "combat VFX signal requires instance-key or instance-id"
+                    {:value value})))
+  value)
+
 (defn intent [value]
   (when (and (contains? value :schema-version)
              (not= schema-version (:schema-version value)))
@@ -85,12 +92,18 @@
   (let [value (-> value (require-key :op)
                   (assoc :schema-version schema-version
                          :seed (long (or (:seed value) 0))))]
-    (when-not (#{:spawn :signal :destroy :clear-owner} (:op value))
+    (when-not (#{:spawn :update :trigger :destroy :clear-owner :snapshot} (:op value))
       (throw (ex-info "unknown combat VFX signal operation" {:value value})))
-    (when (#{:spawn :signal} (:op value))
-      (doseq [k [:effect-id :instance-key :owner :event-seq]]
+    (when (#{:spawn :update :trigger :snapshot} (:op value))
+      (doseq [k [:effect-id :owner :event-seq]]
         (require-key value k)))
-    (when (and (#{:spawn :signal :destroy} (:op value))
+    (when (#{:spawn :update :trigger :snapshot} (:op value))
+      (require-instance-identity value))
+    (when (= :destroy (:op value))
+      (doseq [k [:effect-id :event-seq]]
+        (require-key value k))
+      (require-instance-identity value))
+    (when (and (#{:spawn :update :trigger :snapshot :destroy} (:op value))
                (contains? value :event-seq)
                (not (integer? (:event-seq value))))
       (throw (ex-info "combat VFX event-seq must be an integer" {:value value})))

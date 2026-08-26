@@ -7,6 +7,13 @@
 
 (def ^:private gui-type :node)
 (defn- msg [action] (msg-registry/msg gui-type action))
+
+(defn- node-info-area-policy
+  "Pure owner policy for the two editable node fields."
+  [is-owner?]
+  {:editable-node-name? (boolean is-owner?)
+   :editable-password? (boolean is-owner?)})
+
 (defn- send-owner [] (runtime-hooks/default-client-owner))
 
 (defn send-change-name [container value]

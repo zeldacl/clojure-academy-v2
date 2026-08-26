@@ -99,8 +99,11 @@
 
 (defn require-client-owner
   [owner]
-  (require-player-uuid! :client-owner
-                        (require* client-owner-schema valid-client-owner? :client-owner owner)))
+  ;; Report the actionable missing identity before the broader schema
+  ;; validator. This keeps the mcmod boundary deterministic for malformed
+  ;; client packets and preserves the contract-specific diagnostic.
+  (require-player-uuid! :client-owner owner)
+  (require* client-owner-schema valid-client-owner? :client-owner owner))
 
 (defn require-server-owner
   [owner]

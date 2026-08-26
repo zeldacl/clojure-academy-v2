@@ -773,6 +773,56 @@
                      {:attacker-uuid owner})]
         {:status (if (not= false applied) :applied :failed)}))))
 
+(defn charged-area-damage!
+  "Apply bounded radial damage with a deterministic charge ratio and falloff.
+
+   The graph owns the charge policy and damage type; this host action only
+   resolves neutral entity facts and crosses the mcmod damage boundary."
+  [{:keys [owner world-id center radius damage damage-type projection
+           current-ticks minimum-ticks maximum-ticks ratio-min ratio-max
+           ratio-slot limit]
+    entity-filter :filter}]
+  (let [center (point center)
+        radius (double (max 0.0 (min 64.0 (or radius 0.0))))
+        minimum (double (or minimum-ticks 0.0))
+        maximum (double (or maximum-ticks minimum))
+        current (double (or current-ticks minimum))
+        span (max 1.0 (- maximum minimum))
+        ratio (max (double (or ratio-min 0.0))
+                   (min (double (or ratio-max 1.0))
+                        (/ (- current minimum) span)))
+        base-damage (double (or damage 0.0))
+        entities (if (and owner world-id center (pos? radius))
+                   (entity-select! {:owner owner :world-id world-id
+                                    :shape {:type :sphere :center center :radius radius}
+                                     :filter entity-filter :projection projection
+                                    :limit (max 0 (min 256 (long (or limit 256))))}
+                                   nil)
+                   [])
+        results (mapv (fn [entity]
+                        (let [position (point (:position entity))
+                              distance (if (and center position)
+                                         (Math/sqrt
+                                          (reduce + (map (fn [a b]
+                                                           (let [d (- (double a) (double b))]
+                                                             (* d d)))
+                                                         center position)))
+                                         radius)
+                              falloff (max 0.0 (min 1.0 (- 1.0 (/ distance (max radius 1.0)))))
+                              amount (* base-damage ratio falloff)
+                              result (when (pos? amount)
+                                       (damage! {:owner owner :world-id world-id
+                                                 :target (:id entity)
+                                                 :amount amount
+                                                 :damage-type damage-type}))]
+                          {:entity (:id entity) :amount amount :result result}))
+                      entities)
+        applied (filter #(= :applied (get-in % [:result :status])) results)]
+    {:status (if (seq applied) :applied :failed)
+     :ratio ratio
+     :ratio-slot ratio-slot
+     :hits results}))
+
 (defn break!
   [{:keys [owner world-id position expected-block-id drop? fortune-level
            tool-tier-capped?]}]
@@ -1448,8 +1498,53 @@
               {:status :applied :entity-id entity-id})
             {:status :unhandled :reason :entity-motion-port-missing}))))))
 
+(defn beam-trace!
+  "Resolve a bounded neutral beam into its geometric endpoints, entity hits,
+   and block samples. Damage values are carried as facts for the final graph;
+   this query never mutates the world."
+  [{:keys [owner world-id origin trace-origin direction length visual-length
+           radius query-radius entity-limit block-limit damage damage-type
+           reflection-policy step]} frame]
+  (let [start (point (or trace-origin origin))
+        direction (normalize-vector (or (point direction) [0.0 0.0 1.0]))
+        length (max 0.0 (min 256.0 (double (or length 0.0))))
+        [dx dy dz] direction
+        end (when start
+              [(+ (nth start 0) (* dx length))
+               (+ (nth start 1) (* dy length))
+               (+ (nth start 2) (* dz length))])
+        entities (if (and world-id start end (pos? (long (or entity-limit 256))))
+                   (mapv #(assoc % :damage (double (or damage 0.0))
+                                  :damage-type (or damage-type :generic))
+                         (entity-select!
+                          {:owner owner :world-id world-id
+                           :shape {:type :line :start start :end end
+                                   :radius (double (or radius 0.0))}
+                           :projection [:id :type :position :eye-height :living?]
+                           :limit entity-limit}
+                          frame))
+                   [])
+        blocks (if (and world-id start (pos? length))
+                 (block-select!
+                  {:owner owner :world-id world-id
+                   :shape {:start start :direction direction :length length
+                           :step (double (or step 0.9))}
+                   :limit block-limit}
+                  frame)
+                 [])]
+    {:start start
+     :end (or end start)
+     :visual-end (when start
+                   [(+ (nth start 0) (* dx (double (or visual-length length))))
+                    (+ (nth start 1) (* dy (double (or visual-length length))))
+                    (+ (nth start 2) (* dz (double (or visual-length length))))])
+     :entities entities
+     :blocks blocks
+     :reflection-policy reflection-policy}))
+
 (defn query-handlers []
   {:raycast raycast!
+   :beam-trace beam-trace!
    :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!
@@ -1461,6 +1556,8 @@
 
 (defn action-handlers []
   {:entity/damage damage!
+   :entity/status entity-status!
+   :combat/charged-area-damage charged-area-damage!
    :entity/impulse entity-impulse!
    :entity/radial-impulse radial-impulse!
    :block/break break!
@@ -1481,7 +1578,6 @@
    :entity/teleport teleport-entity!
    :entity/teleport-group teleport-group!
    :entity/trigger-behavior trigger-behavior!
-   :entity/status entity-status!
    :owner/can-fly owner-can-fly!
    :block/random-break random-break!
    :block/area-break area-break!

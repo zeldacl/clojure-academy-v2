@@ -146,7 +146,7 @@
     :impl run-bind})
   (registry/register-primitive!
    {:id :flow/finish :revision 1
-    :doc "Mark the program finished with :outcome; nothing after it runs. :finish-session? (default false) is an opaque pass-through flag domain engines may read off the final ctx to decide whether to end a multi-phase session early (e.g. combat-core's skill_runtime.clj reads it for :pulse-phase early termination -- :release/:abort already end the session unconditionally through a separate rule) -- node-core itself never interprets it."
+    :doc "Mark the program finished with :outcome; nothing after it runs. :finish-session? (default false) is an opaque pass-through flag that a domain engine may read from the final context to end a multi-phase session early; node-core itself never interprets it."
     :category :flow
     :inputs {:outcome {:type :keyword} :finish-session? {:type :boolean :default false}}
     :effects #{:mutate}

@@ -1,20 +1,14 @@
 (ns cn.li.node.composite-loader
-  "Generic loading of :layer :mid composite documents from a manifest +
-   individual EDN resources into node-core's registry -- mirrors combat-
-   core's pre-existing v2 pattern (recipe.clj's load-composites!) so both
-   language layers use the same shape: a manifest lists {:kind :composite
-   :id :resource}, each resource is read via an injected `document-loader`
-   (real content uses cn.li.mcmod.runtime.safe-edn/read-resource! --
-   strict, tag-free, data-only -- but this namespace cannot depend on
-   mcmod directly, so the caller supplies it, exactly like recipe.clj's
-   own :document-loader parameter already does), and one bad document
-   disables only itself (Design E: fail-closed per document, not
-   globally) rather than the whole registry load.
+  "Generic loading of :layer :mid composite documents from a manifest and
+   individual EDN resources. A manifest lists {:kind :composite :id :resource}
+   entries; each resource is read via an injected `document-loader` supplied
+   by the mcmod boundary, and one bad document disables only itself rather
+   than the whole registry load.
 
    A composite document read this way is, byte for byte, the same map
    cn.li.node.descriptor/register-composite! already accepts -- composites
-   were always meant to be authored as data, this namespace is just the
-   'read the data from a file' step that was still missing."
+   are authored as data; this namespace only performs the resource-loading
+   step and never interprets a composite at runtime."
   (:require [cn.li.node.descriptor :as node]))
 
 (defn- fail [message data]

@@ -3,13 +3,11 @@
 
   The session value contains only neutral owner/ability/context data.  It
   never stores Minecraft objects or skill-specific state; all behavior is
-  still selected by the compiled combat program."
-  (:require [cn.li.ac.ability.service.combat-catalog :as catalog]))
+  still selected by the compiled combat program.")
 
 (defonce ^:private sessions* (atom {}))
 
 (defn start! [owner ability-id intent]
-  (catalog/require-available ability-id)
   (let [entry {:owner owner
                :ability-id ability-id
                :context (:context intent)

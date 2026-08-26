@@ -1,5 +1,5 @@
 (ns cn.li.node.descriptor
-  "The node registry: primitive and composite/source descriptors share one
+  "The final node registry: primitive and composite/source descriptors share one
    lookup table so a caller never needs to know which kind resolved a
    component id. This is where the three-layer rule (NODE_LANGUAGE.md
    section 1) is mechanically enforced at registration time -- a :mid
