@@ -20,7 +20,7 @@
          dispatch (fn [action _payload current]
                    (let [result (dispatch-action! action current)]
                      (if (map? result) result current)))
-         vm (v2/mount-view! {:view-id :academy/app/application
+         vm (v2/mount-view! {:view-id :academy.app/application
                              :host-kind host-kind
                              :state state
                              :dispatch-action! dispatch

@@ -1,4 +1,4 @@
-{:view/id :academy/app/combat-hud
+{:view/id :academy.app/combat-hud
  :host {:kind :hud :design-width 320 :design-height 180 :scale-policy :fit}
  :state-schema {:cp-ratio :number :overload-ratio :number :charging? :boolean :selected-skill :keyword :skills :vector}
  :root {:type :stack :key :combat/root :layout {:width :fill :height :fill}

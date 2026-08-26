@@ -12,10 +12,8 @@
    into Quad/Image/GlyphRun commands generically, so this namespace stays
    the only place that understands what any of these fields mean."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
-            [cn.li.presentation.core.host :as bridge]
             [cn.li.ac.gui.presentation-v2 :as v2])
-  (:import [cn.li.presentation.core ActionId ActionPayload ActionResult BindingTable
-            PresentationViewModel]))
+)
 
 (def binding-ids
   {:cp-ratio 0
@@ -255,70 +253,27 @@
     21 (interfered-items snapshot)
     nil))
 
-(defn- binding-table [snapshot-atom]
-  (reify BindingTable
-    (value [_ id] (binding-value @snapshot-atom id))))
-
-;; :selected-skill and :skill-wheel-open? are UI-only state (which wedge is
-;; highlighted, whether the wheel overlay is open) — reactive-hud/build-snapshot
-;; never sets either, so refresh! must not clobber them when it pulls in a new
-;; server-derived snapshot every frame.
 (def ^:private ui-only-keys [:selected-skill :skill-wheel-open?])
 
 (defn combat-view-model
-  "Create the ViewModel for one local player. `dispatch-action!` is injected by
-   AC so the core Runtime never knows game-specific skill semantics."
   [player-uuid dispatch-action!]
   (let [snapshot (atom {})
-        last-action (atom nil)
-        bindings (binding-table snapshot)
-        model (reify PresentationViewModel
-                (bindings [_] bindings)
-                (^ActionResult dispatch [_ ^ActionId action ^ActionPayload payload]
-                  ;; payload is the raw Java ActionPayload wrapper (empty or a
-                  ;; capped byte array) — there is no decoder for structured
-                  ;; click data (e.g. "which wedge") on this path yet, so
-                  ;; :combat/select-skill cycles rather than jumping to an
-                  ;; index the payload can't actually carry today.
-                  (let [action-key (get action-ids (.value action))]
-                    (case action-key
-                      :combat/select-skill
-                      (do (swap! snapshot (fn [s]
-                                            (let [n (max 1 (count (:skill-slots s [])))
-                                                  current (long (or (:selected-skill s) -1))]
-                                              (assoc s :selected-skill (mod (inc current) n)))))
-                          (reset! last-action [action-key payload])
-                          (dispatch-action! action-key payload)
-                          (ActionResult/accepted))
-
-                      :combat/toggle-skill-wheel
-                      (do (swap! snapshot update :skill-wheel-open? not)
-                          (reset! last-action [action-key payload])
-                          (dispatch-action! action-key payload)
-                          (ActionResult/accepted))
-
-                      nil (ActionResult/rejected "unknown combat HUD action")
-
-                      (do (reset! last-action [action-key payload])
-                          (dispatch-action! action-key payload)
-                          (ActionResult/accepted)))))
-                (close [_] (reset! snapshot {})))]
-    {:model model
-     :snapshot snapshot
-     :bindings bindings
-     :last-action last-action
-     :refresh! (fn [screen-w screen-h opts]
-                 (let [ui-state (select-keys @snapshot ui-only-keys)]
-                   (reset! snapshot (merge (reactive-hud/build-snapshot player-uuid screen-w screen-h opts)
-                                           ui-state)))
-                 @snapshot)}))
+        refresh! (fn [screen-w screen-h opts]
+                   (let [ui-state (select-keys @snapshot ui-only-keys)]
+                     (reset! snapshot
+                             (merge (reactive-hud/build-snapshot player-uuid screen-w screen-h opts)
+                                    ui-state)))
+                   @snapshot)]
+    {:snapshot snapshot
+     :refresh! refresh!
+     :dispatch-action! dispatch-action!}))
 
 (defn mount-combat-hud!
-  [runtime player-uuid screen-w screen-h opts dispatch-action!]
+  [_runtime player-uuid screen-w screen-h opts dispatch-action!]
   (let [{:keys [snapshot refresh!]} (combat-view-model player-uuid dispatch-action!)
         _ (refresh! screen-w screen-h opts)
         vm (v2/mount-view!
-             {:view-id :academy/app/combat-hud
+             {:view-id :academy.app/combat-hud
               :host-kind :hud
               :state @snapshot
               :dispatch-action!

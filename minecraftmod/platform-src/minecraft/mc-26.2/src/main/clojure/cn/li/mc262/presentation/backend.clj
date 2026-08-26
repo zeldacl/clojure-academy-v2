@@ -7,12 +7,11 @@
   (:require [cn.li.mcmod.runtime.presentation-backend :as neutral])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
-            RenderCommand$GlyphRun RenderCommand$Image RenderCommand$ItemPreview
             RenderCommand$UiImageBatch RenderCommand$UiItemPreview RenderCommand$UiModelPreview
-            RenderCommand$UiQuadBatch RenderCommand$UiText
+            RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PopClip RenderCommand$PostProcess
-            RenderCommand$PushClip RenderCommand$Quad RenderCommand$Ribbon RenderPass]
+            RenderCommand$PushClip RenderCommand$Ribbon RenderPass]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphicsExtractor Font]))
 
@@ -31,12 +30,6 @@
 
 (defn- draw-command! [^GuiGraphicsExtractor graphics stage context ^RenderCommand command]
   (condp instance? command
-    RenderCommand$Quad
-    (let [^RenderCommand$Quad c command]
-      (.fill graphics (int (.x c)) (int (.y c))
-                      (int (+ (.x c) (.width c))) (int (+ (.y c) (.height c)))
-                      (.rgba c)))
-
     RenderCommand$UiQuadBatch
     (let [^RenderCommand$UiQuadBatch batch command]
       (doseq [^RenderCommand$UiQuad quad (.quads batch)]
@@ -64,16 +57,6 @@
     (let [^RenderCommand$UiModelPreview c command]
       (callback! context :draw-ui-model-preview!
                  [graphics stage (.modelId c) (.x c) (.y c) (.width c) (.height c)]))
-    RenderCommand$Image
-    (let [^RenderCommand$Image c command]
-      (callback! context :draw-image!
-                 [graphics stage (.textureId c) (.x c) (.y c) (.width c) (.height c) (.rgba c)]))
-
-    RenderCommand$GlyphRun
-    (let [^RenderCommand$GlyphRun c command
-          ^Minecraft mc (Minecraft/getInstance)]
-      (.text graphics (.-font mc) (.text c) (int (.x c)) (int (.y c)) (.rgba c)))
-
     RenderCommand$PushClip
     (let [^RenderCommand$PushClip c command]
       (.enableScissor graphics (int (.x c)) (int (.y c))
@@ -108,10 +91,6 @@
     RenderCommand$Beam
     (let [^RenderCommand$Beam c command]
       (callback! context :draw-beam! [graphics stage (.materialId c) (.segmentCount c)]))
-
-    RenderCommand$ItemPreview
-    (let [^RenderCommand$ItemPreview c command]
-      (callback! context :draw-item-preview! [graphics stage (.itemId c) (.x c) (.y c) (.scale c)]))
 
     RenderCommand$CameraContribution
     (let [^RenderCommand$CameraContribution c command]

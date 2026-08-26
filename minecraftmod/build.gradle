@@ -1744,6 +1744,47 @@ tasks.register("verifyMinecraftComponentNeutrality") {
     }
 }
 
+tasks.register("verifyPresentationArtifacts") {
+    group = "verification"
+    description = "Require every declarative UI source to compile into the v2 artifact manifest."
+    dependsOn ":ac:compilePresentationViews"
+    doLast {
+        def sourceRoot = file("ac/src/presentation/resources")
+        def generatedRoot = file("build/neutral/ac/generated/resources/presentation")
+        def manifest = new File(generatedRoot, "META-INF/academy-presentation-views.edn")
+        if (!manifest.isFile()) {
+            throw new GradleException("Presentation v2 manifest missing: " + manifest)
+        }
+        def sources = fileTree(sourceRoot).matching { include "**/*.ui.edn" }.files
+        if (sources.size() < 7) {
+            throw new GradleException("Expected all declarative UI surfaces under " + sourceRoot + "; found " + sources.size())
+        }
+        def manifestText = manifest.getText("UTF-8")
+        sources.each { source ->
+            def text = source.getText("UTF-8")
+            def matcher = text =~ /:view\/id\s+(:[A-Za-z0-9_.-]+\/[A-Za-z0-9_-]+)/
+            if (!matcher.find()) {
+                throw new GradleException("UI source has no :view/id: " + source)
+            }
+            def viewId = matcher.group(1)
+            if (!manifestText.contains(viewId.substring(1))) {
+                throw new GradleException("Compiled manifest is missing " + viewId + " from " + source)
+            }
+        }
+        def legacyRoots = [
+            file("ac/src/main/resources/assets/academy/presentation"),
+            file("presentation-core/src/main/clojure/cn/li/presentation/core/host.clj"),
+            file("presentation-core/src/main/clojure/cn/li/presentation/core/runtime.clj"),
+            file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/core.clj"),
+            file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/render.clj")
+        ]
+        def residues = legacyRoots.findAll { it.exists() }
+        if (!residues.isEmpty()) {
+            throw new GradleException("Legacy Presentation UI residues remain: " + residues)
+        }
+        logger.lifecycle("[verifyPresentationArtifacts] ok (" + sources.size() + " sources)")
+    }
+}
 tasks.register("verifyCurrentPlatforms") {
     group = "verification"
     description = "Run architecture gates for the catalog-based platform layout."

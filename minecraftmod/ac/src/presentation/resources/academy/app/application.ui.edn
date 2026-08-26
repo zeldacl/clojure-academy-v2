@@ -1,4 +1,4 @@
-{:view/id :academy/app/application
+{:view/id :academy.app/application
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :lines :vector :input :string :scroll :number :modal :map}
  :root {:type :column :key :application/root :layout {:x 8 :y 8 :width 304 :height 224}

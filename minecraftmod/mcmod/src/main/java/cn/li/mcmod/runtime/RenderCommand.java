@@ -8,20 +8,14 @@ import java.util.List;
  * compile time; behaviour stays in Clojure backends.
  */
 public sealed interface RenderCommand
-        permits RenderCommand.Quad, RenderCommand.Image, RenderCommand.GlyphRun,
-                RenderCommand.UiQuadBatch, RenderCommand.UiImageBatch, RenderCommand.UiText,
+        permits RenderCommand.UiQuadBatch, RenderCommand.UiImageBatch, RenderCommand.UiText,
                 RenderCommand.UiItemPreview, RenderCommand.UiModelPreview,
                 RenderCommand.PushClip, RenderCommand.PopClip, RenderCommand.Layer,
                 RenderCommand.Mesh, RenderCommand.Billboard, RenderCommand.ParticleBatch,
-                RenderCommand.Ribbon, RenderCommand.Beam, RenderCommand.ItemPreview,
+                RenderCommand.Ribbon, RenderCommand.Beam,
                 RenderCommand.CameraContribution, RenderCommand.PostProcess,
                 RenderCommand.OrderBarrier, RenderCommand.Batch {
-    record Quad(float x, float y, float width, float height, int rgba) implements RenderCommand {}
-    record Image(int textureId, float x, float y, float width, float height, int rgba) implements RenderCommand {}
-    record GlyphRun(int fontId, String text, float x, float y, int rgba) implements RenderCommand {
-        public GlyphRun { text = text == null ? "" : text; }
-    }
-record UiQuad(float x, float y, float width, float height, int rgba) {}
+    record UiQuad(float x, float y, float width, float height, int rgba) {}
     record UiQuadBatch(List<UiQuad> quads) implements RenderCommand {
         public UiQuadBatch { quads = List.copyOf(quads == null ? List.of() : quads); }
     }
@@ -67,7 +61,6 @@ record UiQuad(float x, float y, float width, float height, int rgba) {}
     }
     record Ribbon(int materialId, int pointCount) implements RenderCommand {}
     record Beam(int materialId, int segmentCount) implements RenderCommand {}
-    record ItemPreview(int itemId, float x, float y, float scale) implements RenderCommand {}
     record CameraContribution(float fovDelta, float shakeX, float shakeY, float roll) implements RenderCommand {}
     record PostProcess(int materialId, float intensity) implements RenderCommand {}
     record OrderBarrier() implements RenderCommand {}

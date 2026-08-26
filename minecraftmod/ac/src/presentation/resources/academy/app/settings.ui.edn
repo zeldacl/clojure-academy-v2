@@ -1,4 +1,4 @@
-{:view/id :academy/app/settings
+{:view/id :academy.app/settings
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string
                 :enabled? :boolean}

@@ -2,9 +2,8 @@
   "AC-owned adapter for the retained Presentation Runtime v2.
 
    Surface controllers provide plain state maps and action functions. This
-   namespace owns only artifact lookup, mount geometry, deterministic paint,
-   and the opaque host bridge; it never creates legacy PresentationViewModel
-   or template renderer objects."
+   namespace owns artifact lookup, mount geometry, deterministic paint,
+   and the opaque host bridge; it exposes no renderer implementation details."
   (:require [cn.li.presentation.core.artifact :as artifact]
             [cn.li.presentation.core.paint-v2 :as paint]
             [cn.li.mcmod.client.platform-bridge :as bridge]
@@ -30,12 +29,12 @@
     (keyword? view-id) view-id
     (string? view-id)
     (case view-id
-      "academy:combat_hud" :academy/app/combat-hud
-      "academy:terminal" :academy/app/terminal
-      "academy:application" :academy/app/application
-      "academy:machine_container" :academy/app/machine-container
-      "academy:wireless_matrix" :academy/app/wireless-matrix
-      "academy:wireless_node" :academy/app/wireless-node
+      "academy:combat_hud" :academy.app/combat-hud
+      "academy:terminal" :academy.app/terminal
+      "academy:application" :academy.app/application
+      "academy:machine_container" :academy.app/machine-container
+      "academy:wireless_matrix" :academy.app/wireless-matrix
+      "academy:wireless_node" :academy.app/wireless-node
       (keyword (str/replace view-id ":" "/")))
     :else view-id))
 

@@ -12,7 +12,7 @@
 (defn terminal-view-model [owner dispatch-action!]
   (let [state (terminal/state-snapshot owner)
         vm (v2/mount-view!
-             {:view-id :academy/app/terminal
+             {:view-id :academy.app/terminal
               :host-kind :screen
               :state state
               :dispatch-action!
