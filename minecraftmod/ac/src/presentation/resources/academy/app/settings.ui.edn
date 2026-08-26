@@ -1,0 +1,16 @@
+{:view/id :academy/app/settings
+ :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string
+                :enabled? :boolean}
+ :root {:type :column
+        :layout {:x 16 :y 16 :width 288 :height 208}
+        :children [{:type :text
+                    :layout {:height 18}
+                    :bind {:text [:state :title]}
+                    :semantics {:role :heading}}
+                   {:type :button
+                    :key :save
+                    :layout {:width 96 :height 20}
+                    :bind {:enabled? [:state :enabled?]}
+                    :on {:activate :settings/save}
+                    :semantics {:role :button :label "Save"}}]}}
