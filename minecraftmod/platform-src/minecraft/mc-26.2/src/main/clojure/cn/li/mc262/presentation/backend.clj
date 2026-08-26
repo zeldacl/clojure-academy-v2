@@ -8,6 +8,8 @@
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
             RenderCommand$GlyphRun RenderCommand$Image RenderCommand$ItemPreview
+            RenderCommand$UiImageBatch RenderCommand$UiItemPreview RenderCommand$UiModelPreview
+            RenderCommand$UiQuadBatch RenderCommand$UiText
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PopClip RenderCommand$PostProcess
             RenderCommand$PushClip RenderCommand$Quad RenderCommand$Ribbon RenderPass]
@@ -35,6 +37,33 @@
                       (int (+ (.x c) (.width c))) (int (+ (.y c) (.height c)))
                       (.rgba c)))
 
+    RenderCommand$UiQuadBatch
+    (let [^RenderCommand$UiQuadBatch batch command]
+      (doseq [^RenderCommand$UiQuad quad (.quads batch)]
+        (.fill graphics (int (.x quad)) (int (.y quad))
+                       (int (+ (.x quad) (.width quad)))
+                       (int (+ (.y quad) (.height quad)))
+                       (.rgba quad))))
+
+    RenderCommand$UiImageBatch
+    (let [^RenderCommand$UiImageBatch c command]
+      (callback! context :draw-ui-image-batch!
+                 [graphics stage (.resource c) (.images c)]))
+
+    RenderCommand$UiText
+    (let [^RenderCommand$UiText c command
+          ^Minecraft mc (Minecraft/getInstance)]
+      .text graphics (.-font mc) (.text c) (int (.x c)) (int (.y c)) (.rgba c)))
+
+    RenderCommand$UiItemPreview
+    (let [^RenderCommand$UiItemPreview c command]
+      (callback! context :draw-ui-item-preview!
+                 [graphics stage (.itemId c) (.x c) (.y c) (.scale c)]))
+
+    RenderCommand$UiModelPreview
+    (let [^RenderCommand$UiModelPreview c command]
+      (callback! context :draw-ui-model-preview!
+                 [graphics stage (.modelId c) (.x c) (.y c) (.width c) (.height c)]))
     RenderCommand$Image
     (let [^RenderCommand$Image c command]
       (callback! context :draw-image!
@@ -109,7 +138,7 @@
               :when (= wanted (.stage pass))
               ^RenderCommand command (.commands pass)]
         (when (or (instance? GuiGraphicsExtractor graphics)
-                  (and (map? context) (fn? (:draw-mesh! context))))
+                  (and (map? context) (some fn? (vals context))))
           (draw-command! graphics stage context command)))))
   frame)
 
