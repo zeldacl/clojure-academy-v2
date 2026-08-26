@@ -42,7 +42,7 @@
                  :backend-context
                  {:draw-batch!
                   (fn [_g _stage prim _mat _var _cnt payload]
-                    (when (or (= "mesh" prim) (#{"line" "quad"} prim))
+                    (when (or (= "mesh" prim) (#{"line" "quad" "particle"} prim))
                       (doseq [plan (if (= "mesh" prim) (or payload []) [(vfx-plan/neutral-op->plan payload)])]
                         (geometry/render-presentation-geometry!
                           {:player player :pose-stack pose-stack :buffer-source buffer-source

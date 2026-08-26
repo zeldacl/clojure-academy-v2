@@ -3,9 +3,10 @@
 
    VFX Core owns evaluated, typed-neutral draw operations.  The existing
    mc-* geometry modules remain responsible for Minecraft buffer state, so
-   this adapter only expands line/beam/ring/quad geometry into their
+   this adapter only expands line/beam/ring/quad/particle geometry into their
    long-lived {:ops [...]} plan shape.  It imports no Minecraft class."
-  (:import [cn.li.mcmod.math V3]))
+  (:import [cn.li.mcmod.math V3]
+           [cn.li.mcmod.runtime.vfx ParticleBuffer]))
 
 (def ^:private default-color [255 255 255 255])
 (def ^:private default-texture "minecraft:textures/misc/white.png")
@@ -78,6 +79,32 @@
         :color color}]
       [])))
 
+(defn- particle-ops
+  "Expand the bounded Java particle SoA into billboard-like world quads.
+
+  The neutral ABI deliberately carries positions/colors only; camera-facing
+  orientation remains a version renderer concern. A stable XZ-facing quad is
+  therefore emitted here, which every existing mc-* quad backend can consume
+  without importing Minecraft classes into VFX core."
+  [^ParticleBuffer particles material]
+  (let [n (min (.size particles) (.capacity particles))
+        spec (or (:particle material) {})
+        half (max 0.001 (number-or (or (:size spec) (:scale spec)) 0.1))
+        texture (or (:texture spec) default-texture)]
+    (mapv (fn [i]
+            (let [x (double (aget (.positionX particles) i))
+                  y (double (aget (.positionY particles) i))
+                  z (double (aget (.positionZ particles) i))
+                  color (aget (.color particles) i)]
+              {:kind :quad
+               :p0 (V3. (- x half) y (- z half))
+               :p1 (V3. (- x half) y (+ z half))
+               :p2 (V3. (+ x half) y (+ z half))
+               :p3 (V3. (+ x half) y (- z half))
+               :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+               :texture texture :color color}))
+          (range n))))
+
 (defn neutral-op->plan
   "Return the mc-* geometry plan for one neutral draw-batch operation.
 
@@ -97,5 +124,10 @@
                                          :end (:end geometry)} color)
                         (line-ops geometry color))
                 :quad (quad-ops geometry color material)
+                :particle (if-let [particles (:particle-buffer op)]
+                            (if (instance? ParticleBuffer particles)
+                              (particle-ops particles material)
+                              [])
+                            [])
                 [])]
       {:ops ops})))

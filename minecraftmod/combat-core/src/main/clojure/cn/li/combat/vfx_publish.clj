@@ -9,28 +9,7 @@
    catalog's lifespan; this namespace only needs the catalog data itself
    the final typed VFX catalog passed in explicitly per call -- it never
    loads, caches, or knows where the catalog comes from."
-  (:import [java.util UUID]
-           [cn.li.mcmod.runtime.vfx VfxLifecyclePacket VfxPacketKind]))
-(defn- typed-packet [signal]
-  (let [kind (case (:op signal)
-               :spawn VfxPacketKind/SPAWN
-               :snapshot VfxPacketKind/SNAPSHOT
-               :update VfxPacketKind/DELTA
-               :trigger VfxPacketKind/EVENT
-               :destroy VfxPacketKind/DESTROY
-               :release VfxPacketKind/RELEASE
-               :clear-owner VfxPacketKind/OWNER_RESET
-               (throw (ex-info "unknown VFX operation" {:op (:op signal)})))
-        owner (:owner signal)
-        owner (if (instance? UUID owner) owner (UUID/nameUUIDFromBytes (.getBytes (str owner) "UTF-8")))]
-    (VfxLifecyclePacket. kind (long (or (:world-epoch signal) 0))
-                          (long (or (:instance-id signal) 0))
-                          (int (or (:asset-id signal) (bit-and 0x7fffffff (hash (:effect-id signal)))))
-                          (long (or (:state-seq signal) 0))
-                          (long (or (:event-seq signal) 0)) owner
-                          (long (or (:start-server-tick signal) 0))
-                          (long (or (:seed signal) 0)))))
-
+  (:require [cn.li.vfx.network :as vfx-network]))
 (defonce ^:private result-sink* (atom nil))
 ;; :self signals go to the caster alone (same per-owner transport as
 ;; result-sink*, just a different message id so the client can register one
@@ -188,11 +167,11 @@
                                                    (bit-and 0x7fffffff (hash (:effect-id signal)))))]
         (case scope
           :self (if-let [sink @vfx-typed-self-sink*]
-                  (sink owner (typed-packet typed-signal) signal)
+                  (sink owner (vfx-network/signal->packet typed-signal) signal)
                   (throw (ex-info "typed VFX self sink is not installed" {:owner owner})))
           (do (track-persistent-signal! vfx-catalog owner signal)
               (if-let [sink @vfx-typed-broadcast-sink*]
-                (sink owner (typed-packet typed-signal) signal
+                (sink owner (vfx-network/signal->packet typed-signal) signal
                       (when (not= :world scope) radius))
                 (throw (ex-info "typed VFX broadcast sink is not installed" {:owner owner})))))))))
 (defn replay-persistent-signals!
@@ -207,7 +186,7 @@
   (doseq [[owner signals] @active-persistent-signals*
           signal (vals signals)]
     (let [{:keys [scope radius]} (normalize-signal-audience vfx-catalog signal)
-          typed (typed-packet (assoc signal :asset-id (or (:asset-id signal)
+          typed (vfx-network/signal->packet (assoc signal :asset-id (or (:asset-id signal)
                                                           (bit-and 0x7fffffff (hash (:effect-id signal))))))]
       (if-let [sink @vfx-typed-broadcast-sink*]
         (sink owner typed signal (when (not= :world scope) radius))
@@ -239,7 +218,7 @@
   (forget-owner-persistent-signals! owner)
   (swap! latest-signals* dissoc owner)
   (let [signal {:op :clear-owner :owner owner :event-seq 0}
-        typed (typed-packet signal)]
+        typed (vfx-network/signal->packet signal)]
     (if-let [sink @vfx-typed-broadcast-sink*]
       (sink owner typed signal nil)
       (throw (ex-info "typed VFX broadcast sink is not installed" {:owner owner}))))
