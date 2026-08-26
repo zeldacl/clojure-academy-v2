@@ -105,12 +105,56 @@
                :texture texture :color color}))
           (range n))))
 
+(defn- marker-quad [anchor color]
+  (let [center (v3-from anchor)
+        half 0.08
+        x (.-x center)
+        y (.-y center)
+        z (.-z center)]
+    [{:kind :quad
+      :p0 (V3. (- x half) y (- z half))
+      :p1 (V3. (- x half) y (+ z half))
+      :p2 (V3. (+ x half) y (+ z half))
+      :p3 (V3. (+ x half) y (- z half))
+      :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+      :texture default-texture :color color}]))
+
+(defn- first-field [fields keys]
+  (some (fn [key]
+          (let [value (get fields key)]
+            (when (some? value) value)))
+        keys))
+
+(defn- point-chain-ops [points color]
+  (let [points (vec (take 256 points))]
+    (mapv (fn [[p1 p2]] (line-op p1 p2 color))
+          (partition 2 1 points))))
+
+(defn- typed-vfx-ops
+  "Lower an explicitly typed-vfx fallback without dropping it.
+
+  Leaf components that do not yet have a specialized sampler still cross the
+  same neutral ABI. Common geometric fields are preserved as lines/rings; a
+  bounded marker quad is used only when no geometry can be inferred. This is
+  intentionally visible and deterministic, unlike the old empty-plan path."
+  [geometry color]
+  (let [fields (or (:fields geometry) {})
+        start (first-field fields [:start :from :origin :position :anchor :base])
+        end (first-field fields [:end :to :target])
+        center (first-field fields [:center :position :origin :anchor :base])
+        radius (first-field fields [:radius :size :width])
+        points (first-field fields [:points :path :vertices])]
+    (cond
+      (and start end) [(line-op start end color)]
+      (and (sequential? points) (> (count points) 1)) (point-chain-ops points color)
+      (and center (number? radius)) (ring-ops {:center center :radius radius :segments 16} color)
+      :else (marker-quad center color))))
+
 (defn neutral-op->plan
   "Return the mc-* geometry plan for one neutral draw-batch operation.
 
-   Unsupported typed/emitter payloads intentionally become an empty plan: the
-   operation has crossed the ABI and cannot be interpreted by a version layer
-   without an explicit renderer implementation.  No legacy payload is read."
+   Particle and typed-vfx payloads are lowered through explicit neutral rules;
+   no legacy payload is read and no recognized operation is silently discarded."
   [op]
   (when (and (map? op) (= :draw-batch (:operation op)))
     (let [geometry (or (:geometry op) {})
@@ -129,5 +173,6 @@
                               (particle-ops particles material)
                               [])
                             [])
+                :typed-vfx (typed-vfx-ops geometry color)
                 [])]
       {:ops ops})))

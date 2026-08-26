@@ -9,6 +9,8 @@
 (import '(java.nio ByteBuffer ByteOrder))
 (import '(java.nio.charset StandardCharsets))
 (def ^:const protocol-version 1)
+;; VFX catalog negotiation and the physical channel advertise one bound.
+(def ^:const max-vfx-frame-bytes 32768)
 (def packet-types {:catalog-hello 1 :catalog-ack 2 :input-edge 3 :input-ack 4 :combat-feedback 5 :vfx-trigger 6 :vfx-spawn 7 :vfx-update 8 :vfx-destroy 9 :vfx-clear-owner 10 :vfx-snapshot 11 :vfx-release 12})
 (def reverse-packet-types (into {} (map (fn [[k v]] [v k]) packet-types)))
 (def ^:private vfx-ops #{:trigger :spawn :update :destroy :release :clear-owner :snapshot})
@@ -62,8 +64,12 @@
   ^bytes [signal]
   (let [wire (vfx-wire-signal signal)
         op (:op wire)]
-    (frame (get vfx-op->packet-type op)
-           (binary-codec/encode wire))))
+    (let [^bytes packet (frame (get vfx-op->packet-type op)
+                        (binary-codec/encode wire))]
+      (when (> (alength packet) max-vfx-frame-bytes)
+        (throw (ex-info "VFX frame exceeds protocol bound"
+                        {:max max-vfx-frame-bytes :actual (alength packet)})))
+      packet)))
 
 (defn- decode-frame [^bytes packet]
   (let [^ByteBuffer buffer (doto (ByteBuffer/wrap packet)
@@ -86,6 +92,9 @@
 (defn decode-vfx-signal
   "Decode and validate a fixed VFX packet from the mcmod bridge."
   [^bytes packet]
+  (when (> (alength packet) max-vfx-frame-bytes)
+    (throw (ex-info "VFX frame exceeds protocol bound"
+                    {:max max-vfx-frame-bytes :actual (alength packet)})))
   (let [{:keys [packet-type payload]} (decode-frame packet)
         op (get packet-type->vfx-op packet-type)]
     (when-not op
@@ -148,7 +157,7 @@
                                (.order ByteOrder/BIG_ENDIAN)
                                (.put (byte protocol-version))
                                (.put (byte (get packet-types packet-type)))
-                               (.putShort (short (alength payload)))
+                               (.putShort (unchecked-short (alength payload)))
                                (.put payload))
           result (byte-array (.position buffer))]
       (.flip buffer) (.get buffer result) result)))

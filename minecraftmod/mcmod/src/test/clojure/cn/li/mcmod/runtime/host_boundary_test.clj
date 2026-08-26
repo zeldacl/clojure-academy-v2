@@ -98,3 +98,13 @@
                  (channel/encode-combat-feedback result))]
     (is (= :combat-feedback (:type decoded)))
     (is (= result (select-keys decoded [:status :feedback])))))
+
+(deftest vfx-fixed-frame-bound-test
+  (let [large-value (apply str (repeat 600 "x"))
+        params (zipmap (range 64) (repeat 64 large-value))]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (channel/encode-vfx-signal {:op :spawn
+                                           :effect-id :beam
+                                           :params params}))))
+  (is (thrown? clojure.lang.ExceptionInfo
+               (channel/decode-vfx-signal (byte-array 32769)))))

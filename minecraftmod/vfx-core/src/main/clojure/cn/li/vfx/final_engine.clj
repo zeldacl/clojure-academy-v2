@@ -127,6 +127,19 @@
                    :sound-id (graph-value (:sound-id node) context)
                    :volume (graph-value (:volume node) context)
                    :pitch (graph-value (:pitch node) context)}]
+      :vfx/audio-one-shot [{:operation :audio :stage :audio
+                            :sound-id (graph-value (:sound-id node) context)
+                            :volume (graph-value (:volume node) context)
+                            :pitch (graph-value (:pitch node) context)
+                            :position (graph-value (:position node) context)}]
+      :vfx/audio-loop [{:operation :audio :stage :audio
+                        :sound-id (graph-value (:sound-id node) context)
+                        :volume (graph-value (:volume node) context)
+                        :pitch (graph-value (:pitch node) context)
+                        :position (graph-value (:position node) context)}]
+      :vfx/camera [{:operation :camera-fov :stage :camera
+                   :value (graph-value (:value node) context)
+                   :camera-operation (:operation node)}]
       :vfx/camera-fov [{:operation :camera-fov :stage :camera
                        :value (graph-value (:value node) context)}]
       :vfx/camera-shake [{:operation :camera-shake :stage :camera

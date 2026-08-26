@@ -1,6 +1,7 @@
 (ns cn.li.platform.neutral.presentation-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.platform.neutral.presentation :as presentation]))
+            [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.platform.neutral.vfx-render-plan :as vfx-plan]))
 
 (deftest coalesce-frame-id-groups-calls-within-one-real-frame
   (testing "a second call microseconds later stays on the same frame id"
@@ -18,3 +19,21 @@
                        (+ 1000000 presentation/frame-coalesce-window-nanos)
                        1000000)]
       (is (false? same?)))))
+
+(deftest typed-vfx-fallback-never-returns-an-empty-plan
+  (let [line-plan (vfx-plan/neutral-op->plan
+                   {:operation :draw-batch
+                    :primitive :typed-vfx
+                    :geometry {:kind :typed-vfx
+                               :fields {:start [0.0 0.0 0.0]
+                                        :end [1.0 0.0 0.0]}}
+                    :material {}})
+        marker-plan (vfx-plan/neutral-op->plan
+                     {:operation :draw-batch
+                      :primitive :typed-vfx
+                      :geometry {:kind :typed-vfx :fields {}}
+                      :material {}})]
+    (is (= :line (:kind (first (:ops line-plan)))))
+    (is (= 1 (count (:ops line-plan))))
+    (is (= :quad (:kind (first (:ops marker-plan)))))
+    (is (= 1 (count (:ops marker-plan))))))
