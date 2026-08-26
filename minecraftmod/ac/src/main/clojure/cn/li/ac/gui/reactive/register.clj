@@ -133,10 +133,14 @@
     (some-> (:material batch) name)
     (some-> (:variant batch) name)
     (long (or (:layout-version batch) 1))
-    (long (:count batch))
+    ;; Neutral VFX draw ops have no legacy :count field; one op is a valid batch.
+    (long (or (:count batch)
+              (when-let [particles (:particle-buffer batch)]
+                (.size ^cn.li.mcmod.runtime.vfx.ParticleBuffer particles))
+              1))
     (name (or (:sort-mode batch) :stable))
-    (:payload batch)))
-
+    ;; Keep the neutral op intact for a future loader-owned typed renderer.
+    (or (:payload batch) batch)))
 (defn- vfx-render-passes [vfx-context frame-id partial-tick]
   (let [frame (effect-controller/sample-frame!
                 (merge vfx-context {:frame-id frame-id :partial-tick partial-tick}))]

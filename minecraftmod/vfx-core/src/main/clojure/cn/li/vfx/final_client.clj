@@ -227,20 +227,35 @@
               (aset-float (.age particles) index 0.0)
               (aset-float (.lifetime particles) index lifetime)
               (aset-int (.color particles) index (int (or (:color spec) 0xffffffff))))))))))
-(defn- tick-instance [instance context]
-  (when-let [^ParticleBuffer particles (:particle-buffer instance)]
-    (ParticleKernel/integrate particles 0 (.size particles)
-                              (float (or (:delta-seconds context) 0.0))))
+(def ^:private emitter-stage-order [:spawn :initialize :update :output])
+
+(defn- execute-emitter-stages! [instance context]
+  "Execute explicit catalog stage opcodes across all emitters. Spawn emits once, update runs the Java kernel, and frame sampling owns output."
   (let [descriptor (:descriptor instance)
-        sampled (when (:control-graph descriptor)
-                  (engine/sample-graph descriptor (:params instance) (:state instance)
-                                       (:age instance) (long (or (:seed instance) 0))))
-        _ (doseq [op sampled] (emit-particle-op! instance op))
+        emitter-stages (map :stages (:emitters descriptor))]
+    (doseq [stage emitter-stage-order]
+      (let [modules (vec (mapcat #(get % stage []) emitter-stages))]
+        (case stage
+          :spawn
+          (when (some #(= 100 (int (or (:opcode %) -1))) modules)
+            (doseq [op (engine/sample-graph descriptor (:params instance) (:state instance)
+                                            (:age instance) (long (or (:seed instance) 0)))]
+              (emit-particle-op! instance op)))
+          :update
+          (when (some #(= 300 (int (or (:opcode %) -1))) modules)
+            (when-let [^ParticleBuffer particles (:particle-buffer instance)]
+              (ParticleKernel/integrate particles 0 (.size particles)
+                                        (float (or (:delta-seconds context) 0.0)))))
+          ;; Initialize and output are represented in the ABI. Output is the
+          ;; frame boundary, so it is sampled by sample-frame! exactly once.
+          nil)))))
+(defn- tick-instance [instance context]
+  (execute-emitter-stages! instance context)
+  (let [descriptor (:descriptor instance)
         next-state (when-let [update (:update descriptor)]
                      (update (:state instance)
                              (assoc context :instance instance :events (:events instance))))]
-    (if (and (nil? next-state)
-             (= :transient (:lifecycle descriptor)))
+    (if (and (nil? next-state) (= :transient (:lifecycle descriptor)))
       nil
       (assoc instance :state (or next-state (:state instance)) :events []))))
 (defn tick! [runtime context]
@@ -282,13 +297,13 @@
                   (float (or (:volume op) (:value op) (:amplitude op) 0.0))
                   (some-> (or (:sound-id op) (:effect op)) str)))))
 
-(defn- java-frame [frame]
+(defn- java-frame [runtime frame]
   (let [batches (ArrayList.) outputs (ArrayList.)]
     (doseq [op (mapcat val (:stages frame))]
       (.add batches (op->java-batch op)))
     (doseq [op (:outputs frame)]
       (when-let [output (op->java-output op)] (.add outputs output)))
-    (VfxFrame. (long (:frame-id frame)) 0 batches outputs)))
+    (VfxFrame. (long (:frame-id frame)) (long @(:generation runtime)) batches outputs)))
 (defn sample-frame! [runtime context]
   (let [batches (atom [])
         sink {:emit! #(swap! batches conj %)}]
@@ -313,7 +328,7 @@
           base-frame {:frame-id (:frame-id context)
                       :stages (group-by :stage draw-ops)
                       :outputs outputs}
-          frame (assoc base-frame :java-frame (java-frame base-frame))]
+          frame (assoc base-frame :java-frame (java-frame runtime base-frame))]
       (swap! (:frames runtime)
              (fn [frames]
                (let [next (assoc frames (:frame-id frame) frame)

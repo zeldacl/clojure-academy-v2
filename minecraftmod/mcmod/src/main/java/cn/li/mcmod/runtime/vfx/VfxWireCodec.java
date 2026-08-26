@@ -14,7 +14,7 @@ public final class VfxWireCodec {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(256);
             DataOutputStream out = new DataOutputStream(bytes);
-            out.writeByte(packet.kind().ordinal());
+            out.writeByte(packet.kind().wireId());
             if (packet instanceof VfxCatalogHello hello) {
                 out.writeInt(hello.protocolVersion()); out.writeLong(hello.catalogHash());
                 out.writeInt(hello.maxPacketBytes()); out.writeInt(hello.maxParameters());
@@ -40,9 +40,7 @@ public final class VfxWireCodec {
         try {
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
             int ordinal = in.readUnsignedByte();
-            VfxPacketKind[] kinds = VfxPacketKind.values();
-            if (ordinal >= kinds.length) throw new IllegalArgumentException("unknown VFX packet kind");
-            VfxPacketKind kind = kinds[ordinal];
+            VfxPacketKind kind = VfxPacketKind.fromWireId(ordinal);
             VfxPacket packet;
             switch (kind) {
                 case CATALOG_HELLO -> packet = new VfxCatalogHello(in.readInt(), in.readLong(), in.readInt(), in.readInt());

@@ -729,7 +729,7 @@ tasks.register("verifyPresentationJavaPurity") {
                 // presentation ABI purity rule.
                 def effectCarrier = source.name in ["HostTable.java", "EntityBatch.java",
                                      "BlockBatch.java", "CompiledProgram.java",
-                                     "ExecutionFrame.java", "VfxInstanceTable.java",
+                                     "ExecutionFrame.java",
                                      "SlotArena.java", "BatchArena.java", "SignalRing.java"]
                 if (text =~ /import\s+(net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged)\./) {
                     violations << "${source}: presentation Java may not import Minecraft/loader APIs"
@@ -2065,7 +2065,7 @@ tasks.register("verifyEffectRuntimeJavaCarriers") {
     description = "Ensure Java effect carriers contain fields and constructors only."
     def carriers = fileTree("mcmod/src/main/java/cn/li/mcmod/runtime") {
         include "HostTable.java", "EntityBatch.java", "BlockBatch.java",
-                "CompiledProgram.java", "ExecutionFrame.java", "VfxInstanceTable.java",
+                "CompiledProgram.java", "ExecutionFrame.java",
                 "SlotArena.java", "BatchArena.java", "SignalRing.java"
     }
     inputs.files(carriers)
