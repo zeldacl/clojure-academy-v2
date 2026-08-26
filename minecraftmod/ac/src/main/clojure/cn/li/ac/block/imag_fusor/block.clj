@@ -57,5 +57,6 @@
                              :textures {:all (modid/asset-path "block" "imag_fusor")}
                              :flat-item-icon? true}
                  :block-state {:block-state-properties fusor-logic/fusor-block-state-properties}
-                 :events {:on-right-click fusor-logic/open-fusor-gui!}})]
+                 :events {:on-right-click fusor-logic/open-fusor-gui!
+                          :on-place fusor-logic/handle-fusor-place}})]
      :network-handler fusor-handlers/register-network-handlers!}))

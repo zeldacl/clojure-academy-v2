@@ -18,7 +18,7 @@
   (:import [cn.li.mc262.bridge ItemStackInterop McAccess NbtAccess]
            [cn.li.mc262.runtime BlockRegistry RuntimeAccess]
            [cn.li.mcver ItemData ResourceLocations]
-           [net.minecraft.core BlockPos Holder]
+           [net.minecraft.core BlockPos Direction Holder]
            [net.minecraft.core.component DataComponents]
            [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
@@ -269,6 +269,9 @@
                          :player-spectator?      (fn [^Player this] (.isSpectator this))
                          :player-get-name        (fn [^Player this] (let [^Component nc (.getName this)] (.getString nc)))
                          :player-get-uuid        (fn [^Entity this] (.getUUID this))
+                         :player-get-horizontal-facing (fn [^Player this]
+                                                          (let [^Direction d (.getDirection this)]
+                                                            (.getSerializedName d)))
                          :player-get-main-hand-item-count (fn [^Player this]
                                                             (let [^ItemStack stack (.getMainHandItem this)]
                                                               (if (.isEmpty stack) 0 (int (.getCount stack)))))

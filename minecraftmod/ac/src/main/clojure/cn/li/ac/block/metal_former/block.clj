@@ -54,5 +54,6 @@
                              :textures {:all (modid/asset-path "block" "metal_former_front")}
                              :flat-item-icon? true}
                  :block-state {:block-state-properties former-logic/former-block-state-properties}
-                 :events {:on-right-click former-logic/open-former-gui!}})]
+                 :events {:on-right-click former-logic/open-former-gui!
+                          :on-place former-logic/handle-former-place}})]
      :network-handler former-handlers/register-network-handlers!}))
