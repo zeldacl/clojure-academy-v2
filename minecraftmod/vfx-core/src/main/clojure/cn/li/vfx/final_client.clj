@@ -284,7 +284,8 @@
                (int (hash (or (:material op) :default)))
                (int (get primitive->java (:primitive op) 0))
                (if particles (.size particles) 0)
-               particles)))
+               particles
+               (or (:payload op) op))))
 
 (defn- op->java-output [op]
   (let [kind (case (:operation op)
@@ -304,24 +305,34 @@
     (doseq [op (:outputs frame)]
       (when-let [output (op->java-output op)] (.add outputs output)))
     (VfxFrame. (long (:frame-id frame)) (long @(:generation runtime)) batches outputs)))
+(defn- output-stage-enabled? [descriptor]
+  (let [emitters (:emitters descriptor)]
+    (or (empty? emitters)
+        (some (fn [stages]
+                (some #(= 400 (int (or (:opcode %) -1)))
+                      (get stages :output [])))
+              (map :stages emitters)))))
+
 (defn sample-frame! [runtime context]
   (let [batches (atom [])
         sink {:emit! #(swap! batches conj %)}]
     (doseq [[_ instance] @(:instances runtime)]
-      (if-let [sample (:sample (:descriptor instance))]
-        (sample (assoc context :instance instance :sink sink))
-        (when (:control-graph (:descriptor instance))
-          (doseq [op (engine/sample-graph (:descriptor instance)
-                                          (:params instance)
-                                          (:state instance)
-                                          (:age instance)
-                                          (long (or (:seed instance) 0)))]
-            (swap! batches conj
-                   (cond-> (assoc op :instance-id (:id instance))
-                     (and (:particle-buffer instance)
-                          (= :emitter (get-in op [:geometry :kind])))
-                     (assoc :particle-buffer (:particle-buffer instance)
-                             :primitive :particle)))))))
+      (let [descriptor (:descriptor instance)]
+        (when (output-stage-enabled? descriptor)
+          (if-let [sample (:sample descriptor)]
+            (sample (assoc context :instance instance :sink sink))
+            (when (:control-graph descriptor)
+              (doseq [op (engine/sample-graph descriptor
+                                              (:params instance)
+                                              (:state instance)
+                                              (:age instance)
+                                              (long (or (:seed instance) 0)))]
+                (swap! batches conj
+                       (cond-> (assoc op :instance-id (:id instance))
+                         (and (:particle-buffer instance)
+                              (= :emitter (get-in op [:geometry :kind])))
+                         (assoc :particle-buffer (:particle-buffer instance)
+                                :primitive :particle)))))))))
     (let [ops (vec (take (:max-batches runtime) @batches))
           draw-ops (filterv #(= :draw-batch (:operation %)) ops)
           outputs (filterv #(not= :draw-batch (:operation %)) ops)
@@ -337,7 +348,6 @@
                  (apply dissoc next (take excess ids)))))
       (reset! (:latest-frame runtime) frame)
       frame)))
-
 (defn frame-stage [runtime frame-id stage]
   (get-in @(:frames runtime) [frame-id :stages stage]))
 (defn latest-frame-stage [runtime stage]
