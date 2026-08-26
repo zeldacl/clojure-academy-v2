@@ -254,14 +254,29 @@
 
 (def ^:private ui-only-keys [:selected-skill :skill-wheel-open?])
 
+(defn- runtime-state
+  "Project the rich reactive snapshot onto the stable artifact schema.
+
+   The artifact intentionally exposes only render inputs; game-specific
+   builder details such as :cp-bar and :skill-slots stay on the controller
+   side of the boundary."
+  [snapshot]
+  (merge snapshot
+         {:cp-ratio (double (or (get-in snapshot [:cp-bar :percent]) 0.0))
+          :overload-ratio (double (or (get-in snapshot [:overload-bar :percent]) 0.0))
+          :charging? (boolean (get-in snapshot [:charging :mask-alpha]))
+          :skills (vec (or (:skill-slots snapshot) []))
+          :toasts (vec (or (:toasts snapshot) []))}))
+
 (defn combat-view-model
   [player-uuid dispatch-action!]
   (let [snapshot (atom {})
         refresh! (fn [screen-w screen-h opts]
                    (let [ui-state (select-keys @snapshot ui-only-keys)]
                      (reset! snapshot
-                             (merge (reactive-hud/build-snapshot player-uuid screen-w screen-h opts)
-                                    ui-state)))
+                             (runtime-state
+                              (merge (reactive-hud/build-snapshot player-uuid screen-w screen-h opts)
+                                     ui-state))))
                    @snapshot)]
     {:snapshot snapshot
      :refresh! refresh!

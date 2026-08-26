@@ -8,6 +8,7 @@
 - `presentation-core` 当前只保留 `artifact.clj`、`host_v2.clj`、`paint_v2.clj`、`runtime_v2.clj`；负责 artifact 装载、Runtime v2、Host 生命周期、状态提取和中立绘制 IR，不再包含旧 retained tree、dirty/layout/frame graph 或 Java ViewModel 类型。
 - `presentation-compiler` 当前只保留 `artifact.clj` 与 `main.clj`，构建期将 `.ui.edn` 编译成严格校验的规范化 EDN artifact/manifest；不存在 `CompiledTemplate` 或运行时 `render.clj` 解释器。
 - AC 当前有 7 个生产 artifact：`application`、`combat_hud`、`machine_container`、`settings`、`terminal`、`wireless_matrix`、`wireless_node`。屏幕、容器、HUD 和终端控制器均通过 `presentation-v2` 挂载。
+- Runtime v2 painter 已覆盖当前 artifact 实际使用的 `row/column/stack/rect/progress/text/button/image/scroll/grid/repeater/text-input/portal`；集合节点从 state 展开 item，输入节点输出中立文本/背景命令。Runtime `dispatch!` 对中立 pointer 事件执行 artifact button 命中并将 `:on/:activate` action 与 `:button-id` payload 送入 reducer，key/character/scroll 保留为 `:input/*` action。战斗 HUD controller 在进入 Runtime 前投影 `:cp-ratio/:overload-ratio/:skills/:toasts`，不再把 builder 内部字段直接暴露给 artifact。
 - 帧路径是：AC snapshot → `presentation-core` Runtime v2 → `mcmod` 中立 `Ui*` Render IR → 各版本 backend；版本 backend 不读取 Core 私有状态。
 - 每次变更必须验证六个真实目标的 `:platform:compileClojure`：`forge-1.20.1`、`fabric-1.20.1`、`fabric-1.21.1`、`neoforge-1.21.1`、`fabric-26.2`、`neoforge-26.2`，再执行根 `verifyCurrentPlatforms`。
 

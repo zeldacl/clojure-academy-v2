@@ -60,3 +60,44 @@
         label-command (second commands)]
     (is (instance? cn.li.mcmod.runtime.RenderCommand$UiText label-command))
     (is (= "Save" (.text ^cn.li.mcmod.runtime.RenderCommand$UiText label-command)))))
+(deftest painter-expands-collection-and-input-nodes
+  (let [artifact {:magic :pui2 :schema 2 :view-id :academy/test/collection
+                  :nodes {:id :root :type :column :layout {}
+                          :children [{:type :scroll :bind {:items [:state :lines]}}
+                                     {:type :text-input :bind {:text [:state :query]}}]}}
+        commands (paint/paint-view artifact {:lines [{:label "One"} {:label "Two"}]
+                                               :query "search"}
+                                    {:viewport-width 120 :viewport-height 80})
+        texts (->> commands
+                   (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiText %))
+                   (map #(.text ^cn.li.mcmod.runtime.RenderCommand$UiText %))
+                   vec)]
+    (is (= ["One" "Two" "search"] texts))))
+
+(deftest painter-accepts-boolean-progress-values
+  (let [artifact {:magic :pui2 :schema 2 :view-id :academy/test/progress
+                  :nodes {:id :root :type :progress :layout {:width 20 :height 4}
+                          :bind {:value [:state :loading?]}}}
+        commands (paint/paint-view artifact {:loading? true}
+                                    {:viewport-width 20 :viewport-height 4})]
+    (is (= 1 (count commands)))
+    (is (instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch (first commands)))))
+(deftest runtime-routes-pointer-to-button-action
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact {:magic :pui2 :schema 2 :view-id :academy/test/input
+                  :nodes {:id :root :type :row :layout {}
+                          :children [{:type :button :key :left :layout {:height 20}
+                                      :on {:activate :demo/left}}
+                                     {:type :button :key :right :layout {:height 20}
+                                      :on {:activate :demo/right}}]}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                                  :x 75 :y 10 :button 0})))
+    (is (= [:demo/right {:target :right :button-id 1}] @seen))))

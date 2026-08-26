@@ -83,11 +83,83 @@
                            into #{:layout :paint :semantics}))))
   geometry)
 
+(defn- layout-dimension [value fallback]
+  (if (number? value) (float value) (float fallback)))
+
+(defn- node-rect [parent node]
+  (let [{px :x py :y pw :width ph :height} parent
+        layout (:layout node)]
+    {:x (+ px (float (or (:x layout) 0.0)))
+     :y (+ py (float (or (:y layout) 0.0)))
+     :width (layout-dimension (:width layout) pw)
+     :height (layout-dimension (:height layout) ph)}))
+
+(defn- point-in-rect? [{:keys [x y width height]} px py]
+  (and (<= x (float px) (+ x width))
+       (<= y (float py) (+ y height))))
+
+(defn- child-rects [rect direction children]
+  (let [count* (max 1 (count children))
+        horizontal (= :row direction)
+        available (if horizontal (:width rect) (:height rect))
+        each (/ available count*)]
+    (mapv (fn [index child]
+            (let [layout (:layout child)]
+              (if horizontal
+                (assoc rect :x (+ (:x rect) (* index each))
+                           :width (layout-dimension (:width layout) each))
+                (assoc rect :y (+ (:y rect) (* index each))
+                           :height (layout-dimension (:height layout) each)))))
+          (range) children)))
+
+(defn- button-id [node]
+  (let [key (name (or (:key node) :button))]
+    (cond
+      (.contains key "left") 0
+      (.contains key "right") 1
+      :else nil)))
+
+(defn- hit-action [node parent px py]
+  (let [rect (node-rect parent node)
+        children (:children node)
+        direction (or (get-in node [:layout :direction])
+                      (when (= :row (:type node)) :row)
+                      (when (= :column (:type node)) :column))
+        child-rects* (if direction (child-rects rect direction children)
+                       (mapv (constantly rect) children))
+        hit-child (some (fn [[child child-rect]]
+                     (hit-action child child-rect px py))
+                   (reverse (map vector children child-rects*)))]
+    (or hit-child
+        (when (and (= :button (:type node))
+                   (point-in-rect? rect px py))
+          {:action (get-in node [:on :activate])
+           :payload (cond-> {:target (:key node)}
+                      (some? (button-id node))
+                      (assoc :button-id (button-id node)))}))))
+
+(defn- routed-event [instance event]
+  (if (:action event)
+    event
+    (case (:type event)
+      :pointer (if (= :down (:event-type event))
+                 (or (hit-action (:nodes (:artifact instance))
+                                 {:x 0.0 :y 0.0
+                                  :width (.viewportWidth ^HostGeometry (:geometry instance))
+                                  :height (.viewportHeight ^HostGeometry (:geometry instance))}
+                                 (:x event) (:y event))
+                     {:action :input/pointer :payload event})
+                 {:action :input/pointer :payload event})
+      :key {:action :input/key :payload event}
+      :character {:action :input/character :payload event}
+      :scroll {:action :input/scroll :payload event}
+      {:action :input/unknown :payload event})))
 (defn dispatch!
-  "Run one already-routed action through the pure reducer, then effects." 
-  [^UiRuntime runtime mount {:keys [action payload]}]
+  "Route one neutral input or explicit action through the pure reducer, then effects."
+  [^UiRuntime runtime mount event]
   (owner-thread! runtime)
   (let [instance (instance! runtime mount)
+        {:keys [action payload]} (routed-event instance event)
         response ((:reduce instance) (:view-state instance) action payload)
         next-state (if (contains? response :state)
                      (:state response)
@@ -102,7 +174,6 @@
           (binding [*out* *err*]
             (println "Presentation effect failed:" (pr-str effect) error)))))
     result))
-
 (defn extract-stage!
   "Return a stage packet envelope. Render command extraction is supplied by
    the UI paint assembler; this function already provides stage filtering and
