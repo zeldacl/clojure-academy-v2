@@ -4,7 +4,7 @@
 
 ## 模块边界
 
-- `mcmod/src/main/java/cn/li/mcmod/runtime/vfx/`：Java ABI 与热路径。包含 `ParticleBuffer` SoA 存储、`ParticleKernel`、system/emitter carrier、render frame/batch/output、packet identity、wire codec 和 channel 常量。
+- `mcmod/src/main/java/cn/li/mcmod/runtime/vfx/`：Java ABI 与热路径。包含 `ParticleBuffer` SoA 存储、`ParticleKernel`、system/emitter carrier、render frame/batch/output、带 neutral geometry payload 的 `VfxBatch`、packet identity、wire codec 和 channel 常量。
 - `vfx-core/src/main/clojure/cn/li/vfx/compiler.clj`：独立的 composite 展开器。VFX 不依赖 combat/node-core 的运行时解释器。
 - `vfx-core/src/main/clojure/cn/li/vfx/final-engine.clj`：headless/fake-host 的 final graph sampler 与生命周期测试端口。
 - `vfx-core/src/main/clojure/cn/li/vfx/final-client.clj`：客户端 per-instance runtime、四阶段采样、Java frame 投影、乱序/墓碑处理。
@@ -37,7 +37,7 @@ System
 1. `VfxPacketKind`/`VfxLifecyclePacket` 提供 Java typed identity 和方向验证；
 2. mcmod fixed channel 对完整 signal 做 bounded binary encoding，服务端只发送 catalog hello、VFX 生命周期和 combat feedback，客户端先解码/校验再进入 final-client。
 
-服务端必须先完成 catalog schema/hash 握手；客户端不能提交技能图、目标、伤害或 VFX recipient。参数 update 只能携带 dirty mask 指示的变化字段。
+服务端必须先完成 catalog schema/hash 握手；客户端不能提交技能图、目标、伤害或 VFX recipient。参数 update 只能携带 dirty mask 指示的变化字段；固定通道还强制每包最多 64 个参数和 1 个 64-bit dirty-mask word。
 
 ## 扩展规则
 
