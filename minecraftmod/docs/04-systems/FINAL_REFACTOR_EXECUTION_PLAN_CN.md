@@ -26,18 +26,18 @@
 9. AC client catalog projection 已保留每个 VFX final source graph；`spawn/update/trigger → effect instance → sample-frame!` 会产生 `draw-batch`/audio/camera/post neutral ops。`ray-beam` 有明确执行分支，其余已注册 typed VFX component 不再静默丢弃，而是输出可观测 typed draw payload，交给 presentation adapter 专化。
 10. 不能把 descriptor/schema 覆盖率当作执行完整性：必须建立 `final component → capability → handler → apply result` 的可执行矩阵；只在 vocabulary 注册、但没有 host action/query 的节点不得标记 ready。
 11. “composite”必须区分最终编译期展开与旧运行时解释器：`node/composite` 是 final graph 的受限展开内核，不能删除；旧 combat/vfx VM、recipe loader 和运行时 composite 路径才属于 F6 删除范围。AC catalog 已改为调用 `node/composite/expand-with-descriptors`，不再保留第二套输入替换/递归预算规则；后续只需用回归测试锁定这一唯一入口。
-12. mcmod 的 `cn.li.mcbase.presentation.host-lifecycle` 不是生产 Minecraft API，而是 neutral presentation 的 mcmod/base 中转契约；本轮已在 `platform-src/test-support` 补齐 headless 实现，避免把“缺测试支撑 namespace”误判为生产编译缺口。缺失 world operation 现在按边界契约 fail-closed，缺失 client UUID 先返回专用 contract 错误；对应测试已同步，mcmod 全量 headless 测试现为 188 tests / 564 assertions、0 failures / 0 errors。
+12. mcmod 的 `cn.li.mcbase.presentation.host-lifecycle` 不是生产 Minecraft API，而是 neutral presentation 的 mcmod/base 中转契约；本轮已在 `platform-src/test-support` 补齐 headless 实现，避免把“缺测试支撑 namespace”误判为生产编译缺口。缺失 world operation 现在按边界契约 fail-closed，缺失 client UUID 先返回专用 contract 错误；对应测试已同步，当前 mcmod 全量 headless 测试为 191 tests / 569 assertions、0 failures / 0 errors。
 13. AC 全量 test source 仍包含历史测试基础设施引用（`hud-render-data`、`node-info-area-policy`），它们不影响 `:ac:checkClojure`、final catalog assembly 或 EDN coverage；执行计划必须把“生产编译门”和“历史全量测试清理”分开，不能用后者阻塞 final runtime 交付。
 14. 本轮已补回纯测试支撑 `hud_render_data` 和 `node-info-area-policy`；AC 全量 test compile 仍会暴露更多明确的旧测试引用（`panel_reactive`、`console_reactive`、`skill-runtime`，以及 focused classpath 对 node-core 的缺失）。这些是旧测试迁移/Gradle test classpath 工作，不是生产源码入口；F7 以 production `checkClojure`、模块 headless 执行器测试、mcmod headless 测试和 EDN coverage 为本次交付门，AC 历史测试清理仍单列但不改变生产入口。
 15. 本轮实际网络审计发现固定 `input-edge` 解码原先接受合法包后的尾随字节；现已在 `fixed-channel` 拒绝尾随数据，并加入回归断言。通用 `binary-codec` 现对字符串、集合计数、字节负值/上限和解码尾随字节做硬校验；字符串上限为 1 MiB，以保留现有大于 64 KiB 的能力 payload 语义。网络门禁必须覆盖这些 malformed packet，而不只验证 round-trip。
 16. 本轮实际 VFX 审计发现客户端未知 `effect-id` 会创建 descriptor=nil 的静默空实例；现已改为抛出结构化 `:unknown-effect`。最终 VFX catalog 现在同时加载 `composites_v3_manifest.edn` 与 `components_manifest.edn`，并在 timeline 的 `{:at :node}` 包装内递归展开 composite；VFX graph 在展开后逐节点校验 descriptor，避免“descriptor 已注册但图仍含 composite”的假通过。
 17. `:vfx/beam-bounds`、`:vfx/model-marker`、`:vfx/line` 等 VFX 运行时/结构标识不能登记为空 `:mid`，否则唯一展开器会把没有外部文档的节点替换为 nil；它们已改为 final primitive/structural descriptors。AC EDN coverage 已验证 9 tests / 25 assertions，包含无未展开 composite 的断言。
-18. F3 的能力矩阵不再只是文档要求：`combat.final-engine/capability-matrix` 暴露 final component→neutral capability，combat headless 回归会逐项检查 action/query handler 闭合，并允许明确列出的 AC-owned query port（当前为 `:energy/target`）。当前 combat 测试为 30 tests / 72 assertions。
+18. F3 的能力矩阵不再只是文档要求：`combat.final-engine/capability-matrix` 暴露 final component→neutral capability，combat headless 回归会逐项检查 action/query handler 闭合，并允许明确列出的 AC-owned query port（当前为 `:energy/target`）。当前 combat 测试为 31 tests / 56 assertions。
 19. 二次复核发现并修正了一个真实的严格检查缺口：`flow/once` 的 callback descriptor 原先把 `body/on-first` 标成 sequential，导致 projectile 局部变量无法沿回调边界传播；最终 ABI 现在标成 closed，projectile scan 通过 descriptor 的 `:child-binds-locals` 显式传入 `:projectile`。同时修复了 `contains?` 作用于 lazy sequence 的检查器错误；节点核心回归现为 77 tests / 133 assertions。
 20. 本轮再次直接审计执行器时发现 `:terrain/propagate` 虽然已经由 mcmod platform 暴露为 query，却被 final compiler 的 namespace 默认分支误判为 action；这会让 groundshock 等图拿不到 `:result`。现已把它加入显式 query ABI、query capability matrix，并用 fake host 回归验证不会进入 action 队列。
 21. `flow/foreach` 的 descriptor 已声明 `:index-as`，但 runtime 只绑定 `:as`；现已在每次迭代同时写入值和索引局部变量，并加入执行回归。`flow/once` 也不再用单一全局布尔值：支持 `:last-key`/`:set`/`:boolean`、`storage-path`、`on-first` 与 session patch，覆盖 vec-reflection 的 projectile 去重语义。
 22. Host action handler 的 apply 返回值原先被丢弃，导致 `:entity/mark` 返回的 VFX signal 无法发布；mcmod host 现在返回带 command/capability 的 `:results`，final engine 在 barrier 和最终 apply 两处把 `:vfx-signals/:feedback/:events` 合并进 outbox，并保留 `:action-results` 诊断记录。
-23. VFX server/headless `spawn!` 对未知 effect-id 原先会在参数校验处产生非结构化空引用；现已在分配句柄前硬拒绝 `{:effect-id ...}` 的结构化错误。当前回归为 Combat 30 tests / 72 assertions；Node 77/133、VFX 12/30、mcmod 188/564 全部通过。
+23. VFX server/headless `spawn!` 对未知 effect-id 原先会在参数校验处产生非结构化空引用；现已在分配句柄前硬拒绝 `{:effect-id ...}` 的结构化错误。当前回归为 Combat 31 tests / 56 assertions；Node 77/133、VFX 16/45、mcmod 191/569 全部通过。
 24. 多人 VFX 实例审计发现 final-client 原按 `effect-id/owner/world` 合并实例，忽略 `instance-key` 和 `event-seq`；同一玩家并发施放同类技能会互相覆盖，乱序 update 也可能回写旧参数。现按四元组定位实例、按严格递增序列丢弃重复/旧包，update 直接合并最终参数；replication 独立 `spawn!` 也在分配句柄前结构化拒绝未知 effect。回归覆盖并发 key、乱序 update 和未知 replication effect。
 25. 进一步发现同一服务器 tick 内多个 VFX 操作不能共用 tick 号作为序列，否则 `spawn→update/destroy` 会被客户端误判为重复；Combat Core 现用 `tick * 1_000_000 + execution-order` 生成缺省序列，显式 `:event-seq` 仍优先，且对无 key 的瞬时节点生成 `[ability-id path activation-seq]`，避免瞬时音效/光束碰撞。
 26. VFX 结构节点曾只有空字段 descriptor，编辑器无法获得真实 ABI；现已逐项声明 `beam-bounds/branch/group/let/line/model-marker/repeat` 的 inputs/outputs/children，仍由 final VFX sampler 执行，catalog 装配继续先展开 composite 再做 descriptor 校验。
@@ -49,6 +49,7 @@
 32. 最后一次边界复核发现 destroy 包原先不强制实例身份，且远端 `instance-id` 路由没有校验 effect/owner/world；现已要求 destroy 携带 `instance-key` 或 `instance-id`，并在远端命中时校验 effect-id 及存在的 owner/world，避免 malformed 包串写实例。
 33. 本次生产链路复核发现 `replay-persistent-signals!` 原先只有定义和单元测试，没有 server hook 调用；现由 AC `:on-server-tick-end!` 在非负整数 tick 的每 20 tick 调度一次，并从最终 Combat catalog 取得 VFX catalog 后走既有 fixed-channel broadcast sink。回归覆盖周期、非周期和非法 tick，避免持久/会话效果在 tracking enter 后只靠偶然事件恢复。
 34. 本次 `--rerun-tasks` clean-path 审计发现 `dispatch-result-domain-events!` 的括号使 `reduce` 形成错误的单参数调用，增量构建未触发该问题；现已修正为标准 `[rf coll]` 调用。`lintClojureNative` 重跑通过（11 source roots），随后 `verifyCurrentPlatforms` 通过，确保这是生产修复而非仅缓存状态变化。
+35. 本次最终代码审计又闭合三处边界：`audio-one-shot`/`audio-loop`/`camera` 已有显式 final lowering；`typed-vfx` 在 presentation adapter 中按 line/point-chain/ring/marker 规则有界落地，不再产生空计划；VFX fixed-channel 编解码统一执行 32 KiB 上限，并修复 payload 长度写入的 signed-short 溢出。VFX 回归为 16/45，mcmod 全量为 191/569，均为 0 failures / 0 errors。
 
 ## 分阶段执行顺序
 
@@ -65,7 +66,7 @@
 - 输入包固定为 `seq/control-id/edge/choice/client-tick`；服务端做单调序列去重、40 edges/20 ticks 限频。
 - disconnect/death/dimension-change/gui-close 都调用同一个 `abort!`；客户端不上传技能图和资源快照。
 - VFX 只发送 spawn/update/trigger/destroy/clear-owner/snapshot，使用 effect handle、anchor、dirty bit mask；trigger 是已存在实例上的事件，snapshot 是 tracking enter 的完整 baseline。
-- 实现状态：catalog hello/ack 先于 CombatIntent；服务端已实现重复/乱序拒绝、40 edges/20 ticks 限频和登录/退出/停止清理，且无 MC 运行时依赖。`cn/li/mcbase/presentation/host_lifecycle` 已由 headless test-support 中转层补齐；重复包、乱序包、限频和生命周期中止均纳入 mcmod 188 tests / 564 assertions 的网络/中转门禁。
+- 实现状态：catalog hello/ack 先于 CombatIntent；服务端已实现重复/乱序拒绝、40 edges/20 ticks 限频和登录/退出/停止清理，且无 MC 运行时依赖。`cn/li/mcbase/presentation/host_lifecycle` 已由 headless test-support 中转层补齐；重复包、乱序包、限频和生命周期中止均纳入当前 mcmod 191 tests / 569 assertions 的网络/中转门禁。
 
 ### F2：VFX final runtime
 
@@ -129,9 +130,9 @@
 ### F7：最终构建验收（不含实机）
 
 - `:node-core:runNodeCoreClojureTests`
-- `:mcmod:checkClojure`；随后运行 `:mcmod:compileTestClojure` 与 `:mcmod:runMcmodClojureTests`。`platform-src/test-support/.../host_lifecycle.clj` 已消除缺 namespace 的编译阻塞；全量 48 个命名空间现为 188 tests / 564 assertions、0 failures / 0 errors。
+- `:mcmod:checkClojure`；随后运行 `:mcmod:compileTestClojure` 与 `:mcmod:runMcmodClojureTests`。`platform-src/test-support/.../host_lifecycle.clj` 已消除缺 namespace 的编译阻塞；当前全量 48 个命名空间为 191 tests / 569 assertions、0 failures / 0 errors。
 - `:combat-core:runCombatClojureTests`
-- `:vfx-core:runVfxClojureTests`（当前 12 tests / 30 assertions）
+- `:vfx-core:runVfxClojureTests`（当前 16 tests / 45 assertions）
 - `:ac:checkClojure` + `:ac:runAcEdnCoverageTests`（包含 39/50/36、旧结构硬拒绝、descriptor/schema/scope 装配断言）
 - `verifyCurrentPlatforms` 或等价静态门禁；必要时使用 `--rerun-tasks` 验证 clean path。
 - 记录测试计数、编译警告、未完成实机测试项；实机任务单独创建，不在本任务中伪造通过。
