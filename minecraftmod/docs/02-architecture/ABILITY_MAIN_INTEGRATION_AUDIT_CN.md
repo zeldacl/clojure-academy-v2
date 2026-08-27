@@ -432,6 +432,16 @@ thunder-bolt
 - `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。资源适配器实际扣费、
   方块权限和多人同时施放仍需实机任务验证，故总表继续保持 `⚠️`。
 
+### blood-retrograde checkpoint（逐项复核）
+
+- 对照 `main`：蓄力期间的 charge-slow 属于 owner-only presentation，自动释放、手动
+  release、无目标和资源不足都必须结束该 session 效果；不能依赖旧 handler 的隐式清理。
+- 当前 Final 已在 pulse 自动释放和 release 的统一入口显式 destroy
+  `:blood-retrograde-charge`，abort 路径也保持显式 destroy；伤害、fan raycast、费用、
+  命中 progression/cooldown 仍由同一 graph 执行，没有恢复旧逻辑。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。charge-slow 在各版本
+  Presentation renderer 的本地走速应用仍需实机确认，总表继续保持 `⚠️`。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
