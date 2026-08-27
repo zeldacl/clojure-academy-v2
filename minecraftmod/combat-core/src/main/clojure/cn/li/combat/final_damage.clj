@@ -185,20 +185,25 @@
                                          (deterministic-roll (+ (long (:seed event)) (long level)) probability))
                                 level-data))
                             critical-levels)
-        critical? (boolean critical-level)        amount (max 0.0 (* (- before absorption)
+        critical? (boolean critical-level)
+        amount-before-reflect (max 0.0 (* (- before absorption)
                          (if critical? (double (or (:multiplier critical-level) 1.0)) 1.0)))
         reflections (->> contributions (filter #(= :reflection (:kind %)))
                        (keep (fn [reflection]
-                               (when (< (:depth event)
-                                        (min max-reflection-depth
-                                             (long (or (:max-depth reflection)
-                                                       max-reflection-depth))))
+                               (when (and (not= :environment (:source event))
+                                          (< (:depth event)
+                                             (min max-reflection-depth
+                                                  (long (or (:max-depth reflection)
+                                                            max-reflection-depth)))))
                                  (assoc event :source (:target event) :target (:source event)
-                                        :base (* amount (double (or (:ratio reflection) 1.0)))
+                                        :base (* amount-before-reflect (double (or (:ratio reflection) 1.0)))
+                                        :minimum (double (or (:minimum reflection) 0.0))
                                         :depth (inc (:depth event))
                                         :metadata (assoc (:metadata event)
                                                          :reflected? true
                                                          :reflection reflection))))) vec)
+        reflection-total (reduce + 0.0 (map #(double (or (:base %) 0.0)) reflections))
+        amount (max 0.0 (- amount-before-reflect reflection-total))
         absorb-cost (if (pos? absorption)
                       (reduce (fn [acc contribution]
                                 (merge-with + acc (:cost contribution)))
@@ -211,7 +216,7 @@
                                      (filter #(= :reduction (:kind %)) contributions)))
         reflection-cost (reduce + 0.0
                                  (map (fn [contribution]
-                                        (* amount (double (or (:ratio contribution) 0.0))
+                                        (* amount-before-reflect (double (or (:ratio contribution) 0.0))
                                            (double (or (:cost-per-damage contribution) 0.0))))
                                       (filter #(= :reflection (:kind %)) contributions)))
         resource-costs (merge-with + absorb-cost
