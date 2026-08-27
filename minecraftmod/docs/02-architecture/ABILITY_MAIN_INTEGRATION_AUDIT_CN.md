@@ -175,7 +175,7 @@ vecmanip/brain-course-advanced
       (update :cp-recovery-speed (fnil * 0.0) 1.2))))
 ```
 
-## 其余 29 个真实技能
+## 尚未完成行为等价证据的真实技能
 
 以下技能的 graph 结构、主要 action/VFX 节点已找到，但仍不能标为完全通过，因为所有 graph VFX 都受公共发送链路影响，且 damage/mark/owner context 的公共问题会按技能是否使用这些能力继续传递：
 
@@ -212,6 +212,81 @@ thunder-bolt
 ```
 
 这些技能必须继续逐项核对：效果目标和数量、资源扣除、冷却启动条件、延迟任务、方块/实体副作用、VFX audience、异常/中断清理以及 owner/world 隔离。不能用“graph 已编译”替代这些检查。
+
+## 后续逐项修复清单（不并行改 50 项）
+
+本清单作为唯一执行队列。每完成一项，必须在该项的 Final graph、对应 VFX
+声明、资源/冷却/经验、异常清理和 owner/world 边界上留下证据，并在该节点单独
+提交；未完成项保持 `⚠️`，不能因为注册或编译成功而提前改成 `✅`。
+
+1. `arc-gen`
+2. `body-intensify`
+3. `current-charging`
+4. `mag-manip`
+5. `mag-movement`
+6. `mine-detect`
+7. `thunder-bolt`
+8. `thunder-clap`
+9. `electron-bomb`
+10. `electron-missile`
+11. `jet-engine`
+12. `light-shield`
+13. `meltdowner`
+14. `mine-ray-basic`
+15. `mine-ray-expert`
+16. `mine-ray-luck`
+17. `rad-intensify`
+18. `ray-barrage`
+19. `scatter-bomb`
+20. `dim-folding-theorem`
+21. `space-fluct`
+22. `vec-deviation`
+23. `vec-reflection`
+24. `flashing`
+25. `flesh-ripping`
+26. `location-teleport`
+27. `mark-teleport`
+28. `penetrate-teleport`
+29. `shift-teleport`
+30. `threatening-teleport`
+31. `blood-retrograde`
+32. `directed-blastwave`
+33. `directed-shock`
+34. `groundshock`
+35. `plasma-cannon`
+36. `storm-wing`
+37. `vec-accel`
+38. `railgun`（唯一已确认缺少 Final 能力建模的项，最后单独处理）
+
+课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
+
+```text
+electromaster/brain-course
+meltdowner/brain-course
+teleporter/brain-course
+vecmanip/brain-course
+electromaster/brain-course-advanced
+meltdowner/brain-course-advanced
+teleporter/brain-course-advanced
+vecmanip/brain-course-advanced
+electromaster/mind-course
+meltdowner/mind-course
+teleporter/mind-course
+vecmanip/mind-course
+```
+
+每个战斗技能的完成门槛是：
+
+- 以 `main` 对应 namespace 的效果/分支/副作用为行为基线，只移植到当前 Final
+  graph，不复制旧函数、旧 VM 或兼容分支；
+- graph 中所有 query/action/policy 都能落到 Combat Core、VFX Core 或 AC 组合根的
+  明确端口，不能出现“只声明、无 handler”的节点；
+- 成功、失败、取消、超时四类路径分别核对资源、冷却、经验、实体清理和 VFX
+  destroy/update；
+- 所有写入和广播带 owner/world 作用域，不能共享其它玩家的 session、mark、实体或
+  VFX instance；
+- 完成后只运行该技能的静态/编译门禁和针对性回归，再进入下一项；最后才执行一次
+  50 项 catalog、VFX、能力端口、多人作用域静态总验收。
 
 ## 本轮新增公共链路修复
 
