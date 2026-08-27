@@ -643,6 +643,7 @@
         (when (and (= :accepted (:status result))
                    (= :start (:op intent))
                    (= :session (:activation source))
+                   (not (:finish-session? result))
                    (not (combat-sessions/active? (str owner))))
           (combat-sessions/start! (str owner) ability-id prepared))
         result))))
@@ -1139,13 +1140,38 @@
       (finalize-result! owner result))
     result))
 
+(defn- pulse-active-sessions!
+  "Run exactly one authoritative Final :pulse for every active hold session.
+
+  Client key ticks are transport/UI notifications only; the server tick owns
+  cadence and supplies an elapsed hold count. Iterating the owner-scoped
+  session snapshot keeps one player's pulse, resources and VFX independent of
+  every other player, while a finished pulse removes its own session through
+  the normal Final runtime boundary."
+  [tick]
+  (doseq [[owner session] (combat-sessions/snapshot)]
+    (when (= session (combat-sessions/session owner))
+      (let [hold-ticks (inc (max 0 (- (long tick)
+                                      (long (or (:start-tick session) tick)))))
+            result (dispatch-intent!
+                    owner
+                    {:op :pulse
+                     :ability-id (:ability-id session)
+                     :server-tick (long tick)
+                     :hold-ticks hold-ticks
+                     :context (:context session)
+                     :activation-seed (:activation-seed session)})]
+        (when (= :accepted (:status result))
+          (finalize-result! owner result))))))
 (defn tick!
   "Advance scheduled final graph work and return its neutral result."
   [tick]
   (reset! last-known-tick* (long tick))
   (expire-marks! (long tick))
   (if-let [runtime (final-runtime/production-runtime)]
-    (final-runtime/tick! runtime tick)
+    (do
+      (pulse-active-sessions! (long tick))
+      (final-runtime/tick! runtime tick))
     {:status :rejected :reason :final-runtime-not-installed :tick tick}))
 (defn abort-owner! [owner]
   (if-let [runtime (final-runtime/production-runtime)]

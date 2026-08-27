@@ -467,6 +467,8 @@ vecmanip/mind-course
 - 资源型吸收反应在 CP/过载不足时会被移除，避免先减少伤害再提交失败；非阻塞的 VecDeviation/VecReflection 仍保留 main 的“尽量扣费、继续处理”语义。
 - `:cost/spend` 已补齐 final ABI 的 `:scale`、`:partial?` 和 `:on-insufficient`：前两者分别用于创意模式/按剩余资源扣费，后者现在真正执行显式失败清理分支，不再“只编译不分支”。
 - `:entity/discard` 已支持 UUID 以及 owner+entity-type 两种中立请求；后者先限定同一 world，再同时匹配 owner/type，避免清理其他玩家的会话实体。
+- Final hold-session 的 `pulse` 已统一由 server tick 驱动：客户端 slot tick 只作为输入/界面通知，`combat-runtime/tick!` 每个服务器 tick 按 owner 快照逐个派发一次 `:pulse`，并注入经过的 `:hold-ticks`。这样 ScatterBomb、BloodRetrograde、DirectedBlastwave 等蓄力技能不依赖客户端 tick，且仍只经过 `dispatch-intent! → Final execute!` 这一条路径。
+- `:start` 图若返回 `:finish-session? true`（例如激活资源不足）不再登记 owner session，避免后续 server tick 向已经失败的技能继续 pulse。
 - final session 读取同时保留会话元数据和 `:state`，外部事件图可安全读取 `:ability-id` 等元数据而不会丢失 owner-local 状态。
 - 暴击 feedback 已转成 `:player/feedback`，由 AC 的玩家反馈 adapter 发送；damage-reaction VFX 使用策略输入中的 owner，而非一律使用攻击者。
 - 暴击策略现在尊重 `:damage-types`，并按 level 0→1→2 的顺序合并概率；同一等级只产生一次 VFX/side-event，匹配 main 的 `roll-crit-level`。
