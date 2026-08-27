@@ -289,3 +289,42 @@
     (is (= :accepted (:status result)))
     (is (= :insufficient (:outcome result)))
     (is (true? (:finish-session? result)))))
+
+(deftest ability-caster-binds-neutral-capability-aliases-test
+  (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
+                                       :state-provider (fn [_] {})
+                                       :commit-state! (fn [_])})
+        program (compiler/compile-program
+                 {:component :flow/sequence
+                  :steps [{:component :ability/caster
+                           :bind {:eye :eye :aim :aim :body :body :id :owner-id
+                                  :world-id :wid :charge-ticks :charge-ticks
+                                  :mastery :mastery :level :level :seed :seed}}
+                          {:component :graph/output
+                           :value {:eye {:ref [:local :eye]}
+                                   :aim {:ref [:local :aim]}
+                                   :body {:ref [:local :body]}
+                                   :id {:ref [:local :owner-id]}
+                                   :world {:ref [:local :wid]}
+                                   :charge {:ref [:local :charge-ticks]}
+                                   :mastery {:ref [:local :mastery]}
+                                   :level {:ref [:local :level]}
+                                   :seed {:ref [:local :seed]}}}]})
+        result (engine/execute! runtime program
+                                {:owner :alice :world "world:test" :ability-id :skill/a
+                                 :tick 1 :seed 9
+                                 :input {:capabilities {:caster/eye [1.0 2.0 3.0]
+                                                        :caster/aim [0.0 0.0 1.0]
+                                                        :caster/body [1.0 1.0 1.0]
+                                                        :caster/id :alice
+                                                        :caster/creative? false
+                                                        :world/id "world:test"
+                                                        :charge/ticks 4
+                                                        :progression/mastery 0.75
+                                                        :progression/level 2
+                                                        :rng/seed 99}}})]
+    (is (= :accepted (:status result)))
+    (is (= [{:eye [1.0 2.0 3.0] :aim [0.0 0.0 1.0]
+             :body [1.0 1.0 1.0] :id :alice :world "world:test"
+             :charge 4 :mastery 0.75 :level 2 :seed 99}]
+           (:feedback result)))))

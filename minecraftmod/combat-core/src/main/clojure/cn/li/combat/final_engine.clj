@@ -169,11 +169,31 @@
       (assoc-in context [:locals (:ratio-slot node)] ratio))
     context))
 
+(defn- caster-capability-values
+  "Expose the neutral capability table through the short names used by the
+   :ability/caster source node.  Final input deliberately stores only
+   namespaced ports (:caster/eye, :world/id, :charge/ticks, ...); returning
+   that map directly makes every legacy-looking caster binding resolve to nil.
+   The aliases are closed and deterministic, while the namespaced keys remain
+   available for expressions that use the explicit capability ABI."
+  [input]
+  (let [capabilities (or (:capabilities input) {})
+        aliases {:eye (:caster/eye capabilities)
+                 :aim (:caster/aim capabilities)
+                 :body (:caster/body capabilities)
+                 :id (:caster/id capabilities)
+                 :creative? (:caster/creative? capabilities)
+                 :world-id (:world/id capabilities)
+                 :charge-ticks (:charge/ticks capabilities)
+                 :mastery (:progression/mastery capabilities)
+                 :level (:progression/level capabilities)
+                 :seed (:rng/seed capabilities)}]
+    (merge capabilities aliases)))
 (defn- source-value [node context]
   (let [input (:input (:frame context))
         name (:name node)]
     (case (:component node)
-      :ability/caster (or (:caster input) (:source input) {})
+      :ability/caster (caster-capability-values input)
       :ability/tunable (get-in input [:tunables name])
       :ability/budget (get-in input [:budgets name])
       :ability/progression (get-in input [:progression name])
