@@ -249,3 +249,43 @@
     (is (every? #(or (contains? query-capabilities %)
                      (contains? ac-owned %))
                 (set (vals queries))))))
+
+(deftest cost-spend-honors-scale-partial-and-insufficient-flow-test
+  (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
+                                       :state-provider (fn [_] {:resources {:cp 1.0 :overload 1.0}})
+                                       :commit-state! (fn [_])})
+        program (compiler/compile-program
+                 {:component :flow/sequence
+                  :steps [{:component :cost/spend
+                           :budget {:resources {:cp 4.0 :overload 2.0}}
+                           :scale 0.5
+                           :partial? true
+                           :bind {:insufficient? :insufficient?}}
+                          {:component :flow/branch
+                           :when {:ref [:local :insufficient?]}
+                           :then {:component :flow/finish :outcome :partial}
+                           :else {:component :flow/finish :outcome :full}}]})
+        result (engine/execute! runtime program
+                                {:owner :alice :world "world:test" :ability-id :skill/a
+                                 :tick 1 :seed 9 :input {}})]
+    (is (= :accepted (:status result)))
+    (is (= :partial (:outcome result)))
+    (is (= 0.0 (get-in result [:txn 0 :state :resources :cp])))
+    (is (= 0.0 (get-in result [:txn 0 :state :resources :overload])))))
+
+(deftest cost-spend-runs-on-insufficient-flow-arm-test
+  (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
+                                       :state-provider (fn [_] {:resources {:cp 0.0}})
+                                       :commit-state! (fn [_])})
+        program (compiler/compile-program
+                 {:component :cost/spend
+                  :budget {:resources {:cp 1.0}}
+                  :on-insufficient {:component :flow/finish
+                                    :outcome :insufficient
+                                    :finish-session? true}})
+        result (engine/execute! runtime program
+                                {:owner :alice :world "world:test" :ability-id :skill/a
+                                 :tick 1 :seed 9 :input {}})]
+    (is (= :accepted (:status result)))
+    (is (= :insufficient (:outcome result)))
+    (is (true? (:finish-session? result)))))
