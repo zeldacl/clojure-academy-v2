@@ -67,7 +67,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 | `mine-ray-expert` | 专家射线采矿；取消工具等级限制，独立前置/冷却 | 同 MineRay 专属变体样式 | ⚠️ |
 | `mine-ray-luck` | luck=3 射线采矿，专属颜色/粒子 | 同 MineRay luck 样式 | ⚠️ |
 | `rad-intensify` | 读取目标 radiation mark，使用标记创建时的 source rate 放大伤害 | 目标 mark session | ⚠️ mark-type 匹配与 source rate 快照已修复，并按 world/target 隔离；跨重启持久化与实机 VFX 仍需验证 |
-| `ray-barrage` | 扇形多目标射击；命中后写 radiation mark 并触发后续行为 | ray beam、fan、音效 | ⚠️ mark 提交已接入；扇形命中/后续行为仍需验证 |
+| `ray-barrage` | 扇形多目标射击；命中后写 radiation mark 并触发后续行为 | ray beam、fan、音效 | ⚠️ mark 提交已接入；silbarn 触发已限定施法者 owner，扇形命中/后续行为仍需验证 |
 | `scatter-bomb` | 生成/调度多枚散射弹，资源不足时清理 | 粒子、beam fade、音效 | ⚠️ |
 | `dim-folding-theorem` | 学习后为非反射 magic/skill 攻击提供 level 0 暴击/反馈/成就 | 暴击尾迹/粒子 | ⚠️ policy input、damage-type 过滤、ordered critical、反馈消息和 VFX owner 已接入；经验仍需行为测试 |
 | `flashing` | 四方向闪现；预览/释放资源检查，传送后保护摔落并计经验 | teleport marker、端点爆发 | ⚠️ |
@@ -130,7 +130,7 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 | `vec-deviation` | 开启状态下减伤、CP 代价、音效/经验 | owner session/context、ignore-threshold 与按剩余 CP 尽量扣费已接入；仍需实机验证反射扫描与减伤时序 |
 | `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验；低于 minimum 时仍减少原伤害但不取消原生攻击 | 反射已一次性提交，按 world/source/target/seed/depth 幂等；minimum、残余伤害和环境边界已对齐，参数快照/扣费与递归上限需行为测试 |
 | `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | mark reducer 已接入；持续移动/伤害需验证 |
-| `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | mark reducer 已接入；扇形命中与后续行为需验证 |
+| `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | mark reducer 已接入；silbarn 查询按 caster owner 隔离，扇形命中与后续行为需验证 |
 
 Railgun 还有一个入口级修复：`main` 的 `ItemCoin` 使用不依赖当前是否处于技能
 激活态，因此 `:item/use` 的 final trigger 不能带 `:ability-mode? true` 过滤。
