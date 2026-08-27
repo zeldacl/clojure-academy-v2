@@ -35,6 +35,7 @@
          :session (or (:session (:metadata event)) {})
          :slot (or (:slot (:metadata event)) {})
          :mark (or (:mark (:metadata event)) {})
+         :input (or (:input (:metadata event)) {})
          nil)
        path))
 
@@ -75,24 +76,55 @@
          (= mark-type (get-in event [:metadata :context :mark-type]))
          true)))
 
+(defn- policy-event
+  "Select the immutable input snapshot belonging to one policy."
+  [event policy]
+  (let [metadata (:metadata event)
+        inputs (or (:inputs metadata) {})
+        input (or (get inputs (:ability-id policy)) (:input metadata) {})]
+    (assoc event :metadata (assoc metadata :input input))))
+
+(defn materialize-vfx
+  "Resolve a policy VFX descriptor against its immutable input event."
+  [descriptor event]
+  (letfn [(walk [value]
+            (cond
+              (and (map? value) (:ref value)) (eval-value value event)
+              (map? value) (into {} (map (fn [[k v]] [k (walk v)]) value))
+              (sequential? value) (mapv walk value)
+              :else value))]
+    (when (map? descriptor)
+      (cond-> descriptor
+        (contains? descriptor :payload)
+        (assoc :payload (walk (:payload descriptor)))))))
 (defn- program-contributions [program event]
   (let [value #(double (or (eval-value % event) 0.0))]
     (case (:component program)
       :damage/multiply [{:kind :multiplier :value (value (:multiplier program))}]
       :damage/reduce [{:kind :reduction :value (value (:rate program))}]
-      :damage/absorb [{:kind :absorption :value (value (:cap program))}]
+      :damage/absorb [{:kind :absorption :value (value (:cap program))
+                       :cost (:cost program) :vfx (:vfx program)
+                       :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
       :damage/reflect [{:kind :reflection :ratio (value (:multiplier program))
-                        :minimum (value (:minimum program))}]
+                        :minimum (value (:minimum program))
+                        :max-depth (long (or (value (:max-depth program)) max-reflection-depth))
+                        :cost-per-damage (value (:cost-per-damage program))
+                        :exp-scale (value (:exp-scale program))
+                        :vfx (:vfx program) :events (:events program) :input (:input (:metadata event))}]
       :damage/critical (mapv (fn [{:keys [probability multiplier]}]
                                {:kind :critical
                                 :probability (value probability)
-                                :multiplier (value multiplier)})
+                                :multiplier (value multiplier)
+                                :vfx (:vfx program)
+                                :feedback (:feedback program)
+                                :events (:events program) :input (:input (:metadata event))})
                              (:levels program))
       [])))
 
 (defn collect [reactions event]
-  (->> reactions (filter #(policy-matches? % event))
+  (->> reactions (filter (fn [policy]
+                          (policy-matches? policy (policy-event event policy))))
        (sort-by (juxt #(long (or (:priority %) 0)) #(str (:ability-id %)) #(str (:reaction-id %))))
        vec))
 (defn- deterministic-roll [seed probability]
@@ -100,8 +132,11 @@
 (defn resolve-event [reactions raw-event]
   (let [event (event raw-event) matched (collect reactions event)
         contributions (mapcat (fn [reaction]
-                                (concat (or (:contributions reaction) [])
-                                        (program-contributions (:program reaction) event)))
+                                (let [pe (policy-event event reaction)]
+                                  (map #(assoc % :ability-id (:ability-id reaction)
+                                                 :reaction-id (:reaction-id reaction))
+                                       (concat (or (:contributions reaction) [])
+                                               (program-contributions (:program reaction) pe)))))
                               matched)
         multiplier (reduce * 1.0 (map #(double (or (:value %) 1.0)) (filter #(= :multiplier (:kind %)) contributions)))
         reduction (min 1.0 (max 0.0 (reduce + 0.0 (map #(double (or (:value %) 0.0)) (filter #(= :reduction (:kind %)) contributions)))))
@@ -110,17 +145,32 @@
         criticals (filter #(= :critical (:kind %)) contributions)
         critical-probability (min 1.0 (max 0.0 (reduce + 0.0 (map #(double (or (:probability %) 0.0)) criticals))))
         critical? (and (pos? critical-probability) (deterministic-roll (:seed event) critical-probability))
-        amount (max 0.0 (* (- before absorption) (if critical? (double (or (some :multiplier criticals) 1.0)) 1.0)))
+        critical-level (when critical? (first (sort-by (comp - :multiplier) criticals)))
+        amount (max 0.0 (* (- before absorption)
+                         (if critical? (double (or (:multiplier critical-level) 1.0)) 1.0)))
         reflections (->> contributions (filter #(= :reflection (:kind %)))
                        (keep (fn [reflection]
-                               (when (< (:depth event) max-reflection-depth)
+                               (when (< (:depth event)
+                                        (min max-reflection-depth
+                                             (long (or (:max-depth reflection)
+                                                       max-reflection-depth))))
                                  (assoc event :source (:target event) :target (:source event)
                                         :base (* amount (double (or (:ratio reflection) 1.0)))
                                         :depth (inc (:depth event))
-                                        :metadata (assoc (:metadata event) :reflected? true))))) vec)]
+                                        :metadata (assoc (:metadata event)
+                                                         :reflected? true
+                                                         :reflection reflection))))) vec)]
     {:event event :matched (mapv #(select-keys % [:ability-id :reaction-id]) matched)
      :amount amount :cancelled? (boolean (some #(= :cancel (:kind %)) contributions))
-     :critical? critical? :reflections reflections
+     :critical? critical? :critical-level critical-level :reflections reflections
+     :vfx (vec (keep :vfx (filter #(or (and (= :critical (:kind %)) critical?)
+                                      (= :reflection (:kind %))
+                                      (= :absorption (:kind %))) contributions)))
+     :feedback (vec (keep :feedback (filter #(and (= :critical (:kind %)) critical?) contributions)))
+     :side-events (vec (mapcat #(or (:events %) [])
+                               (filter #(or (and (= :critical (:kind %)) critical?)
+                                          (= :reflection (:kind %))
+                                          (= :absorption (:kind %))) contributions)))
      :state-patches (vec (mapcat :state-patches matched))
      :events (vec (mapcat :events matched))}))
 (defn install-boundary!

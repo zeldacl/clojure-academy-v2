@@ -66,8 +66,10 @@
   "Resolve a neutral damage event through the final damage policy engine."
   [runtime raw-event]
   (let [resolve-event (resolve-var 'cn.li.combat.final-damage/resolve-event)
-        policies (vec (mapcat :damage-policies
-                              (vals (get-in @(:catalog runtime) [:combat :sources]))))]
+        policies (vec (mapcat (fn [[ability-id source]]
+                                (map #(assoc % :ability-id ability-id)
+                                      (:damage-policies source)))
+                              (get-in @(:catalog runtime) [:combat :sources])))]
     (assoc (resolve-event policies raw-event) :status :accepted)))
 
 (defn- registration [runtime ability-id]

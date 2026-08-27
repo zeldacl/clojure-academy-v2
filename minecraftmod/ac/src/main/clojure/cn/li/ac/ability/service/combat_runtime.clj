@@ -3,6 +3,7 @@
 
    Combat Core itself never knows about AC, Minecraft or VFX."
   (:require [cn.li.combat.deferred :as deferred]
+            [cn.li.combat.final-damage :as final-damage]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -28,6 +29,8 @@
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
+            [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
+            [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
@@ -762,6 +765,45 @@
   (or (handle-neutral-domain-event! event)
       {:status :unhandled :event event}))
 
+(defn- vfx-recipients
+  [owner signal]
+  (let [audience (:audience signal)
+        kind (:type audience)
+        radius (double (or (:radius audience) 32.0))]
+    (case kind
+      :nearby (let [nearby (try
+                             (when-let [f (requiring-resolve
+                                           'cn.li.mcbase.runtime.spi.network-transport/find-nearby-player-uuids)]
+                               (vec (f (str owner) radius)))
+                             (catch Throwable _ []))]
+                (vec (distinct (cons (str owner) nearby))))
+      :all (let [nearby (try
+                          (when-let [f (requiring-resolve
+                                        'cn.li.mcbase.runtime.spi.network-transport/find-nearby-player-uuids)]
+                            (vec (f (str owner) Double/MAX_VALUE)))
+                          (catch Throwable _ []))]
+             (vec (distinct (cons (str owner) nearby))))
+      [(str owner)])))
+
+(defn- publish-vfx-signal!
+  [owner signal tick]
+  (when (map? signal)
+    (let [owner (str (or (:owner signal) owner))
+          signal (vfx-contract/signal
+                  (merge {:op :spawn
+                          :owner owner
+                          :event-seq (long (or tick 0))
+                          :seed (long (or (:seed signal) 0))}
+                         (select-keys signal [:effect-id :instance-key :instance-id
+                                              :world-id :audience :anchor :params])))
+          wire (fixed-channel/encode-vfx-signal signal)
+          recipients (vfx-recipients owner signal)]
+      (doseq [recipient recipients]
+        (server-bridge/send-to-client! recipient
+                                        ability-messages/MSG-COMBAT-VFX
+                                        {:wire wire}))
+      {:status :published :recipients (count recipients)
+       :effect-id (:effect-id signal)})))
 (defn dispatch-result-domain-events!
   "Dispatch explicit domain events from one CombatResult.
 
@@ -778,8 +820,77 @@
                                             (:ability-id result)))))
               results))
           []
-          (:events result)))
+          (concat (:events result) (:side-events result))))
 
+(defn- damage-policy-inputs
+  "Build owner/world-scoped immutable inputs for every registered damage policy."
+  [target-id source-id damage-source]
+  (let [target-state (owner-state target-id)
+        source-state (when (and source-id (not= source-id :environment))
+                       (owner-state source-id))
+        target-data (:ability-data target-state)
+        source-data (:ability-data source-state)
+        target-session (combat-sessions/session (str target-id))
+        sources (get-in @catalog* [:combat :sources])]
+    (into {}
+          (map (fn [[ability-id source]]
+                 (let [source-learned? (boolean (and source-data
+                                                      (ability-model/is-learned? source-data ability-id)))
+                       exp-data (if source-learned? source-data target-data)
+                       skill-exp (double (or (get-in exp-data [:skill-exps ability-id]) 0.0))
+                       enabled? (= ability-id (:ability-id target-session))
+                       params (or (:parameter-snapshot target-session) {})
+                       context {:ability-id ability-id
+                                :enabled? enabled?
+                                :source-learned? source-learned?
+                                :skill-exp skill-exp
+                                :max-cp (double (or (get-in target-state [:resources :max-cp]) 0.0))
+                                :front? (if (contains? damage-source :attacker-front?)
+                                          (boolean (:attacker-front? damage-source))
+                                          true)
+                                :mark? (boolean (:mark? damage-source))
+                                :reflected? (boolean (:reflected? damage-source))
+                                :target-position (:position target-state)
+                                :resources (:resources target-state)}
+                       input {:context context
+                              :capabilities {}
+                              :tunables (materialize-final-tunables ability-id skill-exp)
+                              :params params
+                              :session (or target-session {})
+                              :budgets (:costs source)
+                              :invariants (:invariants source)}]
+                   [ability-id input]))
+               sources))))
+(defonce ^:private reflection-claims* (atom {}))
+
+(defn- apply-reflections-once!
+  [result]
+  (let [damage-fn (requiring-resolve 'cn.li.combat.platform/damage!)]
+    (boolean
+     (some (fn [reflection]
+             (let [event (:event reflection)
+                   claim [(:world-id event) (:source event) (:target event)
+                          (:seed event) (:depth event)]
+                   claimed? (atom false)]
+               (swap! reflection-claims*
+                      (fn [claims]
+                        (if (contains? claims claim)
+                          claims
+                          (do (reset! claimed? true)
+                              (if (> (count claims) 2048)
+                                (assoc (into {} (take-last 1024 claims)) claim true)
+                                (assoc claims claim true))))))
+               (when @claimed?
+                 (try
+                   (= :applied (:status
+                                 (damage-fn {:world-id (:world-id event)
+                                             :target (:target event)
+                                             :amount (:base event)
+                                             :damage-type (:type event)
+                                             :owner (:source event)
+                                             :reflected? true})))
+                   (catch Throwable _ false)))))
+           (:reflections result)))))
 (defn- final-damage-request
   [player-id attacker-id original-damage damage-source precheck?]
   (let [runtime (final-runtime/production-runtime)
@@ -788,14 +899,29 @@
                :target player-id
                :base (double original-damage)
                :type (or (:damage-type damage-source) :generic)
-               :seed (long (or (:seed damage-source) @last-known-tick*))}
+               :seed (long (or (:seed damage-source) @last-known-tick*))
+               :metadata {:inputs (damage-policy-inputs player-id attacker-id (or damage-source {}))
+                          :context (get (damage-policy-inputs player-id attacker-id (or damage-source {}))
+                                        :default {})}}
         result (final-runtime/resolve-damage! runtime event)]
     (assoc result
            :precheck? precheck?
-           :reaction-damage-applied? false
+           :reaction-damage-applied? (and precheck? (apply-reflections-once! result))
            :base (double (:amount result))
            :cancelled? (boolean (:cancelled? result)))))
 
+(defonce ^:private finalized-damage-claims* (atom {}))
+
+(defn- finalize-damage-once!
+  [result]
+  (let [event (:event result)
+        claim [(:world-id event) (:source event) (:target event) (:seed event)]]
+    (when (and event (compare-and-set! finalized-damage-claims*
+                                       @finalized-damage-claims*
+                                       (if (> (count @finalized-damage-claims*) 2048)
+                                         (assoc (into {} (take-last 1024 @finalized-damage-claims*)) claim true)
+                                         (assoc @finalized-damage-claims* claim true))))
+      (finalize-result! (:target event) result))))
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
 
@@ -803,6 +929,7 @@
    only the resulting numeric amount back to its event."
   [player-id attacker-id original-damage damage-source]
   (let [request (final-damage-request player-id attacker-id original-damage damage-source false)]
+    (finalize-damage-once! request)
     (if (:cancelled? request) 0.0 (double (:base request)))))
 
 (defn apply-attack-precheck!
@@ -813,22 +940,45 @@
    live damage."
   [player-id attacker-id original-damage damage-source]
   (let [request (final-damage-request player-id attacker-id original-damage damage-source true)]
+    (finalize-damage-once! request)
     (boolean (or (:cancelled? request) (:reaction-damage-applied? request)))))
 
 (defn finalize-result!
-  "Apply one accepted result at the AC composition boundary: commit its
-   owner/session patches, invoke registered capability actions, then reduce
-   explicit domain events. Acknowledgements remain attached to the immutable
-   result for publication and diagnostics."
+  "Apply one accepted result at the AC composition boundary and publish its
+   authoritative VFX/domain outbox after the state decision is known."
   [owner result]
-  (let [result (if (= :accepted (:status result))
+  (let [accepted? (= :accepted (:status result))
+        result (if accepted?
                  (assoc result :patch-results [] :action-results [])
                  result)
-        domain-results (if (= :accepted (:status result))
+        domain-results (if accepted?
                          (dispatch-result-domain-events! owner result)
-                         [])]
+                         [])
+        event (:event result)
+        damage-vfx (when (and accepted? event)
+                     (map (fn [descriptor]
+                            (let [materialized (final-damage/materialize-vfx
+                                                descriptor
+                                                (assoc event :metadata
+                                                       {:input (:input descriptor)}))]
+                              (merge {:op :spawn
+                                      :owner (str (or (:source event) owner))
+                                      :world-id (:world-id event)
+                                      :event-seq (long (or (:seed event) 0))
+                                      :seed (long (or (:seed event) 0))}
+                                     (select-keys materialized
+                                                  [:effect-id :instance-key :instance-id
+                                                   :audience :anchor])
+                                     {:params (:payload materialized)})))
+                          (:vfx result)))
+        graph-vfx (when accepted? (:vfx-signals result))
+        vfx-results (if accepted?
+                      (mapv #(publish-vfx-signal! owner % (current-tick))
+                            (concat graph-vfx damage-vfx))
+                      [])]
     (assoc result :owner owner
-           :domain-event-results (vec domain-results))))
+           :domain-event-results (vec domain-results)
+           :vfx-publish-results (vec vfx-results))))
 (defn dispatch-event!
   "Dispatch a one-shot ability event (no active session required -- a fresh
    activation context is generated the same way a :start intent would) and
