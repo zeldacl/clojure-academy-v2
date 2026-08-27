@@ -362,6 +362,36 @@ thunder-bolt
 - 仍未宣称完成的实体生命周期边界：Final session 只保存球数量，释放按 owner+entity-type 查询，\n  没有 main 的逐球 UUID/实际位置生命周期；同一 owner 的其它 MdBall 来源可能被查询到，\n  也无法在当前 action ABI 中把 spawn 返回 UUID 直接绑定到后续 graph。anti-AFK 已通过 Final\n  `flow/finish :next-phase :release` 转入同一释放 graph：先执行 generic 自伤，再由 server\n  pulse runtime 派发 release，不复制 volley，也不建立第二条路径。
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）；没有实机时不能将实体轨迹、方块碰撞、
   delayed beam 和多人同时蓄力标为完成。
+### mark-teleport checkpoint（逐项复核）
+
+- `main` 的目标距离随持有时间增长，并受最大距离、当前 CP/每米成本限制；最小有效
+  距离为 3，松键使用持有期间最后一个目标，成功时传送、脱离载具、清除摔落状态、
+  计经验并启动冷却。
+- Final 的 `target/hold-destination` 已保留上述距离/资源/最小距离策略；本轮将
+  release 从重新 raycast 改为读取 owner session 的最后 `:destination`，因此不会因
+  松键时准星变化而偏离主线语义。公共 `entity/teleport` 端口现在实际执行
+  `:dismount?`/`:reset-fall-damage?`。
+- 仍需实机确认 teleport adapter 的跨维度实体边界与 marker 的客户端到达率；静态门禁
+  已通过，未将该项标记为最终行为 `✅`。
+
+### location-teleport checkpoint（逐项复核）
+
+- `main` 的保存/删除/查询仍由 AC 专属 named-position RPC 负责；实际传送统一进入
+  Final `target/saved-location` + `combat/teleport-group`，没有恢复旧技能执行器。
+- Final 已按跨维度条件检查经验门槛，并使用距离平方根、跨维度倍率、过载和冷却曲线；
+  `teleport-group` 负责 owner 与半径 5 内实体的相对偏移迁移。
+- RPC 预览只用于 UI 快照，不执行传送；它与 Final 图共享同一 AC tunable registry，
+  但算术镜像仍是可维护性风险，后续总审计需决定是否抽取通用纯成本函数。
+
+### shift-teleport checkpoint（逐项复核）
+
+- `main` 在持有期间持续保存手持物、落点 trace 和路径实体；释放优先使用最后一次
+  预览快照，只有没有快照时才重新解析。当前 Final release 已改为读取 owner session
+  的 `:hand-item`、`:trace`、`:targets`，避免松键重采样改变放置点或伤害列表。
+- 放置/掉落、路径伤害、经验、冷却和 marker 清理仍由同一 Final graph 串联；
+  `target/block-placement` 的权限事实由中性 host 提供，EDN 只决定是否执行。
+- 仍需实机确认方块权限失败时的 drop fallback、路径实体排序和多人 VFX audience。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
