@@ -679,3 +679,19 @@
     (is append-parent)
     (is (some #(= (first appends) %)
               (component-nodes (:then append-parent))))))
+(deftest plasma-cannon-preserves-activation-overload-floor-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/plasma_cannon.edn"))
+        nodes (component-nodes (:program doc))
+        floor-bind (some #(when (and (= :data/bind (:component %))
+                                      (= :overload-floor (:to %))) %)
+                         nodes)
+        enforce (filter #(= :resource/enforce-floor (:component %)) nodes)
+        add (filter #(= :resource/add (:component %)) nodes)]
+    (is (= {:type :double, :default 0.0}
+           (get-in doc [:session-state :overload-floor])))
+    (is (= 1 (count add)))
+    (is (= :overload (:resource (first add))))
+    (is (= 1 (count enforce)))
+    (is (= :overload (:resource (first enforce))))
+    (is floor-bind)
+    (is (= :math/max (get-in floor-bind [:value :expr])))))
