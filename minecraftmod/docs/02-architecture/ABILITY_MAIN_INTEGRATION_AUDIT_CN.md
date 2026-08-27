@@ -36,7 +36,7 @@
 | `mag-manip` | 捕获金属方块/物品实体，持续吸附，释放投掷；碰撞负责伤害/放置/恢复 | 持续弧光、音效、beam | ⚠️ 需继续验证实体碰撞提交 |
 | `mag-movement` | 锁定金属方块/实体并牵引玩家；结束时重置摔落并按距离给经验 | 持续弧光、循环音 | ⚠️ |
 | `mine-detect` | 视线扫描地雷/实体；失明和资源不足拒绝；成功施加扫描状态并计经验/冷却 | 扫描框/扫描音效 | ⚠️ |
-| `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ❌ EDN 缺少 QTE 阈值、蓄力 tick、判定销毁、反射和成就完整链 |
+| `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ❌ item→EDN trigger 路由已补；仍缺 QTE 阈值/蓄力 tick/判定销毁/反射/经验成就完整链 |
 | `thunder-bolt` | 命中目标后闪电、AOE、creeper/potion 分支、经验/冷却 | 闪电冲击 | ⚠️ 目标引用已修复；仍受 damage/VFX 公共链约束 |
 | `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ |
 | `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
@@ -98,7 +98,7 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 
 | 注册项 | main 行为基线 | 当前实现缺口 |
 |---|---|---|
-| `railgun` | Coin QTE、硬币判定/销毁、物品蓄力、反射射击、经验/成就、主射线 | EDN 只有 `:coin-thrown` 完成事件和普通 beam；QTE、蓄力 tick、反射、经验/成就未迁移 |
+| `railgun` | Coin QTE、硬币判定/销毁、物品蓄力、反射射击、经验/成就、主射线 | item→EDN trigger 和硬币实体生成已在 AC 组合根注册；EDN 仍只有 `:coin-thrown` 完成事件和普通 beam，QTE、蓄力 tick、判定销毁、反射、经验/成就未迁移 |
 | `mine-ray-basic` | 基础变体，工具等级限制，fortune=0，独立冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `mine-ray-expert` | 专家变体，取消工具等级限制，独立前置条件/冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `mine-ray-luck` | luck 变体，fortune=3，独立粒子/光束样式 | ✅ 已注入 registration bindings；仍需行为等价测试 |
@@ -112,6 +112,12 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 | `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验；低于 minimum 时仍减少原伤害但不取消原生攻击 | 反射已一次性提交，按 world/source/target/seed/depth 幂等；minimum、残余伤害和环境边界已对齐，参数快照/扣费与递归上限需行为测试 |
 | `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | mark reducer 已接入；持续移动/伤害需验证 |
 | `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | mark reducer 已接入；扇形命中与后续行为需验证 |
+
+Railgun 还有一个入口级修复：`main` 的 `ItemCoin` 使用不依赖当前是否处于技能
+激活态，因此 `:item/use` 的 final trigger 不能带 `:ability-mode? true` 过滤。
+该过滤已移除，并由 `main-item-trigger-is-unconditional-test` 固定 `ac:coin` 和
+`academy:coin` 在 true/false 两种激活状态都能解析到 `:coin-thrown`。这只证明
+事件能进入 Combat Core；事件图本身仍未实现 QTE 状态机。
 
 ### 课程别名（本轮已修复 reducer）
 
@@ -237,7 +243,7 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 ## 本轮验证结果
 
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
-- `:ac:runAcEdnCoverageTests`：通过 11 tests / 27 assertions；该门禁只验证
+- `:ac:runAcEdnCoverageTests`：通过 14 tests / 33 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
 - `:ac:runAcClojureTests`：未能进入测试执行，`compileTestClojure` 被仓库现有
   classpath 问题阻断（缺少 `cn/li/combat/skill_runtime`、
