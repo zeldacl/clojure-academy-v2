@@ -106,7 +106,7 @@
                   raycast/raycast-combined-from-player
                   (fn [player-uuid max-dist living-only?]
                     (swap! calls* conj [player-uuid max-dist living-only?])
-                    {:hit-type "entity" :hit-x 0.0 :hit-y 64.0 :hit-z 30.0 :eye-height 1.8})]
+                    {:hit-type :entity :hit-x 0.0 :hit-y 64.0 :hit-z 30.0 :eye-height 1.8})]
       (let [dest (resolve-destination "p1" "minecraft:overworld" {:x 0.0 :y 64.0 :z 0.0})]
         (is (= [["p1" 100.0 true]] @calls*))
         ;; getLookingPos raises an entity hit by eyeHeight * 0.6.

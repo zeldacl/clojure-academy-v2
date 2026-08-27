@@ -186,7 +186,7 @@
             ;; frames), which would drop the shot short of what was aimed at.
             hit (raycast/raycast-combined-from-player player-id max-distance true)]
         (if hit
-          (let [entity-hit? (= "entity" (:hit-type hit))
+          (let [entity-hit? (= :entity (:hit-type hit))
                 hit-x (double (or (:hit-x hit) (:x hit) eye-x))
                 hit-y (double (or (:hit-y hit) (:y hit) eye-y))
                 hit-z (double (or (:hit-z hit) (:z hit) eye-z))]

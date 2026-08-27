@@ -142,7 +142,7 @@
                   raycast/raycast-combined-excluding
                   (fn [_world sx sy sz & _]
                     (when-not (= [sx sy sz] [0.0 64.0 0.0])
-                      {:hit-type "entity" :uuid victim
+                      {:hit-type :entity :uuid victim
                        :x 0.0 :y 64.0 :z 8.0
                        :hit-x 0.0 :hit-y 64.0 :hit-z 8.0
                        :distance 8.0}))
@@ -255,7 +255,7 @@
                   raycast/available? (constantly true)
                   ;; blocks as well as entities, matching Raytrace.perform
                   raycast/raycast-combined-all (fn [& _]
-                                                 {:hit-type "entity" :uuid victim
+                                                 {:hit-type :entity :uuid victim
                                                   :x 0.0 :y 64.0 :z 5.0 :distance 5.0})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)

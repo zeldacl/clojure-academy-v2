@@ -49,7 +49,7 @@
                     raycast/raycast-combined-excluding
                     (fn [_world sx sy sz & _]
                       (when-not (= [sx sy sz] [1.0 64.0 2.0])
-                        {:hit-type "entity"
+                        {:hit-type :entity
                          :uuid "target-1"
                          :x 4.0
                          :y 65.0
@@ -123,7 +123,7 @@
                     (fn [& args]
                       (when-not (= (vec (take 4 args)) ["w" 1.0 64.0 2.0])
                         (reset! raycast-args* args)
-                        {:hit-type "entity" :uuid "target-1"
+                        {:hit-type :entity :uuid "target-1"
                          :x 4.0 :y 65.0 :z 6.0
                          :hit-x 4.0 :hit-y 65.0 :hit-z 6.0}))
                     entity-damage/apply-direct-damage! (fn [& args]
@@ -206,7 +206,7 @@
                   ;; (Raytrace.perform with EntitySelectors.everything),
                   ;; so the stub answers the combined trace and says
                   ;; what it hit.
-                  raycast/raycast-combined-all (fn [& _] {:hit-type "entity" :uuid "target-1"})
+                  raycast/raycast-combined-all (fn [& _] {:hit-type :entity :uuid "target-1"})
                   entity-damage/apply-direct-damage! (fn [world-id target-id damage source-type opts]
                                                         (swap! calls conj [:damage world-id target-id damage source-type opts])
                                                         true)

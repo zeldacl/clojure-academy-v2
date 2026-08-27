@@ -142,7 +142,7 @@
     (if (:hit-type hit)
       {:x (double (:hit-x hit))
        :y (+ (double (:hit-y hit))
-             (if (= "entity" (:hit-type hit))
+             (if (= :entity (:hit-type hit))
                (* 0.6 (double (or (:eye-height hit) 0.0)))
                0.0))
        :z (double (:hit-z hit))}
@@ -186,7 +186,7 @@
                                               shot-dist
                                               (str player-id))
                 end-pos dest
-                target-uuid (when (= "entity" (:hit-type hit)) (:uuid hit))
+                target-uuid (when (= :entity (:hit-type hit)) (:uuid hit))
                 damage-amt (double (or damage 0.0))
                 payload {:mode :perform
                          :start origin
@@ -236,7 +236,10 @@
                    world-id ox oy oz
                    (:x dir) (:y dir) (:z dir)
                    (max 0.1 dist))
-            target-uuid (when (= "entity" (:hit-type hit))
+            ;; normalize-bridge-map keywords the Java bridge's "entity"/"block"
+            ;; strings — a string comparison here silently never matched and
+            ;; the ray never dealt damage.
+            target-uuid (when (= :entity (:hit-type hit))
                           (or (:uuid hit) (:entity-id hit)))]
         (when (and target-uuid (entity-damage/available?))
           (entity-damage/apply-direct-damage!
