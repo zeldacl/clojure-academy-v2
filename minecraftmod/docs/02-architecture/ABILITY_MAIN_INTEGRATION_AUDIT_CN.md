@@ -77,7 +77,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 | `mag-movement` | 锁定金属方块/实体并牵引玩家；结束时重置摔落并按距离给经验 | 持续弧光、循环音 | ⚠️ |
 | `mine-detect` | 视线扫描地雷/实体；失明和资源不足拒绝；成功施加扫描状态并计经验/冷却 | 扫描框/扫描音效 | ⚠️ |
 | `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ⚠️ Final 图已接入 owner-scoped QTE/蓄力/消费/销毁/反射/成就；exp 细粒度与实机等价仍待验证 |
-| `thunder-bolt` | 命中目标后闪电、AOE、creeper/potion 分支、经验/冷却 | 闪电冲击 | ⚠️ 目标引用已修复；仍受 damage/VFX 公共链约束 |
+| `thunder-bolt` | 命中目标后闪电、AOE、creeper/potion 分支、经验/冷却 | 闪电冲击 | ⚠️ 目标引用与 effective/ineffective 经验分支已接入 Final；仍受 damage/VFX 公共链约束 |
 | `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ |
 | `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
 | `electron-missile` | 持续蓄力生成多发电子球，锁定目标并发射，资源不足/超时清理 | 粒子、beam fade、音效 | ⚠️ |
@@ -144,7 +144,7 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 | `mine-ray-luck` | luck 变体，fortune=3，独立粒子/光束样式 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `location-teleport` | 仅跨维度时检查经验门槛并应用跨维度倍率 | ✅ 已修复 `not=` 逻辑；仍需保存地点/跨维度提交测试 |
 | `light-shield` | damage reaction 吸收伤害，CP/过载消耗，正面判断，状态和冷却 | ✅ 已修复 CP/过载映射并接入 final-damage context；资源/夹角需实机验证 |
-| `thunder-bolt` | 目标命中后 AOE/creeper/potion/经验/冷却 | ✅ 已修复目标引用并接入统一 VFX；AOE 分支需实机验证 |
+| `thunder-bolt` | 目标命中后 AOE/creeper/potion/经验/冷却 | ✅ 已修复目标引用并接入统一 VFX，effective/ineffective 均通过 `ability/progression` 提交；AOE 分支需实机验证 |
 | `dim-folding-theorem` | 学习状态、非反射攻击的暴击/反馈/VFX/成就 | input/context、反馈消息和 VFX owner 已接入；主线等级与经验细节需验证 |
 | `rad-intensify` | 读取 radiation mark，并使用标记创建时的 source rate 放大伤害 | mark 表、策略输入、mark-type 匹配和倍率快照已接入；跨重启持久化未实现 |
 | `space-fluct` | 多级暴击、反射排除、经验/成就/VFX | input/context、反馈消息和 VFX owner 已接入；多级概率与排除反射需验证 |
@@ -646,8 +646,8 @@ thunder-bolt
   的 `:entity-type`（兼容两个平台描述 id 形式）。
 - 已修复 AOE 过滤遗漏施法者的问题：Final `target/entities` 现在同时排除
   `caster/id` 与 direct target，匹配 main 的 `#{player-id target-uuid}` 作用域。
-- 已通过 `:ac:runAcEdnCoverageTests`（21 tests / 53 assertions）。技能伤害全局缩放及
-  实机雷击/VFX 时序仍需验证，不在该技能内保留旧实现或硬编码绕过。
+- main 在每次释放后按是否存在 direct/AOE living target 提交 effective 或 ineffective 经验；Final 原先只有 tag，运行时会把该经验折损为 0。本轮为两个分支分别加入 `ability/progression` 与 score ref，保留原有目标、creeper、slowness、闪电和冷却顺序，不保留旧 callback。
+- 已通过 `:ac:runAcEdnCoverageTests`（32 tests / 96 assertions）。技能伤害全局缩放及实机雷击/VFX 时序仍需验证，不在该技能内保留旧实现或硬编码绕过。
 
 ### thunder-clap checkpoint（检查与修复）
 

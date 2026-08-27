@@ -582,6 +582,17 @@
     (is (= [{:ref [:input :capabilities :caster/id]}
             {:ref [:local :aim-hit :entity-id]}]
            (get-in aoe [:filter :excluded-entity-ids])))))
+(deftest thunder-bolt-submits-effective-and-ineffective-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
+        nodes (component-nodes (:program doc))
+        marks (filter #(and (= :score/mark (:component %))
+                            (contains? #{:effective :ineffective} (:tag %)))
+                      nodes)]
+    (is (= #{:effective :ineffective}
+           (set (map :tag marks))))
+    (is (every? #(map? (:progression %)) marks))
+    (is (= #{:effective-progression :ineffective-progression}
+           (set (map #(get-in % [:progression :ref 1]) marks))))))
 (deftest body-intensify-cooldown-uses-post-exp-masteries-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/body_intensify.edn"))
         release (get-in doc [:program :release])
