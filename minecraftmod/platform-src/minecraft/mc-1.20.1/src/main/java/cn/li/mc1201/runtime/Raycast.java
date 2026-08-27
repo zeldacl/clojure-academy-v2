@@ -40,7 +40,7 @@ public final class Raycast {
 
         Vec3 start = new Vec3(startX, startY, startZ);
         Vec3 end = new Vec3(startX + dirX * maxDistance, startY + dirY * maxDistance, startZ + dirZ * maxDistance);
-        ClipContext clipContext = new ClipContext(start, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, null);
+        ClipContext clipContext = new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null);
         BlockHitResult result = level.clip(clipContext);
 
         if (result == null || result.getType() != HitResult.Type.BLOCK) {

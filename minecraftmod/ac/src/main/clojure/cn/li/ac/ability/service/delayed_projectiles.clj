@@ -140,12 +140,23 @@
               (double dist)
               (str player-id))]
     (if (:hit-type hit)
-      {:x (double (:hit-x hit))
-       :y (+ (double (:hit-y hit))
-             (if (= :entity (:hit-type hit))
-               (* 0.6 (double (or (:eye-height hit) 0.0)))
-               0.0))
-       :z (double (:hit-z hit))}
+      (let [hit-y (double (:hit-y hit))
+            ;; getLookingPos raises the dest by 0.6 * eye height, but a LOW hit
+            ;; (aiming at the enemy's feet) then overshoots ABOVE the box: the
+            ;; ball->dest ray skims over the target and hits nothing. Clamp the
+            ;; raise into the entity's box — at most 90% of its height — so the
+            ;; ray always crosses it (upstream's uncapped raise is geometrically
+            ;; flaky the same way; players expect a hit on a visible beam hit).
+            raise-y (+ hit-y
+                      (if (= :entity (:hit-type hit))
+                        (* 0.6 (double (or (:eye-height hit) 0.0)))
+                        0.0))
+            box-top (+ (double (or (:y hit) hit-y))
+                       (* 0.9 (double (or (:height hit) 0.0))))
+            dest-y (max hit-y (min raise-y box-top))]
+        {:x (double (:hit-x hit))
+         :y dest-y
+         :z (double (:hit-z hit))})
       (geom/v+ (geom/body-pos player-id) (geom/v* dir dist)))))
 
 (defn- run-electron-bomb-beam!
@@ -167,7 +178,10 @@
                                  :z (double (or (:z look-vec) 0.0))})
                 dest (looking-pos world-id player-id dir electron-bomb-ray-distance)
                 shot-dir (geom/vnorm (geom/v- dest origin))
-                shot-dist (geom/vdist origin dest)
+                ;; Extend 0.5 past the dest so the ray definitely crosses the
+                ;; target's box when the (clamped) dest lands on its surface;
+                ;; the entity is always hit before anything beyond it.
+                shot-dist (+ (geom/vdist origin dest) 0.5)
                 ;; Raytrace.perform(world, ballEyes, dest,
                 ;; exclude(player).and(not MdBall)) traces BLOCKS as well, so a
                 ;; wall between the ball and the aim point stops the shot.

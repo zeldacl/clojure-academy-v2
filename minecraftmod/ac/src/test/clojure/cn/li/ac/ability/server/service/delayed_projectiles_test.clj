@@ -106,6 +106,50 @@
                @calls))
         (is (empty? (dp/pending-tasks-snapshot "p1")))))))
 
+(deftest electron-bomb-dest-clamps-raise-into-target-box-test
+  (testing "a low hit on the target clamps the 0.6*eyeHeight raise inside the entity box so the ball ray cannot skim over the head"
+    (let [calls (atom [])]
+      (with-redefs [raycast/available? (constantly true)
+                    entity-damage/available? (constantly true)
+                    world-effects/available? (constantly true)
+                    geom/world-id-of (fn [_] "w")
+                    geom/eye-pos (fn [_] {:x 1.0 :y 65.62 :z 2.0})
+                    geom/body-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                    raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                    world-effects/find-entities-in-aabb
+                    (fn [& _] [{:uuid "ball-9" :x 1.5 :y 65.0 :z 2.2}])
+                    ;; Eye trace (from the eye) hits the pig LOW on its body;
+                    ;; the ball trace hits it too.
+                    raycast/raycast-combined-excluding
+                    (fn [_world sx sy sz & _]
+                      (if (= [sx sy sz] [1.0 65.62 2.0])
+                        {:hit-type :entity
+                         :uuid "pig-1"
+                         :x 3.0 :y 64.0 :z 5.0
+                         :hit-x 3.0 :hit-y 64.7 :hit-z 5.0
+                         :eye-height 0.765 :height 0.9}
+                        {:hit-type :entity
+                         :uuid "pig-1"
+                         :x 3.0 :y 64.0 :z 5.0
+                         :hit-x 3.4 :hit-y 64.9 :hit-z 5.0
+                         :eye-height 0.765 :height 0.9}))
+                    entity-damage/apply-direct-damage! (fn [& args]
+                                                         (swap! calls conj [:damage (vec args)])
+                                                         true)
+                    md-damage/mark-target! (fn [& _] true)
+                    ctx-mgr/push-channel-to-player! (fn [_ _ _ payload]
+                                                      (swap! calls conj [:fx (:end payload)])
+                                                      true)
+                    ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)]
+        (dp/schedule-electron-bomb-beam!
+         {:player-id "p1" :ctx-id "ctx-1" :damage 12.0 :ball-uuid "ball-9" :delay-ticks 1})
+        (dp/tick-player! "p1")
+        ;; dest.y = clamp(64.7 + 0.6*0.765, 64.7, 64 + 0.9*0.9) = 64.81 — inside
+        ;; the pig's box (64..64.9), not the uncapped raise 65.159 which would
+        ;; put the ball ray above the target's head.
+        (is (= 64.81 (get-in @calls [1 1 :y])))
+        (is (= [:damage ["w" "pig-1" 12.0 :magic]] (first @calls)))))))
+
 (deftest electron-bomb-settlement-rays-from-ball-position-test
   (testing "the settle ray originates from the tracked MdBall's orbit position, matching the original's callback (ray from ball.pos toward getDest(player))"
     (let [calls (atom [])
