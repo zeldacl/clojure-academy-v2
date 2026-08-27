@@ -297,6 +297,12 @@ thunder-bolt
 - 该项已通过 `:ac:runAcEdnCoverageTests`（14/33）。实际能量方块/物品 adapter 的
   运行时结果仍需实机任务验证，因此总表继续保持 `⚠️`。
 
+### electron-missile checkpoint（检查与修复）
+
+- `main` 基准：蓄力每 10 tick 生成最多 5 个 MdBall；每 8 tick 选择施法者附近最近的 living 非自身实体，支付攻击 CP/过载后造成魔法伤害、重置无敌时间、增加命中经验并销毁对应球；每 tick 发送 owner+nearby 充能更新，释放/超时/abort 清理球、结束 VFX 并启动固定冷却。
+- Final 图已覆盖蓄力计时、球数量上限、过载地板、tick/攻击费用、超时/释放/abort 清理、目标排序、伤害/经验/冷却和 Final VFX；本轮将目标过滤补为 `excluded-entity-ids=[owner-id]`，与 main 的 `missile-filter-self` 一致，避免施法者被选为目标。
+- 当前仍有迁移边界：Final session 只保存球数量，释放/超时按 owner+entity-type 查询清理，尚未像 main 一样保存每个生成球的 UUID；因此同一玩家并行使用其它 MdBall 技能时，实机会发生跨技能清理/计数干扰风险。该问题不能通过旧回调兼容解决，后续需扩展当前 Final 实体生命周期/会话标识 ABI 后再处理。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）；由于上述生命周期标识和 activation cost 时序尚未在 Final 中闭合，总表继续保持 `⚠️`。
 ### mag-manip checkpoint（检查与修复）
 
 - Final pulse 现在先以 `owner-id + world-id + entity-type` 查询持有实体，写入
