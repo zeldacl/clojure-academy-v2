@@ -14,6 +14,9 @@
 - 38 个真实技能实现。
 - 12 个课程别名：四个能力类别分别注册 `brain-course`、`mind-course`、`brain-course-advanced`。
 - 当前 catalog 结果为 39 个 combat source、50 个 registration、36 个 VFX effect。
+- 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、37 个真实战斗技能
+  `⚠️`、`railgun` 1 个 `❌`。`✅*` 的星号表示课程被动 reducer 已接入，
+  但完整学习/重算测试仍受现有测试 classpath 阻断。
 - `:ac:checkClojure` 与 `:ac:runAcEdnCoverageTests` 已通过，但这两个门禁不执行 main 行为等价性测试。
 
 ## 逐注册项结论
@@ -72,6 +75,24 @@ max overload`、`CP recovery ×1.2`。本轮已在
 `combat-catalog/apply-passive-resource-modifiers` 中实现 owner-local 纯 reducer，
 因此这 12 项的资源效果接入为 `✅*`；`*` 表示仍需在完整测试 classpath 恢复后执行
 学习/重算回归测试。
+
+为避免“按类别合并”掩盖漏注册，12 个别名逐项列出如下；它们都复用同一个
+Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源状态：
+
+| registration | main 被动效果 | 当前接入 |
+|---|---|---|
+| `electromaster/brain-course` | `max-cp +1000` | ✅* |
+| `meltdowner/brain-course` | `max-cp +1000` | ✅* |
+| `teleporter/brain-course` | `max-cp +1000` | ✅* |
+| `vecmanip/brain-course` | `max-cp +1000` | ✅* |
+| `electromaster/brain-course-advanced` | `max-cp +1500`, `max-overload +100` | ✅* |
+| `meltdowner/brain-course-advanced` | `max-cp +1500`, `max-overload +100` | ✅* |
+| `teleporter/brain-course-advanced` | `max-cp +1500`, `max-overload +100` | ✅* |
+| `vecmanip/brain-course-advanced` | `max-cp +1500`, `max-overload +100` | ✅* |
+| `electromaster/mind-course` | `cp-recovery-speed ×1.2` | ✅* |
+| `meltdowner/mind-course` | `cp-recovery-speed ×1.2` | ✅* |
+| `teleporter/mind-course` | `cp-recovery-speed ×1.2` | ✅* |
+| `vecmanip/mind-course` | `cp-recovery-speed ×1.2` | ✅* |
 
 ### 已确认问题（含本轮已修复项）
 
