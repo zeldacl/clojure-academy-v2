@@ -193,3 +193,15 @@ session 基本按 owner 隔离，但 damage reaction、mark 和 VFX audience 还
 7. **Railgun capability**：增加中立 coin-QTE/entity capability，删除旧 adapter 直连路径；提交。
 8. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
 9. 重新运行 Clojure/EDN/全平台编译门禁；运行时多人、VFX 和性能测试另行执行。
+
+## 本轮验证结果
+
+- `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
+- `:ac:runAcEdnCoverageTests`：此前通过 11 tests / 27 assertions；该门禁只验证
+  EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
+- `:ac:runAcClojureTests`：未能进入测试执行，`compileTestClojure` 被仓库现有
+  classpath 问题阻断（缺少 `cn/li/combat/skill_runtime`、
+  `cn/li/combat/structural_primitives` 和 AC developer reactive 命名空间）。
+  这不是本轮源码编译错误；完整回归需先修复测试 classpath。
+- 实机运行、多玩家交叉污染、VFX 网络到达率、CPU/GC/内存尚未测试，必须作为
+  后续独立任务完成。
