@@ -156,8 +156,9 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 Railgun 还有一个入口级修复：`main` 的 `ItemCoin` 使用不依赖当前是否处于技能
 激活态，因此 `:item/use` 的 final trigger 不能带 `:ability-mode? true` 过滤。
 该过滤已移除，并由 `main-item-trigger-is-unconditional-test` 固定 `ac:coin` 和
-`academy:coin` 在 true/false 两种激活状态都能解析到 `:coin-thrown`。这只证明
-事件能进入 Combat Core；事件图本身仍未实现 QTE 状态机。
+`academy:coin` 在 true/false 两种激活状态都能解析到 `:coin-thrown`。QTE 状态机
+已经移植到 Railgun 的单一 Final graph；该测试只证明入口事件能够进入 Combat Core，
+硬币实体运动和实际时序仍需实机验证。
 
 ### 课程别名（本轮已修复 reducer）
 
