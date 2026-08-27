@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（26 tests / 71 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（27 tests / 75 assertions）、
   `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -527,12 +527,14 @@ thunder-bolt
 - `groundshock` 的 Final 图已覆盖 main 的地面传播、方块替换/破坏、AOE 伤害、随机
   向上速度、精通经验、资源/冷却和 hand-session/冲击波 VFX；传播结果先在中性
   `terrain/propagate` 形成 bounded plan，再由 block/entity actions 提交，避免跨玩家
-  共享可变集合。本轮未发现确定性缺口，保留 `⚠️` 仅因 adapter/runtime 未实测。
+  共享可变集合。本轮补齐 `exp-entity` 与 `exp-use` 两条 progression：实体命中在 foreach
+  内提交，成功施放在 release 收尾提交；不再只有无法产生经验的 score tag。
 - `vec-reflection` 与 `vec-deviation` 均通过 owner-scoped `flow/once` 去重 projectile，
   使用统一 reflection scan、damage policy、overload floor 和终止 VFX；未恢复 main 的
   旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session，当前无需
   代码修改；多人隔离仍由 owner/world query 边界负责，待实机确认。
-
+- `:ac:runAcEdnCoverageTests` 通过（27 tests / 75 assertions）。Groundshock 的实体/方块
+  adapter 与多人并发结果仍需实机验证，总表继续保持 `⚠️`。
 ### railgun checkpoint（逐项移植）
 
 - 对照 `main`：Railgun 的两条主路径已按当前 Final ABI 移植：owner-scoped 硬币查询按
@@ -742,7 +744,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 26 tests / 71 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 27 tests / 75 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
