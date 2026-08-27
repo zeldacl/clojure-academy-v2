@@ -73,7 +73,7 @@
          (boolean (eval-value predicate event))
          true)
        (if-let [mark-type (:mark-type policy)]
-         (= mark-type (get-in event [:metadata :context :mark-type]))
+         (= mark-type (get-in event [:metadata :input :context :mark-type]))
          true)))
 
 (defn- policy-event
@@ -84,35 +84,45 @@
         input (or (get inputs (:ability-id policy)) (:input metadata) {})]
     (assoc event :metadata (assoc metadata :input input))))
 
-(defn materialize-vfx
-  "Resolve a policy VFX descriptor against its immutable input event."
-  [descriptor event]
+(defn materialize-value
+  "Resolve every neutral reference in a descriptor against an immutable input event."
+  [value event]
   (letfn [(walk [value]
             (cond
               (and (map? value) (:ref value)) (eval-value value event)
               (map? value) (into {} (map (fn [[k v]] [k (walk v)]) value))
               (sequential? value) (mapv walk value)
               :else value))]
-    (when (map? descriptor)
-      (cond-> descriptor
-        (contains? descriptor :payload)
-        (assoc :payload (walk (:payload descriptor)))))))
+    (walk value)))
+
+(defn materialize-vfx
+  "Resolve a policy VFX descriptor against its immutable input event."
+  [descriptor event]
+  (when (map? descriptor)
+    (cond-> descriptor
+      (contains? descriptor :payload)
+      (assoc :payload (materialize-value (:payload descriptor) event)))))
+
 (defn- program-contributions [program event]
   (let [value #(double (or (eval-value % event) 0.0))
         cost-map (fn [cost] (into {} (map (fn [[resource amount]] [resource (value amount)]) (or cost {}))))]
     (case (:component program)
-      :damage/multiply [{:kind :multiplier :value (value (:multiplier program))}]
+      :damage/multiply [{:kind :multiplier :value (value (:multiplier program))
+                       :owner (:owner-id (get-in event [:metadata :input :context]))}]
       :damage/reduce [{:kind :reduction :value (value (:rate program))
                        :max-cost (value (:max-cost program)) :vfx (:vfx program)
+                       :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/absorb [{:kind :absorption :value (value (:cap program))
                        :cost (cost-map (:cost program)) :vfx (:vfx program)
+                       :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
       :damage/reflect [{:kind :reflection :ratio (value (:multiplier program))
                         :minimum (value (:minimum program))
                         :max-depth (long (or (value (:max-depth program)) max-reflection-depth))
                         :cost-per-damage (value (:cost-per-damage program))
+                        :owner (:owner-id (get-in event [:metadata :input :context]))
                         :exp-scale (value (:exp-scale program))
                         :vfx (:vfx program) :events (:events program) :input (:input (:metadata event))}]
       :damage/critical (mapv (fn [{:keys [probability multiplier]}]
@@ -121,6 +131,7 @@
                                 :multiplier (value multiplier)
                                 :vfx (:vfx program)
                                 :feedback (:feedback program)
+                                :owner (:owner-id (get-in event [:metadata :input :context]))
                                 :events (:events program) :input (:input (:metadata event))})
                              (:levels program))
       [])))
@@ -187,7 +198,16 @@
      :vfx (vec (keep :vfx (filter #(or (and (= :critical (:kind %)) critical?)
                                       (= :reflection (:kind %))
                                       (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions)))
-     :feedback (vec (keep :feedback (filter #(and (= :critical (:kind %)) critical?) contributions)))
+     :feedback (vec
+                  (keep identity
+                        (map (fn [contribution]
+                               (let [input (or (:input contribution) {})
+                                     input (assoc-in input [:context :critical-multiplier]
+                                                     (double (or (:multiplier critical-level) 1.0)))]
+                                 (materialize-value
+                                  (:feedback contribution)
+                                  (assoc event :metadata {:input input}))))
+                             (filter #(and (= :critical (:kind %)) critical?) contributions))))
      :side-events (vec (mapcat #(or (:events %) [])
                                (filter #(or (and (= :critical (:kind %)) critical?)
                                           (= :reflection (:kind %))

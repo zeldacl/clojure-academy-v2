@@ -54,7 +54,7 @@
 ;; is retained, so one player's mark cannot affect another world or target.
 (defonce ^:private combat-marks* (atom {}))
 (declare owner-state resolve-slot finalize-result! initialize-final-runtime!
-         dispatch-domain-event!)
+         dispatch-domain-event! mark-rate-for)
 
 (defn- generate-activation-seed
   "Produce a fresh per-activation RNG seed. Never deterministic across
@@ -525,9 +525,10 @@
         (capabilities/register-action!
          :entity/mark
          (fn [{:keys [owner target mark-type duration-ticks requires-ability
-                      world-id] :as request}]
+                      world-id rate] :as request}]
            (let [owner (str owner)
                  target (str target)
+                 rate (or rate (mark-rate-for owner requires-ability))
                  learned? (or (nil? requires-ability)
                               (ability-model/is-learned?
                                (:ability-data (owner-state owner))
@@ -547,6 +548,7 @@
                    :target-id target
                    :mark-type mark-type
                    :duration duration
+                   :rate rate
                    :world-id (str (or world-id "minecraft:overworld"))
                    :tick (long @last-known-tick*)})
                  {:status :applied
@@ -685,8 +687,24 @@
   (let [entry (get @combat-marks* (mark-key world-id target-id mark-type))]
     (when (and entry (> (long (:expires-at entry)) (long tick))) entry)))
 
+(defn- mark-rate-for
+  "Snapshot a mark amplification at application time using the source skill's
+   neutral tunables. This preserves main's radiation-mark behavior without
+   retaining player or Minecraft objects in the combat mark table."
+  [owner requires-ability]
+  (when (and owner requires-ability)
+    (let [state (owner-state owner)
+          max-cp (double (or (get-in state [:resources :max-cp]) 0.0))
+          exp (double (or (get-in state [:ability-data :skill-exps requires-ability]) 0.0))
+          tunables (materialize-final-tunables requires-ability exp)
+          pair (:damage-rate tunables)
+          denominator (double (or (:mastery-denominator tunables) 8000.0))]
+      (when (and (sequential? pair) (<= 2 (count pair)) (pos? denominator))
+        (+ (double (nth pair 0))
+           (* (max 0.0 (min 1.0 (/ max-cp denominator)))
+              (- (double (nth pair 1)) (double (nth pair 0)))))))))
 (defn- apply-mark-event!
-  [{:keys [world-id source-player-id target-id mark-type duration tick]}]
+  [{:keys [world-id source-player-id target-id mark-type duration tick rate]}]
   (let [tick (long (or tick @last-known-tick*))
         duration (max 1 (long (or duration 60)))
         key (mark-key world-id target-id mark-type)]
@@ -694,6 +712,7 @@
                                     :source-player-id (str source-player-id)
                                     :target-id (str target-id)
                                     :mark-type mark-type
+                                    :rate (double (or rate 1.0))
                                     :applied-at tick
                                     :expires-at (+ tick duration)})
     {:status :applied :type :entity-mark :target-id (str target-id)
@@ -862,16 +881,19 @@
    this seam is invoked so ordering with StatePatch and WorldEffect commits is
    explicit at the application boundary."
   [owner result]
-  (reduce (fn [results event]
-            (if (and (map? event) (not= :query (:type event)))
-              (conj results
-                    (dispatch-domain-event!
-                     (assoc event :owner (or (:owner event) owner)
-                            :ability-id (or (:ability-id event)
-                                            (:ability-id result)))))
-              results))
-          []
-          (concat (:events result) (:side-events result))))
+  (let [feedback-events (mapv (fn [feedback]
+                                {:type :player/feedback :payload feedback})
+                              (or (:feedback result) []))]
+    (reduce (fn [results event]
+              (if (and (map? event) (not= :query (:type event)))
+                (conj results
+                      (dispatch-domain-event!
+                       (assoc event :owner (or (:owner event) owner)
+                              :ability-id (or (:ability-id event)
+                                              (:ability-id result)))))
+                results))
+            []
+            (concat (:events result) (:side-events result) feedback-events))))
 
 (defn- damage-policy-inputs
   "Build owner/world-scoped immutable inputs for every registered damage policy."
@@ -907,6 +929,7 @@
                                 :mark-type (or (:mark-type mark) mark-type)
                                 :mark mark
                                 :reflected? (boolean (:reflected? damage-source))
+                                :owner-id (if source-learned? source-id target-id)
                                 :target-position (:position target-state)
                                 :resources (:resources target-state)}
                        input {:context context
@@ -951,15 +974,14 @@
 (defn- final-damage-request
   [player-id attacker-id original-damage damage-source precheck?]
   (let [runtime (final-runtime/production-runtime)
+        inputs (damage-policy-inputs player-id attacker-id (or damage-source {}))
         event {:world-id (or (:world-id damage-source) "unknown")
                :source (or attacker-id :environment)
                :target player-id
                :base (double original-damage)
                :type (or (:damage-type damage-source) :generic)
                :seed (long (or (:seed damage-source) @last-known-tick*))
-               :metadata {:inputs (damage-policy-inputs player-id attacker-id (or damage-source {}))
-                          :context (get (damage-policy-inputs player-id attacker-id (or damage-source {}))
-                                        :default {})}}
+               :metadata {:inputs inputs}}
         result (final-runtime/resolve-damage! runtime event)]
     (assoc result
            :precheck? precheck?
@@ -1040,7 +1062,7 @@
                                                 (assoc event :metadata
                                                        {:input (:input descriptor)}))]
                               (merge {:op :spawn
-                                      :owner (str (or (:source event) owner))
+                                      :owner (str (or (:owner descriptor) (:source event) owner))
                                       :world-id (:world-id event)
                                       :event-seq (long (or (:seed event) 0))
                                       :seed (long (or (:seed event) 0))}
