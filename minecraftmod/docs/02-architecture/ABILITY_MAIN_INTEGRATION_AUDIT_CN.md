@@ -38,23 +38,23 @@
 | `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ |
 | `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
 | `electron-missile` | 持续蓄力生成多发电子球，锁定目标并发射，资源不足/超时清理 | 粒子、beam fade、音效 | ⚠️ |
-| `jet-engine` | 标记目标、持续移动与伤害，结束计经验/冷却 | 环、粒子、屏幕闪烁、billboard | ❌ `:entity-mark` 没有 AC 提交/reducer |
+| `jet-engine` | 标记目标、持续移动与伤害，结束计经验/冷却 | 环、粒子、屏幕闪烁、billboard | ⚠️ `:entity-mark` 已接入 owner/world 表；持续移动/伤害仍需行为验证 |
 | `light-shield` | 伤害反应吸收伤害；按吸收量消耗 CP/过载，处理正面判断、状态和冷却 | 护盾粒子、循环音、吸收音 | ⚠️ final-damage context 已接入；资源提交/正面夹角仍需实机验证 |
 | `meltdowner` | beam 逐段伤害并按权限破坏方块，资源/过载地板/冷却 | beam、FOV、粒子、音效 | ⚠️ `host/beam-trace` 结果提交需继续验证 |
 | `mine-ray-basic` | 基础射线采矿；工具等级限制、fortune=0、独立冷却 | beam、进度条、粒子、音效 | ⚠️ variant bindings 已注入，仍需行为等价测试 |
 | `mine-ray-expert` | 专家射线采矿；取消工具等级限制，独立前置/冷却 | 同 MineRay 专属变体样式 | ⚠️ |
 | `mine-ray-luck` | luck=3 射线采矿，专属颜色/粒子 | 同 MineRay luck 样式 | ⚠️ |
 | `rad-intensify` | 读取目标 radiation mark，按最大 CP 放大伤害 | 目标 mark session | ⚠️ mark 已按 world/target 持久化；倍率与 mark VFX 仍需实机验证 |
-| `ray-barrage` | 扇形多目标射击；命中后写 radiation mark 并触发后续行为 | ray beam、fan、音效 | ❌ mark 事件无有效持久化提交 |
+| `ray-barrage` | 扇形多目标射击；命中后写 radiation mark 并触发后续行为 | ray beam、fan、音效 | ⚠️ mark 提交已接入；扇形命中/后续行为仍需验证 |
 | `scatter-bomb` | 生成/调度多枚散射弹，资源不足时清理 | 粒子、beam fade、音效 | ⚠️ |
-| `dim-folding-theorem` | 学习后为非反射攻击提供暴击/反馈/成就 | 暴击尾迹/粒子 | ❌ policy 的 `:input` context 当前解析不到 |
+| `dim-folding-theorem` | 学习后为非反射攻击提供暴击/反馈/成就 | 暴击尾迹/粒子 | ⚠️ policy input 已接入；暴击等级/经验仍需验证 |
 | `flashing` | 四方向闪现；预览/释放资源检查，传送后保护摔落并计经验 | teleport marker、端点爆发 | ⚠️ |
 | `flesh-ripping` | 锥形/射线命中伤害和状态，命中/未命中经验与冷却 | 目标框、粒子、音效 | ⚠️ |
 | `location-teleport` | 读取保存地点；跨维度才检查经验门槛并应用倍率 | 传送音效 | ⚠️ `cross-dimension?` 逻辑已修复，仍需验证保存地点/网络边界 |
 | `mark-teleport` | 持续保持目标地点标记，释放时扣资源并传送 | marker、ring fade | ⚠️ |
 | `penetrate-teleport` | 穿透目标寻找可传送地点；成功传送并计经验/冷却 | marker、音效 | ⚠️ |
 | `shift-teleport` | 预览方块放置点，释放放置/掉落物并伤害线路目标 | 目标框、轨迹音 | ⚠️ 方块/物品副作用需最终提交验证 |
-| `space-fluct` | 多级暴击，排除反射伤害并给经验/成就 | 暴击尾迹/粒子 | ❌ policy context 未注入 |
+| `space-fluct` | 多级暴击，排除反射伤害并给经验/成就 | 暴击尾迹/粒子 | ⚠️ policy input 已接入；多级概率/排除反射仍需验证 |
 | `threatening-teleport` | 持有物品进入威胁态；被攻击时传送并伤害，未命中计 miss | 目标框、传送轨迹 | ⚠️ |
 | `blood-retrograde` | 扇形/射线反向伤害，资源、命中经验和会话清理 | 蓄力、冲击、音效 | ⚠️ |
 | `directed-blastwave` | 蓄力后范围伤害、击退、破坏路径方块 | 蓄力弧、冲击波、音效 | ⚠️ |
@@ -63,7 +63,7 @@
 | `plasma-cannon` | 蓄力飞行弹；命中爆炸、范围伤害和地形破坏，过载/冷却 | 能量球、龙卷柱、端点爆发、音效 | ⚠️ |
 | `storm-wing` | 飞行移动、软方块破坏、范围击退、摔落保护和资源扣除 | 飞行粒子、循环音、龙卷柱 | ⚠️ |
 | `vec-accel` | 方向加速、碰撞检查、速度/摔落重置、经验和冷却 | 轨迹带、冲量音 | ⚠️ |
-| `vec-deviation` | 扫描并偏转/销毁投射物；开启时减伤并按伤害消耗 CP | 环形 fade、反射音效 | ❌ damage policy context 与投射物/标记提交未闭合 |
+| `vec-deviation` | 扫描并偏转/销毁投射物；开启时减伤并按伤害消耗 CP | 环形 fade、反射音效 | ⚠️ 开启状态与减伤 policy 已接入；按伤害扣 CP/投射物路径仍需验证 |
 | `vec-reflection` | 扫描并重定向投射物；受到伤害时按倍率反射并扣资源 | 环形粒子、fade/音效 | ⚠️ 反射结果已在攻击预检查一次性提交；参数快照与扣费仍需实机验证 |
 
 课程别名的 12 个注册项（四类别 × `brain-course`、`brain-course-advanced`、
@@ -82,15 +82,15 @@ max overload`、`CP recovery ×1.2`。本轮已在
 | `mine-ray-expert` | 专家变体，取消工具等级限制，独立前置条件/冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `mine-ray-luck` | luck 变体，fortune=3，独立粒子/光束样式 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `location-teleport` | 仅跨维度时检查经验门槛并应用跨维度倍率 | ✅ 已修复 `not=` 逻辑；仍需保存地点/跨维度提交测试 |
-| `light-shield` | damage reaction 吸收伤害，CP/过载消耗，正面判断，状态和冷却 | ✅ 已修复 CP/过载映射；final-damage context/反应提交仍未闭合 |
-| `thunder-bolt` | 目标命中后 AOE/creeper/potion/经验/冷却 | ✅ 已修复目标引用；仍受 damage/VFX 公共链约束 |
-| `dim-folding-theorem` | 学习状态、非反射攻击的暴击/反馈/VFX/成就 | final-damage policy 的 `:input` context 未注入 |
-| `rad-intensify` | 读取 radiation mark 并按 max CP 放大伤害 | mark 没有持久化，且 final-damage context 不完整 |
-| `space-fluct` | 多级暴击、反射排除、经验/成就/VFX | final-damage policy 的 context/input 未注入 |
-| `vec-deviation` | 开启状态下减伤、CP 代价、音效/经验 | final-damage policy 未获得 owner 的开启状态和资源 |
-| `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验 | resolver 产生 `:reflections`，AC 运行时只取数值，未提交反射动作 |
-| `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | `:entity-mark` 事件没有有效 reducer/提交路径 |
-| `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | 同上 |
+| `light-shield` | damage reaction 吸收伤害，CP/过载消耗，正面判断，状态和冷却 | ✅ 已修复 CP/过载映射并接入 final-damage context；资源/夹角需实机验证 |
+| `thunder-bolt` | 目标命中后 AOE/creeper/potion/经验/冷却 | ✅ 已修复目标引用并接入统一 VFX；AOE 分支需实机验证 |
+| `dim-folding-theorem` | 学习状态、非反射攻击的暴击/反馈/VFX/成就 | input/context 已接入；主线等级与经验细节需验证 |
+| `rad-intensify` | 读取 radiation mark 并按 max CP 放大伤害 | mark 表与 policy input 已接入；跨重启持久化未实现 |
+| `space-fluct` | 多级暴击、反射排除、经验/成就/VFX | input/context 已接入；多级概率与排除反射需验证 |
+| `vec-deviation` | 开启状态下减伤、CP 代价、音效/经验 | owner session/context 已接入；按伤害扣 CP 需验证 |
+| `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验 | 反射已一次性提交；参数快照/扣费与递归上限需验证 |
+| `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | mark reducer 已接入；持续移动/伤害需验证 |
+| `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | mark reducer 已接入；扇形命中与后续行为需验证 |
 
 ### 课程别名（本轮已修复 reducer）
 
