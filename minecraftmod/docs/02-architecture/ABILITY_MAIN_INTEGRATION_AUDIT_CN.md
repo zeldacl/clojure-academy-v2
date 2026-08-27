@@ -321,6 +321,16 @@ thunder-bolt
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）。main 的 post-exp cooldown 仍受共享
   progression→cooldown ABI 影响，故总表保持 `⚠️`。
 
+### thunder-bolt checkpoint（检查与修复）
+
+- Final 图覆盖 main 的 living-only 射线、direct target 与 AOE 排除关系、无命中时的
+  full-range 端点、闪电/VFX、direct/重复 AOE slowness、creeper 充能、有效/无效经验
+  和资源/冷却顺序。
+- 已修复 direct target 分支读取不存在的旧 `:creeper?` 字段，统一改为检查中性命中结果
+  的 `:entity-type`（兼容两个平台描述 id 形式）。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）。技能伤害全局缩放及 post-exp cooldown
+  仍属于共享 ABI 问题，不在该技能内保留旧实现或硬编码绕过。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
