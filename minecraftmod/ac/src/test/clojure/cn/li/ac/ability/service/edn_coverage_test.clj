@@ -447,6 +447,21 @@
     (is (= 2 (count starts)))
     (is (= 2 (count binds)))
     (is (not-any? #(= :ability/cooldown (:component %)) nodes))))
+(deftest mag-manip-charges-only-on-release-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/mag_manip.edn"))
+        pulse-nodes (component-nodes (get-in doc [:program :pulse]))
+        release-nodes (component-nodes (get-in doc [:program :release]))]
+    (is (contains? (:costs doc) :release))
+    (is (not (contains? (:costs doc) :pulse)))
+    (is (not-any? #(and (= :ability/budget (:component %))
+                         (= :pulse (:name %)))
+                  pulse-nodes))
+    (is (some #(and (= :ability/budget (:component %))
+                    (= :release (:name %)))
+              release-nodes))
+    (is (some #(and (= :cost/spend (:component %))
+                    (= {:ref [:local :release-budget]} (:budget %)))
+              release-nodes))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
