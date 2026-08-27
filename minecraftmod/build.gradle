@@ -1829,7 +1829,13 @@ tasks.register("verifyPresentationRuntimeZeroResidues") {
                 sourceText =~ /cn\.li\.presentation\.compiler/) {
             throw new GradleException("presentation-core has a runtime compiler dependency")
         }
-        def oldApi = sourceText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree)/
+        def uiProductionRoots = [file("ac/src/main"), file("mcmod/src/main"),
+                                 file("platform-src"), file("presentation-core/src/main"),
+                                 file("presentation-compiler/src/main")]
+        def uiProductionText = uiProductionRoots.findAll { it.directory }.collectMany { root ->
+            fileTree(root) { include "**/*.clj", "**/*.java", "**/*.edn" }.files
+        }.collect { it.getText("UTF-8") }.join("\n")
+        def oldApi = uiProductionText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree)/
         if (oldApi.find()) {
             throw new GradleException("legacy Presentation ViewModel/API reference remains")
         }

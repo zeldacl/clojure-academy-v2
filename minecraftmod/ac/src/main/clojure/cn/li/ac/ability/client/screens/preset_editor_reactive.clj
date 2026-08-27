@@ -1,7 +1,6 @@
 (ns cn.li.ac.ability.client.screens.preset-editor-reactive
   "Presentation Runtime host for the ability preset editor.
-   Preset/skill data is produced by the AC ViewModel; the screen has no XML or
-   legacy UiRt dependency."
+   Preset/skill data is produced by the AC ViewModel; the screen is artifact-backed and does not depend on a renderer implementation."
   (:require [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.preset-editor :as editor]
