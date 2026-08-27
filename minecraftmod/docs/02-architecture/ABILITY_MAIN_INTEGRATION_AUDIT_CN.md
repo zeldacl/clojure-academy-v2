@@ -392,7 +392,10 @@ thunder-bolt
   的 `:hand-item`、`:trace`、`:targets`，避免松键重采样改变放置点或伤害列表。
 - 放置/掉落、路径伤害、经验、冷却和 marker 清理仍由同一 Final graph 串联；
   `target/block-placement` 的权限事实由中性 host 提供，EDN 只决定是否执行。
-- 仍需实机确认方块权限失败时的 drop fallback、路径实体排序和多人 VFX audience。
+- main 的 release cost 带 creative 免扣策略；当前 Final 已在唯一 `cost/spend :release`
+  节点按 `caster/creative?` 缩放，creative 放置不会错误消耗 CP/overload。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。仍需实机确认方块权限
+  失败时的 drop fallback、路径实体排序和多人 VFX audience。
 
 ### flashing checkpoint（逐项复核）
 
