@@ -1140,23 +1140,32 @@
 
 (defn teleport-entity!
   "Move one neutral entity to a position through the mcmod relay.
-   Position mutation is deliberately separate from velocity/configuration so
-   callers can compose ordering without a skill-specific host operation."
-  [{:keys [world-id target position]}]
-  (let [entity-id (or (:id target) (:uuid target) (:entity-id target) target)
+
+   `:dismount?` and `:reset-fall-damage?` are part of the neutral teleport
+   contract. They are applied around the same teleport command so a player
+   cannot remain mounted or retain stale fall distance after a successful move.
+   Non-player entities skip the player-only dismount relay when unavailable."
+  [{:keys [world-id target position dismount? reset-fall-damage?]}]
+  (let [entity-id (some-> (or (:id target) (:uuid target) (:entity-id target) target) str)
         p (point position)
-        valid? (and world-id entity-id p
+        valid? (and world-id (seq entity-id) p
                     (= 3 (count p))
                     (every? #(Double/isFinite (double %)) p)
                     (world-effects/available?))]
-    (if valid?
-      (let [[x y z] p]
-        {:status (if (world-effects/teleport-entity!
-                      (str world-id) (str entity-id) x y z)
-                   :applied :failed)
-         :position {:x x :y y :z z}})
-      {:status :rejected :reason :invalid-entity-teleport-request})))
-
+    (if-not valid?
+      {:status :rejected :reason :invalid-entity-teleport-request}
+      (let [[x y z] p
+            dismounted? (or (not (true? dismount?))
+                            (not (player-motion/available?))
+                            (player-motion/dismount-riding! entity-id))
+            moved? (and dismounted?
+                        (world-effects/teleport-entity!
+                         (str world-id) entity-id x y z))]
+        (when (and moved? (true? reset-fall-damage?)
+                   (teleportation/available?))
+          (teleportation/reset-fall-damage! entity-id))
+        {:status (if moved? :applied :failed)
+         :position {:x x :y y :z z}}))))
 (defn teleport-group!
   "Teleport the owner and bounded nearby entities while preserving offsets."
   [{:keys [owner world-id position radius]}]

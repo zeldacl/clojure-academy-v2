@@ -499,6 +499,13 @@ vecmanip/mind-course
 - Final `flow/finish` 现在真正终止当前 sequence/foreach 的后续节点；`flow/control` 的
   `:skip-item` 只跳过当前 foreach 项；无 `:else` 的 branch 安全地 no-op。这避免了
   资源失败分支继续落入伤害、传送或其它副作用。
+- `entity/teleport` 端口现在兑现 EDN 中的 `:dismount?` 与
+  `:reset-fall-damage?`：传送前尝试解除玩家载具，传送成功后清除摔落伤害状态；
+  非玩家实体在没有玩家运动适配器时仍可正常传送。这样标记、穿透、转移和危险传送
+  的公共传送语义不再只是“传参但被忽略”。
+- `mark-teleport` 的 release 阶段改为读取该 owner 会话最后一次 server-pulse 写入的
+  `:destination` 快照，不在松键瞬间重新 raycast。目标、距离和 CP 计算因此与 main 的
+  “按住期间持续更新、释放使用最后目标”一致，也避免网络时序造成跨玩家/跨 tick 漂移。
 
 ## 公共链路证据
 
@@ -531,6 +538,7 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 3. **Damage result commit**：已完成并提交（`46f3dc0aa`、`2478da3c2`、`d9cff8772`、`19195dbcf`）；参数/费用仍需行为测试。
 4. **VFX transport**：已完成并提交（`46f3dc0aa`、`2478da3c2`）。
 5. **单技能确定性修复**：location teleport、light shield、thunder bolt；提交。
+   `mark-teleport` 的 release 快照与公共 teleport 端口语义已在本轮完成，待本轮提交。
 6. **Registration bindings**：把 Mine Ray 的 variant/presentation/runtime 显式注入；提交。
 7. **Railgun capability**：尚未完成；main 的 coin-QTE、硬币判定/销毁、蓄力 tick、反射射击和经验/成就仍需单独建模，不能以当前 `:coin-thrown` 完成事件代替。
 8. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
@@ -541,8 +549,8 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
 - `:ac:runAcEdnCoverageTests`：通过 14 tests / 33 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
-- `:combat-core:runCombatClojureTests`：通过 25 tests / 65 assertions（包含本轮
-  finish/control 回归）。
+- `:combat-core:runCombatClojureTests`：通过 27 tests / 71 assertions（包含本轮
+  phase-transition、damage-threshold 回归）。
 - `:ac:compileTestClojure`：通过。旧测试中依赖已删除旧 VM/旧 hook 契约的文件已移除，
   没有恢复兼容实现。
 - `:ac:runAcClojureTests`：可编译并进入 143 个 namespace、580 tests；仍有历史测试
