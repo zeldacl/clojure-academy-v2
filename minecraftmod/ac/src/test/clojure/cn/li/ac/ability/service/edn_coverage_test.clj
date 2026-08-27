@@ -187,6 +187,42 @@
     (is (>= (count migrated-ids) 30))
     (is (>= (count emitted) 20))))
 
+(defn- collect-ref-vectors
+  "Collect every :ref vector in a graph/document."
+  [form]
+  (cond
+    (map? form)
+    (concat (when (vector? (:ref form)) [(:ref form)])
+            (mapcat collect-ref-vectors (vals form)))
+    (sequential? form) (mapcat collect-ref-vectors form)
+    :else nil))
+
+(deftest every-ability-reference-has-a-declared-final-input-test
+  "Catch typos where a graph reads a tunable/policy slot that its source
+   document never declares. The final compiler intentionally permits neutral
+   refs, so this is a semantic content check rather than a syntax check."
+  (let [policy-keys (fn [doc key] (set (keys (or (get doc key) {}))))
+        failures (mapcat
+                  (fn [file]
+                    (let [doc (read-file! file)
+                          declared {:tunables (policy-keys doc :tunables)
+                                    :budgets (policy-keys doc :costs)
+                                    :cooldowns (policy-keys doc :cooldown)
+                                    :progression (policy-keys doc :progression)
+                                    :invariants (policy-keys doc :invariants)}]
+                      (keep (fn [reference]
+                              (let [[scope slot key] reference]
+                                (when (and (= :input scope)
+                                           (contains? declared slot)
+                                           (keyword? key)
+                                           (not (contains? (get declared slot) key)))
+                                  {:ability (:id doc) :scope slot :key key
+                                   :ref reference})))
+                            (collect-ref-vectors doc))))
+                  (edn-files "src/main/resources/ac/combat/abilities"))]
+    (is (empty? failures)
+        (str "Final ability refs read undeclared input slots: " failures))))
+
 (deftest final-catalog-is-strictly-lowered-test
   (let [assembled (final-catalog/assemble)
         result (final-catalog-service/initialize!)]
