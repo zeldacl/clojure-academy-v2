@@ -224,7 +224,7 @@ public final class Raycast {
                 e -> e.isPickable() || e instanceof LivingEntity);
 
         for (Entity entity : entities) {
-            Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
+            Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
 
             if (optionalHit.isEmpty()) {
                 continue;
@@ -359,7 +359,7 @@ public final class Raycast {
                     && excludedEntityUuid.equalsIgnoreCase(entity.getUUID().toString())) {
                 continue;
             }
-            Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
+            Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
             if (optionalHit.isEmpty()) {
                 continue;
             }
