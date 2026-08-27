@@ -323,6 +323,23 @@ thunder-bolt
 - 本轮修正 release 冷却：原图只有 `cooldown/start :main`，未传入 `main-cooldown`，按 Final 引擎会写入 0 tick；现在先读取 `ability/cooldown :main`，再以 `:cooldown {:ref [:local :main-cooldown]}` 启动。
 - 共享边界仍未闭合：当前中性 `host/beam-trace` 实现尚未像旧 beam helper 一样调用 `interaction/resolve` 并验证对方反射能力，故 main 的 vec-reflection 反射射击不能仅凭 EDN 节点宣称等价；后续需在中立 beam/interaction ABI 统一补齐，禁止恢复技能专属旧回调。
 - 本轮门禁待运行后记录；总表保持 `⚠️`。
+### rad-intensify checkpoint（逐项复核）
+
+- main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
+  radiation mark 且收到正向战斗伤害时，把创建该 mark 时的倍率乘到伤害上；倍率经验来自
+  `max-cp / init-cp(level5)`，并限制在 `[0,1]`，不是普通 skill-exp。
+- 当前 Final 实现的 `mark-policies` + `damage-policies` 正好落在这条边界：`entity/mark`
+  由 AC 组合根校验 `requires-ability`、快照 source rate 并按
+  `[world-id,target-id,mark-type]` 保存；`final-damage` 只在 `:mark-type :radiation` 且
+  `base > 0` 时读取 `[:input :context :mark :rate]` 做乘法。没有把 main 的被动函数或
+  damage handler 复制进来，也没有第二套触发路径。
+- 已核对 tunable：`damage-rate=[1.4,1.8]`、`mastery-denominator=8000` 与 main 的
+  level-5 初始 CP 默认值一致；mark duration=60，VFX 使用 target-position、nearby
+  audience 和 mark-specific instance key。source rate 在 mark 更新时替换，符合 main
+  后写覆盖前写的语义。
+- 本项不需要 EDN/代码修改；剩余 `⚠️` 仅表示 mark 表跨重启不持久化、VFX 到达率和
+  原生伤害 adapter 尚未实机验证。已通过现有 AC/Combat Core 静态编译门禁，不能将这些
+  未测运行时项标为完成。
 ### mine-ray-basic/expert/luck checkpoint（检查与修复）
 
 - 三个 public registration 共用一个 `mine-ray` Final source；manifest 只注入变体参数：Basic 为
