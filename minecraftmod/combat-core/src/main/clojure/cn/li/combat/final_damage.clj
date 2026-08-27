@@ -98,14 +98,15 @@
         (contains? descriptor :payload)
         (assoc :payload (walk (:payload descriptor)))))))
 (defn- program-contributions [program event]
-  (let [value #(double (or (eval-value % event) 0.0))]
+  (let [value #(double (or (eval-value % event) 0.0))
+        cost-map (fn [cost] (into {} (map (fn [[resource amount]] [resource (value amount)]) (or cost {}))))]
     (case (:component program)
       :damage/multiply [{:kind :multiplier :value (value (:multiplier program))}]
       :damage/reduce [{:kind :reduction :value (value (:rate program))
-                       :cost (:max-cost program) :vfx (:vfx program)
+                       :max-cost (value (:max-cost program)) :vfx (:vfx program)
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/absorb [{:kind :absorption :value (value (:cap program))
-                       :cost (:cost program) :vfx (:vfx program)
+                       :cost (cost-map (:cost program)) :vfx (:vfx program)
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
       :damage/reflect [{:kind :reflection :ratio (value (:multiplier program))
@@ -161,9 +162,27 @@
                                         :depth (inc (:depth event))
                                         :metadata (assoc (:metadata event)
                                                          :reflected? true
-                                                         :reflection reflection))))) vec)]
+                                                         :reflection reflection))))) vec)
+        absorb-cost (if (pos? absorption)
+                      (reduce (fn [acc contribution]
+                                (merge-with + acc (:cost contribution)))
+                              {} (filter #(= :absorption (:kind %)) contributions))
+                      {})
+        reduction-cost (reduce + 0.0
+                                (map (fn [contribution]
+                                       (min (max 0.0 (double (or (:max-cost contribution) 0.0)))
+                                            (* before (double (or (:value contribution) 0.0)))))
+                                     (filter #(= :reduction (:kind %)) contributions)))
+        reflection-cost (reduce + 0.0
+                                 (map (fn [contribution]
+                                        (* amount (double (or (:ratio contribution) 0.0))
+                                           (double (or (:cost-per-damage contribution) 0.0))))
+                                      (filter #(= :reflection (:kind %)) contributions)))
+        resource-costs (merge-with + absorb-cost
+                                    (when (pos? reduction-cost) {:cp reduction-cost})
+                                    (when (pos? reflection-cost) {:cp reflection-cost}))]
     {:event event :matched (mapv #(select-keys % [:ability-id :reaction-id]) matched)
-     :amount amount :cancelled? (boolean (some #(= :cancel (:kind %)) contributions))
+     :amount amount :resource-costs resource-costs :cancelled? (boolean (some #(= :cancel (:kind %)) contributions))
      :critical? critical? :critical-level critical-level :reflections reflections
      :vfx (vec (keep :vfx (filter #(or (and (= :critical (:kind %)) critical?)
                                       (= :reflection (:kind %))

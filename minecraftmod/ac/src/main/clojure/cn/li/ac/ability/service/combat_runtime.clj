@@ -1000,6 +1000,24 @@
     (finalize-damage-once! request)
     (boolean (or (:cancelled? request) (:reaction-damage-applied? request)))))
 
+(defn- commit-damage-costs!
+  [owner result]
+  (let [costs (or (:resource-costs result) {})
+        commands (vec (keep (fn [[resource amount]]
+                              (when (and (contains? #{:cp :overload} resource)
+                                         (number? amount)
+                                         (Double/isFinite (double amount))
+                                         (pos? (double amount)))
+                                {:command :consume-resource
+                                 :cp (if (= :cp resource) (double amount) 0.0)
+                                 :overload (if (= :overload resource) (double amount) 0.0)}))
+                            costs))]
+    (if (seq commands)
+      (let [commit (command-runtime/run-commands-in-session!
+                    (server-session-id) (str owner) commands)]
+        {:status (if (:success? commit) :committed :failed)
+         :commands (count commands)})
+      {:status :none :commands 0})))
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary and publish its
    authoritative VFX/domain outbox after the state decision is known."
@@ -1008,6 +1026,9 @@
         result (if accepted?
                  (assoc result :patch-results [] :action-results [])
                  result)
+        cost-result (if (and accepted? (:resource-costs result))
+                      (commit-damage-costs! owner result)
+                      {:status :none :commands 0})
         domain-results (if accepted?
                          (dispatch-result-domain-events! owner result)
                          [])
