@@ -21,7 +21,7 @@
       (fail "invalid composite manifest" {:resource manifest-resource}))
     manifest))
 
-(defn load
+(defn load-documents
   "Read and validate composite documents into a plain id->descriptor map.
    Loading is pure; the composition root decides which environment receives
    the returned values."

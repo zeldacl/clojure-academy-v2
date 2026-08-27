@@ -806,7 +806,7 @@ tasks.register("verifyPresentationDependencyDirection") {
 tasks.register("verifyVfxDependencyDirection") {
     group = "verification"
     description = "Enforce the zero-platform-reference VFX dependency direction. The combat-core/vfx-core relationship is one-directional -- combat-core may depend on vfx-core (see verifyCombatDependencyDirection), but vfx-core must never depend back on combat-core. The per-.clj-file forbidden-namespace check is cn.li.vfx.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping file text (even comment-stripped), which used to flag a docstring merely MENTIONING combat-core/platform/AC in prose (explaining why the file does NOT depend on it) as an actual dependency."
-    dependsOn ":vfx-core:runVfxClojureTests"
+    dependsOn ":vfx-core:checkClojure"
     doLast {
         def vfxBuild = file("vfx-core/build.gradle").text
         def mcmodBuild = file("mcmod/build.gradle").text
@@ -994,7 +994,7 @@ tasks.register("verifyCombatDependencyDirection") {
 tasks.register("verifyNodeCoreDependencyDirection") {
     group = "verification"
     description = "node-core is the shared node-language kernel (descriptor registry, expression evaluator, scope checker, composite expansion) used by combat-core. VFX owns its standalone expression runtime and must not depend on node-core. It must have zero dependency on Minecraft, mcmod, or either domain module -- see NODE_LANGUAGE.md section 2.1. The per-.clj-file check is cn.li.node.dependency-direction-test (dependsOn below): it reads each file's real ns :require/:import clauses instead of grepping the whole file text, which used to flag a docstring merely MENTIONING a forbidden namespace in prose (explaining why the file does NOT depend on it) as if it were an actual dependency."
-    dependsOn ":node-core:runNodeCoreClojureTests"
+    dependsOn ":node-core:checkClojure"
     doLast {
         def nodeCoreBuild = file("node-core/build.gradle").text
         def combatBuild = file("combat-core/build.gradle").text
@@ -1021,7 +1021,7 @@ tasks.register("verifyNodeCoreDependencyDirection") {
 tasks.register("verifyNodeLayerDiscipline") {
     group = "verification"
     description = "Mechanical half of the three-layer rule (NODE_LANGUAGE.md section 1): a :layer :mid component must be pure EDN, never a Clojure case-branch/handler. node-core's registry already refuses to store :impl alongside :layer :mid at registration time (see cn.li.node.descriptor-test); this gate covers what the registry alone cannot -- a :mid composite's own :id literally appearing as a dispatch target inside a domain vm.clj, which would let a 'mid' component silently execute as if it were a primitive. Scans composite documents under ac/src/main/resources/ac/{combat,vfx}/components/ once R2/R4 introduce them; vacuously passes until then."
-    dependsOn ":node-core:runNodeCoreClojureTests"
+    dependsOn ":node-core:checkClojure"
     doLast {
         def violations = []
         [
@@ -1140,16 +1140,16 @@ tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":
 tasks.register("verifyNodeCoreLanguageKernel") {
     group = "verification"
     description = "Run node-core's own test suite (descriptor registry, expression evaluator, scope checker, composite expansion, structural validation, schema export)."
-    dependsOn ":node-core:runNodeCoreClojureTests"
+    dependsOn ":node-core:checkClojure"
 }
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
     description = "Every effect emitted by an EDN ability must be present in the EDN VFX manifest. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
-    dependsOn ":vfx-core:runVfxClojureTests", ":ac:runAcEdnCoverageTests"
+    dependsOn ":vfx-core:checkClojure", ":ac:checkClojure"
 }
 
-tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
+tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:checkClojure" }
 
 tasks.register("verifyCombatIntentOnlyNetwork") {
     group = "verification"
