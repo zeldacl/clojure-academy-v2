@@ -401,6 +401,15 @@ thunder-bolt
   session，下一次 `:start` 自动路由为该技能的 `:abort` phase，避免覆盖旧 session。
 - 仍需实机确认方向目标、CP/过载原子扣费以及停用冷却与 marker 清理的网络时序。
 
+### threatening-teleport checkpoint（逐项复核）
+
+- `main` 在持有期间不断更新目标框，但释放优先使用最后一次保存的 trace；释放时再
+  校验当前手持物，按命中/未命中概率结算物品、伤害、经验和冷却。
+- 当前 Final release 已改为读取 owner session 的 `:trace`，同时保留释放时
+  `target/item-held` 检查和 needle 倍率；命中/未命中、settle、damage、score、VFX
+  仍由同一 graph 决定，没有恢复旧 handler。
+- 仍需实机确认实体顶部 drop 坐标、物品扣除失败和多人 marker 销毁边界。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
