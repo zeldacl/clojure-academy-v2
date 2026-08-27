@@ -1224,6 +1224,41 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
     }
 }
 
+tasks.register("verifyAbilityCompositionBoundary") {
+    group = "verification"
+    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary."
+    dependsOn ":ac:checkClojure"
+    doLast {
+        def catalog = file("ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj")
+        def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
+        def acBuild = file("ac/build.gradle").text
+        def abilityBuild = file("ability-runtime/build.gradle").text
+        def violations = []
+        if (!catalog.text.contains("cn.li.ability.compose")) {
+            violations << "AC catalog must call ability-runtime composition"
+        }
+        if (!catalog.text.contains("compose-catalog")) {
+            violations << "AC catalog must use compose-catalog"
+        }
+        if (!presentation.text.contains("cn.li.ability.compose") ||
+            !presentation.text.contains("compose-frame")) {
+            violations << "AC Presentation extraction must use ability-runtime compose-frame"
+        }
+        if (acBuild =~ /implementation\s+project\(['\"]:(?:node-core|combat-core|vfx-core|presentation-core)['\"]\)/) {
+            violations << "AC must consume core modules through ability-runtime, not direct Gradle edges"
+        }
+        [":node-core", ":combat-core", ":vfx-core", ":presentation-core"].each { projectPath ->
+            if (!(abilityBuild =~ /project\([\"']${projectPath}[\"']\)/)) {
+                violations << "ability-runtime must compose ${projectPath}"
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("Ability composition boundary violations:\n" + violations.unique().join("\n"))
+        }
+        logger.lifecycle("[verifyAbilityCompositionBoundary] ok")
+    }
+}
+
 tasks.register("verifyCombatSingleDamagePath") {
     group = "verification"
     description = "Ensure damage is only ever applied through combat-core's registered :entity/damage capability, never by a second path -- Java constructing its own DamageSource, or AC calling a raw platform damage port directly.\n\nScope note: this only checks ScriptedBlockBodyEntity.java, not every Scripted*.java. ScriptedProjectileEntity.java's own outgoing .hurt()/.hurtServer() call is entity_mag_hook's approved item mechanic (a plain grappling-hook item, zero ability EDN references -- see feedback_single_combat_execution_path.md); ScriptedMobEntity.java's hurt() is a normal incoming-damage override (super.hurt(...) receiving a hit on itself), not a second outgoing damage path -- neither is the violation this gate targets."
@@ -1882,6 +1917,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatContentHash",
               "verifyCombatIntentOnlyNetwork",
               "verifyCombatLegacyRuntimeRemoval",
+              "verifyAbilityCompositionBoundary",
               "verifyCombatSingleDamagePath",
               "verifyAcNoWorldCapabilities",
               "verifyAbilityVfxRegistryCoverage",
