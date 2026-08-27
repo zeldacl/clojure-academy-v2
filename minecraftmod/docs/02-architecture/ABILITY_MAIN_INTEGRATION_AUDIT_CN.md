@@ -56,7 +56,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
 - 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（38 tests / 112 assertions）、
-  `:combat-core:runCombatClojureTests`（32 tests / 85 assertions）均通过；这些门禁不执行
+  `:combat-core:runCombatClojureTests`（34 tests / 89 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
 ## 逐注册项结论
@@ -541,8 +541,8 @@ thunder-bolt
   内提交，成功施放在 release 收尾提交；不再只有无法产生经验的 score tag。
 - `vec-reflection` 与 `vec-deviation` 均通过 owner-scoped `flow/once` 去重 projectile，
   使用统一 reflection scan、damage policy、overload floor 和终止 VFX；未恢复 main 的
-  旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session；本轮补齐首次偏转的 deflect progression 与受击 damage/reduce progression，`vec-reflection` 补齐首次重定向的 reflect-entity progression，均保留 owner-scoped once 与 difficulty weight。多人隔离仍由 owner/world query 边界负责，待实机确认。
-- `:ac:runAcEdnCoverageTests` 通过（35 tests / 103 assertions）。Groundshock 的实体/方块
+  旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session；本轮补齐首次偏转的 deflect progression 与受击 damage/reduce progression，`vec-reflection` 补齐首次重定向的 reflect-entity progression 与受击 damage/reflect progression，均保留 owner-scoped once 与 difficulty weight。多人隔离仍由 owner/world query 边界负责，待实机确认。
+- `:ac:runAcEdnCoverageTests` 通过（38 tests / 112 assertions）；Combat Core damage/reduce 与 damage/reflect 的受击经验桥已由 34 tests / 89 assertions 覆盖。Groundshock 的实体/方块
   adapter 与多人并发结果仍需实机验证，总表继续保持 `⚠️`。
 ### railgun checkpoint（逐项移植）
 
