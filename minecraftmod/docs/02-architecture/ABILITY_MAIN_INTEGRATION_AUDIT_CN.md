@@ -290,6 +290,18 @@ thunder-bolt
 - 该项已通过 `:ac:runAcEdnCoverageTests`（14/33）。实际能量方块/物品 adapter 的
   运行时结果仍需实机任务验证，因此总表继续保持 `⚠️`。
 
+### mag-manip checkpoint（检查与修复）
+
+- Final pulse 现在先以 `owner-id + world-id + entity-type` 查询持有实体，写入
+  `body-id` 并计算有效距离，再通过 `cost/spend :scale` 决定是否扣 CP/过载；这与
+  main 的“仅在持有实体接近玩家时收费”一致，也让首次 pulse 资源不足时能够设置
+  `place-when-collide?`，避免实体遗留。
+- homing、throw fallback、too-far/entity-missing/abort 的 VFX 和实体清理路径保持在
+  Final 图内，没有恢复旧 `MagManipContext` 回调。
+- 仍有两个未闭合风险：批处理 action 无法在同一图内分支处理 `entity/spawn` 失败后的
+  回滚；投掷实体的碰撞伤害/放置依赖平台实体行为。两者需要共享事务或实机 adapter
+  验证，故总表继续保持 `⚠️`。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
