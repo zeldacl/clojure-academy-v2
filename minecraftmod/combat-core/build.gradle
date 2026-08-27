@@ -85,7 +85,6 @@ dependencies {
     // audiences; AC composes the VFX catalog and mcmod routes packets. The
     // dependency is one-way: combat may read typed lifecycle/audience metadata,
     // while vfx-core never depends back on combat-core.
-    implementation project(":vfx-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }
