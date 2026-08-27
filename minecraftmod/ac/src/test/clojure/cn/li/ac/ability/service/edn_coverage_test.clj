@@ -428,7 +428,16 @@
     (is (= :slot-wheel (-> doc :program :events first key)))
     (is (= :session/write
            (get-in doc [:program :events :slot-wheel :steps 3 :component])))))
-(deftest body-intensify-cooldown-uses-post-exp-masteries-test
+(deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
+        nodes (component-nodes (:program doc))
+        aoe (some #(when (and (= :target/entities (:component %))
+                              (= :aoe-targets (:result %)))
+                    %)
+                  nodes)]
+    (is (= [{:ref [:input :capabilities :caster/id]}
+            {:ref [:local :aim-hit :entity-id]}]
+           (get-in aoe [:filter :excluded-entity-ids])))))(deftest body-intensify-cooldown-uses-post-exp-masteries-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/body_intensify.edn"))
         release (get-in doc [:program :release])
         nodes (component-nodes release)]
