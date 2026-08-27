@@ -122,3 +122,20 @@
     (is (= "a" (get-in (second (last @seen)) [:query])))
     (runtime/dispatch! rt mount {:type :key :key-code 259 :pressed? true})
     (is (= "" (get-in (second (last @seen)) [:query])))))
+(deftest runtime-reuses-paint-for-clean-frame
+  (let [paints (atom 0)
+        rt (runtime/create-runtime)
+        artifact {:magic :pui2 :schema 2 :view-id :academy/test/cache
+                  :nodes {:type :rect :layout {}}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {:value 1}
+                                  :paint-fn (fn [_ _ _]
+                                               (swap! paints inc)
+                                               [:paint])})]
+    (runtime/extract-stage! rt :screen {})
+    (runtime/extract-stage! rt :screen {})
+    (is (= 1 @paints))
+    (runtime/present! rt mount {:value 2})
+    (runtime/extract-stage! rt :screen {})
+    (is (= 2 @paints))))

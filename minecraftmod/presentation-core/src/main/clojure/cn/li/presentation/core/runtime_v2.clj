@@ -44,6 +44,7 @@
                   :paint-fn (or paint-fn (fn [_ _ _] []))
                   :geometry (HostGeometry/identity 0 0)
                   :dirty #{:structure :layout :paint :semantics}
+                  :commands []
                   :focus nil}]
     (vswap! (:state runtime)
             (fn [snapshot]
@@ -226,24 +227,37 @@
             (println "Presentation effect failed:" (pr-str effect) error)))))
     result))
 (defn extract-stage!
-  "Return a stage packet envelope. Render command extraction is supplied by
-   the UI paint assembler; this function already provides stage filtering and
-   mount geometry without guessed cross-stage frame coalescing." 
+  "Return a stage packet envelope and reuse cached commands when the mount is clean.
+   A present!/host update invalidates :paint; the next extraction repaints once and
+   clears the dependent dirty flags."
   [^UiRuntime runtime stage frame-context]
   (owner-thread! runtime)
-  {:stage stage
-   :frame-context frame-context
-   :mounts (->> (:mounts (runtime-state runtime))
-                vals
-                (filter #(= stage (get-in % [:host :stage])))
-                (mapv (fn [instance]
-                        (assoc (select-keys instance [:handle :view-id :geometry :dirty])
-                               :commands (vec ((:paint-fn instance)
-                                               (:artifact instance)
-                                               (:view-state instance)
-                                               (:geometry instance)))))
-                 ))})
-
+  (let [instances (->> (:mounts (runtime-state runtime))
+                        vals
+                        (filter #(= stage (get-in % [:host :stage]))))]
+    {:stage stage
+     :frame-context frame-context
+     :mounts (mapv (fn [instance]
+                     (let [repaint? (contains? (:dirty instance) :paint)
+                           commands (if repaint?
+                                      (vec ((:paint-fn instance)
+                                            (:artifact instance)
+                                            (:view-state instance)
+                                            (:geometry instance)))
+                                      (:commands instance))
+                           dirty (if repaint?
+                                   (disj (:dirty instance) :structure :layout :paint :semantics)
+                                   (:dirty instance))]
+                       (when repaint?
+                         (vswap! (:state runtime)
+                                 (fn [snapshot]
+                                   (-> snapshot
+                                       (assoc-in [:mounts (:handle instance) :commands] commands)
+                                       (assoc-in [:mounts (:handle instance) :dirty] dirty)))))
+                       (assoc (select-keys instance [:handle :view-id :geometry])
+                              :dirty dirty
+                              :commands commands)))
+                   instances)}))
 (defn semantics [^UiRuntime runtime mount]
   (get-in (instance! runtime mount) [:artifact :semantics]))
 

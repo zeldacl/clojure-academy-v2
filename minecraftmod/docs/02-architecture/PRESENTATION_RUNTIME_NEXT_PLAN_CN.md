@@ -95,6 +95,11 @@ Gradle `:platform:compileClojure` 构建（使用目标对应的 Gradle/toolchai
 | Artifact 加载 | 23/23 |
 | Controller load | 23/23 |
 | Backend 指令覆盖 | 100% |
+| compiler 运行时依赖 | 0 |
+| 旧 ViewModel/API 引用 | 0 |
+| 旧模板和 fallback | 0 |
+| 未变化帧 layout/paint 重建 | 0 |
+| 运行时 `.ui.edn` 读取 | 0 |
 
 **统计口径与执行方式：**
 
@@ -103,6 +108,8 @@ Gradle `:platform:compileClojure` 构建（使用目标对应的 Gradle/toolchai
 - `23/23` Artifact 加载要求每个逻辑 Surface 都能解析到编译 manifest 中的 7 个物理 artifact 之一；这是逻辑实例数，不是 `.ui.edn` 文件数。
 - `23/23` Controller load 要求每个 Surface 都有可解析的 controller；同一 controller 可被多个运行时实例复用，但清单按逻辑 Surface 计数，避免把模式切换误算为新增 Surface。
 - `Backend 指令覆盖 100%` 要求三套版本 backend 对 `RenderCommand` sealed ABI 的全部 17 种指令都有显式分派；由 `mcmod:presentation_backend_test` 与六目标 `:platform:compileClojure` 共同验收。
+- `compiler 运行时依赖 = 0`、`旧 ViewModel/API 引用 = 0`、`旧模板和 fallback = 0`、`运行时 .ui.edn 读取 = 0` 由 `verifyPresentationRuntimeZeroResidues` 扫描依赖、生产源码、旧资源根和运行时读取路径。
+- `未变化帧 layout/paint 重建 = 0` 由 Runtime 的 dirty/cache 机制保证：首次提取或状态/几何变化才执行 paint，clean frame 复用已缓存命令；`runtime-v2-test` 有回归断言。
 
 源码清单位于 `ac/src/main/clojure/cn/li/ac/gui/presentation_surface_manifest.clj`，数量回归断言位于
 `ac/src/test/clojure/cn/li/ac/gui/manifest_test.clj`。执行以下门禁即可复核本表：

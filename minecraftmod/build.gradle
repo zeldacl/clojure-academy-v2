@@ -1816,6 +1816,39 @@ tasks.register("verifyPresentationSurfaceCoverage") {
         logger.lifecycle("[verifyPresentationSurfaceCoverage] ok (23/23 surfaces, 11/11 containers, 23/23 controllers)")
     }
 }
+
+tasks.register("verifyPresentationRuntimeZeroResidues") {
+    group = "verification"
+    description = "Verify zero runtime compiler/legacy-template dependencies and no UI source reads at runtime."
+    dependsOn "verifyPresentationArtifacts"
+    doLast {
+        def coreBuild = file("presentation-core/build.gradle").getText("UTF-8")
+        def coreSources = fileTree("presentation-core/src/main") { include "**/*.clj", "**/*.java" }.files
+        def sourceText = coreSources.collect { it.getText("UTF-8") }.join("\n")
+        if (coreBuild =~ /(?:api|implementation)\s+project\(["']?:presentation-compiler/ ||
+                sourceText =~ /cn\.li\.presentation\.compiler/) {
+            throw new GradleException("presentation-core has a runtime compiler dependency")
+        }
+        def oldApi = sourceText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree)/
+        if (oldApi.find()) {
+            throw new GradleException("legacy Presentation ViewModel/API reference remains")
+        }
+        def oldTemplates = []
+        [file("ac/src/main/resources/assets/academy/presentation"),
+         file("presentation-core/src/main/clojure/cn/li/presentation/core/render.clj"),
+         file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/render.clj")].each {
+            if (it.exists()) oldTemplates << it
+        }
+        oldTemplates.addAll(fileTree("ac/src/main") { include "**/*.xml" }.files)
+        if (!oldTemplates.isEmpty()) {
+            throw new GradleException("legacy UI templates/fallback roots remain: " + oldTemplates)
+        }
+        if (sourceText =~ /(?:read-resource|io\/resource|slurp|io\/reader)[^\n]*\.ui\.edn/) {
+            throw new GradleException("runtime Presentation source reads .ui.edn")
+        }
+        logger.lifecycle("[verifyPresentationRuntimeZeroResidues] ok (compiler=0, old-api=0, templates/fallback=0, runtime-ui-edn-read=0)")
+    }
+}
 tasks.register("verifyCurrentPlatforms") {
     group = "verification"
     description = "Run architecture gates for the catalog-based platform layout."
@@ -1833,6 +1866,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationJavaPurity",
               "verifyPresentationDependencyDirection",
               "verifyPresentationSurfaceCoverage",
+              "verifyPresentationRuntimeZeroResidues",
               "verifyNodeCoreDependencyDirection",
               "verifyNodeCoreLanguageKernel",
               "verifyNodeLayerDiscipline",
