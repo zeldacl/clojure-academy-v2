@@ -60,3 +60,14 @@
     (is (= [{:path [:last-absorb-tick] :mode :assign :value 25}]
            (:session-patches applied)))
     (is (empty? (:session-patches blocked)))))
+(deftest absorb-front-cone-is-enforced-test
+  (let [reaction {:ability-id :shield :reaction-id :absorb :priority 10
+                  :on :combat/damage
+                  :program {:component :damage/absorb :cap 3.0 :front? false}}
+        result (damage/resolve-event [reaction]
+                                      {:world-id "w" :source :a :target :b :base 10
+                                       :type :skill :seed 4
+                                       :metadata {:input {:context {:resources {:cp 100.0
+                                                                                :overload 100.0}}}}})]
+    (is (= 10.0 (:amount result)))
+    (is (empty? (:session-patches result)))))

@@ -122,7 +122,8 @@
                        :requires-payment true
                        :cost (cost-map (:cost program)) :vfx (:vfx program)
                        :interval-ticks (value (:interval-ticks program))
-                       :last-tick-path (:last-tick-path program)
+                       :last-tick-path (:last-tick-path program)                       :front? (when (contains? program :front?)
+                                 (boolean (eval-value (:front? program) event)))
                        :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
@@ -168,6 +169,8 @@
                                                         (> (double (or amount 0.0))
                                                            (double (or (get resources resource) 0.0))))
                                                       (:cost contribution))))
+                                         (and (= :absorption (:kind contribution))
+                                              (false? (:front? contribution)))
                                          (and (= :absorption (:kind contribution))
                                               (pos? (double (or (:interval-ticks contribution) 0.0)))
                                               (let [session (or (get-in contribution [:input :session]) {})
