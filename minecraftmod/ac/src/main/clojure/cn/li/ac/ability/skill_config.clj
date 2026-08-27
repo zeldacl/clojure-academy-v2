@@ -103,9 +103,18 @@
     :beam-block-energy :beam.block-energy
     :beam-visual-distance :beam.visual-distance
     :max-distance :beam.max-distance
-    :charge-ticks :charge.item-charge-ticks
+    :qte-active-threshold :qte.coin-active-threshold
+    :qte-perform-threshold :qte.coin-perform-threshold
+    :item-charge-ticks :charge.item-charge-ticks
+    :reflection-distance :reflection.distance
+    :reflection-damage :reflection.damage
     :cost-down-cp :cost.down.cp
-    :cost-down-overload :cost.down.overload}
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :cost-tick-overload :cost.tick.overload
+    :cooldown-ticks :cooldown.manual-ticks
+    :exp-hit :progression.exp-hit
+    :exp-reflection-hit :progression.exp-reflection-hit}
    :arc-gen
    {:damage :combat.damage
     :max-distance :targeting.range
