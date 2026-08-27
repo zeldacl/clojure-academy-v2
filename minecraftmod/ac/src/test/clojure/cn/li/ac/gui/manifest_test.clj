@@ -1,6 +1,7 @@
 (ns cn.li.ac.gui.manifest-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.gui.manifest :as manifest]))
+            [cn.li.ac.gui.manifest :as manifest]
+            [cn.li.ac.gui.presentation-surface-manifest :as surface-manifest]))
 
 (def expected-gui-keys
   #{:wireless-node
@@ -66,3 +67,11 @@
                                   set)]
       (is (empty? (manifest/missing-message-domains referenced-domains)))
       (is (= [:alternate] (manifest/message-actions :metal-former))))))
+
+(deftest presentation-surface-coverage-catalog-test
+  (testing "the executable inventory matches the quantitative acceptance table"
+    (is (= 12 (count surface-manifest/application-surfaces)))
+    (is (= 11 (count surface-manifest/container-surfaces)))
+    (is (= 23 (count surface-manifest/active-surfaces)))
+    (is (= 7 (count (set (map :artifact surface-manifest/active-surfaces)))))
+    (is (= 23 (count (filter :controller surface-manifest/active-surfaces))))))

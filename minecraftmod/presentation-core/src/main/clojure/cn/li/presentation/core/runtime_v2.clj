@@ -43,7 +43,8 @@
                   :close! (or close! (fn [_] nil))
                   :paint-fn (or paint-fn (fn [_ _ _] []))
                   :geometry (HostGeometry/identity 0 0)
-                  :dirty #{:structure :layout :paint :semantics}}]
+                  :dirty #{:structure :layout :paint :semantics}
+                  :focus nil}]
     (vswap! (:state runtime)
             (fn [snapshot]
               (-> snapshot
@@ -128,42 +129,92 @@
         child-rects* (if direction (child-rects rect direction children)
                        (mapv (constantly rect) children))
         hit-child (some (fn [[child child-rect]]
-                     (hit-action child child-rect px py))
-                   (reverse (map vector children child-rects*)))]
+                          (hit-action child child-rect px py))
+                        (reverse (map vector children child-rects*)))]
     (or hit-child
-        (when (and (= :button (:type node))
-                   (point-in-rect? rect px py))
-          {:action (get-in node [:on :activate])
-           :payload (cond-> {:target (:key node)}
-                      (some? (button-id node))
-                      (assoc :button-id (button-id node)))}))))
+        (when (point-in-rect? rect px py)
+          (cond
+            (= :button (:type node))
+            {:action (get-in node [:on :activate])
+             :payload (cond-> {:target (:key node)}
+                        (some? (button-id node))
+                        (assoc :button-id (button-id node)))}
 
+            (= :text-input (:type node))
+            {:focus {:key (:key node)
+                     :path (get-in node [:bind :text])
+                     :field (get-in node [:semantics :field])
+                     :on (:on node)}}
+            :else nil)))))
 (defn- routed-event [instance event]
   (if (:action event)
     event
-    (case (:type event)
-      :pointer (if (= :down (:event-type event))
-                 (or (hit-action (:nodes (:artifact instance))
-                                 {:x 0.0 :y 0.0
-                                  :width (.viewportWidth ^HostGeometry (:geometry instance))
-                                  :height (.viewportHeight ^HostGeometry (:geometry instance))}
-                                 (:x event) (:y event))
-                     {:action :input/pointer :payload event})
-                 {:action :input/pointer :payload event})
-      :key {:action :input/key :payload event}
-      :character {:action :input/character :payload event}
-      :scroll {:action :input/scroll :payload event}
-      {:action :input/unknown :payload event})))
+    (let [focus (:focus instance)]
+      (case (:type event)
+        :pointer (if (= :down (:event-type event))
+                   (or (hit-action (:nodes (:artifact instance))
+                                   {:x 0.0 :y 0.0
+                                    :width (.viewportWidth ^HostGeometry (:geometry instance))
+                                    :height (.viewportHeight ^HostGeometry (:geometry instance))}
+                                   (:x event) (:y event))
+                       {:action :input/pointer :payload event})
+                   {:action :input/pointer :payload event})
+        :key (let [key-code (int (or (:key-code event) -1))
+                   submit-action (get-in focus [:on :submit])]
+               (cond
+                 (and (= key-code 257) submit-action)
+                 {:action submit-action :payload {:value (let [path (get-in focus [:path])]
+                                                       (get-in (:view-state instance)
+                                                                (if (and (vector? path) (= :state (first path)))
+                                                                  (subvec path 1)
+                                                                  path)))}}
+                 (= key-code 259) {:action :input/backspace :payload event}
+                 :else {:action :input/key :payload event}))
+        :character {:action (or (get-in focus [:on :change]) :input/character)
+                    :payload event}
+        :scroll {:action :input/scroll :payload event}
+        {:action :input/unknown :payload event}))))
+
+(defn- focus-path [focus]
+  (when-let [path (:path focus)]
+    (if (and (vector? path) (= :state (first path)))
+      (subvec path 1)
+      path)))
+
+(defn- edit-input-state [state focus action payload]
+  (if-let [path (focus-path focus)]
+    (let [current (str (or (get-in state path) ""))
+          next-value (cond
+                       (= action :input/backspace) (if (seq current) (subs current 0 (dec (count current))) current)
+                       (or (= action :input/character) (contains? payload :text)) (str current (or (:text payload) ""))
+                       :else nil)]
+      (if (some? next-value) (assoc-in state path next-value) state))
+    state))
+
+(defn- input-payload [state focus action payload]
+  (if-let [path (focus-path focus)]
+    (let [value (str (or (get-in state path) ""))]
+      (merge payload {:value value :text value :query value}
+             (when-let [field (:field focus)] {:field field})))
+    payload))
+
 (defn dispatch!
   "Route one neutral input or explicit action through the pure reducer, then effects."
   [^UiRuntime runtime mount event]
   (owner-thread! runtime)
   (let [instance (instance! runtime mount)
-        {:keys [action payload]} (routed-event instance event)
-        response ((:reduce instance) (:view-state instance) action payload)
+        routed (routed-event instance event)
+        {:keys [action payload focus]} routed
+        focus (or focus (:focus instance))
+        _ (when (contains? routed :focus)
+            (vswap! (:state runtime) assoc-in [:mounts mount :focus] focus))
+        state-before (:view-state instance)
+        state-edited (edit-input-state state-before focus action payload)
+        payload (input-payload state-edited focus action payload)
+        response ((:reduce instance) state-edited action payload)
         next-state (if (contains? response :state)
                      (:state response)
-                     (:view-state instance))
+                     state-edited)
         effects (or (:effects response) [])
         result (or (:event-result response) :pass)]
     (present! runtime mount next-state)

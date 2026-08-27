@@ -1785,6 +1785,37 @@ tasks.register("verifyPresentationArtifacts") {
         logger.lifecycle("[verifyPresentationArtifacts] ok (" + sources.size() + " sources)")
     }
 }
+
+tasks.register("verifyPresentationSurfaceCoverage") {
+    group = "verification"
+    description = "Verify the logical Presentation surface inventory and its quantitative acceptance counts."
+    dependsOn "verifyPresentationArtifacts"
+    doLast {
+        def surfaceSource = file("ac/src/main/clojure/cn/li/ac/gui/presentation_surface_manifest.clj")
+        def guiManifestSource = file("ac/src/main/clojure/cn/li/ac/gui/manifest.clj")
+        if (!surfaceSource.isFile() || !guiManifestSource.isFile()) {
+            throw new GradleException("Presentation surface manifests are missing")
+        }
+        def surfaceText = surfaceSource.getText("UTF-8")
+        def guiText = guiManifestSource.getText("UTF-8")
+        def applicationBlock = surfaceText.substring(surfaceText.indexOf("(def application-surfaces"),
+                surfaceText.indexOf("(defn- container-surface"))
+        def applicationCount = (applicationBlock =~ /:artifact\s+:academy\.app\//).count
+        def containerCount = (guiText =~ /:gui-name\s+"/).count
+        def applicationControllerCount = (applicationBlock =~ /:controller\s+/).count
+        def containerControllerCount = (guiText =~ /:screen-factory-fn-kw\s+:create-/).count
+        def controllerCount = applicationControllerCount + containerControllerCount
+        if (applicationCount != 12 || containerCount != 11 || controllerCount != 23) {
+            throw new GradleException("Presentation surface coverage mismatch: applications=" +
+                    applicationCount + ", containers=" + containerCount +
+                    ", controllers=" + controllerCount)
+        }
+        if (applicationCount + containerCount != 23) {
+            throw new GradleException("Expected 23 active Presentation surfaces")
+        }
+        logger.lifecycle("[verifyPresentationSurfaceCoverage] ok (23/23 surfaces, 11/11 containers, 23/23 controllers)")
+    }
+}
 tasks.register("verifyCurrentPlatforms") {
     group = "verification"
     description = "Run architecture gates for the catalog-based platform layout."
@@ -1801,6 +1832,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNeutralClojureNoMinecraftApis",
               "verifyPresentationJavaPurity",
               "verifyPresentationDependencyDirection",
+              "verifyPresentationSurfaceCoverage",
               "verifyNodeCoreDependencyDirection",
               "verifyNodeCoreLanguageKernel",
               "verifyNodeLayerDiscipline",

@@ -101,3 +101,24 @@
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                   :x 75 :y 10 :button 0})))
     (is (= [:demo/right {:target :right :button-id 1}] @seen))))
+(deftest runtime-routes-text-input
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact {:magic :pui2 :schema 2 :view-id :academy/test/text-input
+                  :nodes {:id :root :type :text-input :layout {:width 100 :height 20}
+                          :bind {:text [:state :query]}
+                          :on {:change :edit/change :submit :edit/submit}
+                          :semantics {:role :textbox :field :query}}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {:query ""}
+                                  :reduce (fn [state action payload]
+                                            (swap! seen conj [action state payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (runtime/dispatch! rt mount {:type :character :text "a"})
+    (is (= :edit/change (first (last @seen))))
+    (is (= "a" (get-in (second (last @seen)) [:query])))
+    (runtime/dispatch! rt mount {:type :key :key-code 259 :pressed? true})
+    (is (= "" (get-in (second (last @seen)) [:query])))))

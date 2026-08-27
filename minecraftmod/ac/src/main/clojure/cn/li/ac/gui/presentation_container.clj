@@ -87,6 +87,11 @@
                             extra-values (if-let [snapshot! (:presentation-snapshot-fn container)]
                                            (or (snapshot! container player) {})
                                            {})
+                            form-state (when-let [form (:presentation-form-state container)] @form)
+                            text-values (cond-> {}
+                                          (some? (:ssid form-state)) (assoc :network-ssid (:ssid form-state))
+                                          (some? (:password form-state)) (assoc :network-password (:password form-state))
+                                          (some? (:node-name form-state)) (assoc :node-name (:node-name form-state)))
                             button-values (into {}
                                            (mapcat (fn [{:keys [button-id label]}]
                                                      (case (int (or button-id -1))
@@ -94,15 +99,23 @@
                                                        1 [[:button-right {:label (str (or label ""))}]]
                                                        []))
                                                    (or (:presentation-buttons container) [])))
-                            values (merge base-values extra-values button-values)]
+                            values (merge base-values extra-values text-values button-values)]
                         (menu-bridge/update-snapshot! bridge @revision values)
                         (menu-bridge/snapshot bridge)))
         dispatch-action! (fn [action payload]
-                           (if-let [dispatch (:presentation-dispatch-action! container)]
-                             (dispatch action payload)
-                             (when (= action :container/button)
-                               (when-let [button (:button-click-fn container)]
-                                 (button container (:button-id payload) player)))))]
+                           (cond
+                             (contains? #{:container/text-change :container/text-submit} action)
+                             (when-let [handler (if (= action :container/text-submit)
+                                                   (:presentation-text-submit! container)
+                                                   (:presentation-text-change! container))]
+                               (handler (:field payload) (str (or (:value payload) ""))))
+
+                             :else
+                             (if-let [dispatch (:presentation-dispatch-action! container)]
+                               (dispatch action payload)
+                               (when (= action :container/button)
+                                 (when-let [button (:button-click-fn container)]
+                                   (button container (:button-id payload) player))))))]
     {:type :presentation-container-screen
      :template-id template-id
      :container container

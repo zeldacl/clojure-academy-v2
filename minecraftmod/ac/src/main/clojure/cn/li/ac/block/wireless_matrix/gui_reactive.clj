@@ -86,7 +86,7 @@
              :presentation-network (atom {:initialized false :ssid "" :password ""
                                            :owner "Unknown" :load 0 :max-capacity 16
                                            :range 64 :bandwidth 100})
-             :presentation-form-state (atom {:ssid "" :password ""})
+             :presentation-form-state (atom {:ssid nil :password nil})
              :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
                                      :width 52 :height 18 :label "Init/Refresh"}
                                     {:id :right :button-id 1 :x 70 :y 145

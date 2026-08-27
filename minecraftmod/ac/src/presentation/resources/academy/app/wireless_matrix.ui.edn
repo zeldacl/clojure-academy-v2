@@ -7,8 +7,8 @@
                    {:type :text :key :matrix/range :bind {:text [:state :network-range]}}
                    {:type :text :key :matrix/bandwidth :bind {:text [:state :network-bandwidth]}}
                    {:type :progress :key :matrix/load :layout {:height 6} :bind {:value [:state :network-load]} :semantics {:role :progress}}
-                   {:type :text-input :key :matrix/ssid :layout {:height 20} :bind {:text [:state :network-ssid]} :semantics {:role :textbox}}
-                   {:type :text-input :key :matrix/password :layout {:height 20} :bind {:text [:state :network-password]} :semantics {:role :textbox}}
+                   {:type :text-input :key :matrix/ssid :layout {:height 20} :bind {:text [:state :network-ssid]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :ssid}}
+                   {:type :text-input :key :matrix/password :layout {:height 20} :bind {:text [:state :network-password]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :password}}
                    {:type :row :key :matrix/actions
                     :children [{:type :button :key :matrix/action-left :layout {:width 72 :height 20} :bind {:text [:state :button-left]} :on {:activate :container/button} :semantics {:role :button}}
                                {:type :button :key :matrix/action-right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :container/button} :semantics {:role :button}}]}]}}

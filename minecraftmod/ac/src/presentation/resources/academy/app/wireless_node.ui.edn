@@ -7,8 +7,8 @@
                    {:type :text :key :node/range :bind {:text [:state :network-range]}}
                    {:type :text :key :node/bandwidth :bind {:text [:state :network-bandwidth]}}
                    {:type :progress :key :node/load :layout {:height 6} :bind {:value [:state :network-load]} :semantics {:role :progress}}
-                   {:type :text-input :key :node/name :layout {:height 20} :bind {:text [:state :node-name]} :semantics {:role :textbox}}
-                   {:type :text-input :key :node/password :layout {:height 20} :bind {:text [:state :network-password]} :semantics {:role :textbox}}
+                   {:type :text-input :key :node/name :layout {:height 20} :bind {:text [:state :node-name]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :node-name}}
+                   {:type :text-input :key :node/password :layout {:height 20} :bind {:text [:state :network-password]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :password}}
                    {:type :row :key :node/actions
                     :children [{:type :button :key :node/action-left :layout {:width 72 :height 20} :bind {:text [:state :button-left]} :on {:activate :container/button} :semantics {:role :button}}
                                {:type :button :key :node/action-right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :container/button} :semantics {:role :button}}]}]}}

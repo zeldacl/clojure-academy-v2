@@ -86,6 +86,32 @@ Gradle `:platform:compileClojure` 构建（使用目标对应的 Gradle/toolchai
 - 核心行为测试：artifact schema、Runtime v2 状态提取、Host mount/unmount、Action dispatch、MenuBridge、Render IR 与六目标编译。
 - 性能：中端机器战斗场景 Presentation CPU p95 ≤ 1 ms，压力场景 ≤ 2 ms；静态 HUD 热身后 ≤ 256 B/frame；动态 HUD ≤ 8 KiB/frame；普通 HUD ≤ 8 draw calls，技能轮 ≤ 16。
 
+### 最终量化验收表（硬门槛）
+
+| 验收项 | 要求 |
+| --- | ---: |
+| 活跃 Surface | 23/23 |
+| 容器映射 | 11/11 |
+| Artifact 加载 | 23/23 |
+| Controller load | 23/23 |
+| Backend 指令覆盖 | 100% |
+
+**统计口径与执行方式：**
+
+- `23` 个逻辑 Surface = 12 个 Application/HUD controller mount + `ac.gui.manifest/gui-definitions` 中的 11 个容器 GUI；共享同一个 artifact 的多个应用仍按独立 Surface 计数。
+- `11/11` 容器映射要求每个 GUI manifest 条目都有 `screen-factory-fn-kw`、`container-fn`、`screen-fn` 和 MenuBridge 路径。
+- `23/23` Artifact 加载要求每个逻辑 Surface 都能解析到编译 manifest 中的 7 个物理 artifact 之一；这是逻辑实例数，不是 `.ui.edn` 文件数。
+- `23/23` Controller load 要求每个 Surface 都有可解析的 controller；同一 controller 可被多个运行时实例复用，但清单按逻辑 Surface 计数，避免把模式切换误算为新增 Surface。
+- `Backend 指令覆盖 100%` 要求三套版本 backend 对 `RenderCommand` sealed ABI 的全部 17 种指令都有显式分派；由 `mcmod:presentation_backend_test` 与六目标 `:platform:compileClojure` 共同验收。
+
+源码清单位于 `ac/src/main/clojure/cn/li/ac/gui/presentation_surface_manifest.clj`，数量回归断言位于
+`ac/src/test/clojure/cn/li/ac/gui/manifest_test.clj`。执行以下门禁即可复核本表：
+
+```text
+gradlew.bat :ac:checkClojure :ac:compilePresentationViews verifyPresentationArtifacts verifyPresentationSurfaceCoverage
+gradlew.bat verifyCurrentPlatforms
+```
+
 # 历史实施记录（仅作审计证据，不是当前模块清单）
 
 下文保留此前迁移阶段的决策、门禁和性能目标；若与“当前实现审计基线”冲突，以当前代码和基线为准。

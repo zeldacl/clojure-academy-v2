@@ -35,6 +35,9 @@
     (= action :terminal/query)
     (query-terminal-state! owner nil)
 
+    (= action :terminal/set-query)
+    (term-rt/dispatch-event! owner :terminal/set-query payload)
+
     (= action :terminal/submit-query)
     (do (term-rt/dispatch-event! owner :terminal/set-query payload)
         (query-terminal-state! owner nil))

@@ -16,7 +16,7 @@
   (is (true? (get-in (backend/create :mc-26-2) [:capabilities :instancing?]))))
 
 (deftest neutral-render-command-vocabulary-is-sealed
-  (is (= 16 (alength (.getPermittedSubclasses RenderCommand)))))
+  (is (= 17 (alength (.getPermittedSubclasses RenderCommand)))))
 
 (deftest stage-keyword-maps-to-every-loader-facing-render-stage
   (is (= RenderStage/HUD (backend/stage->render-stage :hud)))
