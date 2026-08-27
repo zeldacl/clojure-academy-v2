@@ -34,12 +34,6 @@
 (def ^:private fn-pull-portable-dev-energy :ability/pull-portable-dev-energy!)
 (def ^:private fn-resolve-awaken-category :ability/resolve-awaken-category!)
 
-;; Persistent/session VFX are replayed periodically so a client that enters
-;; tracking range after an effect started receives its current baseline.  The
-;; replay is intentionally coarse: updates still use dirty masks, while this
-;; cadence bounds bookkeeping and mirrors the fixed 20-tick input window.
-(def ^:private vfx-replay-interval-ticks 20)
-
 (defn- runtime-get-player-state
   [player-uuid]
   (store/get-player-state (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))

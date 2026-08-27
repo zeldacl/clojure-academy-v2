@@ -803,10 +803,10 @@
                          [])]
     (assoc result :owner owner
            :domain-event-results (vec domain-results))))
-(defn dispatch-and-publish-event!
+(defn dispatch-event!
   "Dispatch a one-shot ability event (no active session required -- a fresh
    activation context is generated the same way a :start intent would) and
-   publish its result through the installed sink.
+   finalize its result through the AC composition boundary.
 
    For neutral platform callbacks that need to route a world event into an
    ability's own EDN program instead of applying an effect directly -- e.g. a
@@ -821,7 +821,7 @@
     result))
 
 (defn tick!
-  "Advance scheduled final graph work and publish its neutral result."
+  "Advance scheduled final graph work and return its neutral result."
   [tick]
   (reset! last-known-tick* (long tick))
   (if-let [runtime (final-runtime/production-runtime)]

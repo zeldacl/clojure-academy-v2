@@ -32,7 +32,7 @@
   [world-id attacker-uuid target-uuid _raw-damage]
   (when (combat-catalog/available? :mag-manip)
     (= :accepted
-       (:status (combat-runtime/dispatch-and-publish-event!
+       (:status (combat-runtime/dispatch-event!
                  attacker-uuid :mag-manip :block-body-hit
                  {:world-id world-id :target-id target-uuid})))))
 
