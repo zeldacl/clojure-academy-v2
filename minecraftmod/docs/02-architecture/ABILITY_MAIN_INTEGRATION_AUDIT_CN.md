@@ -49,7 +49,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 
 | ability | main 效果与逻辑 | main VFX | 当前接入结论 |
 |---|---|---|---|
-| `arc-gen` | 射线命中实体造成缩放伤害；命中方块时点火/掉鱼；命中与未命中分别给经验并启动冷却 | beam、命中/端点音效 | ⚠️ 公共 damage/VFX 提交链未闭合 |
+| `arc-gen` | 射线命中实体造成缩放伤害；命中方块时点火/掉鱼；命中与未命中分别给经验并启动冷却 | beam、命中/端点音效 | ⚠️ 已修复 Final 水体 raycast、命中字段归一化和 creeper 判断；公共 damage/VFX 提交链仍未闭合 |
 | `body-intensify` | 按住蓄力；CP/过载约束；释放随机药水效果、经验和冷却 | 手部弧光、循环音、端点爆发 | ⚠️ |
 | `current-charging` | 对主手能量物品或可充能方块持续充能；目标丢失时清理会话 | 充能弧光、循环音 | ⚠️ |
 | `mag-manip` | 捕获金属方块/物品实体，持续吸附，释放投掷；碰撞负责伤害/放置/恢复 | 持续弧光、音效、beam | ⚠️ 需继续验证实体碰撞提交 |
@@ -257,6 +257,18 @@ thunder-bolt
 36. `storm-wing`
 37. `vec-accel`
 38. `railgun`（唯一已确认缺少 Final 能力建模的项，最后单独处理）
+
+### arc-gen checkpoint（db8de4f4e）
+
+- `target/raycast` 使用现有 `policy` ABI 的 `:collidable-or-water` 策略；Combat
+  Core 在中性边界选择最近实体/碰撞方块/水体，不把 Minecraft 类型泄漏到 EDN。
+- 中性命中结果统一提供 `:position`、`:block-position`、`:water?`、`:entity-id` 和
+  `:entity-type`，因此 Arc Gen 不再读取不存在的旧 `:creeper?` 字段。
+- AC 的 `world/block-impact` 处理会在 miss 终点重新读取水体，保持 main 的“未命中也
+  走方块分支”语义；读取和写入始终由事件携带的 `world-id` 约束。
+- 已通过 `:combat-core:runCombatClojureTests`（25/65）及
+  `:ac:runAcEdnCoverageTests`（14/33）。这只是该项的静态/编译 checkpoint，不能把
+  仍未闭合的 skill damage scaling、实际客户端 VFX 发送和实机结果标成 `✅`。
 
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
