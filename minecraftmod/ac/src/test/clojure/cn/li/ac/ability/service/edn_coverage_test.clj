@@ -428,6 +428,14 @@
     (is (= :slot-wheel (-> doc :program :events first key)))
     (is (= :session/write
            (get-in doc [:program :events :slot-wheel :steps 3 :component])))))
+(deftest thunder-clap-aoe-excludes-caster-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_clap.edn"))
+        nodes (component-nodes (:program doc))
+        areas (filter #(= :combat/charged-area-damage (:component %)) nodes)]
+    (is (= 2 (count areas)))
+    (is (every? #(= [{:ref [:input :capabilities :caster/id]}]
+                   (get-in % [:filter :excluded-entity-ids]))
+                areas))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
