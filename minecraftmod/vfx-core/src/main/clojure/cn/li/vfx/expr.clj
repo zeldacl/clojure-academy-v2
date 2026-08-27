@@ -3,9 +3,9 @@
    vec3, boolean, collection, and random. No Minecraft or mcmod dependency
    -- this is the language layer (see NODE_LANGUAGE.md), not a domain
    vocabulary. Domain-specific opcodes (e.g. combat's ballistic vec3/launch,
-   vfx's noise functions) register through `register-op!` instead of being
-   added here, so this runtime stays independent of combat and platform modules
-   are for.")
+   vfx's noise functions) are supplied through an explicit operation table at
+   evaluation time, so this runtime stays independent of combat and platform
+   modules.")
 
 (set! *warn-on-reflection* true)
 

@@ -3,20 +3,15 @@
 
    Domains build one environment during bootstrap and pass it explicitly to
    validators/VMs. The environment is a value, so AC/BC/CC can coexist in one
-   process without resetting or leaking a process-global registry.")
-
-(defn- valid-descriptor? [descriptor]
-  (and (map? descriptor)
-       (keyword? (:id descriptor))
-       (integer? (:revision descriptor))
-       (contains? #{:primitive :mid :source} (:layer descriptor))))
+   process without resetting or leaking a process-global registry. Every
+   descriptor is normalized by the canonical descriptor namespace before it
+   enters the environment."
+  (:require [cn.li.node.descriptor :as descriptor]))
 
 (defn build
   [{:keys [descriptors extra-ops]}]
-  (let [descriptors (vec descriptors)
+  (let [descriptors (mapv descriptor/normalize descriptors)
         ids (map :id descriptors)]
-    (when-not (every? valid-descriptor? descriptors)
-      (throw (ex-info "invalid node descriptor in environment" {})))
     (when-not (= (count ids) (count (set ids)))
       (throw (ex-info "duplicate node descriptor id" {:ids ids})))
     {:descriptors (into {} (map (juxt :id identity) descriptors))

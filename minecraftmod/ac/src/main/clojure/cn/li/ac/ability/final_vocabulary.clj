@@ -208,9 +208,3 @@
       {:descriptors (concat (remove #(contains? loaded (:id %))
                                    (descriptor-specs))
                             (vals loaded))}))))
-
-(defn register!
-  "Vocabulary inspection API retained under its historic name for tooling;
-   it returns descriptors and never mutates process-global state."
-  []
-  (descriptor-specs))

@@ -36,10 +36,6 @@
 (defonce ^:private engine* (atom nil))
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private final-runtime* (atom nil))
-;; How often (in server ticks) tick! resends active :session/:persistent VFX
-;; instances through cn.li.combat.vfx-publish/replay-persistent-signals! so a
-;; player who enters tracking range after an effect started still sees it.
-(def ^:private persistent-replay-interval-ticks 40)
 (defonce ^:private edn-host-capabilities-installed? (atom false))
 ;; The authoritative source for `:now-tick` when a caller does not supply one.
 ;; `tick!` below updates this from the real server tick every call; intents

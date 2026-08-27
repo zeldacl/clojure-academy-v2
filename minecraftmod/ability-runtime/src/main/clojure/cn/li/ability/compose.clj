@@ -3,13 +3,15 @@
 
    A content pack supplies combat outcomes and VFX descriptors. This namespace
    is the only place that combines those values into a frame/result envelope;
-   it never calls Minecraft or owns process-global state.")
+   it never calls Minecraft or owns process-global state."
+  (:require [cn.li.presentation.core.frame :as presentation-frame]))
 
 (defn normalize-scope
   [scope]
   (merge {:server-epoch 0 :world-epoch 0 :catalog-generation 0}
          (select-keys (or scope {}) [:server-epoch :world-epoch
-                                      :catalog-generation :player-id])))
+                                      :catalog-generation :player-id
+                                      :max-render-commands-per-frame])))
 
 (defn route-intent
   "Resolve an intent's recipient without allowing one player to mutate another
@@ -30,6 +32,17 @@
    :owner (:owner combat-result)
    :result (dissoc combat-result :vfx-signals)
    :vfx-intents (vec (map #(assoc % :route (route-intent scope %)) vfx-intents))})
+
+(defn compose-frame
+  "Materialize a bounded immutable Presentation frame at the composition
+   boundary. Presentation contributors remain pure; only the host adapter
+   turns commands into engine-specific objects."
+  [scope contributors context]
+  (let [scope (normalize-scope scope)
+        limit (long (or (:max-render-commands-per-frame scope) 8192))]
+    (presentation-frame/frame contributors
+                                 (merge scope (or context {}))
+                                 limit)))
 
 (defn reduce-player
   "Activation-local reducer. The mutable shell may store the returned value in
