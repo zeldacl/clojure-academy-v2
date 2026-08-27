@@ -9,7 +9,7 @@ layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${proje
 
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes", ":node-core:classes", ":vfx-core:classes"
+    checkTask.dependsOn ":mcmod:classes", ":node-core:classes"
     // node-core is source-first (no compileClojure output outside -PfullAot);
     // its .clj sources land only in its own resources/main dir, which the
     // standard project(":node-core") compileClasspath resolution does not
@@ -20,9 +20,6 @@ tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach
     // (see mcmod/build.gradle) for the same underlying reason.
     checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
     checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
-    checkTask.classpath.from(project(":vfx-core").file("src/main/clojure"))
-    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/resources/main")))
-    checkTask.classpath.from(project(":vfx-core").file("src/main/clojure"))
 }
 
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
@@ -50,7 +47,7 @@ tasks.named("processResources").configure {
 
 tasks.named("compileClojure").configure { task ->
     onlyIf { rootProject.ext.fullAotEnabled }
-    dependsOn ":mcmod:compileClojure", ":node-core:compileClojure", ":vfx-core:compileClojure"
+    dependsOn ":mcmod:compileClojure", ":node-core:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
         task.destinationDirectory = targetDir
