@@ -638,3 +638,11 @@
     (is (= 1 (count marks)))
     (is (= {:ref [:local :deflect-progression]} (:progression (first marks))))
     (is (= {:ref [:local :projectile :difficulty]} (:weight (first marks))))))
+
+(deftest vec-reflection-submits-reflect-entity-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/vec_reflection.edn"))
+        nodes (component-nodes (:program doc))
+        marks (filter #(and (= :score/mark (:component %)) (= :reflect-entity (:tag %))) nodes)]
+    (is (= 1 (count marks)))
+    (is (= {:ref [:local :reflect-entity-progression]} (:progression (first marks))))
+    (is (= {:ref [:local :projectile :difficulty]} (:weight (first marks))))))
