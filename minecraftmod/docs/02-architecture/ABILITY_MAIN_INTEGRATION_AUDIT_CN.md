@@ -348,6 +348,8 @@ thunder-bolt
 - 当前 Final 图原本在 release 重新 raycast，这会把 release 时的目标替换成不同实体。现在
   start/pulse 将中性 `target/raycast` 的 `:attacked?/:target-id/:position` 写入 owner session，
   release 只读取该快照；资源不足与 miss 分支仍由同一 graph 负责 VFX destroy 和 session finish。
+- main 的 `:creative?` 费用策略也已迁移：命中 release 的 `cost/spend` 现在按
+  `caster/creative?` 缩放，creative 玩家不扣 CP/overload；miss 仍不进入费用节点。
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）。目标移动、nausea 随机率、真实伤害 adapter
   与多人同时瞄准仍需实机验证，不能把静态加载视为完成。
 ### scatter-bomb checkpoint（逐项复核）
