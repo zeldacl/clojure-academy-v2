@@ -410,6 +410,19 @@ thunder-bolt
   仍由同一 graph 决定，没有恢复旧 handler。
 - 仍需实机确认实体顶部 drop 坐标、物品扣除失败和多人 marker 销毁边界。
 
+### penetrate-teleport checkpoint（逐项复核）
+
+- `main` 允许客户端通过专用 distance channel 调整期望距离，服务端在 down/tick/up
+  都以该期望值、最大距离和当前 CP 重新计算穿透落点；up 阶段还会缓存同一解析结果，
+  避免费用检查与实际传送使用不同目标。
+- 当前 Final 已迁移穿透扫描、CP 上限、最小距离、marker、释放费用/经验/冷却，并由
+  server pulse 驱动预览；但现行 `CombatIntent` 固定协议只承载 start/release 和
+  W/A/S/D movement，尚没有 distance channel 的中性消息。当前图因此使用配置最大距离，
+  不能宣称与 main 的可调距离完全等价。
+- 后续应先扩展一次性、owner-scoped 的中性参数输入 ABI（服务端校验范围、序列号和
+  session 归属），再在 EDN 中读取该参数；不得把旧 RPC/channel 或 AC 技能 callback
+  重新接回作为双轨兼容。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
