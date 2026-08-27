@@ -126,8 +126,9 @@
                         :owner (:owner-id (get-in event [:metadata :input :context]))
                         :exp-scale (value (:exp-scale program))
                         :vfx (:vfx program) :events (:events program) :input (:input (:metadata event))}]
-      :damage/critical (mapv (fn [{:keys [probability multiplier]}]
+      :damage/critical (mapv (fn [{:keys [level probability multiplier]}]
                                {:kind :critical
+                                :level (long (or level 0))
                                 :probability (value probability)
                                 :multiplier (value multiplier)
                                 :vfx (:vfx program)
@@ -166,10 +167,21 @@
         before (* (:base event) multiplier (- 1.0 reduction))
         absorption (min before (max 0.0 (reduce + 0.0 (map #(double (or (:value %) 0.0)) (filter #(= :absorption (:kind %)) contributions)))))
         criticals (filter #(= :critical (:kind %)) contributions)
-        critical-probability (min 1.0 (max 0.0 (reduce + 0.0 (map #(double (or (:probability %) 0.0)) criticals))))
-        critical? (and (pos? critical-probability) (deterministic-roll (:seed event) critical-probability))
-        critical-level (when critical? (first (sort-by (comp - :multiplier) criticals)))
-        amount (max 0.0 (* (- before absorption)
+        critical-levels (->> criticals
+                             (group-by :level)
+                             (map (fn [[level entries]]
+                                    {:level level
+                                     :probability (min 1.0 (max 0.0 (reduce + 0.0 (map #(double (or (:probability %) 0.0)) entries))))
+                                     :multiplier (double (or (some->> entries (map :multiplier) (remove nil?) (apply max)) 1.0))
+                                     :entries entries}))
+                             (sort-by :level)
+                             vec)
+        critical-level (some (fn [{:keys [level probability] :as level-data}]
+                              (when (and (pos? probability)
+                                         (deterministic-roll (+ (long (:seed event)) (long level)) probability))
+                                level-data))
+                            critical-levels)
+        critical? (boolean critical-level)        amount (max 0.0 (* (- before absorption)
                          (if critical? (double (or (:multiplier critical-level) 1.0)) 1.0)))
         reflections (->> contributions (filter #(= :reflection (:kind %)))
                        (keep (fn [reflection]
@@ -204,7 +216,8 @@
     {:event event :matched (mapv #(select-keys % [:ability-id :reaction-id]) matched)
      :amount amount :resource-costs resource-costs :cancelled? (boolean (some #(= :cancel (:kind %)) contributions))
      :critical? critical? :critical-level critical-level :reflections reflections
-     :vfx (vec (keep :vfx (filter #(or (and (= :critical (:kind %)) critical?)
+     :vfx (vec (keep :vfx (filter #(or (and (= :critical (:kind %)) critical?
+                                                   (= (:level %) (:level critical-level)))
                                       (= :reflection (:kind %))
                                       (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions)))
      :feedback (vec
@@ -216,11 +229,12 @@
                                  (materialize-value
                                   (:feedback contribution)
                                   (assoc event :metadata {:input input}))))
-                             (filter #(and (= :critical (:kind %)) critical?) contributions))))
-     :side-events (vec (mapcat #(or (:events %) [])
-                               (filter #(or (and (= :critical (:kind %)) critical?)
-                                          (= :reflection (:kind %))
-                                          (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions)))
+                             (filter #(and (= :critical (:kind %)) critical? (= (:level %) (:level critical-level))) contributions))))
+     :side-events (vec (distinct (mapcat #(or (:events %) [])
+                                          (filter #(or (and (= :critical (:kind %)) critical?
+                                                            (= (:level %) (:level critical-level)))
+                                                       (= :reflection (:kind %))
+                                                       (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions))))
      :state-patches (vec (mapcat :state-patches matched))
      :events (vec (mapcat :events matched))}))
 (defn install-boundary!
