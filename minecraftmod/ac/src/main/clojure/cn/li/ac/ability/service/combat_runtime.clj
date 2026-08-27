@@ -487,25 +487,6 @@
   []
   (when (compare-and-set! edn-host-capabilities-installed? false true)
     (try
-      (deferred/install-vfx-emitter!
-       (fn [{:keys [effect-id payload owner world-id event-seq seed audience instance-key]}]
-         (let [normalized (vfx-contract/signal
-                           {:op :spawn
-                            :effect-id effect-id
-                            :instance-key (or instance-key [:delayed-beam effect-id])
-                            :owner owner
-                            :world-id world-id
-                            :audience audience
-                            :event-seq (long (or event-seq 0))
-                            :seed (long (or seed 0))
-                            :event :spawn
-                            :params (or payload {})})]
-           (finalize-result!
-             owner
-             {:schema-version 2
-              :status :accepted
-              :owner owner
-              :vfx-signals [normalized]}))))
       (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
         (capabilities/register-query!
          :energy/target

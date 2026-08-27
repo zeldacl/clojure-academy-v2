@@ -8,14 +8,15 @@
             [cn.li.vfx.replication :as replication]
             [cn.li.vfx.expr :as expr]))
 
-(expr/register-op! :vfx/ring-point
-                   (fn [[center radius index points] _]
-                     (let [[x y z] (expr/vec3-components center)
-                           angle (* 2.0 Math/PI (/ (double index) (max 1.0 (double points))))
-                           r (double radius)]
-                       {:vec3 [(+ (double x) (* r (Math/cos angle)))
-                               (double y)
-                               (+ (double z) (* r (Math/sin angle)))]})))
+(def ^:private expression-ops
+  {:vfx/ring-point
+   (fn [[center radius index points] _]
+     (let [[x y z] (expr/vec3-components center)
+           angle (* 2.0 Math/PI (/ (double index) (max 1.0 (double points))))
+           r (double radius)]
+       {:vec3 [(+ (double x) (* r (Math/cos angle)))
+               (double y)
+               (+ (double z) (* r (Math/sin angle)))]}))})
 
 (def ^:const max-instances 4096)
 (def ^:const max-ticks 72000)
@@ -54,7 +55,8 @@
     (and (map? value) (keyword? (:expr value)))
     (expr/evaluate (:expr value)
                    (mapv #(graph-value % context) (:args value))
-                   (long (:seed context)))
+                   (long (:seed context))
+                   (:expression-ops context))
     (and (map? value) (contains? value :from) (contains? value :to))
     (let [t (double (or (:progress context) 0.0))
           from (double (or (graph-value (:from value) context) 0.0))
@@ -163,7 +165,8 @@
                {:params params :state state :age (long age)
                 :duration (or (get params :duration-ticks)
                               (get-in descriptor [:control-graph :duration-ticks]) 1)
-                :seed (long seed) :locals {}}))
+                :seed (long seed) :locals {}
+                :expression-ops expression-ops}))
 
 (defn create-runtime
   [{:keys [catalog replication-service seed-source]

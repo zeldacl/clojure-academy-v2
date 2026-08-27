@@ -321,7 +321,9 @@
      (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                              player-uuid
                                              nil)
-     (deferred/tick-owner! player-uuid))
+     (doseq [result (deferred/tick-owner! player-uuid)]
+       (when (= :applied (:status result))
+         (combat-runtime/finalize-result! player-uuid result))))
 
    :on-server-tick-end!
    (fn [tick-id]

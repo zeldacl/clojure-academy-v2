@@ -11,16 +11,6 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private schedules* (atom {}))
-(defonce ^:private vfx-emitter* (atom nil))
-
-(defn install-vfx-emitter!
-  "Install the host output bridge used for deferred, neutral VFX signals."
-  [emit!]
-  (when-not (ifn? emit!)
-    (throw (ex-info "deferred VFX emitter must be callable" {:emit emit!})))
-  (reset! vfx-emitter* emit!)
-  nil)
-
 (defn- body-pos [owner]
   (let [p (or (raycast/player-position owner) {})]
     {:x (double (or (:x p) 0.0))
@@ -190,13 +180,16 @@
          world-id target (double (or damage 0.0))
          (or damage-type :generic)
          {:attacker-uuid owner :reset-invulnerable-time? true}))
-      (when (and @vfx-emitter* settlement-vfx)
-        (@vfx-emitter* (assoc settlement-vfx
-                               :owner owner :world-id world-id
-                               :event-seq (long (or event-seq 0))
-                               :seed (long (or seed 0))
-                               :payload (assoc (or (:payload settlement-vfx) {})
-                                               :start origin :end destination)))))))
+      {:status :applied
+       :owner owner
+       :world-id world-id
+       :vfx-signals (vec (when settlement-vfx
+                           [(assoc settlement-vfx
+                                   :owner owner :world-id world-id
+                                   :event-seq (long (or event-seq 0))
+                                   :seed (long (or seed 0))
+                                   :payload (assoc (or (:payload settlement-vfx) {})
+                                                   :start origin :end destination))]))})))
 
 (defn tick-owner!
   "Advance one owner's queue and settle all due tasks through neutral bridges."
@@ -212,8 +205,9 @@
         (if (seq pending)
           (swap! schedules* assoc owner {:tick now :tasks pending})
           (swap! schedules* dissoc owner))
-        (doseq [task due]
-          (try (settle! task)
-               (catch Throwable error
-                 (log/warn "Deferred neutral beam settlement failed:" (ex-message error))))))))
-  nil)
+        (vec (keep (fn [task]
+                     (try (settle! task)
+                          (catch Throwable error
+                            (log/warn "Deferred neutral beam settlement failed:" (ex-message error))
+                            nil)))
+                   due))))))
