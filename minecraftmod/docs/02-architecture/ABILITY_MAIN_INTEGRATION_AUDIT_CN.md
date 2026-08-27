@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（29 tests / 81 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（30 tests / 87 assertions）、
   `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -552,8 +552,11 @@ thunder-bolt
 - 主射线继续使用通用 `combat/beam-strike`；该 composite 现按中性
   `reflection-policy` 路由反射目标与伤害，Railgun 不包含 skill-specific host callback。命中
   creeper 通过 `:achievement/trigger` domain event 进入 AC 组合根。
-- 仍保留 `⚠️`：main 的反射命中经验细分、按键按下时已有硬币的即时路径，以及真实实体运动
-  时序/VFX 客户端表现需实机验证；静态门禁不把这些未测项伪装成 `✅`。
+- 本轮补齐反射经验细分：release 先清零 owner session 的 `reflection-hit?`，foreach 消费
+  beam entity 返回的 `reflection-accepted?` 并写回；`ability/progression :hit` 根据该快照
+  选择 `exp-reflection-hit` 或 `exp-hit`，与 main 的 `railgun-exp-gain` 一致。
+- 仍保留 `⚠️`：按键按下时已有硬币的即时路径，以及真实实体运动时序/VFX 客户端表现需
+  实机验证；静态门禁不把这些未测项伪装成 `✅`。
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
@@ -746,11 +749,11 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### AC 越界静态扫描
 
-在 AC 主源码中，技能相关的 `apply-direct-damage!`、VFX nearby 推送和实体副作用调用只出现在 `combat_runtime.clj` 的能力实现/组合边界；技能内容与 server hook 没有再直接调用这些平台函数。`server_hooks` 的伤害入口只转发到 `process-damage-request!` / `apply-attack-precheck!`，物品入口只产生 neutral `:edn-trigger`。因此当前发现的越界不是“绕过三核心模块”，而是 Railgun 的特殊硬币/QTE 语义尚未在中间能力中建模。
+在 AC 主源码中，技能相关的 `apply-direct-damage!`、VFX nearby 推送和实体副作用调用只出现在 `combat_runtime.clj` 的能力实现/组合边界；技能内容与 server hook 没有再直接调用这些平台函数。`server_hooks` 的伤害入口只转发到 `process-damage-request!` / `apply-attack-precheck!`，物品入口只产生 neutral `:edn-trigger`。因此当前发现的越界不是“绕过三核心模块”；Railgun 的特殊硬币/QTE 语义已经在单一 Final 图和 owner-scoped external trigger 中建模。
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 29 tests / 81 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 30 tests / 87 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。

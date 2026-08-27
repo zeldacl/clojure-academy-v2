@@ -535,6 +535,26 @@
            (:progression mark)))
     (is (= {:ref [:input :tunables :exp-per-ball]}
            (get-in doc [:progression :ball-fired :per-mark])))))
+(deftest railgun-reflection-hit-drives-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/railgun.edn"))
+        nodes (component-nodes (:program doc))
+        writes (filter #(and (= :session/write (:component %))
+                             (= :reflection-hit? (:key %))) nodes)
+        progression (some #(when (and (= :ability/progression (:component %))
+                                      (= :hit (:name %))) %)
+                          nodes)
+        mark (some #(when (and (= :score/mark (:component %))
+                               (= :hit (:tag %))) %)
+                    nodes)]
+    (is (= {:type :boolean, :default false}
+           (get-in doc [:session-state :reflection-hit?])))
+    (is (some #(= true (:value %)) writes))
+    (is (some #(= false (:value %)) writes))
+    (is progression)
+    (is (= {:ref [:local :hit-progression]}
+           (:progression mark)))
+    (is (= :math/select
+           (get-in doc [:progression :hit :per-mark :expr])))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
