@@ -147,8 +147,9 @@
                 ;; the punch sound unconditionally (outside the isLocal guard
                 ;; that gates only the hand-punch animation) — a positional
                 ;; sound at the caster, audible to owner + nearby. The impact
-                ;; hand animation itself stays local via directed-shock-fx.clj's
-                ;; :hand channel below; :x/:y/:z here only drive the sound.
+                ;; hand animation itself stays local (upstream l_effect is
+                ;; isLocal): the owner-only fx-punch below drives the hand
+                ;; punch while the fan-out here only carries the sound.
                 (fx/send-local-and-nearby! ctx-id {:topic :directed-shock/fx-perform :mode :perform} nil {:target-id target-id
                                                                                           :world-id world-id
                                                                                           :impulse impulse
@@ -156,6 +157,7 @@
                                                                                           :x (:x player-pos)
                                                                                           :y (:y player-pos)
                                                                                           :z (:z player-pos)})
+                (fx/send! ctx-id {:topic :directed-shock/fx-punch :mode :punch})
                 (ctx-skill/replace-skill-state! ctx-id
                                                 (merge (:skill-state ctx-data)
                                                        {:performed? true

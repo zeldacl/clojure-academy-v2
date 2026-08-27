@@ -35,11 +35,12 @@
       (dsfx/init!)
       (is (= :directed-shock (first @registered-hand*)))
       (is (= #{:directed-shock/fx-start
+               :directed-shock/fx-punch
                :directed-shock/fx-perform
                :directed-shock/fx-end}
              @registered-topics*)))))
 
-(deftest fx-handler-routes-start-perform-end-test
+(deftest fx-handler-routes-start-punch-end-test
   (let [handlers* (atom {})
         hand-enqueued* (atom [])]
     (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
@@ -49,10 +50,10 @@
                                                       (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts)))]
       (dsfx/init!)
       ((get @handlers* :directed-shock/fx-start) "ctx-1" :directed-shock/fx-start nil)
-      ((get @handlers* :directed-shock/fx-perform) "ctx-1" :directed-shock/fx-perform nil)
+      ((get @handlers* :directed-shock/fx-punch) "ctx-1" :directed-shock/fx-punch nil)
       ((get @handlers* :directed-shock/fx-end) "ctx-1" :directed-shock/fx-end {:performed? false})
       (is (= [[:directed-shock "ctx-1" :directed-shock/fx-start {:mode :start} :owner-key [:ctx "ctx-1"]]
-              [:directed-shock "ctx-1" :directed-shock/fx-perform {:mode :perform} :owner-key [:ctx "ctx-1"]]
+              [:directed-shock "ctx-1" :directed-shock/fx-punch {:mode :punch} :owner-key [:ctx "ctx-1"]]
               [:directed-shock "ctx-1" :directed-shock/fx-end {:mode :end :performed? false} :owner-key [:ctx "ctx-1"]]]
              @hand-enqueued*)))))
 

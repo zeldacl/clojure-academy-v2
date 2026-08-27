@@ -73,7 +73,9 @@
       ;; double it for the owner and mislocate it for bystanders (this
       ;; hand-effect enqueue always resolves to the LOCAL viewer's own
       ;; position, not the caster's).
-      :perform
+      ;; :punch is the owner-only channel mode; :perform retained for direct
+      ;; runtime enqueues (tests) — both start the punch stage.
+      (:punch :perform)
       (update state* :effect-state assoc owner-key*
               (merge base-meta {:stage :punch :started-at (now-ms)}))
 

@@ -111,6 +111,7 @@
         set-velocity-calls* (atom [])
         set-position-calls* (atom [])
         perform-calls* (atom [])
+        punch-calls* (atom [])
         end-calls* (atom [])
         cooldown-calls* (atom [])
         exp-calls* (atom [])]
@@ -142,13 +143,16 @@
                          motion-effects/set-entity-position! (fn [world-id target-id x y z]
                                                                 (swap! set-position-calls* conj
                                                                        [world-id target-id x y z]))
-                         fx/send! (fn [ctx-id entry _evt payload]
-                                    (case (:topic entry)
-                                      :directed-shock/fx-perform
-                                      (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
-                                      :directed-shock/fx-end
-                                      (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
-                                      nil))
+                         fx/send! (fn [& args]
+                                    (let [[ctx-id entry _evt payload] args]
+                                      (case (:topic entry)
+                                        :directed-shock/fx-perform
+                                        (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+                                        :directed-shock/fx-punch
+                                        (swap! punch-calls* conj [ctx-id (:topic entry) (:mode entry)])
+                                        :directed-shock/fx-end
+                                        (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
+                                        nil)))
                          skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks]))
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
@@ -165,6 +169,8 @@
     (is (= {:x 0.0 :y 0.0 :z 0.0}
            (select-keys (get-in @perform-calls* [0 3]) [:x :y :z]))
         "punch sound position matches the caster entity position")
+    (is (= [["ctx-hit" :directed-shock/fx-punch :punch]] @punch-calls*)
+        "punch anim is owner-only (upstream l_effect isLocal gate)")
     (is (empty? @end-calls*))
     (is (empty? @terminate-calls*))
     (is (= [["p1" :directed-shock 40]] @cooldown-calls*))
