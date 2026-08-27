@@ -796,3 +796,11 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
   因此不把该整套旧回归作为 Final 行为正确性证据。
 - 实机运行、多玩家交叉污染、VFX 网络到达率、CPU/GC/内存尚未测试，必须作为
   后续独立任务完成。
+
+
+## 最新统一静态校验（2026-08-28）
+
+- 对照 main 的 38 个真实 ability 与 12 个课程别名，当前 catalog 仍为 50 registrations、39 combat sources、36 VFX effects，全部使用 engine final。
+- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（38 tests / 112 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（34 tests / 89 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
+- 对所有显式 score/mark 做了静态扫描：未发现缺少 progression 的标记；Vec Deviation/Reflection 的受击经验由通用 Final damage side-event 桥承载。
+- 这只是加载、解析、编译和纯逻辑门禁；38 个真实技能仍保留 ⚠️，因为实体/方块 adapter 时序、VFX 客户端表现、多人隔离与 CPU/GC/内存 profiling 尚未实机验证。
