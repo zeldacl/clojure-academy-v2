@@ -559,8 +559,11 @@ thunder-bolt
 - 发现确定性缺口：`start` 图没有执行 `costs.activate` 的 `ability/budget + cost/spend`，
   只用资源快照计算了 floor；因此激活不会扣除 main 要求的 down overload，也没有资源
   不足的权威结束分支。
-- 该修复必须重排完整 start 图（先扣费，再进入三种目标分支），不能在技能内添加旧
-  回调兼容或硬编码补扣；当前保持 `⚠️`，待 Final start 资源模板统一后单独提交。
+- 已在 Final `start` 的唯一入口加入 `cost/spend :activate`，以 `caster/creative?` 做
+  scale（creative=0），不足资源立即以 `:insufficient-resource` 结束；之后才进入目标
+  解析分支。没有恢复旧回调或硬编码补扣。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。目标实体/方块运动、
+  权限和多人并发仍需实机验证，总表继续保持 `⚠️`。
 
 ### mine-detect checkpoint（检查与修复）
 
