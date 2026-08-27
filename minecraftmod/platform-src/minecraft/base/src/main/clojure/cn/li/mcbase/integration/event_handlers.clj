@@ -3,36 +3,9 @@
 
   Platform-specific dispatchers and handlers are passed as function parameters
   to enable both Forge and Fabric to use identical core event processing logic."
-  (:require [cn.li.mcmod.platform.block-manipulation :as block-manip]
-            [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.block-runtime :as bquery]
-            [cn.li.mcbase.integration.event-feedback :as event-feedback]
-            [cn.li.mcbase.integration.event-helpers-core :as event-helpers])
-  (:import [net.minecraft.world.entity.player Player]))
-
-(defn runtime-active-result
-  [event-kind]
-  (cond-> {:event-result :runtime-active
-           :event-kind event-kind
-           :cancel? true}
-    (= event-kind :block-place) (assoc :cancel-place? true)
-    (= event-kind :block-break) (assoc :cancel-break? true)))
-
-(defn runtime-active-result?
-  [ret]
-  (= :runtime-active (:event-result ret)))
-
-(defn runtime-active-event?
-  [event-data]
-  (boolean
-    (and (not (block-manip/internal-break?))
-         (when-let [player (:player event-data)]
-           (when (instance? Player player)
-             (try
-               (event-helpers/runtime-activated? player)
-               (catch Throwable t
-                 (log/debug "Runtime active check skipped:" (.getMessage t))
-                 false)))))))
+            [cn.li.mcbase.integration.event-feedback :as event-feedback]))
 
 (defn- identify-block-id
   [block]
@@ -48,46 +21,24 @@
     (when block-id
       (dispatcher-fn (assoc event-data :block-id block-id :event-key event-key)))))
 
-(defn handle-block-left-click
-  "Shared left-click policy. Currently runtime-active players cancel left click."
-  [event-data]
-  (when (runtime-active-event? event-data)
-    (runtime-active-result :left-click)))
-
-(defn handle-entity-attack
-  "Shared entity-attack policy. Runtime-active players cannot attack entities
-  with vanilla LMB -- upstream AcademyCraft overrides the attack KeyBinding
-  itself while ability mode is active (ControlOverrider / our
-  vanilla-input-control SPI), suppressing entity attack uniformly
-  alongside block breaking."
-  [event-data]
-  (when (runtime-active-event? event-data)
-    (runtime-active-result :attack-entity)))
-
-(defn handle-entity-interact
-  "Shared entity-interact policy. Runtime-active players cannot interact with
-  entities via vanilla RMB (trading, mounting, feeding, etc.) -- mirrors
-  handle-entity-attack for the use/interact KeyBinding."
-  [event-data]
-  (when (runtime-active-event? event-data)
-    (runtime-active-result :entity-interact)))
-
 (defn handle-block-place
-  "Shared block place handler with runtime-active policy."
+  "Shared block place handler. Dispatches :on-place to registered block handlers."
   [event-data dispatcher-fn log-prefix]
-  (if (runtime-active-event? event-data)
-    (runtime-active-result :block-place)
-    (dispatch-block-event event-data dispatcher-fn :on-place log-prefix)))
+  (dispatch-block-event event-data dispatcher-fn :on-place log-prefix))
 
 (defn handle-block-break
-  "Shared block break handler with runtime-active policy."
+  "Shared block break handler. Dispatches :on-break to registered block handlers."
   [event-data dispatcher-fn log-prefix]
-  (if (runtime-active-event? event-data)
-    (runtime-active-result :block-break)
-    (dispatch-block-event event-data dispatcher-fn :on-break log-prefix)))
+  (dispatch-block-event event-data dispatcher-fn :on-break log-prefix))
 
 (defn handle-block-right-click
   "Shared right-click handler logic accepting platform-specific dispatcher.
+
+  Note: no ability-mode gating lives here — upstream AcademyCraft gates
+  vanilla interactions solely through ControlOverrider (our
+  vanilla-input-control SPI), which suppresses the attack/use KeyMappings only
+  for slots that have a skill delegate. Empty slots keep full vanilla
+  behavior (spawn eggs, chests, block breaking) while ability mode is on.
 
   Args:
   - event-data: map with :x, :y, :z, :block keys (and other event info)
@@ -98,38 +49,36 @@
 
   Returns: result from dispatcher-fn, or nil if no handler"
   [event-data dispatcher-fn gui-result-pred gui-opener-fn log-prefix]
-  (if (runtime-active-event? event-data)
-    (runtime-active-result :right-click)
-    (let [{:keys [x y z block]} event-data
-          block-name (str block)
-          block-id (identify-block-id block)]
-      (log/debug (str log-prefix " Event at (" x "," y "," z ") block:" block-name))
-      (log/debug (str log-prefix " Identified block-id:" block-id))
+  (let [{:keys [x y z block]} event-data
+        block-name (str block)
+        block-id (identify-block-id block)]
+    (log/debug (str log-prefix " Event at (" x "," y "," z ") block:" block-name))
+    (log/debug (str log-prefix " Identified block-id:" block-id))
 
-      (if block-id
-        (if (or (bquery/has-block-event-handler? block-id :on-right-click)
-                (bquery/is-part-block? block-id))
-          (do
-            (log/debug (str log-prefix " Block has registered handler (or is part block), dispatching..."))
-            (let [ret (dispatcher-fn (assoc event-data :block-id block-id))]
-              (log/debug (str log-prefix " Dispatcher returned gui-id=" (:gui-id ret)
-                              " player=" (some-> (:player ret) (str))
-                              " pos=" (:pos ret)))
-              (event-feedback/emit-feedback! event-data ret)
+    (if block-id
+      (if (or (bquery/has-block-event-handler? block-id :on-right-click)
+              (bquery/is-part-block? block-id))
+        (do
+          (log/debug (str log-prefix " Block has registered handler (or is part block), dispatching..."))
+          (let [ret (dispatcher-fn (assoc event-data :block-id block-id))]
+            (log/debug (str log-prefix " Dispatcher returned gui-id=" (:gui-id ret)
+                            " player=" (some-> (:player ret) (str))
+                            " pos=" (:pos ret)))
+            (event-feedback/emit-feedback! event-data ret)
 
-              ;; Handle GUI opening if result indicates it
-              (when (and gui-result-pred gui-opener-fn ret (gui-result-pred ret))
-                (try
-                  (let [{:keys [gui-id player world pos]} ret]
-                    (when (and gui-id player world pos)
-                      (let [^net.minecraft.world.level.Level world world
-                            ^net.minecraft.core.BlockPos pos pos
-                            tile-entity (.getBlockEntity world pos)]
-                        (when tile-entity
-                          (log/debug (str log-prefix " GUI result received: gui-id=" gui-id))
-                          (gui-opener-fn gui-id player world pos tile-entity)))))
-                  (catch Exception e
-                    (log/stacktrace (str log-prefix " Failed to open GUI") e))))
-              ret))
-          (log/debug (str log-prefix " Block has no registered :on-right-click handler")))
-        (log/debug (str log-prefix " Could not identify block-id from:" block-name))))))
+            ;; Handle GUI opening if result indicates it
+            (when (and gui-result-pred gui-opener-fn ret (gui-result-pred ret))
+              (try
+                (let [{:keys [gui-id player world pos]} ret]
+                  (when (and gui-id player world pos)
+                    (let [^net.minecraft.world.level.Level world world
+                          ^net.minecraft.core.BlockPos pos pos
+                          tile-entity (.getBlockEntity world pos)]
+                      (when tile-entity
+                        (log/debug (str log-prefix " GUI result received: gui-id=" gui-id))
+                        (gui-opener-fn gui-id player world pos tile-entity)))))
+                (catch Exception e
+                  (log/stacktrace (str log-prefix " Failed to open GUI") e))))
+            ret))
+        (log/debug (str log-prefix " Block has no registered :on-right-click handler")))
+      (log/debug (str log-prefix " Could not identify block-id from:" block-name)))))

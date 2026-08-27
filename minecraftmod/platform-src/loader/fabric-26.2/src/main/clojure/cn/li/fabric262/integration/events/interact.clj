@@ -1,5 +1,11 @@
 (ns cn.li.fabric262.integration.events.interact
-  "Fabric interaction event handlers extracted from monolithic events namespace."
+  "Fabric interaction event handlers extracted from monolithic events namespace.
+
+  Attack-block/attack-entity/use-entity suppression is NOT handled here:
+  upstream AcademyCraft gates vanilla attack/use exclusively through
+  ControlOverrider (our vanilla-input-control SPI), which clears the
+  attack/use KeyMappings only for slots that have a skill delegate. This
+  namespace only dispatches AC block right-click logic."
   (:require [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.event-runtime :as interaction-result]
@@ -47,44 +53,10 @@
                  :item-stack item-stack
                  :world world
                  :block (.getBlock block-state)})]
-      (cond
-        (event-handlers/runtime-active-result? ret) InteractionResult/FAIL
-        (interaction-result/interaction-consumed? ret) InteractionResult/SUCCESS
-        :else InteractionResult/PASS))
+      (if (interaction-result/interaction-consumed? ret)
+        InteractionResult/SUCCESS
+        InteractionResult/PASS))
     (catch Throwable t
       (log/stacktrace "Error handling use block event" t)
       (.printStackTrace t)
-      InteractionResult/PASS)))
-
-(defn handle-attack-block
-  [player _world _hand _pos _direction]
-  (try
-    (if (event-handlers/runtime-active-result?
-          (event-handlers/handle-block-left-click {:player player}))
-      InteractionResult/FAIL
-      InteractionResult/PASS)
-    (catch Throwable t
-      (log/stacktrace "Error handling fabric attack block:" t)
-      InteractionResult/PASS)))
-
-(defn handle-attack-entity
-  [player _world _hand _entity _hit-result]
-  (try
-    (if (event-handlers/runtime-active-result?
-          (event-handlers/handle-entity-attack {:player player}))
-      InteractionResult/FAIL
-      InteractionResult/PASS)
-    (catch Throwable t
-      (log/stacktrace "Error handling fabric attack entity:" t)
-      InteractionResult/PASS)))
-
-(defn handle-use-entity
-  [player _world _hand _entity _hit-result]
-  (try
-    (if (event-handlers/runtime-active-result?
-          (event-handlers/handle-entity-interact {:player player}))
-      InteractionResult/FAIL
-      InteractionResult/PASS)
-    (catch Throwable t
-      (log/stacktrace "Error handling fabric use entity:" t)
       InteractionResult/PASS)))

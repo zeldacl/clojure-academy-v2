@@ -1,5 +1,11 @@
 (ns cn.li.neoforge262.integration.events.interact
-  "Forge right/left click interaction event handlers."
+  "NeoForge right-click interaction event handlers.
+
+  Left-click/attack/entity-interact suppression is NOT handled here: upstream
+  AcademyCraft gates vanilla attack/use exclusively through ControlOverrider
+  (our vanilla-input-control SPI), which clears the attack/use KeyMappings only
+  for slots that have a skill delegate. This event handler only dispatches AC
+  block right-click logic."
   (:require [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.platform.neutral.event-runtime :as interaction-result]
             [cn.li.mcmod.util.log :as log]
@@ -7,10 +13,7 @@
             [cn.li.neoforge262.integration.events.event-apply :as event-apply]
             [cn.li.neoforgebase.integration.events.gui-open-port :as gui-open-port]
             [cn.li.neoforge262.runtime.owner :as runtime-owner])
-  (:import [net.neoforged.neoforge.event.entity.player PlayerInteractEvent$RightClickBlock
-            PlayerInteractEvent$LeftClickBlock
-            PlayerInteractEvent$EntityInteract
-            AttackEntityEvent]
+  (:import [net.neoforged.neoforge.event.entity.player PlayerInteractEvent$RightClickBlock]
            [net.minecraft.world InteractionHand]))
 
 (defn- is-gui-result?
@@ -37,67 +40,22 @@
       (when (= hand InteractionHand/MAIN_HAND)
         (let [block-state (.getBlockState level pos)
               item-stack (.getItemInHand player hand)
-                ret (runtime-owner/with-player-owner player (if (.isClientSide level) :client :server)
-                  #(handle-right-click
-                    {:x (.getX pos)
-                     :y (.getY pos)
-                     :z (.getZ pos)
-                     :pos pos
-                     :sneaking (.isShiftKeyDown player)
-                     :player player
-                     :hand hand
-                     :item-stack item-stack
-                     :world level
-                     :block (.getBlock block-state)}))]
-          (cond
-            (event-handlers/runtime-active-result? ret)
-            (do
-              (event-apply/deny-right-click-use! evt)
-              (when-not (.isClientSide level)
-                (event-apply/cancel-player-interact-fail! evt)))
-
-            (interaction-result/interaction-consumed? ret)
-            (do
-              (when-not (.isClientSide level)
-                (log/debug "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
-                          "block=" (.getBlock block-state)))
-              (event-apply/apply-consumed-right-click! evt (.isClientSide level)))))))
+              ret (runtime-owner/with-player-owner player (if (.isClientSide level) :client :server)
+                    #(handle-right-click
+                      {:x (.getX pos)
+                       :y (.getY pos)
+                       :z (.getZ pos)
+                       :pos pos
+                       :sneaking (.isShiftKeyDown player)
+                       :player player
+                       :hand hand
+                       :item-stack item-stack
+                       :world level
+                       :block (.getBlock block-state)}))]
+          (when (interaction-result/interaction-consumed? ret)
+            (when-not (.isClientSide level)
+              (log/debug "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
+                        "block=" (.getBlock block-state)))
+            (event-apply/apply-consumed-right-click! evt (.isClientSide level))))))
     (catch Throwable t
       (log/stacktrace "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" t))))
-
-(defn handle-left-click-block-event
-  [^PlayerInteractEvent$LeftClickBlock evt]
-  (try
-    (let [player (.getEntity evt)
-          hand (.getHand evt)]
-      (when (= hand InteractionHand/MAIN_HAND)
-        (when (event-handlers/runtime-active-result?
-          (runtime-owner/with-player-owner player (if (.isClientSide (.level player)) :client :server)
-            #(event-handlers/handle-block-left-click {:player player})))
-          (event-apply/cancel-event! evt))))
-    (catch Throwable t
-      (log/stacktrace "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" t))))
-
-(defn handle-attack-entity-event
-  [^AttackEntityEvent evt]
-  (try
-    (let [player (.getEntity evt)]
-      (when (event-handlers/runtime-active-result?
-              (runtime-owner/with-player-owner player (if (.isClientSide (.level player)) :client :server)
-                #(event-handlers/handle-entity-attack {:player player})))
-        (event-apply/cancel-event! evt)))
-    (catch Throwable t
-      (log/stacktrace "[FORGE-ATTACK-ENTITY-EVENT] EXCEPTION:" t))))
-
-(defn handle-entity-interact-event
-  [^PlayerInteractEvent$EntityInteract evt]
-  (try
-    (let [player (.getEntity evt)
-          hand (.getHand evt)]
-      (when (= hand InteractionHand/MAIN_HAND)
-        (when (event-handlers/runtime-active-result?
-                (runtime-owner/with-player-owner player (if (.isClientSide (.level player)) :client :server)
-                  #(event-handlers/handle-entity-interact {:player player})))
-          (event-apply/cancel-player-interact-fail! evt))))
-    (catch Throwable t
-      (log/stacktrace "[FORGE-ENTITY-INTERACT-EVENT] EXCEPTION:" t))))

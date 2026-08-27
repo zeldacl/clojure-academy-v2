@@ -6,19 +6,6 @@
            [net.neoforged.neoforge.common.util TriState]
            [cn.li.neoforgebase.bridge EventInterop]))
 
-(defn deny-right-click-use!
-  [evt]
-  (when (instance? PlayerInteractEvent$RightClickBlock evt)
-    (let [^PlayerInteractEvent$RightClickBlock right-click-evt evt]
-      (.setUseItem right-click-evt TriState/FALSE)
-      (.setUseBlock right-click-evt TriState/FALSE)))
-  evt)
-
-(defn cancel-player-interact-fail!
-  [^PlayerInteractEvent evt]
-  (EventInterop/cancelPlayerInteract evt InteractionResult/FAIL)
-  evt)
-
 (defn cancel-player-interact-consume!
   [^PlayerInteractEvent evt]
   (EventInterop/cancelPlayerInteract evt InteractionResult/CONSUME)
