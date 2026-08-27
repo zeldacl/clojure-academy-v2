@@ -477,7 +477,21 @@
     (is (every? #(= {:ref [:local :hit-progression]}
                     (:progression %))
                 hit-marks))))
-(deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
+(deftest directed-blastwave-hit-miss-submit-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/directed_blastwave.edn"))
+        nodes (component-nodes (:program doc))
+        hit (filter #(and (= :ability/progression (:component %))
+                          (= :hit (:name %))) nodes)
+        miss (filter #(and (= :ability/progression (:component %))
+                           (= :miss (:name %))) nodes)
+        marks (filter #(and (= :score/mark (:component %))
+                            (contains? #{:hit :miss} (:tag %))) nodes)]
+    (is (= 1 (count hit)))
+    (is (= 1 (count miss)))
+    (is (= 2 (count marks)))
+    (is (every? #(contains? #{:hit-progression :miss-progression}
+                            (get-in % [:progression :ref 1]))
+                marks))))(deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
         aoe (some #(when (and (= :target/entities (:component %))
