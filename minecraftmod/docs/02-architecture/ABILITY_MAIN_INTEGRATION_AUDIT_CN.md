@@ -413,7 +413,7 @@ thunder-bolt
   `target/block-placement` 的权限事实由中性 host 提供，EDN 只决定是否执行。
 - main 的 release cost 带 creative 免扣策略；当前 Final 已在唯一 `cost/spend :release`
   节点按 `caster/creative?` 缩放，creative 放置不会错误消耗 CP/overload。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。仍需实机确认方块权限
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。仍需实机确认方块权限
   失败时的 drop fallback、路径实体排序和多人 VFX audience。
 
 ### flashing checkpoint（逐项复核）
@@ -427,7 +427,7 @@ thunder-bolt
   `overload-floor` 必须记录 activation 扣费后的余量。Final start 现对 CP/overload
   都按 `caster/creative?` 缩放，并以 `max(0, start-overload-cost)` 写入 floor；
   不引入技能专属旧回调。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。仍需实机确认方向目标、
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。仍需实机确认方向目标、
   CP/过载原子扣费以及停用冷却与 marker 清理的网络时序。
 
 ### threatening-teleport checkpoint（逐项复核）
@@ -447,12 +447,11 @@ thunder-bolt
   都以该期望值、最大距离和当前 CP 重新计算穿透落点；up 阶段还会缓存同一解析结果，
   避免费用检查与实际传送使用不同目标。
 - 当前 Final 已迁移穿透扫描、CP 上限、最小距离、marker、释放费用/经验/冷却，并由
-  server pulse 驱动预览；但现行 `CombatIntent` 固定协议只承载 start/release 和
-  W/A/S/D movement，尚没有 distance channel 的中性消息。当前图因此使用配置最大距离，
-  不能宣称与 main 的可调距离完全等价。
-- 后续应先扩展一次性、owner-scoped 的中性参数输入 ABI（服务端校验范围、序列号和
-  session 归属），再在 EDN 中读取该参数；不得把旧 RPC/channel 或 AC 技能 callback
-  重新接回作为双轨兼容。
+  server pulse 驱动预览。本轮补齐距离调节：客户端滚轮通过固定输入 choice 发送 `wheel:<delta>`，服务端
+  只接受有限浮点范围并转换为 `:slot-wheel` 事件；Final 事件图按 owner session 的
+  `:desired-distance` 做 clamp 写回，start/pulse/release 统一读取同一快照。
+- `dispatch-intent!` 额外要求 `:slot-wheel` 必须命中该 owner 的活动会话，避免伪造或跨玩家修改；
+  没有恢复旧 RPC/channel 或技能 callback。剩余 `⚠️` 仅是目的地 adapter、碰撞边界和多人实机验证。
 
 ### directed-blastwave checkpoint（逐项复核）
 
@@ -460,7 +459,7 @@ thunder-bolt
   扣费成功后又执行了一次 `:input :budgets :release`，属于确定的双重扣费。
 - 已删除重复 `:cost/spend` 节点，保留单一事务扣费、AOE damage/knockback、方块破坏、
   hit/miss progression、cooldown 和统一 VFX 链；没有恢复旧 handler 或新增兼容分支。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。资源适配器实际扣费、
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。资源适配器实际扣费、
   方块权限和多人同时施放仍需实机任务验证，故总表继续保持 `⚠️`。
 
 ### blood-retrograde checkpoint（逐项复核）
@@ -470,7 +469,7 @@ thunder-bolt
 - 当前 Final 已在 pulse 自动释放和 release 的统一入口显式 destroy
   `:blood-retrograde-charge`，abort 路径也保持显式 destroy；伤害、fan raycast、费用、
   命中 progression/cooldown 仍由同一 graph 执行，没有恢复旧逻辑。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。charge-slow 在各版本
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。charge-slow 在各版本
   Presentation renderer 的本地走速应用仍需实机确认，总表继续保持 `⚠️`。
 
 ### directed-shock checkpoint（逐项复核）
@@ -479,7 +478,7 @@ thunder-bolt
   cooldown 后才结束会话；命中与 miss 都要销毁第一人称手部动画。
 - 当前 Final 命中分支此前遗漏了 hand-session destroy，已补齐；自动 punch、miss、资源
   不足和 abort 路径保持同一清理契约，没有引回旧 handler。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。实体击退 adapter 的
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。实体击退 adapter 的
   实机结果与多人并发仍待运行时任务验证，总表继续保持 `⚠️`。
 
 ### plasma-cannon checkpoint（逐项复核）
@@ -489,7 +488,7 @@ thunder-bolt
   仍由 Final session pulse/release 图负责。
 - 当前 Final start 增加 `target/resolve-destination`，以 `target-hit?` 在精确命中点和
   向下射线终点之间选择 `vortex-base`；没有复制 main 的 helper，也没有增加旧回调通道。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。飞行碰撞、爆炸地形权限和
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。飞行碰撞、爆炸地形权限和
   多人 VFX audience 仍需实机任务验证，总表继续保持 `⚠️`。
 
 ### vec-accel checkpoint（逐项复核）
@@ -498,7 +497,7 @@ thunder-bolt
   Final pulse 的轨迹原点引用了 `:local :eye`，但原先 caster bind 遗漏该字段。
 - 已在当前 Final pulse 绑定 `:eye :eye`；速度、可执行条件、费用、实体 motion、摔落
   重置、经验/cooldown 和 owner-only 轨迹仍通过现有中性节点执行，无旧回调双轨。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。运动 adapter、碰撞和
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。运动 adapter、碰撞和
   多人 owner 作用域仍需实机任务验证，总表继续保持 `⚠️`。
 
 ### storm-wing checkpoint（逐项复核）
@@ -510,7 +509,7 @@ thunder-bolt
   已保存 pulse 进入时的 `phase-before`，并以它作为 `:scale` 条件（进入时 phase 0
   为 0，进入时 phase 1 为 1），避免充能完成的转换 tick 因 session 写入 phase=1 而
   多扣一次。不引入旧 handler 或第二条扣费路径；资源不足清理和 owner/world 作用域保持不变。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。飞行 motion adapter、
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。飞行 motion adapter、
   软方块权限、范围击退与多人同时飞行仍需实机验证，总表保持 `⚠️`。
 
 ### groundshock / vec-reflection / vec-deviation checkpoint（逐项复核）
@@ -600,7 +599,7 @@ thunder-bolt
 - 已在 Final `start` 的唯一入口加入 `cost/spend :activate`，以 `caster/creative?` 做
   scale（creative=0），不足资源立即以 `:insufficient-resource` 结束；之后才进入目标
   解析分支。没有恢复旧回调或硬编码补扣。
-- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。目标实体/方块运动、
+- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。目标实体/方块运动、
   权限和多人并发仍需实机验证，总表继续保持 `⚠️`。
 
 ### mine-detect checkpoint（检查与修复）
@@ -722,7 +721,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 14 tests / 33 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 18 tests / 44 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
@@ -747,7 +746,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 本轮验证结果
 
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
-- `:ac:runAcEdnCoverageTests`：通过 14 tests / 33 assertions；该门禁只验证
+- `:ac:runAcEdnCoverageTests`：通过 18 tests / 44 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
 - `:combat-core:runCombatClojureTests`：通过 28 tests / 73 assertions（包含本轮
   phase-transition、damage-threshold、teleport safety 回归）。

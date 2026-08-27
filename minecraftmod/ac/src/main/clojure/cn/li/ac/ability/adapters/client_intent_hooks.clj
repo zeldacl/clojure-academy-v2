@@ -65,6 +65,21 @@
      nil)
     intent-id))
 
+(defn- send-choice-intent! [player-uuid slot choice]
+  "Send a bounded, server-validated neutral choice for the active slot.
+
+   Choice values are transport facts only; the server maps the wheel prefix
+   to the Final event vocabulary."
+  (let [intent-id (swap! intent-seq* inc)]
+    (net-client/send-to-server
+     (client-owner player-uuid) messages/MSG-COMBAT-INTENT
+     {:wire (fixed-channel/encode-intent
+             {:seq intent-id :control-id (long slot) :edge :press
+              :choice choice
+              :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))})}
+     nil)
+    intent-id))
+
 (defn- active-slot-for-owner [player-uuid]
   (some (fn [[session owner slot]]
           (when (and (= session (current-session))
@@ -238,7 +253,14 @@
    :client-on-movement-key-up!
    (fn [player-uuid movement-key]
      (send-movement-intent! player-uuid movement-key :release))
-   :client-on-slot-wheel! (fn [_ _ _] nil)
+   :client-on-slot-wheel!
+   (fn [player-uuid slot delta]
+     (when (and (combat-slot? player-uuid slot)
+                (number? delta)
+                (Double/isFinite (double delta))
+                (not (zero? (double delta))))
+       (send-choice-intent! player-uuid slot
+                            (str "wheel:" (double delta)))))
    :client-slot-visual-state slot-visual-state
    :client-visual-state (fn [_ _] nil)
    :client-register-push-handlers! register-push-handlers!

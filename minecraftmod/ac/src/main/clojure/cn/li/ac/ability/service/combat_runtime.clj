@@ -644,21 +644,26 @@
                                                  (long (or (:server-tick intent)
                                                            @last-known-tick*)))))
         prepared (final-input owner ability-id (assoc intent :activation-seed seed) seed)]
-    (if (and (= :start (:op intent))
-             (cooldown-active? owner ability-id))
-      {:status :rejected :reason :cooldown
+    (if (and (= :slot-wheel (:event intent))
+             (not (and active-session
+                       (= ability-id (:ability-id active-session)))))
+      {:status :rejected :reason :no-active-session
        :schema-version 1 :ability-id ability-id
-       :feedback [{:type :cooldown-active :ability-id ability-id}]}
-      (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
-                          :schema-version 1 :ability-id ability-id)]
-        (when (and (= :accepted (:status result))
-                   (= :start (:op intent))
-                   (= :session (:activation source))
-                   (not (:finish-session? result))
-                   (not (combat-sessions/active? (str owner))))
-          (combat-sessions/start! (str owner) ability-id prepared))
-        result))))
-(defn dispatch-trigger!
+       :feedback [{:type :combat-input-rejected :reason :no-active-session}]}
+      (if (and (= :start (:op intent))
+               (cooldown-active? owner ability-id))
+        {:status :rejected :reason :cooldown
+         :schema-version 1 :ability-id ability-id
+         :feedback [{:type :cooldown-active :ability-id ability-id}]}
+        (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
+                            :schema-version 1 :ability-id ability-id)]
+          (when (and (= :accepted (:status result))
+                     (= :start (:op intent))
+                     (= :session (:activation source))
+                     (not (:finish-session? result))
+                     (not (combat-sessions/active? (str owner))))
+            (combat-sessions/start! (str owner) ability-id prepared))
+          result)))))`n(defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
 
   The trigger map is produced by `combat-catalog/resolve-trigger`; clients never

@@ -419,3 +419,12 @@
     (is (= 1 (count breaks)))
     (is (true? (:barrier? (first breaks))))
     (is (= :status (first (keys (:bind (first breaks))))))))
+(deftest penetrate-teleport-distance-channel-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/penetrate_teleport.edn"))
+        targets (filter #(= :target/penetration-destination (:component %))
+                        (component-nodes doc))]
+    (is (= 3 (count targets)))
+    (is (every? #(= {:ref [:local :desired-distance]} (:distance %)) targets))
+    (is (= :slot-wheel (-> doc :program :events first key)))
+    (is (= :session/write
+           (get-in doc [:program :events :slot-wheel :steps 3 :component])))))

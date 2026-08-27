@@ -39,12 +39,21 @@
     (try
       (let [{:keys [seq control-id edge choice client-tick] :as decoded}
             (fixed-channel/decode-intent (:wire payload))]
-        (if (string? choice)
+        (cond
+          (and (string? choice) (str/starts-with? choice "wheel:"))
+          (let [delta (Double/parseDouble (subs choice 6))]
+            (when (and (Double/isFinite delta) (<= -8.0 delta 8.0) (not (zero? delta)))
+              {:schema-version 1 :intent-id seq :op :event :event :slot-wheel
+               :slot control-id :context {:delta delta} :client-tick client-tick}))
+
+          (string? choice)
           (let [[movement-key movement-transition] (str/split choice #":" 2)]
             {:schema-version 1 :intent-id seq :op :movement
              :slot control-id :movement-key (keyword movement-key)
              :movement-transition (keyword movement-transition)
              :client-tick client-tick})
+
+          :else
           {:schema-version 1 :intent-id seq
            :op (case edge :press :start :release :release :abort :abort)
            :slot control-id :client-tick client-tick}))
@@ -230,7 +239,7 @@
                          (str (name raw-key) "-" (name raw-transition))))
         ;; The client submits only a neutral movement fact.  The server owns
         ;; the event vocabulary and creative-mode truth.
-        intent (cond-> (select-keys payload [:schema-version :intent-id :slot :client-tick])
+        intent (cond-> (select-keys payload [:schema-version :intent-id :slot :client-tick :event :context])
                  (not movement?) (assoc :op (:op payload))
                  valid-movement? (assoc :op :event :action :event :event event)
                  true (assoc :creative? (boolean (entity/player-creative? player))))
