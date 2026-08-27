@@ -49,6 +49,10 @@
 ;; would make `random/*` behave identically for repeated activations. Mixing
 ;; in this counter and wall-clock nanos gives every activation its own seed.
 (defonce ^:private activation-seed-counter* (atom 0))
+;; Mark state is authoritative server data, partitioned by world and target.
+;; Entries contain only neutral ids/ticks; no entity object or cross-player atom
+;; is retained, so one player's mark cannot affect another world or target.
+(defonce ^:private combat-marks* (atom {}))
 (declare owner-state resolve-slot finalize-result! initialize-final-runtime!
          dispatch-domain-event!)
 
@@ -543,6 +547,7 @@
                    :target-id target
                    :mark-type mark-type
                    :duration duration
+                   :world-id (str (or world-id "minecraft:overworld"))
                    :tick (long @last-known-tick*)})
                  {:status :applied
                   :vfx-signals (vec (keep identity
@@ -672,6 +677,48 @@
          :type (:type event) :amount weighted})
       {:status :applied :type (:type event) :amount 0.0})))
 
+(defn- mark-key [world-id target-id mark-type]
+  [(str (or world-id "minecraft:overworld")) (str target-id) mark-type])
+
+(defn- active-mark
+  [world-id target-id mark-type tick]
+  (let [entry (get @combat-marks* (mark-key world-id target-id mark-type))]
+    (when (and entry (> (long (:expires-at entry)) (long tick))) entry)))
+
+(defn- apply-mark-event!
+  [{:keys [world-id source-player-id target-id mark-type duration tick]}]
+  (let [tick (long (or tick @last-known-tick*))
+        duration (max 1 (long (or duration 60)))
+        key (mark-key world-id target-id mark-type)]
+    (swap! combat-marks* assoc key {:world-id (str (or world-id "minecraft:overworld"))
+                                    :source-player-id (str source-player-id)
+                                    :target-id (str target-id)
+                                    :mark-type mark-type
+                                    :applied-at tick
+                                    :expires-at (+ tick duration)})
+    {:status :applied :type :entity-mark :target-id (str target-id)
+     :mark-type mark-type :expires-at (+ tick duration)}))
+
+(defn- clear-mark-target!
+  [target-id]
+  (swap! combat-marks*
+         (fn [marks]
+           (into {} (remove (fn [[_ value]] (= (str target-id) (:target-id value))) marks))))
+  {:status :applied :type :entity-mark-clear :target-id (str target-id)})
+
+(defn- clear-mark-owner!
+  [owner]
+  (swap! combat-marks*
+         (fn [marks]
+           (into {} (remove (fn [[_ value]] (= (str owner) (:source-player-id value))) marks))))
+  {:status :applied :type :entity-owner-clear :owner (str owner)})
+
+(defn- expire-marks!
+  [tick]
+  (swap! combat-marks*
+         (fn [marks]
+           (into {} (filter (fn [[_ value]] (> (long (:expires-at value)) (long tick))) marks))))
+  nil)
 (defn- handle-neutral-domain-event!
   "Apply the two generic domain events emitted by the Arc final graph.
 
@@ -680,6 +727,10 @@
   mutation, so a stale raycast cannot overwrite a changed world block."
   [event]
   (case (:type event)
+    :entity-mark (apply-mark-event! event)
+    :entity-mark-clear (clear-mark-target! (:target-id event))
+    :entity-owner-clear (clear-mark-owner! (:owner event))
+
     :achievement/trigger
     (let [payload (:payload event)]
       (when (and (map? payload) (:owner event) (:id payload))
@@ -831,6 +882,7 @@
         target-data (:ability-data target-state)
         source-data (:ability-data source-state)
         target-session (combat-sessions/session (str target-id))
+        world-id (or (:world-id damage-source) (:world-id target-state) "minecraft:overworld")
         sources (get-in @catalog* [:combat :sources])]
     (into {}
           (map (fn [[ability-id source]]
@@ -838,6 +890,9 @@
                                                       (ability-model/is-learned? source-data ability-id)))
                        exp-data (if source-learned? source-data target-data)
                        skill-exp (double (or (get-in exp-data [:skill-exps ability-id]) 0.0))
+                       mark-type (some :mark-type (:mark-policies source))
+                       mark (when mark-type
+                               (active-mark world-id target-id mark-type @last-known-tick*))
                        enabled? (= ability-id (:ability-id target-session))
                        params (or (:parameter-snapshot target-session) {})
                        context {:ability-id ability-id
@@ -848,7 +903,9 @@
                                 :front? (if (contains? damage-source :attacker-front?)
                                           (boolean (:attacker-front? damage-source))
                                           true)
-                                :mark? (boolean (:mark? damage-source))
+                                :mark? (boolean (or mark (:mark? damage-source)))
+                                :mark-type (or (:mark-type mark) mark-type)
+                                :mark mark
                                 :reflected? (boolean (:reflected? damage-source))
                                 :target-position (:position target-state)
                                 :resources (:resources target-state)}
@@ -1000,6 +1057,7 @@
   "Advance scheduled final graph work and return its neutral result."
   [tick]
   (reset! last-known-tick* (long tick))
+  (expire-marks! (long tick))
   (if-let [runtime (final-runtime/production-runtime)]
     (final-runtime/tick! runtime tick)
     {:status :rejected :reason :final-runtime-not-installed :tick tick}))
