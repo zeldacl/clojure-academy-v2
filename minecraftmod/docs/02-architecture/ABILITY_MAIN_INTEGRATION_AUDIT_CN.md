@@ -18,6 +18,61 @@
 
 ## 逐注册项结论
 
+## 50 项逐项功能核对
+
+下表中的“效果/逻辑”来自 `main` 的 `defskill` 实现；“VFX”来自同一技能的
+`*_fx.clj`，不是根据当前 EDN 的节点名称倒推。`⚠️` 表示图已经注册，但还
+不能证明完整等价；`❌` 表示已经找到确定缺陷。当前没有任何战斗技能可以在
+“最终伤害上下文、mark 提交、VFX 网络发送、多人作用域”都闭合前标成 `✅`。
+
+| ability | main 效果与逻辑 | main VFX | 当前接入结论 |
+|---|---|---|---|
+| `arc-gen` | 射线命中实体造成缩放伤害；命中方块时点火/掉鱼；命中与未命中分别给经验并启动冷却 | beam、命中/端点音效 | ⚠️ 公共 damage/VFX 提交链未闭合 |
+| `body-intensify` | 按住蓄力；CP/过载约束；释放随机药水效果、经验和冷却 | 手部弧光、循环音、端点爆发 | ⚠️ |
+| `current-charging` | 对主手能量物品或可充能方块持续充能；目标丢失时清理会话 | 充能弧光、循环音 | ⚠️ |
+| `mag-manip` | 捕获金属方块/物品实体，持续吸附，释放投掷；碰撞负责伤害/放置/恢复 | 持续弧光、音效、beam | ⚠️ 需继续验证实体碰撞提交 |
+| `mag-movement` | 锁定金属方块/实体并牵引玩家；结束时重置摔落并按距离给经验 | 持续弧光、循环音 | ⚠️ |
+| `mine-detect` | 视线扫描地雷/实体；失明和资源不足拒绝；成功施加扫描状态并计经验/冷却 | 扫描框/扫描音效 | ⚠️ |
+| `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ❌ EDN 缺少 QTE 阈值、蓄力 tick、判定销毁、反射和成就完整链 |
+| `thunder-bolt` | 命中目标后闪电、AOE、creeper/potion 分支、经验/冷却 | 闪电冲击 | ⚠️ 目标引用已修复；仍受 damage/VFX 公共链约束 |
+| `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ |
+| `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
+| `electron-missile` | 持续蓄力生成多发电子球，锁定目标并发射，资源不足/超时清理 | 粒子、beam fade、音效 | ⚠️ |
+| `jet-engine` | 标记目标、持续移动与伤害，结束计经验/冷却 | 环、粒子、屏幕闪烁、billboard | ❌ `:entity-mark` 没有 AC 提交/reducer |
+| `light-shield` | 伤害反应吸收伤害；按吸收量消耗 CP/过载，处理正面判断、状态和冷却 | 护盾粒子、循环音、吸收音 | ❌ final-damage context 未注入；消耗映射已修复但反应仍未闭合 |
+| `meltdowner` | beam 逐段伤害并按权限破坏方块，资源/过载地板/冷却 | beam、FOV、粒子、音效 | ⚠️ `host/beam-trace` 结果提交需继续验证 |
+| `mine-ray-basic` | 基础射线采矿；工具等级限制、fortune=0、独立冷却 | beam、进度条、粒子、音效 | ⚠️ variant bindings 已注入，仍需行为等价测试 |
+| `mine-ray-expert` | 专家射线采矿；取消工具等级限制，独立前置/冷却 | 同 MineRay 专属变体样式 | ⚠️ |
+| `mine-ray-luck` | luck=3 射线采矿，专属颜色/粒子 | 同 MineRay luck 样式 | ⚠️ |
+| `rad-intensify` | 读取目标 radiation mark，按最大 CP 放大伤害 | 目标 mark session | ❌ mark 未持久化且 final-damage context 未闭合 |
+| `ray-barrage` | 扇形多目标射击；命中后写 radiation mark 并触发后续行为 | ray beam、fan、音效 | ❌ mark 事件无有效持久化提交 |
+| `scatter-bomb` | 生成/调度多枚散射弹，资源不足时清理 | 粒子、beam fade、音效 | ⚠️ |
+| `dim-folding-theorem` | 学习后为非反射攻击提供暴击/反馈/成就 | 暴击尾迹/粒子 | ❌ policy 的 `:input` context 当前解析不到 |
+| `flashing` | 四方向闪现；预览/释放资源检查，传送后保护摔落并计经验 | teleport marker、端点爆发 | ⚠️ |
+| `flesh-ripping` | 锥形/射线命中伤害和状态，命中/未命中经验与冷却 | 目标框、粒子、音效 | ⚠️ |
+| `location-teleport` | 读取保存地点；跨维度才检查经验门槛并应用倍率 | 传送音效 | ⚠️ `cross-dimension?` 逻辑已修复，仍需验证保存地点/网络边界 |
+| `mark-teleport` | 持续保持目标地点标记，释放时扣资源并传送 | marker、ring fade | ⚠️ |
+| `penetrate-teleport` | 穿透目标寻找可传送地点；成功传送并计经验/冷却 | marker、音效 | ⚠️ |
+| `shift-teleport` | 预览方块放置点，释放放置/掉落物并伤害线路目标 | 目标框、轨迹音 | ⚠️ 方块/物品副作用需最终提交验证 |
+| `space-fluct` | 多级暴击，排除反射伤害并给经验/成就 | 暴击尾迹/粒子 | ❌ policy context 未注入 |
+| `threatening-teleport` | 持有物品进入威胁态；被攻击时传送并伤害，未命中计 miss | 目标框、传送轨迹 | ⚠️ |
+| `blood-retrograde` | 扇形/射线反向伤害，资源、命中经验和会话清理 | 蓄力、冲击、音效 | ⚠️ |
+| `directed-blastwave` | 蓄力后范围伤害、击退、破坏路径方块 | 蓄力弧、冲击波、音效 | ⚠️ |
+| `directed-shock` | 蓄力拳击；命中伤害、位移/击退、命中/未命中经验和冷却 | 第一人称手部动画、音效 | ⚠️ |
+| `groundshock` | 传播破坏/替换方块并 AOE 伤害；能量、掉落率、范围随经验变化 | 第一人称动作、地面冲击波 | ⚠️ 方块/实体批处理需验证 |
+| `plasma-cannon` | 蓄力飞行弹；命中爆炸、范围伤害和地形破坏，过载/冷却 | 能量球、龙卷柱、端点爆发、音效 | ⚠️ |
+| `storm-wing` | 飞行移动、软方块破坏、范围击退、摔落保护和资源扣除 | 飞行粒子、循环音、龙卷柱 | ⚠️ |
+| `vec-accel` | 方向加速、碰撞检查、速度/摔落重置、经验和冷却 | 轨迹带、冲量音 | ⚠️ |
+| `vec-deviation` | 扫描并偏转/销毁投射物；开启时减伤并按伤害消耗 CP | 环形 fade、反射音效 | ❌ damage policy context 与投射物/标记提交未闭合 |
+| `vec-reflection` | 扫描并重定向投射物；受到伤害时按倍率反射并扣资源 | 环形粒子、fade/音效 | ❌ resolver 只产出 `:reflections`，AC 未提交反射伤害 |
+
+课程别名的 12 个注册项（四类别 × `brain-course`、`brain-course-advanced`、
+`mind-course`）没有战斗 VFX：它们分别是 `+1000 max CP`、`+1500 max CP +100
+max overload`、`CP recovery ×1.2`。本轮已在
+`combat-catalog/apply-passive-resource-modifiers` 中实现 owner-local 纯 reducer，
+因此这 12 项的资源效果接入为 `✅*`；`*` 表示仍需在完整测试 classpath 恢复后执行
+学习/重算回归测试。
+
 ### 明确缺陷
 
 | 注册项 | main 行为基线 | 当前实现缺口 |
@@ -127,4 +182,3 @@ session 基本按 owner 隔离，但 damage reaction、mark 和 VFX audience 还
 7. **Railgun capability**：增加中立 coin-QTE/entity capability，删除旧 adapter 直连路径；提交。
 8. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
 9. 重新运行 Clojure/EDN/全平台编译门禁；运行时多人、VFX 和性能测试另行执行。
-
