@@ -281,6 +281,15 @@ thunder-bolt
   内写技能专属常量或保留旧回调双轨。
 - 该项暂不修改 EDN，保持队列中的 `⚠️`，待共享 ABI 修复后重新核验并单独提交。
 
+### current-charging checkpoint（检查与修复）
+
+- Final 图已覆盖 main 的 item/block 双模式、起始 overload 扣除、逐 tick CP、overload
+  floor、能量目标解析、有效/无效经验、充能 VFX 更新，以及 release/abort 清理。
+- 已修复 item 模式中“主手物品消失”只销毁 VFX 但不结束 session 的缺口：现在返回
+  `:item-missing` 并设置 `:finish-session? true`，不会继续占用该玩家的 channel。
+- 该项已通过 `:ac:runAcEdnCoverageTests`（14/33）。实际能量方块/物品 adapter 的
+  运行时结果仍需实机任务验证，因此总表继续保持 `⚠️`。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
