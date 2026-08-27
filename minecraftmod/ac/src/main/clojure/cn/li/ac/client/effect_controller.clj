@@ -113,8 +113,8 @@
 (defn reload-resources! [generation] (core/reload-resources! (runtime) generation))
 (defn registered-effects [] (core/registered-effects (runtime)))
 
-(defn effect-state-snapshot [effect-id]
-  (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
+(defn effect-state-snapshot [owner effect-id]
+  (when-let [instance-id (core/instance-for-owner (runtime) effect-id (str owner))]
     (let [instance (get @(:instances (runtime)) instance-id)]
       { :effect-state {(:instance-key instance) (:params instance)}
         :fx-state {(:instance-key instance) (:params instance)}})))
@@ -138,19 +138,21 @@
       0.0)))
 
 (defn add-camera-pitch-delta!
-  ([delta] (add-camera-pitch-delta! nil delta))
-  ([_owner delta]
-   (when (< (.size ^ArrayDeque camera-pitch*) 1024)
-     (.addLast ^ArrayDeque camera-pitch* [_owner (float delta)]))
-   nil))
+  [owner delta]
+  (when-not owner
+    (throw (ex-info "camera pitch delta requires an owner" {})))
+  (when (< (.size ^ArrayDeque camera-pitch*) 1024)
+    (.addLast ^ArrayDeque camera-pitch* [(str owner) (float delta)]))
+  nil)
 
 (defn drain-camera-pitch-deltas!
-  ([] (drain-camera-pitch-deltas! nil))
   ([owner]
-   (let [out (transient []) remaining (ArrayDeque. 1024)]
+   (when-not owner
+     (throw (ex-info "camera pitch drain requires an owner" {})))
+   (let [owner (str owner) out (transient []) remaining (ArrayDeque. 1024)]
      (loop []
        (when-let [entry (.pollFirst ^ArrayDeque camera-pitch*)]
-         (if (or (nil? owner) (= owner (first entry)))
+         (if (= owner (first entry))
            (conj! out (second entry))
            (.addLast ^ArrayDeque remaining entry))
          (recur)))

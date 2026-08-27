@@ -63,7 +63,7 @@
         extracted ((:extract-stage! api) stage frame-context)
         contributors (mapv (fn [[index mount]]
                              (ability-compose/contributor
-                              (keyword (str "mount-" index))
+                              (keyword (format "mount-%08d" index))
                               (fn [_] (:commands mount))))
                            (map-indexed vector (:mounts extracted)))
         composed (ability-compose/compose-frame

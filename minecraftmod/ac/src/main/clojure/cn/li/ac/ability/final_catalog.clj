@@ -353,4 +353,5 @@
               :counts {:combat-sources (:source-count combat)
                        :combat-registrations (:registration-count combat)
                        :vfx-effects (:effect-count vfx)}
-              :content-hash (content-hash bundle))))))
+              :content-hash (content-hash
+                             (ability-compose/catalog-fingerprint-input bundle)))))))

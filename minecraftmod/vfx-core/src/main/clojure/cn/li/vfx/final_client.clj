@@ -73,9 +73,6 @@
         (swap! (:instances runtime) assoc (:id instance) instance)
         (:id instance))))
 
-(defn instance-for-effect [runtime effect-id]
-  (some (fn [[id instance]] (when (= effect-id (:effect-id instance)) id))
-        @(:instances runtime)))
 (defn instance-for-owner [runtime effect-id owner]
   (some (fn [[id instance]]
           (when (and (= effect-id (:effect-id instance)) (= owner (:owner instance))) id))

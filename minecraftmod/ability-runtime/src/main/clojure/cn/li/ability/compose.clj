@@ -21,8 +21,10 @@
   (when-not (keyword? content-id)
     (throw (ex-info "catalog content id must be a keyword"
                     {:content-id content-id})))
-  (when-not (map? node-environment)
-    (throw (ex-info "catalog requires a node environment" {})))
+  (when-not (and (map? node-environment)
+                 (map? (:descriptors node-environment)))
+    (throw (ex-info "catalog requires a normalized node environment"
+                    {:node-environment node-environment})))
   (when-not (map? combat)
     (throw (ex-info "catalog requires combat content" {})))
   (when-not (map? vfx)
@@ -31,6 +33,29 @@
    :node-environment node-environment
    :combat combat
    :vfx vfx})
+
+(defn catalog-fingerprint-input
+  "Return only deterministic catalog data for network identity checks.
+
+   Node environments contain executable function values under :impl and
+   :extra-ops. Those values are valid runtime data but must never participate
+   in a cross-process hash because function object identities are JVM-local."
+  [{:keys [content-id node-environment combat vfx] :as bundle}]
+  (when-not (map? bundle)
+    (throw (ex-info "catalog bundle must be a map" {:bundle bundle})))
+  (when-not (and (map? node-environment)
+                 (map? (:descriptors node-environment)))
+    (throw (ex-info "catalog bundle has no normalized node environment" {})))
+  (let [descriptors (into (sorted-map)
+                          (map (fn [[id descriptor]]
+                                 [id (dissoc descriptor :impl)]))
+                          (:descriptors node-environment))
+        extra-op-ids (vec (sort (keys (:extra-ops node-environment))))]
+    {:content-id content-id
+     :node-environment {:descriptors descriptors
+                        :extra-op-ids extra-op-ids}
+     :combat combat
+     :vfx vfx}))
 
 (defn route-intent
   "Resolve an intent's recipient without allowing one player to mutate another

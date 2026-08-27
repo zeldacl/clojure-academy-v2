@@ -541,9 +541,9 @@
                    ;; Storm-wing stores its state under :effect-state, flashing
                    ;; under :fx-state — read whichever key the effect uses.
                    (vals (or (:effect-state
-                              (vfx-level/effect-state-snapshot effect-id))
+                              (vfx-level/effect-state-snapshot player-uuid effect-id))
                              (:fx-state
-                              (vfx-level/effect-state-snapshot effect-id)))))
+                              (vfx-level/effect-state-snapshot player-uuid effect-id)))))
         sw-storm
         (some (fn [st]
                 (when (and (:active? st)
