@@ -331,6 +331,17 @@ thunder-bolt
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）。技能伤害全局缩放及 post-exp cooldown
   仍属于共享 ABI 问题，不在该技能内保留旧实现或硬编码绕过。
 
+### thunder-clap checkpoint（检查与修复）
+
+- Final 图覆盖蓄力 start/pulse/release/abort、最大蓄力自动释放、最小蓄力判断、
+  CP/overload 费用、charged-area-damage、距离 falloff、overcharge、闪电、环形
+  VFX、成就和 session 清理。
+- 发现并修复 charged-area-damage 的伤害表达式错误引用 `[:item :position]`：Final
+  引擎没有 `:item` 作用域，该表达式会得到 nil；现在只传基础伤害×overcharge，实体
+  距离 falloff 由中性 `combat/charged-area-damage` host 统一计算。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）。main 的 post-exp cooldown 与公共
+  damage scaling 仍需共享 ABI 修复，当前总表保持 `⚠️`。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
