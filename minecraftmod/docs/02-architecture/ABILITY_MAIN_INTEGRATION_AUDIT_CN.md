@@ -312,6 +312,15 @@ thunder-bolt
 - 该修复必须重排完整 start 图（先扣费，再进入三种目标分支），不能在技能内添加旧
   回调兼容或硬编码补扣；当前保持 `⚠️`，待 Final start 资源模板统一后单独提交。
 
+### mine-detect checkpoint（检查与修复）
+
+- Final 图已覆盖资源不足拒绝、blindness、普通/advanced 扫描模式、owner-only
+  `block-scan-transient`、经验和冷却节点。
+- 已将 VFX `max-range` 从硬编码 `28.0` 改为与扫描 `targeting-range` 相同的 Final
+  tunable；否则高经验的 30 格扫描会被 bounds 截断。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）。main 的 post-exp cooldown 仍受共享
+  progression→cooldown ABI 影响，故总表保持 `⚠️`。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
