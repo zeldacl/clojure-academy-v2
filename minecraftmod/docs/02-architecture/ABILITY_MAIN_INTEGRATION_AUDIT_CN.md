@@ -683,6 +683,14 @@ Combat Core 返回 `:vfx-signals`；AC `finalize-result!` 现已将 graph 与 da
 
 session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边界；mark 使用 `[world-id,target-id,mark-type]`，反射/结果使用 `[world-id,source,target,seed]` 幂等键。交叉玩家不泄漏仍需实机测试。
 
+本轮又修复了同一玩家同时使用多个 MdBall 技能时的交叉清理：`electron-missile`、
+`electron-bomb`、`scatter-bomb` 现在分别在 `entity/spawn` 写入
+`ac_electron_missile`、`ac_electron_bomb`、`ac_scatter_bomb` 标签；Combat Core 的
+`target/entities` 与延迟 beam 的 `origin-selector` 使用 `required-tags` 精确筛选，
+Minecraft adapter 在生成实体后同一中立边界内写入标签。这样清理/发射不会误取同一
+owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI，不是 AC 技能专属
+兼容分支。
+
 ### AC 越界静态扫描
 
 在 AC 主源码中，技能相关的 `apply-direct-damage!`、VFX nearby 推送和实体副作用调用只出现在 `combat_runtime.clj` 的能力实现/组合边界；技能内容与 server hook 没有再直接调用这些平台函数。`server_hooks` 的伤害入口只转发到 `process-damage-request!` / `apply-attack-precheck!`，物品入口只产生 neutral `:edn-trigger`。因此当前发现的越界不是“绕过三核心模块”，而是 Railgun 的特殊硬币/QTE 语义尚未在中间能力中建模。
@@ -700,14 +708,16 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 2. **Mark domain**：已完成并提交（`7b8510bd0`）。
 3. **Damage result commit**：已完成并提交（`46f3dc0aa`、`2478da3c2`、`d9cff8772`、`19195dbcf`）；参数/费用仍需行为测试。
 4. **VFX transport**：已完成并提交（`46f3dc0aa`、`2478da3c2`）。
-5. **单技能确定性修复**：location teleport、light shield、thunder bolt、mark-teleport、
+5. **Neutral entity isolation**：`entity/spawn` 的 `add-tags`、实体查询/延迟
+   selector 的 `required-tags` 已完成并提交（`c70a49f0c`）。
+6. **单技能确定性修复**：location teleport、light shield、thunder bolt、mark-teleport、
    flesh-ripping、directed-blastwave、directed-shock、blood-retrograde、plasma-cannon、
    vec-accel、storm-wing、mag-movement；均已按技能单独提交（最近提交分别为
    `26dee6fa3`、`a2618d29d`、`fba68d32a`）。
-6. **Registration bindings**：把 Mine Ray 的 variant/presentation/runtime 显式注入；提交。
-7. **Railgun capability**：尚未完成；main 的 coin-QTE、硬币判定/销毁、蓄力 tick、反射射击和经验/成就仍需单独建模，不能以当前 `:coin-thrown` 完成事件代替。
-8. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
-9. 重新运行 Clojure/EDN/全平台编译门禁；运行时多人、VFX 和性能测试另行执行。
+7. **Registration bindings**：把 Mine Ray 的 variant/presentation/runtime 显式注入；提交。
+8. **Railgun capability**：尚未完成；main 的 coin-QTE、硬币判定/销毁、蓄力 tick、反射射击和经验/成就仍需单独建模，不能以当前 `:coin-thrown` 完成事件代替。
+9. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
+10. 重新运行 Clojure/EDN/全平台编译门禁；运行时多人、VFX 和性能测试另行执行。
 
 ## 本轮验证结果
 
