@@ -88,7 +88,7 @@ max overload`、`CP recovery ×1.2`。本轮已在
 | `rad-intensify` | 读取 radiation mark，并使用标记创建时的 source rate 放大伤害 | mark 表、策略输入、mark-type 匹配和倍率快照已接入；跨重启持久化未实现 |
 | `space-fluct` | 多级暴击、反射排除、经验/成就/VFX | input/context、反馈消息和 VFX owner 已接入；多级概率与排除反射需验证 |
 | `vec-deviation` | 开启状态下减伤、CP 代价、音效/经验 | owner session/context 已接入；main 的“按剩余 CP 尽量扣费但继续减伤”需验证 |
-| `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验 | 反射已一次性提交，按 world/source/target/seed/depth 幂等；参数快照/扣费与递归上限需验证 |
+| `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验；低于 minimum 时仍减少原伤害但不取消原生攻击 | 反射已一次性提交，按 world/source/target/seed/depth 幂等；minimum、残余伤害和环境边界已对齐，参数快照/扣费与递归上限需行为测试 |
 | `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | mark reducer 已接入；持续移动/伤害需验证 |
 | `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | mark reducer 已接入；扇形命中与后续行为需验证 |
 
@@ -175,6 +175,7 @@ thunder-bolt
 - 暴击 feedback 已转成 `:player/feedback`，由 AC 的玩家反馈 adapter 发送；damage-reaction VFX 使用策略输入中的 owner，而非一律使用攻击者。
 - 暴击策略现在尊重 `:damage-types`，并按 level 0→1→2 的顺序合并概率；同一等级只产生一次 VFX/side-event，匹配 main 的 `roll-crit-level`。
 - LightShield 未携带 front flag 时由 AC 组合层按目标朝向和攻击者位置计算 horizontal-yaw cone，不再默认所有攻击都是正面。
+- VecReflection 现在始终提交一次反射并从原生伤害中扣除反射量；只有达到 main 的 `min-reflected-damage` 才在 attack-precheck 阶段取消原生攻击，环境伤害不会生成无效反射目标。
 
 ## 公共链路证据
 
