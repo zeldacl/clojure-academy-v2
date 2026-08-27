@@ -316,6 +316,13 @@ thunder-bolt
 - 本轮修正 `damage/absorb` 的费用映射：`main` 的防御路径把 `absorb-cp` 传入 overload、把 `absorb-overload` 传入 CP（配置注释也明确记录该历史参数顺序）；Final policy 现按该顺序提交资源费用。
 - 已确认的共享边界：Final `damage/absorb` 当前尚未消费 `interval-ticks/last-tick-path`，因此受击间隔与 last-absorb 状态仍需在 Combat Core damage ABI 中补齐；不能在 AC 保留旧 damage handler 双轨。激活 cost-fail 时序也需以 Final 统一资源策略重新核验。
 - 本轮 EDN 静态门禁待运行后记录；总表保持 `⚠️`，不能把可编译视作受击行为等价。
+### meltdowner checkpoint（检查与修复）
+
+- `main` 的 charge window 为 20/40/100 tick；release 计算 time-rate，执行 beam（实体伤害、方块破坏、反射射击），按 time-rate 增加经验并启动 time-rate×base×cooldown 冷却，最后清理充能 VFX。
+- Final 图已覆盖充能状态、overload floor、tick 费用、beam trace、实体/方块副作用、反射字段消费、VFX 和经验事件。
+- 本轮修正 release 冷却：原图只有 `cooldown/start :main`，未传入 `main-cooldown`，按 Final 引擎会写入 0 tick；现在先读取 `ability/cooldown :main`，再以 `:cooldown {:ref [:local :main-cooldown]}` 启动。
+- 共享边界仍未闭合：当前中性 `host/beam-trace` 实现尚未像旧 beam helper 一样调用 `interaction/resolve` 并验证对方反射能力，故 main 的 vec-reflection 反射射击不能仅凭 EDN 节点宣称等价；后续需在中立 beam/interaction ABI 统一补齐，禁止恢复技能专属旧回调。
+- 本轮门禁待运行后记录；总表保持 `⚠️`。
 ### mag-manip checkpoint（检查与修复）
 
 - Final pulse 现在先以 `owner-id + world-id + entity-type` 查询持有实体，写入
