@@ -323,6 +323,27 @@ thunder-bolt
 - 本轮修正 release 冷却：原图只有 `cooldown/start :main`，未传入 `main-cooldown`，按 Final 引擎会写入 0 tick；现在先读取 `ability/cooldown :main`，再以 `:cooldown {:ref [:local :main-cooldown]}` 启动。
 - 共享边界仍未闭合：当前中性 `host/beam-trace` 实现尚未像旧 beam helper 一样调用 `interaction/resolve` 并验证对方反射能力，故 main 的 vec-reflection 反射射击不能仅凭 EDN 节点宣称等价；后续需在中立 beam/interaction ABI 统一补齐，禁止恢复技能专属旧回调。
 - 本轮门禁待运行后记录；总表保持 `⚠️`。
+### mine-ray-basic/expert/luck checkpoint（检查与修复）
+
+- 三个 public registration 共用一个 `mine-ray` Final source；manifest 只注入变体参数：Basic 为
+  10 格、工具等级受限、fortune=0，Expert 为 20 格且不限制工具等级，Luck 在 Expert 基础
+  上使用 fortune=3。三者的 hardness 快照、同目标逐 tick 扣减、换目标重置、方块掉落、
+  方块经验、overload floor、冷却和 beam/progress/particle/audio VFX 均在同一 Final graph
+  内完成，没有旧回调双轨。
+- 对照 main 后发现确定性缺口：main 在每次目标获取时还检查该技能的
+  `skill-destroy-allowed?`；此前 Final 只检查世界权限/工具等级，关闭技能破坏开关时仍
+  可能推进进度并在 break 分支发放经验。现在 AC 组合根通过中性 capability
+  `:ability/destroy-blocks?` 提供每个 owner/ability 的策略，Final graph 在“同目标继续”和
+  “新目标获取”两个分支都消费该 capability；关闭时立即清空目标状态，不产生进度、破坏或
+  经验。
+- `block/break` 仍由 Combat Core 的中性平台 action 执行，携带 expected-block-id、fortune
+  和 tool-tier policy；权限、世界隔离和内部 break gate 留在 adapter。这样不会把 AC 的技能
+  配置泄漏到 Combat Core，也不会因多个玩家共享方块目标而互相修改 session。
+- 共享边界仍需保留为 `⚠️`：Final tick 的原子 cost-fail 顺序、break action 失败后的经验提交，
+  以及多人同时改变同一方块的实际 adapter 结果无法在当前无实机条件下证明与 main 完全一致；
+  不得以旧 `mine_rays_base` 回调恢复双轨。
+- 本轮 `:ac:runAcEdnCoverageTests`（14/33）及 `:combat-core:runCombatClojureTests`
+  （25/65）通过；这是加载/编译 checkpoint，不等价于实机行为验收。
 ### mag-manip checkpoint（检查与修复）
 
 - Final pulse 现在先以 `owner-id + world-id + entity-type` 查询持有实体，写入

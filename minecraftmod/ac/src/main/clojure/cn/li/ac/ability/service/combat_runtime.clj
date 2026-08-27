@@ -438,6 +438,10 @@
      :caster/id owner
      :world/id (:world-id context)
      :caster/creative? (boolean (:creative? context))
+     ;; Per-skill terrain gate is an AC policy fact. Combat Core only
+     ;; consumes this neutral capability; it never reads AC config directly.
+     :ability/destroy-blocks? (boolean (skill-config/destroy-blocks-enabled?
+                                             (:ability-id context)))
      ;; Configured target registries are snapshotted at activation and exposed
      ;; as neutral lists.  EDN never reaches back into AC config paths.
      :targeting/normal-metal-blocks (ability-config/get-normal-metal-blocks)
