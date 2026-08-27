@@ -597,8 +597,8 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
 - `:ac:runAcEdnCoverageTests`：通过 14 tests / 33 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
-- `:combat-core:runCombatClojureTests`：通过 27 tests / 71 assertions（包含本轮
-  phase-transition、damage-threshold 回归）。
+- `:combat-core:runCombatClojureTests`：通过 28 tests / 73 assertions（包含本轮
+  phase-transition、damage-threshold、teleport safety 回归）。
 - `:ac:compileTestClojure`：通过。旧测试中依赖已删除旧 VM/旧 hook 契约的文件已移除，
   没有恢复兼容实现。
 - `:ac:runAcClojureTests`：可编译并进入 143 个 namespace、580 tests；仍有历史测试

@@ -3,7 +3,10 @@
             [cn.li.combat.final-compiler :as compiler]
             [cn.li.combat.final-engine :as engine]
             [cn.li.combat.platform :as platform]
-            [cn.li.mcmod.runtime.host :as host]))
+            [cn.li.mcmod.runtime.host :as host]
+            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.teleportation :as teleportation]))
 (deftest compiler-lowers-query-after-mutation-to-barrier-test
   (is (map? (compiler/compile-program
              {:component :flow/sequence
@@ -250,6 +253,30 @@
 (deftest charged-area-platform-port-uses-action-abi-test
   (is (= :failed (:status (platform/charged-area-damage! {})))))
 
+(deftest teleport-entity-honors-neutral-safety-flags-test
+  (let [calls (atom [])]
+    (with-redefs [world-effects/available? (constantly true)
+                  player-motion/available? (constantly true)
+                  player-motion/dismount-riding! (fn [owner]
+                                                   (swap! calls conj [:dismount owner])
+                                                   true)
+                  world-effects/teleport-entity! (fn [world owner x y z]
+                                                   (swap! calls conj [:teleport world owner x y z])
+                                                   true)
+                  teleportation/available? (constantly true)
+                  teleportation/reset-fall-damage! (fn [owner]
+                                                     (swap! calls conj [:reset-fall owner])
+                                                     true)]
+      (is (= :applied (:status (platform/teleport-entity!
+                                {:world-id "world:test"
+                                 :target "player-1"
+                                 :position [1.0 2.0 3.0]
+                                 :dismount? true
+                                 :reset-fall-damage? true}))))
+      (is (= [[:dismount "player-1"]
+              [:teleport "world:test" "player-1" 1.0 2.0 3.0]
+              [:reset-fall "player-1"]]
+             @calls)))))
 (deftest capability-matrix-resolves-to-host-or-ac-port-test
   (let [{:keys [queries actions]} (engine/capability-matrix)
         query-capabilities (set (keys (platform/query-handlers)))
