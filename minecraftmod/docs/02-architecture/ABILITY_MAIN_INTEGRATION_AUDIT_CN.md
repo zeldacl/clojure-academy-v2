@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（22 tests / 55 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（23 tests / 59 assertions）、
   `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -287,9 +287,13 @@ thunder-bolt
   `:entity-type`，因此 Arc Gen 不再读取不存在的旧 `:creeper?` 字段。
 - AC 的 `world/block-impact` 处理会在 miss 终点重新读取水体，保持 main 的“未命中也
   走方块分支”语义；读取和写入始终由事件携带的 `world-id` 约束。
-- 已通过 `:combat-core:runCombatClojureTests`（25/65）及
-  `:ac:runAcEdnCoverageTests`（14/33）。这只是该项的静态/编译 checkpoint，不能把
-  仍未闭合的 skill damage scaling、实际客户端 VFX 发送和实机结果标成 `✅`。
+- 本轮补齐 post-cast cooldown：entity/block 两个分支分别提交 progression 后，以
+  `mastery + exp-entity/exp-block` 对 cooldown 端点做 `math/lerp` 与 `math/floor`，
+  匹配 main 读取更新经验后的 `Float#toInt`；图中不再使用旧 `ability/cooldown` 节点。
+- 已通过 `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）及
+  `:ac:runAcEdnCoverageTests`（23 tests / 59 assertions）。这只是该项的静态/编译
+  checkpoint，不能把仍未闭合的 skill damage scaling、实际客户端 VFX 发送和实机结果
+  标成 `✅`。
 
 ### electron-bomb checkpoint（检查与修复）
 
@@ -734,7 +738,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 22 tests / 55 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 23 tests / 59 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
@@ -759,7 +763,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 本轮验证结果
 
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
-- `:ac:runAcEdnCoverageTests`：通过 22 tests / 55 assertions；该门禁只验证
+- `:ac:runAcEdnCoverageTests`：通过 23 tests / 59 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
 - `:combat-core:runCombatClojureTests`：通过 31 tests / 83 assertions（包含本轮
   phase-transition、damage-threshold、teleport safety 回归）。

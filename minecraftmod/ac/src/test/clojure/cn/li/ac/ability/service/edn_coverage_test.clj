@@ -436,6 +436,17 @@
     (is (every? #(= [{:ref [:input :capabilities :caster/id]}]
                    (get-in % [:filter :excluded-entity-ids]))
                 areas))))
+(deftest arc-gen-cooldown-uses-hit-exp-branch-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/arc_gen.edn"))
+        nodes (component-nodes (:program doc))
+        starts (filter #(= :cooldown/start (:component %)) nodes)
+        binds (filter #(and (= :data/bind (:component %))
+                            (= :cooldown-exp-next (:to %))) nodes)]
+    (is (some #(and (= :ability/tunable (:component %))
+                    (= :cooldown-endpoints (:name %))) nodes))
+    (is (= 2 (count starts)))
+    (is (= 2 (count binds)))
+    (is (not-any? #(= :ability/cooldown (:component %)) nodes))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))

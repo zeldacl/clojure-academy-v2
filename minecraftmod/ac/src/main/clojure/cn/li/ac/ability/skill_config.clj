@@ -125,6 +125,7 @@
     :cost-cp :cost.down.cp
     :cost-overload :cost.down.overload
     :cooldown-ticks :cooldown.ticks
+    :cooldown-endpoints :cooldown.ticks
     :exp-entity :progression.exp-entity
     :exp-block :progression.exp-block}
    :flesh-ripping
@@ -273,6 +274,7 @@
     :release-cp :cost.up.cp
     :release-overload :cost.up.overload
     :cooldown-ticks :cooldown.ticks
+    :cooldown-endpoints :cooldown.ticks
     :exp-entity :progression.exp-entity
     :exp-use :progression.exp-use}
    :blood-retrograde
