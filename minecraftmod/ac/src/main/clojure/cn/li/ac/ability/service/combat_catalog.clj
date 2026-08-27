@@ -101,11 +101,32 @@
                      :status (migration-status ability-id)})))
   (get-in @state* [:combat :abilities ability-id]))
 
-(defn apply-passive-resource-modifiers [_ability-data values]
-  ;; Passive resource effects are represented as final policy data. Resource
-  ;; settlement is performed by the final combat transaction; this catalog
-  ;; view never executes a second evaluator.
-  values)
+(defn apply-passive-resource-modifiers
+  "Apply the generic course modifiers owned by AC's ability data.
+
+  Course registrations are shared final graphs, but their resource effects
+  are player-local progression rules. Keeping this reducer pure avoids a
+  second evaluator and makes the multiplayer boundary explicit: only the
+  supplied owner's immutable `:learned-skills` set is inspected.
+  "
+  [ability-data values]
+  (let [learned (set (or (:learned-skills ability-data) #{}))
+        has-suffix? (fn [suffix]
+                      (boolean
+                       (some (fn [skill-id]
+                               (and (keyword? skill-id) (= suffix (name skill-id))))
+                             learned)))
+        cp-speed (double (or (:cp-recovery-speed values) 0.0))]
+    (cond-> values
+      (has-suffix? "brain-course")
+      (update :max-cp (fnil + 0.0) 1000.0)
+
+      (has-suffix? "brain-course-advanced")
+      (-> (update :max-cp (fnil + 0.0) 1500.0)
+          (update :max-overload (fnil + 0.0) 100.0))
+
+      (has-suffix? "mind-course")
+      (assoc :cp-recovery-speed (* cp-speed 1.2)))))
 
 (defn- normalize-translations [translations]
   (into {}
