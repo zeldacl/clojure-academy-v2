@@ -36,8 +36,9 @@
 
 (defn spawn-entity!
   "Spawn a neutral tracked entity through the platform adapter."
-  [world-id owner entity-type position velocity life-ticks]
-  (call :spawn-entity! world-id owner entity-type position velocity life-ticks))
+  [world-id owner entity-type position velocity life-ticks add-tags]
+  (call :spawn-entity! world-id owner entity-type position velocity life-ticks
+        (vec (or add-tags []))))
 
 (defn execute-flashing!
   "Execute the approved Flashing movement behind a Host Port."

@@ -187,6 +187,7 @@
         ids (set (map str (or (:entity-ids filter) [])))
         excluded (set (map str (or (:excluded-entity-ids filter) [])))
         excluded-tags (set (or (:excluded-tags filter) []))
+        required-tags (set (or (:required-tags filter) []))
         difficulty-map (reduce (fn [result entry]
                                  (if (string? entry)
                                    (let [index (.lastIndexOf ^String entry ":")]
@@ -239,6 +240,7 @@
                              (not (contains? excluded id)))))
              (remove #(seq (set/intersection excluded-tags
                                               (set (or (:tags %) [])))))
+             (filter #(set/subset? required-tags (set (or (:tags %) []))))
              (filter #(or (nil? owner-filter)
                           (= owner-filter (str (or (:owner-id %)
                                                    (:owner-uuid %))))))
@@ -1038,10 +1040,13 @@
 
 (defn spawn-entity!
   "Spawn a neutral tracked entity through the mcmod relay."
-  [{:keys [world-id owner entity-type position velocity life-ticks]}]
-  (if (and world-id owner (string? entity-type) (world-effects/available?))
+  [{:keys [world-id owner entity-type position velocity life-ticks add-tags]}]
+  (if (and world-id owner (string? entity-type)
+           (every? string? (or add-tags []))
+           (world-effects/available?))
     (let [entity-id (world-effects/spawn-entity!
-                     world-id owner entity-type position velocity life-ticks)]
+                     world-id owner entity-type position velocity life-ticks
+                     add-tags)]
       {:status (if entity-id :applied :failed)
        :entity-id (when (not (true? entity-id)) entity-id)})
     {:status :rejected :reason :invalid-entity-spawn}))

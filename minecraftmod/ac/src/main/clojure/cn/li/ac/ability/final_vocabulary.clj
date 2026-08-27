@@ -41,7 +41,7 @@
    {:id :entity/mark, :inputs {:requires-ability {:type :any, :default nil}, :duration-ticks {:type :any, :default nil}, :target {:type :any, :default nil}, :mark-type {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/radial-impulse, :inputs {:world-id {:type :any, :default nil}, :speed-max {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :center {:type :any, :default nil}, :speed-min {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/reset-fall-damage, :inputs {:target {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :entity/spawn, :inputs {:entity-type {:type :any, :default nil}, :life-ticks {:type :any, :default nil}, :world-id {:type :any, :default nil}, :position {:type :any, :default nil}, :velocity {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
+   {:id :entity/spawn, :inputs {:add-tags {:type :any, :default nil}, :entity-type {:type :any, :default nil}, :life-ticks {:type :any, :default nil}, :world-id {:type :any, :default nil}, :position {:type :any, :default nil}, :velocity {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/teleport, :inputs {:dismount? {:type :any, :default nil}, :world-id {:type :any, :default nil}, :reset-fall-damage? {:type :any, :default nil}, :position {:type :any, :default nil}, :target {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/trigger-behavior, :inputs {:entity {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :finalize, :inputs {:outcome {:type :any, :default nil}}, :outputs {}, :children {}}

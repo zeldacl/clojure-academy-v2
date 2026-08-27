@@ -257,7 +257,7 @@
                             (catch Exception e
                               (log/warn "Failed to spawn projectile:" (ex-message e))
                               {:success? false})))
-     :spawn-entity! (fn [world-id owner entity-type _position velocity life-ticks]
+     :spawn-entity! (fn [world-id owner entity-type _position velocity life-ticks add-tags]
                       (try
                         (when-let [^MinecraftServer server (server-fn)]
                           (when-let [player (query-core/get-player-by-uuid server (str owner))]
@@ -267,8 +267,17 @@
                                   vz (double (or (:z v) 0.0))
                                   speed (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
 
-                               (entity/player-spawn-tracked-entity-by-id!
-                                player (str entity-type) speed life-ticks))))
+                               (when-let [entity-uuid
+                                          (entity/player-spawn-tracked-entity-by-id!
+                                           player (str entity-type) speed life-ticks)]
+                                 (when (seq add-tags)
+                                   (when-let [spawned (entity-motion/resolve-entity
+                                                       server
+                                                       (str world-id)
+                                                       (str entity-uuid))]
+                                     (doseq [tag add-tags]
+                                       (entity-motion/add-tag-for-entity! spawned tag))))
+                                 entity-uuid))))
                         (catch Exception e
                           (log/warn "Failed to spawn neutral entity:" (ex-message e))
                           false)))

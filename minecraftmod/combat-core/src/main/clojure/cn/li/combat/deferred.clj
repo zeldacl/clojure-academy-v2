@@ -6,7 +6,8 @@
   mcmod's platform bridge for the atomic damage operation. AC only wires the
   tick/clear hooks; settlement returns a neutral result whose VFX intents are
   routed by the ability composition boundary."
-  (:require [cn.li.mcmod.platform.raycast :as raycast]
+  (:require [clojure.set :as set]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -106,7 +107,8 @@
         ez (double (or (:z center) 0.0))
         entity-type (:entity-type selector)
         entity-id (some-> (:entity-id selector) str)
-        owner-id (some-> (or (:owner-id selector) owner) str)]
+        owner-id (some-> (or (:owner-id selector) owner) str)
+        required-tags (set (or (:required-tags selector) []))]
     (or
       (when (and selector (world-effects/available?))
         (let [candidate (->> (world-effects/find-entities-in-aabb
@@ -124,7 +126,9 @@
                                             (or (nil? owner-id)
                                                 (= owner-id
                                                    (some-> (or (:owner-id entity)
-                                                               (:owner-uuid entity)) str))))))
+                                                               (:owner-uuid entity)) str)))
+                                            (set/subset? required-tags
+                                                         (set (or (:tags entity) []))))))
                              (sort-by (fn [{:keys [x y z]}]
                                         (let [dx (- (double (or x 0.0)) ex)
                                               dy (- (double (or y 0.0)) ey)
