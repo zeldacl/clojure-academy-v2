@@ -786,9 +786,9 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 本轮验证结果
 
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
-- `:ac:runAcEdnCoverageTests`：通过 24 tests / 64 assertions；该门禁只验证
+- `:ac:runAcEdnCoverageTests`：通过 39 tests / 115 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
-- `:combat-core:runCombatClojureTests`：通过 31 tests / 83 assertions（包含本轮
+- `:combat-core:runCombatClojureTests`：通过 34 tests / 89 assertions（包含本轮
   phase-transition、damage-threshold、teleport safety 回归）。
 - `:ac:compileTestClojure`：通过。旧测试中依赖已删除旧 VM/旧 hook 契约的文件已移除，
   没有恢复兼容实现。
