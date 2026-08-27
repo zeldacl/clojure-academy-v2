@@ -227,23 +227,50 @@
       (run-node engine child context (conj path (if first? :on-first :body)))
       context)))
 
-(defn- spend-budget [context node]
+(defn- spend-budget [engine context node path]
+  "Apply a neutral resource budget with the complete final ABI semantics.
+
+   `:scale` is evaluated once for the whole budget, `:partial?` allows each
+   resource to spend only what is available (used by non-blocking defensive
+   policies), and `:on-insufficient` is an explicit flow arm.  The old
+   implementation silently ignored all three fields, which made a graph
+   compile while taking a different branch at runtime."
   (let [owner (or (:owner node) (:owner (:frame context)))
         budget (resolve-value (:budget node) context)
         resources (or (:resources budget) budget {})
+        scale (double (or (resolve-value (:scale node) context) 1.0))
+        scale (max 0.0 (if (Double/isFinite scale) scale 0.0))
+        required (into {}
+                       (map (fn [[resource amount]]
+                              [resource (* scale (double (or (resolve-value amount context) 0.0)))])
+                            resources))
         state (contracts/owner-state (:txn context) owner)
+        available (into {}
+                       (map (fn [[resource amount]]
+                              [resource (max 0.0 (double (or (get-in state [:resources resource]) 0.0)))])
+                            required))
         sufficient? (every? (fn [[resource amount]]
-                             (>= (double (or (get-in state [:resources resource]) 0.0))
-                                 (double (resolve-value amount context))))
-                           resources)]
-    (if sufficient?
-      (let [txn (reduce (fn [txn [resource amount]]
-                          (contracts/update-owner-in txn owner [:resources resource]
-                                                     #(- (double (or % 0.0))
-                                                        (double (resolve-value amount context)))))
-                        (:txn context) resources)]
-        (bind-result (assoc context :txn txn) (:bind node) false))
-      (bind-result context (:bind node) true))))
+                             (>= (get available resource 0.0) amount))
+                           required)
+        partial? (true? (:partial? node))
+        spend (if sufficient?
+                required
+                (if partial?
+                  (into {} (map (fn [[resource amount]]
+                                  [resource (min amount (get available resource 0.0))])
+                                required))
+                  {}))
+        insufficient? (not sufficient?)
+        txn (reduce (fn [txn [resource amount]]
+                      (if (pos? amount)
+                        (contracts/update-owner-in txn owner [:resources resource]
+                                                   #(- (double (or % 0.0)) amount))
+                        txn))
+                    (:txn context) spend)
+        context (bind-result (assoc context :txn txn) (:bind node) insufficient?)]
+    (if (and insufficient? (not partial?) (:on-insufficient node))
+      (run-node engine (:on-insufficient node) context (conj path :on-insufficient))
+      context)))
 
 (defn- normalize-vfx-signal [value context path]
   (let [frame (:frame context)
@@ -334,7 +361,7 @@
           (assoc-in context [:locals (:bind node)] false)))
       :data/bind (bind-result context (:to node) (resolve-value (:value node) context))
       :session/write (bind-session! context node)
-      :cost/spend (spend-budget context node)
+      :cost/spend (spend-budget engine context node path)
       :cooldown/start
       (let [owner (or (:owner node) (:owner (:frame context)))
             ability-id (:ability-id (:frame context))
@@ -426,8 +453,13 @@
         supplied ((:state-provider engine) owner)
         owner-record (if (contains? supplied :state) supplied {:revision 0 :state supplied})
         txn (contracts/state-txn-set {owner owner-record})
-        session ((:session-provider engine) owner)
-        initial {:frame frame :locals {} :session (or (:state session) session {})
+        session-record ((:session-provider engine) owner)
+        ;; Session metadata (notably :ability-id) and mutable :state are both
+        ;; part of the neutral session contract. Keep metadata visible to
+        ;; event graphs while flattening state for :session/read/write.
+        session (merge (dissoc (or session-record {}) :state)
+                       (or (:state session-record) {}))
+        initial {:frame frame :locals {} :session session
                  :session-patches [] :seed* (atom (:seed frame))
                  :txn txn :commands [] :barriers []
                  :outbox (contracts/outbox) :scheduled []

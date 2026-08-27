@@ -1023,13 +1023,46 @@
     {:status :rejected :reason :invalid-entity-spawn}))
 
 (defn discard-entity!
-  "Discard a neutral entity through the mcmod relay."
-  [{:keys [world-id entity]}]
-  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))]
-    (if (and world-id entity-id (world-effects/available?))
+  "Discard a neutral entity through the mcmod relay.
+
+   A session may retain an entity UUID, but older content also expresses the
+   neutral operation as owner + entity-type (for example a shield body).  The
+   latter is resolved in the owner's world and filtered by both owner and type
+   before any discard, so one player can never remove another player's session
+   entity."
+  [{:keys [world-id owner entity entity-type]}]
+  (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
+        direct? (and world-id entity-id (world-effects/available?))]
+    (cond
+      direct?
       {:status (if (world-effects/discard-entity-by-uuid!
                     world-id (str entity-id))
                  :applied :failed)}
+
+      (and world-id owner entity-type (world-effects/available?))
+      (let [owner-id (str owner)
+            owner-pos (entity-motion/entity-position (str world-id) owner-id)
+            candidates (when (and (map? owner-pos)
+                              (every? #(number? (get owner-pos %)) [:x :y :z]))
+                         (world-effects/find-entities-in-radius
+                          (str world-id) (double (:x owner-pos))
+                          (double (:y owner-pos)) (double (:z owner-pos)) 128.0))
+            matches (filter (fn [candidate]
+                             (and (= (str entity-type)
+                                     (str (or (:type candidate) (:entity-type candidate))))
+                                  (= owner-id
+                                     (str (or (:owner-id candidate)
+                                              (:owner-uuid candidate))))))
+                           (or candidates []))
+            applied (keep (fn [candidate]
+                            (let [id (or (:id candidate) (:uuid candidate) (:entity-id candidate))]
+                              (when (and id (world-effects/discard-entity-by-uuid!
+                                             world-id (str id))) id)))
+                          matches)]
+        {:status (if (seq applied) :applied :failed)
+         :discarded (count applied)})
+
+      :else
       {:status :rejected :reason :invalid-entity-discard})))
 
 (defn configure-entity!
