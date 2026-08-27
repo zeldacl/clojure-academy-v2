@@ -218,7 +218,6 @@
   {:client-get-skill-by-controllable
    (fn [category-id ctrl-id]
      (skill-query/get-skill-by-controllable category-id ctrl-id))
-   :client-send-combat-intent! send-combat-intent!
    :client-on-slot-key-down!
    (fn [player-uuid slot]
      (when (combat-slot? player-uuid slot)
@@ -273,4 +272,4 @@
    :client-trigger-preset-switch! (fn [p] (keybinds/switch-preset! p))
    :client-show-combat-notice! (fn [_ _] nil)
    :client-notify-visual-event! (fn [_ _] nil)
-   :client-ui-state-snapshot (fn [] {:active-slots @active-slots*})})
+})

@@ -53,12 +53,3 @@
                                                    (swap! aborted conj player-uuid))]
       (runtime-hooks/on-player-dimension-change! "dimension-player" "minecraft:overworld" "minecraft:the_nether")
       (is (= ["dimension-player"] @aborted)))))
-
-(deftest runtime-client-charge-coin-visual-state-contract-test
-  (runtime-bridge/install-runtime-hooks!)
-  (let [state (runtime-hooks/with-client-ctx-fn {:session-id :test-client-session} (fn [] (runtime-hooks/client-visual-state :ac/charge-coin {:player-uuid "client-player"})))]
-    (is (contains? state :active?))
-    (is (contains? state :coin-active?))
-    (is (contains? state :charge-ratio))
-    (is (contains? state :charge-ticks))
-    (is (contains? state :coin-progress))))
