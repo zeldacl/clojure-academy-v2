@@ -404,6 +404,13 @@
            ;; bindings are merged last so the client cannot replace variant
            ;; metadata or presentation/runtime values.
            (:context intent)
+           ;; Hold duration is a server-owned neutral capability.  Pulse and
+           ;; release intents carry it outside the skill-specific context so a
+           ;; client cannot spoof it; make it visible to :charge/ticks for all
+           ;; session graphs, including key-up release where no context map is
+           ;; sent.
+           (when (contains? intent :hold-ticks)
+             {:hold-ticks (long (max 0 (or (:hold-ticks intent) 0)))})
            registration-context)))
 
 (defn- caster-facade
@@ -638,6 +645,17 @@
                         (= :toggle (:activation source))
                         (= ability-id (:ability-id active-session)))
                  (assoc intent :op :abort)
+                 intent)
+        ;; Key-up release packets do not carry a client hold counter.  Derive
+        ;; the elapsed duration from the owner-scoped server session so every
+        ;; charge graph observes the same authoritative value as :pulse.
+        intent (if (and active-session
+                        (#{:pulse :release} (:op intent))
+                        (not (contains? intent :hold-ticks)))
+                 (assoc intent :hold-ticks
+                        (inc (max 0 (- (long @last-known-tick*)
+                                       (long (or (:start-tick active-session)
+                                                 @last-known-tick*))))))
                  intent)
         seed (long (or (:activation-seed intent)
                        (generate-activation-seed owner ability-id

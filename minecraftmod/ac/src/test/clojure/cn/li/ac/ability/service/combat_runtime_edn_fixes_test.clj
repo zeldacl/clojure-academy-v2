@@ -72,6 +72,11 @@
       (is (= "world-a" (:world/id facade)))
       (is (= 42 (:charge/ticks facade))))))
 
+(deftest server-hold-ticks-enter-neutral-capability-context
+  (testing "authoritative pulse/release hold duration is exposed as :charge/ticks"
+    (let [context (#'combat-runtime/activation-context
+                   "p-hold" :thunder-clap {:hold-ticks 42} 7)]
+      (is (= 42 (:hold-ticks context))))))
 (deftest activation-seed-varies-across-activations
   (testing "each railgun activation gets its own RNG seed, not a constant hash of [owner ability-id] (bug #21)"
     (runtime-store/get-or-create-player-state!
