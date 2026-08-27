@@ -199,6 +199,9 @@ thunder-bolt
 - `final-damage` 的 `mark-type` 现在读取当前策略的 `:input :context`；此前错误读取顶层 metadata，会让 radiation policy 静默不匹配。
 - radiation mark 在写入时保存 source rate，伤害读取该快照；这与 `main` 的 `mark-target!`（后续命中替换 source/rate）一致，而不是按受击者当前 CP 重新计算。
 - 资源型吸收反应在 CP/过载不足时会被移除，避免先减少伤害再提交失败；非阻塞的 VecDeviation/VecReflection 仍保留 main 的“尽量扣费、继续处理”语义。
+- `:cost/spend` 已补齐 final ABI 的 `:scale`、`:partial?` 和 `:on-insufficient`：前两者分别用于创意模式/按剩余资源扣费，后者现在真正执行显式失败清理分支，不再“只编译不分支”。
+- `:entity/discard` 已支持 UUID 以及 owner+entity-type 两种中立请求；后者先限定同一 world，再同时匹配 owner/type，避免清理其他玩家的会话实体。
+- final session 读取同时保留会话元数据和 `:state`，外部事件图可安全读取 `:ability-id` 等元数据而不会丢失 owner-local 状态。
 - 暴击 feedback 已转成 `:player/feedback`，由 AC 的玩家反馈 adapter 发送；damage-reaction VFX 使用策略输入中的 owner，而非一律使用攻击者。
 - 暴击策略现在尊重 `:damage-types`，并按 level 0→1→2 的顺序合并概率；同一等级只产生一次 VFX/side-event，匹配 main 的 `roll-crit-level`。
 - LightShield 未携带 front flag 时由 AC 组合层按目标朝向和攻击者位置计算 horizontal-yaw cone，不再默认所有攻击都是正面。
