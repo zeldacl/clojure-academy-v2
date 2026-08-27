@@ -363,6 +363,12 @@
 (defn- activation-context
   [owner ability-id intent seed]
   (let [state (runtime-store/get-player-state (server-session-id) (str owner))
+        registration (try (combat-catalog/require-available ability-id)
+                         (catch Throwable _ nil))
+        bindings (or (:bindings registration) {})
+        registration-context (merge (or (:metadata bindings) {})
+                                    (when (map? (:presentation bindings))
+                                      {:runtime (:presentation bindings)}))
         resource-data (:resource-data state)
         position (when (raycast/available?)
                    (raycast/player-position (str owner)))
@@ -386,7 +392,12 @@
             :resources {:cp (double (or (:cur-cp resource-data) 0.0))
                         :overload (double (or (:cur-overload resource-data) 0.0))}
             :creative? (boolean (:creative? intent))}
-           (:context intent))))
+           ;; Client input may carry skill-specific neutral context (for
+           ;; example a saved location name). Server-owned registration
+           ;; bindings are merged last so the client cannot replace variant
+           ;; metadata or presentation/runtime values.
+           (:context intent)
+           registration-context)))
 
 (defn- caster-facade
   "Schema v2 design C: the neutral capability table an EDN ability reads via
