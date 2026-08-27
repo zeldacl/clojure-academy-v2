@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.final-vocabulary
   "Static final node vocabulary. Descriptors are source-controlled data; no
    runtime graph inspection or descriptor synthesis is allowed."
-  (:require [cn.li.node.descriptor :as descriptors]))
+  (:require [cn.li.node.environment :as descriptors]))
 
 (def ^:private component-specs
   [
@@ -202,9 +202,9 @@
    captured per server/player session without cross-player state."
   ([] (environment []))
   ([composites]
-   (descriptors/build-environment
-    (concat (descriptor-specs)
-            (map normalize-spec (vals (or composites {})))))))
+   (descriptors/build
+    {:descriptors (concat (descriptor-specs)
+                          (map normalize-spec (vals (or composites {}))))})))
 
 (defn register!
   "Vocabulary inspection API retained under its historic name for tooling;
