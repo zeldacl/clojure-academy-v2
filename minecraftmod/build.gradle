@@ -773,7 +773,7 @@ tasks.register("verifyPresentationDependencyDirection") {
         }.files.each { File buildFile ->
             def path = rootDir.toPath().relativize(buildFile.toPath()).toString().replace('\\', '/')
             def mentionsCore = buildFile.text =~ /project\([\"']:?presentation-core[\"']\)/
-            if (mentionsCore && path != "build.gradle" && !(path in ["ac/build.gradle", "presentation-core/build.gradle",
+            if (mentionsCore && path != "build.gradle" && !(path in ["ac/build.gradle", "ability-runtime/build.gradle", "presentation-core/build.gradle",
                                            "presentation-compiler/build.gradle"])) {
                 violations << "${buildFile}: forbidden direct dependency on presentation-core (platform/base must use mcmod contract)"
             }
@@ -784,7 +784,7 @@ tasks.register("verifyPresentationDependencyDirection") {
         if (!(platformBuild =~ /project\(mcmodProject\.path\)/)) violations << "minecraft/base platform target must explicitly depend on mcmod"
         if (!(platformBuild =~ /mcmodContract\s+rootProject\.project\(mcmodProject\.path\)/)) violations << "minecraft/base platform target must carry mcmod in its isolated contract configuration"
         if (!(platformBuild =~ /runtimeClassOutput\(mcmodProject\)/)) violations << "minecraft/base platform target must consume mcmod output"
-        if (!(acBuild =~ /project\([\"']:?presentation-core[\"']\)/)) violations << "ac must depend on presentation-core"
+        if (!(file("ability-runtime/build.gradle").text =~ /project\([\"']:?presentation-core[\"']\)/)) violations << "ability-runtime must compose presentation-core"
         [file("platform-src")].findAll { it.directory }.each { File root ->
             fileTree(root) { include "**/*.clj" }.files.each { File source ->
                 if (source.text.contains("cn.li.presentation.core")) violations << "${source}: platform source imports presentation-core"
@@ -1135,7 +1135,7 @@ tasks.register("verifyCombatSkillCoverage") {
     description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
     dependsOn ":ac:runAcEdnCoverageTests"
 }
-tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:runCombatClojureTests" }
+tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:checkClojure" }
 
 tasks.register("verifyNodeCoreLanguageKernel") {
     group = "verification"
@@ -1569,14 +1569,14 @@ tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
     group = "verification"
     description = "Require every neutral provider factory on a classpath without platform sources or Minecraft libraries."
     dependsOn ":api:classes", ":mcmod:classes", ":node-core:classes", ":presentation-core:classes",
-              ":presentation-compiler:classes", ":vfx-core:classes", ":combat-core:classes", ":ac:classes"
+              ":presentation-compiler:classes", ":vfx-core:classes", ":combat-core:classes", ":ability-runtime:classes", ":ac:classes"
     // AC's neutral provider closure now owns Presentation Runtime ViewModels;
     // include the core/compiler artifacts in this isolated classpath while
     // still excluding every Minecraft/loader project. node-core joined this
     // list once combat-core/vfx-core started depending on it (the shared
     // node-language kernel) -- its jar is on their runtime classpath now.
     def neutralProjects = [project(":api"), project(":mcmod"), project(":node-core"), project(":vfx-core"),
-                           project(":combat-core"),
+                           project(":combat-core"), project(":ability-runtime"),
                            project(":presentation-core"),
                            project(":presentation-compiler"), project(":ac")]
     // The isolated classpath is materialized from project runtime classpaths,
