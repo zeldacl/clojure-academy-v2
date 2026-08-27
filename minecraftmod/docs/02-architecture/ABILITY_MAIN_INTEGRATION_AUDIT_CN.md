@@ -303,6 +303,12 @@ thunder-bolt
 - Final 图已覆盖蓄力计时、球数量上限、过载地板、tick/攻击费用、超时/释放/abort 清理、目标排序、伤害/经验/冷却和 Final VFX；本轮将目标过滤补为 `excluded-entity-ids=[owner-id]`，与 main 的 `missile-filter-self` 一致，避免施法者被选为目标。
 - 当前仍有迁移边界：Final session 只保存球数量，释放/超时按 owner+entity-type 查询清理，尚未像 main 一样保存每个生成球的 UUID；因此同一玩家并行使用其它 MdBall 技能时，实机会发生跨技能清理/计数干扰风险。该问题不能通过旧回调兼容解决，后续需扩展当前 Final 实体生命周期/会话标识 ABI 后再处理。
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）；由于上述生命周期标识和 activation cost 时序尚未在 Final 中闭合，总表继续保持 `⚠️`。
+### jet-engine checkpoint（检查与修复）
+
+- `main` 的标记阶段使用仅方块 raycast（实体不参与目标点），释放后以 8 tick 线性速度推进并在 15 tick 生命周期内逐段做实体命中/伤害；释放资源不足则结束标记，触发阶段结束清理全部 owner-scoped VFX。
+- Final 图已覆盖 marking/triggering phase、CP 门控、release CP+overload、速度/分段命中、radiation mark、经验/冷却和 owner/nearby VFX。
+- 本轮修正 start/pulse 的 `target/raycast`：改为 `include-entities? false, include-blocks? true`，避免实体挡在准星前时改变 main 定义的方块目标点；triggering 分段仍保持实体-only raycast。
+- 仍需实机验证玩家速度/碰撞、segment 命中及 radiation mark 与 `rad-intensify` 的跨技能组合；当前总表保持 `⚠️`。
 ### mag-manip checkpoint（检查与修复）
 
 - Final pulse 现在先以 `owner-id + world-id + entity-type` 查询持有实体，写入
