@@ -127,6 +127,50 @@
     (is (empty? missing)
         (str "Ability :effect-id(s) absent from the VFX manifest: " (sort missing)))))
 
+(defn- collect-vfx-nodes
+  "Collect authored effect/vfx nodes without depending on field ordering."
+  [form]
+  (cond
+    (map? form)
+    (concat (when (= :effect/vfx (:component form)) [form])
+            (mapcat collect-vfx-nodes (vals form)))
+    (sequential? form) (mapcat collect-vfx-nodes form)
+    :else nil))
+
+(deftest every-ability-vfx-spawn-satisfies-effect-input-schema-test
+  "A successful compile only proves that an effect id exists.  The VFX
+   runtime still rejects/loses a signal when a spawn omits a required input,
+   so validate each authored ability payload against the effect's declared
+   :inputs/:spawn contract. Destroy/update operations intentionally carry
+   partial payloads and are excluded; update merges into an existing session."
+  (let [effects (into {}
+                      (map (fn [file]
+                             (let [effect (read-file! file)] [(:id effect) effect])))
+                      (edn-files "src/main/resources/ac/vfx/effects"))
+        failures (mapcat
+                  (fn [file]
+                    (let [ability (read-file! file)]
+                      (keep (fn [node]
+                              (when (= :spawn (or (:operation node) (:op node) :spawn))
+                                (let [effect-id (:effect-id node)
+                                      effect (get effects effect-id)
+                                      declared (get-in effect [:inputs :spawn] {})
+                                      payload (or (:payload node) {})
+                                      required (keep (fn [[key spec]]
+                                                       (when (or (keyword? spec)
+                                                                 (and (map? spec)
+                                                                      (not (contains? spec :default))))
+                                                         key))
+                                                     declared)
+                                      missing (remove #(contains? payload %) required)]
+                                  (when (seq missing)
+                                    {:ability (:id ability) :effect-id effect-id
+                                     :missing (vec missing)}))))
+                            (collect-vfx-nodes ability))))
+                  (edn-files "src/main/resources/ac/combat/abilities"))]
+    (is (empty? failures)
+        (str "Ability VFX spawn payloads missing required inputs: " failures))))
+
 (deftest coverage-counts-are-non-trivial-test
   ;; Guards against both deftests above passing vacuously (empty sets are
   ;; trivially subsets of anything) -- pins the real content's current
