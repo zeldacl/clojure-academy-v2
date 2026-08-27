@@ -526,6 +526,7 @@
     :cost-down-cp :cost.down.cp
     :cost-down-overload :cost.down.overload
     :cooldown-ticks :cooldown.ticks
+    :cooldown-endpoints :cooldown.ticks
     :exp-cast :progression.exp-cast}
    :mag-movement
    {:targeting-range :targeting.range

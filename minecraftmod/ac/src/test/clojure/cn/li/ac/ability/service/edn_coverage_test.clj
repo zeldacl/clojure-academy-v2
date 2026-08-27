@@ -440,3 +440,14 @@
                     (= {:ticks {:ref [:local :cooldown-ticks-next]}}
                        (:cooldown %))) nodes))
     (is (not-any? #(= :ability/cooldown (:component %)) nodes))))
+(deftest mine-detect-cooldown-uses-post-exp-masteries-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/mine_detect.edn"))
+        nodes (component-nodes (:program doc))]
+    (is (some #(and (= :ability/tunable (:component %))
+                    (= :cooldown-endpoints (:name %))) nodes))
+    (is (some #(and (= :data/bind (:component %))
+                    (= :cooldown-exp-next (:to %))) nodes))
+    (is (some #(and (= :cooldown/start (:component %))
+                    (= {:ticks {:ref [:local :cooldown-ticks-next]}}
+                       (:cooldown %))) nodes))
+    (is (not-any? #(= :ability/cooldown (:component %)) nodes))))

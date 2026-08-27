@@ -606,14 +606,17 @@ thunder-bolt
 - `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。目标实体/方块运动、
   权限和多人并发仍需实机验证，总表继续保持 `⚠️`。
 
-### mine-detect checkpoint（检查与修复）
+### mine-detect checkpoint（逐项迁移）
 
 - Final 图已覆盖资源不足拒绝、blindness、普通/advanced 扫描模式、owner-only
   `block-scan-transient`、经验和冷却节点。
 - 已将 VFX `max-range` 从硬编码 `28.0` 改为与扫描 `targeting-range` 相同的 Final
   tunable；否则高经验的 30 格扫描会被 bounds 截断。
-- 已通过 `:ac:runAcEdnCoverageTests`（14/33）。main 的 post-exp cooldown 仍受共享
-  progression→cooldown ABI 影响，故总表保持 `⚠️`。
+- 本轮补齐 post-cast cooldown：Final 图读取配置端点和 `exp-cast`，以
+  `mastery + exp-cast` 做 `math/lerp` 后 `math/floor`，再启动 cooldown，匹配 main 的
+  `addSkillExp` 后 `Float#toInt` 语义；未保留技能 callback。
+- 已通过 `:ac:runAcEdnCoverageTests`（20 tests / 52 assertions）。扫描 adapter、盲目状态
+  和多人 VFX 仍需实机验证，故总表保持 `⚠️`。
 
 ### thunder-bolt checkpoint（检查与修复）
 
