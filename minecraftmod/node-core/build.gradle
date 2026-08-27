@@ -4,7 +4,7 @@ plugins {
 }
 
 // node-core is the node-language kernel shared by combat-core and vfx-core:
-// descriptor registry, expression evaluator, lexical-scope checker,
+// immutable descriptor environment, expression evaluator, lexical-scope checker,
 // composite expansion, structural validation, schema export. It must not
 // depend on Minecraft, mcmod, or either domain module -- see
 // verifyNodeCoreDependencyDirection in the root build.gradle and

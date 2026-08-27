@@ -2,6 +2,7 @@
   "Reactive GUI bridge — installs reactive handlers via client bridge merge.
    Individual block GUIs self-register via their own init-*-reactive! functions."
   (:require
+            [cn.li.ability.compose :as ability-compose]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
@@ -60,7 +61,19 @@
   [frame-id stage frame-context]
   (let [api (presentation-host-api-v2)
         extracted ((:extract-stage! api) stage frame-context)
-        commands (vec (mapcat :commands (:mounts extracted)))]
+        contributors (mapv (fn [[index mount]]
+                             (ability-compose/contributor
+                              (keyword (str "mount-" index))
+                              (fn [_] (:commands mount))))
+                           (map-indexed vector (:mounts extracted)))
+        composed (ability-compose/compose-frame
+                  {:player-id :client
+                   :max-render-commands-per-frame 8192}
+                  contributors
+                  {:frame-seq frame-id
+                   :stage stage
+                   :frame-context frame-context})
+        commands (:commands composed)]
     (FramePacket. (long frame-id)
                   [(RenderPass. (or (get stage->render-stage stage)
                                     RenderStage/SCREEN)

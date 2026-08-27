@@ -4,9 +4,10 @@
    This namespace owns resource loading and typed registration metadata only.
    It never invokes a Minecraft API, a legacy evaluator, or a client callback.
    Combat programs remain source graphs until their nodes have been lowered to
-   the final compiler vocabulary; VFX descriptors are validated immediately so
-   the combat catalog can depend on a stable VFX ABI first."
-  (:require [cn.li.node.composite :as composite]
+  the final compiler vocabulary; VFX descriptors are validated immediately so
+  the combat catalog can depend on a stable VFX ABI first."
+  (:require [cn.li.ability.compose :as ability-compose]
+            [cn.li.node.composite :as composite]
             [cn.li.vfx.compiler :as vfx-compiler]
             [cn.li.ac.ability.final-vocabulary :as vocabulary]))
 (def ^:const schema-version 1)
@@ -346,11 +347,10 @@
          vfx (load-vfx vfx-manifest vfx-composite-docs)
          node-environment (vocabulary/environment combat-composite-docs)
          combat (load-combat combat-manifest node-environment combat-composite-docs)]
-     {:schema-version schema-version
-      :node-environment node-environment
-      :vfx vfx
-      :combat combat
-      :counts {:combat-sources (:source-count combat)
-               :combat-registrations (:registration-count combat)
-               :vfx-effects (:effect-count vfx)}
-      :content-hash (content-hash {:combat combat :vfx vfx})})))
+     (let [bundle (ability-compose/compose-catalog :ac node-environment combat vfx)]
+       (assoc bundle
+              :schema-version schema-version
+              :counts {:combat-sources (:source-count combat)
+                       :combat-registrations (:registration-count combat)
+                       :vfx-effects (:effect-count vfx)}
+              :content-hash (content-hash bundle))))))

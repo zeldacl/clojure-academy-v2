@@ -13,6 +13,25 @@
                                       :catalog-generation :player-id
                                       :max-render-commands-per-frame])))
 
+(defn compose-catalog
+  "Create the immutable cross-core bundle consumed by a content pack.
+   Combat, VFX and Presentation are values at this boundary; no content-pack
+   policy or host adapter is allowed to mutate or reinterpret them here."
+  [content-id node-environment combat vfx]
+  (when-not (keyword? content-id)
+    (throw (ex-info "catalog content id must be a keyword"
+                    {:content-id content-id})))
+  (when-not (map? node-environment)
+    (throw (ex-info "catalog requires a node environment" {})))
+  (when-not (map? combat)
+    (throw (ex-info "catalog requires combat content" {})))
+  (when-not (map? vfx)
+    (throw (ex-info "catalog requires vfx content" {})))
+  {:content-id content-id
+   :node-environment node-environment
+   :combat combat
+   :vfx vfx})
+
 (defn route-intent
   "Resolve an intent's recipient without allowing one player to mutate another
    player's state. :self is owner-only; :tracking/:world are explicit server
@@ -43,6 +62,12 @@
     (presentation-frame/frame contributors
                                  (merge scope (or context {}))
                                  limit)))
+
+(defn contributor
+  "Expose the composition-layer contributor constructor so content adapters
+   do not depend on Presentation Core's implementation namespace directly."
+  [id render-fn]
+  (presentation-frame/contributor id render-fn))
 
 (defn reduce-player
   "Activation-local reducer. The mutable shell may store the returned value in

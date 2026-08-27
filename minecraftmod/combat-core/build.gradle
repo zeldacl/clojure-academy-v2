@@ -73,10 +73,11 @@ tasks.register("runCombatClojureTests", JavaExec) {
 
 dependencies {
     implementation project(":mcmod")
-    // Shared node-language kernel (descriptor registry, expression
-    // evaluator, scope checker, composite expansion) -- see
+    // Shared node-language kernel (immutable descriptor environment,
+    // expression evaluator, scope checker, composite expansion) -- see
     // verifyNodeCoreDependencyDirection and NODE_LANGUAGE.md section 2.1.
-    // combat-core's own vocabulary (components.clj) registers against it.
+    // combat-core's own vocabulary (components.clj) is folded into an
+    // environment by the composition root.
     implementation project(":node-core")
     // Combat emits only the transport-level VFX intent ABI (effect id,
     // audience and payload). AC/ability-runtime composes the VFX catalog and
