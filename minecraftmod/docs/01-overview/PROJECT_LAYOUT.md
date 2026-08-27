@@ -38,7 +38,8 @@ platform-builds/
 | `:presentation-compiler` | 严格校验 `.ui.edn` → 规范化 artifact/manifest 编译器；无运行时模板解释器 |
 | `:vfx-core` | 最终 VFX System/Emitter/Module/Stage/Parameter 运行时：显式四阶段图采样、生命周期/序列幂等、SoA 粒子缓冲与 Java 帧 ABI；无旧 VM/recipe/runtime 兼容层 |
 | `:combat-core` | 纯数据技能程序引擎：`:sequence`/`:query`/`:damage`/`:vfx`/`:world-effect`/`:domain-event` op 编译与执行，永不认识 Minecraft/渲染/VFX 运行时 |
-| `:ac` | AcademyCraft 内容与领域逻辑；组合 combat-core（技能数据）+ vfx-core（客户端特效）+ presentation-core（HUD/GUI 呈现） |
+| `:ability-runtime` | 跨内容包的组合边界；组合 node-core、combat-core、vfx-core、presentation-core，并提供 result/frame/owner 路由协议 |
+| `:ac` | AcademyCraft 内容与领域逻辑；通过 ability-runtime 使用 combat-core、vfx-core、presentation-core，保留 AC 专属技能与业务规则 |
 | `:platform` | 唯一平台工程；通过 `scripts/target-gradle.ps1 <target-id>` 选择具体目标 |
 | `:tools:target-launcher` | 目标构建的辅助启动器工程，非运行时代码 |
 

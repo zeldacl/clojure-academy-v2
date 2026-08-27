@@ -15,7 +15,8 @@
 - `combat-core/src/main/clojure/cn/li/combat/interception.clj`：伤害拦截决策边界（含反应管线），platform 事实采集（raycast/entity-motion）与 `:entity/damage` capability 调用都在这里直接完成，不经过 AC 转发。
 - `combat-core/src/main/clojure/cn/li/combat/skill_runtime.clj`：技能激活编排——tunable 具体化、VFX 信号规范化、结果组装。
 - `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host query/action capability 表。
-- `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：AC 侧唯一同时依赖 combat-core 与 vfx-core 的组装点——加载 manifest、跑 vfx 契约交叉校验、暴露编译后 catalog。
+- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：唯一同时组合 node/combat/vfx/presentation 值的中立边界；AC、BC、CC 都通过它组装 catalog、result 和 frame。
+- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：AC 侧内容加载器，读取 AC manifest 并将 combat/vfx/node 值交给 ability-runtime 组合。
 - `ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj`：AC composition root，注入 AC 自己领域的端口（resource/progression/achievement/saved-location 等），提交 combat-core 产出的 `:owner-patch`/`:session-patch`。
 
 ## 词汇表分层（详见 NODE_LANGUAGE.md §1）
@@ -32,7 +33,7 @@
 
 1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/components_manifest.edn`、`vfx/manifest.edn`、`vfx/components_manifest.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
 2. 客户端 CombatIntent 驱动 `skill_runtime/dispatch!`：具体化 tunable → `vm/execute!` 树遍历 → 产出 `{:actions :events :vfx-signals :query-results :status}`。
-3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 交给 `combat-core/vfx-publish` 按 audience 广播。
+3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 作为中立 Intent 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播。
 4. 任意入站伤害（技能命中或 vanilla 击中）都先经过 `combat-core/interception.clj` 的 `intercept!`——这是唯一的伤害决策边界，platform 事实（world-id/目标位置/攻击者朝向）与反应管线（`reactions.clj`，逐步并入同一 VM，见 NODE_LANGUAGE.md §10）都在这一步完成，结果只返回给调用方提交，不在中途落地。
 
 ## 扩展点
@@ -56,5 +57,5 @@
 
 ## 兼容性约束
 
-- `combat-core` 依赖 `node-core` 与 `mcmod`；可依赖 `vfx-core`（单向）用于 VFX 信号规范化。不得依赖 `ac`/`platform`/任何具体 loader 命名空间，由 `verifyCombatDependencyDirection` 强制。
+- `combat-core` 只依赖 `node-core` 与 `mcmod`；VFX 信号是中立数据 ABI，不依赖 `vfx-core`。不得依赖 `ac`/`platform`/任何具体 loader 命名空间，由 `verifyCombatDependencyDirection` 强制。
 - `node-core` 不得依赖 `combat-core`/`vfx-core`/`mcmod`/`ac`，由 `verifyNodeCoreDependencyDirection` 强制。

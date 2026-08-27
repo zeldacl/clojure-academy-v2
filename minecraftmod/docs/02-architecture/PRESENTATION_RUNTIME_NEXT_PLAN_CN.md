@@ -7,7 +7,7 @@
 
 - `presentation-core` 当前只保留 `artifact.clj`、`host_v2.clj`、`paint_v2.clj`、`runtime_v2.clj`；负责 artifact 装载、Runtime v2、Host 生命周期、状态提取和中立绘制 IR，不再包含旧 retained tree、dirty/layout/frame graph 或 Java ViewModel 类型。
 - `presentation-compiler` 当前只保留 `artifact.clj` 与 `main.clj`，构建期将 `.ui.edn` 编译成严格校验的规范化 EDN artifact/manifest；不存在 `CompiledTemplate` 或运行时 `render.clj` 解释器。
-- AC 当前有 7 个生产 artifact：`application`、`combat_hud`、`machine_container`、`settings`、`terminal`、`wireless_matrix`、`wireless_node`。屏幕、容器、HUD 和终端控制器均通过 `presentation-v2` 挂载。
+- AC 当前有 7 个生产 artifact：`application`、`combat_hud`、`machine_container`、`settings`、`terminal`、`wireless_matrix`、`wireless_node`。屏幕、容器、HUD 和终端控制器均通过 `presentation-v2` 挂载；跨 Combat/VFX/Presentation 的组合由 `ability-runtime` 统一承载。
 - Runtime v2 painter 已覆盖当前 artifact 实际使用的 `row/column/stack/rect/progress/text/button/image/scroll/grid/repeater/text-input/portal`；集合节点从 state 展开 item，输入节点输出中立文本/背景命令。Runtime `dispatch!` 对中立 pointer 事件执行 artifact button 命中并将 `:on/:activate` action 与 `:button-id` payload 送入 reducer，key/character/scroll 保留为 `:input/*` action。战斗 HUD controller 在进入 Runtime 前投影 `:cp-ratio/:overload-ratio/:skills/:toasts`，不再把 builder 内部字段直接暴露给 artifact。
 - 帧路径是：AC snapshot → `presentation-core` Runtime v2 → `mcmod` 中立 `Ui*` Render IR → 各版本 backend；版本 backend 不读取 Core 私有状态。
 - 每次变更必须验证六个真实目标的 `:platform:compileClojure`：`forge-1.20.1`、`fabric-1.20.1`、`fabric-1.21.1`、`neoforge-1.21.1`、`fabric-26.2`、`neoforge-26.2`，再执行根 `verifyCurrentPlatforms`。
@@ -23,7 +23,8 @@
 
 ```mermaid
 flowchart LR
-    AC["ac\nViewModel / Action / Effect Controller / EDN\n组合 combat-core + vfx-core + presentation-core"] --> MM["mcmod\n版本中立 Minecraft 领域桥接\nHostDescriptor / neutral Ui* Render IR\n(cn.li.mcmod.runtime)"]
+    AC["ac / bc / cc\nContent ViewModel / Action / EDN\n各自领域规则"] --> AR["ability-runtime\n跨内容包组合\nCombat + VFX + Presentation + owner routing"]
+    AR --> MM["mcmod\n版本中立 Minecraft 领域桥接\nHostDescriptor / neutral Ui* Render IR\n(cn.li.mcmod.runtime)"]
     MM --> BASE["minecraft/base\nHost 生命周期 / 公共 MC 桥接"]
     BASE --> VER["minecraft/mc-*\n1.20.1 / 1.21.1 / 26.2 Render Backend"]
     LOADER["loader/*\nScreen/HUD/World stage + reload 注册"] --> BASE
@@ -37,7 +38,8 @@ flowchart LR
 
 - `presentation-core`：Clojure Runtime v2、artifact 装载、Host 生命周期、状态提取和绘制 IR；Java 侧仅保留 `HostGeometry`、`MountHandle` 等数据契约。
 - `presentation-compiler`：Clojure 编译 `*.ui.edn`，构建期完成 schema/binding/action 校验并输出规范化 artifact/manifest；运行时不解释模板。
-- `ac`：Clojure ViewModel、Action、Effect Controller 和 EDN 内容；组合 combat-core（技能数据程序）+ vfx-core（客户端特效实例）+ presentation-core（HUD/GUI 呈现），不直接调用 Minecraft 渲染 API。
+- `ability-runtime`：唯一跨内容包组合 node/combat/vfx/presentation 值、结果、帧和 owner 路由的中立层。
+- `ac`：Clojure ViewModel、Action、Effect Controller 和 EDN 内容；通过 ability-runtime 使用 combat-core、vfx-core、presentation-core，保留 AC 专属业务规则，不直接调用 Minecraft 渲染 API。
 - `mcmod`：版本中立的 Minecraft 领域桥接层，也是帧 ABI（`cn.li.mcmod.runtime.RenderCommand`/`RenderStage`/`RenderPass`/`FramePacket`，sealed + typed record）的唯一持有者；presentation-core 与 vfx-core 都只依赖 `mcmod`，互不依赖。负责 Host 描述、服务端权威 snapshot/delta、MenuBridge 的 slot anchor 数据、Action codec/长度限制/校验，以及 AC 与 Presentation Runtime 的中立协议。不得引用具体 loader 或版本类。
 - `minecraft/base`：公共 Minecraft 生命周期和桥接；将游戏线程/资源重载/渲染阶段映射为 Runtime 调用。仅在确实需要 Minecraft 类型继承或注解时使用 Java。
 - `minecraft/mc-*`：三个版本的 Render Backend；对 sealed `RenderCommand` 做 `instanceof`/`condp instance?` 分派，只消费不可变 `FramePacket`，不能修改语义或加入业务判断。
@@ -47,7 +49,7 @@ flowchart LR
 
 `presentation-devtools` 模块（Inspector/热重载/性能面板）已删除——零生产调用者，`settings.gradle`/`build.gradle` 的模块注册与门禁引用一并清理。
 
-Gradle 依赖铁律：`presentation-core -> mcmod`、`minecraft/base -> mcmod`、`ac -> presentation-core`；`minecraft/base`、`loader/*` 和 `presentation-core` 之间不得建立直接依赖。平台 backend 通过 `mcmod` 提供的中立 backend/profile 数据接收 FramePacket 装配结果，避免把 Core 类型反向导入版本桥接层。
+Gradle 依赖铁律：`presentation-core -> mcmod`、`ability-runtime -> {node-core, combat-core, vfx-core, presentation-core, mcmod}`、`ac -> ability-runtime`、`minecraft/base -> mcmod`；`minecraft/base`、`loader/*` 和 `presentation-core` 之间不得建立直接依赖。平台 backend 通过 `mcmod` 提供的中立 backend/profile 数据接收 FramePacket 装配结果，避免把 Core 类型反向导入版本桥接层。
 
 ## 运行时边界
 

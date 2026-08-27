@@ -5,13 +5,14 @@
 ## 模块边界
 
 - `mcmod/src/main/java/cn/li/mcmod/runtime/vfx/`：Java ABI 与热路径。包含 `ParticleBuffer` SoA 存储、`ParticleKernel`、system/emitter carrier、render frame/batch/output、带 neutral geometry payload 的 `VfxBatch`、packet identity、wire codec 和 channel 常量。
-- `vfx-core/src/main/clojure/cn/li/vfx/compiler.clj`：独立的 composite 展开器。VFX 不依赖 combat/node-core 的运行时解释器。
+- `vfx-core/src/main/clojure/cn/li/vfx/compiler.clj`：独立的 VFX composite 展开器。VFX 不依赖 Combat 的运行时解释器，但与 Combat 共享 node-core 的描述符、表达式和作用域语言内核。
 - `vfx-core/src/main/clojure/cn/li/vfx/final-engine.clj`：headless/fake-host 的 final graph sampler 与生命周期测试端口。
 - `vfx-core/src/main/clojure/cn/li/vfx/final-client.clj`：客户端 per-instance runtime、四阶段采样、Java frame 投影、乱序/墓碑处理。
 - `vfx-core/src/main/clojure/cn/li/vfx/replication.clj`：服务端 tracking、baseline、snapshot/replay、release/destroy 生命周期。
-- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：读取 final VFX system EDN、展开 composite、生成 emitter stages 和静态 descriptor。
+- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：读取 final VFX system EDN、展开 composite、生成 emitter stages 和静态 descriptor，再通过 ability-runtime 组合 catalog。
+- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：将 VFX catalog 与 Combat、Presentation、NodeEnvironment 组合；VFX Core 本身不反向依赖这些内容模块。
 - `ac/src/main/clojure/cn/li/ac/client/effect_controller.clj`：AC composition root；只安装 catalog、转发 signal、采样 frame，不持有旧 handler 或 singleton aggregate。
-- `combat-core/src/main/clojure/cn/li/combat/vfx_publish.clj`：按 self/tracking/world audience 发布 typed VFX 生命周期信号。
+- Combat Core 只产生中立 VFX Intent；按 self/tracking/world audience 的路由由 ability-runtime 与 AC adapter 完成，VFX Core 不提供 Combat 发布器。
 
 ## 执行模型
 

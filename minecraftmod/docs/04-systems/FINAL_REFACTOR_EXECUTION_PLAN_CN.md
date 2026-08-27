@@ -167,5 +167,5 @@
 - 服务器权威：客户端只发送输入边沿，不能决定 ability-id、目标、伤害、资源或 VFX recipients。
 - 原子提交：Host preflight 失败时不提交 StateTxn；世界副作用不回滚，但结果必须报告 partial apply。
 - 网络稳定：catalog hash 不一致拒绝执行；VFX update 使用 dirty mask，session/persistent 在 tracking enter、周期 replay 或显式 snapshot 时补发。
-- 依赖稳定：`node-core ← combat-core/vfx-core ← AC`，Minecraft 和网络只在 mcmod。
+- 依赖稳定：`node-core ← combat-core/vfx-core ← ability-runtime ← AC/BC/CC`；Minecraft 和网络能力由 mcmod 提供，组合层只通过明确端口使用。
 - 内容完整：最终 catalog 仍覆盖 39 source、50 specialization、36 effect；没有旧格式 fallback。
