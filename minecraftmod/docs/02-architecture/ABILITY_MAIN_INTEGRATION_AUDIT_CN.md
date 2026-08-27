@@ -39,12 +39,12 @@
 | `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
 | `electron-missile` | 持续蓄力生成多发电子球，锁定目标并发射，资源不足/超时清理 | 粒子、beam fade、音效 | ⚠️ |
 | `jet-engine` | 标记目标、持续移动与伤害，结束计经验/冷却 | 环、粒子、屏幕闪烁、billboard | ❌ `:entity-mark` 没有 AC 提交/reducer |
-| `light-shield` | 伤害反应吸收伤害；按吸收量消耗 CP/过载，处理正面判断、状态和冷却 | 护盾粒子、循环音、吸收音 | ❌ final-damage context 未注入；消耗映射已修复但反应仍未闭合 |
+| `light-shield` | 伤害反应吸收伤害；按吸收量消耗 CP/过载，处理正面判断、状态和冷却 | 护盾粒子、循环音、吸收音 | ⚠️ final-damage context 已接入；资源提交/正面夹角仍需实机验证 |
 | `meltdowner` | beam 逐段伤害并按权限破坏方块，资源/过载地板/冷却 | beam、FOV、粒子、音效 | ⚠️ `host/beam-trace` 结果提交需继续验证 |
 | `mine-ray-basic` | 基础射线采矿；工具等级限制、fortune=0、独立冷却 | beam、进度条、粒子、音效 | ⚠️ variant bindings 已注入，仍需行为等价测试 |
 | `mine-ray-expert` | 专家射线采矿；取消工具等级限制，独立前置/冷却 | 同 MineRay 专属变体样式 | ⚠️ |
 | `mine-ray-luck` | luck=3 射线采矿，专属颜色/粒子 | 同 MineRay luck 样式 | ⚠️ |
-| `rad-intensify` | 读取目标 radiation mark，按最大 CP 放大伤害 | 目标 mark session | ❌ mark 未持久化且 final-damage context 未闭合 |
+| `rad-intensify` | 读取目标 radiation mark，按最大 CP 放大伤害 | 目标 mark session | ⚠️ mark 已按 world/target 持久化；倍率与 mark VFX 仍需实机验证 |
 | `ray-barrage` | 扇形多目标射击；命中后写 radiation mark 并触发后续行为 | ray beam、fan、音效 | ❌ mark 事件无有效持久化提交 |
 | `scatter-bomb` | 生成/调度多枚散射弹，资源不足时清理 | 粒子、beam fade、音效 | ⚠️ |
 | `dim-folding-theorem` | 学习后为非反射攻击提供暴击/反馈/成就 | 暴击尾迹/粒子 | ❌ policy 的 `:input` context 当前解析不到 |
@@ -64,7 +64,7 @@
 | `storm-wing` | 飞行移动、软方块破坏、范围击退、摔落保护和资源扣除 | 飞行粒子、循环音、龙卷柱 | ⚠️ |
 | `vec-accel` | 方向加速、碰撞检查、速度/摔落重置、经验和冷却 | 轨迹带、冲量音 | ⚠️ |
 | `vec-deviation` | 扫描并偏转/销毁投射物；开启时减伤并按伤害消耗 CP | 环形 fade、反射音效 | ❌ damage policy context 与投射物/标记提交未闭合 |
-| `vec-reflection` | 扫描并重定向投射物；受到伤害时按倍率反射并扣资源 | 环形粒子、fade/音效 | ❌ resolver 只产出 `:reflections`，AC 未提交反射伤害 |
+| `vec-reflection` | 扫描并重定向投射物；受到伤害时按倍率反射并扣资源 | 环形粒子、fade/音效 | ⚠️ 反射结果已在攻击预检查一次性提交；参数快照与扣费仍需实机验证 |
 
 课程别名的 12 个注册项（四类别 × `brain-course`、`brain-course-advanced`、
 `mind-course`）没有战斗 VFX：它们分别是 `+1000 max CP`、`+1500 max CP +100
@@ -173,29 +173,29 @@ thunder-bolt
 
 EDN policy 使用 `[:input :context ...]`、`[:input :tunables ...]` 和 `[:input :params ...]`，但 `final-damage` 当前只解析 `:request`、`:context`、`:param`、`:session`、`:mark` scope；AC 构造 damage event 时也没有把 activation input 放入 metadata。
 
-结果：相关 policy 会静默读到 nil/默认值，形成“可编译但不执行”的假阳性。
+结果：公共 `:input` ABI 已支持并按 policy ability-id 选择快照；仍有少数技能所需的主线参数（例如 Railgun QTE）未建模，不能把所有 policy 视为等价。
 
 ### mark 持久化
 
-AC 的 `:entity/mark` capability 只 dispatch `:entity-mark`，neutral event handler 没有对应分支；Combat Core 的纯 `domain/apply-event` 存在，但 AC 没有调用它并提交 owner/world 作用域状态。
+AC 的 `:entity/mark` capability 现在落入按 `[world-id,target-id,mark-type]` 隔离的有界标记表，支持到期与 owner/target 清理；damage policy 会读取有效 mark。该表尚未做持久化存档，跨重启恢复仍属于实机/持久化任务。
 
 ### VFX 发送
 
-Combat Core 返回 `:vfx-signals`，AC `finalize-result!` 只处理 state/session/domain events，没有调用 server network sender。客户端虽然注册了 `MSG-COMBAT-VFX` handler，但没有证明所有 server result 都能到达该 channel。
+Combat Core 返回 `:vfx-signals`；AC `finalize-result!` 现已将 graph 与 damage-reaction VFX 统一编码后发送到 `MSG-COMBAT-VFX`，并按 owner/nearby audience 路由。未运行实机，故仍需验证实际到达率和跨世界过滤。
 
 ### 多人隔离
 
-session 基本按 owner 隔离，但 damage reaction、mark 和 VFX audience 还缺少统一的 `[world-id owner-id entity-id]` 作用域证据。修复公共链路时必须同时增加交叉玩家不泄漏测试。
+session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边界；mark 使用 `[world-id,target-id,mark-type]`，反射/结果使用 `[world-id,source,target,seed]` 幂等键。交叉玩家不泄漏仍需实机测试。
 
 ## 修复顺序与提交点
 
-1. **Context ABI**：将 owner/world/ability/activation input/marks 作为统一 immutable metadata 传入 damage policy；提交。
-2. **Mark domain**：实现持久化、过期、owner/world 隔离，并连接 mark 查询；提交。
-3. **Damage result commit**：提交 reflect、absorb cost、reaction event/state patch；提交。
-4. **VFX transport**：将 outbox 按 `:owner`/`:nearby` 路由到 `MSG-COMBAT-VFX`；提交。
+1. **Context ABI**：已完成并提交（`46f3dc0aa`）。
+2. **Mark domain**：已完成并提交（`7b8510bd0`）。
+3. **Damage result commit**：已完成并提交（`46f3dc0aa`、`2478da3c2`）；参数/费用仍需实机确认。
+4. **VFX transport**：已完成并提交（`46f3dc0aa`、`2478da3c2`）。
 5. **单技能确定性修复**：location teleport、light shield、thunder bolt；提交。
 6. **Registration bindings**：把 Mine Ray 的 variant/presentation/runtime 显式注入；提交。
-7. **Railgun capability**：增加中立 coin-QTE/entity capability，删除旧 adapter 直连路径；提交。
+7. **Railgun capability**：尚未完成；main 的 coin-QTE、硬币判定/销毁、蓄力 tick、反射射击和经验/成就仍需单独建模，不能以当前 `:coin-thrown` 完成事件代替。
 8. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
 9. 重新运行 Clojure/EDN/全平台编译门禁；运行时多人、VFX 和性能测试另行执行。
 
