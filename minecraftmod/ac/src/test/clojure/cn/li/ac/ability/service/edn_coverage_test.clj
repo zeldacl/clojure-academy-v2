@@ -23,6 +23,34 @@
             [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.ac.ability.registry.skill :as skill-registry]))
 
+;; Exact public registration baseline extracted from main's Clojure registry:
+;; 38 concrete combat skills plus the 12 category-scoped course aliases. A
+;; count-only assertion would allow a replacement to silently drop one id and
+;; add a duplicate while still reporting "50".
+(def ^:private main-registration-ids
+  #{:arc-gen :blood-retrograde :body-intensify :current-charging
+    :dim-folding-theorem :directed-blastwave :directed-shock :electron-bomb
+    :electron-missile :flashing :flesh-ripping :groundshock :jet-engine
+    :light-shield :location-teleport :mag-manip :mag-movement :mark-teleport :meltdowner
+    :mine-detect :mine-ray-basic :mine-ray-expert :mine-ray-luck
+    :penetrate-teleport :plasma-cannon :rad-intensify :railgun :ray-barrage
+    :scatter-bomb :shift-teleport :space-fluct :storm-wing :threatening-teleport
+    :thunder-bolt :thunder-clap :vec-accel :vec-deviation :vec-reflection
+    :electromaster/brain-course :meltdowner/brain-course
+    :teleporter/brain-course :vecmanip/brain-course
+    :electromaster/brain-course-advanced :meltdowner/brain-course-advanced
+    :teleporter/brain-course-advanced :vecmanip/brain-course-advanced
+    :electromaster/mind-course :meltdowner/mind-course
+    :teleporter/mind-course :vecmanip/mind-course})
+
+(def ^:private main-concrete-ability-ids
+  (disj main-registration-ids
+        :electromaster/brain-course :meltdowner/brain-course
+        :teleporter/brain-course :vecmanip/brain-course
+        :electromaster/brain-course-advanced :meltdowner/brain-course-advanced
+        :teleporter/brain-course-advanced :vecmanip/brain-course-advanced
+        :electromaster/mind-course :meltdowner/mind-course
+        :teleporter/mind-course :vecmanip/mind-course))
 (defn- read-file!
   "Plain clojure.edn/read, deliberately NOT safe-edn's stricter reader --
    this only needs to walk real EDN structure for a handful of known
@@ -112,6 +140,35 @@
         missing (set/difference migrated-ids manifest-ids)]
     (is (empty? missing)
         (str "Migrated abilities missing from the EDN manifest: " (sort missing)))))
+
+(deftest main-registration-set-is-exactly-covered-test
+  (let [manifest (safe-edn/read-resource! "ac/combat/manifest.edn")
+        ids (mapv :id (:documents manifest))]
+    (is (= (count main-registration-ids) (count ids))
+        "main registration baseline must not gain or lose entries")
+    (is (= main-registration-ids (set ids))
+        (str "Registration ids differ from main baseline; missing="
+             (sort (set/difference main-registration-ids (set ids)))
+             " extra=" (sort (set/difference (set ids) main-registration-ids))))
+    (is (= (count ids) (count (set ids)))
+        "registration ids must be unique")))
+
+(deftest every-concrete-main-ability-has-a-vfx-declaration-test
+  (let [files (edn-files "src/main/resources/ac/combat/abilities")
+        docs (into {} (map (fn [file] (let [doc (read-file! file)] [(:id doc) doc])) files))
+        manifest (safe-edn/read-resource! "ac/combat/manifest.edn")
+        registrations (into {} (map (juxt :id identity) (:documents manifest)))
+        missing (keep (fn [ability-id]
+                        (let [registration (get registrations ability-id)
+                              source-id (or (:source-id registration) ability-id)
+                              doc (get docs source-id)
+                              effects (set (collect-values-for-key :effect-id doc))]
+                          (when (or (nil? registration) (nil? doc) (empty? effects))
+                            ability-id)))
+                      main-concrete-ability-ids)]
+    (is (empty? missing)
+        (str "Concrete main abilities without any declared VFX effect-id: "
+             (sort missing)))))
 
 (deftest every-effect-id-referenced-by-an-ability-is-in-the-vfx-manifest-test
   ;; Real-parsing replacement for verifyAbilityVfxRegistryCoverage. Scans
