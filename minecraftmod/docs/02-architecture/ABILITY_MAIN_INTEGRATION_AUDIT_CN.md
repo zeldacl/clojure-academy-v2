@@ -309,6 +309,13 @@ thunder-bolt
 - Final 图已覆盖 marking/triggering phase、CP 门控、release CP+overload、速度/分段命中、radiation mark、经验/冷却和 owner/nearby VFX。
 - 本轮修正 start/pulse 的 `target/raycast`：改为 `include-entities? false, include-blocks? true`，避免实体挡在准星前时改变 main 定义的方块目标点；triggering 分段仍保持实体-only raycast。
 - 仍需实机验证玩家速度/碰撞、segment 命中及 radiation mark 与 `rad-intensify` 的跨技能组合；当前总表保持 `⚠️`。
+### light-shield checkpoint（检查与修复）
+
+- `main` 的核心行为是 toggle 护盾：前方水平 yaw 接触伤害；受到合资格攻击时按吸收上限减伤，并按原实现的参数顺序扣防御资源；按 tick/接触/受击分别加经验；结束时移除护盾实体、施加 slowness 并按持有 tick 计算冷却。
+- Final 图已覆盖 toggle session、overload floor、tick/接触费用、前方 cone、吸收 policy、状态/冷却和 owner/nearby VFX。
+- 本轮修正 `damage/absorb` 的费用映射：`main` 的防御路径把 `absorb-cp` 传入 overload、把 `absorb-overload` 传入 CP（配置注释也明确记录该历史参数顺序）；Final policy 现按该顺序提交资源费用。
+- 已确认的共享边界：Final `damage/absorb` 当前尚未消费 `interval-ticks/last-tick-path`，因此受击间隔与 last-absorb 状态仍需在 Combat Core damage ABI 中补齐；不能在 AC 保留旧 damage handler 双轨。激活 cost-fail 时序也需以 Final 统一资源策略重新核验。
+- 本轮 EDN 静态门禁待运行后记录；总表保持 `⚠️`，不能把可编译视作受击行为等价。
 ### mag-manip checkpoint（检查与修复）
 
 - Final pulse 现在先以 `owner-id + world-id + entity-type` 查询持有实体，写入
