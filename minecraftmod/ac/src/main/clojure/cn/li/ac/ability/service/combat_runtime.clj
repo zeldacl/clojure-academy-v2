@@ -252,6 +252,21 @@
 
 (defn current-tick [] @last-known-tick*)
 
+(defn- combat-source
+  "Resolve the final source graph for a public registration id.
+
+   Most abilities use the same id for the source and registration.  Shared
+   documents (for example mine-ray's basic/expert/luck registrations) carry a
+   distinct :source-id, so looking only in :combat/:sources by the public id
+   silently drops their tunables and policy data.  Keep this indirection in
+   one place so every dispatch path observes the same registration ABI."
+  [ability-id]
+  (let [catalog @catalog*
+        sources (get-in catalog [:combat :sources])
+        registration (get-in catalog [:combat :by-id ability-id])
+        source-id (or (:source-id registration) ability-id)]
+    (get sources source-id)))
+
 (defn initialize-final-runtime!
   "Install AC's production final runtime against mcmod neutral capability
    handlers. This is the only runtime used after the final dispatch cutover."
@@ -427,7 +442,7 @@
 (defn- materialize-final-tunables
   "Resolve config declarations to neutral values for a final graph input."
   [ability-id skill-exp]
-  (let [source (get-in @catalog* [:combat :sources ability-id])
+  (let [source (combat-source ability-id)
         declarations (:tunables source)]
     (if-not (map? declarations)
       {}
@@ -452,7 +467,7 @@
 
 (defn- final-input [owner ability-id intent seed]
   (let [context (activation-context owner ability-id intent seed)
-        source (get-in @catalog* [:combat :sources ability-id])]
+        source (combat-source ability-id)]
     (merge intent
            {:context context
             :capabilities (caster-facade owner context)
@@ -591,7 +606,7 @@
                        (generate-activation-seed owner ability-id
                                                  (long (or (:server-tick intent)
                                                            @last-known-tick*)))))
-        source (get-in @catalog* [:combat :sources ability-id])
+        source (combat-source ability-id)
         prepared (final-input owner ability-id (assoc intent :activation-seed seed) seed)]
     (if (and (= :start (:op intent))
              (cooldown-active? owner ability-id))
