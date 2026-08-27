@@ -29,6 +29,8 @@
 | 4 | `mag-manip` | 静态完成：持有体 UUID barrier 与会话查询作用域 | 碰撞放置/伤害、spawn 失败回滚 |
 | 5 | `light-shield` | 静态完成：护盾 UUID、接触 self-exclusion、吸收 interval/session patch | 原生受击 adapter、多人 |
 | 6 | 共享 `damage/absorb` ABI | 静态完成：`interval-ticks`/`last-tick-path` 由 Combat Core 计算并提交 session | 原生事件时序 |
+| 7 | penetrate-teleport | 静态完成：固定通道 wheel choice、owner session 距离 clamp、三阶段快照 | 目的地/碰撞 adapter、多人 |
+| 8 | meltdowner | 静态完成：公共 beam-trace 按 reflection-policy 调用 interaction/resolve 并返回反射字段 | 反射目标/方块 adapter、多人 |
 
 其余技能按同一顺序继续处理；不得以复制 main handler、兼容旧 callback 或第二条执行轨替代
 当前 Final 图。每个批次在对应测试通过后单独提交。
@@ -296,16 +298,15 @@ thunder-bolt
 - 本轮修正：生成 MdBall 后通过 Final `target/entities` 查询取得本次生成球的实体 ID，并把 ID 放入中立 `origin-selector`；`combat-core/deferred` 增加 `:entity-id` 精确过滤。同一玩家同时存在多个 MdBall 时，延迟射线不会误选其它技能的球，也不会跨玩家选中实体。
 - 未引入旧技能函数、兼容分支或 AC 直连；仍由 AC 组合根提供 Final host/query/action wiring。
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）与 `:combat-core:runCombatClojureTests`（25/65）。实机下仍需验证生成失败边界及适配器返回 ID 与实体生命周期的一致性，因此总表保持 `⚠️`。
-### body-intensify checkpoint（检查结论）
+### body-intensify checkpoint（逐项迁移）
 
-- Final 图已覆盖 main 的起始 overload 扣除、逐 tick CP 扣除、overload floor、最小/最大/
-  容忍蓄力时长、随机状态效果、hunger、成功经验、超时/资源不足/abort 清理，以及
-  owner-only 充能和 nearby 释放 VFX。
-- 当前不能宣称完整等价：`score/mark` 的经验事件在图执行后才由 AC reducer 提交，而
-  `cooldown/start` 在同一图内使用激活时 materialized tunable；因此“经验增加后再计算
-  冷却”的 main 语义需要先补共享 progression→cooldown ABI。禁止在 Body Intensify
-  内写技能专属常量或保留旧回调双轨。
-- 该项暂不修改 EDN，保持队列中的 `⚠️`，待共享 ABI 修复后重新核验并单独提交。
+- Final 图覆盖 main 的起始 overload、逐 tick CP/overload floor、最小/最大/容忍蓄力、
+  随机状态效果、hunger、VFX、超时/资源不足/abort 清理。
+- 本轮把 cooldown tunable 暴露为配置端点，在 release 图中先计算
+  `mastery + progression-exp-use`，再以 `math/lerp` 求冷却并启动；因此顺序与 main 的
+  “成功释放增加经验后计算 cooldown”一致，不再依赖提交后的旧 callback 或静态旧 exp。
+- 仍需实机验证随机效果 adapter、状态持续时间和多人 owner VFX；静态门禁通过，故总表
+  继续保持 `⚠️`，但该项的 progression→cooldown 共享阻塞已解除。
 
 ### current-charging checkpoint（检查与修复）
 

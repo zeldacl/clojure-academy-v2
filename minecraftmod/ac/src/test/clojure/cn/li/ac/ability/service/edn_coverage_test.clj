@@ -428,3 +428,15 @@
     (is (= :slot-wheel (-> doc :program :events first key)))
     (is (= :session/write
            (get-in doc [:program :events :slot-wheel :steps 3 :component])))))
+(deftest body-intensify-cooldown-uses-post-exp-masteries-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/body_intensify.edn"))
+        release (get-in doc [:program :release])
+        nodes (component-nodes release)]
+    (is (some #(and (= :ability/tunable (:component %))
+                    (= :cooldown-endpoints (:name %))) nodes))
+    (is (some #(and (= :data/bind (:component %))
+                    (= :cooldown-exp-next (:to %))) nodes))
+    (is (some #(and (= :cooldown/start (:component %))
+                    (= {:ticks {:ref [:local :cooldown-ticks-next]}}
+                       (:cooldown %))) nodes))
+    (is (not-any? #(= :ability/cooldown (:component %)) nodes))))

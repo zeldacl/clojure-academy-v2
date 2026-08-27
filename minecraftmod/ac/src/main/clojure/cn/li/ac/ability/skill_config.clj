@@ -517,6 +517,7 @@
     :cost-down-overload :cost.down.overload
     :cost-tick-cp :cost.tick.cp
     :cooldown-ticks :cooldown.ticks
+    :cooldown-endpoints :cooldown.ticks
     :progression-exp-use :progression.exp-use}
    :mine-detect
    {:targeting-range :targeting.range
