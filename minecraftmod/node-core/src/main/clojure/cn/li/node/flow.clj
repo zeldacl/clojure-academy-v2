@@ -19,7 +19,8 @@
 (declare execute!)
 
 (defn- resolve-field [node k ctx]
-  (value/resolve-value (get node k) (:locals ctx) (:seed ctx)))
+  (value/resolve-value (get node k) (:locals ctx) (:seed ctx)
+                       (get-in ctx [:environment :extra-ops] {})))
 
 (defn- run-child [child ctx]
   (execute! child ctx))

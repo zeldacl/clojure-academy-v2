@@ -5,10 +5,9 @@
    by the mcmod boundary, and one bad document disables only itself rather
    than the whole registry load.
 
-   A composite document read this way is, byte for byte, the same map
-   cn.li.node.descriptor/register-composite! already accepts -- composites
-   are authored as data; this namespace only performs the resource-loading
-   step and never interprets a composite at runtime."
+   A composite document read this way is immutable descriptor data; this
+   namespace only performs the resource-loading step and never interprets a
+   composite at runtime."
   (:require [cn.li.node.descriptor :as node]))
 
 (defn- fail [message data]

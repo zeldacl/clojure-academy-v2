@@ -3,9 +3,8 @@
    vec3, boolean, collection, and random. No Minecraft or mcmod dependency
    -- this is the language layer (see NODE_LANGUAGE.md), not a domain
    vocabulary. Domain-specific opcodes (e.g. combat's ballistic vec3/launch,
-   vfx's noise functions) register through `register-op!` instead of being
-   added here, so node-core itself never needs to know what combat or vfx
-   are for.")
+   vfx's domain opcodes are supplied through the immutable NodeEnvironment,
+   so node-core itself never needs to know what combat or vfx are for.")
 
 (set! *warn-on-reflection* true)
 
@@ -69,23 +68,14 @@
   (let [delta (- to from)]
     (if (<= (Math/abs delta) step) to (+ from (if (neg? delta) (- step) step)))))
 
-(defonce ^:private extra-ops* (atom {}))
-
-(defn register-op!
-  "Register a domain-specific expression opcode not in the shared baseline
-   below (e.g. combat's :vec3/launch ballistic helper). `f` is
-   (fn [args seed] value). Domain vocabularies own their own opcodes;
-   node-core only owns dispatch."
-  [opcode f]
-  (swap! extra-ops* assoc opcode f))
-
 (defn evaluate
   "Evaluate one expression opcode against already-resolved args (a vector).
    `seed` seeds the deterministic RNG ops -- vary it per call (see
    next-seed) or every random/* op in one program evaluation returns the
    same value."
-  ([opcode args] (evaluate opcode args 0))
-  ([opcode args seed]
+  ([opcode args] (evaluate opcode args 0 {}))
+  ([opcode args seed] (evaluate opcode args seed {}))
+  ([opcode args seed extra-ops]
    (let [seed (long seed)]
      (case opcode
        :math/add (double (+ (double (nth args 0)) (double (nth args 1))))
@@ -178,6 +168,6 @@
        :random/int (bounded-int seed (long (nth args 0)) (long (nth args 1)))
        :random/chance (< (unit-double seed) (double (nth args 0)))
 
-       (if-let [f (get @extra-ops* opcode)]
+       (if-let [f (get extra-ops opcode)]
          (f args seed)
          (throw (ex-info "unsupported expression opcode" {:opcode opcode})))))))

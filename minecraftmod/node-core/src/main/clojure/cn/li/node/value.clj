@@ -18,21 +18,23 @@
    `seed` (threaded into cn.li.node.expr/evaluate; bumped on every nested
    :expr so repeated random/* calls within one resolution don't all return
    the same result)."
-  [value locals seed]
-  (let [seed (long (or seed 0))]
+  ([value locals seed]
+   (resolve-value value locals seed {}))
+  ([value locals seed extra-ops]
+   (let [seed (long (or seed 0))]
     (cond
       (and (map? value) (vector? (:ref value)) (= :local (first (:ref value))))
       (let [[_ local-name & path] (:ref value)]
         (if (seq path) (get-in (get locals local-name) (vec path)) (get locals local-name)))
 
       (and (map? value) (keyword? (:expr value)))
-      (let [args (mapv #(resolve-value % locals (expr/next-seed seed)) (:args value))]
-        (expr/evaluate (:expr value) args seed))
+      (let [args (mapv #(resolve-value % locals (expr/next-seed seed) extra-ops) (:args value))]
+        (expr/evaluate (:expr value) args seed extra-ops))
 
       (map? value)
-      (reduce-kv (fn [acc k v] (assoc acc k (resolve-value v locals seed))) {} value)
+      (reduce-kv (fn [acc k v] (assoc acc k (resolve-value v locals seed extra-ops))) {} value)
 
       (vector? value)
-      (mapv #(resolve-value % locals seed) value)
+      (mapv #(resolve-value % locals seed extra-ops) value)
 
-      :else value)))
+      :else value))))
