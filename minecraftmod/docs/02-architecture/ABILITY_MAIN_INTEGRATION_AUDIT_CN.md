@@ -340,6 +340,16 @@ thunder-bolt
   `:ac:runAcEdnCoverageTests`（14/33）。由于没有实机，raycast 命中点、Silbarn 行为
   adapter、锥体几何边界和多人同时施放的实际结果仍保持 `⚠️`，不能将静态通过视为运行时
   完成。
+### flesh-ripping checkpoint（逐项复核）
+
+- main 在 hold 期间持续 raycast 并更新目标框；release 使用最后一次保存的 trace，命中时
+  扣 CP/overload、造成 magic damage、按概率给施法者 nausea、记经验并启动 cooldown；
+  miss 只清理 marker，不扣 release 费用。
+- 当前 Final 图原本在 release 重新 raycast，这会把 release 时的目标替换成不同实体。现在
+  start/pulse 将中性 `target/raycast` 的 `:attacked?/:target-id/:position` 写入 owner session，
+  release 只读取该快照；资源不足与 miss 分支仍由同一 graph 负责 VFX destroy 和 session finish。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）。目标移动、nausea 随机率、真实伤害 adapter
+  与多人同时瞄准仍需实机验证，不能把静态加载视为完成。
 ### scatter-bomb checkpoint（逐项复核）
 
 - main 的基准是 hold-channel：启动时扣 overload 并记录实际余量作为 floor；server tick
