@@ -270,6 +270,13 @@ thunder-bolt
   `:ac:runAcEdnCoverageTests`（14/33）。这只是该项的静态/编译 checkpoint，不能把
   仍未闭合的 skill damage scaling、实际客户端 VFX 发送和实机结果标成 `✅`。
 
+### electron-bomb checkpoint（检查与修复）
+
+- `main` 基准是无资源消耗；施放时立即增加固定经验并启动按熟练度插值的冷却；生成带生命周期的 MdBall，在接近生命周期结束时从球的实时位置向施法者当时的准星终点射出单体魔法伤害射线；无论命中与否都发送射线表现。
+- Final EDN 已覆盖上述时序、伤害/冷却曲线、生命周期分支、魔法伤害、延迟调度和附近玩家 VFX 广播。
+- 本轮修正：生成 MdBall 后通过 Final `target/entities` 查询取得本次生成球的实体 ID，并把 ID 放入中立 `origin-selector`；`combat-core/deferred` 增加 `:entity-id` 精确过滤。同一玩家同时存在多个 MdBall 时，延迟射线不会误选其它技能的球，也不会跨玩家选中实体。
+- 未引入旧技能函数、兼容分支或 AC 直连；仍由 AC 组合根提供 Final host/query/action wiring。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）与 `:combat-core:runCombatClojureTests`（25/65）。实机下仍需验证生成失败边界及适配器返回 ID 与实体生命周期的一致性，因此总表保持 `⚠️`。
 ### body-intensify checkpoint（检查结论）
 
 - Final 图已覆盖 main 的起始 overload 扣除、逐 tick CP 扣除、overload floor、最小/最大/

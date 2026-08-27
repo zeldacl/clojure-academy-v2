@@ -105,6 +105,7 @@
         ey (double (or (:y center) 0.0))
         ez (double (or (:z center) 0.0))
         entity-type (:entity-type selector)
+        entity-id (some-> (:entity-id selector) str)
         owner-id (some-> (or (:owner-id selector) owner) str)]
     (or
       (when (and selector (world-effects/available?))
@@ -115,6 +116,11 @@
                                        (and (or (nil? entity-type)
                                                 (= entity-type (or (:type entity)
                                                                    (:entity-type entity))))
+                                            (or (nil? entity-id)
+                                                (= entity-id
+                                                   (some-> (or (:id entity)
+                                                               (:uuid entity)
+                                                               (:entity-id entity)) str)))
                                             (or (nil? owner-id)
                                                 (= owner-id
                                                    (some-> (or (:owner-id entity)
