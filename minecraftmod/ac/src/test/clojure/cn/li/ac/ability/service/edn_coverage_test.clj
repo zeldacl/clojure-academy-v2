@@ -622,3 +622,11 @@
         marks (filter #(and (= :score/mark (:component %)) (= :cast (:tag %))) nodes)]
     (is (= 2 (count marks)))
     (is (every? #(= {:ref [:local :cast-progression]} (:progression %)) marks))))
+
+(deftest storm-wing-submits-flight-tick-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/storm_wing.edn"))
+        nodes (component-nodes (:program doc))
+        marks (filter #(and (= :score/mark (:component %)) (= :flight-tick (:tag %))) nodes)]
+    (is (= 1 (count marks)))
+    (is (= {:ref [:local :flight-tick-progression]}
+           (:progression (first marks))))))
