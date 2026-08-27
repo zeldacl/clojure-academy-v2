@@ -521,6 +521,20 @@
            (:progression mark)))
     (is (= {:ref [:session :time-rate]}
            (get-in doc [:progression :use :weight])))))
+(deftest scatter-bomb-ball-fired-submits-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/scatter_bomb.edn"))
+        nodes (component-nodes (:program doc))
+        progression (some #(when (and (= :ability/progression (:component %))
+                                      (= :ball-fired (:name %))) %)
+                          nodes)
+        mark (some #(when (and (= :score/mark (:component %))
+                               (= :ball-fired (:tag %))) %)
+                    nodes)]
+    (is progression)
+    (is (= {:ref [:local :ball-fired-progression]}
+           (:progression mark)))
+    (is (= {:ref [:input :tunables :exp-per-ball]}
+           (get-in doc [:progression :ball-fired :per-mark])))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))

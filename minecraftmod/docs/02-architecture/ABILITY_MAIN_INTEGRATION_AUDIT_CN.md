@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（28 tests / 78 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（29 tests / 81 assertions）、
   `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -388,12 +388,15 @@ thunder-bolt
   扣 CP，在 20..80 tick 每 10 tick 生成一枚 MdBall（最多 7），释放时每枚球独立散射，
   熟练度超过阈值后才允许按 `floor(balls * exp)` 枚自动瞄准；tick 200 anti-AFK 先造成
   generic 自伤，再结算并发射已有球体。无 cooldown，按球发放经验。
-- 当前 Final 图已覆盖启动/蓄力费用、floor、生成节奏、owner/type/world 过滤、散射
-  beam、nearby VFX 和按球 score。此前释放条件漏掉 `auto-aim-exp-threshold`，现在已在
-  Final branch 中补齐；server pulse 已由统一 runtime 每 tick 注入 `charge/ticks`。
-- Final session 现在保存每个生成球的 UUID，并在 release/abort 通过 `entity-ids + owner + world` 精确查询；spawn 结果绑定与列表更新都在同一 Final graph 内完成。anti-AFK 已通过 Final `flow/finish :next-phase :release` 转入同一释放 graph：先执行 generic 自伤，再由 server pulse runtime 派发 release，不复制 volley，也不建立第二条路径。
-- 已通过 `:ac:runAcEdnCoverageTests`（14/33）；没有实机时不能将实体轨迹、方块碰撞、
-  delayed beam 和多人同时蓄力标为完成。
+- 当前 Final 图已覆盖启动/蓄力费用、floor、生成节奏、owner/type/world 过滤、散射 beam、
+  nearby VFX 和按球 score；释放条件包含 `auto-aim-exp-threshold`，server pulse 由统一
+  runtime 每 tick 注入 `charge/ticks`。本轮补齐每球 `ability/progression :ball-fired`
+  到 score 事件的传递，使 `exp-per-ball` 真正按发射球数结算。
+- Final session 保存每个生成球的 UUID，并在 release/abort 通过 `entity-ids + owner + world`
+  精确清理；anti-AFK 通过 Final `flow/finish :next-phase :release` 转入同一释放 graph，
+  不复制 volley，也不建立第二条路径。
+- `:ac:runAcEdnCoverageTests` 通过（29 tests / 81 assertions）；没有实机时不能将实体轨迹、
+  方块碰撞、delayed beam 和多人同时蓄力标为完成。
 ### mark-teleport checkpoint（逐项复核）
 
 - `main` 的目标距离随持有时间增长，并受最大距离、当前 CP/每米成本限制；最小有效
@@ -747,7 +750,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 28 tests / 78 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 29 tests / 81 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
