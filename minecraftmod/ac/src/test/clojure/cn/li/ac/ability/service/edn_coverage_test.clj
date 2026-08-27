@@ -491,7 +491,8 @@
     (is (= 2 (count marks)))
     (is (every? #(contains? #{:hit-progression :miss-progression}
                             (get-in % [:progression :ref 1]))
-                marks))))(deftest groundshock-submits-entity-and-use-progression-test
+                marks))))
+(deftest groundshock-submits-entity-and-use-progression-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/groundshock.edn"))
         nodes (component-nodes (:program doc))
         hit (filter #(and (= :ability/progression (:component %))
@@ -505,7 +506,22 @@
     (is (= 2 (count marks)))
     (is (every? #(contains? #{:hit-progression :use-progression}
                             (get-in % [:progression :ref 1]))
-                marks))))(deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
+                marks))))
+(deftest meltdowner-release-submits-weighted-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/meltdowner.edn"))
+        nodes (component-nodes (:program doc))
+        progression (some #(when (and (= :ability/progression (:component %))
+                                      (= :use (:name %))) %)
+                          nodes)
+        mark (some #(when (and (= :score/mark (:component %))
+                               (= :use (:tag %))) %)
+                    nodes)]
+    (is progression)
+    (is (= {:ref [:local :use-progression]}
+           (:progression mark)))
+    (is (= {:ref [:session :time-rate]}
+           (get-in doc [:progression :use :weight])))))
+(deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
         aoe (some #(when (and (= :target/entities (:component %))
@@ -514,7 +530,8 @@
                   nodes)]
     (is (= [{:ref [:input :capabilities :caster/id]}
             {:ref [:local :aim-hit :entity-id]}]
-           (get-in aoe [:filter :excluded-entity-ids])))))(deftest body-intensify-cooldown-uses-post-exp-masteries-test
+           (get-in aoe [:filter :excluded-entity-ids])))))
+(deftest body-intensify-cooldown-uses-post-exp-masteries-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/body_intensify.edn"))
         release (get-in doc [:program :release])
         nodes (component-nodes release)]

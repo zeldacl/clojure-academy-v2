@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（27 tests / 75 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（28 tests / 78 assertions）、
   `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -342,14 +342,17 @@ thunder-bolt
 - 本轮 EDN 静态门禁待运行后记录；总表保持 `⚠️`，不能把可编译视作受击行为等价。
 ### meltdowner checkpoint（检查与修复）
 
-- `main` 的 charge window 为 20/40/100 tick；release 计算 time-rate，执行 beam（实体伤害、方块破坏、反射射击），按 time-rate 增加经验并启动 time-rate×base×cooldown 冷却，最后清理充能 VFX。
-- Final 图已覆盖充能状态、overload floor、tick 费用、beam trace、实体/方块副作用、反射字段消费、VFX 和经验事件。
-- 本轮修正 release 冷却：原图只有 `cooldown/start :main`，未传入 `main-cooldown`，按 Final 引擎会写入 0 tick；现在先读取 `ability/cooldown :main`，再以 `:cooldown {:ref [:local :main-cooldown]}` 启动。
-- 本轮补齐公共 beam-trace：Combat Core 对每个命中实体按 EDN `reflection-policy` 调用中性
-  `interaction/resolve`，把 `reflection-accepted?/target/start/end/damage` 作为同一 trace 结果返回；
-  Meltdowner 的反射分支因此与实体伤害、VFX 一样走 Final graph，不恢复旧 beam helper 或技能回调。
-- 仍需实机验证反射目标的真实 raycast、方块破坏 adapter 和多人同时 beam；静态门禁只证明
-  ABI/编译闭合，故总表保持 `⚠️`。
+- `main` 的 charge window 为 20/40/100 tick；release 计算 time-rate，执行 beam（实体伤害、
+  方块破坏、反射射击），按 time-rate 增加经验并启动 time-rate×base×cooldown 冷却，最后
+  清理充能 VFX。
+- Final 图已覆盖充能状态、overload floor、tick 费用、beam trace、实体/方块副作用、反射
+  字段消费、VFX 和经验事件；release 冷却先读取 `ability/cooldown :main` 再启动，避免写入
+  0 tick。本轮补齐 `ability/progression :use` 到 score 事件的传递，使 descriptor 中的
+  `time-rate` 权重真正参与经验结算。
+- 公共 beam-trace 对每个命中实体按 EDN `reflection-policy` 调用中性 `interaction/resolve`，
+  把反射字段作为同一 trace 结果返回；没有恢复旧 beam helper 或技能回调。
+- 仍需实机验证反射目标的真实 raycast、方块破坏 adapter 和多人同时 beam；静态门禁通过但
+  不能将未测运行时结果标成 `✅`。
 ### ray-barrage checkpoint（检查与修复）
 
 - main 的分支基准是：准星首个实体为尚未触发的 Silbarn 时，触发其行为并在当前瞄准方向
@@ -744,7 +747,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 27 tests / 75 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 28 tests / 78 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
