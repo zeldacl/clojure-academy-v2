@@ -630,3 +630,11 @@
     (is (= 1 (count marks)))
     (is (= {:ref [:local :flight-tick-progression]}
            (:progression (first marks))))))
+
+(deftest vec-deviation-submits-deflect-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/vec_deviation.edn"))
+        nodes (component-nodes (:program doc))
+        marks (filter #(and (= :score/mark (:component %)) (= :deflect (:tag %))) nodes)]
+    (is (= 1 (count marks)))
+    (is (= {:ref [:local :deflect-progression]} (:progression (first marks))))
+    (is (= {:ref [:local :projectile :difficulty]} (:weight (first marks))))))
