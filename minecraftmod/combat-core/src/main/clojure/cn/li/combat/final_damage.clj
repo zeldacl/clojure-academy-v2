@@ -101,7 +101,9 @@
   (let [value #(double (or (eval-value % event) 0.0))]
     (case (:component program)
       :damage/multiply [{:kind :multiplier :value (value (:multiplier program))}]
-      :damage/reduce [{:kind :reduction :value (value (:rate program))}]
+      :damage/reduce [{:kind :reduction :value (value (:rate program))
+                       :cost (:max-cost program) :vfx (:vfx program)
+                       :events (:events program) :input (:input (:metadata event))}]
       :damage/absorb [{:kind :absorption :value (value (:cap program))
                        :cost (:cost program) :vfx (:vfx program)
                        :events (:events program) :input (:input (:metadata event))}]
@@ -165,12 +167,12 @@
      :critical? critical? :critical-level critical-level :reflections reflections
      :vfx (vec (keep :vfx (filter #(or (and (= :critical (:kind %)) critical?)
                                       (= :reflection (:kind %))
-                                      (= :absorption (:kind %))) contributions)))
+                                      (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions)))
      :feedback (vec (keep :feedback (filter #(and (= :critical (:kind %)) critical?) contributions)))
      :side-events (vec (mapcat #(or (:events %) [])
                                (filter #(or (and (= :critical (:kind %)) critical?)
                                           (= :reflection (:kind %))
-                                          (= :absorption (:kind %))) contributions)))
+                                          (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions)))
      :state-patches (vec (mapcat :state-patches matched))
      :events (vec (mapcat :events matched))}))
 (defn install-boundary!

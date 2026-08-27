@@ -1026,7 +1026,9 @@
                                      (select-keys materialized
                                                   [:effect-id :instance-key :instance-id
                                                    :audience :anchor])
-                                     {:params (:payload materialized)})))
+                                     {:params (or (:payload materialized)
+                                               (dissoc materialized :effect-id :instance-key
+                                                       :instance-id :audience :anchor :input))})))
                           (:vfx result)))
         graph-vfx (when accepted? (:vfx-signals result))
         vfx-results (if accepted?
