@@ -646,3 +646,11 @@
     (is (= 1 (count marks)))
     (is (= {:ref [:local :reflect-entity-progression]} (:progression (first marks))))
     (is (= {:ref [:local :projectile :difficulty]} (:weight (first marks))))))
+
+(deftest vec-deviation-damage-progression-policy-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/vec_deviation.edn"))
+        policy (first (:damage-policies doc))
+        program (:program policy)]
+    (is (= :damage/reduce (:component program)))
+    (is (= :damaged (:exp-tag program)))
+    (is (= {:ref [:input :tunables :exp-damage-scale]} (:exp-scale program)))))

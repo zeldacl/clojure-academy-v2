@@ -117,6 +117,11 @@
                        :ignore-threshold (value (:ignore-threshold program))
                        :max-cost (value (:max-cost program)) :vfx (:vfx program)
                        :owner (:owner-id (get-in event [:metadata :input :context]))
+                       :exp-tag (:exp-tag program)
+                       :exp-amount (value (:exp-scale program))
+                       :exp-eligible? (not (and (some? (:ignore-threshold program))
+                                                   (> (double (:base event))
+                                                      (value (:ignore-threshold program)))))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/absorb [{:kind :absorption :value (value (:cap program))
                        :requires-payment true
@@ -165,9 +170,11 @@
                                                    (program-contributions (:program reaction) pe)))))
                                   matched)
         progression-events (vec (keep (fn [contribution]
-                                        (when (and (= :absorption (:kind contribution))
-                                                   (:exp-tag contribution)
-                                                   (number? (:exp-amount contribution)))
+                                        (when (and (:exp-tag contribution)
+                                                   (number? (:exp-amount contribution))
+                                                   (or (= :absorption (:kind contribution))
+                                                       (and (= :reduction (:kind contribution))
+                                                            (not= false (:exp-eligible? contribution)))))
                                           {:type :score/mark
                                            :tag (:exp-tag contribution)
                                            :progression (:exp-amount contribution)

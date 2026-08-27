@@ -86,3 +86,13 @@
                                                                                 :overload 100.0}}}}})]
     (is (= 10.0 (:amount result)))
     (is (empty? (:session-patches result)))))
+(deftest reduce-exp-tag-emits-only-for-eligible-damage-test
+  (let [reaction {:ability-id :vec-deviation :reaction-id :reduce :priority 1
+                  :on :combat/damage
+                  :program {:component :damage/reduce :rate 0.5 :max-cost 99.0
+                            :ignore-threshold 5.0 :exp-tag :damaged :exp-scale 0.1}}
+        eligible (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})
+        ignored (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 6.0 :type :skill :seed 1})]
+    (is (= [{:type :score/mark :tag :damaged :progression 0.1
+             :owner nil :ability-id :vec-deviation}] (:side-events eligible)))
+    (is (empty? (:side-events ignored)))))
