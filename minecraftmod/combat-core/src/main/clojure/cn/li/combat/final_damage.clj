@@ -114,6 +114,7 @@
                        :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/absorb [{:kind :absorption :value (value (:cap program))
+                       :requires-payment true
                        :cost (cost-map (:cost program)) :vfx (:vfx program)
                        :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
@@ -145,13 +146,21 @@
   (< (double (mod (Math/abs (long (hash [seed probability]))) 1000000)) (* 1000000.0 (double probability))))
 (defn resolve-event [reactions raw-event]
   (let [event (event raw-event) matched (collect reactions event)
-        contributions (mapcat (fn [reaction]
-                                (let [pe (policy-event event reaction)]
-                                  (map #(assoc % :ability-id (:ability-id reaction)
-                                                 :reaction-id (:reaction-id reaction))
-                                       (concat (or (:contributions reaction) [])
-                                               (program-contributions (:program reaction) pe)))))
-                              matched)
+        raw-contributions (mapcat (fn [reaction]
+                                    (let [pe (policy-event event reaction)]
+                                      (map #(assoc % :ability-id (:ability-id reaction)
+                                                     :reaction-id (:reaction-id reaction))
+                                           (concat (or (:contributions reaction) [])
+                                                   (program-contributions (:program reaction) pe)))))
+                                  matched)
+        contributions (vec (remove (fn [contribution]
+                                     (and (:requires-payment contribution)
+                                          (let [resources (get-in contribution [:input :context :resources] {})]
+                                            (some (fn [[resource amount]]
+                                                    (> (double (or amount 0.0))
+                                                       (double (or (get resources resource) 0.0))))
+                                                  (:cost contribution)))))
+                                   raw-contributions))
         multiplier (reduce * 1.0 (map #(double (or (:value %) 1.0)) (filter #(= :multiplier (:kind %)) contributions)))
         reduction (min 1.0 (max 0.0 (reduce + 0.0 (map #(double (or (:value %) 0.0)) (filter #(= :reduction (:kind %)) contributions)))))
         before (* (:base event) multiplier (- 1.0 reduction))
