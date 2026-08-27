@@ -462,6 +462,21 @@
     (is (some #(and (= :cost/spend (:component %))
                     (= {:ref [:local :release-budget]} (:budget %)))
               release-nodes))))
+(deftest blood-retrograde-hit-submits-progression-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/blood_retrograde.edn"))
+        nodes (component-nodes (:program doc))
+        progression-nodes (filter #(and (= :ability/progression (:component %))
+                                        (= :hit (:name %)))
+                                  nodes)
+        hit-marks (filter #(and (= :score/mark (:component %))
+                                (= :hit (:tag %)))
+                          nodes)]
+    (is (= 2 (count progression-nodes))
+        "release and auto-release must both submit hit progression")
+    (is (= 2 (count hit-marks)))
+    (is (every? #(= {:ref [:local :hit-progression]}
+                    (:progression %))
+                hit-marks))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
