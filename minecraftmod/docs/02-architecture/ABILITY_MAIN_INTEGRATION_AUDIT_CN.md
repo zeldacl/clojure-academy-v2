@@ -423,6 +423,15 @@ thunder-bolt
   session 归属），再在 EDN 中读取该参数；不得把旧 RPC/channel 或 AC 技能 callback
   重新接回作为双轨兼容。
 
+### directed-blastwave checkpoint（逐项复核）
+
+- 对照 `main` 的 release 路径确认资源只应扣除一次；当前 Final 原先在显式 CP/过载
+  扣费成功后又执行了一次 `:input :budgets :release`，属于确定的双重扣费。
+- 已删除重复 `:cost/spend` 节点，保留单一事务扣费、AOE damage/knockback、方块破坏、
+  hit/miss progression、cooldown 和统一 VFX 链；没有恢复旧 handler 或新增兼容分支。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。资源适配器实际扣费、
+  方块权限和多人同时施放仍需实机任务验证，故总表继续保持 `⚠️`。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
