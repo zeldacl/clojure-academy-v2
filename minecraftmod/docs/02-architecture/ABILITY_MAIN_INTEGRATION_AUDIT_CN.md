@@ -340,6 +340,22 @@ thunder-bolt
   `:ac:runAcEdnCoverageTests`（14/33）。由于没有实机，raycast 命中点、Silbarn 行为
   adapter、锥体几何边界和多人同时施放的实际结果仍保持 `⚠️`，不能将静态通过视为运行时
   完成。
+### scatter-bomb checkpoint（逐项复核）
+
+- main 的基准是 hold-channel：启动时扣 overload 并记录实际余量作为 floor；server tick
+  扣 CP，在 20..80 tick 每 10 tick 生成一枚 MdBall（最多 7），释放时每枚球独立散射，
+  熟练度超过阈值后才允许按 `floor(balls * exp)` 枚自动瞄准；tick 200 anti-AFK 先造成
+  generic 自伤，再结算并发射已有球体。无 cooldown，按球发放经验。
+- 当前 Final 图已覆盖启动/蓄力费用、floor、生成节奏、owner/type/world 过滤、散射
+  beam、nearby VFX 和按球 score。此前释放条件漏掉 `auto-aim-exp-threshold`，现在已在
+  Final branch 中补齐；server pulse 已由统一 runtime 每 tick 注入 `charge/ticks`。
+- 仍未宣称完成的两个边界：Final session 只保存球数量，释放按 owner+entity-type 查询，
+  没有 main 的逐球 UUID/实际位置生命周期；同一 owner 的其它 MdBall 来源可能被查询到，
+  也无法在当前 action ABI 中把 spawn 返回 UUID 直接绑定到后续 graph。另一个确定差异是
+  anti-AFK 分支尚未复用释放 volley（当前只自伤、清理充能 VFX 并结束），下一节点需先
+  抽取当前 Final 的可复用释放组合，禁止复制一份旧回调或建立第二条路径。
+- 已通过 `:ac:runAcEdnCoverageTests`（14/33）；没有实机时不能将实体轨迹、方块碰撞、
+  delayed beam 和多人同时蓄力标为完成。
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
