@@ -177,9 +177,7 @@ dependencies {
 
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
-    implementation project(':vfx-core')
-    implementation project(':combat-core')
-    implementation project(':presentation-core')
+    implementation project(':ability-runtime')
     // presentation-compiler is build-only; it is resolved through the
     // presentationCompiler configuration below and is never packaged.
     testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
@@ -189,11 +187,12 @@ dependencies {
 // The platform target consumes AC as its selected content project.  Expose the
 // neutral source roots that AC composes without making platform build logic
 // depend on (or even name) vfx-core directly.
-evaluationDependsOn(':vfx-core')
-evaluationDependsOn(':combat-core')
+evaluationDependsOn(':ability-runtime')
 ext.neutralRuntimeSourceRoots = sourceSets.main.clojure.srcDirs +
-    project(':vfx-core').sourceSets.main.clojure.srcDirs +
-    project(':combat-core').sourceSets.main.clojure.srcDirs
+    project(':ability-runtime').file('src/main/clojure') +
+    project(':node-core').file('src/main/clojure') +
+    project(':combat-core').file('src/main/clojure') +
+    project(':vfx-core').file('src/main/clojure')
 
 // Consumable source-first variant for platform targets.  The target build
 // selects AC from the catalog and receives this already-composed directory;

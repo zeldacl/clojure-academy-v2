@@ -72,11 +72,11 @@ ext.neutralRuntimeClassDirs = [
 ]
 
 dependencies {
-    implementation project(":mcmod")
-    implementation project(":node-core")
-    implementation project(":combat-core")
-    implementation project(":vfx-core")
-    implementation project(":presentation-core")
+    api project(":mcmod")
+    api project(":node-core")
+    api project(":combat-core")
+    api project(":vfx-core")
+    api project(":presentation-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }

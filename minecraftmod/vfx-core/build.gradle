@@ -65,6 +65,9 @@ tasks.register("runVfxClojureTests", JavaExec) {
 
 dependencies {
     implementation project(":mcmod")
+    // Shared immutable node environment/descriptor contracts. VFX owns its
+    // visual reducers, but uses the same language kernel as Combat.
+    implementation project(":node-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
 }

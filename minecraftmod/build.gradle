@@ -56,7 +56,7 @@ ext {
     // Only platform namespaces that touch Minecraft/Loader APIs are required
     // to be AOT/remapped.  The explicit fullAot switch remains available for
     // the historical diagnostic build mode.
-    neutralSourceFirstProjects = [":ac", ":mcmod", ":vfx-core", ":combat-core"]
+    neutralSourceFirstProjects = [":ac", ":mcmod", ":node-core", ":vfx-core", ":combat-core", ":ability-runtime"]
 }
 
 allprojects {
@@ -819,8 +819,11 @@ tasks.register("verifyVfxDependencyDirection") {
         if (vfxBuild =~ /project\([\"']:(?:ac|platform|presentation-core|presentation-compiler|combat-core)[\"']\)/) {
             violations << "vfx-core must not depend on AC, platform, Presentation or Combat Core modules"
         }
-        if (!(acBuild =~ /project\([\"']:?vfx-core[\"']\)/)) {
-            violations << "AC must compose vfx-core"
+        if (!(vfxBuild =~ /project\([\"']:?node-core[\"']\)/)) {
+            violations << "vfx-core must depend on node-core"
+        }
+        if (acBuild =~ /project\([\"']:?vfx-core[\"']\)/) {
+            violations << "AC must not depend directly on vfx-core; ability-runtime owns composition"
         }
         if (platformBuild =~ /vfx-core|project\([\"']:?vfx-core[\"']\)/) {
             violations << "platform build logic must not mention vfx-core"
@@ -958,14 +961,14 @@ tasks.register("verifyCombatDependencyDirection") {
         if (!(combatBuild =~ /project\([\"']:?mcmod[\"']\)/)) {
             violations << "combat-core must depend on mcmod"
         }
-        if (!(combatBuild =~ /project\([\"']:?vfx-core[\"']\)/)) {
-            violations << "combat-core must depend on vfx-core (one-directional: for VFX effect audience/lifecycle metadata only)"
+        if (combatBuild =~ /project\([\"']:?vfx-core[\"']\)/) {
+            violations << "combat-core must not depend on vfx-core; it emits pure VfxIntent values"
         }
         if (combatBuild =~ /project\([\"']:(?:ac|platform|presentation-core)[\"']\)/) {
             violations << "combat-core must not depend on AC, platform or Presentation"
         }
-        if (!(acBuild =~ /project\([\"']:?combat-core[\"']\)/)) {
-            violations << "AC must compose combat-core"
+        if (acBuild =~ /project\([\"']:?combat-core[\"']\)/) {
+            violations << "AC must not depend directly on combat-core; ability-runtime owns composition"
         }
         if (platformBuild =~ /combat-core|project\([\"']:?combat-core[\"']\)/) {
             violations << "platform build logic must not mention combat-core"
