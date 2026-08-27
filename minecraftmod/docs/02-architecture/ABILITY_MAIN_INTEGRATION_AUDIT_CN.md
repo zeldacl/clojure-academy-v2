@@ -349,11 +349,7 @@ thunder-bolt
 - 当前 Final 图已覆盖启动/蓄力费用、floor、生成节奏、owner/type/world 过滤、散射
   beam、nearby VFX 和按球 score。此前释放条件漏掉 `auto-aim-exp-threshold`，现在已在
   Final branch 中补齐；server pulse 已由统一 runtime 每 tick 注入 `charge/ticks`。
-- 仍未宣称完成的两个边界：Final session 只保存球数量，释放按 owner+entity-type 查询，
-  没有 main 的逐球 UUID/实际位置生命周期；同一 owner 的其它 MdBall 来源可能被查询到，
-  也无法在当前 action ABI 中把 spawn 返回 UUID 直接绑定到后续 graph。另一个确定差异是
-  anti-AFK 分支尚未复用释放 volley（当前只自伤、清理充能 VFX 并结束），下一节点需先
-  抽取当前 Final 的可复用释放组合，禁止复制一份旧回调或建立第二条路径。
+- 仍未宣称完成的实体生命周期边界：Final session 只保存球数量，释放按 owner+entity-type 查询，\n  没有 main 的逐球 UUID/实际位置生命周期；同一 owner 的其它 MdBall 来源可能被查询到，\n  也无法在当前 action ABI 中把 spawn 返回 UUID 直接绑定到后续 graph。anti-AFK 已通过 Final\n  `flow/finish :next-phase :release` 转入同一释放 graph：先执行 generic 自伤，再由 server\n  pulse runtime 派发 release，不复制 volley，也不建立第二条路径。
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）；没有实机时不能将实体轨迹、方块碰撞、
   delayed beam 和多人同时蓄力标为完成。
 ### rad-intensify checkpoint（逐项复核）
