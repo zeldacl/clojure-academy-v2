@@ -47,19 +47,40 @@
                                 [k (assoc mark :ticks-left ttl)]))))
                     marks)))))
 
+(defn- resolve-mark-position
+  "Resolve the marked entity's live client position so the sparks follow the
+  target — upstream's Events.onUpdateClient re-spawns MdParticleFactory
+  particles at the entity's current position every tick (particles stop when
+  the entity is no longer tracked). Falls back to the mark-time snapshot
+  position when the entity is untracked or no snapshot exists (ray-barrage
+  marks carry no :target-pos and previously rendered nothing at all)."
+  [{:keys [target-id x y z]}]
+  (let [fallback (when (and (number? x) (number? y) (number? z))
+                   {:x (double x) :y (double y) :z (double z)})]
+    (if (and target-id (seq (str target-id)))
+      (or (try
+            (client-bridge/run-client-effect!
+             :mcmod/get-entity-position
+             {:entity-uuid (str target-id)})
+            (catch Throwable _ nil))
+          fallback)
+      fallback)))
+
 (defn- mark-ops
   [mark]
   (let [ttl (long (or (:ticks-left mark) 0))
         alpha (int (max 40 (min 180 (* 3 ttl))))
-        sparks (rand-int 4)]
-    (when (and (number? (:x mark))
-               (number? (:y mark))
-               (number? (:z mark))
+        sparks (rand-int 4)
+        {:keys [x y z height]} (resolve-mark-position mark)]
+    (when (and (number? x)
+               (number? y)
+               (number? z)
                (pos? ttl)
                (pos? sparks))
-      (let [cx (double (:x mark))
-            cy (+ 0.8 (double (:y mark)))
-            cz (double (:z mark))
+      (let [cx (double x)
+            ;; Mid-body anchor: upstream samples h in [0, entity.height].
+            cy (+ (double y) (* 0.5 (double (or height 1.6))))
+            cz (double z)
             base-angle (* 0.22 ttl)]
         (for [i (range sparks)]
           (let [angle (+ base-angle (* i 2.1))
