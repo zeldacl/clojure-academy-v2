@@ -213,7 +213,7 @@
 
 (deftest final-vocabulary-descriptor-abi-test
   (let [descriptors (filter #(= :final (:category %))
-                            (final-vocabulary/register!))]
+(final-vocabulary/descriptor-specs))]
     (is (pos? (count descriptors)))
     (is (every? #(every? (fn [k] (contains? % k))
                          [:id :revision :layer :category :doc :inputs :outputs :children])
