@@ -356,11 +356,13 @@
       :flow/finish (cond-> (-> context
                                (assoc-in [:locals :outcome] (:outcome node))
                                (assoc :halt? true))
+                     (:next-phase node) (assoc :next-phase (:next-phase node))
                      (:finish-session? node) (assoc :finish-session? true))
       :finalize (cond-> (-> context
                             (assoc-in [:locals :outcome] (:outcome node))
                             (assoc :halt? true))
-                  (:finish-session? node) (assoc :finish-session? true))
+                     (:next-phase node) (assoc :next-phase (:next-phase node))
+                     (:finish-session? node) (assoc :finish-session? true))
       :flow/once (run-once engine node context path)
       :flow/branch (if-let [selected (if (resolve-value (:when node) context) (:then node) (:else node))]
                       (run-node engine selected context (conj path :branch))
@@ -530,6 +532,7 @@
          :session-patches (:session-patches result)
          :locals (:locals result)
          :outcome (get-in result [:locals :outcome])
+         :next-phase (:next-phase result)
          :finish-session? (boolean (:finish-session? result))
          :outbox (:outbox result)
          :vfx-signals (:vfx (:outbox result))

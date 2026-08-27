@@ -49,7 +49,7 @@
    ;; arms may flow to the successor.
    {:id :flow/branch, :inputs {:when {:type :any, :default nil}}, :outputs {}, :children {:then {:kind :single, :flow :branch}, :else {:kind :single, :flow :branch}}}
    {:id :flow/control, :inputs {:signal {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :flow/finish, :inputs {:finish-session? {:type :any, :default nil}, :outcome {:type :any, :default nil}}, :outputs {}, :children {}}
+   {:id :flow/finish, :inputs {:finish-session? {:type :any, :default nil}, :next-phase {:type :any, :default nil}, :outcome {:type :any, :default nil}}, :outputs {}, :children {}}
    ;; Loop variables are visible only in the closed body and are renamed by
    ;; composite expansion through the descriptor's :binds-locals contract.
    {:id :flow/foreach, :inputs {:limit {:type :any, :default nil}, :as {:type :any, :default nil}, :items {:type :any, :default nil}, :index-as {:type :any, :default nil}}, :outputs {}, :children {:body {:kind :single, :flow :closed}}, :binds-locals #{:as :index-as}}

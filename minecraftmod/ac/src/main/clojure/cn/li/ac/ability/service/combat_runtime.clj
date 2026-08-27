@@ -1162,7 +1162,18 @@
                      :context (:context session)
                      :activation-seed (:activation-seed session)})]
         (when (= :accepted (:status result))
-          (finalize-result! owner result))))))
+          (finalize-result! owner result)
+          (when (= :release (:next-phase result))
+            (let [release-result
+                  (dispatch-intent!
+                   owner
+                   {:op :release
+                    :ability-id (:ability-id session)
+                    :server-tick (long tick)
+                    :context (:context session)
+                    :activation-seed (:activation-seed session)})]
+              (when (= :accepted (:status release-result))
+                (finalize-result! owner release-result)))))))))
 (defn tick!
   "Advance scheduled final graph work and return its neutral result."
   [tick]
