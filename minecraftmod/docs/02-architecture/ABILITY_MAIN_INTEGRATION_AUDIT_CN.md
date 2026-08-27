@@ -442,6 +442,15 @@ thunder-bolt
 - `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。charge-slow 在各版本
   Presentation renderer 的本地走速应用仍需实机确认，总表继续保持 `⚠️`。
 
+### directed-shock checkpoint（逐项复核）
+
+- 对照 `main` 的命中 release 路径：伤害、精通阈值后的实体位移/击退、音效、命中经验和
+  cooldown 后才结束会话；命中与 miss 都要销毁第一人称手部动画。
+- 当前 Final 命中分支此前遗漏了 hand-session destroy，已补齐；自动 punch、miss、资源
+  不足和 abort 路径保持同一清理契约，没有引回旧 handler。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。实体击退 adapter 的
+  实机结果与多人并发仍待运行时任务验证，总表继续保持 `⚠️`。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
