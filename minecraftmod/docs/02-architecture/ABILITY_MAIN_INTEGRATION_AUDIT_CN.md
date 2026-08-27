@@ -171,7 +171,7 @@ thunder-bolt
 
 ### final-damage input ABI
 
-EDN policy 使用 `[:input :context ...]`、`[:input :tunables ...]` 和 `[:input :params ...]`，但 `final-damage` 当前只解析 `:request`、`:context`、`:param`、`:session`、`:mark` scope；AC 构造 damage event 时也没有把 activation input 放入 metadata。
+EDN policy 使用 `[:input :context ...]`、`[:input :tunables ...]` 和 `[:input :params ...]`。当前 `final-damage` 已支持 `:input` scope，并由 AC 按 policy ability-id 注入 immutable 输入快照。
 
 结果：公共 `:input` ABI 已支持并按 policy ability-id 选择快照；仍有少数技能所需的主线参数（例如 Railgun QTE）未建模，不能把所有 policy 视为等价。
 
