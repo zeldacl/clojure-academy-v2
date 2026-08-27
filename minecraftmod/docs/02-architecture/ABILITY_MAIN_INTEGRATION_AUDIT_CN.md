@@ -85,7 +85,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 | `plasma-cannon` | 蓄力飞行弹；命中爆炸、范围伤害和地形破坏，过载/冷却 | 能量球、龙卷柱、端点爆发、音效 | ⚠️ |
 | `storm-wing` | 飞行移动、软方块破坏、范围击退、摔落保护和资源扣除 | 飞行粒子、循环音、龙卷柱 | ⚠️ |
 | `vec-accel` | 方向加速、碰撞检查、速度/摔落重置、经验和冷却 | 轨迹带、冲量音 | ⚠️ |
-| `vec-deviation` | 扫描并偏转/销毁投射物；开启时减伤并按伤害消耗 CP | 环形 fade、反射音效 | ⚠️ 开启状态与减伤 policy 已接入；main 的“CP 不足仍按剩余 CP 扣除但继续减伤”需行为测试 |
+| `vec-deviation` | 扫描并偏转/销毁投射物；开启时减伤并按伤害消耗 CP | 环形 fade、反射音效 | ⚠️ 开启状态、ignore-threshold 与减伤 policy 已接入；main 的“CP 不足仍按剩余 CP 扣除但继续减伤”已由 Final damage 测试覆盖，反射扫描仍需实机验证 |
 | `vec-reflection` | 扫描并重定向投射物；受到伤害时按倍率反射并扣资源 | 环形粒子、fade/音效 | ⚠️ 反射结果已在攻击预检查一次性提交，按 world/source/target/seed/depth 幂等；参数快照与扣费仍需行为测试 |
 
 课程别名的 12 个注册项（四类别 × `brain-course`、`brain-course-advanced`、
@@ -127,7 +127,7 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 | `dim-folding-theorem` | 学习状态、非反射攻击的暴击/反馈/VFX/成就 | input/context、反馈消息和 VFX owner 已接入；主线等级与经验细节需验证 |
 | `rad-intensify` | 读取 radiation mark，并使用标记创建时的 source rate 放大伤害 | mark 表、策略输入、mark-type 匹配和倍率快照已接入；跨重启持久化未实现 |
 | `space-fluct` | 多级暴击、反射排除、经验/成就/VFX | input/context、反馈消息和 VFX owner 已接入；多级概率与排除反射需验证 |
-| `vec-deviation` | 开启状态下减伤、CP 代价、音效/经验 | owner session/context 已接入；main 的“按剩余 CP 尽量扣费但继续减伤”需验证 |
+| `vec-deviation` | 开启状态下减伤、CP 代价、音效/经验 | owner session/context、ignore-threshold 与按剩余 CP 尽量扣费已接入；仍需实机验证反射扫描与减伤时序 |
 | `vec-reflection` | 开启状态下反射伤害、代价、最大深度/经验；低于 minimum 时仍减少原伤害但不取消原生攻击 | 反射已一次性提交，按 world/source/target/seed/depth 幂等；minimum、残余伤害和环境边界已对齐，参数快照/扣费与递归上限需行为测试 |
 | `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | mark reducer 已接入；持续移动/伤害需验证 |
 | `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | mark reducer 已接入；扇形命中与后续行为需验证 |

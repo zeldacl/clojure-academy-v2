@@ -26,6 +26,16 @@
     (is (= 7.0 (:amount result)))
     (is (= [{:ability-id :shield :reaction-id :absorb}]
            (:matched result)))))
+(deftest reduction-ignore-threshold-test
+  (let [reaction {:ability-id :deviation :reaction-id :reduce :priority 1
+                  :on :combat/damage
+                  :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 5.0}}
+        small (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})
+        large (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 6.0 :type :skill :seed 1})]
+    (is (= 2.0 (:amount small)))
+    (is (= 6.0 (:amount large)))
+    (is (= 2.0 (get-in small [:resource-costs :cp])))
+    (is (nil? (get-in large [:resource-costs :cp])))))
 (deftest boundary-commits-only-after-actual-apply-test
   (let [committed (atom nil)]
     (damage/install-boundary! {:reactions [] :commit-state! #(reset! committed %)})

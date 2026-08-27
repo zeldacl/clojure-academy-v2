@@ -114,6 +114,7 @@
       :damage/multiply [{:kind :multiplier :value (value (:multiplier program))
                        :owner (:owner-id (get-in event [:metadata :input :context]))}]
       :damage/reduce [{:kind :reduction :value (value (:rate program))
+                       :ignore-threshold (value (:ignore-threshold program))
                        :max-cost (value (:max-cost program)) :vfx (:vfx program)
                        :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
@@ -167,7 +168,7 @@
                                                   (:cost contribution)))))
                                    raw-contributions))
         multiplier (reduce * 1.0 (map #(double (or (:value %) 1.0)) (filter #(= :multiplier (:kind %)) contributions)))
-        reduction (min 1.0 (max 0.0 (reduce + 0.0 (map #(double (or (:value %) 0.0)) (filter #(= :reduction (:kind %)) contributions)))))
+        reduction (min 1.0 (max 0.0 (reduce + 0.0 (map (fn [contribution] (let [threshold (:ignore-threshold contribution) ignored? (and (some? threshold) (> (double (:base event)) (double threshold)))] (if ignored? 0.0 (double (or (:value contribution) 0.0))))) (filter #(= :reduction (:kind %)) contributions)))))
         before (* (:base event) multiplier (- 1.0 reduction))
         absorption (min before (max 0.0 (reduce + 0.0 (map #(double (or (:value %) 0.0)) (filter #(= :absorption (:kind %)) contributions)))))
         criticals (filter #(= :critical (:kind %)) contributions)
@@ -209,11 +210,7 @@
                                 (merge-with + acc (:cost contribution)))
                               {} (filter #(= :absorption (:kind %)) contributions))
                       {})
-        reduction-cost (reduce + 0.0
-                                (map (fn [contribution]
-                                       (min (max 0.0 (double (or (:max-cost contribution) 0.0)))
-                                            (* before (double (or (:value contribution) 0.0)))))
-                                     (filter #(= :reduction (:kind %)) contributions)))
+        reduction-cost (reduce + 0.0 (map (fn [contribution] (let [threshold (:ignore-threshold contribution) ignored? (and (some? threshold) (> (double (:base event)) (double threshold)))] (if ignored? 0.0 (min (max 0.0 (double (or (:max-cost contribution) 0.0))) (* (double (:base event)) (double (or (:value contribution) 0.0))))))) (filter #(= :reduction (:kind %)) contributions)))
         reflection-cost (reduce + 0.0
                                  (map (fn [contribution]
                                         (* amount-before-reflect (double (or (:ratio contribution) 0.0))
