@@ -202,9 +202,12 @@
    captured per server/player session without cross-player state."
   ([] (environment []))
   ([composites]
-   (descriptors/build
-    {:descriptors (concat (descriptor-specs)
-                          (map normalize-spec (vals (or composites {}))))})))
+   (let [loaded (into {} (map (fn [[id spec]] [id (normalize-spec spec)])
+                              (or composites {})))]
+     (descriptors/build
+      {:descriptors (concat (remove #(contains? loaded (:id %))
+                                   (descriptor-specs))
+                            (vals loaded))}))))
 
 (defn register!
   "Vocabulary inspection API retained under its historic name for tooling;

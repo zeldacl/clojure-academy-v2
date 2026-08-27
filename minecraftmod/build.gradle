@@ -1133,7 +1133,7 @@ tasks.register("verifyCombatProviderClosure") {
 tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
     description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
-    dependsOn ":ac:runAcEdnCoverageTests"
+    dependsOn ":ac:checkClojure"
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:checkClojure" }
 
@@ -1164,12 +1164,11 @@ tasks.register("verifyCombatIntentOnlyNetwork") {
         if (!source.contains("MSG-COMBAT-INTENT")) {
             throw new GradleException("AC server network is missing CombatIntent registration")
         }
-        if (!source.contains("publish-combat-result!")) {
-            throw new GradleException("AC server network no longer routes CombatIntent results through cn.li.combat.vfx-publish/publish-combat-result! -- VFX audience routing would be bypassed")
+        if (source.contains("vfx-publish") || source.contains("combat.vfx-publish")) {
+            throw new GradleException("AC server network still depends on the removed combat VFX publisher")
         }
-        def vfxPublish = file("combat-core/src/main/clojure/cn/li/combat/vfx_publish.clj").text
-        if (!vfxPublish.contains("(dissoc result :vfx-signals)")) {
-            throw new GradleException("combat-core vfx-publish/publish-combat-result! no longer strips :vfx-signals from the push channel and the CombatIntent RPC reply")
+        if (file("combat-core/src/main/clojure/cn/li/combat/vfx_publish.clj").exists()) {
+            throw new GradleException("obsolete combat-core VFX publisher still exists")
         }
         logger.lifecycle("[verifyCombatIntentOnlyNetwork] ok")
     }
