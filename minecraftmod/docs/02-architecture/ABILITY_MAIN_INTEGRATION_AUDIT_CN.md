@@ -78,7 +78,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 | `mine-detect` | 视线扫描地雷/实体；失明和资源不足拒绝；成功施加扫描状态并计经验/冷却 | 扫描框/扫描音效 | ⚠️ |
 | `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ⚠️ Final 图已接入 owner-scoped QTE/蓄力/消费/销毁/反射/成就；exp 细粒度与实机等价仍待验证 |
 | `thunder-bolt` | 命中目标后闪电、AOE、creeper/potion 分支、经验/冷却 | 闪电冲击 | ⚠️ 目标引用与 effective/ineffective 经验分支已接入 Final；仍受 damage/VFX 公共链约束 |
-| `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ |
+| `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ 成功释放的 cast 经验已接入 Final；蓄力/自动释放时序仍需实机验证 |
 | `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
 | `electron-missile` | 持续蓄力生成多发电子球，锁定目标并发射，资源不足/超时清理 | 粒子、beam fade、音效 | ⚠️ |
 | `jet-engine` | 标记目标、持续移动与伤害，结束计经验/冷却 | 环、粒子、屏幕闪烁、billboard | ⚠️ `:entity-mark` 已接入 owner/world 表；持续移动/伤害仍需行为验证 |
@@ -650,6 +650,10 @@ thunder-bolt
 - 已通过 `:ac:runAcEdnCoverageTests`（32 tests / 96 assertions）。技能伤害全局缩放及实机雷击/VFX 时序仍需验证，不在该技能内保留旧实现或硬编码绕过。
 
 ### thunder-clap checkpoint（检查与修复）
+
+- main 只有达到最小蓄力并实际执行范围攻击时才调用一次 add-skill-exp exp-use；未达最小蓄力、资源失败或 abort 不应获得该经验。Final 的 pulse 自动释放和 release 达标分支都共享同一 cast progression 节点，保持一次性提交。
+- 本轮将原先只有 score/mark cast 的两处节点改为 ability/progression cast 加 score progression ref；没有复制 main callback，也没有新增兼容路径。
+- 已通过 ac runAcEdnCoverageTests（33 tests / 98 assertions）。蓄力 tick、自动释放、范围伤害和多人 VFX 时序仍需实机验证，总表保持 ⚠️。
 
 - Final 图覆盖蓄力 start/pulse/release/abort、最大蓄力自动释放、最小蓄力判断、
   CP/overload 费用、charged-area-damage、距离 falloff、overcharge、闪电、环形

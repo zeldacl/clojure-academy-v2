@@ -616,3 +616,9 @@
                     (= {:ticks {:ref [:local :cooldown-ticks-next]}}
                        (:cooldown %))) nodes))
     (is (not-any? #(= :ability/cooldown (:component %)) nodes))))
+(deftest thunder-clap-submits-cast-progression-on-perform-paths-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_clap.edn"))
+        nodes (component-nodes (:program doc))
+        marks (filter #(and (= :score/mark (:component %)) (= :cast (:tag %))) nodes)]
+    (is (= 2 (count marks)))
+    (is (every? #(= {:ref [:local :cast-progression]} (:progression %)) marks))))
