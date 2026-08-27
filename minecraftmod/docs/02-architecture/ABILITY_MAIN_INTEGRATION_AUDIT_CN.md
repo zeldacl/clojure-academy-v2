@@ -470,6 +470,38 @@ thunder-bolt
 - `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。运动 adapter、碰撞和
   多人 owner 作用域仍需实机任务验证，总表继续保持 `⚠️`。
 
+### storm-wing checkpoint（逐项复核）
+
+- 对照 `main`：充能阶段只推进 charge/悬浮和预览；进入 flying 后才按 tick 扣除
+  CP/overload、累计 flight progression，并在资源不足时恢复 `can-fly?`、销毁四个
+  vortex、粒子和循环音效。
+- 当前 Final 原先把 `cost/spend :flight` 放在 phase 分支之后，导致充能阶段也扣费；
+  已改为以 `session.phase=1` 为条件的 `:scale`（phase 0 为 0，phase 1 为 1），
+  不引入旧 handler 或第二条扣费路径。资源不足清理和 owner/world 作用域保持不变。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。飞行 motion adapter、
+  软方块权限、范围击退与多人同时飞行仍需实机验证，总表保持 `⚠️`。
+
+### groundshock / vec-reflection / vec-deviation checkpoint（逐项复核）
+
+- `groundshock` 的 Final 图已覆盖 main 的地面传播、方块替换/破坏、AOE 伤害、随机
+  向上速度、精通经验、资源/冷却和 hand-session/冲击波 VFX；传播结果先在中性
+  `terrain/propagate` 形成 bounded plan，再由 block/entity actions 提交，避免跨玩家
+  共享可变集合。本轮未发现确定性缺口，保留 `⚠️` 仅因 adapter/runtime 未实测。
+- `vec-reflection` 与 `vec-deviation` 均通过 owner-scoped `flow/once` 去重 projectile，
+  使用统一 reflection scan、damage policy、overload floor 和终止 VFX；未恢复 main 的
+  旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session，当前无需
+  代码修改；多人隔离仍由 owner/world query 边界负责，待实机确认。
+
+### railgun checkpoint（最后处理）
+
+- 对照 `main`：Railgun 不是普通 release beam，而是 coin-QTE（按硬币飞行进度命中
+  窗口）与铁物品 charge fallback 两条状态路径，并带 coin 判定去重、反射副射击、
+  creeper 成就、经验/手动冷却和 charge/shot 两套 VFX。
+- 当前 Final `railgun.edn` 只实现通用 beam release；`:coin-thrown` 事件仍是
+  `:received` 占位，尚未实现 QTE/charge 状态机，因此不能宣称与 main 等价，也不能
+  用旧 `railgun.clj` 回调补回双轨。该项列为清单最后一个待迁移项，需先扩展中性
+  `event/session` ABI（owner-scoped coin snapshot 与一次性判定）后再单独提交。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
