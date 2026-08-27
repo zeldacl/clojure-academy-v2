@@ -16,6 +16,23 @@
 闭合；38 个真实技能仍需要运行时等价证据，Railgun 的静态能力缺口已完成移植。因此
 本轮不会把“EDN 可加载/可编译”包装成“效果正确”。
 
+### 本轮逐项迁移队列（2026-08-28）
+
+按 main 的 38 个真实技能逐项复核；“静态完成”只表示 Final 图、共享 ABI 和编译门禁已
+闭合，不代表未执行的实机验收。
+
+| 批次 | 技能 | 本轮结果 | 仍需实机/外部证据 |
+|---|---|---|---|
+| 1 | `electron-bomb` | 静态完成：spawn barrier 直接绑定 UUID，延迟 beam 不再查询最近同类实体 | 延迟调度、实体过期 |
+| 2 | `electron-missile` | 静态完成：session 保存球 UUID，发射后精确移除，清理按 UUID+owner+world | 运动、目标命中、多人 |
+| 3 | `scatter-bomb` | 静态完成：球 UUID 列表、anti-AFK release、abort 清理 | 散射碰撞、多人 |
+| 4 | `mag-manip` | 静态完成：持有体 UUID barrier 与会话查询作用域 | 碰撞放置/伤害、spawn 失败回滚 |
+| 5 | `light-shield` | 静态完成：护盾 UUID、接触 self-exclusion、吸收 interval/session patch | 原生受击 adapter、多人 |
+| 6 | 共享 `damage/absorb` ABI | 静态完成：`interval-ticks`/`last-tick-path` 由 Combat Core 计算并提交 session | 原生事件时序 |
+
+其余技能按同一顺序继续处理；不得以复制 main handler、兼容旧 callback 或第二条执行轨替代
+当前 Final 图。每个批次在对应测试通过后单独提交。
+
 本轮已先修复会影响多个技能的公共错误：资源预算的失败分支/缩放/部分扣费、按
 owner+entity-type 的会话实体清理、以及 final session 元数据读取。修复后门禁均通过，
 但这些修复不等同于逐技能行为测试。
@@ -33,8 +50,8 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 38 个真实技能实现。
 - 12 个课程别名：四个能力类别分别注册 `brain-course`、`mind-course`、`brain-course-advanced`。
 - 当前 catalog 结果为 39 个 combat source、50 个 registration、36 个 VFX effect。
-- 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、37 个真实战斗技能
-  38 个真实技能均为 `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
+- 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
+  `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
 - `:ac:checkClojure` 与 `:ac:runAcEdnCoverageTests` 已通过，但这两个门禁不执行 main 行为等价性测试。
 

@@ -393,3 +393,23 @@
                                   (vals (:outputs descriptor)))))
                 descriptors))
     (is (every? #(contains? #{:primitive :mid :source} (:layer %)) descriptors))))
+
+(defn- component-nodes [form]
+  (cond
+    (map? form) (concat (when (:component form) [form])
+                        (mapcat component-nodes (vals form)))
+    (sequential? form) (mapcat component-nodes form)
+    :else nil))
+
+(deftest spawned-entities-use-explicit-result-binding-test
+  (let [files (edn-files "src/main/resources/ac/combat/abilities")
+        spawn-nodes (mapcat (fn [file]
+                              (filter #(= :entity/spawn (:component %))
+                                      (component-nodes (read-file! file))))
+                            files)]
+    (is (= 6 (count spawn-nodes))
+        "all spawned combat entities must be represented by a single Final action")
+    (is (every? #(and (true? (:barrier? %))
+                      (= :entity-id (first (keys (:bind %)))))
+                spawn-nodes)
+        "spawn actions must bind their exact neutral entity id at a barrier")))
