@@ -662,3 +662,20 @@
     (is (= :damage/reflect (:component program)))
     (is (= :damaged (:exp-tag program)))
     (is (= {:ref [:input :params :exp-damage-scale]} (:exp-scale program)))))
+
+(deftest electron-missile-only-appends-successfully-spawned-ball-ids-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/electron_missile.edn"))
+        nodes (component-nodes (:program doc))
+        appends (filter #(and (= :data/bind (:component %))
+                              (= :ball-ids-next (:to %)))
+                        nodes)
+        append-parent (some (fn [node]
+                              (when (and (= :flow/branch (:component node))
+                                         (= {:ref [:local :spawned-ball-id]}
+                                            (:when node)))
+                                node))
+                            nodes)]
+    (is (= 1 (count appends)))
+    (is append-parent)
+    (is (some #(= (first appends) %)
+              (component-nodes (:then append-parent))))))
