@@ -451,6 +451,16 @@ thunder-bolt
 - `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。实体击退 adapter 的
   实机结果与多人并发仍待运行时任务验证，总表继续保持 `⚠️`。
 
+### plasma-cannon checkpoint（逐项复核）
+
+- 对照 `main`：蓄力开始时龙卷柱的地面基准来自向下 block raycast；无命中时必须使用
+  射线终点，不能把 nil 位置传入后续 VFX。飞行、路径阻挡、到达/超时爆炸和资源/冷却
+  仍由 Final session pulse/release 图负责。
+- 当前 Final start 增加 `target/resolve-destination`，以 `target-hit?` 在精确命中点和
+  向下射线终点之间选择 `vortex-base`；没有复制 main 的 helper，也没有增加旧回调通道。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。飞行碰撞、爆炸地形权限和
+  多人 VFX audience 仍需实机任务验证，总表继续保持 `⚠️`。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
