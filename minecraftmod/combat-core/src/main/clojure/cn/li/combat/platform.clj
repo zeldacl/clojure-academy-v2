@@ -1585,8 +1585,20 @@
                (+ (nth start 1) (* dy length))
                (+ (nth start 2) (* dz length))])
         entities (if (and world-id start end (pos? (long (or entity-limit 256))))
-                   (mapv #(assoc % :damage (double (or damage 0.0))
-                                  :damage-type (or damage-type :generic))
+                   (mapv (fn [entity]
+                           (merge
+                            (assoc entity
+                                   :damage (double (or damage 0.0))
+                                   :damage-type (or damage-type :generic))
+                            (or (when reflection-policy
+                                  (interaction-resolve!
+                                   {:world-id world-id
+                                    :target (:id entity)
+                                    :policy reflection-policy
+                                    :visual-origin (or trace-origin origin)
+                                    :visual-direction direction}
+                                   frame))
+                                {})))
                          (entity-select!
                           {:owner owner :world-id world-id
                            :shape {:type :line :start start :end end

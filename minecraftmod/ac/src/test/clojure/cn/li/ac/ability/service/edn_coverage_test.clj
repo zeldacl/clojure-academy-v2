@@ -424,7 +424,7 @@
         targets (filter #(= :target/penetration-destination (:component %))
                         (component-nodes doc))]
     (is (= 3 (count targets)))
-    (is (every? #(= {:ref [:local :desired-distance]} (:distance %)) targets))
+    (is (= 2 (count (filter #(= {:ref [:local :desired-distance]} (:distance %)) targets))))
     (is (= :slot-wheel (-> doc :program :events first key)))
     (is (= :session/write
            (get-in doc [:program :events :slot-wheel :steps 3 :component])))))

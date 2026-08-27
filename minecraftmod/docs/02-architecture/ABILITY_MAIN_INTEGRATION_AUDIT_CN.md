@@ -340,8 +340,11 @@ thunder-bolt
 - `main` 的 charge window 为 20/40/100 tick；release 计算 time-rate，执行 beam（实体伤害、方块破坏、反射射击），按 time-rate 增加经验并启动 time-rate×base×cooldown 冷却，最后清理充能 VFX。
 - Final 图已覆盖充能状态、overload floor、tick 费用、beam trace、实体/方块副作用、反射字段消费、VFX 和经验事件。
 - 本轮修正 release 冷却：原图只有 `cooldown/start :main`，未传入 `main-cooldown`，按 Final 引擎会写入 0 tick；现在先读取 `ability/cooldown :main`，再以 `:cooldown {:ref [:local :main-cooldown]}` 启动。
-- 共享边界仍未闭合：当前中性 `host/beam-trace` 实现尚未像旧 beam helper 一样调用 `interaction/resolve` 并验证对方反射能力，故 main 的 vec-reflection 反射射击不能仅凭 EDN 节点宣称等价；后续需在中立 beam/interaction ABI 统一补齐，禁止恢复技能专属旧回调。
-- 本轮门禁待运行后记录；总表保持 `⚠️`。
+- 本轮补齐公共 beam-trace：Combat Core 对每个命中实体按 EDN `reflection-policy` 调用中性
+  `interaction/resolve`，把 `reflection-accepted?/target/start/end/damage` 作为同一 trace 结果返回；
+  Meltdowner 的反射分支因此与实体伤害、VFX 一样走 Final graph，不恢复旧 beam helper 或技能回调。
+- 仍需实机验证反射目标的真实 raycast、方块破坏 adapter 和多人同时 beam；静态门禁只证明
+  ABI/编译闭合，故总表保持 `⚠️`。
 ### ray-barrage checkpoint（检查与修复）
 
 - main 的分支基准是：准星首个实体为尚未触发的 Silbarn 时，触发其行为并在当前瞄准方向
