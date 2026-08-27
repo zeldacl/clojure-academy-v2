@@ -270,6 +270,17 @@ thunder-bolt
   `:ac:runAcEdnCoverageTests`（14/33）。这只是该项的静态/编译 checkpoint，不能把
   仍未闭合的 skill damage scaling、实际客户端 VFX 发送和实机结果标成 `✅`。
 
+### body-intensify checkpoint（检查结论）
+
+- Final 图已覆盖 main 的起始 overload 扣除、逐 tick CP 扣除、overload floor、最小/最大/
+  容忍蓄力时长、随机状态效果、hunger、成功经验、超时/资源不足/abort 清理，以及
+  owner-only 充能和 nearby 释放 VFX。
+- 当前不能宣称完整等价：`score/mark` 的经验事件在图执行后才由 AC reducer 提交，而
+  `cooldown/start` 在同一图内使用激活时 materialized tunable；因此“经验增加后再计算
+  冷却”的 main 语义需要先补共享 progression→cooldown ABI。禁止在 Body Intensify
+  内写技能专属常量或保留旧回调双轨。
+- 该项暂不修改 EDN，保持队列中的 `⚠️`，待共享 ABI 修复后重新核验并单独提交。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
