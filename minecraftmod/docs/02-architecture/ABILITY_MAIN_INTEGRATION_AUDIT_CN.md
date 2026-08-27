@@ -13,7 +13,7 @@
 
 结论不是“50 个 ability 都已经正确接入”：`main` 的 50 个公开注册项已经做到
 逐项注册且 38 个真实技能都有 final VFX 声明，但只有课程被动的 12 个别名达到静态
-闭合；37 个真实技能仍需要运行时等价证据，`railgun` 还有已确认的行为缺失。因此
+闭合；38 个真实技能仍需要运行时等价证据，Railgun 的静态能力缺口已完成移植。因此
 本轮不会把“EDN 可加载/可编译”包装成“效果正确”。
 
 本轮已先修复会影响多个技能的公共错误：资源预算的失败分支/缩放/部分扣费、按
@@ -34,7 +34,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 12 个课程别名：四个能力类别分别注册 `brain-course`、`mind-course`、`brain-course-advanced`。
 - 当前 catalog 结果为 39 个 combat source、50 个 registration、36 个 VFX effect。
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、37 个真实战斗技能
-  `⚠️`、`railgun` 1 个 `❌`。`✅*` 的星号表示课程被动 reducer 已接入，
+  38 个真实技能均为 `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
 - `:ac:checkClojure` 与 `:ac:runAcEdnCoverageTests` 已通过，但这两个门禁不执行 main 行为等价性测试。
 
@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 | `mag-manip` | 捕获金属方块/物品实体，持续吸附，释放投掷；碰撞负责伤害/放置/恢复 | 持续弧光、音效、beam | ⚠️ 需继续验证实体碰撞提交 |
 | `mag-movement` | 锁定金属方块/实体并牵引玩家；结束时重置摔落并按距离给经验 | 持续弧光、循环音 | ⚠️ |
 | `mine-detect` | 视线扫描地雷/实体；失明和资源不足拒绝；成功施加扫描状态并计经验/冷却 | 扫描框/扫描音效 | ⚠️ |
-| `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ❌ item→EDN trigger 路由已补；仍缺 QTE 阈值/蓄力 tick/判定销毁/反射/经验成就完整链 |
+| `railgun` | 硬币 QTE、铁物品蓄力、硬币判定/销毁、反射射击、经验/成就、主射线 | 硬币/枪体 billboard、rail beam | ⚠️ Final 图已接入 owner-scoped QTE/蓄力/消费/销毁/反射/成就；exp 细粒度与实机等价仍待验证 |
 | `thunder-bolt` | 命中目标后闪电、AOE、creeper/potion 分支、经验/冷却 | 闪电冲击 | ⚠️ 目标引用已修复；仍受 damage/VFX 公共链约束 |
 | `thunder-clap` | 蓄力范围伤害、闪电、资源和冷却、成就 | 环形蓄力/闪电 | ⚠️ |
 | `electron-bomb` | 生成电子球并延迟调度 beam，命中后完成伤害/经验/冷却 | 瞬时电弧 | ⚠️ 延迟实体结果需继续验证 |
@@ -117,7 +117,7 @@ Combat Core 被动 reducer，不产生 VFX，也不共享其他玩家的资源�
 
 | 注册项 | main 行为基线 | 当前实现缺口 |
 |---|---|---|
-| `railgun` | Coin QTE、硬币判定/销毁、物品蓄力、反射射击、经验/成就、主射线 | item→EDN trigger 和硬币实体生成已在 AC 组合根注册；EDN 仍只有 `:coin-thrown` 完成事件和普通 beam，QTE、蓄力 tick、判定销毁、反射、经验/成就未迁移 |
+| `railgun` | Coin QTE、硬币判定/销毁、物品蓄力、反射射击、经验/成就、主射线 | item→EDN trigger、owner-scoped QTE/charge session、通用 beam reflection、实体消费/销毁及成就事件均已移植；细粒度经验和实机时序待验证 |
 | `mine-ray-basic` | 基础变体，工具等级限制，fortune=0，独立冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `mine-ray-expert` | 专家变体，取消工具等级限制，独立前置条件/冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
 | `mine-ray-luck` | luck 变体，fortune=3，独立粒子/光束样式 | ✅ 已注入 registration bindings；仍需行为等价测试 |
@@ -256,7 +256,7 @@ thunder-bolt
 35. `plasma-cannon`
 36. `storm-wing`
 37. `vec-accel`
-38. `railgun`（唯一已确认缺少 Final 能力建模的项，最后单独处理）
+38. `railgun`（已完成静态能力移植，待运行时等价证据）
 
 ### arc-gen checkpoint（db8de4f4e）
 
@@ -505,16 +505,19 @@ thunder-bolt
   旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session，当前无需
   代码修改；多人隔离仍由 owner/world query 边界负责，待实机确认。
 
-### railgun checkpoint（最后处理）
+### railgun checkpoint（逐项移植）
 
-- 对照 `main`：Railgun 不是普通 release beam，而是 coin-QTE（按硬币飞行进度命中
-  窗口）与铁物品 charge fallback 两条状态路径，并带 coin 判定去重、反射副射击、
-  creeper 成就、经验/手动冷却和 charge/shot 两套 VFX。
-- 当前 Final `railgun.edn` 只实现通用 beam release；`:coin-thrown` 事件仍是
-  `:received` 占位，尚未实现 QTE/charge 状态机，因此不能宣称与 main 等价，也不能
-  用旧 `railgun.clj` 回调补回双轨。该项列为清单最后一个待迁移项，需先扩展中性
-  `event/session` ABI（owner-scoped coin snapshot 与一次性判定）后再单独提交。
-
+- 对照 `main`：Railgun 的两条主路径已按当前 Final ABI 移植：owner-scoped 硬币查询按
+  `motion-progress` 降序选择候选；事件阶段同时检查 active/perform 阈值，命中后销毁硬币并
+  请求 `next-phase :release`；没有命中时只结束本次事件，不会跨玩家取硬币。
+- 铁物品 fallback 使用 owner session 的 `hold-ticks`，服务器 pulse 达到 `item-charge-ticks`
+  后请求 release；release 再重新读取主手并消费铁锭/铁块。资源消耗使用现有 `cost.down`/
+  `cost.tick` tunable，不再引入未配置的 `cost.fire` 或旧回调。
+- 主射线继续使用通用 `combat/beam-strike`；该 composite 现按中性
+  `reflection-policy` 路由反射目标与伤害，Railgun 不包含 skill-specific host callback。命中
+  creeper 通过 `:achievement/trigger` domain event 进入 AC 组合根。
+- 仍保留 `⚠️`：main 的反射命中经验细分、按键按下时已有硬币的即时路径，以及真实实体运动
+  时序/VFX 客户端表现需实机验证；静态门禁不把这些未测项伪装成 `✅`。
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
@@ -698,7 +701,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ### 50 项统一静态验收（本轮）
 
 - 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 14 tests / 33 assertions 全部通过。
-- `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。唯一明确缺口仍是 `railgun` 的 QTE/charge 状态机，已保留为 `❌`，没有用 `:coin-thrown :received` 占位冒充完成。其组合边界已先修正为“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`；这样事件查询可以看到 owner-scoped 硬币，但 QTE 阈值、蓄力 tick、判定销毁、反射、经验/成就仍未伪造实现。
+- `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
 
@@ -715,7 +718,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
    vec-accel、storm-wing、mag-movement；均已按技能单独提交（最近提交分别为
    `26dee6fa3`、`a2618d29d`、`fba68d32a`）。
 7. **Registration bindings**：把 Mine Ray 的 variant/presentation/runtime 显式注入；提交。
-8. **Railgun capability**：尚未完成；main 的 coin-QTE、硬币判定/销毁、蓄力 tick、反射射击和经验/成就仍需单独建模，不能以当前 `:coin-thrown` 完成事件代替。
+8. **Railgun capability**：已完成 Final 图移植；QTE/蓄力/实体隔离/反射/成就均有中性节点或通用 composite，剩余反射经验细分和实机时序验证。
 9. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
 10. 重新运行 Clojure/EDN/全平台编译门禁；运行时多人、VFX 和性能测试另行执行。
 

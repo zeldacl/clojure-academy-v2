@@ -414,9 +414,20 @@
      (when-let [trigger (:edn-trigger payload)]
        (let [result (combat-runtime/dispatch-trigger! player-uuid trigger payload)]
          (when (= :accepted (:status result))
-           (combat-runtime/finalize-result! player-uuid result))))
+           (combat-runtime/finalize-result! player-uuid result)
+           ;; Final external events may request a next phase. Continue through
+           ;; the same owner-scoped runtime boundary; no skill callback path.
+           (when-let [next-phase (:next-phase result)]
+             (let [release (combat-runtime/dispatch-intent!
+                            player-uuid
+                            {:op next-phase
+                             :ability-id (:ability trigger)
+                             :server-tick (:server-tick payload)
+                             :context payload
+                             :activation-seed (:activation-seed payload)})]
+               (when (= :accepted (:status release))
+                 (combat-runtime/finalize-result! player-uuid release)))))))
      (item-actions/on-item-action! action player-uuid payload))
-
    :build-item-use-plan
    (fn [_player-uuid item-id activated? _side]
     (when-let [action (item-actions/resolve-item-action item-id)]
