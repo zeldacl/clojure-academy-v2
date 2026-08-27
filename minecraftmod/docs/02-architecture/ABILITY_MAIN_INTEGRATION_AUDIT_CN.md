@@ -73,17 +73,17 @@ max overload`、`CP recovery ×1.2`。本轮已在
 因此这 12 项的资源效果接入为 `✅*`；`*` 表示仍需在完整测试 classpath 恢复后执行
 学习/重算回归测试。
 
-### 明确缺陷
+### 已确认问题（含本轮已修复项）
 
 | 注册项 | main 行为基线 | 当前实现缺口 |
 |---|---|---|
 | `railgun` | Coin QTE、硬币判定/销毁、物品蓄力、反射射击、经验/成就、主射线 | EDN 只有 `:coin-thrown` 完成事件和普通 beam；QTE、蓄力 tick、反射、经验/成就未迁移 |
-| `mine-ray-basic` | 基础变体，工具等级限制，fortune=0，独立冷却 | 共享图读取 `:runtime`，但注册 bindings 没注入 activation runtime |
-| `mine-ray-expert` | 专家变体，取消工具等级限制，独立前置条件/冷却 | 同上 |
-| `mine-ray-luck` | luck 变体，fortune=3，独立粒子/光束样式 | 同上 |
-| `location-teleport` | 仅跨维度时检查经验门槛并应用跨维度倍率 | 当前 `:cross-dimension?` 使用 `:value/eq`，与 main 的 `not=` 相反 |
-| `light-shield` | damage reaction 吸收伤害，CP/过载消耗，正面判断，状态和冷却 | final-damage context 没有传入；EDN 中 CP 与 overload 消耗互换 |
-| `thunder-bolt` | 目标命中后 AOE/creeper/potion/经验/冷却 | AOE 分支读取不存在的 `[:input :target-type]`、`[:input :target-id]` |
+| `mine-ray-basic` | 基础变体，工具等级限制，fortune=0，独立冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
+| `mine-ray-expert` | 专家变体，取消工具等级限制，独立前置条件/冷却 | ✅ 已注入 registration bindings；仍需行为等价测试 |
+| `mine-ray-luck` | luck 变体，fortune=3，独立粒子/光束样式 | ✅ 已注入 registration bindings；仍需行为等价测试 |
+| `location-teleport` | 仅跨维度时检查经验门槛并应用跨维度倍率 | ✅ 已修复 `not=` 逻辑；仍需保存地点/跨维度提交测试 |
+| `light-shield` | damage reaction 吸收伤害，CP/过载消耗，正面判断，状态和冷却 | ✅ 已修复 CP/过载映射；final-damage context/反应提交仍未闭合 |
+| `thunder-bolt` | 目标命中后 AOE/creeper/potion/经验/冷却 | ✅ 已修复目标引用；仍受 damage/VFX 公共链约束 |
 | `dim-folding-theorem` | 学习状态、非反射攻击的暴击/反馈/VFX/成就 | final-damage policy 的 `:input` context 未注入 |
 | `rad-intensify` | 读取 radiation mark 并按 max CP 放大伤害 | mark 没有持久化，且 final-damage context 不完整 |
 | `space-fluct` | 多级暴击、反射排除、经验/成就/VFX | final-damage policy 的 context/input 未注入 |
@@ -92,9 +92,10 @@ max overload`、`CP recovery ×1.2`。本轮已在
 | `jet-engine` | 每 tick 移动、伤害并写入 radiation mark | `:entity-mark` 事件没有有效 reducer/提交路径 |
 | `ray-barrage` | 命中后写入 radiation mark，并触发后续行为 | 同上 |
 
-### 课程别名明确缺陷
+### 课程别名（本轮已修复 reducer）
 
-以下 12 项的 EDN 都声明了被动效果，但当前 catalog 函数是 no-op，因此被动效果不会改变玩家状态：
+以下 12 项的 EDN 声明了被动效果；本轮已把它们改为读取 owner-local
+`ability-data` 的纯 reducer，不再是 no-op：
 
 ```text
 electromaster/brain-course
@@ -111,11 +112,21 @@ teleporter/brain-course-advanced
 vecmanip/brain-course-advanced
 ```
 
-当前实现：
+当前核心实现：
 
 ```clojure
-(defn apply-passive-resource-modifiers [_ability-data values]
-  values)
+(defn apply-passive-resource-modifiers [ability-data values]
+  (let [learned (set (or (:learned-skills ability-data) #{}))
+        has-suffix? (fn [suffix]
+                      (some #(and (keyword? %) (= suffix (name %))) learned))]
+    (cond-> values
+      (has-suffix? "brain-course")
+      (update :max-cp (fnil + 0.0) 1000.0)
+      (has-suffix? "brain-course-advanced")
+      (-> (update :max-cp (fnil + 0.0) 1500.0)
+          (update :max-overload (fnil + 0.0) 100.0))
+      (has-suffix? "mind-course")
+      (update :cp-recovery-speed (fnil * 0.0) 1.2))))
 ```
 
 ## 其余 24 个真实技能
