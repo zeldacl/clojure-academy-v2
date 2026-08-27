@@ -301,8 +301,8 @@ thunder-bolt
 
 - `main` 基准：蓄力每 10 tick 生成最多 5 个 MdBall；每 8 tick 选择施法者附近最近的 living 非自身实体，支付攻击 CP/过载后造成魔法伤害、重置无敌时间、增加命中经验并销毁对应球；每 tick 发送 owner+nearby 充能更新，释放/超时/abort 清理球、结束 VFX 并启动固定冷却。
 - Final 图已覆盖蓄力计时、球数量上限、过载地板、tick/攻击费用、超时/释放/abort 清理、目标排序、伤害/经验/冷却和 Final VFX；本轮将目标过滤补为 `excluded-entity-ids=[owner-id]`，与 main 的 `missile-filter-self` 一致，避免施法者被选为目标。
-- 当前仍有迁移边界：Final session 只保存球数量，释放/超时按 owner+entity-type 查询清理，尚未像 main 一样保存每个生成球的 UUID；因此同一玩家并行使用其它 MdBall 技能时，实机会发生跨技能清理/计数干扰风险。该问题不能通过旧回调兼容解决，后续需扩展当前 Final 实体生命周期/会话标识 ABI 后再处理。
-- 已通过 `:ac:runAcEdnCoverageTests`（14/33）；由于上述生命周期标识和 activation cost 时序尚未在 Final 中闭合，总表继续保持 `⚠️`。
+- Final session 现在保存每个生成球的 UUID：`entity/spawn :barrier? true` 的中性结果绑定到 `:ball-ids`，发射后按 `collection/remove` 更新列表，释放/超时/abort 使用 `entity-ids + owner + world` 精确清理；不再按 owner/type 模糊抓取同一玩家的其它实体。
+- 已通过 `:ac:runAcEdnCoverageTests` 与 `:combat-core:runCombatClojureTests`；总表仍保持 `⚠️`，仅表示实体 adapter、延迟射线和多人实机结果尚未测试。
 ### jet-engine checkpoint（检查与修复）
 
 - `main` 的标记阶段使用仅方块 raycast（实体不参与目标点），释放后以 8 tick 线性速度推进并在 15 tick 生命周期内逐段做实体命中/伤害；释放资源不足则结束标记，触发阶段结束清理全部 owner-scoped VFX。
@@ -314,7 +314,7 @@ thunder-bolt
 - `main` 的核心行为是 toggle 护盾：前方水平 yaw 接触伤害；受到合资格攻击时按吸收上限减伤，并按原实现的参数顺序扣防御资源；按 tick/接触/受击分别加经验；结束时移除护盾实体、施加 slowness 并按持有 tick 计算冷却。
 - Final 图已覆盖 toggle session、overload floor、tick/接触费用、前方 cone、吸收 policy、状态/冷却和 owner/nearby VFX。
 - 本轮修正 `damage/absorb` 的费用映射：`main` 的防御路径把 `absorb-cp` 传入 overload、把 `absorb-overload` 传入 CP（配置注释也明确记录该历史参数顺序）；Final policy 现按该顺序提交资源费用。
-- 已确认的共享边界：Final `damage/absorb` 当前尚未消费 `interval-ticks/last-tick-path`，因此受击间隔与 last-absorb 状态仍需在 Combat Core damage ABI 中补齐；不能在 AC 保留旧 damage handler 双轨。激活 cost-fail 时序也需以 Final 统一资源策略重新核验。
+- Final `damage/absorb` 现在消费 `interval-ticks/last-tick-path`：同一护盾会话在间隔内不会重复吸收，成功吸收后以中性 `session-patch` 提交 last-absorb tick；该状态由 AC 组合根提交，不在技能内保留旧 damage handler。激活 cost-fail 时序仍需以 Final 统一资源策略在实机复核。
 - 本轮 EDN 静态门禁待运行后记录；总表保持 `⚠️`，不能把可编译视作受击行为等价。
 ### meltdowner checkpoint（检查与修复）
 
@@ -361,7 +361,7 @@ thunder-bolt
 - 当前 Final 图已覆盖启动/蓄力费用、floor、生成节奏、owner/type/world 过滤、散射
   beam、nearby VFX 和按球 score。此前释放条件漏掉 `auto-aim-exp-threshold`，现在已在
   Final branch 中补齐；server pulse 已由统一 runtime 每 tick 注入 `charge/ticks`。
-- 仍未宣称完成的实体生命周期边界：Final session 只保存球数量，释放按 owner+entity-type 查询，\n  没有 main 的逐球 UUID/实际位置生命周期；同一 owner 的其它 MdBall 来源可能被查询到，\n  也无法在当前 action ABI 中把 spawn 返回 UUID 直接绑定到后续 graph。anti-AFK 已通过 Final\n  `flow/finish :next-phase :release` 转入同一释放 graph：先执行 generic 自伤，再由 server\n  pulse runtime 派发 release，不复制 volley，也不建立第二条路径。
+- Final session 现在保存每个生成球的 UUID，并在 release/abort 通过 `entity-ids + owner + world` 精确查询；spawn 结果绑定与列表更新都在同一 Final graph 内完成。anti-AFK 已通过 Final `flow/finish :next-phase :release` 转入同一释放 graph：先执行 generic 自伤，再由 server pulse runtime 派发 release，不复制 volley，也不建立第二条路径。
 - 已通过 `:ac:runAcEdnCoverageTests`（14/33）；没有实机时不能将实体轨迹、方块碰撞、
   delayed beam 和多人同时蓄力标为完成。
 ### mark-teleport checkpoint（逐项复核）
@@ -564,8 +564,9 @@ thunder-bolt
   `place-when-collide?`，避免实体遗留。
 - homing、throw fallback、too-far/entity-missing/abort 的 VFX 和实体清理路径保持在
   Final 图内，没有恢复旧 `MagManipContext` 回调。
-- 仍有两个未闭合风险：批处理 action 无法在同一图内分支处理 `entity/spawn` 失败后的
-  回滚；投掷实体的碰撞伤害/放置依赖平台实体行为。两者需要共享事务或实机 adapter
+- 持有实体现在由 spawn barrier 返回 UUID 并写入 session，pulse/release/abort 只使用该 UUID
+  加 owner/world 作用域；不再因为同一玩家存在其它同类实体而选错目标。投掷实体的碰撞
+  伤害/放置仍依赖平台实体行为，spawn 失败后的跨 action 回滚仍需共享事务或实机 adapter
   验证，故总表继续保持 `⚠️`。
 
 ### mag-movement checkpoint（检查结论）
