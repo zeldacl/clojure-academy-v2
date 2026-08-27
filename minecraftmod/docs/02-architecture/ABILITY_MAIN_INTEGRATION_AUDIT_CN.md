@@ -476,8 +476,9 @@ thunder-bolt
   CP/overload、累计 flight progression，并在资源不足时恢复 `can-fly?`、销毁四个
   vortex、粒子和循环音效。
 - 当前 Final 原先把 `cost/spend :flight` 放在 phase 分支之后，导致充能阶段也扣费；
-  已改为以 `session.phase=1` 为条件的 `:scale`（phase 0 为 0，phase 1 为 1），
-  不引入旧 handler 或第二条扣费路径。资源不足清理和 owner/world 作用域保持不变。
+  已保存 pulse 进入时的 `phase-before`，并以它作为 `:scale` 条件（进入时 phase 0
+  为 0，进入时 phase 1 为 1），避免充能完成的转换 tick 因 session 写入 phase=1 而
+  多扣一次。不引入旧 handler 或第二条扣费路径；资源不足清理和 owner/world 作用域保持不变。
 - `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。飞行 motion adapter、
   软方块权限、范围击退与多人同时飞行仍需实机验证，总表保持 `⚠️`。
 
