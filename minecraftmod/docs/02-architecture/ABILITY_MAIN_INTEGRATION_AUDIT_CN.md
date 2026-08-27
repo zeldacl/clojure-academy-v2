@@ -399,7 +399,12 @@ thunder-bolt
 - 当前 Final 仍由 `flow/phases` 描述持续时间、过载地板、摔落保护和四方向事件；
   本轮在 AC 组合根增加通用 toggle 边沿解析：对同一 owner 的 active `:toggle`
   session，下一次 `:start` 自动路由为该技能的 `:abort` phase，避免覆盖旧 session。
-- 仍需实机确认方向目标、CP/过载原子扣费以及停用冷却与 marker 清理的网络时序。
+- 对照 main 又发现两处确定性差异：creative 玩家不应支付 activation overload，且
+  `overload-floor` 必须记录 activation 扣费后的余量。Final start 现对 CP/overload
+  都按 `caster/creative?` 缩放，并以 `max(0, start-overload-cost)` 写入 floor；
+  不引入技能专属旧回调。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。仍需实机确认方向目标、
+  CP/过载原子扣费以及停用冷却与 marker 清理的网络时序。
 
 ### threatening-teleport checkpoint（逐项复核）
 
