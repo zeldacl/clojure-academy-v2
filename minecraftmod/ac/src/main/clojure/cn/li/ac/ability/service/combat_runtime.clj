@@ -1004,10 +1004,15 @@
                :type (or (:damage-type damage-source) :generic)
                :seed (long (or (:seed damage-source) @last-known-tick*))
                :metadata {:inputs inputs}}
-        result (final-runtime/resolve-damage! runtime event)]
+        result (final-runtime/resolve-damage! runtime event)
+        reflection-applied? (apply-reflections-once! result)
+        reflection-cancel? (boolean (some (fn [reflection]
+                                            (>= (double (or (:base reflection) 0.0))
+                                                (double (or (:minimum reflection) 0.0))))
+                                          (:reflections result)))]
     (assoc result
            :precheck? precheck?
-           :reaction-damage-applied? (and precheck? (apply-reflections-once! result))
+           :reaction-damage-applied? (and precheck? reflection-applied? reflection-cancel?)
            :base (double (:amount result))
            :cancelled? (boolean (:cancelled? result)))))
 
