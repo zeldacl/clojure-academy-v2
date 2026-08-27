@@ -413,3 +413,9 @@
                       (= :entity-id (first (keys (:bind %)))))
                 spawn-nodes)
         "spawn actions must bind their exact neutral entity id at a barrier")))
+(deftest mine-ray-break-result-is-gated-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/mine_ray.edn"))
+        breaks (filter #(= :block/break (:component %)) (component-nodes doc))]
+    (is (= 1 (count breaks)))
+    (is (true? (:barrier? (first breaks))))
+    (is (= :status (first (keys (:bind (first breaks))))))))

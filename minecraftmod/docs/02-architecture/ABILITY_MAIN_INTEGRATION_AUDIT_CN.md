@@ -570,8 +570,10 @@ thunder-bolt
 - `block/break` 仍由 Combat Core 的中性平台 action 执行，携带 expected-block-id、fortune
   和 tool-tier policy；权限、世界隔离和内部 break gate 留在 adapter。这样不会把 AC 的技能
   配置泄漏到 Combat Core，也不会因多个玩家共享方块目标而互相修改 session。
-- 共享边界仍需保留为 `⚠️`：Final tick 的原子 cost-fail 顺序、break action 失败后的经验提交，
-  以及多人同时改变同一方块的实际 adapter 结果无法在当前无实机条件下证明与 main 完全一致；
+- Final `block/break` 现在使用 barrier 返回的 `:status`，只有 `:applied` 才提交 block
+  progression；失败时清空目标状态，不会发放经验。共享边界仍需保留为 `⚠️`：Final tick
+  的原子 cost-fail 顺序，以及多人同时改变同一方块的实际 adapter 结果无法在当前无实机
+  条件下证明与 main 完全一致；
   不得以旧 `mine_rays_base` 回调恢复双轨。
 - 本轮 `:ac:runAcEdnCoverageTests`（14/33）及 `:combat-core:runCombatClojureTests`
   （25/65）通过；这是加载/编译 checkpoint，不等价于实机行为验收。
