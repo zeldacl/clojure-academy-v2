@@ -96,3 +96,14 @@
     (is (= [{:type :score/mark :tag :damaged :progression 0.1
              :owner nil :ability-id :vec-deviation}] (:side-events eligible)))
     (is (empty? (:side-events ignored)))))
+
+(deftest reflect-exp-tag-emits-on-eligible-reflection-test
+  (let [reaction {:ability-id :vec-reflection :reaction-id :reflect :priority 1
+                  :on :combat/damage
+                  :program {:component :damage/reflect :multiplier 0.5 :minimum 0.0
+                            :max-depth 5 :cost-per-damage 0.0
+                            :exp-tag :damaged :exp-scale 0.2}}
+        result (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 10.0 :type :skill :seed 1})]
+    (is (= [{:type :score/mark :tag :damaged :progression 0.2
+             :owner nil :ability-id :vec-reflection}] (:side-events result)))
+    (is (= 1 (count (:reflections result))))))

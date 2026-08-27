@@ -654,3 +654,11 @@
     (is (= :damage/reduce (:component program)))
     (is (= :damaged (:exp-tag program)))
     (is (= {:ref [:input :tunables :exp-damage-scale]} (:exp-scale program)))))
+
+(deftest vec-reflection-damage-progression-policy-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/vec_reflection.edn"))
+        policy (first (:damage-policies doc))
+        program (:program policy)]
+    (is (= :damage/reflect (:component program)))
+    (is (= :damaged (:exp-tag program)))
+    (is (= {:ref [:input :params :exp-damage-scale]} (:exp-scale program)))))

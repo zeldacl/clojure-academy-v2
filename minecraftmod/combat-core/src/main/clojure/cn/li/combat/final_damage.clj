@@ -139,7 +139,13 @@
                         :max-depth (long (or (value (:max-depth program)) max-reflection-depth))
                         :cost-per-damage (value (:cost-per-damage program))
                         :owner (:owner-id (get-in event [:metadata :input :context]))
-                        :exp-scale (value (:exp-scale program))
+                        :exp-tag (:exp-tag program)
+                        :exp-amount (value (:exp-scale program))
+                        :exp-eligible? (and (not= :environment (:source event))
+                                             (< (long (:depth event))
+                                                (min max-reflection-depth
+                                                     (long (or (value (:max-depth program))
+                                                               max-reflection-depth)))))
                         :vfx (:vfx program) :events (:events program) :input (:input (:metadata event))}]
       :damage/critical (mapv (fn [{:keys [level probability multiplier]}]
                                {:kind :critical
@@ -173,7 +179,7 @@
                                         (when (and (:exp-tag contribution)
                                                    (number? (:exp-amount contribution))
                                                    (or (= :absorption (:kind contribution))
-                                                       (and (= :reduction (:kind contribution))
+                                                       (and (contains? #{:reduction :reflection} (:kind contribution))
                                                             (not= false (:exp-eligible? contribution)))))
                                           {:type :score/mark
                                            :tag (:exp-tag contribution)
