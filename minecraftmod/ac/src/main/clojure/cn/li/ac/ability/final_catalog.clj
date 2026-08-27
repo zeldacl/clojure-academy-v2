@@ -7,7 +7,6 @@
    the final compiler vocabulary; VFX descriptors are validated immediately so
    the combat catalog can depend on a stable VFX ABI first."
   (:require [cn.li.node.composite :as composite]
-            [cn.li.node.descriptor :as descriptors]
             [cn.li.vfx.compiler :as vfx-compiler]
             [cn.li.ac.ability.final-vocabulary :as vocabulary]))
 (def ^:const schema-version 1)
@@ -153,14 +152,15 @@
                    [id document])))
           (:documents manifest))))
 
-(defn- load-combat [combat-manifest composites]
+(defn- load-combat [combat-manifest node-environment composites]
   (let [manifest (validate-manifest (read-resource combat-manifest) :combat)
         sources (reduce (fn [result {:keys [id resource kind source-id]}]
                           (when-not (= :ability kind)
                             (throw (ex-info "combat manifest contains non-ability"
                                             {:id id :kind kind})))
                           (let [source (-> (read-resource resource)
-                                           (update :program #(composite/expand-with-descriptors % composites)))
+                                           (update :program #(composite/expand-with-environment-and-composites
+                                                              node-environment % composites)))
                                 source-key (or source-id id)]
                             (when-not (or (= source-key (:id source))
                                           (= id (:id source)))
@@ -338,15 +338,16 @@
           vfx-manifest "ac/vfx/manifest.edn"
           combat-composites "ac/combat/composites_v3_manifest.edn"
           vfx-composites "ac/vfx/composites_v3_manifest.edn"}}]
-   (let [_vocabulary (vocabulary/register!)
-         combat-composite-docs (load-composite-docs combat-composites)
+   (let [combat-composite-docs (load-composite-docs combat-composites)
          vfx-composite-docs (merge (load-composite-docs vfx-composites)
                                    ;; The reusable timeline composites are
                                    ;; part of the final VFX catalog as well.
                                    (load-composite-docs "ac/vfx/components_manifest.edn"))
          vfx (load-vfx vfx-manifest vfx-composite-docs)
-         combat (load-combat combat-manifest combat-composite-docs)]
+         node-environment (vocabulary/environment combat-composite-docs)
+         combat (load-combat combat-manifest node-environment combat-composite-docs)]
      {:schema-version schema-version
+      :node-environment node-environment
       :vfx vfx
       :combat combat
       :counts {:combat-sources (:source-count combat)

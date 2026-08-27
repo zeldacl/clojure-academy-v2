@@ -207,6 +207,14 @@
   [root]
   (expand-node registry/descriptor root #{} (volatile! 0) [:program]))
 
+(defn expand-with-environment
+  "Expand a graph against one immutable NodeEnvironment. The environment is
+   explicit so concurrent AC/BC/CC catalogs cannot observe one another's
+   descriptors."
+  [environment root]
+  (let [descriptor-of #(registry/environment-descriptor environment %)]
+    (expand-node descriptor-of root #{} (volatile! 0) [:program])))
+
 (defn expand-with-descriptors
   "Expand a graph using an external map of final composite descriptors.
 
@@ -217,4 +225,12 @@
   [root composites]
   (let [composites (or composites {})
         descriptor-of (fn [id] (or (get composites id) (registry/descriptor id)))]
+    (expand-node descriptor-of root #{} (volatile! 0) [:program])))
+
+(defn expand-with-environment-and-composites
+  "Expand using an immutable environment plus catalog-local composite docs."
+  [environment root composites]
+  (let [composites (or composites {})
+        descriptor-of (fn [id] (or (get composites id)
+                                   (registry/environment-descriptor environment id)))]
     (expand-node descriptor-of root #{} (volatile! 0) [:program])))

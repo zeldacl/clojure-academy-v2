@@ -4,11 +4,9 @@
    The catalog is assembled once and every registration must compile into the
    final graph IR. A non-executable registration aborts startup; there is no
    legacy evaluator or pending fallback."
-  (:require [cn.li.node.descriptor :as descriptors]
-            [cn.li.node.schema-export :as schema]
+  (:require [cn.li.node.schema-export :as schema]
             [cn.li.node.scope :as scope]
-            [cn.li.node.validate :as validate]
-            [cn.li.ac.ability.final-vocabulary :as vocabulary]))
+            [cn.li.node.validate :as validate]))
 
 (defonce ^:private catalog-state (atom {:status :cold}))
 
@@ -40,7 +38,8 @@
     :else nil))
 
 (defn- strict-graphs! [assembled]
-  (let [registration-programs (vec (keep :graph (get-in assembled [:combat :registrations])))
+  (let [environment (:node-environment assembled)
+        registration-programs (vec (keep :graph (get-in assembled [:combat :registrations])))
         source-programs (vec (keep #(or (:program %) (:graph %))
                                   (vals (get-in assembled [:combat :sources]))))
         vfx-programs (vec (keep :source-graph
@@ -49,17 +48,15 @@
         legacy (some (fn [program] (legacy-form program [:program])) programs)]
     (when legacy
       (throw (ex-info "assembled final graph contains legacy syntax" legacy)))
-    (vocabulary/register!)
     ;; Validate every expanded combat source and registration, not just the
     ;; player-facing registration copy.  Scope must start empty: seeding it
     ;; with every local name found anywhere in the tree would make the check
     ;; vacuous and allow an unbound local to reach the runtime.
     (doseq [program (concat registration-programs source-programs)]
-      (validate/validate! program)
-      (scope/check! program))
-    (descriptors/freeze!)
-    {:descriptor-count (count (schema/export-catalog))
-     :schema (schema/export-catalog)}))
+      (validate/validate-in-environment! environment program)
+      (scope/check-in-environment! environment program))
+    {:descriptor-count (count (schema/export-environment environment))
+     :schema (schema/export-environment environment)}))
 
 (defn- compile-registration [registration]
   (when-not (= :final (:engine registration))

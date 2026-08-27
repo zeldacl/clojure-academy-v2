@@ -27,3 +27,9 @@
    stable diff/output order."
   []
   (mapv export-descriptor (sort-by :id (registry/all-descriptors))))
+
+(defn export-environment
+  "Export one immutable NodeEnvironment in stable id order."
+  [environment]
+  (mapv export-descriptor
+        (sort-by :id (registry/environment-descriptors environment))))

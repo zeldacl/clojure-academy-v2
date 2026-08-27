@@ -12,6 +12,8 @@
 (defn- fail [reason data]
   (throw (ex-info (name reason) (assoc data :reason reason))))
 
+(def ^:dynamic *environment* nil)
+
 (defn- callback-input-keys [d]
   (set (keep (fn [[k spec]] (when (= :node (:type spec)) k)) (:inputs d))))
 
@@ -42,7 +44,9 @@
 (defn validate-node! [node path]
   (when-not (map? node) (fail :not-a-node {:path path}))
   (let [component (:component node)
-        d (registry/descriptor component)]
+        d (if *environment*
+            (registry/environment-descriptor *environment* component)
+            (registry/descriptor component))]
     (when-not d (fail :unknown-component {:path path :component component}))
     (validate-fields! node d path)
     (doseq [[key {:keys [kind]}] (:children d)]
@@ -62,3 +66,10 @@
   [root]
   (validate-node! root [:program])
   nil)
+
+(defn validate-in-environment!
+  "Validate a graph against one immutable descriptor environment."
+  [environment root]
+  (binding [*environment* environment]
+    (validate-node! root [:program])
+    nil))

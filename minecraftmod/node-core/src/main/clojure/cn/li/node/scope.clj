@@ -99,6 +99,7 @@
    (get-in d [:child-binds-locals child-key] #{})))
 
 (declare check-node)
+(def ^:dynamic *environment* nil)
 
 (defn- run-port
   "Run every child under one :children port against the SAME `bound`,
@@ -127,7 +128,9 @@
   [node bound path]
   (when-not (map? node) (fail :not-a-node {:path path}))
   (let [component (:component node)
-        d (registry/descriptor component)]
+        d (if *environment*
+            (registry/environment-descriptor *environment* component)
+            (registry/descriptor component))]
     (when-not d (fail :unknown-component {:path path :component component}))
     (let [node-local-binds (set (keep (fn [key]
                                        (let [value (get node key)]
@@ -171,3 +174,11 @@
   ([root seed-bound]
    (check-node root (set seed-bound) [:program])
    nil))
+
+(defn check-in-environment!
+  "Check a graph against an explicit immutable descriptor environment."
+  ([environment root] (check-in-environment! environment root #{}))
+  ([environment root seed-bound]
+   (binding [*environment* environment]
+     (check-node root (set seed-bound) [:program])
+     nil)))

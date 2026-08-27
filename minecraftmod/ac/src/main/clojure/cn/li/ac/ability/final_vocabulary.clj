@@ -183,14 +183,31 @@
                                     (or (:outputs spec) {})))
              :children (or (:children spec) {}))))
 
-(defn register! []
-  (doseq [spec (map normalize-spec
-                   (concat component-specs
-                           (map composite-spec composite-only-ids)
-                           vfx-runtime-specs))]
-    (when-not (descriptors/descriptor (:id spec))
-      (if (= :mid (:layer spec))
-        (descriptors/register-composite! spec)
-        (descriptors/register-primitive!
-         (assoc spec :layer :primitive :impl (fn [_ _] {}))))))
-  (descriptors/all-descriptors))
+(defn descriptor-specs
+  "Return the complete AC vocabulary as immutable descriptor values. No
+   process-global registration occurs; each composition root owns its copy."
+  []
+  (mapv (fn [spec]
+          (let [spec (normalize-spec spec)]
+            (if (= :mid (:layer spec))
+              spec
+              (assoc spec :layer :primitive :impl (fn [_ _] {})))))
+        (concat component-specs
+                (map composite-spec composite-only-ids)
+                vfx-runtime-specs)))
+
+(defn environment
+  "Build an AC-local NodeEnvironment, optionally extending it with loaded
+   composite documents. The returned value is immutable and can be safely
+   captured per server/player session without cross-player state."
+  ([] (environment []))
+  ([composites]
+   (descriptors/build-environment
+    (concat (descriptor-specs)
+            (map normalize-spec (vals (or composites {})))))))
+
+(defn register!
+  "Vocabulary inspection API retained under its historic name for tooling;
+   it returns descriptors and never mutates process-global state."
+  []
+  (descriptor-specs))
