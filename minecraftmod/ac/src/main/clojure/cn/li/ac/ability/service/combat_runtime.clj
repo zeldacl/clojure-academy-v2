@@ -623,15 +623,26 @@
     (pos? ticks)))
 
 (defn dispatch-intent! [owner intent]
-  ;; Final runtime is the sole production dispatch path.  Pending source
-  ;; Final graphs return an explicit execution status; there is no alternate
+  ;; Final runtime is the sole production dispatch path. Pending source Final
+  ;; graphs return an explicit execution status; there is no alternate
   ;; evaluator or catalog fallback at this boundary.
   (let [ability-id (edn-ability-id owner intent)
+        source (combat-source ability-id)
+        active-session (combat-sessions/session (str owner))
+        ;; Toggle abilities use one physical key for both activation and
+        ;; deactivation. The client wire intentionally stays neutral (`:start`);
+        ;; the server resolves the edge from its owner-scoped session so a
+        ;; repeated key-down cannot create a second session or overwrite the
+        ;; active state. This is generic for every future :toggle source.
+        intent (if (and (= :start (:op intent))
+                        (= :toggle (:activation source))
+                        (= ability-id (:ability-id active-session)))
+                 (assoc intent :op :abort)
+                 intent)
         seed (long (or (:activation-seed intent)
                        (generate-activation-seed owner ability-id
                                                  (long (or (:server-tick intent)
                                                            @last-known-tick*)))))
-        source (combat-source ability-id)
         prepared (final-input owner ability-id (assoc intent :activation-seed seed) seed)]
     (if (and (= :start (:op intent))
              (cooldown-active? owner ability-id))
@@ -647,7 +658,6 @@
                    (not (combat-sessions/active? (str owner))))
           (combat-sessions/start! (str owner) ability-id prepared))
         result))))
-
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
 

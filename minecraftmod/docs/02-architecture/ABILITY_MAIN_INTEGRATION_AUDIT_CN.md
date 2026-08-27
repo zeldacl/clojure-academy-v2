@@ -392,6 +392,15 @@ thunder-bolt
   `target/block-placement` 的权限事实由中性 host 提供，EDN 只决定是否执行。
 - 仍需实机确认方块权限失败时的 drop fallback、路径实体排序和多人 VFX audience。
 
+### flashing checkpoint（逐项复核）
+
+- `main` 使用同一按键切换 flashing：首次按下建立持续 session，重复按下结束
+  session 并启动停用冷却；W/A/S/D 事件只在该 owner 的 session 存在时生效。
+- 当前 Final 仍由 `flow/phases` 描述持续时间、过载地板、摔落保护和四方向事件；
+  本轮在 AC 组合根增加通用 toggle 边沿解析：对同一 owner 的 active `:toggle`
+  session，下一次 `:start` 自动路由为该技能的 `:abort` phase，避免覆盖旧 session。
+- 仍需实机确认方向目标、CP/过载原子扣费以及停用冷却与 marker 清理的网络时序。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
