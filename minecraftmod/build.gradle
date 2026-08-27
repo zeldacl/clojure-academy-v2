@@ -565,6 +565,45 @@ tasks.register("verifyUiXmlIds") {
     }
 }
 
+tasks.register("verifyParticleDefinitions") {
+    group = "verification"
+    description = "Fail if a particles/<id>.json definition references a texture that is not at textures/particle/<path>.png. The per-type definition format (assets/<ns>/particles/<id>.json with {\"textures\": [\"ns:path\"]}) is identical across 1.20.1 / 1.21.1 / 26.2, and every loader binds the sprite set from it — a missing file leaves the MutableSpriteSet unbound and every spawn NPEs."
+    doLast {
+        def slurper = new groovy.json.JsonSlurper()
+        def problems = []
+        def fileCount = 0
+        fileTree(file("ac/src/main/resources/assets")) { include "**/particles/*.json" }.each { File defFile ->
+            fileCount++
+            def ns = defFile.parentFile.parentFile.parentFile.name
+            def textures = []
+            try {
+                def json = slurper.parse(defFile)
+                textures = (json.textures ?: []) as List
+            } catch (Exception e) {
+                problems << "${defFile.name}: unparseable json (${e.message})"
+            }
+            textures.each { String tex ->
+                def parts = tex.split(":", 2)
+                def texNs = parts.length == 2 ? parts[0] : ns
+                def path = parts.length == 2 ? parts[1] : parts[0]
+                def expected = file("ac/src/main/resources/assets/${texNs}/textures/particle/${path}.png")
+                if (!expected.exists()) {
+                    def misplaced = file("ac/src/main/resources/assets/${texNs}/textures/${path}.png")
+                    def hint = misplaced.exists()
+                        ? " (texture exists at textures/${path}.png — particle atlas sprites resolve under textures/particle/, like vanilla smoke.json → textures/particle/generic_7.png)"
+                        : ""
+                    problems << "${defFile.name}: texture \"${tex}\" missing at textures/particle/${path}.png${hint}"
+                }
+            }
+        }
+        if (problems) {
+            problems.each { logger.lifecycle("[verifyParticleDefinitions] " + it) }
+            throw new GradleException("[verifyParticleDefinitions] ${problems.size()} particle definition problem(s) — every spawn of a sprite-set particle NPEs (sprites list never rebound)")
+        }
+        logger.lifecycle("[verifyParticleDefinitions] ok ({} particle definition file(s))", fileCount)
+    }
+}
+
 tasks.register("verifyNeutralClojureNoMinecraftApis") {
     group = "verification"
     description = "Fail if ac/mcmod Clojure sources or build.gradle files import or reference Minecraft/Forge/Fabric/NeoForge APIs."
@@ -904,7 +943,8 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNeutralProviderClosure",
               "verifyNeutralProviderRuntimeLoad",
               "verifyMinecraftComponentNeutrality",
-              "verifyVersionSeamParity"
+              "verifyVersionSeamParity",
+              "verifyParticleDefinitions"
 }
 
 tasks.register("verifyBuildProfiles") {
