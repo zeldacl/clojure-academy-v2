@@ -3,7 +3,7 @@
    palette, or a schema dump for review). One descriptor in, one plain-data
    map out -- deliberately dumb, so it cannot itself become a place where
    editor-specific logic accumulates."
-  (:require [cn.li.node.descriptor :as registry]))
+  (:require [cn.li.node.environment :as registry]))
 
 (defn- export-fields [fields]
   (reduce-kv (fn [acc k spec] (assoc acc k (select-keys spec [:type :min :max :default :doc :scope])))
@@ -22,14 +22,8 @@
    :effects (:effects d)
    :reads-environment (:reads-environment d)})
 
-(defn export-catalog
-  "Every currently-registered descriptor as plain data, sorted by id for a
-   stable diff/output order."
-  []
-  (mapv export-descriptor (sort-by :id (registry/all-descriptors))))
-
 (defn export-environment
   "Export one immutable NodeEnvironment in stable id order."
   [environment]
   (mapv export-descriptor
-        (sort-by :id (registry/environment-descriptors environment))))
+        (sort-by :id (registry/all-descriptors environment))))

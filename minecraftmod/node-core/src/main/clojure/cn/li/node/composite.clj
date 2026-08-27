@@ -10,7 +10,7 @@
    nodes) is a :primitive. A :source node found anywhere inside a
    composite body is a compile error -- source nodes are only legal at an
    ability document's own top level (NODE_LANGUAGE.md section 5)."
-  (:require [cn.li.node.descriptor :as registry]
+  (:require [cn.li.node.environment :as registry]
             [clojure.walk :as walk]))
 
 (def ^:const max-depth 16)
@@ -195,42 +195,10 @@
                     node*
                     (filter (fn [[_ spec]] (= :node (:type spec))) (:inputs d)))))))))
 
-(defn expand
-  "Expand every composite invocation in `root`, returning a tree whose every
-   :component resolves to a :primitive descriptor (or, only at nodes
-   reachable before any composite substitution, a :source descriptor).
-   Throws (see cn.li.node.scope's :reason vocabulary plus :unknown-composite-
-   input/:missing-required-field/:composite-expansion-cycle/:expansion-node-
-   budget-exceeded/:expansion-depth-exceeded/:source-node-outside-ability)
-   on unknown component/input, missing required input, cycles, or budget
-   overrun."
-  [root]
-  (expand-node registry/descriptor root #{} (volatile! 0) [:program]))
-
-(defn expand-with-environment
-  "Expand a graph against one immutable NodeEnvironment. The environment is
-   explicit so concurrent AC/BC/CC catalogs cannot observe one another's
-   descriptors."
-  [environment root]
-  (let [descriptor-of #(registry/environment-descriptor environment %)]
-    (expand-node descriptor-of root #{} (volatile! 0) [:program])))
-
-(defn expand-with-descriptors
-  "Expand a graph using an external map of final composite descriptors.
-
-   The supplied descriptors are consulted before the frozen node registry;
-   primitive/source descriptors still come from the registry. This lets AC
-   load EDN composite documents without installing mutable runtime entries or
-   maintaining a second expansion algorithm in the content catalog."
-  [root composites]
-  (let [composites (or composites {})
-        descriptor-of (fn [id] (or (get composites id) (registry/descriptor id)))]
-    (expand-node descriptor-of root #{} (volatile! 0) [:program])))
-
 (defn expand-with-environment-and-composites
   "Expand using an immutable environment plus catalog-local composite docs."
   [environment root composites]
   (let [composites (or composites {})
         descriptor-of (fn [id] (or (get composites id)
-                                   (registry/environment-descriptor environment id)))]
+                                   (registry/descriptor environment id)))]
     (expand-node descriptor-of root #{} (volatile! 0) [:program])))

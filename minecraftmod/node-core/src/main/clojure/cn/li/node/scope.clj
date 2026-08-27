@@ -25,7 +25,7 @@
 
    This is what turns 'a node only reads what it declares' from an
    authoring convention into a property the compiler checks."
-  (:require [cn.li.node.descriptor :as registry]
+  (:require [cn.li.node.environment :as registry]
             [clojure.set :as set]))
 
 (defn- fail [reason data]
@@ -128,9 +128,7 @@
   [node bound path]
   (when-not (map? node) (fail :not-a-node {:path path}))
   (let [component (:component node)
-        d (if *environment*
-            (registry/environment-descriptor *environment* component)
-            (registry/descriptor component))]
+        d (registry/descriptor *environment* component)]
     (when-not d (fail :unknown-component {:path path :component component}))
     (let [node-local-binds (set (keep (fn [key]
                                        (let [value (get node key)]
@@ -163,17 +161,6 @@
                             branch)
             merged (if (seq results) (reduce set/intersection results) after-sequential)]
         (into merged (own-binds node d))))))
-
-(defn check!
-  "Verify the lexical-scope invariant for a node tree rooted at `root`,
-   optionally seeded with an initial bound set (e.g. a composite body's own
-   :inputs keys, or an ability's declared :session-state keys). Throws
-   ex-info (:reason one of :not-a-node/:unknown-component/:unbound-local/
-   :unknown-output-port/:unknown-port-kind) on violation; returns nil."
-  ([root] (check! root #{}))
-  ([root seed-bound]
-   (check-node root (set seed-bound) [:program])
-   nil))
 
 (defn check-in-environment!
   "Check a graph against an explicit immutable descriptor environment."

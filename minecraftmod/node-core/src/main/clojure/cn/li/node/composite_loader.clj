@@ -21,18 +21,10 @@
       (fail "invalid composite manifest" {:resource manifest-resource}))
     manifest))
 
-(defn install!
-  "Read `manifest-resource` (a path `document-loader` understands, e.g. a
-   classpath resource path) listing {:kind :composite :id :resource}
-   entries, and register-composite! every document that parses and
-   validates. `document-loader` is a (fn [resource-path] -> parsed-edn),
-   required (not defaulted here -- see this namespace's docstring for why).
-
-   Returns {:registered [id...] :errors [{:id :error :data} ...]}. A
-   document that fails to parse, whose :id doesn't match the manifest
-   entry, or whose shape isn't a well-formed :layer :mid composite (or
-   whose registration itself fails, e.g. a duplicate id) is recorded in
-   :errors and skipped; every other document still loads."
+(defn load
+  "Read and validate composite documents into a plain id->descriptor map.
+   Loading is pure; the composition root decides which environment receives
+   the returned values."
   [{:keys [manifest-resource document-loader]}]
   (when-not (ifn? document-loader)
     (fail "document-loader is required" {:manifest-resource manifest-resource}))
@@ -48,9 +40,8 @@
                    {:manifest-id id :document-id (:id document)}))
            (when-not (and (= :mid (:layer document)) (map? (:inputs document)) (map? (:body document)))
              (fail "invalid v3 composite document" {:id id}))
-           (node/register-composite! document))
-         (update result :registered conj id)
+           (update result :documents assoc id (node/normalize document)))
          (catch Throwable throwable
            (update result :errors conj {:id id :error (ex-message throwable) :data (ex-data throwable)}))))
-     {:registered [] :errors []}
+     {:documents {} :errors []}
      (:documents manifest))))

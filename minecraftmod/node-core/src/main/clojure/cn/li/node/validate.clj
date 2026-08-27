@@ -6,7 +6,7 @@
    deliberately independent of cn.li.node.scope (which only proves binding
    safety) and of cn.li.node.composite (which only proves expansion
    terminates); together the three cover shape, binding, and expansion."
-  (:require [cn.li.node.descriptor :as registry]
+  (:require [cn.li.node.environment :as registry]
             [cn.li.node.types :as types]))
 
 (defn- fail [reason data]
@@ -44,9 +44,7 @@
 (defn validate-node! [node path]
   (when-not (map? node) (fail :not-a-node {:path path}))
   (let [component (:component node)
-        d (if *environment*
-            (registry/environment-descriptor *environment* component)
-            (registry/descriptor component))]
+        d (registry/descriptor *environment* component)]
     (when-not d (fail :unknown-component {:path path :component component}))
     (validate-fields! node d path)
     (doseq [[key {:keys [kind]}] (:children d)]
@@ -57,15 +55,6 @@
         nil))
     (doseq [key (callback-input-keys d)]
       (validate-child (get node key) (conj path key)))))
-
-(defn validate!
-  "Recursively validate `root` and every reachable descendant. Throws
-   ex-info (:reason one of :not-a-node/:unknown-component/:unknown-field/
-   :missing-required-field/:type-mismatch) on the first violation found;
-   returns nil."
-  [root]
-  (validate-node! root [:program])
-  nil)
 
 (defn validate-in-environment!
   "Validate a graph against one immutable descriptor environment."

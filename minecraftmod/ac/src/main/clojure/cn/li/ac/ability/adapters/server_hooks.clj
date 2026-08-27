@@ -15,7 +15,6 @@
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.combat.deferred :as deferred]
-            [cn.li.combat.vfx-publish :as vfx-publish]
             [cn.li.vfx.network :as vfx-network]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -267,7 +266,6 @@
      (network/clear-input-admission! player-uuid)
      (deferred/clear-owner! player-uuid)
      (clear-combat-owner! player-uuid)
-     (vfx-publish/broadcast-clear-owner! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
 
@@ -295,15 +293,13 @@
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
-     (clear-combat-owner! player-uuid)
-     (vfx-publish/broadcast-clear-owner! player-uuid))
+     (clear-combat-owner! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
      (combat-runtime/abort-owner! player-uuid)
      (deferred/clear-owner! player-uuid)
-     (clear-combat-owner! player-uuid)
-     (vfx-publish/broadcast-clear-owner! player-uuid))
+      (clear-combat-owner! player-uuid))
 
    :get-skills-for-category
    (fn [cat-id]
@@ -329,11 +325,6 @@
 
    :on-server-tick-end!
    (fn [tick-id]
-     (when (and (integer? tick-id)
-                (not (neg? (long tick-id)))
-                (zero? (mod (long tick-id) vfx-replay-interval-ticks)))
-       (vfx-publish/replay-persistent-signals!
-        (:vfx (combat-catalog/catalog))))
      nil)
 
    :list-player-uuids
@@ -396,24 +387,10 @@
    (fn [_fns-map] nil)
 
    :register-context-send-fns!
-   (fn [fns-map]
-     (when-let [to-client (:to-client fns-map)]
-       (vfx-publish/install-result-sink!
-        (fn [owner result]
-          (to-client owner ability-messages/MSG-COMBAT-RESULT
-                     {:wire (fixed-channel/encode-combat-feedback result)})))
-       (vfx-publish/install-vfx-typed-self-sink!
-        (fn [owner packet signal]
-          (vfx-network/validate-direction! :s2c packet)
-          (to-client owner ability-messages/MSG-COMBAT-VFX
-                     {:wire (fixed-channel/encode-vfx-signal signal)}))))
-     (when-let [to-nearby (:to-nearby fns-map)]
-       (vfx-publish/install-vfx-typed-broadcast-sink!
-        (fn [owner packet signal radius]
-          (vfx-network/validate-direction! :s2c packet)
-          (to-nearby owner ability-messages/MSG-COMBAT-VFX
-                     {:wire (fixed-channel/encode-vfx-signal signal)}
-                     radius)))))
+   (fn [_fns-map]
+     ;; Visual/result transport is owned by ability-runtime ports. AC only
+     ;; installs the composition root; no combat-core sink mutation occurs.
+     nil)
 
    :get-context-player-uuid
    ;; Context ids are no longer authoritative combat handles.  Returning nil

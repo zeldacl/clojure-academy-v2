@@ -15,7 +15,6 @@
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.combat.vfx-publish :as vfx-publish]
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
@@ -249,15 +248,7 @@
                        {:status :rejected :feedback [{:type :invalid-movement}]}
                        (combat-runtime/dispatch-intent! owner intent)))))
         result (if (= :accepted (:status result))
-                 ;; publish-combat-result! both routes :vfx-signals to their
-                 ;; audience (self/nearby-broadcast) through the push
-                 ;; channel and strips them from the value returned here --
-                 ;; the RPC reply itself only ever carries status/feedback,
-                 ;; the same single-execution-path contract every other
-                 ;; result-shaped payload in this module already follows.
-                 (vfx-publish/publish-combat-result!
-                  (:vfx (combat-catalog/catalog))
-                  (combat-runtime/finalize-result! owner result))
+                 (combat-runtime/finalize-result! owner result)
                  result)]
     (when (= :rejected (:status result))
       (log/debug "Combat intent rejected" {:owner owner :feedback (:feedback result)}))

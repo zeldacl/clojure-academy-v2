@@ -11,8 +11,7 @@
    not because they touch Minecraft -- nothing in the three-layer rule
    (NODE_LANGUAGE.md section 1) requires a primitive to call mcmod, only
    that ONLY primitives may have :impl at all."
-  (:require [cn.li.node.descriptor :as registry]
-            [cn.li.node.value :as value]
+  (:require [cn.li.node.value :as value]
             [cn.li.node.expr :as expr]))
 
 (def builtin-ids #{:flow/sequence :flow/branch :flow/foreach :data/bind :flow/finish})
@@ -86,28 +85,21 @@
       :flow/finish (run-finish node ctx)
       ((:dispatch ctx) node ctx))))
 
-(defn install!
-  "Register the 5 builtin descriptors. Idempotent per JVM process is NOT
-   guaranteed (the registry rejects duplicate ids) -- call this exactly
-   once per registry lifetime, before freeze!. Both combat-core and
-   vfx-core call this during their own vocabulary bootstrap."
-  []
-  (registry/register-primitive!
-   {:id :flow/sequence :revision 1
+(def builtin-descriptors
+  "Immutable descriptor values for the shared structural primitives."
+  [{:id :flow/sequence :revision 1
     :doc "Run each step in order; a step that finishes the program short-circuits the rest."
     :category :flow
     :children {:steps {:kind :seq :flow :sequential}}
     :effects #{:mutate}
-    :impl run-sequence})
-  (registry/register-primitive!
+    :impl run-sequence}
    {:id :flow/branch :revision 1
     :doc "Run :then when :when is true, otherwise :else."
     :category :flow
     :inputs {:when {:type :boolean}}
     :children {:then {:kind :single :flow :branch} :else {:kind :single :flow :branch}}
     :effects #{:mutate}
-    :impl run-branch})
-  (registry/register-primitive!
+    :impl run-branch}
    {:id :flow/foreach :revision 1
     :doc "Run :body once per item in :items (up to :limit), binding :as (and optionally :index-as) inside the body's own closed scope."
     :category :flow
@@ -117,37 +109,18 @@
              :limit {:type :long :default nil}}
     :children {:body {:kind :single :flow :closed}}
     :effects #{:mutate}
-    ;; :as/:index-as bind loop-local names through plain keyword fields,
-    ;; not the generic :bind {port -> local} convention -- composite
-    ;; expansion's rename-locals needs this declared so it renames these
-    ;; fields' values consistently with every {:ref [:local ...]} that
-    ;; reads them (see composite.clj's own comment on the bug this fixed).
     :binds-locals #{:as :index-as}
-    :impl run-foreach})
-  (registry/register-primitive!
+    :impl run-foreach}
    {:id :data/bind :revision 1
     :doc "Bind :value to local name :to."
     :category :flow
     :inputs {:to {:type :keyword} :value {:type :any}}
     :effects #{:mutate}
-    ;; :to introduces a new local by a plain keyword field, the same
-    ;; pattern :flow/foreach's :as/:index-as use (see that registration's
-    ;; own comment on the bug this fixed for foreach) -- without
-    ;; :binds-locals here, cn.li.node.composite/rename-locals renames every
-    ;; {:ref [:local X ...]} READ of a :data/bind-introduced local (its
-    ;; first cond branch renames ANY {:ref [:local ...]} unconditionally)
-    ;; but leaves the :data/bind node's own :to WRITE unrenamed, since only
-    ;; :binds-locals-declared fields go through the second branch. A write
-    ;; to the literal name and reads of the renamed name never meet: caught
-    ;; by :combat/break-budget's accumulator-threading composite, which
-    ;; wrote :remaining via :data/bind and read it back via
-    ;; {:ref [:local :remaining]} one step later and got nil.
     :binds-locals #{:to}
-    :impl run-bind})
-  (registry/register-primitive!
+    :impl run-bind}
    {:id :flow/finish :revision 1
-    :doc "Mark the program finished with :outcome; nothing after it runs. :finish-session? (default false) is an opaque pass-through flag that a domain engine may read from the final context to end a multi-phase session early; node-core itself never interprets it."
+    :doc "Mark the program finished with :outcome; nothing after it runs."
     :category :flow
     :inputs {:outcome {:type :keyword} :finish-session? {:type :boolean :default false}}
     :effects #{:mutate}
-    :impl run-finish}))
+    :impl run-finish}])

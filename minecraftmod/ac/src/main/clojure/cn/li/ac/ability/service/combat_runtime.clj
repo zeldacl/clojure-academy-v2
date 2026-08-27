@@ -2,8 +2,7 @@
   "AC composition root for the neutral combat engine.
 
    Combat Core itself never knows about AC, Minecraft or VFX."
-  (:require [cn.li.combat.vfx-publish :as vfx-publish]
-            [cn.li.combat.deferred :as deferred]
+  (:require [cn.li.combat.deferred :as deferred]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -501,14 +500,12 @@
                             :seed (long (or seed 0))
                             :event :spawn
                             :params (or payload {})})]
-           (vfx-publish/publish-combat-result!
-            (:vfx (combat-catalog/catalog))
-            (finalize-result!
+           (finalize-result!
              owner
              {:schema-version 2
               :status :accepted
               :owner owner
-              :vfx-signals [normalized]})))))
+              :vfx-signals [normalized]}))))
       (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
         (capabilities/register-query!
          :energy/target
@@ -843,8 +840,7 @@
                 {:op :event :action :event :ability-id ability-id
                  :event event :context context})]
     (when (= :accepted (:status result))
-      (vfx-publish/publish-combat-result!
-       (:vfx (combat-catalog/catalog)) (finalize-result! owner result)))
+      (finalize-result! owner result))
     result))
 
 (defn tick!
@@ -865,5 +861,4 @@
   (reset! engine* nil)
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
-  (vfx-publish/reset-for-test!)
   nil)
