@@ -21,6 +21,7 @@
    :collection/contains? {:expr :collection/contains?
                           :args [["minecraft:iron_block"] "minecraft:iron_block"]}
    :collection/concat {:expr :collection/concat :args [[1] [2]]}
+   :collection/remove {:expr :collection/remove :args [[1 2] 1]}
    :value/normalize-id {:expr :value/normalize-id :args ["block.minecraft.iron_block"]}
    :value/parse-status-spec {:expr :value/parse-status-spec :args ["jump-boost:1"]}
    :value/status-id {:expr :value/status-id :args ["jump-boost:1"]}

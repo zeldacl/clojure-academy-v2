@@ -106,6 +106,7 @@
 
        :collection/contains? (boolean (some #(= % (nth args 1)) (or (nth args 0) [])))
        :collection/concat (vec (concat (or (nth args 0) []) (or (nth args 1) [])))
+       :collection/remove (vec (remove #(= % (nth args 1)) (or (nth args 0) [])))
        :collection/first (first (or (nth args 0) []))
        :collection/nonempty (boolean (seq (nth args 0)))
 
