@@ -418,6 +418,8 @@ thunder-bolt
 - 当前 Final release 已改为读取 owner session 的 `:trace`，同时保留释放时
   `target/item-held` 检查和 needle 倍率；命中/未命中、settle、damage、score、VFX
   仍由同一 graph 决定，没有恢复旧 handler。
+- main 的 up-stage creative 免扣也已迁移：命中 release 的 `cost/spend` 按
+  `caster/creative?` 缩放，creative 玩家不会错误消耗 CP/overload。
 - 仍需实机确认实体顶部 drop 坐标、物品扣除失败和多人 marker 销毁边界。
 
 ### penetrate-teleport checkpoint（逐项复核）
