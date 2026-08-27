@@ -44,3 +44,12 @@
              (:status (runtime/dispatch! rt ability-id
                                          {:owner "alice" :world "w" :tick 0
                                           :seed 1 :input {:phase :start}})))))))
+
+(deftest final-runtime-frame-world-prefers-activation-context-test
+  (let [resolve-world (var-get (ns-resolve 'cn.li.ac.ability.final-runtime 'frame-world-id))]
+    (is (= "world:nether" (resolve-world {:context {:world-id "world:nether"}})))
+    (is (= "world:end" (resolve-world {:capabilities {:world/id "world:end"}})))
+    (is (= "world:explicit"
+           (resolve-world {:world-id "world:explicit"
+                           :context {:world-id "world:nether"}})))
+    (is (= "minecraft:overworld" (resolve-world {})))))

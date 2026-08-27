@@ -142,12 +142,19 @@
 
 (defn production-runtime [] @production-runtime*)
 
+(defn- frame-world-id
+  "Resolve the immutable world snapshot used by the final execution frame."
+  [intent]
+  (or (:world-id intent)
+      (get-in intent [:context :world-id])
+      (get-in intent [:capabilities :world/id])
+      "minecraft:overworld"))
 (defn dispatch-production! [owner ability-id intent]
   (if-let [runtime @production-runtime*]
     (dispatch! runtime ability-id
                {:owner owner
                 :ability-id ability-id
-                :world (or (:world-id intent) "minecraft:overworld")
+                :world (frame-world-id intent)
                 :tick (long (or (:server-tick intent) (:tick intent) 0))
                 :seed (long (or (:activation-seed intent)
                                 (hash [owner ability-id (:server-tick intent)])))
