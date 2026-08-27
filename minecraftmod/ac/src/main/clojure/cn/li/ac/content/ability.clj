@@ -64,6 +64,25 @@
     (skill-registry/register-skill! skill-spec))
   true)
 
+(defn- register-final-item-triggers!
+  "Install item-to-trigger routing required by final EDN external-triggers.
+   The action keyword is only a neutral platform routing key; execution remains
+   in the final Combat Core graph and is never implemented by an item callback."
+  []
+  (item-actions/register-item-action! "ac:coin" :railgun-coin-throw)
+  (item-actions/register-item-action! (modid/namespaced-path "coin") :railgun-coin-throw)
+  (item-actions/register-item-entity-spawn!
+   "ac:coin"
+   {:entity-id (modid/namespaced-path "entity_coin_throwing")
+    :speed 0.0
+    :unique-per-owner? true})
+  (item-actions/register-item-entity-spawn!
+   (modid/namespaced-path "coin")
+   {:entity-id (modid/namespaced-path "entity_coin_throwing")
+    :speed 0.0
+    :unique-per-owner? true})
+  nil)
+
 (defn init-combat-ability-content!
   "Production composition root for ability content.
 
@@ -75,6 +94,7 @@
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (register-combat-catalog!)
+      (register-final-item-triggers!)
       ;; The saved-name screen is only a persistence/RPC bridge. Teleport
       ;; execution itself is the final Combat Core EDN program.
       (loc-teleport-rpc/init!)
