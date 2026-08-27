@@ -302,6 +302,16 @@ thunder-bolt
   回滚；投掷实体的碰撞伤害/放置依赖平台实体行为。两者需要共享事务或实机 adapter
   验证，故总表继续保持 `⚠️`。
 
+### mag-movement checkpoint（检查结论）
+
+- 目标解析、normal/weak metal 过滤、entity 目标存活检查、持续移动/overload floor、
+  释放时 reset-fall-damage、距离经验和 nearby VFX 均已有 Final 节点。
+- 发现确定性缺口：`start` 图没有执行 `costs.activate` 的 `ability/budget + cost/spend`，
+  只用资源快照计算了 floor；因此激活不会扣除 main 要求的 down overload，也没有资源
+  不足的权威结束分支。
+- 该修复必须重排完整 start 图（先扣费，再进入三种目标分支），不能在技能内添加旧
+  回调兼容或硬编码补扣；当前保持 `⚠️`，待 Final start 资源模板统一后单独提交。
+
 课程别名不进入战斗图修复队列，但仍保留在最终总验收中：
 
 ```text
