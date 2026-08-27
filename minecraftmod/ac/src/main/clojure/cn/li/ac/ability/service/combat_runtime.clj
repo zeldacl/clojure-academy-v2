@@ -958,6 +958,8 @@
                                (active-mark world-id target-id mark-type @last-known-tick*))
                        enabled? (= ability-id (:ability-id target-session))
                        params (or (:parameter-snapshot target-session) {})
+                       session (merge (dissoc (or target-session {}) :state)
+                                      (or (:state target-session) {}))
                        tunables (materialize-final-tunables ability-id skill-exp)
                        front? (if-let [cone (:front-cone-degrees tunables)]
                                 (if (contains? damage-source :attacker-front?)
@@ -981,7 +983,7 @@
                               :capabilities {}
                               :tunables tunables
                               :params params
-                              :session (or target-session {})
+                              :session session
                               :budgets (:costs source)
                               :invariants (:invariants source)}]
                    [ability-id input]))
@@ -1092,6 +1094,15 @@
         {:status (if (:success? commit) :committed :failed)
          :commands (count commands)})
       {:status :none :commands 0})))
+(defn- commit-damage-session!
+  "Commit reaction-owned session patches after the native damage decision.
+   These patches are neutral session state, never AC player-state mutations."
+  [owner result]
+  (let [patches (vec (or (:session-patches result) []))]
+    (when (seq patches)
+      (combat-sessions/apply-actions!
+       (server-session-id) (str owner)
+       [{:type :session-patch :entries patches}]))))
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary and publish its
    authoritative VFX/domain outbox after the state decision is known."
@@ -1103,6 +1114,7 @@
         cost-result (if (and accepted? (:resource-costs result))
                       (commit-damage-costs! owner result)
                       {:status :none :commands 0})
+        _session-result (when accepted? (commit-damage-session! owner result))
         domain-results (if accepted?
                          (dispatch-result-domain-events! owner result)
                          [])

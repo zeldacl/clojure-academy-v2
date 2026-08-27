@@ -121,6 +121,8 @@
       :damage/absorb [{:kind :absorption :value (value (:cap program))
                        :requires-payment true
                        :cost (cost-map (:cost program)) :vfx (:vfx program)
+                       :interval-ticks (value (:interval-ticks program))
+                       :last-tick-path (:last-tick-path program)
                        :owner (:owner-id (get-in event [:metadata :input :context]))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
@@ -160,12 +162,18 @@
                                                    (program-contributions (:program reaction) pe)))))
                                   matched)
         contributions (vec (remove (fn [contribution]
-                                     (and (:requires-payment contribution)
-                                          (let [resources (get-in contribution [:input :context :resources] {})]
-                                            (some (fn [[resource amount]]
-                                                    (> (double (or amount 0.0))
-                                                       (double (or (get resources resource) 0.0))))
-                                                  (:cost contribution)))))
+                                     (or (and (:requires-payment contribution)
+                                              (let [resources (get-in contribution [:input :context :resources] {})]
+                                                (some (fn [[resource amount]]
+                                                        (> (double (or amount 0.0))
+                                                           (double (or (get resources resource) 0.0))))
+                                                      (:cost contribution))))
+                                         (and (= :absorption (:kind contribution))
+                                              (pos? (double (or (:interval-ticks contribution) 0.0)))
+                                              (let [session (or (get-in contribution [:input :session]) {})
+                                                    last-tick (lookup-path session (or (:last-tick-path contribution) []))
+                                                    elapsed (- (long (:seed event)) (long (or last-tick Long/MIN_VALUE)))]
+                                                (< elapsed (long (:interval-ticks contribution)))))))
                                    raw-contributions))
         multiplier (reduce * 1.0 (map #(double (or (:value %) 1.0)) (filter #(= :multiplier (:kind %)) contributions)))
         reduction (min 1.0 (max 0.0 (reduce + 0.0 (map (fn [contribution] (let [threshold (:ignore-threshold contribution) ignored? (and (some? threshold) (> (double (:base event)) (double threshold)))] (if ignored? 0.0 (double (or (:value contribution) 0.0))))) (filter #(= :reduction (:kind %)) contributions)))))
@@ -242,6 +250,13 @@
                                                        (= :reflection (:kind %))
                                                        (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions))))
      :state-patches (vec (mapcat :state-patches matched))
+     :session-patches (vec (for [contribution (filter #(and (= :absorption (:kind %))
+                                                              (pos? absorption)
+                                                              (seq (:last-tick-path %)))
+                                                        contributions)]
+                              {:path (:last-tick-path contribution)
+                               :mode :assign
+                               :value (long (:seed event))}))
      :events (vec (mapcat :events matched))}))
 (defn install-boundary!
   "Connect the pure resolver to mcmod's begin/complete SPI. The token holds

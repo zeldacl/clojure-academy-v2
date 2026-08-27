@@ -45,3 +45,18 @@
       (boundary/complete! resolution true 2.0)
       (is (= 2.0 (:amount @committed))))
     (boundary/clear!)))
+(deftest absorb-interval-and-session-patch-test
+  (let [reaction {:ability-id :shield :reaction-id :absorb :priority 10
+                  :on :combat/damage
+                  :program {:component :damage/absorb :cap 3.0
+                            :interval-ticks 10 :last-tick-path [:last-absorb-tick]}}
+        base-event {:world-id "w" :source :a :target :b :base 10 :type :skill
+                    :metadata {:input {:context {:resources {:cp 100.0 :overload 100.0}}
+                                        :session {:last-absorb-tick 15}}}}
+        blocked (damage/resolve-event [reaction] (assoc base-event :seed 20))
+        applied (damage/resolve-event [reaction] (assoc base-event :seed 25))]
+    (is (= 10.0 (:amount blocked)))
+    (is (= 7.0 (:amount applied)))
+    (is (= [{:path [:last-absorb-tick] :mode :assign :value 25}]
+           (:session-patches applied)))
+    (is (empty? (:session-patches blocked)))))
