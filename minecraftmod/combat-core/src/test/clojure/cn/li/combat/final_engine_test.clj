@@ -209,6 +209,37 @@
     (is (= :mark-sparks (get-in result [:vfx-signals 0 :effect-id])))
     (is (= :entity/mark (get-in result [:host :results 0 :capability])))))
 
+(deftest barrier-action-binds-neutral-result-test
+  (let [applied (atom [])
+        runtime (engine/create-engine
+                 {:host (host/create
+                         {:queries {}
+                          :actions {:entity/spawn
+                                    (fn [phase command _]
+                                      (if (= :preflight phase)
+                                        true
+                                        (do
+                                          (swap! applied conj command)
+                                          {:status :applied :entity-id "spawned-1"})))}})
+                  :state-provider (fn [_] {})
+                  :commit-state! (fn [_])})
+        program (compiler/compile-program
+                 {:component :flow/sequence
+                  :steps [{:component :entity/spawn
+                           :entity-type "academy:test"
+                           :owner "alice"
+                           :world-id "world:test"
+                           :barrier? true
+                           :bind {:entity-id :spawned-id}}
+                          {:component :graph/output
+                           :value {:id {:ref [:local :spawned-id]}}}]})
+        result (engine/execute! runtime program
+                                {:owner "alice" :world "world:test"
+                                 :ability-id :skill/a :tick 1 :seed 1 :input {}})]
+    (is (= :accepted (:status result)))
+    (is (= [{:id "spawned-1"}] (:feedback result)))
+    (is (= "spawned-1" (get-in result [:locals :spawned-id])))
+    (is (= 1 (count @applied)))))
 (deftest domain-event-is-emitted-as-an-event-outbox-entry-test
   (let [engine (engine/create-engine
                 {:host (host/create {:queries {} :actions {}})

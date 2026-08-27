@@ -42,7 +42,7 @@
     :else value))
 (defn- command-id [engine path]
   (let [n (swap! (:next-command engine) inc)] [:combat (vec path) n]))
-(declare run-node merge-action-results normalize-vfx-signal)
+(declare run-node merge-action-results normalize-vfx-signal bind-command-results)
 (defn- flush-command-prefix [engine context]
   (if (seq (:commands context))
     (let [result (host/execute! (:host engine) (:commands context)
@@ -51,10 +51,10 @@
         (-> context
             (assoc :commands [])
             (update :barriers (fnil conj []) result)
-            (merge-action-results result))
+            (merge-action-results result)
+            (bind-command-results result))
         (assoc context :host-error result)))
     context))
-
 (defn- merge-action-results
   "Fold neutral action return values into the graph outbox.
 
@@ -91,6 +91,21 @@
                context bind)
     (assoc-in context [:locals bind] value)))
 
+(defn- bind-command-results
+  "Bind outputs returned by already-applied action commands.
+
+   Action nodes are normally batched for one host transaction. A node may
+   opt into :barrier? when a following graph step needs its result (for
+   example the UUID returned by :entity/spawn); the command id keeps this
+   binding exact without querying by owner/type or leaking platform objects."
+  [context host-result]
+  (reduce (fn [ctx {:keys [id value]}]
+            (if-let [bind (get-in ctx [:command-binds id])]
+              (-> (bind-result ctx bind value)
+                  (update :command-binds dissoc id))
+              ctx))
+          context
+          (:results host-result)))
 (defn- node-bind [node]
   ;; Final EDN uses :bind for explicit port maps and :result for the compact
   ;; query form. Both are final ABI, and neither may disappear at runtime.
@@ -147,7 +162,7 @@
 
 (defn- action-args [node context]
   (let [structural #{:component :kind :bind :capability :operation :on-fail :guards
-                     :reservations :body :then :else :steps :start :pulse :release :abort}]
+                     :reservations :barrier? :body :then :else :steps :start :pulse :release :abort}]
     (resolve-value (or (:args node) (apply dissoc node structural)) context)))
 
 (defn- with-derived-action-locals
@@ -482,17 +497,24 @@
                       (contracts/assoc-owner-in (:txn context) owner path* value))]
             (assoc context :txn txn))
           :action
-          (let [context (with-derived-action-locals node context)]
-            (update context :commands conj
-                    (contracts/host-command {:id (command-id engine path)
-                                             :capability (or (:capability node)
-                                                             (when (contains? (:actions (:host engine)) component)
-                                                               component)
-                                                             (get capability-aliases component)
-                                                             component)
-                                             :owner (:owner (:frame context))
-                                             :world-id (:world (:frame context))
-                                             :args (action-args node context)})))
+          (let [context (with-derived-action-locals node context)
+                id (command-id engine path)
+                command (contracts/host-command {:id id
+                                                 :capability (or (:capability node)
+                                                                 (when (contains? (:actions (:host engine)) component)
+                                                                   component)
+                                                                 (get capability-aliases component)
+                                                                 component)
+                                                 :owner (:owner (:frame context))
+                                                 :world-id (:world (:frame context))
+                                                 :args (action-args node context)})
+                context (update context :commands conj command)
+                context (if-let [bind (node-bind node)]
+                          (assoc-in context [:command-binds id] bind)
+                          context)]
+            (if (:barrier? node)
+              (flush-command-prefix engine context)
+              context))
           :vfx (emit context :vfx (normalize-vfx node context path))
           :feedback (emit context :feedback (resolve-value (:event node) context))
           context)))))
@@ -510,14 +532,16 @@
                        (or (:state session-record) {}))
         initial {:frame frame :locals {} :session session
                  :session-patches [] :seed* (atom (:seed frame))
-                 :txn txn :commands [] :barriers []
+                 :txn txn :commands [] :barriers [] :command-binds {}
                  :outbox (contracts/outbox) :scheduled []
                  :vfx-order* (atom 0)}
         result (run-node engine (:program compiled) initial [:program])
         host-result (or (:host-error result)
                         (host/execute! (:host engine) (:commands result) {:frame frame}))
         result (if (:ok? host-result)
-                  (merge-action-results result host-result)
+                  (-> result
+                      (merge-action-results host-result)
+                      (bind-command-results host-result))
                   result)]
     (if-not (:ok? host-result)
       {:status :rejected :reason (:reason (:error host-result)) :host host-result
