@@ -432,15 +432,15 @@
              ;; ability-activation requirement. A coin use always consumes,
              ;; spawns, dispatches the domain action (CoinThrowEvent analog)
              ;; and notifies the client QTE.
-             server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}
-                                     {:kind :domain-action :action action
-                                      :payload (assoc domain-payload
-                                                      :edn-trigger trigger)}]
+             server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}]
                               entity-spawn (conj {:kind :spawn-scripted-effect
                                                   :entity-id (:entity-id entity-spawn)
                                                   :unique-per-owner?
                                                   (boolean (:unique-per-owner? entity-spawn))
-                                                  :speed (double (or (:speed entity-spawn) 0.0))}))]
+                                                  :speed (double (or (:speed entity-spawn) 0.0))})
+                              true (conj {:kind :domain-action :action action
+                                          :payload (assoc domain-payload
+                                                          :edn-trigger trigger)}))]
          {:server-actions server-actions
           :client-actions [{:kind :notify-local-effect
                             :event-key :ac/charge-coin-throw}]
