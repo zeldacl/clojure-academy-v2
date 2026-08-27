@@ -674,14 +674,23 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 
 在 AC 主源码中，技能相关的 `apply-direct-damage!`、VFX nearby 推送和实体副作用调用只出现在 `combat_runtime.clj` 的能力实现/组合边界；技能内容与 server hook 没有再直接调用这些平台函数。`server_hooks` 的伤害入口只转发到 `process-damage-request!` / `apply-attack-precheck!`，物品入口只产生 neutral `:edn-trigger`。因此当前发现的越界不是“绕过三核心模块”，而是 Railgun 的特殊硬币/QTE 语义尚未在中间能力中建模。
 
+### 50 项统一静态验收（本轮）
+
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 14 tests / 33 assertions 全部通过。
+- `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。唯一明确缺口仍是 `railgun` 的 QTE/charge 状态机，已保留为 `❌`，没有用 `:coin-thrown :received` 占位冒充完成。
+- 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
+- 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
+
 ## 修复顺序与提交点
 
 1. **Context ABI**：已完成并提交（`46f3dc0aa`）。
 2. **Mark domain**：已完成并提交（`7b8510bd0`）。
 3. **Damage result commit**：已完成并提交（`46f3dc0aa`、`2478da3c2`、`d9cff8772`、`19195dbcf`）；参数/费用仍需行为测试。
 4. **VFX transport**：已完成并提交（`46f3dc0aa`、`2478da3c2`）。
-5. **单技能确定性修复**：location teleport、light shield、thunder bolt；提交。
-   `mark-teleport` 的 release 快照与公共 teleport 端口语义已在本轮完成，待本轮提交。
+5. **单技能确定性修复**：location teleport、light shield、thunder bolt、mark-teleport、
+   flesh-ripping、directed-blastwave、directed-shock、blood-retrograde、plasma-cannon、
+   vec-accel、storm-wing、mag-movement；均已按技能单独提交（最近提交分别为
+   `26dee6fa3`、`a2618d29d`、`fba68d32a`）。
 6. **Registration bindings**：把 Mine Ray 的 variant/presentation/runtime 显式注入；提交。
 7. **Railgun capability**：尚未完成；main 的 coin-QTE、硬币判定/销毁、蓄力 tick、反射射击和经验/成就仍需单独建模，不能以当前 `:coin-thrown` 完成事件代替。
 8. **Passive reducer**：实现三种通用课程被动效果并按 owner 状态提交；提交。
