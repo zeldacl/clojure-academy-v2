@@ -103,6 +103,7 @@
         {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 10 :performed? false :punched? false :punch-ticks 0}})
         perform-calls* (atom [])
+        punch-calls* (atom [])
         cooldown-calls* (atom [])
         exp-calls* (atom [])]
     (skill-ctx/with-server-skill-context
@@ -123,15 +124,20 @@
                          raycast/player-look-vector (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
                          world-effects/find-entities-in-radius (fn [& _] [])
-                         fx/send! (fn [ctx-id entry _evt payload]
-                                    (when (= :directed-blastwave/fx-perform (:topic entry))
-                                      (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
+                         fx/send! (fn [& args]
+                                    (let [[ctx-id entry _evt payload] args]
+                                      (when (= :directed-blastwave/fx-perform (:topic entry))
+                                        (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
+                                      (when (= :directed-blastwave/fx-punch (:topic entry))
+                                        (swap! punch-calls* conj [ctx-id (:topic entry) (:mode entry)]))))
                          skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks]))
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                         (swap! exp-calls* conj [player-id skill-id amount]))]
              (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-miss" :exp 0.5 :cost-ok? true)))))
     (is (= 2 (count @perform-calls*)) "fanned out to owner + nearby")
+    (is (= [["ctx-miss" :directed-blastwave/fx-punch :punch]] @punch-calls*)
+        "punch anim is owner-only (upstream l_effect isLocal gate)")
     (is (= {:x 2.0 :y 3.0 :z 8.0}
            (get-in @perform-calls* [0 3 :pos])))
     (is (= [["p1" :directed-blastwave 80]] @cooldown-calls*))
@@ -181,9 +187,10 @@
                            (swap! set-position-calls* conj [world-id target-id x y z]))
                          motion-effects/set-entity-velocity! (fn [world-id target-id x y z]
                                                         (swap! set-velocity-calls* conj [world-id target-id x y z]))
-                         fx/send! (fn [ctx-id entry _evt payload]
-                                    (when (= :directed-blastwave/fx-perform (:topic entry))
-                                      (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
+                         fx/send! (fn [& args]
+                                    (let [[ctx-id entry _evt payload] args]
+                                      (when (= :directed-blastwave/fx-perform (:topic entry))
+                                        (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))))
                          skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks]))
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]

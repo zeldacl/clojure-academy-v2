@@ -1,59 +1,36 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.directed-blastwave
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str]
-            [cn.li.ac.ability.client.fx-templates.arc-beam])
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam])
   (:import [cn.li.mcmod.math V3]))
 
 (def ^:private sound-id (modid/namespaced-path "vecmanip.directed_blast"))
 (def ^:private wave-life 15)
 
-
-
-
-
-
-
-
+;; ---------------------------------------------------------------------------
+;; Level runtime — the WaveEffect (rings + world sound) spawned on perform.
+;; Upstream s_perform sends MSG_PERFORM to every recipient and each c_perform
+;; then triggers effectAt locally (no isLocal gate), so the wave is
+;; world-rendered by owner and bystanders alike. The wave is a spawned
+;; WaveEffect entity upstream — nothing kills it when the context ends; it
+;; expires on its own ttl.
+;; ---------------------------------------------------------------------------
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
-  (let [store* (or store {:effect-state {} :waves {}})
+  (let [store* (or store {:waves {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode charge-ticks punched? pos look-dir performed? source-player-id world-id]} (or payload {})
+        {:keys [mode pos look-dir source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case mode
-      :start
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
-      :update
-      (assoc-in store* [:effect-state owner-key*]
-                (assoc (merge base-meta (get-in store* [:effect-state owner-key*] {}))
-                       :owner-key owner-key*
-                       :ctx-id ctx-id
-                       :channel channel
-                       :source-player-id source-player-id
-                       :world-id world-id
-                       :active? true
-                       :charge-ticks (long (or charge-ticks 0))
-                       :punched? (boolean punched?)
-                       :performed? false))
       :perform
       (let [wave-entry (when (map? pos)
                          (let [d (or look-dir {:x 0.0 :y 0.0 :z 1.0})
@@ -84,18 +61,12 @@
            :y (double (or (:y pos) 0.0))
            :z (double (or (:z pos) 0.0))})
         updated-store)
-      :end
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta {:active? false :charge-ticks 0 :punched? false
-                                  :performed? (boolean performed?)}))
       store*)))
 
 (defn- tick-state!
   [store]
-  (let [state* (or store {:effect-state {} :waves {}})]
-    (assoc state*
-           :effect-state (store-tick/keep-active (:effect-state state*))
-           :waves (store-tick/tick-ttl-items-by-owner (:waves state*)))))
+  (let [state* (or store {:waves {}})]
+    (assoc state* :waves (store-tick/tick-ttl-items-by-owner (:waves state*)))))
 
 (defn- alpha-curve
   [t]
@@ -155,57 +126,121 @@
                              {:r 255 :g 255 :b 255 :a alpha-i})]))))
         rings))))
 
-(defn- charge-ops
-  [^V3 center charge-ticks punched?]
-  (let [progress (min 1.0 (/ (double charge-ticks) 50.0))
-        radius (+ 0.1 (* 0.16 progress))
-        pulse (+ radius (* 0.025 (Math/sin (* 0.22 charge-ticks))))
-        points 16
-        cx (.-x center) cy (.-y center) cz (.-z center)
-        alpha (if punched? 220 170)
-        color {:r 225 :g 245 :b 255 :a alpha}
-        core {:r 178 :g 220 :b 245 :a (int (* 0.7 alpha))}]
-    (vec
-      (mapcat
-        (fn [idx]
-          (let [a0 (/ (* 2.0 Math/PI idx) points)
-                a1 (/ (* 2.0 Math/PI (inc idx)) points)
-                p0 (vec3/v3 (+ cx (* pulse (Math/cos a0))) cy (+ cz (* pulse (Math/sin a0))))
-                p1 (vec3/v3 (+ cx (* pulse (Math/cos a1))) cy (+ cz (* pulse (Math/sin a1))))]
-            [(ru/line-op p0 p1 color)
-             (ru/line-op center p0 core)]))
-        (range points)))))
-
 (defn- build-plan
-  [_camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state waves]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :directed-blastwave)
-        db (some (fn [st]
-                   (when (and (:active? st)
-                              (or (nil? (:source-player-id st))
-                                  (nil? (:player-uuid hand-center-pos))
-                                  (= (str (:source-player-id st))
-                                     (str (:player-uuid hand-center-pos)))))
-                     st))
-                 (vals effect-state))
-        current-waves (mapcat val waves)
-        charge-plan (if (and hand-center-pos db (:active? db))
-                      (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
-                                  (long (or (:charge-ticks db) 0))
-                                  (boolean (:punched? db)))
-                      [])
-        wave-plan (mapcat wave-ops current-waves)]
-    (when (or (seq charge-plan) (seq wave-plan))
-      {:ops (vec (concat charge-plan wave-plan))})))
+  [_camera-pos _hand-center-pos _tick]
+  (let [{:keys [waves]} (arc-beam/snapshot :directed-blastwave {:runtime :level})
+        wave-plan (mapcat wave-ops (mapcat val waves))]
+    (when (seq wave-plan)
+      {:ops (vec wave-plan)})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-blastwave :level] [_ _] {:effect-state {} :waves {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:directed-blastwave :level]
+;; ---------------------------------------------------------------------------
+;; Hand runtime — the raise-hand (prepare) and punch animations.
+;; Upstream l_handEffectStart plays AnimPresets.createPrepareAnim on key-down
+;; (0.15s raise, then held) and l_effect plays createPunchAnim on perform
+;; (0.3s punch). Both are first-person hand-render overrides that only make
+;; sense for the caster — the channels are owner-only sends, matching the
+;; original's isLocal gates. The curve control points below are a direct
+;; transcription of AnimPresets.createPrepareAnim / createPunchAnim.
+;; ---------------------------------------------------------------------------
+
+(def ^:private prepare-duration-ms 150.0)
+(def ^:private punch-duration-ms 300.0)
+
+(defn- now-ms [] (System/currentTimeMillis))
+
+(defn- prepare-transform [progress]
+  {:tx (hand-effects/sample-curve [[0.0 0.0] [1.0 -0.02]] progress)
+   :ty (hand-effects/sample-curve [[0.0 0.0] [0.5 0.2] [1.0 0.4]] progress)
+   :tz (hand-effects/sample-curve [[0.0 0.0] [1.0 -0.05]] progress)
+   :rot-x (hand-effects/sample-curve [[0.0 0.0] [1.0 -20.0]] progress)
+   :rot-y 0.0
+   :rot-z 0.0})
+
+(defn- punch-transform [progress]
+  {:tx (hand-effects/sample-curve [[0.0 -0.04] [0.5 -0.04] [1.0 0.0]] progress)
+   :ty (hand-effects/sample-curve [[0.0 0.8] [0.5 0.75] [1.0 0.0]] progress)
+   :tz (hand-effects/sample-curve [[0.0 0.0] [0.3 -0.4] [1.0 0.0]] progress)
+   :rot-x (hand-effects/sample-curve [[0.0 -40.0] [0.5 -45.0] [1.0 0.0]] progress)
+   :rot-y (hand-effects/sample-curve [[0.0 0.0] [0.3 10.0] [1.0 0.0]] progress)
+   :rot-z 0.0})
+
+(defn- enqueue-hand-state!
+  [state ctx-id channel owner-key payload]
+  (let [state* (or state {:effect-state {}})
+        {:keys [mode performed? source-player-id world-id]} payload
+        owner-key* (or owner-key [:ctx ctx-id])
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
+    (case mode
+      :start
+      (update state* :effect-state assoc owner-key*
+              (merge base-meta {:stage :prepare :started-at (now-ms)}))
+      :punch
+      (update state* :effect-state assoc owner-key*
+              (merge base-meta {:stage :punch :started-at (now-ms)}))
+      ;; Upstream stopInterrupt on MSG_TERMINATED cuts the hand override even
+      ;; after a successful punch; the punch stage here is time-bounded anyway
+      ;; (tick removes it after punch-duration-ms), so a performed context just
+      ;; lets it finish while an aborted one snaps the hand back immediately.
+      :end
+      (if performed?
+        state*
+        (update state* :effect-state dissoc owner-key*))
+      state*)))
+
+(defn- tick-hand-state!
+  [state]
+  (let [state* (or state {:effect-state {}})]
+    (update state* :effect-state
+            (fn [states]
+              (into {}
+                    (remove (fn [[_ {:keys [stage started-at]}]]
+                              (and (= stage :punch)
+                                   (>= (- (now-ms) (long started-at)) punch-duration-ms))))
+                    states)))))
+
+(defn- hand-transform []
+  (when-let [[owner-key {:keys [stage started-at]}]
+             (some (fn [[owner-key st]]
+                     (when (:stage st)
+                       [owner-key st]))
+                   (:effect-state (arc-beam/snapshot :directed-blastwave)))]
+    (let [elapsed (- (now-ms) (long started-at))]
+      (case stage
+        :prepare
+        (prepare-transform (min 1.0 (/ elapsed prepare-duration-ms)))
+        :punch
+        (let [progress (/ elapsed punch-duration-ms)]
+          (if (>= progress 1.0)
+            (do
+              (arc-beam/clear-owner! :directed-blastwave owner-key)
+              nil)
+            (punch-transform progress)))
+        nil))))
+
+;; ---------------------------------------------------------------------------
+;; Registration
+;; ---------------------------------------------------------------------------
+
+(defmethod arc-beam/effect-initial-state [:directed-blastwave :level] [_ _] {:waves {}})
+(defmethod arc-beam/effect-enqueue-state! [:directed-blastwave :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:directed-blastwave :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :directed-blastwave
+(defmethod arc-beam/effect-tick-state! [:directed-blastwave :level] [_ _ store] (tick-state! store))
+(defmethod arc-beam/effect-build-plan :directed-blastwave
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :directed-blastwave [_ store owner-key]
-  ;; The hand effect is context-bound (upstream l_handEffectTerminate stops the
-  ;; render override); the wave is a spawned WaveEffect entity that nothing
-  ;; kills when the context ends. See railgun_shot.clj's clear-owner.
-  (update store :effect-state dissoc owner-key))
+(defmethod arc-beam/effect-initial-state [:directed-blastwave :hand] [_ _] {:effect-state {}})
+(defmethod arc-beam/effect-enqueue-state! [:directed-blastwave :hand]
+  [_ _ store ctx-id channel owner-key payload] (enqueue-hand-state! store ctx-id channel owner-key payload))
+(defmethod arc-beam/effect-tick-state! [:directed-blastwave :hand] [_ _ store] (tick-hand-state! store))
+(defmethod arc-beam/effect-transform-fn :directed-blastwave [_effect-id] (hand-transform))
+(defmethod arc-beam/effect-clear-owner! :directed-blastwave [_ store owner-key]
+  ;; Hand override is context-bound (upstream stopInterrupt); the wave is a
+  ;; spawned WaveEffect that nothing kills when the context ends — it expires
+  ;; on its own ttl, like the railgun-shot precedent.
+  (if (contains? store :effect-state)
+    (update store :effect-state dissoc owner-key)
+    store))

@@ -184,8 +184,10 @@
   (ctx-skill/replace-skill-state! ctx-id
                          {:charge-ticks 0 :punched? false
                           :punch-ticks 0 :performed? false})
-  (fx/send! ctx-id {:topic :directed-blastwave/fx-start :mode :start})
-  (fx/send! ctx-id {:topic :directed-blastwave/fx-update :mode :update} nil {:charge-ticks 0 :punched? false}))
+  ;; Upstream l_handEffectStart: key-down plays only the 0.15s hand-raise
+  ;; (prepare) anim — no particles, no sound. Owner-only, like the original's
+  ;; isLocal-gated hand override.
+  (fx/send! ctx-id {:topic :directed-blastwave/fx-start :mode :start}))
 
 (defn- directed-blastwave-tick!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -195,9 +197,6 @@
           punched?    (boolean (:punched? ss))
           next-punch  (if punched? (inc (long (or (:punch-ticks ss) 0))) 0)]
       (ctx-skill/replace-skill-state! ctx-id (assoc ss :charge-ticks next-charge :punch-ticks next-punch))
-      (fx/send! ctx-id {:topic :directed-blastwave/fx-update :mode :update} nil
-                {:charge-ticks (long (max 0 next-charge))
-                 :punched? punched?})
       (cond
         (>= next-charge (cfg-int :charge.max-tolerant-ticks))
         (terminate-with-end! ctx-id false)
@@ -251,15 +250,17 @@
                    world-id (:uuid entity)
                    (:x push) (:y push) (:z push)))))
             (break-nearby-blocks! player-id world-id hit-pos exp*)
-            ;; Original's s_perform sendToClient(MSG_PERFORM, position); each
+            ;; Upstream s_perform sendToClient(MSG_PERFORM, position); each
             ;; recipient's c_perform (owner + nearby, no isLocal gate) then
             ;; locally triggers effectAt — a world-positioned sound + WaveEffect
             ;; — so every recipient independently renders it, bystanders
-            ;; included. Only the caster's own hand-punch animation is
-            ;; isLocal-gated separately.
+            ;; included. On air release the position is player pos + look*4 and
+            ;; the effect fires the same way (exp-miss, no entities).
             (fx/send-local-and-nearby! ctx-id {:topic :directed-blastwave/fx-perform :mode :perform} nil {:pos hit-pos
-                                                                                          :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
-                                                                                          :charge-ticks (long (max 0 charge-ticks))})
+                                                                                          :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})})
+            ;; Upstream l_effect (MSG_PERFORM) starts the punch anim under an
+            ;; isLocal gate — owner-only send, unlike the fan-out above.
+            (fx/send! ctx-id {:topic :directed-blastwave/fx-punch :mode :punch})
             (ctx-skill/replace-skill-state! ctx-id
                                             (assoc (:skill-state ctx-data)
                                                    :punched? true :punch-ticks 0 :performed? true))
