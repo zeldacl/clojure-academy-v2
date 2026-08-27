@@ -129,7 +129,7 @@ vecmanip/brain-course-advanced
       (update :cp-recovery-speed (fnil * 0.0) 1.2))))
 ```
 
-## 其余 24 个真实技能
+## 其余 29 个真实技能
 
 以下技能的 graph 结构、主要 action/VFX 节点已找到，但仍不能标为完全通过，因为所有 graph VFX 都受公共发送链路影响，且 damage/mark/owner context 的公共问题会按技能是否使用这些能力继续传递：
 
@@ -158,6 +158,11 @@ storm-wing
 threatening-teleport
 thunder-clap
 vec-accel
+mine-ray-basic
+mine-ray-expert
+mine-ray-luck
+location-teleport
+thunder-bolt
 ```
 
 这些技能必须继续逐项核对：效果目标和数量、资源扣除、冷却启动条件、延迟任务、方块/实体副作用、VFX audience、异常/中断清理以及 owner/world 隔离。不能用“graph 已编译”替代这些检查。
