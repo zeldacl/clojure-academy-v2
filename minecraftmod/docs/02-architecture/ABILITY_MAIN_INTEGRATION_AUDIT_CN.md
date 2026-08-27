@@ -55,8 +55,8 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（30 tests / 87 assertions）、
-  `:combat-core:runCombatClojureTests`（31 tests / 83 assertions）均通过；这些门禁不执行
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（31 tests / 93 assertions）、
+  `:combat-core:runCombatClojureTests`（32 tests / 85 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
 ## 逐注册项结论
@@ -339,7 +339,7 @@ thunder-bolt
 - Final 图已覆盖 toggle session、overload floor、tick/接触费用、前方 cone、吸收 policy、状态/冷却和 owner/nearby VFX。
 - 本轮修正 `damage/absorb` 的费用映射：`main` 的防御路径把 `absorb-cp` 传入 overload、把 `absorb-overload` 传入 CP（配置注释也明确记录该历史参数顺序）；Final policy 现按该顺序提交资源费用。
 - Final `damage/absorb` 现在消费 `interval-ticks/last-tick-path`：同一护盾会话在间隔内不会重复吸收，成功吸收后以中性 `session-patch` 提交 last-absorb tick；该状态由 AC 组合根提交，不在技能内保留旧 damage handler。激活 cost-fail 时序仍需以 Final 统一资源策略在实机复核。
-- 本轮 EDN 静态门禁待运行后记录；总表保持 `⚠️`，不能把可编译视作受击行为等价。
+- main 的 touch/tick/attacked 三类经验现在分别接入 `ability/progression`；其中 `damage/absorb` 使用 `exp-tag/exp-scale` 生成 `:score/mark` side-event，即使正面判断、间隔或资源条件使本次吸收未付款，也保留 main 在合资格受击事件上的 attacked 经验语义。AC 静态门禁已通过（31 tests / 93 assertions），但原生受击事件时序、资源扣费和多人隔离仍需实机复核，总表保持 `⚠️`。
 ### meltdowner checkpoint（检查与修复）
 
 - `main` 的 charge window 为 20/40/100 tick；release 计算 time-rate，执行 beam（实体伤害、
@@ -753,7 +753,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 30 tests / 87 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 31 tests / 93 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。

@@ -60,7 +60,22 @@
     (is (= [{:path [:last-absorb-tick] :mode :assign :value 25}]
            (:session-patches applied)))
     (is (empty? (:session-patches blocked)))))
-(deftest absorb-front-cone-is-enforced-test
+(deftest absorb-exp-tag-emits-progression-even-when-payment-fails-test
+  (let [reaction {:ability-id :light-shield :reaction-id :absorb :priority 10
+                  :on :combat/damage
+                  :program {:component :damage/absorb :cap 3.0
+                            :cost {:cp 10.0}
+                            :exp-tag :attacked
+                            :exp-scale 0.25}}
+        result (damage/resolve-event [reaction]
+                                      {:world-id "w" :source :a :target :b
+                                       :base 10.0 :type :skill :seed 4
+                                       :metadata {:input {:context {:resources {:cp 0.0
+                                                                                :overload 0.0}}}}})]
+    (is (= 10.0 (:amount result)))
+    (is (= [{:type :score/mark :tag :attacked :progression 0.25
+             :owner nil :ability-id :light-shield}]
+           (:side-events result)))))(deftest absorb-front-cone-is-enforced-test
   (let [reaction {:ability-id :shield :reaction-id :absorb :priority 10
                   :on :combat/damage
                   :program {:component :damage/absorb :cap 3.0 :front? false}}

@@ -122,9 +122,11 @@
                        :requires-payment true
                        :cost (cost-map (:cost program)) :vfx (:vfx program)
                        :interval-ticks (value (:interval-ticks program))
-                       :last-tick-path (:last-tick-path program)                       :front? (when (contains? program :front?)
+                       :last-tick-path (:last-tick-path program) :front? (when (contains? program :front?)
                                  (boolean (eval-value (:front? program) event)))
                        :owner (:owner-id (get-in event [:metadata :input :context]))
+                       :exp-tag (:exp-tag program)
+                       :exp-amount (value (:exp-scale program))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
       :damage/reflect [{:kind :reflection :ratio (value (:multiplier program))
@@ -162,6 +164,16 @@
                                            (concat (or (:contributions reaction) [])
                                                    (program-contributions (:program reaction) pe)))))
                                   matched)
+        progression-events (vec (keep (fn [contribution]
+                                        (when (and (= :absorption (:kind contribution))
+                                                   (:exp-tag contribution)
+                                                   (number? (:exp-amount contribution)))
+                                          {:type :score/mark
+                                           :tag (:exp-tag contribution)
+                                           :progression (:exp-amount contribution)
+                                           :owner (:owner contribution)
+                                           :ability-id (:ability-id contribution)}))
+                                      raw-contributions))
         contributions (vec (remove (fn [contribution]
                                      (or (and (:requires-payment contribution)
                                               (let [resources (get-in contribution [:input :context :resources] {})]
@@ -247,12 +259,12 @@
                                   (:feedback contribution)
                                   (assoc event :metadata {:input input}))))
                              (filter #(and (= :critical (:kind %)) critical? (= (:level %) (:level critical-level))) contributions))))
-     :side-events (vec (distinct (mapcat #(or (:events %) [])
+     :side-events (vec (distinct (concat progression-events
+                                         (mapcat #(or (:events %) [])
                                           (filter #(or (and (= :critical (:kind %)) critical?
                                                             (= (:level %) (:level critical-level)))
                                                        (= :reflection (:kind %))
-                                                       (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions))))
-     :state-patches (vec (mapcat :state-patches matched))
+                                                       (or (= :absorption (:kind %)) (= :reduction (:kind %)))) contributions)))))     :state-patches (vec (mapcat :state-patches matched))
      :session-patches (vec (for [contribution (filter #(and (= :absorption (:kind %))
                                                               (pos? absorption)
                                                               (seq (:last-tick-path %)))

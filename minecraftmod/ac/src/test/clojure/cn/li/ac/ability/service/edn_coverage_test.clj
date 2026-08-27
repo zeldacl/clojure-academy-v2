@@ -555,6 +555,23 @@
            (:progression mark)))
     (is (= :math/select
            (get-in doc [:progression :hit :per-mark :expr])))))
+(deftest light-shield-submits-all-progression-kinds-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/light_shield.edn"))
+        nodes (component-nodes (:program doc))
+        names (set (keep #(when (= :ability/progression (:component %))
+                           (:name %))
+                        nodes))
+        marks (filter #(and (= :score/mark (:component %))
+                            (contains? #{:touch :tick} (:tag %)))
+                      nodes)
+        absorb (some #(when (= :damage/absorb (get-in % [:program :component])) (:program %)) (:damage-policies doc))]
+    (is (contains? names :touch))
+    (is (contains? names :tick))
+    (is (= 2 (count marks)))
+    (is (every? #(map? (:progression %)) marks))
+    (is (= :attacked (:exp-tag absorb)))
+    (is (= {:ref [:input :tunables :exp-attacked]}
+           (:exp-scale absorb)))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
