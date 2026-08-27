@@ -67,8 +67,8 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterParticleProviders(RegisterParticleProvidersEvent event) {
         // Meltdowner md particles (md_particle / md_particle_luck sprites from
-        // the mod's particles.json atlas) — upstream MdParticleFactory. The
-        // particles.json entries must exist for the sprite-set registration
+        // the mod's particles/<id>.json atlas definitions) — upstream MdParticleFactory. The
+        // definition entries must exist for the sprite-set registration
         // (the event javadoc enforces it).
         registerMdParticleProvider(event, "md_particle");
         registerMdParticleProvider(event, "md_particle_luck");

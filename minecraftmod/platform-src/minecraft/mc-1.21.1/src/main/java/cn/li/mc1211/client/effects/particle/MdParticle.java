@@ -15,7 +15,7 @@ import net.minecraft.core.particles.SimpleParticleType;
  * nothing re-sets it, so these motes drift on their given velocity alone. (The
  * 0.01 upstream is MineRaysBase's RIGIDBODY gravity on falling block debris, a
  * different thing entirely.) Rendered with the md_particle / md_particle_luck
- * sprites from the mod's particles.json atlas entries.
+ * sprites from the mod's particles/<id>.json atlas definitions.
  */
 public class MdParticle extends TextureSheetParticle {
 

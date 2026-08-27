@@ -121,7 +121,7 @@ public final class ForgeClientRenderRegistry {
 
     public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
         // Meltdowner md particles (md_particle / md_particle_luck sprites from
-        // the mod's particles.json atlas) — upstream MdParticleFactory.
+        // the mod's particles/<id>.json atlas definitions) — upstream MdParticleFactory.
         registerMdParticleProvider(event, "md_particle");
         registerMdParticleProvider(event, "md_particle_luck");
     }
