@@ -12,6 +12,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private schedules* (atom {}))
+(def ^:const max-scheduled-actions-per-owner 256)
 (defn- body-pos [owner]
   (let [p (or (raycast/player-position owner) {})]
     {:x (double (or (:x p) 0.0))
@@ -73,21 +74,27 @@
            seed instance-key]}]
   (if (and owner world-id (map? origin) (map? destination)
            (number? damage) (Double/isFinite (double damage)))
-    (do
-      (schedule! {:owner owner
-                  :world-id world-id
-                  :origin origin
-                  :destination destination
-                  :damage (double damage)
-                  :damage-type (or damage-type :generic)
-                  :delay-ticks (long (max 1 (or delay-ticks 1)))
-                  :origin-selector origin-selector
-                  :destination-selector destination-selector
-                  :exclude-owner? (boolean exclude-owner?)
-                  :settlement-vfx settlement-vfx
-                  :instance-key instance-key
-                  :seed (long (or seed 0))})
-      {:status :scheduled})
+    (if (>= (count (get-in @schedules* [owner :tasks] []))
+            max-scheduled-actions-per-owner)
+      {:status :rejected
+       :reason :scheduled-action-budget-exceeded
+       :owner owner
+       :limit max-scheduled-actions-per-owner}
+      (do
+        (schedule! {:owner owner
+                    :world-id world-id
+                    :origin origin
+                    :destination destination
+                    :damage (double damage)
+                    :damage-type (or damage-type :generic)
+                    :delay-ticks (long (max 1 (or delay-ticks 1)))
+                    :origin-selector origin-selector
+                    :destination-selector destination-selector
+                    :exclude-owner? (boolean exclude-owner?)
+                    :settlement-vfx settlement-vfx
+                    :instance-key instance-key
+                    :seed (long (or seed 0))})
+        {:status :scheduled}))
     {:status :rejected :reason :invalid-beam-request}))
 
 (defn- resolve-origin [world-id owner selector fallback]
