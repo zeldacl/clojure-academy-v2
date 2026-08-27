@@ -328,3 +328,50 @@
              :body [1.0 1.0 1.0] :id :alice :world "world:test"
              :charge 4 :mastery 0.75 :level 2 :seed 99}]
            (:feedback result)))))
+
+(deftest finish-stops-following-sequence-siblings-test
+  (let [applied (atom [])
+        runtime (engine/create-engine
+                 {:host (host/create {:queries {}
+                                      :actions {:entity/damage
+                                                (fn [phase command _]
+                                                  (when (= :apply phase)
+                                                    (swap! applied conj command))
+                                                  true)}})
+                  :state-provider (fn [_] {})
+                  :commit-state! (fn [_])})
+        program (compiler/compile-program
+                 {:component :flow/sequence
+                  :steps [{:component :flow/finish :outcome :blocked}
+                          {:component :entity/damage :target "mob" :amount 99}]})
+        result (engine/execute! runtime program
+                                {:owner :alice :ability-id :skill/a
+                                 :world "world:test" :tick 1 :seed 1 :input {}})]
+    (is (= :blocked (:outcome result)))
+    (is (empty? @applied))))
+
+(deftest foreach-skip-item-control-does-not-run-rest-of-item-test
+  (let [applied (atom [])
+        runtime (engine/create-engine
+                 {:host (host/create {:queries {}
+                                      :actions {:entity/damage
+                                                (fn [phase command _]
+                                                  (when (= :apply phase)
+                                                    (swap! applied conj command))
+                                                  true)}})
+                  :state-provider (fn [_] {})
+                  :commit-state! (fn [_])})
+        program (compiler/compile-program
+                 {:component :flow/foreach :items [0 1] :as :item
+                  :body {:component :flow/sequence
+                         :steps [{:component :flow/branch
+                                  :when {:expr :value/eq
+                                         :args [{:ref [:local :item]} 0]}
+                                  :then {:component :flow/control :signal :skip-item}}
+                                 {:component :entity/damage
+                                  :target {:ref [:local :item]} :amount 1}]}})
+        result (engine/execute! runtime program
+                                {:owner :alice :ability-id :skill/a
+                                 :world "world:test" :tick 1 :seed 1 :input {}})]
+    (is (= :accepted (:status result)))
+    (is (= [1] (mapv #(get-in % [:args :target]) @applied)))))

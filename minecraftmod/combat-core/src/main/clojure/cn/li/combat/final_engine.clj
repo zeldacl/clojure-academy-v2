@@ -326,7 +326,20 @@
   (update context :outbox contracts/outbox kind value))
 
 (defn- run-sequence [engine steps context path]
-  (reduce (fn [ctx [index child]] (run-node engine child ctx (conj path index))) context (map-indexed vector steps)))
+  (loop [remaining (seq (map-indexed vector steps))
+         ctx context]
+    ;; `flow/finish` and `flow/control` are control-flow nodes, not merely
+    ;; annotations. Once either node has raised a signal, do not execute
+    ;; later siblings in this sequence. This makes an insufficient-resource
+    ;; or invalid-target arm authoritative instead of falling through to a
+    ;; damage or teleport action later in the same graph.
+    (if (or (nil? (seq remaining))
+            (:halt? ctx)
+            (:control-signal ctx))
+      ctx
+      (let [[index child] (first remaining)]
+        (recur (next remaining)
+               (run-node engine child ctx (conj path index)))))))
 (defn- run-node [engine node context path]
   (let [component (:component node)]
     (case component
@@ -340,12 +353,18 @@
         (if phase-node
           (run-node engine phase-node context (conj path phase))
           context))
-      :flow/finish (cond-> (assoc-in context [:locals :outcome] (:outcome node))
+      :flow/finish (cond-> (-> context
+                               (assoc-in [:locals :outcome] (:outcome node))
+                               (assoc :halt? true))
                      (:finish-session? node) (assoc :finish-session? true))
-      :finalize (cond-> (assoc-in context [:locals :outcome] (:outcome node))
+      :finalize (cond-> (-> context
+                            (assoc-in [:locals :outcome] (:outcome node))
+                            (assoc :halt? true))
                   (:finish-session? node) (assoc :finish-session? true))
       :flow/once (run-once engine node context path)
-      :flow/branch (run-node engine (if (resolve-value (:when node) context) (:then node) (:else node)) context (conj path :branch))
+      :flow/branch (if-let [selected (if (resolve-value (:when node) context) (:then node) (:else node))]
+                      (run-node engine selected context (conj path :branch))
+                      context)
       :flow/foreach
       (let [items (vec (or (resolve-value (:items node) context) []))
             limit (min (count items) (long (or (:limit node) (:max-iteration contracts/budgets))))
@@ -355,9 +374,14 @@
           (if (>= index limit)
             ctx
             (let [ctx* (assoc-in ctx [:locals as] (nth items index))
-                  ctx* (if index-as (assoc-in ctx* [:locals index-as] index) ctx*)]
-              (recur (inc index)
-                     (run-node engine (:body node) ctx* (conj path index)))))))
+                  ctx* (if index-as (assoc-in ctx* [:locals index-as] index) ctx*)
+                  body-result (run-node engine (:body node) ctx* (conj path index))]
+              (if (:halt? body-result)
+                body-result
+                (recur (inc index)
+                       (if (= :skip-item (:control-signal body-result))
+                         (dissoc body-result :control-signal)
+                         body-result)))))))
       :flow/after
       (update context :scheduled conj {:tick (+ (long (:tick (:frame context))) (long (or (:delay node) 1))) :node (:body node) :path path})
       :graph/input (bind-result context (node-bind node) (get-in (:input (:frame context)) (:path node)))
@@ -415,7 +439,10 @@
                 :world-id (:world (:frame context))
                 :args {:resource (:resource node)
                        :minimum (double (resolve-value (:minimum node) context))}}))
-      :flow/control (run-node engine (or (:body node) (:then node)) context (conj path :control))
+      :flow/control (if-let [child (or (:body node) (:then node))]
+                      (assoc (run-node engine child context (conj path :control))
+                             :control-signal (:signal node))
+                      (assoc context :control-signal (:signal node)))
       :end (assoc-in context [:locals :outcome] (or (:outcome node) :ended))
       :stop-vfx (emit context :vfx (assoc (normalize-vfx node context path) :op :destroy))
       :effect/vfx (emit context :vfx (normalize-vfx node context path))
