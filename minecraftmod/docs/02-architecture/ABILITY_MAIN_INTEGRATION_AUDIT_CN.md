@@ -24,7 +24,7 @@
 | 批次 | 技能 | 本轮结果 | 仍需实机/外部证据 |
 |---|---|---|---|
 | 1 | `electron-bomb` | 静态完成：spawn barrier 直接绑定 UUID，延迟 beam 不再查询最近同类实体 | 延迟调度、实体过期 |
-| 2 | `electron-missile` | 静态完成：session 保存球 UUID，发射后精确移除，清理按 UUID+owner+world | 运动、目标命中、多人 |
+| 2 | `electron-missile` | 静态完成：session 保存球 UUID，发射后精确移除，清理按 UUID+owner+world；达到球数上限时不会追加空 ID | 运动、目标命中、多人 |
 | 3 | `scatter-bomb` | 静态完成：球 UUID 列表、anti-AFK release、abort 清理 | 散射碰撞、多人 |
 | 4 | `mag-manip` | 静态完成：持有体 UUID barrier 与会话查询作用域 | 碰撞放置/伤害、spawn 失败回滚 |
 | 5 | `light-shield` | 静态完成：护盾 UUID、接触 self-exclusion、吸收 interval/session patch | 原生受击 adapter、多人 |
@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（38 tests / 112 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（39 tests / 115 assertions）、
   `:combat-core:runCombatClojureTests`（34 tests / 89 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -326,6 +326,7 @@ thunder-bolt
 - `main` 基准：蓄力每 10 tick 生成最多 5 个 MdBall；每 8 tick 选择施法者附近最近的 living 非自身实体，支付攻击 CP/过载后造成魔法伤害、重置无敌时间、增加命中经验并销毁对应球；每 tick 发送 owner+nearby 充能更新，释放/超时/abort 清理球、结束 VFX 并启动固定冷却。
 - Final 图已覆盖蓄力计时、球数量上限、过载地板、tick/攻击费用、超时/释放/abort 清理、目标排序、伤害/经验/冷却和 Final VFX；本轮将目标过滤补为 `excluded-entity-ids=[owner-id]`，与 main 的 `missile-filter-self` 一致，避免施法者被选为目标。
 - Final session 现在保存每个生成球的 UUID：`entity/spawn :barrier? true` 的中性结果绑定到 `:ball-ids`，发射后按 `collection/remove` 更新列表，释放/超时/abort 使用 `entity-ids + owner + world` 精确清理；不再按 owner/type 模糊抓取同一玩家的其它实体。
+- 复核发现并修复一个边界：当 `balls >= max-balls` 时 spawn 分支不会绑定新 UUID，球列表追加现在置于 `spawned-ball-id` truthy 分支内，避免把 `nil` 写入 session 并污染后续查询/清理。
 - 已通过 `:ac:runAcEdnCoverageTests` 与 `:combat-core:runCombatClojureTests`；总表仍保持 `⚠️`，仅表示实体 adapter、延迟射线和多人实机结果尚未测试。
 ### jet-engine checkpoint（检查与修复）
 
@@ -542,7 +543,7 @@ thunder-bolt
 - `vec-reflection` 与 `vec-deviation` 均通过 owner-scoped `flow/once` 去重 projectile，
   使用统一 reflection scan、damage policy、overload floor 和终止 VFX；未恢复 main 的
   旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session；本轮补齐首次偏转的 deflect progression 与受击 damage/reduce progression，`vec-reflection` 补齐首次重定向的 reflect-entity progression 与受击 damage/reflect progression，均保留 owner-scoped once 与 difficulty weight。多人隔离仍由 owner/world query 边界负责，待实机确认。
-- `:ac:runAcEdnCoverageTests` 通过（38 tests / 112 assertions）；Combat Core damage/reduce 与 damage/reflect 的受击经验桥已由 34 tests / 89 assertions 覆盖。Groundshock 的实体/方块
+- `:ac:runAcEdnCoverageTests` 通过（39 tests / 115 assertions）；Combat Core damage/reduce 与 damage/reflect 的受击经验桥已由 34 tests / 89 assertions 覆盖。Groundshock 的实体/方块
   adapter 与多人并发结果仍需实机验证，总表继续保持 `⚠️`。
 ### railgun checkpoint（逐项移植）
 
@@ -760,7 +761,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 38 tests / 112 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 39 tests / 115 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
@@ -801,6 +802,6 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 最新统一静态校验（2026-08-28）
 
 - 对照 main 的 38 个真实 ability 与 12 个课程别名，当前 catalog 仍为 50 registrations、39 combat sources、36 VFX effects，全部使用 engine final。
-- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（38 tests / 112 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（34 tests / 89 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
+- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（39 tests / 115 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（34 tests / 89 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
 - 对所有显式 score/mark 做了静态扫描：未发现缺少 progression 的标记；Vec Deviation/Reflection 的受击经验由通用 Final damage side-event 桥承载。
 - 这只是加载、解析、编译和纯逻辑门禁；38 个真实技能仍保留 ⚠️，因为实体/方块 adapter 时序、VFX 客户端表现、多人隔离与 CPU/GC/内存 profiling 尚未实机验证。
