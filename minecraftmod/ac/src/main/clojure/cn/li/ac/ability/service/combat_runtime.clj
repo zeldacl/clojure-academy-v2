@@ -895,6 +895,22 @@
             []
             (concat (:events result) (:side-events result) feedback-events))))
 
+(defn- attacker-in-front?
+  "Compute the main LightShield horizontal-yaw cone from neutral positions."
+  [world-id target-id source-id cone-degrees]
+  (if (or (nil? source-id) (= source-id :environment))
+    true
+    (try
+      (let [target-pos (entity-motion/entity-position (str world-id) (str target-id))
+            source-pos (entity-motion/entity-position (str world-id) (str source-id))
+            look (raycast/player-look-vector (str target-id))
+            yaw (fn [x z] (- (Math/toDegrees (Math/atan2 (double x) (double z)))))
+            target-yaw (yaw (- (double (:x source-pos)) (double (:x target-pos)))
+                            (- (double (:z source-pos)) (double (:z target-pos))))
+            player-yaw (yaw (double (:x look)) (double (:z look)))
+            diff (mod (Math/abs (double (- target-yaw player-yaw))) 360.0)]
+        (< diff (double cone-degrees)))
+      (catch Throwable _ true))))
 (defn- damage-policy-inputs
   "Build owner/world-scoped immutable inputs for every registered damage policy."
   [target-id source-id damage-source]
@@ -917,14 +933,18 @@
                                (active-mark world-id target-id mark-type @last-known-tick*))
                        enabled? (= ability-id (:ability-id target-session))
                        params (or (:parameter-snapshot target-session) {})
+                       tunables (materialize-final-tunables ability-id skill-exp)
+                       front? (if-let [cone (:front-cone-degrees tunables)]
+                                (if (contains? damage-source :attacker-front?)
+                                  (boolean (:attacker-front? damage-source))
+                                  (attacker-in-front? world-id target-id source-id cone))
+                                true)
                        context {:ability-id ability-id
                                 :enabled? enabled?
                                 :source-learned? source-learned?
                                 :skill-exp skill-exp
                                 :max-cp (double (or (get-in target-state [:resources :max-cp]) 0.0))
-                                :front? (if (contains? damage-source :attacker-front?)
-                                          (boolean (:attacker-front? damage-source))
-                                          true)
+                                :front? front?
                                 :mark? (boolean (or mark (:mark? damage-source)))
                                 :mark-type (or (:mark-type mark) mark-type)
                                 :mark mark
@@ -934,7 +954,7 @@
                                 :resources (:resources target-state)}
                        input {:context context
                               :capabilities {}
-                              :tunables (materialize-final-tunables ability-id skill-exp)
+                              :tunables tunables
                               :params params
                               :session (or target-session {})
                               :budgets (:costs source)
@@ -975,7 +995,9 @@
   [player-id attacker-id original-damage damage-source precheck?]
   (let [runtime (final-runtime/production-runtime)
         inputs (damage-policy-inputs player-id attacker-id (or damage-source {}))
-        event {:world-id (or (:world-id damage-source) "unknown")
+        event {:world-id (or (:world-id damage-source)
+                               (:world-id (owner-state player-id))
+                               "minecraft:overworld")
                :source (or attacker-id :environment)
                :target player-id
                :base (double original-damage)

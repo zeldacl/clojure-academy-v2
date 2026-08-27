@@ -67,14 +67,18 @@
     :else value))
 
 (defn- policy-matches? [policy event]
-  (and (or (= :combat/damage (:on policy)) (nil? (:on policy)))
+  (let [damage-types (or (:damage-types policy)
+                         (get-in policy [:program :damage-types]))]
+    (and (or (= :combat/damage (:on policy)) (nil? (:on policy)))
        (matches? policy event)
+       (or (nil? damage-types)
+           (contains? (set damage-types) (:type event)))
        (if-let [predicate (:when policy)]
          (boolean (eval-value predicate event))
          true)
        (if-let [mark-type (:mark-type policy)]
          (= mark-type (get-in event [:metadata :input :context :mark-type]))
-         true)))
+         true))))
 
 (defn- policy-event
   "Select the immutable input snapshot belonging to one policy."
