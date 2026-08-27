@@ -461,6 +461,15 @@ thunder-bolt
 - `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。飞行碰撞、爆炸地形权限和
   多人 VFX audience 仍需实机任务验证，总表继续保持 `⚠️`。
 
+### vec-accel checkpoint（逐项复核）
+
+- 对照 `main`：蓄力每 tick 需要同时刷新玩家 eye/look、地面检测、初速度和轨迹预览；
+  Final pulse 的轨迹原点引用了 `:local :eye`，但原先 caster bind 遗漏该字段。
+- 已在当前 Final pulse 绑定 `:eye :eye`；速度、可执行条件、费用、实体 motion、摔落
+  重置、经验/cooldown 和 owner-only 轨迹仍通过现有中性节点执行，无旧回调双轨。
+- `:ac:runAcEdnCoverageTests` 通过（14 tests / 33 assertions）。运动 adapter、碰撞和
+  多人 owner 作用域仍需实机任务验证，总表继续保持 `⚠️`。
+
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有
