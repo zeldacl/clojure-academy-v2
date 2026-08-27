@@ -153,6 +153,18 @@
     (is (= (count ids) (count (set ids)))
         "registration ids must be unique")))
 
+(deftest main-item-trigger-is-unconditional-test
+  ;; main's ItemCoin handler runs for every coin use, even when the player is
+  ;; not currently holding the railgun activation.  The external trigger must
+  ;; therefore not add an :ability-mode? gate; otherwise the platform still
+  ;; consumes/spawns the item but the final event graph is never entered.
+  (combat-catalog/initialize!)
+  (is (= {:ability :railgun :event :coin-thrown}
+         (combat-catalog/resolve-trigger
+          :item/use {:item-id "ac:coin" :ability-mode? false})))
+  (is (= {:ability :railgun :event :coin-thrown}
+         (combat-catalog/resolve-trigger
+          :item/use {:item-id "academy:coin" :ability-mode? true}))))
 (deftest every-concrete-main-ability-has-a-vfx-declaration-test
   (let [files (edn-files "src/main/resources/ac/combat/abilities")
         docs (into {} (map (fn [file] (let [doc (read-file! file)] [(:id doc) doc])) files))
