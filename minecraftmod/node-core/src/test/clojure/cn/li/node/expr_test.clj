@@ -41,6 +41,8 @@
   (is (not= (expr/evaluate :random/uniform [0.0 1.0] 42)
             (expr/evaluate :random/uniform [0.0 1.0] (expr/next-seed 42)))))
 
-(deftest register-op-extends-vocabulary-test
-  (expr/register-op! :test/double (fn [args _seed] (* 2.0 (double (first args)))))
-  (is (= 10.0 (expr/evaluate :test/double [5.0]))))
+(deftest explicit-op-table-extends-vocabulary-test
+  (is (= 10.0
+         (expr/evaluate :test/double [5.0] 0
+                        {:test/double (fn [args _seed]
+                                        (* 2.0 (double (first args))))}))))

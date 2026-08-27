@@ -11,8 +11,6 @@
             [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
-            [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.combat.vfx-publish :as vfx-publish]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.combat.deferred :as delayed-projectiles]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -192,27 +190,10 @@
               [:projectiles "p1"]]
              @calls)))))
 
-(deftest server-tick-end-replays-persistent-vfx-at-fixed-cadence-test
-  (let [calls (atom [])
-        end! (:on-server-tick-end! (server-hooks/runtime-server-hooks))]
-    (with-redefs [combat-catalog/catalog (fn [] {:vfx :test-vfx-catalog})
-                  vfx-publish/replay-persistent-signals!
-                  (fn [catalog]
-                    (swap! calls conj catalog)
-                    nil)]
-      (doseq [tick-id [19 20 21 40]]
-        (is (nil? (end! tick-id))))
-      (is (= [:test-vfx-catalog :test-vfx-catalog] @calls)))))
-
-(deftest server-tick-end-ignores-invalid-or-negative-ticks-test
-  (let [calls (atom [])
-        end! (:on-server-tick-end! (server-hooks/runtime-server-hooks))]
-    (with-redefs [combat-catalog/catalog (fn [] {:vfx :test-vfx-catalog})
-                  vfx-publish/replay-persistent-signals!
-                  (fn [_] (swap! calls conj :called))]
-      (doseq [tick-id [-20 -1 nil :20 20.0]]
-        (is (nil? (end! tick-id))))
-      (is (empty? @calls)))))
+(deftest server-tick-end-is-noop-after-explicit-result-routing-test
+  (let [end! (:on-server-tick-end! (server-hooks/runtime-server-hooks))]
+    (doseq [tick-id [19 20 21 40 -20 -1 nil :20 20.0]]
+      (is (nil? (end! tick-id))))))
 
 (deftest get-context-player-uuid-is-inert-test
   (testing "Context network routes were removed from AC -- the neutral hook
