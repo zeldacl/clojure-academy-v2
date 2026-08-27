@@ -469,10 +469,13 @@
 
 (defn- basic-raycast [request]
   (let [{:keys [world-id owner origin direction distance include-entities?
-                include-blocks?]} request
+                include-blocks? block-policy policy]} request
         [sx sy sz] (point origin)
         [dx dy dz] (point direction)
         distance (max 0.0 (min 128.0 (double (or distance 0.0))))
+        block-hit-fn (if (= :collidable-or-water (or block-policy (:block-policy policy)))
+                       raycast/raycast-collidable-blocks-or-water
+                       raycast/raycast-blocks)
         hit (cond
               (and (:living-only? request) owner
                    (not= false include-entities?))
@@ -480,11 +483,18 @@
                (str owner) distance true)
               (and (not= false include-entities?)
                    (not= false include-blocks?))
-              (raycast/raycast-combined world-id sx sy sz dx dy dz distance)
+              (let [block-hit (block-hit-fn world-id sx sy sz dx dy dz distance)
+                    entity-hit (raycast/raycast-entities world-id sx sy sz dx dy dz distance)]
+                (cond
+                  (nil? block-hit) entity-hit
+                  (nil? entity-hit) block-hit
+                  (<= (double (or (:distance block-hit) Double/POSITIVE_INFINITY))
+                      (double (or (:distance entity-hit) Double/POSITIVE_INFINITY))) block-hit
+                  :else entity-hit))
               (not= false include-entities?)
               (raycast/raycast-entities world-id sx sy sz dx dy dz distance)
               (not= false include-blocks?)
-              (raycast/raycast-blocks world-id sx sy sz dx dy dz distance)
+              (block-hit-fn world-id sx sy sz dx dy dz distance)
               :else nil)]
     (let [result (or hit {:hit-type :miss :hit? false
                           :world-id world-id
@@ -502,18 +512,27 @@
             attacked? (= :entity (:hit-type result))
             target-id (or (:target-id result) (:entity-id result)
                           (:entity-uuid result) (:uuid result))
+            block-position (when (= :block (:hit-type result))
+                             [(long (Math/floor (double (or (:x result) sx))))
+                              (long (Math/floor (double (or (:y result) sy))))
+                              (long (Math/floor (double (or (:z result) sz))))])
+            block-id (some-> (:block-id result) str)
             target-width (double (or (:width result) 0.5))
             target-height (double (or (:height result) 0.0))
             drop-position (if attacked?
                            (update position :y + target-height)
                            position)]
         (assoc result :position position
+               :block-position block-position
+               :water? (boolean (and (= :block (:hit-type result))
+                                     (= "minecraft:water" block-id)))
                :attacked? attacked?
+               :entity-id target-id
+               :entity-type (when attacked? (:type result))
                :target-id target-id
                :target-width target-width
                :target-height target-height
                :drop-position drop-position)))))
-
 (defn- normalize-vector
   [[x y z]]
   (let [length (Math/sqrt (+ (* (double x) (double x))

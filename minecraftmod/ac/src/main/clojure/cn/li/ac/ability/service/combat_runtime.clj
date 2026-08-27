@@ -790,12 +790,22 @@
           finite-point? (fn [p]
                           (and (vector? p) (= 3 (count p))
                                (every? #(and (number? %) (Double/isFinite (double %))) p)))
+          detected-water? (or (boolean water?)
+                              (when (and (string? world-id)
+                                         (finite-point? block-point)
+                                         (block-manipulation/available?))
+                                (= "minecraft:water"
+                                   (block-manipulation/get-block
+                                    world-id
+                                    (long (Math/floor (double (nth block-point 0))))
+                                    (long (Math/floor (double (nth block-point 1))))
+                                    (long (Math/floor (double (nth block-point 2))))))))
           seed (long (or seed 0))
-          fish? (and water? (> (double (or skill-exp 0.0))
+          fish? (and detected-water? (> (double (or skill-exp 0.0))
                                (double (or fishing-exp-threshold 1.0)))
                      (< (seeded-rng/unit-double seed)
                         (double (or fishing-probability 0.0))))
-          ignite? (and (not water?)
+          ignite? (and (not detected-water?)
                        (< (seeded-rng/unit-double (seeded-rng/next-long seed))
                           (double (or ignite-probability 0.0))))]
       (cond
