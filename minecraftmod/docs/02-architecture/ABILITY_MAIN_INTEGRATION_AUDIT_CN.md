@@ -20,6 +20,14 @@
 owner+entity-type 的会话实体清理、以及 final session 元数据读取。修复后门禁均通过，
 但这些修复不等同于逐技能行为测试。
 
+随后又修正了 Final 图的控制流语义：`:flow/finish` 现在会停止当前 sequence/foreach
+的后续节点，`:flow/control :skip-item` 只跳过当前 foreach 项，且无 `:else` 的
+`:flow/branch` 会安全地成为 no-op。此前这些节点虽然能编译，却会在资源不足、无目标
+或单项扣费失败后继续执行伤害/传送等副作用；该修复已由 Combat Core 回归测试覆盖。
+同时移除了依赖已删除旧视觉状态路径的 AC 测试和 stale client hook 注册项，没有恢复
+旧 VM 或双轨兼容代码。当前可执行的编译/EDN 门禁通过，但旧运行时测试中仍有若干
+测试假设 `combat_runtime` 的历史返回值；它们不再作为 Final 行为正确性的证据。
+
 ## 注册规模
 
 - 38 个真实技能实现。
@@ -217,6 +225,9 @@ thunder-bolt
 - 暴击策略现在尊重 `:damage-types`，并按 level 0→1→2 的顺序合并概率；同一等级只产生一次 VFX/side-event，匹配 main 的 `roll-crit-level`。
 - LightShield 未携带 front flag 时由 AC 组合层按目标朝向和攻击者位置计算 horizontal-yaw cone，不再默认所有攻击都是正面。
 - VecReflection 现在始终提交一次反射并从原生伤害中扣除反射量；只有达到 main 的 `min-reflected-damage` 才在 attack-precheck 阶段取消原生攻击，环境伤害不会生成无效反射目标。
+- Final `flow/finish` 现在真正终止当前 sequence/foreach 的后续节点；`flow/control` 的
+  `:skip-item` 只跳过当前 foreach 项；无 `:else` 的 branch 安全地 no-op。这避免了
+  资源失败分支继续落入伤害、传送或其它副作用。
 
 ## 公共链路证据
 
@@ -259,9 +270,12 @@ session、damage reaction、mark 和 VFX audience 现已携带 owner/world 边�
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
 - `:ac:runAcEdnCoverageTests`：通过 14 tests / 33 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
-- `:ac:runAcClojureTests`：未能进入测试执行，`compileTestClojure` 被仓库现有
-  classpath 问题阻断（缺少 `cn/li/combat/skill_runtime`、
-  `cn/li/combat/structural_primitives` 和 AC developer reactive 命名空间）。
-  这不是本轮源码编译错误；完整回归需先修复测试 classpath。
+- `:combat-core:runCombatClojureTests`：通过 25 tests / 65 assertions（包含本轮
+  finish/control 回归）。
+- `:ac:compileTestClojure`：通过。旧测试中依赖已删除旧 VM/旧 hook 契约的文件已移除，
+  没有恢复兼容实现。
+- `:ac:runAcClojureTests`：可编译并进入 143 个 namespace、580 tests；仍有历史测试
+  假设旧 `combat_runtime` 返回值的失败，以及与本任务无关的 Wind Gen fixture 失败，
+  因此不把该整套旧回归作为 Final 行为正确性证据。
 - 实机运行、多玩家交叉污染、VFX 网络到达率、CPU/GC/内存尚未测试，必须作为
   后续独立任务完成。
