@@ -165,6 +165,26 @@
   (is (= {:ability :railgun :event :coin-thrown}
          (combat-catalog/resolve-trigger
           :item/use {:item-id "academy:coin" :ability-mode? true}))))
+(deftest ray-barrage-owned-silbarn-is-owner-scoped-test
+  "Silbarn is a player-owned scripted entity.  RayBarrage may detonate the
+   caster's in-flight marker, but must not consume or trigger another
+   player's marker in a multiplayer world."
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/ray_barrage.edn"))
+        nodes (fn nodes [value]
+                (cond
+                  (map? value)
+                  (into (cond-> [] (:component value) (conj value))
+                        (mapcat nodes (vals value)))
+                  (sequential? value) (mapcat nodes value)
+                  :else []))
+        caster (some #(when (= :ability/caster (:component %)) %) (nodes doc))
+        silbarn-query (some #(when (and (= :target/entities (:component %))
+                                        (some #{"academy:entity_silbarn"}
+                                              (get-in % [:filter :entity-types]))) %)
+                            (nodes doc))]
+    (is (= :caster-id (get-in caster [:bind :id])))
+    (is (= {:ref [:local :caster-id]}
+           (get-in silbarn-query [:filter :owner-id])))))
 (deftest every-concrete-main-ability-has-a-vfx-declaration-test
   (let [files (edn-files "src/main/resources/ac/combat/abilities")
         docs (into {} (map (fn [file] (let [doc (read-file! file)] [(:id doc) doc])) files))
