@@ -323,6 +323,23 @@ thunder-bolt
 - 本轮修正 release 冷却：原图只有 `cooldown/start :main`，未传入 `main-cooldown`，按 Final 引擎会写入 0 tick；现在先读取 `ability/cooldown :main`，再以 `:cooldown {:ref [:local :main-cooldown]}` 启动。
 - 共享边界仍未闭合：当前中性 `host/beam-trace` 实现尚未像旧 beam helper 一样调用 `interaction/resolve` 并验证对方反射能力，故 main 的 vec-reflection 反射射击不能仅凭 EDN 节点宣称等价；后续需在中立 beam/interaction ABI 统一补齐，禁止恢复技能专属旧回调。
 - 本轮门禁待运行后记录；总表保持 `⚠️`。
+### ray-barrage checkpoint（检查与修复）
+
+- main 的分支基准是：准星首个实体为尚未触发的 Silbarn 时，触发其行为并在当前瞄准方向
+  对锥体内目标逐个造成 scattered magic damage；其它命中（包括已触发 Silbarn）走 plain
+  单体射线。两条路径都发送预射线/音效、写 radiation mark、增加一次使用经验并启动
+  熟练度冷却；资源不足不产生任何副作用。
+- 当前 Final 图已使用中性 `target/raycast` + `target/entities` + `target/entities`
+  cone 查询，Silbarn 行为通过 `entity/trigger-behavior`，伤害/mark/VFX/经验/冷却均在
+  同一 graph 内组合；锥体查询排除施法者和已触发的 Silbarn，owner/world 由 Final host
+  作用域传入，未保留 main 的 `ray_barrage_perform!` 或旧 damage helper。
+- 发现并修复的确定性缺口：平台实体 adapter 已提供中性 `:behavior-hit?`，但
+  Combat Core 的 `project-entity` 没有投影该字段，导致 Final 无法识别已触发 Silbarn，
+  所有 Silbarn 都会误走爆炸分支。现在字段被保留并可由 EDN projection 显式读取。
+- 已通过 `:combat-core:runCombatClojureTests`（25/65）及
+  `:ac:runAcEdnCoverageTests`（14/33）。由于没有实机，raycast 命中点、Silbarn 行为
+  adapter、锥体几何边界和多人同时施放的实际结果仍保持 `⚠️`，不能将静态通过视为运行时
+  完成。
 ### rad-intensify checkpoint（逐项复核）
 
 - main 的 Rad Intensify 本身是被动技能：它不在按键图中执行副作用，而是在目标拥有

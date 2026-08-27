@@ -68,6 +68,11 @@
                 :item? (boolean (:item? entity))
                 :projectile? (boolean (:projectile? entity))
                 :arrow? (boolean (:arrow? entity))
+                ;; Preserve the neutral behavior-state bit exposed by the
+                ;; platform entity adapter. Final abilities may use it to
+                ;; distinguish a ready scripted projectile from one that has
+                ;; already triggered, without knowing its concrete class.
+                :behavior-hit? (boolean (:behavior-hit? entity))
                 :living? (boolean (:living? entity))
                 :mob? (boolean (:mob? entity))
                 :multipart? (boolean (:multipart? entity))
