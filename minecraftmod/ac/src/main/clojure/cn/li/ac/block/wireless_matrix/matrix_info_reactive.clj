@@ -4,7 +4,8 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.gui.info-area :as info-area]))
 
 (defrecord MatrixNetworkData
   [ssid password owner load max-capacity range bandwidth initialized])
@@ -55,5 +56,29 @@
     (net-client/send-to-server owner (msg :change-password)
       (action-payload/action-payload container {:new-password new-password}) nil)))
 
-(defn attach! [& _] nil)
-(defn rebuild! [& _] nil)
+(defn info-area-snapshot
+  "Build the declarative AC InfoArea projection from network data and policy."
+  [data is-owner?]
+  (info-area/snapshot data {:owner? is-owner?}))
+
+(defn attach!
+  ([model initial]
+   (info-area/attach! model initial))
+  ([container _menu _player]
+   (let [slot (:presentation-info-area container)
+         data (if-let [network (:presentation-network container)] @network {})
+         model (info-area/attach! (when slot @slot)
+                                  (info-area-snapshot data false))]
+     (when slot (reset! slot model))
+     model)))
+
+(defn rebuild!
+  ([model next-snapshot]
+   (info-area/rebuild! model next-snapshot))
+  ([container data is-owner?]
+   (let [slot (:presentation-info-area container)
+         model (when slot @slot)
+         next-snapshot (info-area-snapshot data is-owner?)
+         model (info-area/rebuild! model next-snapshot)]
+     (when slot (reset! slot model))
+     model)))

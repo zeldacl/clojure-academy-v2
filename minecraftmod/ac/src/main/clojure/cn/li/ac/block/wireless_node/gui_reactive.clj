@@ -37,6 +37,7 @@
                    (let [value (get container key default)]
                      (if (instance? clojure.lang.IDeref value) @value value)))]
     (assoc container
+           :presentation-info-area (atom nil)
            :presentation-form-state (atom {:node-name (str (value-of :ssid ""))
                                 :password (str (value-of :password ""))})
            :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145 :width 52 :height 18 :label "Save"}
@@ -55,7 +56,15 @@
                 :network-owner (str "Owner: " (node-logic/owner-name state))
                 :network-range (str "Range: " (or (value-of :range 0) 0))
                 :network-bandwidth (str "Energy: " (long energy) "/" (long max-energy) " IF")
-                :network-load (max 0.0 (min 1.0 (/ load max-load)))}))
+                :network-load (max 0.0 (min 1.0 (/ load max-load)))
+                :info-area (node-info/info-area-snapshot
+                             {:initialized true
+                              :owner (node-logic/owner-name state)
+                              :range (or (value-of :range 0) 0)
+                              :bandwidth (long energy)
+                              :load load
+                              :max-capacity max-load}
+                             (node-logic/owner-authorized? state player))}))
            :presentation-text-change!
            (fn [field value]
              (swap! (:presentation-form-state container) assoc field value))

@@ -86,6 +86,7 @@
              :presentation-network (atom {:initialized false :ssid "" :password ""
                                            :owner "Unknown" :load 0 :max-capacity 16
                                            :range 64 :bandwidth 100})
+             :presentation-info-area (atom nil)
              :presentation-form-state (atom {:ssid nil :password nil})
              :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
                                      :width 52 :height 18 :label "Init/Refresh"}
@@ -107,7 +108,9 @@
                   :network-owner (str "Owner: " (or (:owner data) "Unknown"))
                   :network-range (str "Range: " (or (:range data) 0))
                   :network-bandwidth (str "Bandwidth: " (or (:bandwidth data) 0) " IF/T")
-                  :network-load (max 0.0 (min 1.0 (/ (double (or (:load data) 0)) max-capacity)))}))
+                  :network-load (max 0.0 (min 1.0 (/ (double (or (:load data) 0)) max-capacity)))
+                  :info-area (matrix-info/info-area-snapshot
+                               data (matrix-logic/owner-authorized? state player))}))
              :presentation-text-submit!
              (fn [field value]
                (swap! (:presentation-form-state container) assoc field value)
