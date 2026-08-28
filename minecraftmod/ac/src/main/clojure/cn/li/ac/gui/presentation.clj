@@ -54,12 +54,20 @@
                        {:state (if (map? next-state) next-state current)
                         :effects []
                         :event-result :consume})))
+        reduce* (fn [current action payload]
+                  (let [response (reduce current action payload)
+                        next-state (if (and (map? response)
+                                            (contains? response :state))
+                                       (:state response)
+                                       current)]
+                    (reset! state* next-state)
+                    response))
         mount ((:mount-view! api)
                {:host {:stage (stage-for host-kind)}
                 :view-id view-id
                 :artifact artifact
                 :state state
-                :reduce reduce
+                :reduce reduce*
                 :run-effect! (or run-effect! (fn [_] nil))
                 :close! (fn [_] (when on-close (on-close)))
                 :paint-fn paint/paint-view})]
