@@ -11,10 +11,7 @@
    {:id :ability/cooldown, :inputs {:name {:type :any, :default nil}}, :outputs {:cooldown {:type :any}}, :children {}}
    {:id :ability/progression, :inputs {:name {:type :any, :default nil}}, :outputs {:progression {:type :any}}, :children {}}
    {:id :ability/tunable, :inputs {:name {:type :any, :default nil}}, :outputs {:value {:type :any}}, :children {}}
-   {:id :block/area-break, :inputs {:world-id {:type :any, :default nil}, :break-probability {:type :any, :default nil}, :self-drop? {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :drop-probability {:type :any, :default nil}, :hardness-max {:type :any, :default nil}, :origin {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :block/break, :inputs {:fortune-level {:type :any, :default nil}, :position {:type :any, :default nil}, :drop? {:type :any, :default nil}, :expected-block-id {:type :any, :default nil}, :tool-tier-capped? {:type :any, :default nil}, :barrier? {:type :any, :default nil}}, :outputs {:status {:type :any}, :block-id {:type :any}, :position {:type :any}}, :children {}}
-   {:id :block/break-budget, :inputs {:world-id {:type :any, :default nil}, :limit {:type :any, :default nil}, :drop-chance {:type :any, :default nil}, :energy {:type :any, :default nil}, :seed {:type :any, :default nil}, :blocks {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :block/random-break, :inputs {:attempts {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :hardness-max {:type :any, :default nil}, :origin {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :block/set, :inputs {:expected-block-ids {:type :any, :default nil}, :block-id {:type :any, :default nil}, :position {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :combat/charged-area-damage, :inputs {:minimum-ticks {:type :any, :default nil}, :limit {:type :any, :default nil}, :maximum-ticks {:type :any, :default nil}, :ratio-min {:type :any, :default nil}, :ratio-slot {:type :any, :default nil}, :current-ticks {:type :any, :default nil}, :radius {:type :any, :default nil}, :center {:type :any, :default nil}, :filter {:type :any, :default nil}, :damage {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :ratio-max {:type :any, :default nil}, :projection {:type :any, :default nil}}, :outputs {}, :children {:on-impact {:kind :single, :flow :sequential}}}
    {:id :combat/damage, :inputs {:amount {:type :any, :default nil}, :damage-pipeline {:type :any, :default nil}, :world-id {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :target {:type :any, :default nil}, :reset-invulnerable-time? {:type :any, :default nil}}, :outputs {}, :children {}}
@@ -48,7 +45,7 @@
    ;; arms may flow to the successor.
    {:id :flow/branch, :inputs {:when {:type :any, :default nil}}, :outputs {}, :children {:then {:kind :single, :flow :branch}, :else {:kind :single, :flow :branch}}}
    {:id :flow/control, :inputs {:signal {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :flow/finish, :inputs {:finish-session? {:type :any, :default nil}, :next-phase {:type :any, :default nil}, :outcome {:type :any, :default nil}}, :outputs {}, :children {}}
+   {:id :flow/finish, :inputs {:finish-ability? {:type :any, :default nil}, :next-phase {:type :any, :default nil}, :outcome {:type :any, :default nil}}, :outputs {}, :children {}}
    ;; Loop variables are visible only in the closed body and are renamed by
    ;; composite expansion through the descriptor's :binds-locals contract.
    {:id :flow/foreach, :inputs {:limit {:type :any, :default nil}, :as {:type :any, :default nil}, :items {:type :any, :default nil}, :index-as {:type :any, :default nil}}, :outputs {}, :children {:body {:kind :single, :flow :closed}}, :binds-locals #{:as :index-as}}

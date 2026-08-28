@@ -1,16 +1,14 @@
 (ns cn.li.combat.beam-settlement
   "Generic delayed projectile settlement owned by Combat Core.
 
-  This namespace contains no skill identifiers.  It resolves optional moving
+  This namespace contains no skill identifiers. It resolves optional moving
   origins and fresh owner ray destinations from neutral selectors, then calls
-  mcmod's platform bridge for the atomic damage operation. AC only wires the
-  tick/clear hooks; settlement returns a neutral result whose VFX intents are
-  routed by the ability composition boundary."
+  mcmod's platform bridge for the atomic damage operation. The ability
+  composition boundary supplies scheduling and routes the neutral result/VFX."
   (:require [clojure.set :as set]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (defn- body-pos [owner]
   (let [p (or (raycast/player-position owner) {})]
@@ -173,3 +171,6 @@
         {:status :rejected :reason :continuation-schedule-failed
          :message (ex-message error)}))
     {:status :rejected :reason :invalid-beam-request}))
+
+
+
