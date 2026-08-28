@@ -29,6 +29,7 @@
    :artifact (case gui-key
                :wireless-matrix :academy.app/wireless-matrix
                :wireless-node :academy.app/wireless-node
+               :developer :academy.app/developer
                :academy.app/machine-container)
    :controller (:screen-factory-fn-kw definition)})
 

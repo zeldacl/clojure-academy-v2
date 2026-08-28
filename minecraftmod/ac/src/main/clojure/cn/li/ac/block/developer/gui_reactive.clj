@@ -13,6 +13,7 @@
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.gui.presentation-container :as presentation-container]
+            [cn.li.ac.block.developer.presentation :as developer-presentation]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -89,8 +90,7 @@
 ;; ============================================================================
 
 (defn create-screen [container menu player]
-  (presentation-container/presentation-screen-data
-    container menu player :developer "academy:machine_container"))
+  (developer-presentation/create-screen container menu player))
 
 (defn init-developer-reactive!
   []

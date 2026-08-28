@@ -1,0 +1,50 @@
+{:view/id :academy.app/developer
+ :host {:kind :container :design-width 400 :design-height 187 :scale-policy :fit}
+ :state-schema {:title :string :mode :keyword :ability-name :string :level-label :string
+                :exp-label :string :energy-ratio :number :sync-rate :number
+                :skills :vector :selected-skill :map :console-lines :vector
+                :console-input :string :status :string :button-upgrade :map
+                :button-reset :map :button-wireless :map}
+ :root {:type :column :key :developer/root :layout {:x 8 :y 8 :width 384 :height 171}
+        :children [{:type :text :key :developer/title :layout {:height 18}
+                    :bind {:text [:state :title]} :semantics {:role :heading}}
+                   {:type :row :key :developer/summary :layout {:height 34}
+                    :children [{:type :column :key :developer/ability :layout {:width 180}
+                                :children [{:type :text :bind {:text [:state :ability-name]}}
+                                           {:type :text :bind {:text [:state :level-label]}}
+                                           {:type :text :bind {:text [:state :exp-label]}}]}
+                               {:type :column :key :developer/energy :layout {:width 180}
+                                :children [{:type :progress :layout {:height 6}
+                                            :bind {:value [:state :energy-ratio]}}
+                                           {:type :progress :layout {:height 6}
+                                            :bind {:value [:state :sync-rate]}}
+                                           {:type :text :bind {:text [:state :mode]}}]}]}
+                   {:type :row :key :developer/actions :layout {:height 22}
+                    :children [{:type :button :key :developer/upgrade :layout {:width 96 :height 20}
+                                :bind {:text [:state :button-upgrade]} :on {:activate :developer/level-up}
+                                :semantics {:role :button}}
+                               {:type :button :key :developer/reset :layout {:width 96 :height 20}
+                                :bind {:text [:state :button-reset]} :on {:activate :developer/reset}
+                                :semantics {:role :button}}
+                               {:type :button :key :developer/wireless :layout {:width 96 :height 20}
+                                :bind {:text [:state :button-wireless]} :on {:activate :developer/wireless}
+                                :semantics {:role :button}}]}
+                   {:type :text :key :developer/selected :layout {:height 18}
+                    :bind {:text [:state :selected-skill]}}
+                   {:type :scroll :key :developer/skills :layout {:height 42}
+                    :bind {:items [:state :skills]} :semantics {:role :list}
+                    :children [{:type :row :layout {:height 18}
+                                :children [{:type :text :layout {:width 250}
+                                            :bind {:text [:item :label]}}
+                                           {:type :button :layout {:width 80 :height 16}
+                                            :bind {:text [:item :select-label]}
+                                            :on {:activate :developer/select-skill}
+                                            :semantics {:role :button}}]}]}
+                   {:type :scroll :key :developer/console :layout {:height 26}
+                    :bind {:items [:state :console-lines]} :semantics {:role :list}
+                    :children [{:type :text :bind {:text [:item :label]}}]}
+                   {:type :text-input :key :developer/input :layout {:height 20}
+                    :bind {:text [:state :console-input]}
+                    :on {:submit :developer/console-submit}
+                    :semantics {:role :textbox :field :developer-console}}
+                   {:type :text :key :developer/status :bind {:text [:state :status]}}]}}

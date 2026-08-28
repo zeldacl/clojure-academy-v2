@@ -315,30 +315,56 @@
   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner)))
 
 (defn- presentation-state [owner]
-  (let [data (or (build-screen-render-data owner) {})]
-    {:lines (vec (concat
-                   [{:label (str "Category: " (or (get-in data [:ability-info :category-id]) "unknown"))}
-                    {:label (str "Level: " (or (get-in data [:ability-info :level]) 0))}
-                    {:label (str "Skill points: " (or (get-in data [:ability-info :skill-points]) 0))}]
-                   (map (fn [{:keys [skill-id learned progress]}]
-                          {:label (str (if learned "[learned] " "[ ] ") (name skill-id)
-                                       " " (format "%.0f%%" (* 100.0 (double (or progress 0.0)))))})
-                        (:skill-nodes data))))
-     :status "Activate a skill after selecting it"
-     :button-left {:label "Refresh" :visible? true}}))
+  (let [data (or (build-screen-render-data owner) {})
+        info (:ability-info data)
+        nodes (vec (:skill-nodes data))
+        skill-items (mapv (fn [{:keys [skill-id learned exp skill-name can-learn]}]
+                            {:kind :skill
+                             :skill-id skill-id
+                             :label (str (if learned "[learned] " "[ ] ")
+                                         (or skill-name (name skill-id))
+                                         " " (format "%.0f%%" (* 100.0 (double (or exp 0.0)))))
+                             :action-label (if learned "View" (if can-learn "Learn" "Locked"))})
+                          nodes)
+        level-item (when (get info :can-level-up)
+                     [{:kind :level-up :label "Ability level-up available" :action-label "Level Up"}])]
+    {:lines [{:label (str "Category: " (or (:category-name info) "unknown"))}
+             {:label (str "Level: " (or (:level info) 0))}]
+     :items (vec (concat level-item skill-items))
+     :status "Select a skill, then activate again to learn it"
+     :button-left {:label "Refresh" :visible? true}
+     :button-right {:label "Refresh" :visible? true}}))
 
 (defn open-presentation! [player-uuid & [learn-context]]
-  (let [owner (read-model/local-client-owner player-uuid "skill-tree")]
+  (let [owner (read-model/local-client-owner player-uuid "skill-tree")
+        mount* (atom nil)]
     (open-screen! owner learn-context)
-    (application/mount!
-      (str "application/skill-tree/" player-uuid)
-      "Skill Tree"
-      (presentation-state owner)
-      (fn [action _current]
-        (when (= action :application/activate)
-          (presentation-state owner)))
-      #(close-screen! owner))))
-
+    (let [vm (application/mount!
+               (str "application/skill-tree/" player-uuid)
+               "Skill Tree"
+               (presentation-state owner)
+               (fn [action current]
+                 (if (= action :application/activate)
+                   (let [item (:selected-item current)
+                         sid (:skill-id item)]
+                     (cond
+                       (= :level-up (:kind item))
+                       (api/req-level-up! owner
+                         (fn [_]
+                           (when-let [mounted @mount*]
+                             ((:refresh! mounted) (presentation-state owner)))))
+                       (and (= :skill (:kind item)) sid)
+                       (if (= sid (:selected-skill (screen-state-snapshot owner)))
+                         (api/req-learn-skill! owner sid nil
+                           (fn [_]
+                             (when-let [mounted @mount*]
+                               ((:refresh! mounted) (presentation-state owner)))))
+                         (on-skill-click owner sid))))
+                   nil)
+                 (assoc (presentation-state owner) :selected-item nil))
+               #(close-screen! owner))]
+      (reset! mount* vm)
+      vm)))
 ;; ============================================================================
 ;; CGui Widget Factory — reactive screen dispatch for :ac/skill-tree
 ;; ============================================================================

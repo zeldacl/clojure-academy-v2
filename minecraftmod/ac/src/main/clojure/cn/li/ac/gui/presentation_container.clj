@@ -72,6 +72,10 @@
 (defn presentation-screen-data
   [container menu player schema-id template-id]
   (let [revision (atom 0)
+        refresh* (atom nil)
+        container (assoc container
+                     :presentation-refresh! (fn []
+                       (when-let [refresh @refresh*] (refresh))))
         layout (or (slot-schema/get-slot-layout schema-id) {:slots []})
         slot-count (count (:slots layout))
         anchors (mapv (fn [{:keys [index x y]}]
@@ -124,6 +128,7 @@
      :player player
      :mount-fn (fn [_]
                  (let [vm (mount-container! nil bridge snapshot-fn dispatch-action! template-id)]
+                   (reset! refresh* (:refresh! vm))
                    {:mount (:mount vm)
                     :on-close (fn []
                                 (when-let [close (or (:presentation-close-fn container)

@@ -17,10 +17,14 @@
    (mount! owner title snapshot dispatch-action! on-close host-kind :academy.app/application))
   ([owner title snapshot dispatch-action! on-close host-kind view-id]
    (let [state (merge {:title title :lines [] :status "" :scroll 0.0
-                       :modal nil :input ""}
+                       :modal nil :input "" :items []}
                       snapshot)
-         dispatch (fn [action _payload current]
-                   (let [result (dispatch-action! action current)]
+         dispatch (fn [action payload current]
+                   (let [current (cond-> (assoc current :selected-target (:target payload))
+                                   (contains? payload :item)
+                                   (assoc :selected-item (:item payload)
+                                          :selected-index (:index payload)))
+                         result (dispatch-action! action current)]
                      (if (map? result) result current)))
          vm (presentation/mount-view! {:view-id view-id
                              :host-kind host-kind
