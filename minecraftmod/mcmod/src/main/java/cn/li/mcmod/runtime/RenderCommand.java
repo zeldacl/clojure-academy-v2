@@ -14,6 +14,7 @@ public sealed interface RenderCommand
                 RenderCommand.Mesh, RenderCommand.Billboard, RenderCommand.ParticleBatch,
                 RenderCommand.Ribbon, RenderCommand.Beam,
                 RenderCommand.CameraContribution, RenderCommand.PostProcess,
+                RenderCommand.AudioContribution,
                 RenderCommand.OrderBarrier, RenderCommand.Batch {
     record UiQuad(float x, float y, float width, float height, int rgba) {}
     record UiQuadBatch(List<UiQuad> quads) implements RenderCommand {
@@ -63,6 +64,10 @@ public sealed interface RenderCommand
     record Beam(int materialId, int segmentCount) implements RenderCommand {}
     record CameraContribution(float fovDelta, float shakeX, float shakeY, float roll) implements RenderCommand {}
     record PostProcess(int materialId, float intensity) implements RenderCommand {}
+    /** Neutral audio intent paired with a frame; backend resolves the sound id. */
+    record AudioContribution(String soundId, float volume, float pitch) implements RenderCommand {
+        public AudioContribution { soundId = soundId == null ? "" : soundId; }
+    }
     record OrderBarrier() implements RenderCommand {}
     /**
      * Neutral VFX effect batch. payload is immutable data or a ByteBuffer;

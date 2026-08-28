@@ -15,11 +15,13 @@
   {:world-before-translucent RenderStage/WORLD_BEFORE_TRANSLUCENT
    :world-after-translucent  RenderStage/WORLD_AFTER_TRANSLUCENT
    :first-person             RenderStage/FIRST_PERSON
+   :camera                   RenderStage/CAMERA
    :hud-underlay             RenderStage/HUD_UNDERLAY
    :hud                      RenderStage/HUD
    :hud-overlay              RenderStage/HUD_OVERLAY
    :screen                   RenderStage/SCREEN
-   :post-process             RenderStage/POST_PROCESS})
+   :post-process             RenderStage/POST_PROCESS
+   :audio                    RenderStage/AUDIO})
 
 (defn stage->render-stage ^RenderStage [stage]
   (or (get stage-keywords stage)

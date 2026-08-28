@@ -12,9 +12,11 @@ public enum RenderStage {
     WORLD_ALWAYS_ON_TOP,
     WORLD_GLOW,
     FIRST_PERSON,
+    CAMERA,
     HUD_UNDERLAY,
     HUD,
     HUD_OVERLAY,
     SCREEN,
-    POST_PROCESS
+    POST_PROCESS,
+    AUDIO
 }

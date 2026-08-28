@@ -1,11 +1,11 @@
 (ns cn.li.ac.gui.presentation-container
-  "Container surface controller backed by the v2 artifact runtime.
+  "Container surface controller backed by the Presentation artifact runtime.
    Menu authority stays in MenuBridge; only normalized snapshots and actions
    cross into the retained UI runtime."
   (:require [cn.li.mcmod.gui.presentation-menu-bridge :as menu-bridge]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.gui.container.common :as container-common]
-            [cn.li.ac.gui.presentation :as v2]
+            [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids
@@ -47,7 +47,7 @@
   (let [state-fn (fn []
                    (let [snapshot (snapshot-fn)]
                      (merge (:values snapshot {}) snapshot)))
-        vm (v2/mount-view!
+        vm (presentation/mount-view!
              {:view-id view-id
               :host-kind :container
               :state (state-fn)
@@ -60,7 +60,7 @@
            :refresh! (fn []
                        (let [next (state-fn)]
                          (reset! (:snapshot vm) next)
-                         (v2/present! vm next)))))))
+                         (presentation/present! vm next)))))))
 
 (defn open-screen!
   [menu-bridge snapshot-fn dispatch-action! on-close]

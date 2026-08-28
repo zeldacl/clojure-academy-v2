@@ -1,7 +1,7 @@
 (ns cn.li.ac.terminal.client.presentation-terminal
-  "Terminal surface controller backed by Presentation Runtime v2."
+  "Terminal surface controller backed by Presentation Runtime."
   (:require [cn.li.ac.terminal.client.runtime :as terminal]
-            [cn.li.ac.gui.presentation :as v2]
+            [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids {:installed? 0 :apps 1 :page 2 :loading? 3 :query 4 :modal 5})
@@ -11,7 +11,7 @@
 
 (defn terminal-view-model [owner dispatch-action!]
   (let [state (terminal/state-snapshot owner)
-        vm (v2/mount-view!
+        vm (presentation/mount-view!
              {:view-id :academy.app/terminal
               :host-kind :screen
               :state state
@@ -21,7 +21,7 @@
                 (terminal/state-snapshot owner))})]
     (assoc vm
            :refresh! (fn []
-                       (v2/present! vm (terminal/state-snapshot owner)))
+                       (presentation/present! vm (terminal/state-snapshot owner)))
            :state (:state vm))))
 
 (defn mount-terminal! [owner dispatch-action!]

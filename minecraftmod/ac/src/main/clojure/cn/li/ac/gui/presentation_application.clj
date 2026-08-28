@@ -2,7 +2,7 @@
   "Application surface controller backed exclusively by Presentation Runtime.
    Application modules own state and action semantics; this namespace only
    adapts their map callbacks to the compiled application artifact."
-  (:require [cn.li.ac.gui.presentation :as v2]
+  (:require [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids {:title 0 :lines 1 :status 2 :scroll 3 :modal 4
@@ -22,7 +22,7 @@
          dispatch (fn [action _payload current]
                    (let [result (dispatch-action! action current)]
                      (if (map? result) result current)))
-         vm (v2/mount-view! {:view-id view-id
+         vm (presentation/mount-view! {:view-id view-id
                              :host-kind host-kind
                              :state state
                              :dispatch-action! dispatch
@@ -34,13 +34,13 @@
             :owner owner
             :refresh! (fn
                         ([] (:state vm))
-                        ([next-state] (v2/present! vm (merge @(:state vm) next-state))))
+                        ([next-state] (presentation/present! vm (merge @(:state vm) next-state))))
             :state (:state vm)
             :model nil
             :host-kind host-kind))))
 
 (defn unmount! [vm]
   (cond
-    (map? vm) (v2/unmount! vm)
+    (map? vm) (presentation/unmount! vm)
     :else nil))
 

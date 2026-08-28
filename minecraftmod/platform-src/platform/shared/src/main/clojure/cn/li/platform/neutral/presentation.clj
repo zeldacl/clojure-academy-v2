@@ -163,7 +163,7 @@
       (unmount-all!))
     nil))
 
-;; Presentation Runtime v2 opaque API. These functions intentionally traffic
+;; Presentation Runtime opaque API. These functions intentionally traffic
 ;; only in maps and opaque mount tokens; platform code does not import core
 ;; classes or the build-time compiler.
 (defn mount-view! [spec]
@@ -178,7 +178,7 @@
   (when-let [update! (:update-host! (lifecycle/host-api (ensure-registered!) host-id))]
     (update! mount geometry)))
 
-(defn extract-stage-v2! [stage frame-context]
+(defn extract-stage! [stage frame-context]
   (when-let [extract! (:extract-stage! (lifecycle/host-api (ensure-registered!) host-id))]
     (extract! stage frame-context)))
 
@@ -186,7 +186,7 @@
   (when-let [semantics (:semantics! (lifecycle/host-api (ensure-registered!) host-id))]
     (semantics mount)))
 
-(defn invalidate-render-resources-v2! []
+(defn invalidate-render-resources! []
   (when-let [invalidate! (:invalidate-render-resources!
                           (lifecycle/host-api (ensure-registered!) host-id))]
     (invalidate!)))
