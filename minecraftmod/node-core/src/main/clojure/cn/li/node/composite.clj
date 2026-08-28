@@ -105,14 +105,27 @@
    combat composite has no reason to ever write {:ref [:input ...]} except
    to mean one of its own declared parameters, so this change is a no-op
    for every existing combat composite)."
-  [body inputs]
+  [body inputs input-specs ns-prefix]
   (walk/postwalk
    (fn [form]
      (if (and (map? form) (vector? (:ref form)) (= :input (first (:ref form))))
        (let [[_ k & path] (:ref form)]
          (if (contains? inputs k)
            (let [v (get inputs k)]
-             (if (seq path) (get-in v (vec path)) v))
+             (if (seq path)
+               (get-in v (vec path))
+               (if-let [scope (get-in input-specs [k :scope])]
+                 (walk/postwalk
+                  (fn [callback-form]
+                    (if (and (map? callback-form)
+                             (vector? (:ref callback-form))
+                             (= :local (first (:ref callback-form)))
+                             (contains? scope (second (:ref callback-form))))
+                      (update-in callback-form [:ref 1]
+                                 #(keyword (str (name ns-prefix) "$" (name %))))
+                      callback-form))
+                  v)
+                 v)))
            form))
        form))
    body))
@@ -152,7 +165,7 @@
                 inputs (resolve-inputs d node path)
                 ns-prefix (gensym (str (name component) "__"))
                 renamed-body (rename-locals descriptor-of (:body d) ns-prefix)
-                substituted (substitute-inputs renamed-body inputs)
+                substituted (substitute-inputs renamed-body inputs (:inputs d) ns-prefix)
                 extra-binds (output-binds d node ns-prefix path)
                 ;; Flatten into the body's own :flow/sequence when it already
                 ;; is one (the overwhelmingly common composite shape) instead

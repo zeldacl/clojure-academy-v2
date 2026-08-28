@@ -321,9 +321,9 @@
     (is (not-any? #(= :singleton (:lifecycle %))
                   (vals (get-in assembled [:vfx :effects])))
         "final VFX catalog must not contain the removed singleton lifecycle")
-    (is (= 50 (:ready-count result)))
+    (is (= 50 (count (get-in result [:combat :registrations]))))
     (is (pos? (get-in result [:node-schema :descriptor-count])))
-    (is (every? #(= :ready (:status %))
+    (is (every? #(map? (:compiled %))
                 (get-in result [:combat :registrations])))))
 
 (deftest final-catalog-has-no-unexpanded-composites-test
@@ -721,4 +721,6 @@
     (is (= :overload (:resource (first enforce))))
     (is floor-bind)
     (is (= :math/max (get-in floor-bind [:value :expr])))))
+
+
 

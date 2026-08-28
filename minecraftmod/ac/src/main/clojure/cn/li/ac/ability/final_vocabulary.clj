@@ -149,11 +149,16 @@
     :outputs {:affected-count {:type :int}}
     :node-kind :action :execution {:kind :combat-kernel :capability :kernel/motion-radial-impulse}}
    {:id :kernel/terrain-wave-plan :revision 1 :layer :kernel :visibility :internal
-    :inputs {:origin {:type :vec3} :direction {:type :vec3} :initial-energy {:type :float} :max-iterations {:type :int} :seed {:type :int}}
-    :outputs {:transforms {:type [:list-of :map]} :broken-blocks {:type [:list-of :map]} :mastery-breaks {:type [:list-of :map]} :entities {:type [:list-of :map]}}
+    :inputs {:origin {:type :vec3} :direction {:type :vec3} :initial-energy {:type :float} :max-iterations {:type :int} :seed {:type :int}
+             :spread {:type :map} :energy-cost {:type :map} :block-transforms {:type :map}
+             :mastery {:type :float} :mastery-threshold {:type :float} :mastery-radius {:type :int}
+             :mastery-hardness-cap {:type :float} :ground-break-probability {:type :float}
+             :drop-probability {:type :float} :launch-base {:type :float} :launch-span {:type :float}
+             :entity-search-radius {:type :float}}
+    :outputs {:affected-blocks {:type [:list-of :map]} :transforms {:type [:list-of :map]} :broken-blocks {:type [:list-of :map]} :mastery-breaks {:type [:list-of :map]} :entities {:type [:list-of :map]}}
     :node-kind :query :execution {:kind :combat-kernel :capability :kernel/terrain-wave-plan}}
    {:id :kernel/trace-beam :revision 1 :layer :kernel :visibility :internal
-    :inputs {:origin {:type :vec3} :direction {:type :vec3} :length {:type :float} :radius {:type :float}}
+    :inputs {:origin {:type :vec3} :trace-origin {:type :any, :default nil} :direction {:type :vec3} :length {:type :float} :visual-length {:type :any, :default nil} :radius {:type :float} :query-radius {:type :any, :default nil} :entity-limit {:type :int, :default 256} :damage {:type :float, :default 0.0} :damage-type {:type :resource-id, :default :generic} :block-limit {:type :int, :default 4096} :reflection-policy {:type :any, :default nil} :step {:type :any, :default nil}}
     :outputs {:beam {:type :map}}
     :node-kind :query :execution {:kind :combat-kernel :capability :kernel/trace-beam}}])
 
@@ -174,7 +179,7 @@
     "target" :query "owner" :query "query" :query "energy" :query "terrain" :query
     "combat" :action "entity" :action "world" :action "block" :action
     "motion" :action "projectile" :action "inventory" :action
-    "resource" :action "ability" :source "state" :source
+    "resource" :action "ability" :source "state" :source "data" :source
     "effect" :vfx "vfx" :vfx nil))
 (defn- normalize-spec [spec]
   (-> spec

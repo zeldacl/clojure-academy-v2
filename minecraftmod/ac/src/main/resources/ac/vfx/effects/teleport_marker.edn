@@ -6,7 +6,7 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:owner :owner-id
+ {:spawn {:owner :entity-ref
           :position :vec3
           :color :any
           :particle-chance :float}

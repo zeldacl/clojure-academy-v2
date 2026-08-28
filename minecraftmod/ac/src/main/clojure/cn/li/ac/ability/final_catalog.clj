@@ -97,7 +97,7 @@
 (defn compile-registration
   "Compile one specialization using explicit bindings.
 
-   The old deep :overrides merge is deliberately rejected. A migration step
+   The old deep :overrides merge is deliberately rejected. A catalog validation step
    may convert old files into named binding sections before calling this
    function, but the final catalog never evaluates an untyped override map."
   [{:keys [id source-id resource bindings] :as registration} source]
@@ -335,6 +335,7 @@
                        :vfx-effects (:effect-count vfx)}
               :content-hash (content-hash
                              (ability-compose/catalog-fingerprint-input bundle)))))))
+
 
 
 

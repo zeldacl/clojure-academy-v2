@@ -1,5 +1,6 @@
 {:schema-version 1
  :kind :composite
+ :layer :composite
  :id :vfx/beam-arc-fade
  :revision 1
  :inputs
@@ -52,5 +53,6 @@
                              :radius {:ref [:input :ring-radius]}
                              :segments {:ref [:input :ring-segments]}
                              :color {:ref [:input :ring-color]}}}}]}}
+
 
 

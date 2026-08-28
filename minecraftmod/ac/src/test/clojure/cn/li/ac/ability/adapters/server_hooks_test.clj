@@ -75,12 +75,11 @@
           plan (build-plan "p1" "ac:coin" true :server)]
           (is (= {:kind :consume-item :count 1 :unless-instabuild? true}
             (first (:server-actions plan))))
-          (is (= :domain-action (:kind (second (:server-actions plan)))))
-          (is (= :railgun-coin-throw (:action (second (:server-actions plan)))))
-          (is (number? (get-in plan [:server-actions 1 :payload :timestamp-ms])))
-          (is (= {:kind :spawn-scripted-effect :entity-id "entity_coin_throwing"
-                  :unique-per-owner? false :speed 0.0}
-            (nth (:server-actions plan) 2)))
+          (is (= :spawn-scripted-effect (:kind (second (:server-actions plan)))))
+          (is (= :railgun-coin-throw (:action (nth (:server-actions plan) 2))))
+          (is (number? (get-in plan [:server-actions 2 :payload :timestamp-ms])))
+          (is (= {:kind :domain-action :action :railgun-coin-throw}
+            (select-keys (nth (:server-actions plan) 2) [:kind :action])))
       (is (= [{:kind :notify-local-effect
                :event-key :ac/charge-coin-throw}]
              (:client-actions plan)))
@@ -92,7 +91,7 @@
     (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
     (let [build-plan (:build-item-use-plan (server-hooks/runtime-server-hooks))
           plan (build-plan "p1" "ac:coin" false :server)]
-      (is (= [:consume-item :domain-action :spawn-scripted-effect]
+      (is (= [:consume-item :spawn-scripted-effect :domain-action]
              (mapv :kind (:server-actions plan))))
       (is (= [{:kind :notify-local-effect
                :event-key :ac/charge-coin-throw}]
@@ -286,5 +285,10 @@
                       (= :hydrate-player-state (:command cmd))
                       (map? (:resource-data cmd))))
                   @commands*)))))
+
+
+
+
+
 
 

@@ -61,7 +61,6 @@
 (defn- compile-registration [environment registration]
   (try
     (assoc registration
-           :status :ready
            :compiled ((compiler-api) environment (:graph registration)))
     (catch clojure.lang.ExceptionInfo error
       (throw (ex-info "final catalog graph compilation failed"
@@ -70,10 +69,7 @@
                              (ex-data error)))))))
 
 (defn initialize!
-  "Load and index the immutable final catalog.
-
-   `assemble-options` is forwarded to the pure catalog loader, which keeps
-   this service usable in headless tests and deterministic server startup."
+  "Load and index the immutable final catalog."
   ([] (initialize! {}))
   ([assemble-options]
    (let [assembled ((catalog-api) assemble-options)
@@ -85,9 +81,7 @@
                        :combat (assoc (:combat assembled)
                                       :registrations registrations
                                       :by-id by-id)
-                       :status :ready
-                       :ready-count (count (filter #(= :ready (:status %)) registrations))
-                       :pending-count 0)]
+                       :status :ready)]
      (let [result (assoc result :node-schema node-schema)]
        (reset! catalog-state result)
        result))))
@@ -98,7 +92,7 @@
   (get-in @catalog-state [:combat :by-id id]))
 
 (defn available? [id]
-  (= :ready (:status (registration id))))
+  (some? (registration id)))
 
 (defn program [id]
   (:compiled (registration id)))
@@ -109,20 +103,15 @@
 (defn content-hash []
   (:content-hash @catalog-state))
 
-(defn migration-status []
-  (select-keys @catalog-state [:status :ready-count :pending-count :content-hash]))
+(defn catalog-status []
+  (select-keys @catalog-state [:status :content-hash]))
 
-(defn migration-report
-  "Return a deterministic audit of every final registration."
+(defn catalog-report
+  "Return a deterministic audit of every compiled registration."
   []
   (let [registrations (get-in @catalog-state [:combat :registrations])]
     {:total (count registrations)
-     :ready (count (filter #(= :ready (:status %)) registrations))
-     :pending 0
+     :compiled (count (filter :compiled registrations))
      :entries (mapv (fn [entry]
-                      (select-keys entry [:id :source-id :status :compile-error]))
+                      (select-keys entry [:id :source-id :compiled]))
                     (sort-by (comp str :id) registrations))}))
-
-
-
-

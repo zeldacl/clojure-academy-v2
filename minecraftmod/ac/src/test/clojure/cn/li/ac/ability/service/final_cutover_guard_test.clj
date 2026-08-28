@@ -11,12 +11,14 @@
 (deftest final-catalog-has-only-final-registrations-test
   (let [assembled (catalog/assemble)]
     (is (= 50 (count (get-in assembled [:combat :registrations]))))
-    (is (every? #(= :final (:engine %))
+    (is (every? #(map? (:graph %))
                 (get-in assembled [:combat :registrations])))))
 
 (deftest final-service-compiles-every-registration-test
   (let [result (service/initialize!)]
     (is (= :ready (:status result)))
-    (is (= 50 (:ready-count result)))
+    (is (= 50 (count (get-in result [:combat :registrations]))))
     (is (every? #(map? (:compiled %))
                 (get-in result [:combat :registrations])))))
+
+

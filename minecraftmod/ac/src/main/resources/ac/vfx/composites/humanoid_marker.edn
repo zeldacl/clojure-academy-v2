@@ -1,5 +1,6 @@
 {:schema-version 1
  :kind :composite
+ :layer :composite
  :id :vfx/humanoid-marker
  :revision 1
  :inputs
@@ -52,5 +53,6 @@
     :front [0.1875 0.25 0.5 0.875] :back [0.125 0.1875 0.5 0.875]
     :right [0.125 0.1875 0.5 0.875] :left [0.1875 0.25 0.5 0.875]
     :top [0.1875 0.25 0.5 0.625] :bottom [0.1875 0.25 0.75 0.875]}]}}
+
 
 

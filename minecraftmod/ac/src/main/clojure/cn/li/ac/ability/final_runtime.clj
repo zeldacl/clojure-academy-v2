@@ -59,7 +59,7 @@
     runtime))
 
 (defn catalog-status [runtime]
-  (let [status (resolve-var 'cn.li.ac.ability.final-catalog-service/migration-status)]
+  (let [status (resolve-var 'cn.li.ac.ability.final-catalog-service/catalog-status)]
     (if @(:catalog runtime) (status) {:status :cold})))
 
 (defn resolve-damage!
@@ -160,4 +160,5 @@
                                 (hash [owner ability-id (:server-tick intent)])))
                 :input (dissoc intent :owner :ability-id)})
     {:status :rejected :reason :final-runtime-not-installed}))
+
 
