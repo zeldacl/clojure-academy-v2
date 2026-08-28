@@ -8,6 +8,7 @@
             RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
             RenderCommand$UiImageBatch RenderCommand$UiItemPreview RenderCommand$UiModelPreview
             RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText
+            RenderCommand$Transform RenderCommand$Mask RenderCommand$AudioContribution
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PopClip RenderCommand$PostProcess
             RenderCommand$PushClip RenderCommand$Ribbon RenderPass]
@@ -62,6 +63,18 @@
                                (int (+ (.x c) (.width c))) (int (+ (.y c) (.height c)))))
 
     RenderCommand$PopClip (.disableScissor graphics)
+
+    RenderCommand$Transform
+    (let [^RenderCommand$Transform c command]
+      (callback! context :apply-transform! [graphics stage (.transformId c) (.payload c)]))
+
+    RenderCommand$Mask
+    (let [^RenderCommand$Mask c command]
+      (callback! context :apply-mask! [graphics stage (.maskId c) (.payload c)]))
+
+    RenderCommand$AudioContribution
+    (let [^RenderCommand$AudioContribution c command]
+      (callback! context :play-audio! [stage (.soundId c) (.volume c) (.pitch c)]))
 
     RenderCommand$Layer
     (let [^RenderCommand$Layer c command]

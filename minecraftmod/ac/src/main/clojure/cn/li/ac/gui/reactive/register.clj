@@ -59,6 +59,8 @@
    :post-process RenderStage/POST_PROCESS
    :audio RenderStage/AUDIO})
 
+(declare presentation-host-api)
+
 (defn- frame-packet
   [frame-id stage frame-context]
   (let [api (presentation-host-api)

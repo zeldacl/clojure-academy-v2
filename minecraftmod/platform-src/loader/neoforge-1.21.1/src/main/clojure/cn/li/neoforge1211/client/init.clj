@@ -303,8 +303,6 @@
                                 (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                               (catch Throwable _ false)))
        ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
-       :terminal-apply-perspective! (fn [& _] nil)
-       :terminal-render-cursor!    (fn [& _] nil)
        :terminal-cursor-hide!      (fn [& _] nil)
        :terminal-cursor-show!      (fn [& _] nil)
        ;; Settings app "keys" category rebinding —Forge-only (Fabric has no

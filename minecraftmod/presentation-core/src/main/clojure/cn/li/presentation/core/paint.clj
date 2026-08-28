@@ -4,7 +4,7 @@
    Collection nodes expand from immutable state and leaf nodes emit only
    neutral Ui* commands. This namespace has no Minecraft/backend dependency."
   (:import [cn.li.mcmod.runtime RenderCommand$UiImage RenderCommand$UiImageBatch
-            RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText RenderCommand$UiItemPreview RenderCommand$UiModelPreview RenderCommand$PushClip RenderCommand$PopClip
+            RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText RenderCommand$UiItemPreview RenderCommand$UiModelPreview RenderCommand$PushClip RenderCommand$PopClip RenderCommand$Transform RenderCommand$Mask
             UiResourceRef UiResourceRef$Kind]))
 
 (defn- state-value [env path]
@@ -147,6 +147,8 @@
       :slot-anchor [(RenderCommand$UiQuadBatch.
                      [(RenderCommand$UiQuad. x y width height (unchecked-int 0x22000000))])]
       :clip [(RenderCommand$PushClip. x y width height)]
+      :transform [(RenderCommand$Transform. (str (or (get-in node [:style :transform-id]) "identity")) (or (get-in node [:style :transform]) {}))]
+      :mask [(RenderCommand$Mask. (str (or (get-in node [:style :mask-id]) "none")) (or (get-in node [:style :mask]) {}))]
       nil)))
 
 (defn- collection-values [env node]

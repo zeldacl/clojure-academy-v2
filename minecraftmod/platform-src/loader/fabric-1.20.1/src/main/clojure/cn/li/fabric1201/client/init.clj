@@ -207,8 +207,6 @@
                         (recipe-query/all-recipes-for item-id recipe-kind))
      :find-recipes (fn [item-id]
                      (recipe-query/find-recipes item-id))
-     :terminal-apply-perspective! (fn [& _] nil)
-     :terminal-render-cursor!    (fn [& _] nil)
      :terminal-cursor-hide!      (fn [& _] nil)
      :terminal-cursor-show!      (fn [& _] nil)}))
 

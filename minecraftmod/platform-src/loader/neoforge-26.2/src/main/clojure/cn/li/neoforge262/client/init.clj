@@ -283,8 +283,6 @@
                                   handle (.handle w)]
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                             (catch Throwable _ false)))
-     :terminal-apply-perspective! (fn [& _] nil)
-     :terminal-render-cursor! (fn [& _] nil)
      :terminal-cursor-hide! (fn [& _] nil)
      :terminal-cursor-show! (fn [& _] nil)
      :keybind-rebind-supported? (constantly true)

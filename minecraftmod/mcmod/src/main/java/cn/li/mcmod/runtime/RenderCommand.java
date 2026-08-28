@@ -10,7 +10,7 @@ import java.util.List;
 public sealed interface RenderCommand
         permits RenderCommand.UiQuadBatch, RenderCommand.UiImageBatch, RenderCommand.UiText,
                 RenderCommand.UiItemPreview, RenderCommand.UiModelPreview,
-                RenderCommand.PushClip, RenderCommand.PopClip, RenderCommand.Layer,
+                RenderCommand.PushClip, RenderCommand.PopClip, RenderCommand.Transform, RenderCommand.Mask, RenderCommand.Layer,
                 RenderCommand.Mesh, RenderCommand.Billboard, RenderCommand.ParticleBatch,
                 RenderCommand.Ribbon, RenderCommand.Beam,
                 RenderCommand.CameraContribution, RenderCommand.PostProcess,
@@ -36,6 +36,14 @@ public sealed interface RenderCommand
     }
     record PushClip(float x, float y, float width, float height) implements RenderCommand {}
     record PopClip() implements RenderCommand {}
+    /** Projective/affine transform payload interpreted by the version backend. */
+    record Transform(String transformId, Object payload) implements RenderCommand {
+        public Transform { transformId = transformId == null ? "identity" : transformId; }
+    }
+    /** Declarative mask payload; backend owns stencil/alpha implementation. */
+    record Mask(String maskId, Object payload) implements RenderCommand {
+        public Mask { maskId = maskId == null ? "none" : maskId; }
+    }
     record Layer(int id) implements RenderCommand {}
     /**
      * Version-neutral mesh submission. The optional payload is immutable
