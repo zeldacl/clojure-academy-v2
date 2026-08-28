@@ -9,6 +9,7 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
+            [cn.li.mcmod.platform.position :as pos]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.tab.role-config :as role-config]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -61,30 +62,45 @@
     (swap! state* merge {:linked (:linked response)
                          :avail (vec (or (:avail response) []))}))
   nil)
-(defn- generic-info-area [container]
-  "Project the common code-built InfoArea contract into declarative state.
-   Block-specific controllers may replace this with richer typed data."
-  (let [known [[:status "Status"] [:mode "Mode"] [:wireless-mode "Wireless"]
-               [:altitude "Altitude"] [:gen-speed "Generation"]
-               [:obstacle "Obstacle"] [:work-progress "Work"]
-               [:current-recipe-liquid "Liquid Needed"] [:liquid-amount "Liquid"]]
-        fields (->> known
-                    (keep (fn [[key label]]
-                            (when (contains? container key)
-                              {:label label
-                               :value (str (or (value-of (get container key)) "-"))})))
-                    vec)
-        progress (double (or (value-of (:progress container)) 0.0))
+(defn- generic-info-area [container progress]
+  "Project the common code-built InfoArea contract into declarative state."
+  (let [tile (:tile-entity container)
+        altitude (when (= (:container-type container) :wind-gen-main)
+                   (try (some-> tile pos/block-pos pos/pos-y str)
+                        (catch Exception _ nil)))
+        fields (cond-> []
+                 (contains? container :status)
+                 (conj {:label "Status" :value (str (or (value-of (:status container)) "-"))})
+                 (contains? container :mode)
+                 (conj {:label "Mode" :value (str (or (value-of (:mode container)) "-"))})
+                 (contains? container :wireless-mode)
+                 (conj {:label "Wireless" :value (str (or (value-of (:wireless-mode container)) "-"))})
+                 altitude
+                 (conj {:label "Altitude" :value altitude})
+                 (contains? container :fan-installed)
+                 (conj {:label "Fan" :value (if (value-of (:fan-installed container)) "YES" "NO")})
+                 (contains? container :no-obstacle)
+                 (conj {:label "Obstacle" :value (if (value-of (:no-obstacle container)) "CLEAR" "BLOCKED")})
+                 (contains? container :gen-speed)
+                 (conj {:label "Generation" :value (format "%.2f IF/T" (double (or (value-of (:gen-speed container)) 0.0)))})
+                 (contains? container :work-progress)
+                 (conj {:label "Work" :value (str (or (value-of (:work-progress container)) "-"))})
+                 (contains? container :work-counter)
+                 (conj {:label "Work" :value (str (or (value-of (:work-counter container)) "-"))})
+                 (contains? container :current-recipe-liquid)
+                 (conj {:label "Liquid Needed" :value (str (or (value-of (:current-recipe-liquid container)) "-"))})
+                 (contains? container :liquid-amount)
+                 (conj {:label "Liquid" :value (str (or (value-of (:liquid-amount container)) "-"))}))
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
     {:title "Machine Info"
      :fields fields
-     :load-ratio (max 0.0 (min 1.0 (/ progress max-progress)))}))
+     :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
 (defn- snapshot-for [container revision slot-count]
   (let [network (wireless-state container)
         linked (:linked network)
         energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
-        progress (double (or (value-of (:progress container)) 0.0))
+        progress (double (or (when-let [f (:presentation-progress-fn container)] (f container)) (value-of (:progress container)) 0.0))
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
     {:revision @revision
      :values {:slots (mapv #(slot-value container %) (range slot-count))
@@ -94,7 +110,7 @@
                                  (value-of (:machine-state container))
                                  (value-of (:mode container))
                                  "IDLE")
-              :info-area (generic-info-area container)
+              :info-area (generic-info-area container progress)
               :network-visible (boolean (wireless-config container))
               :network-state (if linked "Connected" "Not connected")
               :network-owner (str "Node: " (or (:node-name linked) "-"))

@@ -10,6 +10,7 @@
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.block.metal-former.recipes :as recipes]
+            [cn.li.ac.block.metal-former.config :as cfg]
             [cn.li.ac.block.metal-former.schema :as former-schema]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
@@ -32,7 +33,10 @@
                                             {:gui-id (gui-manifest/gui-id :metal-former)})
          :presentation-close-fn (:on-close former-sync)
          :presentation-wireless {:domain :metal-former :role :machine}
-         :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
+         :presentation-wireless-state (atom {:linked nil :avail [] :password ""})
+         :presentation-progress-fn (fn [c] (if @(:working c)
+                                            (max 0.0 (min 1.0 (/ (double @(:work-counter c)) (double cfg/work-ticks))))
+                                            0.0))))
 (defn- get-slot-count [_] (slot-schema/tile-slot-count former-slot-schema-id))
 (defn- get-slot-item [c i] (common/get-slot-item-be c i))
 (defn- set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))
