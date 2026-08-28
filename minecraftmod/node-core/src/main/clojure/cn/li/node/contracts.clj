@@ -79,8 +79,8 @@
   (apply update-owner txn owner update-in ks f args))
 
 (defn txn-entries [txn]
-  (mapv (fn [[owner {:keys [base-revision working-state patches]}]]
-          {:owner owner :base-revision base-revision :state working-state :patches patches})
+  (mapv (fn [[owner {:keys [base-revision base-state working-state patches]}]]
+          {:owner owner :base-revision base-revision :base-state base-state :state working-state :patches patches})
         (sort-by (comp pr-str key) (:owners txn))))
 
 (defn host-command

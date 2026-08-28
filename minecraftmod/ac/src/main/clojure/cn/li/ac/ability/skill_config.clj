@@ -564,6 +564,7 @@
     :const (case (or type :double)
              :double {:value (tunable-double config-skill-id field-id)}
              :long {:value (tunable-int config-skill-id field-id)}
+             :int {:value (tunable-int config-skill-id field-id)}
              :string-list {:value (tunable-string-list config-skill-id field-id)}
              (throw (ex-info "unsupported :const tunable type"
                              {:ability-id skill-id :tunable tunable-id :type type})))

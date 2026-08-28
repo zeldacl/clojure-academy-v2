@@ -673,7 +673,10 @@
         {:status :rejected :reason :cooldown
          :schema-version 1 :ability-id ability-id
          :feedback [{:type :cooldown-active :ability-id ability-id}]}
-        (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
+        (let [_ (when-not (final-runtime/production-runtime)
+                  (install-ac-host-capabilities!)
+                  (initialize-final-runtime!))
+              result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
                             :schema-version 1 :ability-id ability-id)]
           (when (and (= :accepted (:status result))
                      (= :start (:op intent))
@@ -681,7 +684,8 @@
                      (not (:finish-session? result))
                      (not (combat-sessions/active? (str owner))))
             (combat-sessions/start! (str owner) ability-id prepared))
-          result)))))`n(defn dispatch-trigger!
+          result)))))
+(defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
 
   The trigger map is produced by `combat-catalog/resolve-trigger`; clients never

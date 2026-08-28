@@ -97,7 +97,7 @@
 (defn skill-specs []
   (mapv (fn [[ability-id ability]]
           {:id ability-id :category-id (or (:category-id ability) :generic)
-           :level (:level ability) :controllable? (:controllable? ability)
+           :level (or (:level ability) 1) :controllable? (:controllable? ability)
            :name-key (:name-key ability) :description-key (:description-key ability)
            :icon (:icon ability) :ctrl-id (or (:ctrl-id ability) ability-id)
            :pattern (or (:pattern ability) :passive) :actions (or (:actions ability) {})
