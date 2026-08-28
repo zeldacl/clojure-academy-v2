@@ -3,6 +3,7 @@
 
    Collection nodes expand from immutable state and leaf nodes emit only
    neutral Ui* commands. This namespace has no Minecraft/backend dependency."
+  (:require [clojure.string])
   (:import [cn.li.mcmod.runtime RenderCommand$UiImage RenderCommand$UiImageBatch
             RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText RenderCommand$UiItemPreview RenderCommand$UiModelPreview RenderCommand$PushClip RenderCommand$PopClip RenderCommand$Transform RenderCommand$Mask
             UiResourceRef UiResourceRef$Kind]))
@@ -79,6 +80,12 @@
                         (:title item) (:skill-id item) ""))
     :else (str item)))
 
+(defn- composite-resource [source]
+  (let [[namespace path] (clojure.string/split (str source) #":" 2)]
+    (UiResourceRef. (or (not-empty namespace) "academy")
+                    (or (not-empty path) (str source))
+                    UiResourceRef$Kind/TEXTURE)))
+
 (defn- command-for [node rect env]
   (let [type (:type node)
         value (bound-value env node :value)
@@ -147,6 +154,21 @@
       :slot-anchor [(RenderCommand$UiQuadBatch.
                      [(RenderCommand$UiQuad. x y width height (unchecked-int 0x22000000))])]
       :clip [(RenderCommand$PushClip. x y width height)]
+      :composite (let [item (or (:item env) {})
+                       kind (:kind item)
+                       ix (float (or (:x item) x))
+                       iy (float (or (:y item) y))
+                       iw (float (or (:w item) width))
+                       ih (float (or (:h item) height))
+                       color (rgba (:rgba item) rgba*)]
+                   (case kind
+                     :quad [(RenderCommand$UiQuadBatch.
+                              [(RenderCommand$UiQuad. ix iy iw ih color)])]
+                     :image [(RenderCommand$UiImageBatch.
+                               (composite-resource (:src item))
+                               [(RenderCommand$UiImage. ix iy iw ih color)])]
+                     :text [(RenderCommand$UiText. 0 (item-label (:text item)) ix iy color)]
+                     []))
       :transform [(RenderCommand$Transform. (str (or (get-in node [:style :transform-id]) "identity")) (or (get-in node [:style :transform]) {}))]
       :mask [(RenderCommand$Mask. (str (or (get-in node [:style :mask-id]) "none")) (or (get-in node [:style :mask]) {}))]
       nil)))

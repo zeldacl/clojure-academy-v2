@@ -1,5 +1,5 @@
 (ns cn.li.presentation.compiler.artifact
-  "Deterministic compiler for Presentation UI v2 artifacts.
+  "Deterministic compiler for Presentation UI artifacts.
 
    This namespace is build-only. The runtime consumes the serialized EDN
    produced here and never loads presentation-compiler."
@@ -17,7 +17,7 @@
 (def primitive-types
   #{:absolute :row :column :grid :stack :clip :scroll :portal :repeater :conditional :switch :transform :mask
     :rect :image :nine-slice :text :line :gradient :progress :radial-progress
-    :button :text-input :item-preview :model-preview :slot-anchor})
+    :button :text-input :item-preview :model-preview :slot-anchor :composite})
 
 (def semantic-roles
   #{:generic :heading :button :textbox :dialog :list :list-item :image :slot :progress})

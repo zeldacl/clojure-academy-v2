@@ -252,6 +252,32 @@
     21 (interfered-items snapshot)
     nil))
 
+(defn- composite-items
+  "Flatten every dynamic HUD projection into shared Presentation composite nodes."
+  [snapshot]
+  (vec
+    (mapcat (fn [value]
+              (cond
+                (nil? value) []
+                (map? value) [value]
+                (sequential? value) value
+                :else []))
+            [(background-mask-rect snapshot)
+             (cp-full-glow-items snapshot)
+             (when-let [hints (:movement-hints snapshot)] (movement-hints-items hints))
+             (when-let [indicator (:activation-indicator snapshot)] (activation-indicator-items indicator))
+             (preset-indicators-items (:preset-indicators snapshot []))
+             (numbers-texts-items (:numbers-texts snapshot []))
+             (vm-wave-items (:vm-waves snapshot []))
+             (charging-rect snapshot)
+             (charging-arc-items (:charging-arcs snapshot []))
+             (when-let [coin (:coin-qte snapshot)] (coin-qte-items coin))
+             (toast-items (:toasts snapshot []))
+             (when-let [notif (:tutorial-notification snapshot)] (tutorial-notification-items notif))
+             (debug-line-items (:debug-lines snapshot []))
+             (overload-pulse-items snapshot)
+             (screen-flash-rect snapshot)
+             (interfered-items snapshot)])))
 (def ^:private ui-only-keys [:selected-skill :skill-wheel-open?])
 
 (defn- runtime-state
@@ -266,7 +292,8 @@
           :overload-ratio (double (or (get-in snapshot [:overload-bar :percent]) 0.0))
           :charging? (boolean (get-in snapshot [:charging :mask-alpha]))
           :skills (vec (or (:skill-slots snapshot) []))
-          :toasts (vec (or (:toasts snapshot) []))}))
+          :toasts (vec (or (:toasts snapshot) []))
+          :composite-list (composite-items snapshot)}))
 
 (defn combat-view-model
   [player-uuid dispatch-action!]

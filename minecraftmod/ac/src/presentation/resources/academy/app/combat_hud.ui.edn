@@ -7,4 +7,5 @@
                    {:type :progress :key :combat/overload :layout {:width 120 :height 8} :bind {:value [:state :overload-ratio]} :semantics {:role :progress}}
                    {:type :grid :key :combat/skills :layout {:width 160 :height 64} :bind {:items [:state :skills]}}
                    {:type :rect :key :combat/crosshair :layout {:width 12 :height 12} :bind {:alpha [:state :crosshair]}}
-                   {:type :repeater :key :combat/toasts :bind {:items [:state :toasts]} :children [{:type :text :bind {:text [:state :item]}}]}]}}
+                   {:type :repeater :key :combat/toasts :bind {:items [:state :toasts]} :children [{:type :text :bind {:text [:state :item]}}]}
+                   {:type :repeater :key :combat/composite :bind {:items [:state :composite-list]} :children [{:type :composite :bind {:item [:state :item]}}]}]}}
