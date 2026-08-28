@@ -197,7 +197,11 @@
                                            (paint-node child child-rect env))
                                          children child-rects)]
               (vec (concat commands child-commands
-                           (when (= :clip type) [(RenderCommand$PopClip.)]))))))))))
+                           (when (= :clip type) [(RenderCommand$PopClip.)])
+                           (when (= :transform type)
+                             [(RenderCommand$Transform. "identity" {})])
+                           (when (= :mask type)
+                             [(RenderCommand$Mask. "none" {})]))))))))))
 (defn- geometry-dimension [geometry key accessor]
   (cond
     (map? geometry) (get geometry key)
