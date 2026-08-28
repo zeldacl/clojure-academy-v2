@@ -5,7 +5,7 @@
 
 (def query-capabilities
   #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select
-    :interaction/resolve :energy/target :saved-location :terrain/wave-plan
+    :interaction/resolve :energy/target :saved-location
     :kernel/terrain-wave-plan})
 
 (def action-capabilities
@@ -18,8 +18,8 @@
     :world/lightning :world/explosion :world/sound
     :projectile/redirect :projectile/schedule-beam
     :resource/enforce-floor :resource/add
-    :combat/charged-area-damage :combat/area-damage :combat/impact-strike
-    :combat/teleport-group :inventory/settle :inventory/place-or-drop
+    
+    :inventory/settle :inventory/place-or-drop
     :kernel/terrain-break-area :kernel/terrain-random-break
     :kernel/terrain-apply-break-budget :kernel/motion-radial-impulse
     :kernel/trace-beam :kernel/terrain-wave-plan})

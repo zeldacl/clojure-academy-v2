@@ -799,56 +799,6 @@
                      {:attacker-uuid owner})]
         {:status (if (not= false applied) :applied :failed)}))))
 
-(defn charged-area-damage!
-  "Apply bounded radial damage with a deterministic charge ratio and falloff.
-
-   The graph owns the charge policy and damage type; this host action only
-   resolves neutral entity facts and crosses the mcmod damage boundary."
-  [{:keys [owner world-id center radius damage damage-type projection
-           current-ticks minimum-ticks maximum-ticks ratio-min ratio-max
-           ratio-slot limit]
-    entity-filter :filter}]
-  (let [center (point center)
-        radius (double (max 0.0 (min 64.0 (or radius 0.0))))
-        minimum (double (or minimum-ticks 0.0))
-        maximum (double (or maximum-ticks minimum))
-        current (double (or current-ticks minimum))
-        span (max 1.0 (- maximum minimum))
-        ratio (max (double (or ratio-min 0.0))
-                   (min (double (or ratio-max 1.0))
-                        (/ (- current minimum) span)))
-        base-damage (double (or damage 0.0))
-        entities (if (and owner world-id center (pos? radius))
-                   (entity-select! {:owner owner :world-id world-id
-                                    :shape {:type :sphere :center center :radius radius}
-                                     :filter entity-filter :projection projection
-                                    :limit (max 0 (min 256 (long (or limit 256))))}
-                                   nil)
-                   [])
-        results (mapv (fn [entity]
-                        (let [position (point (:position entity))
-                              distance (if (and center position)
-                                         (Math/sqrt
-                                          (reduce + (map (fn [a b]
-                                                           (let [d (- (double a) (double b))]
-                                                             (* d d)))
-                                                         center position)))
-                                         radius)
-                              falloff (max 0.0 (min 1.0 (- 1.0 (/ distance (max radius 1.0)))))
-                              amount (* base-damage ratio falloff)
-                              result (when (pos? amount)
-                                       (damage! {:owner owner :world-id world-id
-                                                 :target (:id entity)
-                                                 :amount amount
-                                                 :damage-type damage-type}))]
-                          {:entity (:id entity) :amount amount :result result}))
-                      entities)
-        applied (filter #(= :applied (get-in % [:result :status])) results)]
-    {:status (if (seq applied) :applied :failed)
-     :ratio ratio
-     :ratio-slot ratio-slot
-     :hits results}))
-
 (defn break!
   [{:keys [owner world-id position expected-block-id drop? fortune-level
            tool-tier-capped?]}]
@@ -1171,19 +1121,6 @@
           (teleportation/reset-fall-damage! entity-id))
         {:status (if moved? :applied :failed)
          :position {:x x :y y :z z}}))))
-(defn teleport-group!
-  "Teleport the owner and bounded nearby entities while preserving offsets."
-  [{:keys [owner world-id position radius]}]
-  (let [p (point position)
-        radius (double (or radius 0.0))]
-    (if (and owner world-id p (= 3 (count p))
-             (every? #(Double/isFinite (double %)) p)
-             (<= 0.0 radius 32.0))
-      (let [[x y z] p]
-        (teleportation/teleport-with-entities! owner world-id x y z radius))
-      {:success false :teleported-count 0
-       :reason :invalid-teleport-group-request})))
-
 (defn entity-impulse!
   "Set one entity's neutral velocity vector.  The component remains generic;
    the platform relay is responsible only for resolving the entity id and
@@ -1639,7 +1576,7 @@
 (defn action-handlers []
   {:entity/damage damage!
    :entity/status entity-status!
-   :combat/charged-area-damage charged-area-damage!
+
    :entity/impulse entity-impulse!
    :block/break break!
    :block/set set-block!
@@ -1656,7 +1593,7 @@
    :entity/discard discard-entity!
    :entity/configure configure-entity!
    :entity/teleport teleport-entity!
-   :entity/teleport-group teleport-group!
+
    :entity/trigger-behavior trigger-behavior!
    :owner/can-fly owner-can-fly!
    :motion/entity-velocity entity-velocity!

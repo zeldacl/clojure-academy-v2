@@ -7,10 +7,10 @@
 
 (def ^:private query-capabilities
   #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select
-    :interaction/resolve :energy/target :saved-location :terrain/wave-plan
+    :interaction/resolve :energy/target :saved-location
     :kernel/terrain-wave-plan})
 (def ^:private action-capabilities
-  #{:inventory/consume :entity/damage :entity/impulse :entity/teleport :entity/teleport-group
+  #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
     :entity/trigger-behavior :entity/mark :energy/charge
     :entity/reset-fall-damage :motion/flight
     :owner/can-fly
@@ -18,8 +18,8 @@
     :motion/entity-velocity :motion/entity-velocity-add :motion/velocity :block/break :block/set
     :world/lightning :world/explosion :world/sound
     :projectile/redirect :projectile/schedule-beam :resource/enforce-floor :resource/add
-    :combat/charged-area-damage :combat/area-damage :combat/impact-strike
-    :combat/teleport-group :inventory/settle :inventory/place-or-drop
+    
+    :inventory/settle :inventory/place-or-drop
     :kernel/terrain-break-area :kernel/terrain-random-break
     :kernel/terrain-apply-break-budget :kernel/motion-radial-impulse
     :kernel/trace-beam :kernel/terrain-wave-plan})

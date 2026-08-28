@@ -1020,7 +1020,7 @@ tasks.register("verifyNodeCoreDependencyDirection") {
 
 tasks.register("verifyNodeLayerDiscipline") {
     group = "verification"
-    description = "Mechanical half of the three-layer rule (NODE_LANGUAGE.md section 1): a :layer :composite component must be pure EDN, never a Clojure case-branch/handler. NodeEnvironment normalization rejects implementation functions on :mid descriptors; this gate covers what normalization alone cannot -- a :composite document's own :id literally appearing as a dispatch target inside a domain vm.clj, which would let a 'mid' component silently execute as if it were a primitive."
+    description = "Mechanical half of the node-layer rule (NODE_LANGUAGE.md section 1): a :layer :composite component must be pure EDN, never a Clojure case-branch/handler. NodeEnvironment normalization rejects implementation functions on composites; this gate covers what normalization alone cannot -- a composite document's own :id literally appearing as a dispatch target inside a domain VM, which would let a composite silently execute as if it were a primitive."
     dependsOn ":node-core:checkClojure"
     doLast {
         def violations = []
@@ -1032,11 +1032,18 @@ tasks.register("verifyNodeLayerDiscipline") {
                 def vmSourceWithoutComments = pair.vm.text.replaceAll(/(?m);.*$/, "")
                 fileTree(pair.dir) { include "*.edn" }.files.each { File doc ->
                     def text = doc.text
-                    if (text =~ /:layer\s+:mid/) {
-                        (text =~ /:id\s+(:[A-Za-z0-9!?*\/-]+)/).each { match ->
+                    if (text =~ /:layer\s+:composite/) {
+                        // Composite ids are namespaced keywords. Restrict the
+                        // scan so payload keys such as `:id :type` do not look
+                        // like node dispatch targets.
+                        (text =~ /:id\s+(:[A-Za-z0-9!?*\-]+\/[A-Za-z0-9!?*\/-]+)/).each { match ->
                             def id = match[1].toString()
-                            if (vmSourceWithoutComments.contains(id)) {
-                                violations << "${doc}: :composite component ${id} appears as a literal dispatch target in ${pair.vm} -- mid components must only ever be reached through composite expansion, never a case branch in the domain VM"
+                            // Match a complete keyword token; e.g.
+                            // :target/directional-destination must not match
+                            // the distinct primitive :target/directional-destination-query.
+                            def token = /(?<![A-Za-z0-9!?*\/-])${Pattern.quote(id)}(?![A-Za-z0-9!?*\/-])/ 
+                            if (vmSourceWithoutComments =~ token) {
+                                violations << "${doc}: :composite component ${id} appears as a literal dispatch target in ${pair.vm} -- composites must only ever be reached through expansion, never a case branch in the domain VM"
                             }
                         }
                     }

@@ -115,15 +115,6 @@
   {:combat/damage :entity/damage
    :combat/status :entity/status
    :combat/impulse :entity/impulse
-   :terrain/apply-break-budget :terrain/apply-break-budget
-   :motion/radial-impulse :motion/radial-impulse
-   :terrain/break-area :terrain/break-area
-   :terrain/random-break :terrain/random-break
-   :terrain/wave-plan :terrain/wave-plan
-   :combat/area-damage :combat/area-damage
-   :combat/impact-strike :combat/impact-strike
-   :combat/charged-area-damage :combat/charged-area-damage
-   :combat/teleport-group :combat/teleport-group
    :world/sound :world/sound
    :world/lightning :world/lightning
    :world/explosion :world/explosion
@@ -142,7 +133,7 @@
    :target/directional-destination-query :raycast
    :owner/snapshot :owner/snapshot
    :energy/target :energy/target
-   :terrain/wave-plan :terrain/wave-plan
+
    :kernel/terrain-wave-plan :kernel/terrain-wave-plan})
 
 (def ^:private query-kinds
@@ -168,25 +159,6 @@
   (let [structural #{:component :kind :bind :capability :operation :on-fail :guards
                      :reservations :barrier? :body :then :else :steps :start :pulse :release :abort}]
     (resolve-value (or (:args node) (apply dissoc node structural)) context)))
-
-(defn- with-derived-action-locals
-  "Materialize action-local outputs that are needed while constructing the
-   same command.  `combat/charged-area-damage` exposes its deterministic
-   charge ratio through :ratio-slot; because actions are batched, the host
-   cannot return that value before the command is queued, so the neutral
-   engine computes the bounded ratio from the node's own inputs first."
-  [node context]
-  (if (and (= :combat/charged-area-damage (:component node))
-           (keyword? (:ratio-slot node)))
-    (let [minimum (double (or (resolve-value (:minimum-ticks node) context) 0.0))
-          maximum (double (or (resolve-value (:maximum-ticks node) context) minimum))
-          current (double (or (resolve-value (:current-ticks node) context) minimum))
-          span (max 1.0 (- maximum minimum))
-          ratio (max (double (or (:ratio-min node) 0.0))
-                     (min (double (or (:ratio-max node) 1.0))
-                          (/ (- current minimum) span)))]
-      (assoc-in context [:locals (:ratio-slot node)] ratio))
-    context))
 
 (defn- caster-capability-values
   "Expose the neutral capability table through the short names used by the
@@ -501,7 +473,7 @@
                       (contracts/assoc-owner-in (:txn context) owner path* value))]
             (assoc context :txn txn))
           :action
-          (let [context (with-derived-action-locals node context)
+          (let [
                 id (command-id engine path)
                 command (contracts/host-command {:id id
                                                  :capability (or (:capability node)
