@@ -136,7 +136,6 @@
 (def ^:private query-capabilities
   {:target/raycast :raycast
    :target/raycast-fan :raycast
-   :target/beam :beam-trace
    :target/entities :entity/select
    :target/blocks :block/select
    :target/entity-snapshot :entity/snapshot
@@ -156,7 +155,6 @@
    :target/block-placement :block-placement
    :target/directional-destination-query :directional-destination
    :target/raycast :raycast
-   :target/beam :beam-trace
    :kernel/trace-beam :kernel/trace-beam})
 
 (defn capability-matrix
