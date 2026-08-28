@@ -1627,7 +1627,6 @@
 
 (defn query-handlers []
   {:raycast raycast!
-   :beam-trace beam-trace!
    :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!

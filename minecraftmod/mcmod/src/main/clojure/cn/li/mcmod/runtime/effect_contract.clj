@@ -4,19 +4,25 @@
 (def schema-version 2)
 
 (def query-capabilities
-  #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select :state/read :interaction/resolve
-    :energy/target :terrain/propagate})
+  #{:owner/snapshot :item/held :raycast :entity/select :entity/snapshot :block/select
+    :interaction/resolve :energy/target :saved-location :terrain/wave-plan
+    :kernel/terrain-wave-plan})
 
 (def action-capabilities
   #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
     :entity/trigger-behavior :entity/mark :energy/charge
-    :entity/reset-fall-damage :entity/radial-impulse :motion/flight :motion/velocity
+    :entity/reset-fall-damage :motion/flight :motion/velocity
     :owner/can-fly
     :entity/status :entity/spawn :entity/discard :entity/configure
     :motion/entity-velocity :motion/entity-velocity-add :block/break :block/set
-    :world/lightning :world/explosion :world/sound :block/random-break :block/break-budget
+    :world/lightning :world/explosion :world/sound
     :projectile/redirect :projectile/schedule-beam
-    :resource/enforce-floor :resource/add})
+    :resource/enforce-floor :resource/add
+    :combat/charged-area-damage :combat/area-damage :combat/impact-strike
+    :combat/teleport-group :inventory/settle :inventory/place-or-drop
+    :kernel/terrain-break-area :kernel/terrain-random-break
+    :kernel/terrain-apply-break-budget :kernel/motion-radial-impulse
+    :kernel/trace-beam :kernel/terrain-wave-plan})
 
 (defn- require-map! [value message]
   (when-not (map? value)
