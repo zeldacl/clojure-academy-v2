@@ -113,8 +113,9 @@
                              (map read-file! (edn-files "src/main/resources/ac/combat/abilities")))))
         "all combat ability documents must be physically migrated")
     (is (empty? residues) (str "legacy final-graph syntax remains: " residues))
-    (is (every? #(= :final (:engine (second %))) abilities)
-        "every ability document must declare the final engine")
+    (is (every? #(and (not (contains? (second %) :engine))
+                         (contains? (second %) :program)) abilities)
+        "ability documents use the final program field; removed engine tag must not return")
     (is (every? #(contains? % :bindings) (:documents manifest))
         "every registration must use explicit bindings")
     (is (not-any? #(contains? % :overrides) (:documents manifest))
@@ -128,7 +129,7 @@
   (let [migrated-ids (into #{}
                            (keep (fn [file]
                                    (let [doc (read-file! file)]
-                                     (when (= :migrated (:status doc)) (:id doc)))))
+                                     (when (and (= :ability (:kind doc)) (contains? doc :program)) (:id doc)))))
                            (edn-files "src/main/resources/ac/combat/abilities"))
         manifest (safe-edn/read-resource! "ac/combat/manifest.edn")
         ;; A shared EDN document may be exposed under several public
@@ -268,7 +269,7 @@
   (let [migrated-ids (into #{}
                            (keep (fn [file]
                                    (let [doc (read-file! file)]
-                                     (when (= :migrated (:status doc)) (:id doc)))))
+                                     (when (and (= :ability (:kind doc)) (contains? doc :program)) (:id doc)))))
                            (edn-files "src/main/resources/ac/combat/abilities"))
         emitted (into #{}
                       (mapcat (fn [file] (collect-values-for-key :effect-id (read-file! file))))
@@ -392,7 +393,7 @@
                           (concat (vals (:inputs descriptor))
                                   (vals (:outputs descriptor)))))
                 descriptors))
-    (is (every? #(contains? #{:primitive :mid :source} (:layer %)) descriptors))))
+    (is (every? #(contains? #{:primitive :composite :kernel :source} (:layer %)) descriptors))))
 
 (defn- component-nodes [form]
   (cond
@@ -559,7 +560,7 @@
         mark (some #(when (and (= :score/mark (:component %))
                                (= :hit (:tag %))) %)
                     nodes)]
-    (is (= {:type :boolean, :default false}
+    (is (= {:type :bool, :default false}
            (get-in doc [:session-state :reflection-hit?])))
     (is (some #(= true (:value %)) writes))
     (is (some #(= false (:value %)) writes))
