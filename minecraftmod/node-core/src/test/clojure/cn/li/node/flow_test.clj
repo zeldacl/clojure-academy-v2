@@ -54,10 +54,10 @@
 (deftest finish-defaults-finish-session-to-false-but-carries-it-when-set-test
   (let [default-result (flow/execute! {:component :flow/finish :outcome :done}
                                       {:locals {} :seed 0 :dispatch dispatch-noop})
-        flagged-result (flow/execute! {:component :flow/finish :outcome :done :finish-session? true}
+        flagged-result (flow/execute! {:component :flow/finish :outcome :done :finish-ability? true}
                                       {:locals {} :seed 0 :dispatch dispatch-noop})]
-    (is (false? (:finish-session? default-result)))
-    (is (true? (:finish-session? flagged-result)))))
+    (is (false? (:finish-ability? default-result)))
+    (is (true? (:finish-ability? flagged-result)))))
 
 (deftest dispatch-handles-unknown-component-test
   (let [seen (atom nil)
@@ -65,3 +65,4 @@
         dispatch (fn [node ctx] (reset! seen node) ctx)]
     (flow/execute! program {:locals {} :seed 0 :dispatch dispatch})
     (is (= :test/custom (:component @seen)))))
+

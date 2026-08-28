@@ -681,7 +681,7 @@
           (when (and (= :accepted (:status result))
                      (= :start (:op intent))
                      (= :session (:activation source))
-                     (not (:finish-session? result))
+                     (not (:finish-ability? result))
                      (not (combat-sessions/active? (str owner))))
             (combat-sessions/start! (str owner) ability-id prepared))
           result)))))

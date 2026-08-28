@@ -59,7 +59,7 @@
 
 (defn- run-finish [node ctx]
   (assoc ctx :finished? true :outcome (:outcome node)
-         :finish-session? (boolean (resolve-field node :finish-session? ctx))))
+         :finish-ability? (boolean (resolve-field node :finish-ability? ctx))))
 
 (defn execute!
   "Execute `node` against `ctx`:
@@ -122,6 +122,6 @@
    {:id :flow/finish :revision 1
     :doc "Mark the program finished with :outcome; nothing after it runs."
     :category :flow
-    :inputs {:outcome {:type :keyword} :finish-session? {:type :boolean :default false}}
+    :inputs {:outcome {:type :keyword} :finish-ability? {:type :boolean :default false}}
     :effects #{:mutate}
     :impl run-finish}])
