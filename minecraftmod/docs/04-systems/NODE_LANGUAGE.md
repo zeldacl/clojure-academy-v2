@@ -105,7 +105,7 @@ Minecraft，放在 `node-core` 模块。`combat-core`/`vfx-core` 各自在其上
 
 ## 5. Source 节点：唯一允许的环境读取
 
-Source 节点是"环境边界"的显式化——环境读取无法被消除，只能被显式化、类型化、可枚举。`:layer :source`，只能出现在**上层技能文档顶层**，`:composite`/`:primitive` 中出现即编译错误。
+Source 节点是"环境边界"的显式化——环境读取无法被消除，只能被显式化、类型化、可枚举。`:layer :source` 默认只能出现在**上层技能文档顶层**；唯一例外是 composite 声明为 `:node` 的调用点回调，该回调带着调用方词法作用域内联执行，不能成为 composite body 的隐式依赖。普通 `:composite`/`:primitive` body 中出现 source 仍是编译错误。
 
 combat-core 的 source 节点（六个）：
 
