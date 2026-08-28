@@ -1784,14 +1784,14 @@ tasks.register("verifyMinecraftComponentNeutrality") {
 
 tasks.register("verifyPresentationArtifacts") {
     group = "verification"
-    description = "Require every declarative UI source to compile into the v2 artifact manifest."
+    description = "Require every declarative UI source to compile into the Presentation artifact catalog."
     dependsOn ":ac:compilePresentationViews"
     doLast {
         def sourceRoot = file("ac/src/presentation/resources")
         def generatedRoot = file("build/neutral/ac/generated/resources/presentation")
-        def manifest = new File(generatedRoot, "META-INF/academy-presentation-views.edn")
+        def manifest = new File(generatedRoot, "META-INF/presentation/catalog.edn")
         if (!manifest.isFile()) {
-            throw new GradleException("Presentation v2 manifest missing: " + manifest)
+            throw new GradleException("Presentation catalog missing: " + manifest)
         }
         def sources = fileTree(sourceRoot).matching { include "**/*.ui.edn" }.files
         if (sources.size() < 7) {
@@ -1811,8 +1811,6 @@ tasks.register("verifyPresentationArtifacts") {
         }
         def legacyRoots = [
             file("ac/src/main/resources/assets/academy/presentation"),
-            file("presentation-core/src/main/clojure/cn/li/presentation/core/host.clj"),
-            file("presentation-core/src/main/clojure/cn/li/presentation/core/runtime.clj"),
             file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/core.clj"),
             file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/render.clj")
         ]

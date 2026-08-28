@@ -11,11 +11,11 @@
            [java.nio.charset StandardCharsets]
            [java.nio.file Files Path]))
 
-(def artifact-magic :pui2)
-(def artifact-schema 2)
+(def artifact-magic :pui3)
+(def artifact-schema 3)
 
 (def primitive-types
-  #{:absolute :row :column :grid :stack :clip :scroll :portal :repeater
+  #{:absolute :row :column :grid :stack :clip :scroll :portal :repeater :conditional :switch :transform :mask
     :rect :image :nine-slice :text :line :gradient :progress :radial-progress
     :button :text-input :item-preview :model-preview :slot-anchor})
 
@@ -143,6 +143,9 @@
       :actions (:actions compiled)
       :resources (or (:resources source) [])
       :semantics (or (:semantics source) {})
+       :editor {:artifact-version 3
+                :source-path path
+                :root-id [:view view-id]}
       :capabilities (or (:capabilities source)
                         (:requires-capabilities source)
                         #{})})))
@@ -156,9 +159,12 @@
   (when (.exists root)
     (doseq [^File file (reverse (sort-by #(.getPath ^File %) (file-seq root)))]
       (.delete file))))
-(defn compile-directory! [source-root output-root]
+(defn compile-directory! [source-root output-root content-id]
   (let [source-root (.toPath (io/file source-root))
         output-file (io/file output-root)
+        _ (when-not (and content-id (not (str/blank? (str content-id))))
+            (fail "content-id" "must be a non-empty identifier"))
+        content-id (str content-id)
         _ (clear-output! output-file)
         output-root (.toPath output-file)
         files (->> (file-seq (.toFile source-root))
@@ -167,22 +173,26 @@
                    (sort-by #(.toString (.toPath ^File %))))
         entries (for [^File file files
                       :let [source (edn/read-string (slurp file :encoding "UTF-8"))
-                            artifact (compile-source source (.getPath file))
+                            artifact (assoc (compile-source source (.getPath file))
+                                            :content-id content-id)
                             view-id (:view-id artifact)
-                            relative (str "assets/academy/presentation-compiled/"
-                                          (name (or (namespace view-id) "academy")) "/"
+                            relative (str "assets/" content-id "/presentation-compiled/"
+                                          (name (or (namespace view-id) content-id)) "/"
                                           (name view-id) ".uic.edn")
                             target (.resolve output-root relative)]]
                   (do
                     (write-edn! target artifact)
                     [view-id {:resource relative
+                              :content-id content-id
                               :source-hash (:source-hash artifact)
                               :schema artifact-schema
                               :host (:host artifact)}]))
-        manifest {:magic :pui2-manifest
+        manifest {:magic :pui3-catalog
                   :schema artifact-schema
+                  :content-id content-id
+                  :content-ids [content-id]
                   :views (into (sorted-map) entries)
                   :generated-by :presentation-compiler}
-        manifest-path (.resolve output-root "META-INF/academy-presentation-views.edn")]
+        manifest-path (.resolve output-root "META-INF/presentation/catalog.edn")]
     (write-edn! manifest-path (canonicalize manifest))
     manifest))

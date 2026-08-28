@@ -271,7 +271,8 @@ def compilePresentationViews = tasks.register('compilePresentationViews', JavaEx
     mainClass = 'clojure.main'
     args '-m', 'cn.li.presentation.compiler.main',
          '--source', file('src/presentation/resources').absolutePath,
-         '--output', generatedPresentationResources.get().asFile.absolutePath
+         '--output', generatedPresentationResources.get().asFile.absolutePath,
+         '--content-id', 'academy'
     inputs.dir file('src/presentation/resources')
     inputs.dir file('src/presentation/clojure')
     outputs.dir generatedPresentationResources
@@ -375,3 +376,4 @@ tasks.register('coverageAcClojureTests', JavaExec) {
             '--test-ns-regex', 'cn\\.li\\.ac\\..*-test',
             '--output', "${project.buildDir}/reports/coverage"
 }
+

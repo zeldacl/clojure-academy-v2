@@ -1,19 +1,19 @@
-(ns cn.li.ac.gui.presentation-v2
-  "AC-owned adapter for the retained Presentation Runtime v2.
+(ns cn.li.ac.gui.presentation
+  "AC-owned adapter for the retained Presentation Runtime.
 
    Surface controllers provide plain state maps and action functions. This
    namespace owns artifact lookup, mount geometry, deterministic paint,
    and the opaque host bridge; it exposes no renderer implementation details."
   (:require [cn.li.presentation.core.artifact :as artifact]
-            [cn.li.presentation.core.paint-v2 :as paint]
+            [cn.li.presentation.core.paint :as paint]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.presentation.core HostGeometry]))
 
 (defn- host-api []
-  (or (bridge/call-adapter :presentation-host-api-v2)
-      (throw (ex-info "Presentation Runtime v2 bridge is not installed" {}))))
+  (or (bridge/call-adapter :presentation-host-api)
+      (throw (ex-info "Presentation Runtime bridge is not installed" {}))))
 
 (defn- stage-for [host-kind]
   (case host-kind
@@ -88,3 +88,4 @@
 
 (defn unmount! [{:keys [unmount!]}]
   (when unmount! (unmount!)))
+

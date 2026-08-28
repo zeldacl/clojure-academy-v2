@@ -1,8 +1,8 @@
 (ns cn.li.ac.gui.presentation-application
-  "Application surface controller backed exclusively by Presentation Runtime v2.
+  "Application surface controller backed exclusively by Presentation Runtime.
    Application modules own state and action semantics; this namespace only
    adapts their map callbacks to the compiled application artifact."
-  (:require [cn.li.ac.gui.presentation-v2 :as v2]
+  (:require [cn.li.ac.gui.presentation :as v2]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids {:title 0 :lines 1 :status 2 :scroll 3 :modal 4
@@ -43,3 +43,4 @@
   (cond
     (map? vm) (v2/unmount! vm)
     :else nil))
+

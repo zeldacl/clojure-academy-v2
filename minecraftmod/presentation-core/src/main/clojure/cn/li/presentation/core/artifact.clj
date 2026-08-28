@@ -7,10 +7,10 @@
             [clojure.java.io :as io]))
 
 (def ^:private manifest-resource
-  "META-INF/academy-presentation-views.edn")
-(def ^:private artifact-magic :pui2)
-(def ^:private manifest-magic :pui2-manifest)
-(def ^:private artifact-schema 2)
+  "META-INF/presentation/catalog.edn")
+(def ^:private artifact-magic :pui3)
+(def ^:private manifest-magic :pui3-catalog)
+(def ^:private artifact-schema 3)
 
 (defn- read-resource [resource]
   (when-let [url (io/resource resource)]
@@ -56,3 +56,4 @@
                        {:view-id view-id :expected source-hash
                         :actual (:source-hash artifact)})))
      artifact)))
+

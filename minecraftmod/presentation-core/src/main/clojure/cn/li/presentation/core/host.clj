@@ -1,6 +1,6 @@
-(ns cn.li.presentation.core.host-v2
-  "Public map-shaped host API for Presentation Runtime v2." 
-  (:require [cn.li.presentation.core.runtime-v2 :as runtime]))
+(ns cn.li.presentation.core.host
+  "Public map-shaped host API for Presentation Runtime." 
+  (:require [cn.li.presentation.core.runtime :as runtime]))
 
 (defn create-runtime []
   (runtime/create-runtime))

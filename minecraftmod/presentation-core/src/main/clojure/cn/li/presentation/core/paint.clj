@@ -1,4 +1,4 @@
-(ns cn.li.presentation.core.paint-v2
+(ns cn.li.presentation.core.paint
   "Deterministic painter for normalized UI artifacts.
 
    Collection nodes expand from immutable state and leaf nodes emit only

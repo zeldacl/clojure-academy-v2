@@ -11,7 +11,7 @@
    maps that the neutral Presentation painter consumes as typed UI IR, so this
    namespace stays the only place that understands what any of these fields mean."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
-            [cn.li.ac.gui.presentation-v2 :as v2])
+            [cn.li.ac.gui.presentation :as v2])
 )
 
 (def binding-ids
@@ -302,3 +302,4 @@
                        ([width height next-opts]
                         (refresh! width height next-opts)
                         (v2/present! vm @snapshot))))))
+

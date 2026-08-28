@@ -1,7 +1,7 @@
 (ns cn.li.ac.terminal.client.presentation-terminal
   "Terminal surface controller backed by Presentation Runtime v2."
   (:require [cn.li.ac.terminal.client.runtime :as terminal]
-            [cn.li.ac.gui.presentation-v2 :as v2]
+            [cn.li.ac.gui.presentation :as v2]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids {:installed? 0 :apps 1 :page 2 :loading? 3 :query 4 :modal 5})

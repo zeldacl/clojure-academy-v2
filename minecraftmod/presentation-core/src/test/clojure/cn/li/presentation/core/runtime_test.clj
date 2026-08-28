@@ -1,11 +1,11 @@
-(ns cn.li.presentation.core.runtime-v2-test
+(ns cn.li.presentation.core.runtime-test
   (:require [clojure.test :refer :all]
-            [cn.li.presentation.core.runtime-v2 :as runtime]
-            [cn.li.presentation.core.paint-v2 :as paint])
+            [cn.li.presentation.core.runtime :as runtime]
+            [cn.li.presentation.core.paint :as paint])
   (:import [cn.li.presentation.core HostGeometry]))
 
 (def sample-artifact
-  {:magic :pui2 :schema 2 :view-id :academy/test/runtime
+  {:magic :pui3 :schema 3 :view-id :academy/test/runtime
    :semantics {:role :generic :label "test"}})
 
 (deftest runtime-commits-state-before-effects
@@ -35,7 +35,7 @@
     (is (thrown? IllegalStateException (runtime/unmount-all! rt)))))
 (deftest runtime-extracts-new-ui-render-ir
   (let [rt (runtime/create-runtime)
-        artifact {:magic :pui2 :schema 2 :view-id :academy/test/paint
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/paint
                   :nodes {:id :root :type :rect :layout {}
                           :style {:rgba (unchecked-int 0xFF00FF00)}}}
         mount (runtime/mount!
@@ -51,7 +51,7 @@
     (is (= 1 (count (.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))))
     (runtime/unmount! rt mount)))
 (deftest painter-uses-button-binding-label
-  (let [artifact {:magic :pui2 :schema 2 :view-id :academy/test/button
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/button
                   :nodes {:id :root :type :button :layout {:width 80 :height 20}
                           :bind {:text [:state :button]}
                           :semantics {:role :button}}}
@@ -61,7 +61,7 @@
     (is (instance? cn.li.mcmod.runtime.RenderCommand$UiText label-command))
     (is (= "Save" (.text ^cn.li.mcmod.runtime.RenderCommand$UiText label-command)))))
 (deftest painter-expands-collection-and-input-nodes
-  (let [artifact {:magic :pui2 :schema 2 :view-id :academy/test/collection
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/collection
                   :nodes {:id :root :type :column :layout {}
                           :children [{:type :scroll :bind {:items [:state :lines]}}
                                      {:type :text-input :bind {:text [:state :query]}}]}}
@@ -75,7 +75,7 @@
     (is (= ["One" "Two" "search"] texts))))
 
 (deftest painter-accepts-boolean-progress-values
-  (let [artifact {:magic :pui2 :schema 2 :view-id :academy/test/progress
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/progress
                   :nodes {:id :root :type :progress :layout {:width 20 :height 4}
                           :bind {:value [:state :loading?]}}}
         commands (paint/paint-view artifact {:loading? true}
@@ -85,7 +85,7 @@
 (deftest runtime-routes-pointer-to-button-action
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui2 :schema 2 :view-id :academy/test/input
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/input
                   :nodes {:id :root :type :row :layout {}
                           :children [{:type :button :key :left :layout {:height 20}
                                       :on {:activate :demo/left}}
@@ -104,7 +104,7 @@
 (deftest runtime-routes-text-input
   (let [seen (atom [])
         rt (runtime/create-runtime)
-        artifact {:magic :pui2 :schema 2 :view-id :academy/test/text-input
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/text-input
                   :nodes {:id :root :type :text-input :layout {:width 100 :height 20}
                           :bind {:text [:state :query]}
                           :on {:change :edit/change :submit :edit/submit}
@@ -125,7 +125,7 @@
 (deftest runtime-reuses-paint-for-clean-frame
   (let [paints (atom 0)
         rt (runtime/create-runtime)
-        artifact {:magic :pui2 :schema 2 :view-id :academy/test/cache
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/cache
                   :nodes {:type :rect :layout {}}}
         mount (runtime/mount! rt {:host {:stage :screen}
                                   :artifact artifact

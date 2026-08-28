@@ -8,20 +8,20 @@
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
-            [cn.li.ac.gui.presentation-v2 :as presentation-v2]
-            [cn.li.presentation.core.host-v2 :as presentation-host-v2]
+            [cn.li.ac.gui.presentation :as presentation]
+            [cn.li.presentation.core.host :as presentation-host]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderStage]))
 
-(defonce ^:private presentation-runtime-v2* (atom nil))
+(defonce ^:private presentation-runtime* (atom nil))
 
-(defn presentation-runtime-v2
-  "The retained Runtime v2 instance exposed through the generic host map." 
+(defn presentation-runtime
+  "The retained Runtime instance exposed through the generic host map." 
   []
-  (or @presentation-runtime-v2*
-      (let [runtime (presentation-host-v2/create-runtime)]
-        (or (compare-and-set! presentation-runtime-v2* nil runtime)
-            @presentation-runtime-v2*))))
+  (or @presentation-runtime*
+      (let [runtime (presentation-host/create-runtime)]
+        (or (compare-and-set! presentation-runtime* nil runtime)
+            @presentation-runtime*))))
 
 (defonce ^:private combat-hud* (atom nil))
 (defonce ^:private terminal* (atom nil))
@@ -44,8 +44,8 @@
 (defn- merge-vfx-passes
   [_vfx-context _frame-id _partial-tick packet]
   packet)
-(defn presentation-host-api-v2 []
-  (presentation-host-v2/api (presentation-runtime-v2)))
+(defn- core-host-api []
+  (presentation-host/api (presentation-runtime)))
 
 (def ^:private stage->render-stage
   {:world-before-translucent RenderStage/WORLD_BEFORE_TRANSLUCENT
@@ -57,9 +57,9 @@
    :screen RenderStage/SCREEN
    :post-process RenderStage/POST_PROCESS})
 
-(defn- v2-frame
+(defn- frame-packet
   [frame-id stage frame-context]
-  (let [api (presentation-host-api-v2)
+  (let [api (presentation-host-api)
         extracted ((:extract-stage! api) stage frame-context)
         contributors (mapv (fn [[index mount]]
                              (ability-compose/contributor
@@ -80,13 +80,13 @@
                                 commands)])))
 
 (defn presentation-host-api
-  "Single AC host contract. All view mounts and frame extraction use Runtime v2;
+  "Single AC host contract. All view mounts and frame extraction use Runtime;
    only normalized artifact IDs and neutral runtime maps cross the bridge."
   []
-  (let [runtime (presentation-runtime-v2)
-        v2-api (presentation-host-api-v2)]
+  (let [runtime (presentation-runtime)
+        core-api (core-host-api)]
      {:mount! (fn [owner host-kind view-id model]
-               (presentation-v2/mount-view!
+               (presentation/mount-view!
                 {:view-id (or view-id :academy.app/application)
                  :host-kind host-kind
                  :state (if (map? model) model {})
@@ -97,9 +97,9 @@
                  (refresh! width height {}))
                (when-let [refresh! (:refresh! @terminal*)]
                  (refresh!))
-               (v2-frame frame-id :screen {:width width :height height}))
+               (frame-packet frame-id :screen {:width width :height height}))
      :frame-with-context! (fn [frame-id delta-seconds width height vfx-context]
-                            (let [frame (v2-frame frame-id :screen
+                            (let [frame (frame-packet frame-id :screen
                                                   {:width width :height height})]
                               (merge-vfx-passes vfx-context frame-id delta-seconds frame)))
      :mount-combat-hud! (fn [player-uuid width height]
@@ -113,26 +113,29 @@
                          (:mount (presentation-container/mount-container!
                                   runtime menu-bridge snapshot-fn dispatch-action!)))
      :unmount! (fn [mount]
-                 ((:unmount! v2-api) mount)
+                 ((:unmount! core-api) mount)
                  (when (= mount (:mount @combat-hud*))
                    (reset! combat-hud* nil))
                  (when (= mount (:mount @terminal*))
                    (reset! terminal* nil)))
      :reload-resources! (fn [_generation]
-                          ((:invalidate-render-resources! v2-api)))
+                          ((:invalidate-render-resources! core-api)))
      :dispatch! (fn [mount event]
-                  ((:dispatch-input! v2-api) mount event))
+                  ((:dispatch-input! core-api) mount event))
      :dispatch-input! (fn [mount event]
-                        ((:dispatch-input! v2-api) mount event))
+                        ((:dispatch-input! core-api) mount event))
      :unmount-all! (fn []
                      (reset! combat-hud* nil)
                      (reset! terminal* nil)
-                     ((:unmount-all! v2-api)))}))
+                     ((:unmount-all! core-api)))}))
 
 (defn install-bridge!
   "Install the Presentation Runtime bridge into the neutral client boundary."
   []
   (bridge/merge-client-bridge!
-    {:presentation-host-api presentation-host-api
-     :presentation-host-api-v2 presentation-host-api-v2})
+    {:presentation-host-api presentation-host-api})
   (log/info "Presentation Runtime bridge installed"))
+
+
+
+

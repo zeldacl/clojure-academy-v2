@@ -1,8 +1,9 @@
 (ns cn.li.presentation.core.test-runner
   (:require [clojure.test :as test]
-            [cn.li.presentation.core.runtime-v2-test]))
+            [cn.li.presentation.core.runtime-test]))
 
 (defn -main [& _]
-  (let [result (test/run-tests 'cn.li.presentation.core.runtime-v2-test)]
+  (let [result (test/run-tests 'cn.li.presentation.core.runtime-test)]
     (when (pos? (+ (:fail result) (:error result)))
       (System/exit 1))))
+

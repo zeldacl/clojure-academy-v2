@@ -1,5 +1,5 @@
-(ns cn.li.presentation.core.runtime-v2
-  "Single-threaded retained Presentation Runtime v2.
+(ns cn.li.presentation.core.runtime
+  "Single-threaded retained Presentation Runtime.
 
    This namespace intentionally has no dependency on presentation-compiler or
    Minecraft. It owns mount state, host geometry, input routing, reducer
@@ -278,3 +278,4 @@
   (owner-thread! runtime)
   (vswap! (:state runtime) update :resource-epoch inc)
   (:resource-epoch (runtime-state runtime)))
+

@@ -13,8 +13,8 @@
                                        :on {:activate :example/save}
                                        :semantics {:role :button}}]}}
                    "example.ui.edn")]
-    (is (= :pui2 (:magic compiled)))
-    (is (= 2 (:schema compiled)))
+    (is (= :pui3 (:magic compiled)))
+    (is (= 3 (:schema compiled)))
     (is (= [{:id 0 :path [:state :title]}] (:bindings compiled)))
     (is (= [{:id 0 :name :example/save}] (:actions compiled)))
     (is (= :column (get-in compiled [:nodes :type])))

@@ -5,7 +5,7 @@
   (:require [cn.li.mcmod.gui.presentation-menu-bridge :as menu-bridge]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.gui.container.common :as container-common]
-            [cn.li.ac.gui.presentation-v2 :as v2]
+            [cn.li.ac.gui.presentation :as v2]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids
@@ -128,3 +128,4 @@
                                 (when-let [close (or (:presentation-close-fn container)
                                                      (:close-fn container))]
                                   (close container)))}))}))
+
