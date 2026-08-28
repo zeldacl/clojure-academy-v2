@@ -1645,7 +1645,7 @@
    :motion/radial-impulse radial-impulse!
    :block/break break!
    :block/set set-block!
-   :block/break-budget break-budget!
+   :terrain/apply-break-budget break-budget!
    :world/sound sound!
    :world/explosion explosion!
    :world/lightning lightning!
@@ -1662,8 +1662,8 @@
    :entity/teleport-group teleport-group!
    :entity/trigger-behavior trigger-behavior!
    :owner/can-fly owner-can-fly!
-   :block/random-break random-break!
-   :block/area-break area-break!
+   :terrain/random-break random-break!
+   :terrain/break-area area-break!
    :motion/entity-velocity entity-velocity!
    :motion/entity-velocity-add entity-velocity-add!
    :projectile/redirect projectile-redirect!
@@ -1682,4 +1682,5 @@
   (doseq [[capability handler] (action-handlers)]
     (when-not (contains? (:actions (capabilities/snapshot)) capability)
       (capabilities/register-action! capability handler))))
+
 
