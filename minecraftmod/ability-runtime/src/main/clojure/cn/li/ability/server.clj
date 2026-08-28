@@ -1,6 +1,6 @@
 (ns cn.li.ability.server
-  "Server-side runtime shell. The implementation intentionally owns no
-   global state; callers create one instance per logical server runtime."
+  "Server-side runtime shell. Each caller creates one instance per logical
+   server runtime; delayed work is stored in that instance only."
   (:require [cn.li.ability.limits :as limits]
             [cn.li.ability.continuation :as continuation]))
 
@@ -10,15 +10,18 @@
     (throw (ex-info "server runtime requires a compiled bundle" {})))
   (when-not (map? minecraft-ports)
     (throw (ex-info "server runtime requires Minecraft ports" {})))
-  {:side :server
-   :bundle bundle
-   :minecraft-ports minecraft-ports
-   :server-epoch (long (or server-epoch 0))
-   :limits (limits/validate limits)
-   ;; WorldShard and PlayerRuntime instances are installed by the bootstrap
-   ;; on the server tick thread.  They are intentionally instance-local.
-   :world-shards {}})
-
+  (let [continuations (continuation/create
+                       {:execute! (or continuation-execute!
+                                      (fn [_ _] nil))})]
+    {:side :server
+     :bundle bundle
+     :minecraft-ports minecraft-ports
+     :server-epoch (long (or server-epoch 0))
+     :limits (limits/validate limits)
+     ;; WorldShard and PlayerRuntime instances are installed by the bootstrap
+     ;; on the server tick thread. They are intentionally instance-local.
+     :world-shards {}
+     :continuations continuations}))
 
 (defn schedule! [runtime task]
   (continuation/schedule! (:continuations runtime) task))
@@ -31,5 +34,3 @@
 
 (defn cancel-all! [runtime]
   (continuation/cancel-all! (:continuations runtime)))
-
-

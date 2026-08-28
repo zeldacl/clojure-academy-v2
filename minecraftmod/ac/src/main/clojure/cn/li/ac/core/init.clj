@@ -7,6 +7,7 @@
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.combat.platform :as combat-platform]
+            [cn.li.ability.combat :as ability-combat]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.command.platform-bridge :as command-bridge]
             [cn.li.ac.config.modid :as modid]
@@ -45,8 +46,13 @@
   ;; precondition R9) -- capability-aware load-time validation can only see
   ;; what's already registered at the moment it runs. World-facing
   ;; capabilities are entirely Combat Core's own; AC only links its own
-  ;; domain ports (resources/progression/energy/marks) after.
-  (combat-platform/install!)
+  (ability-combat/install-runtime!
+    (ability-combat/create-runtime
+     {:execute-result! (fn [owner result]
+                         (when (= :applied (:status result))
+                           (combat-runtime/finalize-result! owner result))) }))
+  (combat-platform/install!
+   {:schedule-beam! ability-combat/schedule-installed!})
   (combat-runtime/install-ac-host-capabilities!)
   (combat-runtime/initialize-final-runtime!)
   ;; The final EDN catalog is authoritative.  Catalog initialization fails
@@ -73,3 +79,6 @@
   (ability-runtime/install-runtime-hooks!
     (ability-runtime-container/create-ability-runtime-container))
   nil)
+
+
+

@@ -7,7 +7,7 @@
    behaviour."
   (:require [clojure.set :as set]
             [cn.li.combat.actions :as combat-actions]
-            [cn.li.combat.deferred :as deferred]
+            [cn.li.combat.beam-settlement :as beam]
             [cn.li.combat.targeting :as targeting]
             [cn.li.mcmod.platform.block-manipulation :as blocks]
             [cn.li.mcmod.platform.entity-damage :as damage]
@@ -1662,8 +1662,7 @@
    :owner/can-fly owner-can-fly!
    :motion/entity-velocity entity-velocity!
    :motion/entity-velocity-add entity-velocity-add!
-   :projectile/redirect projectile-redirect!
-   :projectile/schedule-beam deferred/schedule-action!
+   :projectile/redirect projectile-redirect!
    ;; Internal kernel capabilities are not exported by schema-export.
    :kernel/terrain-break-area area-break!
    :kernel/terrain-random-break random-break!
@@ -1673,19 +1672,21 @@
    :kernel/terrain-wave-plan terrain-propagate!})
 
 (defn install!
-  "Register every neutral capability Combat Core owns with the shared
-   mcmod capability registry.  Idempotent: a capability another caller
-   already registered is left alone.  AC's bootstrap calls this once,
-   ahead of catalog load, instead of hand-registering each capability
-   itself."
-  []
-  (doseq [[capability handler] (query-handlers)]
-    (when-not (contains? (:queries (capabilities/snapshot)) capability)
-      (capabilities/register-query! capability handler)))
-  (doseq [[capability handler] (action-handlers)]
-    (when-not (contains? (:actions (capabilities/snapshot)) capability)
-      (capabilities/register-action! capability handler))))
-
-
-
+  "Register Combat Core capabilities with an injected delayed-work scheduler.
+   The scheduler is supplied by ability-runtime; Combat Core never owns a
+   process-global queue."
+  [{:keys [schedule-beam!]}]
+  (when-not (ifn? schedule-beam!)
+    (throw (ex-info "Combat Core requires an instance-local beam scheduler" {})))
+  (let [handlers (action-handlers)]
+    (doseq [[capability handler] (query-handlers)]
+      (when-not (contains? (:queries (capabilities/snapshot)) capability)
+        (capabilities/register-query! capability handler)))
+    (doseq [[capability handler] (assoc handlers
+                                        :projectile/schedule-beam
+                                        (fn [request]
+                                          (beam/schedule-action! schedule-beam! request)))]
+      (when-not (contains? (:actions (capabilities/snapshot)) capability)
+        (capabilities/register-action! capability handler))))
+  nil)
 

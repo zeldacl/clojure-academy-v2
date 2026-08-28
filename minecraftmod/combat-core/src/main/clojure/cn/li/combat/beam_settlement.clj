@@ -1,4 +1,4 @@
-(ns cn.li.combat.deferred
+(ns cn.li.combat.beam-settlement
   "Generic delayed projectile settlement owned by Combat Core.
 
   This namespace contains no skill identifiers.  It resolves optional moving
@@ -12,8 +12,6 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private schedules* (atom {}))
-(def ^:const max-scheduled-actions-per-owner 256)
 (defn- body-pos [owner]
   (let [p (or (raycast/player-position owner) {})]
     {:x (double (or (:x p) 0.0))
@@ -41,62 +39,6 @@
     (if (pos? length)
       {:x (/ x length) :y (/ y length) :z (/ z length)}
       {:x 0.0 :y 0.0 :z 1.0})))
-
-(defn clear-owner! [owner]
-  (swap! schedules* dissoc owner)
-  nil)
-
-(defn clear-all! []
-  (reset! schedules* {})
-  nil)
-
-(defn pending [owner]
-  (let [{:keys [tick tasks]} (get @schedules* owner)]
-    (mapv #(assoc % :ticks-left (max 0 (- (:due-tick %) (long (or tick 0)))))
-          (or tasks []))))
-
-(defn schedule!
-  "Queue a bounded neutral beam task for the owner's server-thread tick."
-  [{:keys [owner delay-ticks] :as task}]
-  (let [delay (max 1 (long (or delay-ticks 1)))]
-    (swap! schedules*
-           (fn [state]
-             (let [{:keys [tick tasks]} (get state owner {:tick 0 :tasks []})
-                   due (+ (long tick) delay)]
-               (assoc state owner {:tick (long tick)
-                                   :tasks (conj (vec tasks)
-                                                (assoc task :due-tick due))}))))
-     nil))
-
-(defn schedule-action!
-  "Capability handler for the neutral delayed beam scheduler."
-  [{:keys [owner world-id origin destination damage damage-type delay-ticks
-           origin-selector destination-selector exclude-owner? settlement-vfx
-           seed instance-key]}]
-  (if (and owner world-id (map? origin) (map? destination)
-           (number? damage) (Double/isFinite (double damage)))
-    (if (>= (count (get-in @schedules* [owner :tasks] []))
-            max-scheduled-actions-per-owner)
-      {:status :rejected
-       :reason :scheduled-action-budget-exceeded
-       :owner owner
-       :limit max-scheduled-actions-per-owner}
-      (do
-        (schedule! {:owner owner
-                    :world-id world-id
-                    :origin origin
-                    :destination destination
-                    :damage (double damage)
-                    :damage-type (or damage-type :generic)
-                    :delay-ticks (long (max 1 (or delay-ticks 1)))
-                    :origin-selector origin-selector
-                    :destination-selector destination-selector
-                    :exclude-owner? (boolean exclude-owner?)
-                    :settlement-vfx settlement-vfx
-                    :instance-key instance-key
-                    :seed (long (or seed 0))})
-        {:status :scheduled}))
-    {:status :rejected :reason :invalid-beam-request}))
 
 (defn- resolve-origin [world-id owner selector fallback]
   (let [fallback (or fallback (eye-pos owner))
@@ -163,7 +105,7 @@
     (vector? value) value
     :else [0.0 0.0 0.0]))
 
-(defn- settle! [{:keys [owner world-id origin destination damage damage-type
+(defn settle! [{:keys [owner world-id origin destination damage damage-type
                         origin-selector destination-selector exclude-owner?
                          settlement-vfx event-seq seed]}]
   (when (raycast/available?)
@@ -209,23 +151,25 @@
                                    :payload (assoc (or (:payload settlement-vfx) {})
                                                    :start origin :end destination))]))})))
 
-(defn tick-owner!
-  "Advance one owner's queue and settle all due tasks through neutral bridges."
-  [owner]
-  (let [{:keys [tick tasks]} (get @schedules* owner)]
-    (when (some? tick)
-      (let [now (inc (long tick))
-            [due pending] (reduce (fn [[due pending] task]
-                                   (if (<= (long (:due-tick task)) now)
-                                     [(conj due task) pending]
-                                     [due (conj pending task)]))
-                                 [[] []] tasks)]
-        (if (seq pending)
-          (swap! schedules* assoc owner {:tick now :tasks pending})
-          (swap! schedules* dissoc owner))
-        (vec (keep (fn [task]
-                     (try (settle! task)
-                          (catch Throwable error
-                            (log/warn "Deferred neutral beam settlement failed:" (ex-message error))
-                            nil)))
-                   due))))))
+(defn schedule-action!
+  "Validate a neutral delayed beam request and pass it to an injected
+   instance-local continuation scheduler.  Combat Core owns settlement; the
+   scheduler lifetime belongs to the composition root."
+  [schedule! {:keys [owner delay-ticks] :as request}]
+  (if (and (ifn? schedule!) owner (:world-id request)
+           (map? (:origin request)) (map? (:destination request))
+           (number? (:damage request))
+           (Double/isFinite (double (:damage request))))
+    (try
+      (schedule! {:owner owner
+                  :delay-ticks (long (max 1 (or delay-ticks 1)))
+                  :payload (-> request
+                               (assoc :damage (double (:damage request)))
+                               (assoc :damage-type (or (:damage-type request) :generic))
+                               (assoc :exclude-owner? (boolean (:exclude-owner? request)))
+                               (assoc :seed (long (or (:seed request) 0))))})
+      {:status :scheduled :owner owner}
+      (catch Throwable error
+        {:status :rejected :reason :continuation-schedule-failed
+         :message (ex-message error)}))
+    {:status :rejected :reason :invalid-beam-request}))

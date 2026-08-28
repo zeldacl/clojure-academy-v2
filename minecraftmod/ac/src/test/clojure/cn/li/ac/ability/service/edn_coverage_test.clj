@@ -349,7 +349,7 @@
   ;; is separate from graph execution and catches missing specialization
   ;; category/prerequisite bindings before a real server boot.
   (combat-catalog/initialize!)
-  (let [specs (combat-catalog/migrated-skill-specs)]
+  (let [specs (combat-catalog/skill-specs)]
     (is (= 50 (count specs)))
     (is (= :electromaster
            (:category-id (some #(when (= :electromaster/brain-course (:id %)) %) specs))))
@@ -426,7 +426,7 @@
     (is (= 3 (count targets)))
     (is (= 2 (count (filter #(= {:ref [:local :desired-distance]} (:distance %)) targets))))
     (is (= :slot-wheel (-> doc :program :events first key)))
-    (is (= :session/write
+    (is (= :state/write
            (get-in doc [:program :events :slot-wheel :steps 3 :component])))))
 (deftest thunder-clap-aoe-excludes-caster-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_clap.edn"))
@@ -532,7 +532,7 @@
     (is progression)
     (is (= {:ref [:local :use-progression]}
            (:progression mark)))
-    (is (= {:ref [:session :time-rate]}
+    (is (= {:ref [:state :time-rate]}
            (get-in doc [:progression :use :weight])))))
 (deftest scatter-bomb-ball-fired-submits-progression-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/scatter_bomb.edn"))
@@ -551,7 +551,7 @@
 (deftest railgun-reflection-hit-drives-progression-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/railgun.edn"))
         nodes (component-nodes (:program doc))
-        writes (filter #(and (= :session/write (:component %))
+        writes (filter #(and (= :state/write (:component %))
                              (= :reflection-hit? (:key %))) nodes)
         progression (some #(when (and (= :ability/progression (:component %))
                                       (= :hit (:name %))) %)
@@ -713,7 +713,7 @@
                          nodes)
         enforce (filter #(= :resource/enforce-floor (:component %)) nodes)
         add (filter #(= :resource/add (:component %)) nodes)]
-    (is (= {:type :double, :default 0.0}
+    (is (= {:type :float, :default 0.0}
            (get-in doc [:session-state :overload-floor])))
     (is (= 1 (count add)))
     (is (= :overload (:resource (first add))))
@@ -721,3 +721,4 @@
     (is (= :overload (:resource (first enforce))))
     (is floor-bind)
     (is (= :math/max (get-in floor-bind [:value :expr])))))
+

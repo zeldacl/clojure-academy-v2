@@ -12,7 +12,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.server.network :as network]
-            [cn.li.combat.deferred :as delayed-projectiles]
+            [cn.li.ability.combat :as ability-combat]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -151,7 +151,7 @@
     (with-redefs [combat-runtime/abort-owner! (fn [uuid]
                                                    (swap! called conj [:abort uuid])
                                                    nil)
-                  delayed-projectiles/clear-owner! (fn [uuid]
+                  ability-combat/cancel-installed-owner! (fn [uuid]
                                                             (swap! called conj [:projectiles uuid])
                                                             nil)
           store/remove-player-state! (fn [session-id uuid]
@@ -176,7 +176,7 @@
                   ps-tick/server-tick-player-in-session! (fn [session-id uuid payload]
                                                            (swap! calls conj [:player-state-tick session-id uuid payload])
                                                            nil)
-                  delayed-projectiles/tick-owner! (fn [uuid]
+                  ability-combat/tick-installed-owner! (fn [uuid]
                                                      (swap! calls conj [:projectiles uuid])
                                                      nil)
                   combat-runtime/tick! (fn [_tick-id]
@@ -214,7 +214,7 @@
                   world-registry/clear-session-world-data! (fn [session-id]
                                                              (swap! called conj [:wireless session-id])
                                                              nil)
-                  delayed-projectiles/clear-all! (fn []
+                  ability-combat/cancel-installed-all! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
       (stop! :server-session))
@@ -286,3 +286,5 @@
                       (= :hydrate-player-state (:command cmd))
                       (map? (:resource-data cmd))))
                   @commands*)))))
+
+

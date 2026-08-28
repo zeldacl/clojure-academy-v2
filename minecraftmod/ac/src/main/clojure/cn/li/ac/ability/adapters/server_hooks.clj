@@ -14,7 +14,7 @@
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.combat.deferred :as deferred]
+            [cn.li.ability.combat :as ability-combat]
             [cn.li.vfx.network :as vfx-network]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -258,7 +258,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (network/clear-catalog-handshake! player-uuid)
      (network/clear-input-admission! player-uuid)
-     (deferred/clear-owner! player-uuid)
+     (ability-combat/cancel-installed-owner! player-uuid)
      (clear-combat-owner! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
@@ -271,7 +271,7 @@
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
-     (deferred/clear-all!)
+     (ability-combat/cancel-installed-all!)
      (combat-runtime/dispatch-domain-event!
       {:type :entity-marks-clear-all
        :owner :system
@@ -286,13 +286,13 @@
    :on-player-death!
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
-     (deferred/clear-owner! player-uuid)
+     (ability-combat/cancel-installed-owner! player-uuid)
      (clear-combat-owner! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
      (combat-runtime/abort-owner! player-uuid)
-     (deferred/clear-owner! player-uuid)
+     (ability-combat/cancel-installed-owner! player-uuid)
       (clear-combat-owner! player-uuid))
 
    :get-skills-for-category
@@ -315,9 +315,8 @@
      (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                              player-uuid
                                              nil)
-     (doseq [result (deferred/tick-owner! player-uuid)]
-       (when (= :applied (:status result))
-         (combat-runtime/finalize-result! player-uuid result))))
+     (ability-combat/tick-installed-owner! player-uuid)
+)
 
    :on-server-tick-end!
    (fn [tick-id]
@@ -472,3 +471,5 @@
    :compute-reflected-damage
    (fn [current-damage]
      (entity-damage-runtime/compute-reflected-damage current-damage))})
+
+

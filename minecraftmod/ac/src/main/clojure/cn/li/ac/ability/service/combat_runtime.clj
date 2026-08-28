@@ -2,7 +2,7 @@
   "AC composition root for the neutral combat engine.
 
    Combat Core itself never knows about AC, Minecraft or VFX."
-  (:require [cn.li.combat.deferred :as deferred]
+  (:require
             [cn.li.combat.final-damage :as final-damage]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -1239,6 +1239,7 @@
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
   nil)
+
 
 
 
