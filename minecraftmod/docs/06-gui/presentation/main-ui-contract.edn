@@ -1,0 +1,51 @@
+{:baseline {:ref "main"
+            :commit "ea8a8d12fc06151fa77634f54155a7cb15dc4df6"
+            :purpose :behavior-contract-only}
+ :source-kinds #{:xml :static-code :dynamic-code :direct-render :native-menu :mixed}
+ :surfaces
+ [{:id :academy/container/wireless-node :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/wireless-matrix :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/solar-generator :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/wind-generator-main :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/wind-generator-base :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/imag-fusor :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/metal-former :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/phase-generator :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/developer :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/energy-converter :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+  {:id :academy/container/ability-interferer :owner :ac :host :container :source-kind :mixed :stage :screen :entrypoints #{:block-right-click}}
+
+  {:id :academy/app/terminal-shell :owner :ac :host :screen :source-kind :mixed :stage :screen :entrypoints #{:keybind :item-right-click}}
+  {:id :academy/app/about :owner :ac :host :screen :source-kind :mixed :stage :screen :entrypoints #{:terminal-app}}
+  {:id :academy/app/frequency-transmitter :owner :ac :host :screen :source-kind :mixed :stage :screen :entrypoints #{:terminal-app}}
+  {:id :academy/app/media-player :owner :ac :host :screen :source-kind :mixed :stage :screen :entrypoints #{:terminal-app}}
+  {:id :academy/app/settings :owner :ac :host :screen :source-kind :mixed :stage :screen :entrypoints #{:terminal-app}}
+  {:id :academy/app/tutorial :owner :ac :host :screen :source-kind :mixed :stage :screen :entrypoints #{:terminal-app :item-right-click}}
+  {:id :academy/app/ui-customize :owner :ac :host :screen :source-kind :dynamic-code :stage :screen :entrypoints #{:terminal-app}}
+  {:id :academy/app/skill-tree :owner :ac :host :screen :source-kind :dynamic-code :stage :screen :entrypoints #{:terminal-app :developer-panel}}
+  {:id :academy/app/preset-editor :owner :ac :host :screen :source-kind :dynamic-code :stage :screen :entrypoints #{:terminal-app :developer-panel}}
+  {:id :academy/app/location-teleport :owner :ac :host :screen :source-kind :dynamic-code :stage :screen :entrypoints #{:context-push}}
+  {:id :academy/app/portable-developer :owner :ac :host :screen :source-kind :dynamic-code :stage :screen :entrypoints #{:item-right-click}}
+  {:id :academy/overlay/install-effect :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:install-event}}
+
+  {:id :academy/hud/combat :owner :ac :host :hud :source-kind :dynamic-code :stage :hud :entrypoints #{:client-tick}}
+  {:id :academy/hud/skill-slots :owner :ac :host :hud :source-kind :dynamic-code :stage :hud :entrypoints #{:client-tick}}
+  {:id :academy/hud/toast :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:event}}
+  {:id :academy/hud/movement-hints :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:client-tick}}
+  {:id :academy/hud/charging :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:client-tick}}
+  {:id :academy/hud/coin-qte :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:client-tick}}
+  {:id :academy/hud/vector-wave :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:client-tick}}
+  {:id :academy/hud/frequency-link :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:event}}
+  {:id :academy/hud/media-auxiliary :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:client-tick}}
+  {:id :academy/hud/debug :owner :ac :host :hud :source-kind :dynamic-code :stage :hud-overlay :entrypoints #{:debug}}
+
+  {:id :academy/vfx/world :owner :ac :host :world :source-kind :direct-render :stage :world-after-translucent :entrypoints #{:combat-result}}
+  {:id :academy/vfx/first-person :owner :ac :host :first-person :source-kind :direct-render :stage :first-person :entrypoints #{:combat-result}}
+  {:id :academy/vfx/camera :owner :ac :host :camera :source-kind :direct-render :stage :camera :entrypoints #{:combat-result}}
+  {:id :academy/vfx/post-process :owner :ac :host :post-process :source-kind :direct-render :stage :post-process :entrypoints #{:combat-result}}]
+ :unreachable-candidates
+ #{:academy/resource/life-record :academy/resource/med-synth
+   :academy/resource/legacy-loctele :academy/resource/legacy-inventory-variants}
+ :required-migration-fields
+ #{:main-evidence :state-schema :actions :effects :layout :assets :semantics
+   :artifact :reducer :targets :snapshot-fixtures}}
