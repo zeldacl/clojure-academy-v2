@@ -5,13 +5,15 @@
             [cn.li.ability.compose :as ability-compose]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
+            [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderStage]))
+  (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderStage RenderCommand$Batch RenderCommand$AudioContribution RenderCommand$CameraContribution RenderCommand$PostProcess]
+           [cn.li.mcmod.runtime.vfx VfxFrame VfxRenderStage VfxOutputKind]))
 
 (defonce ^:private presentation-runtime* (atom nil))
 
@@ -41,9 +43,34 @@
         (or (compare-and-set! terminal* nil vm)
             @terminal*))))
 
+(def ^:private vfx-stage->render-stage
+  {VfxRenderStage/WORLD_TRANSLUCENT RenderStage/WORLD_BEFORE_TRANSLUCENT
+   VfxRenderStage/WORLD_ADDITIVE RenderStage/WORLD_GLOW
+   VfxRenderStage/WORLD_AFTER_TRANSLUCENT RenderStage/WORLD_AFTER_TRANSLUCENT
+   VfxRenderStage/FIRST_PERSON RenderStage/FIRST_PERSON
+   VfxRenderStage/SCREEN RenderStage/SCREEN})
+
+(defn- vfx-command [^cn.li.mcmod.runtime.vfx.VfxBatch batch]
+  (RenderCommand$Batch. (or (get vfx-stage->render-stage (.stage batch)) RenderStage/WORLD_AFTER_TRANSLUCENT)
+                         (str (.primitiveId batch)) (str (.materialId batch)) "vfx"
+                         0 (long (.instanceCount batch)) "stable" (.payload batch)))
+
+(defn- vfx-output-command [^cn.li.mcmod.runtime.vfx.VfxOutput output]
+  (case (.kind output)
+    VfxOutputKind/AUDIO (RenderCommand$AudioContribution. (or (.resourceId output) "") (.amount output) 1.0)
+    VfxOutputKind/CAMERA (RenderCommand$CameraContribution. (.amount output) 0.0 0.0 0.0)
+    VfxOutputKind/SCREEN (RenderCommand$PostProcess. (.value output) (.amount output))
+    nil))
+
 (defn- merge-vfx-passes
-  [_vfx-context _frame-id _partial-tick packet]
-  packet)
+  [_vfx-context frame-id partial-tick ^FramePacket packet]
+  (let [^VfxFrame vfx (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick})
+        commands (vec (concat (map vfx-command (.batches vfx))
+                              (keep vfx-output-command (.outputs vfx))))
+        passes (mapv (fn [^RenderPass pass]
+                       (RenderPass. (.stage pass) (vec (concat (.commands pass) commands))))
+                     (.passes packet))]
+    (FramePacket. (.frameId packet) passes)))
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
 
