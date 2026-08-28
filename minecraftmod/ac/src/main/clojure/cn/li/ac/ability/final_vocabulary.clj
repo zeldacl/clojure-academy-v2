@@ -164,7 +164,7 @@
     :outputs {} :children {:body {:kind :single :flow :sequential}}}])
 
 (defn- composite-spec [id]
-  {:id id :revision 1 :layer :mid :category :final
+  {:id id :revision 1 :layer :composite :category :final
    :doc (str "Final node component " id)
    :inputs {} :outputs {} :children {}})
 
@@ -189,7 +189,7 @@
   []
   (mapv (fn [spec]
           (let [spec (normalize-spec spec)]
-            (if (= :mid (:layer spec))
+            (if (= :composite (:layer spec))
               spec
               (assoc spec :layer :primitive :impl (fn [_ _] {})))))
         (concat component-specs
@@ -208,3 +208,4 @@
       {:descriptors (concat (remove #(contains? loaded (:id %))
                                    (descriptor-specs))
                             (vals loaded))}))))
+

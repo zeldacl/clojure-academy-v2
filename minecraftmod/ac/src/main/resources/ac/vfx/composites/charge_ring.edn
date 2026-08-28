@@ -1,7 +1,7 @@
 {:kind :composite
  :id :vfx.fx/charge-ring
  :revision 1
- :layer :mid
+ :layer :composite
  :doc "Generic radial charge indicator: a ring of :points line segments whose radius grows and pulses with :charge-ticks toward :max-charge-ticks, recolored to :core-color once :punched?. Replaces the old monolithic :vfx/charge-ring Clojure component with the same parameter surface, expressed as node-core primitives (:vfx/let, :vfx/repeat, :vfx/line) composed in pure EDN."
  :category :charge
  :inputs {:center {:type :vec3}
@@ -48,3 +48,4 @@
           :args [{:ref [:input :center]} {:ref [:input :radius]}
                  {:expr :math/add :args [{:ref [:input :i]} 1]} {:ref [:input :points]}]}
      :color {:ref [:input :ring-color]}}}}}}
+

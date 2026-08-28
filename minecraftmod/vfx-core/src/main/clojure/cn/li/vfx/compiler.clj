@@ -29,7 +29,7 @@
     (map? value)
     (let [component (:component value)
           descriptor (when component (get composites component))]
-      (if (and descriptor (= :mid (:layer descriptor)))
+      (if (and descriptor (= :composite (:layer descriptor)))
         (let [declared (or (:inputs descriptor) {})
               supplied (dissoc value :component)
               unknown (remove #(contains? declared %) (keys supplied))

@@ -138,18 +138,13 @@
           (map (fn [{:keys [id resource kind]}]
                  (when-not (= :composite kind)
                    (throw (ex-info "composite manifest contains non-composite" {:id id :kind kind})))
-                 (let [document (read-resource resource)
-                       ;; The component-era manifest predates the explicit
-                       ;; layer field; its kind and body are still the same
-                       ;; pure :mid document, so normalize that one omission
-                       ;; at the catalog boundary.
-                       document (if (nil? (:layer document))
-                                  (assoc document :layer :mid)
-                                  document)]
+                 (let [document (read-resource resource)]
                    (when-not (= id (:id document))
-                     (throw (ex-info "composite source id mismatch" {:manifest-id id :source-id (:id document)})))
-                   (when-not (= :mid (:layer document))
-                     (throw (ex-info "composite must use :mid layer" {:id id :layer (:layer document)})))
+                     (throw (ex-info "composite source id mismatch"
+                                     {:manifest-id id :source-id (:id document)})))
+                   (when-not (= :composite (:layer document))
+                     (throw (ex-info "composite must declare :composite layer"
+                                     {:id id :layer (:layer document)})))
                    [id document])))
           (:documents manifest))))
 
@@ -352,5 +347,7 @@
                        :vfx-effects (:effect-count vfx)}
               :content-hash (content-hash
                              (ability-compose/catalog-fingerprint-input bundle)))))))
+
+
 
 

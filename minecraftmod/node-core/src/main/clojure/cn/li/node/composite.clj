@@ -1,5 +1,5 @@
 (ns cn.li.node.composite
-  "Compile-time expansion of :layer :mid composite invocations into the
+  "Compile-time expansion of :layer :composite composite invocations into the
    caller's tree. A composite is macro-substituted at its call site: it is
    data-shape sugar, not a runtime function call, and can expose typed
    :outputs without leaking hardcoded slot names (see NODE_LANGUAGE.md
@@ -20,7 +20,7 @@
   (throw (ex-info (name reason) (assoc data :reason reason))))
 
 (defn- composite? [descriptor-of id]
-  (when-let [d (descriptor-of id)] (= :mid (:layer d))))
+  (when-let [d (descriptor-of id)] (= :composite (:layer d))))
 
 (defn- resolve-inputs
   "Build {input-key -> supplied-value-or-subtree} for one call site,
@@ -202,3 +202,4 @@
         descriptor-of (fn [id] (or (get composites id)
                                    (registry/descriptor environment id)))]
     (expand-node descriptor-of root #{} (volatile! 0) [:program])))
+

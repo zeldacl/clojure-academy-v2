@@ -1,5 +1,5 @@
 (ns cn.li.node.composite-loader
-  "Generic loading of :layer :mid composite documents from a manifest and
+  "Generic loading of :layer :composite composite documents from a manifest and
    individual EDN resources. A manifest lists {:kind :composite :id :resource}
    entries; each resource is read via an injected `document-loader` supplied
    by the mcmod boundary, and one bad document disables only itself rather
@@ -37,10 +37,11 @@
            (when-not (= id (:id document))
              (fail "composite manifest/document id mismatch"
                    {:manifest-id id :document-id (:id document)}))
-           (when-not (and (= :mid (:layer document)) (map? (:inputs document)) (map? (:body document)))
+           (when-not (and (= :composite (:layer document)) (map? (:inputs document)) (map? (:body document)))
              (fail "invalid v3 composite document" {:id id}))
            (update result :documents assoc id (node/normalize document)))
          (catch Throwable throwable
            (update result :errors conj {:id id :error (ex-message throwable) :data (ex-data throwable)}))))
      {:documents {} :errors []}
      (:documents manifest))))
+
