@@ -166,8 +166,8 @@
                (when-let [refresh! (:refresh! @terminal*)]
                  (refresh!))
                (frame-packet frame-id :screen {:width width :height height}))
-     :frame-with-context! (fn [frame-id delta-seconds width height vfx-context]
-                            (let [frame (frame-packet frame-id :screen
+     :frame-with-context! (fn [stage frame-id delta-seconds width height vfx-context]
+                            (let [frame (frame-packet frame-id stage
                                                   {:width width :height height})]
                               (merge-vfx-passes vfx-context frame-id delta-seconds frame)))
      :mount-combat-hud! (fn [player-uuid width height]

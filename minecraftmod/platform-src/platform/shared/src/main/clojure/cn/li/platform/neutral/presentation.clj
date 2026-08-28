@@ -102,7 +102,7 @@
   (let [registry (ensure-registered!)
         api (lifecycle/host-api registry host-id)]
     (if-let [frame-with-context! (:frame-with-context! api)]
-      (frame-with-context! frame-id delta-seconds width height context)
+      (frame-with-context! stage frame-id delta-seconds width height context)
       (lifecycle/dispatch-runtime-stage!
         registry host-id stage frame-id delta-seconds width height))))
 
