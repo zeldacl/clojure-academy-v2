@@ -366,10 +366,17 @@
   screen-open? — a Screen is open: press/tick/release dispatch is suppressed,
   but the physical state is still recorded (no false rising edge later).
   just-opened?  — first tick of the suppressed window: a held delegate is
-  aborted once, matching upstream `state.state && shouldAbort → onKeyAbort`."
+  aborted once, matching upstream `state.state && shouldAbort → onKeyAbort`.
+  just-closed?  — first tick after the window: a key that is physically down
+  is absorbed. The mouse press that clicks a menu button and the menu close
+  both happen in the same frame's GLFW event poll, BEFORE this tick samples —
+  the press was under the Screen but never got a suppressed tick, so without
+  this the closing frame would emit a false :press."
   ([key-idx is-down]
-   (on-skill-key-event key-idx is-down false false))
+   (on-skill-key-event key-idx is-down false false false))
   ([key-idx is-down screen-open? just-opened?]
+   (on-skill-key-event key-idx is-down screen-open? just-opened? false))
+  ([key-idx is-down screen-open? just-opened? just-closed?]
    (when-let [player-uuid (get-client-player-uuid)]
      (let [owner        (current-client-owner player-uuid)
            key-state    (key-state-snapshot owner)
@@ -385,6 +392,11 @@
          (processor/execute-skill-key-event!
            {:transition :abort :delegate delegate} player-uuid)
 
+         ;; Screen just closed with the key still physically down: the press
+         ;; happened under the Screen (same-frame button click) — absorb it.
+         (and just-closed? is-down)
+         nil
+
          (not screen-open?)
          (processor/execute-skill-key-event! event player-uuid))
        (when (not= was-down (boolean is-down))
@@ -394,15 +406,17 @@
 (defn on-gui-key-event
   "Handle GUI key state change. Opens screens or toggles mode on key press.
   Presses while a Screen is open are suppressed but still tracked, so a key
-  held across a Screen close never looks like a fresh press."
+  held across a Screen close never looks like a fresh press (and a key that
+  is down on the first tick after a Screen closes is absorbed — see
+  on-skill-key-event)."
   ([gui-type is-down]
-   (on-gui-key-event gui-type is-down false))
-  ([gui-type is-down screen-open?]
+   (on-gui-key-event gui-type is-down false false))
+  ([gui-type is-down screen-open? just-closed?]
    (when-let [player-uuid (get-client-player-uuid)]
      (let [owner     (current-client-owner player-uuid)
            key-state (key-state-snapshot owner)
            event     (sm/compute-gui-key-event key-state gui-type is-down)]
-       (when-not screen-open?
+       (when (and (not screen-open?) (not just-closed?))
          (processor/execute-gui-key-event! event player-uuid))
        (when (not= (boolean (get-in key-state [:gui-keys gui-type])) (boolean is-down))
          (swap-key-state! owner sm/next-gui-key-state gui-type is-down))))))
@@ -410,15 +424,16 @@
 (defn on-movement-key-event
   "Handle movement key state transitions and forward them to runtime bridge.
   Transitions while a Screen is open are suppressed but still tracked (see
-  on-skill-key-event)."
+  on-skill-key-event); keys down on the first tick after a Screen closes are
+  absorbed too."
   ([movement-key is-down]
-   (on-movement-key-event movement-key is-down false))
-  ([movement-key is-down screen-open?]
+   (on-movement-key-event movement-key is-down false false))
+  ([movement-key is-down screen-open? just-closed?]
    (when-let [player-uuid (get-client-player-uuid)]
      (let [owner     (current-client-owner player-uuid)
            key-state (key-state-snapshot owner)
            event     (sm/compute-movement-key-event key-state movement-key is-down)]
-       (when-not screen-open?
+       (when (and (not screen-open?) (not just-closed?))
          (processor/execute-movement-key-event! event player-uuid))
        (when (not= (boolean (get-in key-state [:movement-keys movement-key])) (boolean is-down))
          (swap-key-state! owner sm/next-movement-key-state movement-key is-down))))))
@@ -526,13 +541,22 @@
   ([player-uuid]
    (vanilla-input/suppress-vanilla-inputs! (vanilla-override-key-codes player-uuid))))
 
-(defn- screen-just-opened?
-  "True on the first client tick a Screen is open. Held skill delegates are
-  aborted on that tick (upstream `state.state && shouldAbort → onKeyAbort`)."
+(defn- screen-window-edges
+  "Screen-open window edge flags for this tick, from the previous tick's state.
+
+  Returns [just-opened? just-closed?]:
+  - just-opened? — first tick a Screen is open: held skill delegates are
+    aborted (upstream `state.state && shouldAbort → onKeyAbort`).
+  - just-closed?  — first tick after a Screen closed: keys physically down are
+    absorbed. A menu button closes the Screen on mouse-down inside the same
+    frame's GLFW event poll, so the press never got a suppressed tick; without
+    the just-closed absorb the closing frame would emit a false :press."
   [screen-open?]
-  (let [prev @previous-screen-open]
-    (reset! previous-screen-open (boolean screen-open?))
-    (and screen-open? (not prev))))
+  (let [prev @previous-screen-open
+        screen-open? (boolean screen-open?)]
+    (reset! previous-screen-open screen-open?)
+    [(and screen-open? (not prev))
+     (and (not screen-open?) prev)]))
 
 (defn tick-keys!
   "Main tick function called by forge layer. key-state-fn returns boolean for
@@ -549,8 +573,8 @@
   ([key-state-fn screen-open?]
    ;; Frequency Transmitter's pass-on stage owns the mouse buttons just like
    ;; upstream ControlOverrider; ordinary ability-slot input is suppressed.
-   (let [player-uuid (get-client-player-uuid)
-         just-opened? (screen-just-opened? screen-open?)]
+   (let [[just-opened? just-closed?] (screen-window-edges screen-open?)
+         player-uuid (get-client-player-uuid)]
      ;; Suppress vanilla attack/use first so handleKeybinds on the *next* frame
      ;; does not keep swinging while a skill owns LMB/RMB (upstream ControlOverrider).
      (sync-vanilla-input-overrides! player-uuid)
@@ -564,25 +588,27 @@
              idx
              (key-state-fn [:slot idx])
              screen-open?
-             just-opened?)))
+             just-opened?
+             just-closed?)))
        (doseq [idx (range 4)]
          (on-skill-key-event
            idx
            (key-state-fn [:slot idx])
            screen-open?
-           just-opened?))))
+           just-opened?
+           just-closed?)))
 
-   ;; Poll movement keys (W/A/S/D)
-   (doseq [movement-key movement-keys]
-     (on-movement-key-event movement-key (key-state-fn [:movement movement-key]) screen-open?))
+     ;; Poll movement keys (W/A/S/D)
+     (doseq [movement-key movement-keys]
+       (on-movement-key-event movement-key (key-state-fn [:movement movement-key]) screen-open? just-closed?))
 
-   ;; Poll GUI keys. :primary = N (edit-preset) — see screen-glfw-keys in the
-   ;; platform key-state-fn; the CURRENT binding (Settings app / config)
-   ;; resolves through the bound-key resolver. Upstream AcademyCraft:
-   ;; KEY_EDIT_PRESET = N (ClientHandler.java) — preset-editor must be on
-   ;; :primary/N to match. The skill-tree viewer is debug-only and has NO key
-   ;; binding (upstream reaches it only via the terminal app).
-   (on-gui-key-event :preset-editor (key-state-fn [:screen :primary]) screen-open?)))
+     ;; Poll GUI keys. :primary = N (edit-preset) — see screen-glfw-keys in the
+     ;; platform key-state-fn; the CURRENT binding (Settings app / config)
+     ;; resolves through the bound-key resolver. Upstream AcademyCraft:
+     ;; KEY_EDIT_PRESET = N (ClientHandler.java) — preset-editor must be on
+     ;; :primary/N to match. The skill-tree viewer is debug-only and has NO key
+     ;; binding (upstream reaches it only via the terminal app).
+     (on-gui-key-event :preset-editor (key-state-fn [:screen :primary]) screen-open? just-closed?))))
 
 (defn reset-all-keys!
   "Reset all key states. Called on disconnect or dimension change."

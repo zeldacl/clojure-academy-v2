@@ -202,14 +202,15 @@
       ;; Click "Back to Game": LMB pressed while the menu is open — the press
       ;; is tracked but must not dispatch.
       (keybinds/on-skill-key-event 0 true true false)
-      ;; Menu closes while LMB is still physically held — no fresh press edge.
-      (keybinds/on-skill-key-event 0 true false false)
+      ;; Menu closes while LMB is still physically held (just-closed tick) —
+      ;; the hold is absorbed, no fresh press edge, no tick.
+      (keybinds/on-skill-key-event 0 true false false true)
       ;; LMB released.
       (keybinds/on-skill-key-event 0 false false false))
     (is (not-any? (fn [[event _]] (= event :down)) @events)
         "the menu-close click must never reach the skill's on-key-down")
-    (is (= [[:tick "player-a"] [:up "player-a"]] @events)
-        "the absorbed hold only produces no-op tick/up against the dead slot")))
+    (is (= [[:up "player-a"]] @events)
+        "the absorbed hold only produces a no-op release against the dead slot")))
 
 (deftest screen-open-aborts-held-skill-once-and-absorbs-the-hold-test
   ;; Upstream ClientRuntime: `state.state && shouldAbort → onKeyAbort` — a
@@ -269,7 +270,35 @@
       (is (not-any? (fn [[event _]] (= event :down)) @events)
           "menu-close click never fires the skill through tick-keys!")
       (is (not-any? (fn [[event _]] (= event :abort)) @events)
-          "nothing was held when the screen opened — no abort"))))
+          "nothing was held when the screen opened — no abort")
+      (is (= [[:up "player-a"]] @events)
+          "the press under the menu is absorbed; only the trailing release no-ops"))))
+
+(deftest same-frame-menu-close-click-never-fires-skill-test
+  ;; The actual bug path: the menu button closes the Screen on mouse-down, in
+  ;; the SAME frame's GLFW event poll — the END-tick sample after the close
+  ;; never saw the press under the Screen, so the just-closed tick must absorb
+  ;; any key that is physically down (it is by definition a click-hold).
+  (store/set-player-state! :session-a "player-a" (activated-state))
+  (let [events (atom [])]
+    (register-recording-skill-delegate! events)
+    (binding [keybinds/*client-session-id* :session-a
+              keybinds/*get-player-uuid-fn* (constantly "player-a")]
+      ;; In game, LMB up.
+      (keybinds/on-skill-key-event 0 false)
+      ;; Pause menu open for a couple of ticks, LMB up.
+      (keybinds/on-skill-key-event 0 false true true false)
+      (keybinds/on-skill-key-event 0 false true false false)
+      ;; Click "Back to Game": press + menu close land in the same frame, so
+      ;; the first sample after the close already has screen-open? = false and
+      ;; LMB physically down (just-closed tick).
+      (keybinds/on-skill-key-event 0 true false false true)
+      ;; LMB released in-game.
+      (keybinds/on-skill-key-event 0 false false false false))
+    (is (not-any? (fn [[event _]] (= event :down)) @events)
+        "the click-hold absorbed on the just-closed tick must never reach on-key-down")
+    (is (= [[:up "player-a"]] @events)
+        "only the trailing release no-ops against the dead slot")))
 
 (deftest vanilla-override-key-codes-follow-upstream-control-overrider-test
   (binding [keybinds/*client-session-id* :session-a
