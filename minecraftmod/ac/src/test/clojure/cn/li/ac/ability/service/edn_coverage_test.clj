@@ -436,7 +436,20 @@
     (is (every? #(= [{:ref [:input :capabilities :caster/id]}]
                    (get-in % [:filter :excluded-entity-ids]))
                 areas))))
-(deftest arc-gen-cooldown-uses-hit-exp-branch-test
+(deftest thunder-clap-min-charge-cost-failure-releases-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_clap.edn"))
+        charging-cost (some #(when (and (= :cost/spend (:component %))
+                                      (= {:ref [:input :budgets :charging]}
+                                         (:budget %)))
+                              %)
+                            (component-nodes (get-in doc [:program :pulse])))
+        failure (:on-insufficient charging-cost)]
+    (is (= :flow/branch (:component failure)))
+    (is (= :math/gte (get-in failure [:when :expr])))
+    (is (= :charge/ticks (get-in failure [:when :args 0 :ref 2])))
+    (is (= :charge-min (get-in failure [:when :args 1 :ref 2])))
+    (is (= :release (get-in failure [:then :next-phase])))
+    (is (= true (get-in failure [:else :steps 1 :finish-session?])))))(deftest arc-gen-cooldown-uses-hit-exp-branch-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/arc_gen.edn"))
         nodes (component-nodes (:program doc))
         starts (filter #(= :cooldown/start (:component %)) nodes)
