@@ -100,57 +100,75 @@
                               0.0)
             neighbor-offsets [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
         (doseq [origin origins]
-          (loop [travel    0.0
-                 remaining (* line-energy (+ 0.95 (* 0.1 (rand))))]
-            (when (and (<= travel (double max-distance)) (pos? remaining))
-              (let [pos      (geom/v+ origin (geom/v* dir travel))
-                    bx       (geom/floor-int (:x pos))
-                    by       (geom/floor-int (:y pos))
-                    bz       (geom/floor-int (:z pos))
-                    hardness (block-manip/get-block-hardness
+          ;; Upstream RangedRayDamage.processLine starts its Plotter one cell
+          ;; in from the disk point, so the disk-plane cell itself — for a
+          ;; horizontal look, the ground under the shooter's feet — is never
+          ;; visited and the player does not fall into their own crater. The
+          ;; Plotter also visits each cell exactly once, while a fixed 1.0-unit
+          ;; ray march double-visits cells on diagonal lines (floor(origin +
+          ;; dir*1.0) can stay in the same cell). Track the last visited cell
+          ;; (seeded with the origin cell) and skip repeats, matching both the
+          ;; origin skip and the per-cell energy accounting.
+          (let [origin-key [(geom/floor-int (:x origin))
+                            (geom/floor-int (:y origin))
+                            (geom/floor-int (:z origin))]]
+            (loop [travel    0.0
+                   remaining (* line-energy (+ 0.95 (* 0.1 (rand))))
+                   last-key  origin-key]
+              (when (and (<= travel (double max-distance)) (pos? remaining))
+                (let [pos      (geom/v+ origin (geom/v* dir travel))
+                      bx       (geom/floor-int (:x pos))
+                      by       (geom/floor-int (:y pos))
+                      bz       (geom/floor-int (:z pos))
+                      key      [bx by bz]
+                      hardness (block-manip/get-block-hardness
                                                              world-id bx by bz)]
-                (cond
-                  ;; An absent hardness result is treated like empty space. More
-                  ;; importantly, a real air block has hardness 0 and must not
-                  ;; consume the whole line's energy.
-                  (nil? hardness)
-                  (recur (+ travel 1.0) remaining)
+                  (if (= key last-key)
+                    (recur (+ travel 1.0) remaining last-key)
+                    (cond
+                      ;; An absent hardness result is treated like empty space.
+                      ;; More importantly, a real air block has hardness 0 and
+                      ;; must not consume the whole line's energy.
+                      (nil? hardness)
+                      (recur (+ travel 1.0) remaining key)
 
-                  ;; Upstream turns unbreakable blocks (negative hardness) into
-                  ;; an effectively infinite energy cost, stopping this ray.
-                  (neg? (double hardness))
-                  nil
+                      ;; Upstream turns unbreakable blocks (negative hardness)
+                      ;; into an effectively infinite energy cost, stopping
+                      ;; this ray.
+                      (neg? (double hardness))
+                      nil
 
-                  ;; Zero-hardness blocks cost no energy. Air is skipped; a
-                  ;; tangible zero-hardness block is still removed when allowed.
-                  (zero? (double hardness))
-                  (if (nil? (block-manip/get-block world-id bx by bz))
-                    (recur (+ travel 1.0) remaining)
-                    (when (and (skill-effects/skill-destroy-allowed? skill-id)
-                               (block-manip/can-break-block? player-id world-id bx by bz))
-                      (block-manip/break-block! player-id world-id bx by bz (< (rand) 0.05))
-                      (recur (+ travel 1.0) remaining)))
-
-                  (and (skill-effects/skill-destroy-allowed? skill-id)
-                       (<= (double hardness) remaining)
-                       (block-manip/can-break-block? player-id world-id bx by bz))
-                  (do
-                    (block-manip/break-block!
-                      player-id world-id bx by bz (< (rand) 0.05))
-                    (when (< (rand) 0.05)
-                      (let [[ox oy oz] (rand-nth neighbor-offsets)
-                            nx         (+ bx (int ox))
-                            ny         (+ by (int oy))
-                            nz         (+ bz (int oz))]
+                      ;; Zero-hardness blocks cost no energy. Air is skipped; a
+                      ;; tangible zero-hardness block is still removed when
+                      ;; allowed.
+                      (zero? (double hardness))
+                      (if (nil? (block-manip/get-block world-id bx by bz))
+                        (recur (+ travel 1.0) remaining key)
                         (when (and (skill-effects/skill-destroy-allowed? skill-id)
-                                   (block-manip/can-break-block?
-                                     player-id world-id nx ny nz))
-                          (block-manip/break-block!
-                            player-id world-id nx ny nz false))))
-                    (recur (+ travel 1.0) (- remaining (double hardness))))
+                                   (block-manip/can-break-block? player-id world-id bx by bz))
+                          (block-manip/break-block! player-id world-id bx by bz (< (rand) 0.05))
+                          (recur (+ travel 1.0) remaining key)))
 
-                  :else
-                  nil)))))))))
+                      (and (skill-effects/skill-destroy-allowed? skill-id)
+                           (<= (double hardness) remaining)
+                           (block-manip/can-break-block? player-id world-id bx by bz))
+                      (do
+                        (block-manip/break-block!
+                          player-id world-id bx by bz (< (rand) 0.05))
+                        (when (< (rand) 0.05)
+                          (let [[ox oy oz] (rand-nth neighbor-offsets)
+                                nx         (+ bx (int ox))
+                                ny         (+ by (int oy))
+                                nz         (+ bz (int oz))]
+                            (when (and (skill-effects/skill-destroy-allowed? skill-id)
+                                       (block-manip/can-break-block?
+                                         player-id world-id nx ny nz))
+                              (block-manip/break-block!
+                                player-id world-id nx ny nz false))))
+                        (recur (+ travel 1.0) (- remaining (double hardness)) key))
+
+                      :else
+                      nil)))))))))))
 
 (defn execute-beam!
   "Execute beam logic and return evt enriched with :beam-result.

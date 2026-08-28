@@ -97,7 +97,7 @@
                     (swap! broken* conj [x y z])
                     true)]
       (#'beam/break-blocks!
-       "p1" "w1"
+       :test-skill "p1" "w1"
        {:x 0.1 :y 0.1 :z 0.1}
        {:x 1.0 :y 0.0 :z 0.0}
        3.0 10.0 0.0 0.9)
@@ -117,8 +117,36 @@
                   block-manip/break-block!
                   (fn [& args] (swap! broken* conj args))]
       (#'beam/break-blocks!
-       "p1" "w1"
+       :test-skill "p1" "w1"
        {:x 0.1 :y 0.1 :z 0.1}
        {:x 1.0 :y 0.0 :z 0.0}
        3.0 10.0 0.0 0.9)
       (is (empty? @broken*)))))
+
+(deftest block-beam-spares-disk-plane-cell-under-shooter-test
+  ;; Reported bug: meltdowner's beam destroyed the ground under the shooter's
+  ;; feet. Upstream RangedRayDamage.processLine starts its Plotter one cell in
+  ;; from the disk point, so the disk-plane cell itself — the ground block at
+  ;; the shooter's feet for a horizontal look — is never visited and the
+  ;; player does not fall into their own crater; the beam still carves the
+  ;; cells in front of the disk plane.
+  (let [broken* (atom [])]
+    (with-redefs [block-manip/available? (constantly true)
+                  block-manip/get-block-hardness
+                  (fn [_world _x _y z] (if (pos? z) 1.0 5.0))
+                  block-manip/get-block
+                  (fn [_world _x _y z] (when (pos? z) "minecraft:stone"))
+                  block-manip/can-break-block? (fn [& _] true)
+                  block-manip/break-block!
+                  (fn [_player _world x y z _drop?]
+                    (swap! broken* conj [x y z])
+                    true)]
+      (#'beam/break-blocks!
+       :test-skill "p1" "w1"
+       {:x 0.0 :y 63.0 :z 0.0}
+       {:x 0.0 :y 0.0 :z 1.0}
+       3.0 10.0 1.0 0.9)
+      (is (not-any? (fn [[_ _ z]] (zero? z)) @broken*)
+          "the disk-plane cells (ground under the shooter) survive")
+      (is (some #{[0 63 1]} @broken*)
+          "the cells in front of the disk plane are still carved"))))
