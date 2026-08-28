@@ -35,8 +35,6 @@
 (def ^:private window-size-fn nil)
 (def ^:private shader-fn nil)
 (def ^:private local-player-block-aim-fn nil)
-(def ^:private terminal-apply-perspective-fn nil)
-(def ^:private terminal-render-cursor-fn nil)
 (def ^:private terminal-cursor-hide-fn nil)
 (def ^:private terminal-cursor-show-fn nil)
 (def ^:private local-player-uuid-fn nil)
@@ -59,8 +57,6 @@
    :get-window-size #'window-size-fn
    :resolve-shader #'shader-fn
    :local-player-block-aim #'local-player-block-aim-fn
-   :terminal-apply-perspective! #'terminal-apply-perspective-fn
-   :terminal-render-cursor! #'terminal-render-cursor-fn
    :terminal-cursor-hide! #'terminal-cursor-hide-fn
    :terminal-cursor-show! #'terminal-cursor-show-fn
    :local-player-uuid #'local-player-uuid-fn
@@ -151,13 +147,6 @@
   (when local-player-block-aim-fn
     (local-player-block-aim-fn distance)))
 
-;; These adapters are invoked by the platform's render callbacks.  Keeping
-;; their public shapes explicit makes the cached IFn boundary visible and
-;; prevents frame-time Framework/map dispatch.
-(defn terminal-apply-perspective! [graphics render-state mouse-x mouse-y partial-tick]
-  (terminal-apply-perspective-fn graphics render-state mouse-x mouse-y partial-tick))
-(defn terminal-render-cursor! [graphics render-state mouse-x mouse-y partial-tick]
-  (terminal-render-cursor-fn graphics render-state mouse-x mouse-y partial-tick))
 (defn terminal-cursor-hide! [] (terminal-cursor-hide-fn))
 (defn terminal-cursor-show! [] (terminal-cursor-show-fn))
 
