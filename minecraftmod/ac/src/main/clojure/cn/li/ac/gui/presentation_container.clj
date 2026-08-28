@@ -25,6 +25,24 @@
       (container-common/get-slot-item-be container index))
     (catch Exception _ nil)))
 
+(defn- generic-info-area [container]
+  "Project the common code-built InfoArea contract into declarative state.
+   Block-specific controllers may replace this with richer typed data."
+  (let [known [[:status "Status"] [:mode "Mode"] [:wireless-mode "Wireless"]
+               [:altitude "Altitude"] [:gen-speed "Generation"]
+               [:obstacle "Obstacle"] [:work-progress "Work"]
+               [:current-recipe-liquid "Liquid Needed"] [:liquid-amount "Liquid"]]
+        fields (->> known
+                    (keep (fn [[key label]]
+                            (when (contains? container key)
+                              {:label label
+                               :value (str (or (value-of (get container key)) "-"))})))
+                    vec)
+        progress (double (or (value-of (:progress container)) 0.0))
+        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
+    {:title "Machine Info"
+     :fields fields
+     :load-ratio (max 0.0 (min 1.0 (/ progress max-progress)))}))
 (defn- snapshot-for [container revision slot-count]
   (let [energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
@@ -37,7 +55,8 @@
               :machine-state (or (value-of (:status container))
                                  (value-of (:machine-state container))
                                  (value-of (:mode container))
-                                 "IDLE")}}))
+                                 "IDLE")
+              :info-area (generic-info-area container)}}))
 
 (defn mount-container!
   ([runtime menu-bridge snapshot-fn dispatch-action!]
