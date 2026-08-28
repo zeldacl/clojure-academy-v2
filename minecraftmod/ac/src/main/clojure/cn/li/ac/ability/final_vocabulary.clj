@@ -39,7 +39,6 @@
    {:id :entity/configure, :inputs {:world-id {:type :any, :default nil}, :place-when-collide? {:type :any, :default nil}, :projectile-damage {:type :any, :default nil}, :block-id {:type :any, :default nil}, :add-tags {:type :any, :default nil}, :entity {:type :any, :default nil}, :velocity {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/discard, :inputs {:world-id {:type :any, :default nil}, :entity {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/mark, :inputs {:requires-ability {:type :any, :default nil}, :duration-ticks {:type :any, :default nil}, :target {:type :any, :default nil}, :mark-type {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :motion/radial-impulse, :inputs {:world-id {:type :any, :default nil}, :speed-max {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :center {:type :any, :default nil}, :speed-min {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/reset-fall-damage, :inputs {:target {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/spawn, :inputs {:add-tags {:type :any, :default nil}, :barrier? {:type :any, :default nil}, :entity-type {:type :any, :default nil}, :life-ticks {:type :any, :default nil}, :world-id {:type :any, :default nil}, :position {:type :any, :default nil}, :velocity {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {:entity-id {:type :any}, :status {:type :any}}, :children {}}
    {:id :entity/teleport, :inputs {:dismount? {:type :any, :default nil}, :world-id {:type :any, :default nil}, :reset-fall-damage? {:type :any, :default nil}, :position {:type :any, :default nil}, :target {:type :any, :default nil}}, :outputs {}, :children {}}
@@ -75,7 +74,6 @@
    {:id :score/mark, :inputs {:weight {:type :any, :default nil}, :tag {:type :any, :default nil}, :progression {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :state/read, :inputs {:key {:type :any, :default nil}}, :outputs {:value {:type :any}}, :children {}}
    {:id :state/write, :inputs {:key {:type :any, :default nil}, :value {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :target/beam, :inputs {:block-limit {:type :any, :default nil}, :query-radius {:type :any, :default nil}, :entity-limit {:type :any, :default nil}, :radius {:type :any, :default nil}, :damage {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :trace-origin {:type :any, :default nil}, :length {:type :any, :default nil}, :origin {:type :any, :default nil}, :reflection-policy {:type :any, :default nil}, :step {:type :any, :default nil}, :direction {:type :any, :default nil}, :visual-length {:type :any, :default nil}}, :outputs {:beam {:type :any}}, :children {}}
    {:id :target/block-placement, :inputs {:hit {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
    {:id :target/blocks, :inputs {:limit {:type :any, :default nil}, :shape {:type :any, :default nil}, :projection {:type :any, :default nil}}, :outputs {:blocks {:type :any}}, :children {}}
    {:id :target/directional-destination-query, :inputs {:look {:type :any, :default nil}, :eye-y {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
@@ -86,7 +84,6 @@
    {:id :target/raycast-fan, :inputs {:pitch-angles {:type :any, :default nil}, :limit {:type :any, :default nil}, :yaw-range-degrees {:type :any, :default nil}, :seed {:type :any, :default nil}, :result {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :target/resolve-destination, :inputs {:hit {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
    {:id :target/saved-location, :inputs {:location-name {:type :any, :default nil}}, :outputs {:location {:type :any}}, :children {}}
-   {:id :terrain/wave-plan, :inputs {:launch-base {:type :any, :default nil}, :launch-span {:type :any, :default nil}, :spread {:type :any, :default nil}, :mastery-radius {:type :any, :default nil}, :ground-break-probability {:type :any, :default nil}, :mastery-threshold {:type :any, :default nil}, :entity-search-radius {:type :any, :default nil}, :max-iterations {:type :any, :default nil}, :energy-cost {:type :any, :default nil}, :seed {:type :any, :default nil}, :result {:type :any, :default nil}, :drop-probability {:type :any, :default nil}, :origin {:type :any, :default nil}, :mastery-hardness-cap {:type :any, :default nil}, :block-transforms {:type :any, :default nil}, :mastery {:type :any, :default nil}, :initial-energy {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :vfx/arc-field, :inputs {:count-limit {:type :any, :default nil}, :life-ticks {:type :any, :default nil}, :start {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :end {:type :any, :default nil}, :spacing {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :vfx/arc-strike, :inputs {:hand-origin? {:type :any, :default nil}, :sound-position {:type :any, :default nil}, :sound-pitch {:type :any, :default nil}, :sound-volume {:type :any, :default nil}, :start {:type :any, :default nil}, :seed {:type :any, :default nil}, :sound-id {:type :any, :default nil}, :arc-life-ticks {:type :any, :default nil}, :aoe-points {:type :any, :default nil}, :aoe-origin {:type :any, :default nil}, :end {:type :any, :default nil}, :bounds-radius {:type :any, :default nil}, :pattern {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :vfx/audio-loop, :inputs {:pitch {:type :any, :default nil}, :stop-on-destroy? {:type :any, :default nil}, :instance-key {:type :any, :default nil}, :volume {:type :any, :default nil}, :sound-id {:type :any, :default nil}, :position {:type :any, :default nil}}, :outputs {}, :children {}}
@@ -139,29 +136,29 @@
 
 (def ^:private kernel-specs
   [{:id :kernel/break-area :revision 1 :layer :kernel :visibility :internal
-    :inputs {:origin {:type :vec3} :radius {:type :double} :hardness-max {:type :double} :limit {:type :long}}
-    :outputs {:broken-count {:type :long}}
-    :execution {:kind :combat-kernel :capability :terrain/break-area}}
+    :inputs {:origin {:type :vec3} :radius {:type :float} :hardness-max {:type :float} :limit {:type :int}}
+    :outputs {:broken-count {:type :int}}
+    :node-kind :action :execution {:kind :combat-kernel :capability :kernel/terrain-break-area}}
    {:id :kernel/random-break :revision 1 :layer :kernel :visibility :internal
-    :inputs {:origin {:type :vec3} :radius {:type :double} :attempts {:type :long} :hardness-max {:type :double} :seed {:type :long}}
-    :outputs {:broken-count {:type :long}}
-    :execution {:kind :combat-kernel :capability :terrain/random-break}}
+    :inputs {:origin {:type :vec3} :radius {:type :float} :attempts {:type :int} :hardness-max {:type :float} :seed {:type :int}}
+    :outputs {:broken-count {:type :int}}
+    :node-kind :action :execution {:kind :combat-kernel :capability :kernel/terrain-random-break}}
    {:id :kernel/apply-break-budget :revision 1 :layer :kernel :visibility :internal
-    :inputs {:blocks {:type [:list-of :map]} :energy {:type :double} :limit {:type :long} :drop-chance {:type :double}}
-    :outputs {:remaining-energy {:type :double}}
-    :execution {:kind :combat-kernel :capability :terrain/apply-break-budget}}
+    :inputs {:blocks {:type [:list-of :map]} :energy {:type :float} :limit {:type :int} :drop-chance {:type :float}}
+    :outputs {:remaining-energy {:type :float}}
+    :node-kind :action :execution {:kind :combat-kernel :capability :kernel/terrain-apply-break-budget}}
    {:id :kernel/radial-impulse :revision 1 :layer :kernel :visibility :internal
-    :inputs {:center {:type :vec3} :radius {:type :double} :speed {:type :double} :limit {:type :long}}
-    :outputs {:affected-count {:type :long}}
-    :execution {:kind :combat-kernel :capability :motion/radial-impulse}}
+    :inputs {:center {:type :vec3} :radius {:type :float} :speed {:type :float} :limit {:type :int}}
+    :outputs {:affected-count {:type :int}}
+    :node-kind :action :execution {:kind :combat-kernel :capability :kernel/motion-radial-impulse}}
    {:id :kernel/terrain-wave-plan :revision 1 :layer :kernel :visibility :internal
-    :inputs {:origin {:type :vec3} :direction {:type :vec3} :initial-energy {:type :double} :max-iterations {:type :long} :seed {:type :long}}
+    :inputs {:origin {:type :vec3} :direction {:type :vec3} :initial-energy {:type :float} :max-iterations {:type :int} :seed {:type :int}}
     :outputs {:transforms {:type [:list-of :map]} :broken-blocks {:type [:list-of :map]} :mastery-breaks {:type [:list-of :map]} :entities {:type [:list-of :map]}}
-    :execution {:kind :combat-kernel :capability :terrain/wave-plan}}
+    :node-kind :query :execution {:kind :combat-kernel :capability :kernel/terrain-wave-plan}}
    {:id :kernel/trace-beam :revision 1 :layer :kernel :visibility :internal
-    :inputs {:origin {:type :vec3} :direction {:type :vec3} :length {:type :double} :radius {:type :double}}
+    :inputs {:origin {:type :vec3} :direction {:type :vec3} :length {:type :float} :radius {:type :float}}
     :outputs {:beam {:type :map}}
-    :execution {:kind :combat-kernel :capability :target/beam}}])
+    :node-kind :query :execution {:kind :combat-kernel :capability :kernel/trace-beam}}])
 
 (defn- composite-spec [id]
   {:id id :revision 1 :layer :composite :visibility :author :category :final
@@ -171,10 +168,22 @@
   (cond-> (or field {:type :any})
     (not (contains? field :default)) (assoc :default nil)))
 
+(defn- node-kind-for [id]
+  (case (namespace id)
+    "flow" :flow "finalize" :flow "graph" :source
+    "feedback" :feedback "domain" :feedback
+    "policy" :policy "cost" :policy "cooldown" :policy
+    "progression" :policy "score" :policy
+    "target" :query "owner" :query "query" :query "energy" :query "terrain" :query
+    "combat" :action "entity" :action "world" :action "block" :action
+    "motion" :action "projectile" :action "inventory" :action
+    "resource" :action "ability" :source "state" :source
+    "effect" :vfx "vfx" :vfx nil))
 (defn- normalize-spec [spec]
   (-> spec
       (assoc :revision (long (or (:revision spec) 1))
              :visibility (or (:visibility spec) :author)
+             :node-kind (or (:node-kind spec) (node-kind-for (:id spec)))
              :category (or (:category spec) :final)
              :doc (or (:doc spec) (str "Final node " (:id spec)))
              :inputs (into {} (map (fn [[k v]] [k (normalize-field v)]) (or (:inputs spec) {})))
@@ -196,5 +205,9 @@
   ([composites]
    (let [loaded (into {} (map (fn [[id spec]] [id (normalize-spec spec)]) (or composites {})))]
      (descriptors/build {:descriptors (concat (remove #(contains? loaded (:id %)) (descriptor-specs)) (vals loaded))}))))
+
+
+
+
 
 

@@ -126,7 +126,12 @@
    :combat/teleport-group :combat/teleport-group
    :world/sound :world/sound
    :world/lightning :world/lightning
-   :world/explosion :world/explosion})
+   :world/explosion :world/explosion
+   :kernel/break-area :kernel/terrain-break-area
+   :kernel/random-break :kernel/terrain-random-break
+   :kernel/apply-break-budget :kernel/terrain-apply-break-budget
+   :kernel/radial-impulse :kernel/motion-radial-impulse
+   :kernel/trace-beam :kernel/trace-beam})
 
 (def ^:private query-capabilities
   {:target/raycast :raycast
@@ -142,7 +147,8 @@
    :target/directional-destination-query :raycast
    :owner/snapshot :owner/snapshot
    :energy/target :energy/target
-   :terrain/wave-plan :terrain/wave-plan})
+   :terrain/wave-plan :terrain/wave-plan
+   :kernel/terrain-wave-plan :kernel/terrain-wave-plan})
 
 (def ^:private query-kinds
   {:target/raycast-fan :raycast-fan
@@ -150,7 +156,8 @@
    :target/block-placement :block-placement
    :target/directional-destination-query :directional-destination
    :target/raycast :raycast
-   :target/beam :beam-trace})
+   :target/beam :beam-trace
+   :kernel/trace-beam :kernel/trace-beam})
 
 (defn capability-matrix
   "Static execution ABI used by audits and editor tooling.
@@ -566,6 +573,9 @@
          :feedback (:feedback (:outbox result))
          :events (:events (:outbox result))
          :scheduled (:scheduled result) :barriers (:barriers result) :host host-result}))))
+
+
+
 
 
 

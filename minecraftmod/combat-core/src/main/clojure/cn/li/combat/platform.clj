@@ -1631,21 +1631,19 @@
    :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!
-   :terrain/wave-plan terrain-propagate!
    :interaction/resolve interaction-resolve!
    :saved-location saved-location!
    :owner/snapshot owner-snapshot!
-   :entity/snapshot entity-snapshot!})
+   :entity/snapshot entity-snapshot!
+   :kernel/terrain-wave-plan terrain-propagate!})
 
 (defn action-handlers []
   {:entity/damage damage!
    :entity/status entity-status!
    :combat/charged-area-damage charged-area-damage!
    :entity/impulse entity-impulse!
-   :motion/radial-impulse radial-impulse!
    :block/break break!
    :block/set set-block!
-   :terrain/apply-break-budget break-budget!
    :world/sound sound!
    :world/explosion explosion!
    :world/lightning lightning!
@@ -1662,12 +1660,17 @@
    :entity/teleport-group teleport-group!
    :entity/trigger-behavior trigger-behavior!
    :owner/can-fly owner-can-fly!
-   :terrain/random-break random-break!
-   :terrain/break-area area-break!
    :motion/entity-velocity entity-velocity!
    :motion/entity-velocity-add entity-velocity-add!
    :projectile/redirect projectile-redirect!
-   :projectile/schedule-beam deferred/schedule-action!})
+   :projectile/schedule-beam deferred/schedule-action!
+   ;; Internal kernel capabilities are not exported by schema-export.
+   :kernel/terrain-break-area area-break!
+   :kernel/terrain-random-break random-break!
+   :kernel/terrain-apply-break-budget break-budget!
+   :kernel/motion-radial-impulse radial-impulse!
+   :kernel/trace-beam beam-trace!
+   :kernel/terrain-wave-plan terrain-propagate!})
 
 (defn install!
   "Register every neutral capability Combat Core owns with the shared
@@ -1682,5 +1685,7 @@
   (doseq [[capability handler] (action-handlers)]
     (when-not (contains? (:actions (capabilities/snapshot)) capability)
       (capabilities/register-action! capability handler))))
+
+
 
 
