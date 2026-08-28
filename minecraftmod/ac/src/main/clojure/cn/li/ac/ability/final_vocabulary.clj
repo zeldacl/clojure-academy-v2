@@ -194,14 +194,15 @@
 
 (defn descriptor-specs []
   (mapv (fn [spec]
-          (let [spec (normalize-spec spec)]
-            (if (= :composite (:layer spec))
-              spec
-              (if (= :kernel (:layer spec))
-                spec
-                (assoc spec :layer :primitive :impl (fn [_ _] {}))))))
+          (let [spec (normalize-spec spec)
+                layer (or (:layer spec)
+                          (if (= :source (:node-kind spec)) :source :primitive))]
+            (case layer
+              :composite spec
+              :kernel spec
+              :source (dissoc (assoc spec :layer :source) :impl :execution)
+              (assoc spec :layer :primitive :impl (fn [_ _] {})))))
         (concat component-specs (map composite-spec composite-only-ids) kernel-specs vfx-runtime-specs)))
-
 (defn environment
   ([] (environment []))
   ([composites]

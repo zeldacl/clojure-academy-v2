@@ -127,10 +127,6 @@
    :world/sound :world/sound
    :world/lightning :world/lightning
    :world/explosion :world/explosion
-   :kernel/break-area :kernel/terrain-break-area
-   :kernel/random-break :kernel/terrain-random-break
-   :kernel/apply-break-budget :kernel/terrain-apply-break-budget
-   :kernel/radial-impulse :kernel/motion-radial-impulse
    :kernel/trace-beam :kernel/trace-beam})
 
 (def ^:private query-capabilities
