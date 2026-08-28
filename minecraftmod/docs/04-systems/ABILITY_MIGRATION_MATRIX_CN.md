@@ -4,7 +4,7 @@
 
 | # | registration | source | EDN | 迁移组合 | adapter/VFX 隔离 |
 |---:|---|---|---|---|---|
-| 1 | `:railgun` | `:railgun` | `ac/combat/abilities/railgun.edn` | source → target/beam composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
+| 1 | `:railgun` | `:railgun` | `ac/combat/abilities/railgun.edn` | source → combat/beam-strike composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
 | 2 | `:arc-gen` | `:arc-gen` | `ac/combat/abilities/arc_gen.edn` | source → target query → area/damage composite → impact VFX | owner-scoped state + event-seq VFX |
 | 3 | `:thunder-clap` | `:thunder-clap` | `ac/combat/abilities/thunder_clap.edn` | source → target query → area/damage composite → impact VFX | owner-scoped state + event-seq VFX |
 | 4 | `:vec-reflection` | `:vec-reflection` | `ac/combat/abilities/vec_reflection.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
@@ -25,7 +25,7 @@
 | 19 | `:flashing` | `:flashing` | `ac/combat/abilities/flashing.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 20 | `:plasma-cannon` | `:plasma-cannon` | `ac/combat/abilities/plasma_cannon.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 21 | `:storm-wing` | `:storm-wing` | `ac/combat/abilities/storm_wing.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
-| 22 | `:ray-barrage` | `:ray-barrage` | `ac/combat/abilities/ray_barrage.edn` | source → target/beam composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
+| 22 | `:ray-barrage` | `:ray-barrage` | `ac/combat/abilities/ray_barrage.edn` | source → combat/beam-strike composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
 | 23 | `:current-charging` | `:current-charging` | `ac/combat/abilities/current_charging.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 24 | `:thunder-bolt` | `:thunder-bolt` | `ac/combat/abilities/thunder_bolt.edn` | source → target query → area/damage composite → impact VFX | owner-scoped state + event-seq VFX |
 | 25 | `:mine-detect` | `:mine-detect` | `ac/combat/abilities/mine_detect.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
@@ -34,10 +34,10 @@
 | 28 | `:body-intensify` | `:body-intensify` | `ac/combat/abilities/body_intensify.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 29 | `:jet-engine` | `:jet-engine` | `ac/combat/abilities/jet_engine.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 30 | `:light-shield` | `:light-shield` | `ac/combat/abilities/light_shield.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
-| 31 | `:meltdowner` | `:meltdowner` | `ac/combat/abilities/meltdowner.edn` | source → target/beam composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
+| 31 | `:meltdowner` | `:meltdowner` | `ac/combat/abilities/meltdowner.edn` | source → combat/beam-strike composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
 | 32 | `:flesh-ripping` | `:flesh-ripping` | `ac/combat/abilities/flesh_ripping.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
-| 33 | `:electron-bomb` | `:electron-bomb` | `ac/combat/abilities/electron_bomb.edn` | source → target/beam composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
-| 34 | `:electron-missile` | `:electron-missile` | `ac/combat/abilities/electron_missile.edn` | source → target/beam composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
+| 33 | `:electron-bomb` | `:electron-bomb` | `ac/combat/abilities/electron_bomb.edn` | source → combat/beam-strike composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
+| 34 | `:electron-missile` | `:electron-missile` | `ac/combat/abilities/electron_missile.edn` | source → combat/beam-strike composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
 | 35 | `:rad-intensify` | `:rad-intensify` | `ac/combat/abilities/rad_intensify.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 36 | `:mine-ray-basic` | `:mine-ray` | `ac/combat/abilities/mine_ray.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |
 | 37 | `:mine-ray-expert` | `:mine-ray` | `ac/combat/abilities/mine_ray.edn` | source → flow/phases → policy → query → action → effect/vfx | owner-scoped state + event-seq VFX |

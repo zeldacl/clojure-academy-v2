@@ -9,9 +9,9 @@
 ## 模块边界
 
 - `node-core/**`：语言本体，不依赖 Minecraft，也不依赖 combat-core/vfx-core/ac。
-- `combat-core/src/main/clojure/cn/li/combat/components.clj`：战斗词汇表注册——底层原语（`:layer :primitive`，带 `:impl`，可调 mcmod）与内建 composite。
-- `combat-core/src/main/clojure/cn/li/combat/vm.clj`：树遍历解释器；对 `:effect/vfx`/`:domain/event`/`:session-patch`/`:owner-patch` 等发射节点产出 `:actions`/`:events`/`:vfx`。
-- `combat-core/src/main/clojure/cn/li/combat/recipe.clj`：ability/composite 文档加载与编译，fail-closed 逐文档隔离（Design E）。
+- `combat-core/src/main/clojure/cn/li/combat/final_engine.clj`：唯一 final graph 执行器；只处理编译后的节点树，产出中立 actions/events/VFX 信号。
+- `combat-core/src/main/clojure/cn/li/combat/final_compiler.clj`：唯一 final graph 编译器；展开后的 composite 必须通过 descriptor、作用域和引用检查。
+- `combat-core/src/main/clojure/cn/li/combat/recipe.clj`：仅保留为非技能内容的文档读取工具，不是技能执行入口。
 - `combat-core/src/main/clojure/cn/li/combat/interception.clj`：伤害拦截决策边界（含反应管线），platform 事实采集（raycast/entity-motion）与 `:entity/damage` capability 调用都在这里直接完成，不经过 AC 转发。
 - `combat-core/src/main/clojure/cn/li/combat/skill_runtime.clj`：技能激活编排——tunable 具体化、VFX 信号规范化、结果组装。
 - `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host query/action capability 表。
@@ -32,7 +32,7 @@
 ## 运行时流程
 
 1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/composites.edn`、`vfx/manifest.edn`、`vfx/composites.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
-2. 客户端 CombatIntent 驱动 `skill_runtime/dispatch!`：具体化 tunable → `vm/execute!` 树遍历 → 产出 `{:actions :events :vfx-signals :query-results :status}`。
+2. 客户端 CombatIntent 驱动 AC final runtime：具体化 tunable → composite 展开 → `final_compiler/compile-program` → `final_engine/execute!`，产出 `{:commands :events :vfx :status}`。
 3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 作为中立 Intent 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播。
 4. 任意入站伤害（技能命中或 vanilla 击中）都先经过 `combat-core/interception.clj` 的 `intercept!`——这是唯一的伤害决策边界，platform 事实（world-id/目标位置/攻击者朝向）与反应管线（`reactions.clj`，逐步并入同一 VM，见 NODE_LANGUAGE.md §10）都在这一步完成，结果只返回给调用方提交，不在中途落地。
 
