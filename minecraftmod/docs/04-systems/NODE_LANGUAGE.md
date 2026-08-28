@@ -9,13 +9,13 @@
 
 ## 0. 目标
 
-技能与特效内容用一棵节点树描述，分三层：
+技能与特效内容用一棵节点树描述，分四类节点：
 
 ```
-上层技能 (ability, EDN)  ──组合──>  组合层语义 (mid, EDN)  ──组合──>  底层原语 (primitive, Clojure fn)
+技能 source 图 (source + primitive/composite, EDN)  ──展开──>  执行图 (primitive, EDN ABI)  ──宿主结算──>  Minecraft adapter
 ```
 
-三层共用同一套语言（描述符、表达式、作用域、composite 展开），语言本体不依赖
+四类节点共用同一套语言（描述符、表达式、作用域、composite 展开），语言本体不依赖
 Minecraft，放在 `node-core` 模块。`combat-core`/`vfx-core` 各自在其上注册词汇表。
 
 设计目标（用户确认的硬约束）：
@@ -23,13 +23,13 @@ Minecraft，放在 `node-core` 模块。`combat-core`/`vfx-core` 各自在其上
 2. **只有底层原语可以用函数实现**（因为需要经 mcmod 调 Minecraft API）；**组合层节点必须是纯 EDN**，由底层原语组合而成，不允许有自己的 Clojure 实现。
 3. 语言本身要足够机器可读，能驱动一个类似 Unreal 蓝图的可视化技能编辑器：每个节点的输入/输出要有类型、范围、默认值、文档。
 
-## 1. 三层规则
+## 1. 四类节点规则
 
 | 层 | `:layer` | 形态 | 可以做什么 | 注册方式 |
 |---|---|---|---|---|
 | 底层原语 | `:primitive` | Clojure 函数 | 可调用 mcmod / Minecraft；**不可调用其它节点** | `register-primitive!`，必须带 `:impl` |
 | 组合层语义 | `:composite` | 纯 EDN（composite 文档） | 只能组合已注册的原语/组合层节点 | `load-composite!`，**禁止** `:impl` |
-| 上层技能 | `:ability` | 纯 EDN（technique 文档） | 组合组合层与底层；唯一允许使用 source 节点的层 | manifest 文档 |
+| 上层技能 | `:source`/ability 文档 | 纯 EDN（technique 文档） | 组合 composite 与 primitive；唯一允许使用 source 节点的层 | manifest 文档 |
 
 机械强制（见 §7 门禁）：
 - 注册期直接拒绝 `:layer :composite` 且携带 `:impl` 的描述符——语言实现层面不给"组合层用函数抄近路"留出口。

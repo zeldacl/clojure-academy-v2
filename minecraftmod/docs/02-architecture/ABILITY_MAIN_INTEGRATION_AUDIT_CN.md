@@ -3,6 +3,8 @@
 > 审计基线：`main` 分支中的 Clojure `defskill`、课程构建器和 AC 运行时逻辑。
 > 当前 `ac/src/main/resources/ac/combat/abilities/*.edn` 只作为待验证实现，不能反过来定义行为。
 
+> **历史基线说明（2026-08-28）**：本文保留 main 分支逐项审计证据，结论不代表当前迁移分支的最终状态。当前唯一执行基线是 docs/04-systems/ABILITY_MIGRATION_MATRIX_CN.md、COMBAT_CORE.md 与 NODE_LANGUAGE.md；其中 	arget/beam-trace、host/beam-trace、	errain/propagate、inish-session? 等名称均为历史标识，不得重新加入最终 EDN 或 capability 路由。
+
 ## 判定规则
 
 - `❌`：已经发现确定的行为差异、缺失副作用或当前系统无法支持。
