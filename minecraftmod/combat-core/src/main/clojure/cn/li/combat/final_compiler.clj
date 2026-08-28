@@ -53,9 +53,15 @@
     []))
 (defn- compile-node [environment node path flags]
   (when-not (map? node) (fail :not-a-node {:path path :node node}))
-  (let [component (:component node) kind (node-kind environment node)]
+  (let [component (:component node)
+        descriptor (node-environment/descriptor environment component)
+        kind (or (:node-kind descriptor) (:kind node))]
     (when-not (keyword? component) (fail :missing-component {:path path}))
     (when-not kind (fail :unknown-final-node-kind {:path path :component component}))
+    (when (= :composite (:layer descriptor))
+      (fail :unexpanded-composite
+            {:path path :component component
+             :message "composite nodes must be expanded before final compilation"}))
     ;; A query after an action is lowered to a runtime transaction barrier.
     ;; The final engine flushes the already-preflighted command prefix before
     ;; issuing the query, preserving source order without delegating to the
