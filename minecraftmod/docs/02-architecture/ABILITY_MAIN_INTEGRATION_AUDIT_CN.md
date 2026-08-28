@@ -55,7 +55,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
-- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（41 tests / 128 assertions）、
+- 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（42 tests / 130 assertions）、
   `:combat-core:runCombatClojureTests`（35 tests / 92 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
@@ -631,7 +631,10 @@ thunder-bolt
 - 已在 Final `start` 的唯一入口加入 `cost/spend :activate`，以 `caster/creative?` 做
   scale（creative=0），不足资源立即以 `:insufficient-resource` 结束；之后才进入目标
   解析分支。没有恢复旧回调或硬编码补扣。
-- `:ac:runAcEdnCoverageTests` 通过（18 tests / 44 assertions）。目标实体/方块运动、
+- 已修正 pulse 的两个目标类型分支：资源不足不再使用只设置 outcome 的裸 `:finalize`，
+  而是转入同一 `:release` 图；因此会执行 main 要求的距离经验、摔落伤害重置、
+  两个会话 VFX 清理及 `finish-session`。没有复制第二套收尾逻辑。
+- `:ac:runAcEdnCoverageTests` 通过（42 tests / 130 assertions）。目标实体/方块运动、
   权限和多人并发仍需实机验证，总表继续保持 `⚠️`。
 
 ### mine-detect checkpoint（逐项迁移）
@@ -664,7 +667,7 @@ thunder-bolt
 - 本轮将原先只有 score/mark cast 的两处节点改为 ability/progression cast 加 score progression ref；没有复制 main callback，也没有新增兼容路径。
 - 达到最小蓄力但 tick 资源扣费失败时，main 会通过 cost-fail 路径立即执行攻击；Final
   现在将该失败分支切换到同一 release 图，保留成功/资源不足两条明确路径，不复制第二套攻击逻辑。
-- 已通过 ac runAcEdnCoverageTests（41 tests / 128 assertions）。蓄力 tick、自动释放、范围伤害和多人 VFX 时序仍需实机验证，总表保持 ⚠️。
+- 已通过 ac runAcEdnCoverageTests（42 tests / 130 assertions）。蓄力 tick、自动释放、范围伤害和多人 VFX 时序仍需实机验证，总表保持 ⚠️。
 
 - Final 图覆盖蓄力 start/pulse/release/abort、最大蓄力自动释放、最小蓄力判断、
   CP/overload 费用、charged-area-damage、距离 falloff、overcharge、闪电、环形
@@ -773,7 +776,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 41 tests / 128 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 42 tests / 130 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
@@ -798,7 +801,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 本轮验证结果
 
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
-- `:ac:runAcEdnCoverageTests`：通过 41 tests / 128 assertions；该门禁只验证
+- `:ac:runAcEdnCoverageTests`：通过 42 tests / 130 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
 - `:combat-core:runCombatClojureTests`：通过 35 tests / 92 assertions（包含本轮
   phase-transition、damage-threshold、teleport safety 回归）。
@@ -814,6 +817,6 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 最新统一静态校验（2026-08-28）
 
 - 对照 main 的 38 个真实 ability 与 12 个课程别名，当前 catalog 仍为 50 registrations、39 combat sources、36 VFX effects，全部使用 engine final。
-- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（41 tests / 128 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（35 tests / 92 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
+- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（42 tests / 130 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（35 tests / 92 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
 - 对所有显式 score/mark 做了静态扫描：未发现缺少 progression 的标记；Vec Deviation/Reflection 的受击经验由通用 Final damage side-event 桥承载。
 - 这只是加载、解析、编译和纯逻辑门禁；38 个真实技能仍保留 ⚠️，因为实体/方块 adapter 时序、VFX 客户端表现、多人隔离与 CPU/GC/内存 profiling 尚未实机验证。

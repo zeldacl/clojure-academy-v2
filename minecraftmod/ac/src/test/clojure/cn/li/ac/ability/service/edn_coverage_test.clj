@@ -636,6 +636,19 @@
     (is (= 2 (count marks)))
     (is (every? #(= {:ref [:local :cast-progression]} (:progression %)) marks))))
 
+(deftest mag-movement-cost-failure-enters-release-finalization-test
+  (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/mag_movement.edn"))
+        pulse-nodes (component-nodes (get-in doc [:program :pulse]))
+        insufficient-branches (filter #(and (= :flow/branch (:component %))
+                                            (= {:ref [:local :insufficient?]} (:when %)))
+                                      pulse-nodes)]
+    (is (= 2 (count insufficient-branches)))
+    (is (every? #(= {:component :flow/finish
+                     :outcome :insufficient-resource
+                     :next-phase :release}
+                    (:then %))
+                insufficient-branches))))
+
 (deftest storm-wing-submits-flight-tick-progression-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/storm_wing.edn"))
         nodes (component-nodes (:program doc))
