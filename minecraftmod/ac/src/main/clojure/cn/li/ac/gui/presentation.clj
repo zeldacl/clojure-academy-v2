@@ -35,6 +35,7 @@
       "academy:settings" :academy.app/settings
       "academy:machine_container" :academy.app/machine-container
       "academy:developer" :academy.app/developer
+      "academy:ability_interferer" :academy.app/ability-interferer
       "academy:wireless_matrix" :academy.app/wireless-matrix
       "academy:wireless_node" :academy.app/wireless-node
       (keyword (str/replace view-id ":" "/")))

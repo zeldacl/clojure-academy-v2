@@ -65,7 +65,7 @@
 (defn- generic-info-area [container progress]
   "Project the common code-built InfoArea contract into declarative state."
   (let [tile (:tile-entity container)
-        altitude (when (= (:container-type container) :wind-gen-main)
+        altitude (when (contains? #{:wind-gen-main :wind-gen-base} (:container-type container))
                    (try (some-> tile pos/block-pos pos/pos-y str)
                         (catch Exception _ nil)))
         fields (cond-> []

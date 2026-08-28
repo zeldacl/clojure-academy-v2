@@ -30,6 +30,7 @@
                :wireless-matrix :academy.app/wireless-matrix
                :wireless-node :academy.app/wireless-node
                :developer :academy.app/developer
+               :ability-interferer :academy.app/ability-interferer
                :academy.app/machine-container)
    :controller (:screen-factory-fn-kw definition)})
 

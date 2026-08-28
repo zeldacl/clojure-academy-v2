@@ -1,0 +1,49 @@
+{:view/id :academy.app/ability-interferer
+ :host {:kind :container :design-width 320 :design-height 220 :scale-policy :fit}
+ :state-schema {:slots :vector :slot-anchors :vector :machine-state :string :energy-ratio :number
+                :interferer-range :string :interferer-enabled :string
+                :interferer-range-down :map :interferer-range-up :map :interferer-toggle :map
+                :interferer-whitelist :vector :interferer-input :string :interferer-selected :string
+                :interferer-remove :map :network-visible :boolean :network-state :string
+                :network-owner :string :network-range :string :network-bandwidth :string
+                :network-load :number :network-nodes :vector :network-password :string
+                :network-disconnect :map :network-available-label :map :info-area :map}
+ :root {:type :column :key :interferer/root :layout {:x 8 :y 8 :width 304 :height 204}
+        :children [{:type :text :key :interferer/title :bind {:text [:state :machine-state]} :semantics {:role :heading}}
+                   {:type :scroll :key :interferer/slots :layout {:height 20} :bind {:items [:state :slots]} :semantics {:role :list}}
+                   {:type :repeater :key :interferer/slot-anchors :bind {:items [:state :slot-anchors]} :children [{:type :slot-anchor :bind {:item [:state :item]}}]}
+                   {:type :progress :key :interferer/energy :layout {:height 6} :bind {:value [:state :energy-ratio]} :semantics {:role :progress}}
+                   {:type :row :key :interferer/config
+                    :children [{:type :text :key :interferer/range :layout {:width 92} :bind {:text [:state :interferer-range]}}
+                               {:type :button :key :interferer/range-down :layout {:width 38 :height 18} :bind {:text [:state :interferer-range-down]} :on {:activate :interferer/range-down} :semantics {:role :button}}
+                               {:type :button :key :interferer/range-up :layout {:width 38 :height 18} :bind {:text [:state :interferer-range-up]} :on {:activate :interferer/range-up} :semantics {:role :button}}
+                               {:type :button :key :interferer/toggle :layout {:width 72 :height 18} :bind {:text [:state :interferer-toggle]} :on {:activate :interferer/toggle} :semantics {:role :button}}]}
+                   {:type :text :key :interferer/enabled :bind {:text [:state :interferer-enabled]}}
+                   {:type :text :key :interferer/selected :bind {:text [:state :interferer-selected]}}
+                   {:type :scroll :key :interferer/whitelist :layout {:height 54} :bind {:items [:state :interferer-whitelist]} :semantics {:role :list}
+                    :children [{:type :row :layout {:height 18}
+                                :children [{:type :text :layout {:width 212} :bind {:text [:item :label]}}
+                                           {:type :button :layout {:width 72 :height 16} :bind {:text [:item :select-label]} :on {:activate :interferer/select-whitelist} :semantics {:role :button}}]}]}
+                   {:type :row :key :interferer/input-row
+                    :children [{:type :text-input :key :interferer/input :layout {:width 212 :height 18} :bind {:text [:state :interferer-input]} :on {:change :interferer/input-change :submit :interferer/add-whitelist} :semantics {:role :textbox :field :interferer-input}}
+                               {:type :button :key :interferer/remove :layout {:width 72 :height 18} :bind {:text [:state :interferer-remove]} :on {:activate :interferer/remove-whitelist} :semantics {:role :button}}]}
+                   {:type :column :key :interferer/network :bind {:visible [:state :network-visible]} :layout {:height 56}
+                    :children [{:type :text :bind {:text [:state :network-state]}}
+                               {:type :text :bind {:text [:state :network-owner]}}
+                               {:type :text :bind {:text [:state :network-range]}}
+                               {:type :text :bind {:text [:state :network-bandwidth]}}
+                               {:type :progress :layout {:height 5} :bind {:value [:state :network-load]} :semantics {:role :progress}}
+                               {:type :text-input :layout {:height 18} :bind {:text [:state :network-password]} :on {:change :container/wireless-password :submit :container/wireless-password} :semantics {:role :textbox :field :wireless-password}}
+                               {:type :row :children [{:type :button :layout {:width 72 :height 18} :bind {:text [:state :network-disconnect]} :on {:activate :container/wireless-disconnect} :semantics {:role :button}}
+                                                    {:type :text :layout {:width 72 :height 18} :bind {:text [:state :network-available-label]}}]}
+                               {:type :scroll :layout {:height 34} :bind {:items [:state :network-nodes]} :semantics {:role :list}
+                                :children [{:type :row :layout {:height 18}
+                                            :children [{:type :text :layout {:width 212} :bind {:text [:item :label]}}
+                                                       {:type :button :layout {:width 72 :height 16} :bind {:text [:item :action-label]} :on {:activate :container/wireless-connect} :semantics {:role :button}}]}]}]}
+                   {:type :column :key :interferer/info :layout {:height 48}
+                    :children [{:type :text :bind {:text [:state :info-area :title]}}
+                               {:type :scroll :layout {:height 30} :bind {:items [:state :info-area :fields]} :semantics {:role :list}
+                                :children [{:type :row :layout {:height 16}
+                                            :children [{:type :text :layout {:width 76} :bind {:text [:item :label]}}
+                                                       {:type :text :layout {:width 220} :bind {:text [:item :value]}}]}]}]}
+                   ]}}
