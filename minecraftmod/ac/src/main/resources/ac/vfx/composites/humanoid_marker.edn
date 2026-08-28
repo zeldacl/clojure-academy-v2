@@ -4,12 +4,12 @@
  :revision 1
  :inputs
  {:anchor {:type :vec3}
-  :owner {:type :object :default nil}
+  :owner {:type :any :default nil}
   :texture-pattern {:type :string}
-  :frame-count {:type :long}
-  :frame-period-ticks {:type :double :default 2.5}
-  :color {:type :object :default [255 255 255 255]}
-  :facing {:type :keyword :default :owner}}
+  :frame-count {:type :int}
+  :frame-period-ticks {:type :float :default 2.5}
+  :color {:type :any :default [255 255 255 255]}
+  :facing {:type :resource-id :default :owner}}
  :body
  {:component :vfx/model-marker
   :anchor {:ref [:input :anchor]}
@@ -52,3 +52,4 @@
     :front [0.1875 0.25 0.5 0.875] :back [0.125 0.1875 0.5 0.875]
     :right [0.125 0.1875 0.5 0.875] :left [0.1875 0.25 0.5 0.875]
     :top [0.1875 0.25 0.5 0.625] :bottom [0.1875 0.25 0.75 0.875]}]}}
+

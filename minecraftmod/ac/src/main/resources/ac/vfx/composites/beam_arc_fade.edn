@@ -3,26 +3,26 @@
  :id :vfx/beam-arc-fade
  :revision 1
  :inputs
- {:duration-ticks {:type :long}
-  :beam-at {:type :long}
+ {:duration-ticks {:type :int}
+  :beam-at {:type :int}
   :start {:type :vec3}
   :end {:type :vec3}
-  :grow-ticks {:type :long}
-  :layers {:type :object}
-  :arc-at {:type :long}
-  :arc-spacing {:type :object}
-  :arc-radius {:type :object}
-  :arc-count-limit {:type :long}
-  :arc-life-ticks {:type :long}
-  :seed {:type :long}
-  :fade-at {:type :long}
-  :fade-from-tick {:type :long}
-  :fade-to-tick {:type :long}
-  :fade-from-alpha {:type :double}
-  :fade-to-alpha {:type :double}
-  :ring-radius {:type :object}
-  :ring-segments {:type :long}
-  :ring-color {:type :object}}
+  :grow-ticks {:type :int}
+  :layers {:type :any}
+  :arc-at {:type :int}
+  :arc-spacing {:type :any}
+  :arc-radius {:type :any}
+  :arc-count-limit {:type :int}
+  :arc-life-ticks {:type :int}
+  :seed {:type :int}
+  :fade-at {:type :int}
+  :fade-from-tick {:type :int}
+  :fade-to-tick {:type :int}
+  :fade-from-alpha {:type :float}
+  :fade-to-alpha {:type :float}
+  :ring-radius {:type :any}
+  :ring-segments {:type :int}
+  :ring-color {:type :any}}
  :body
  {:component :vfx/timeline
   :duration-ticks {:ref [:input :duration-ticks]}
@@ -52,3 +52,4 @@
                              :radius {:ref [:input :ring-radius]}
                              :segments {:ref [:input :ring-segments]}
                              :color {:ref [:input :ring-color]}}}}]}}
+

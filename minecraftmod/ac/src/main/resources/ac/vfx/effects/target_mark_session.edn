@@ -7,12 +7,12 @@
  :lifecycle :transient
  :inputs
  {:spawn {:position :vec3
-          :ttl-ticks :long
-          :count :long
-          :radius :double
-          :color :object
-          :seed :long}}
- :state-slots {:age :double :seed :long}
+          :ttl-ticks :int
+          :count :int
+          :radius :float
+          :color :any
+          :seed :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 60
          :children [{:at 0
@@ -27,3 +27,4 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius {:ref [:input :radius]}}}
+

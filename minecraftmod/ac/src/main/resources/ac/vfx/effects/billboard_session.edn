@@ -5,10 +5,10 @@
  :id :billboard-session
  :revision 1
  :lifecycle :session
- :inputs {:spawn {:anchor :object :duration-ticks :long :texture-pattern :string
-                  :frame-count :long :frame-duration-ms :long :half-size :double}
-          :update {:anchor :object}}
- :state-slots {:age :double :seed :long}
+ :inputs {:spawn {:anchor :any :duration-ticks :int :texture-pattern :string
+                  :frame-count :int :frame-duration-ms :int :half-size :float}
+          :update {:anchor :any}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks {:ref [:input :duration-ticks]}
          :children [{:at 0
@@ -18,3 +18,4 @@
                             :frame-count {:ref [:input :frame-count]}
                             :frame-duration-ms {:ref [:input :frame-duration-ms]}
                             :half-size {:ref [:input :half-size]}}}]}}
+

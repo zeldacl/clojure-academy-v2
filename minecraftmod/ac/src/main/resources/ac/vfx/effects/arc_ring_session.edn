@@ -6,15 +6,15 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:start :vec3 :end :vec3 :duration-ticks :long
-          :arc-spacing :object :arc-radius :object :arc-count-limit :long
-          :arc-life-ticks :long :ring-from :double :ring-to :double
-          :ring-segments :long :ring-color :object :sound-id :string
-          :sound-volume :double :sound-pitch :double :sound-position :vec3
-          :fade-at :long :fade-to-tick :long :fade-ring-from :double
-          :fade-ring-to :double :fade-segments :long :fade-color :object}
+ {:spawn {:start :vec3 :end :vec3 :duration-ticks :int
+          :arc-spacing :any :arc-radius :any :arc-count-limit :int
+          :arc-life-ticks :int :ring-from :float :ring-to :float
+          :ring-segments :int :ring-color :any :sound-id :string
+          :sound-volume :float :sound-pitch :float :sound-position :vec3
+          :fade-at :int :fade-to-tick :int :fade-ring-from :float
+          :fade-ring-to :float :fade-segments :int :fade-color :any}
   :update {:end :vec3}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks {:ref [:input :duration-ticks]}
          :children [{:at 0
@@ -54,3 +54,4 @@
           :start {:ref [:input :start]}
           :end {:ref [:input :end]}
           :radius 2.0}}
+

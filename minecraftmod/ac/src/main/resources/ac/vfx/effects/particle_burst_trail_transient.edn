@@ -9,10 +9,10 @@
  ;; knowledge; callers provide the texture, spread, motion and fade policy.
  :inputs
  {:spawn {:start :vec3 :end :vec3
-          :spacing :object :radius :object :count-limit :long
-          :life-ticks :long :texture :string :velocity :object
-          :size :object :alpha :object :fade-in :long :fade-out :long}}
- :state-slots {:age :double :seed :long}
+          :spacing :any :radius :any :count-limit :int
+          :life-ticks :int :texture :string :velocity :any
+          :size :any :alpha :any :fade-in :int :fade-out :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
   :duration-ticks 45
   :children [{:at 0
@@ -34,3 +34,4 @@
           :start {:ref [:input :start]}
           :end {:ref [:input :end]}
           :radius 1.2}}
+

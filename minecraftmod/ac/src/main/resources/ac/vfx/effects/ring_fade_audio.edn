@@ -6,12 +6,12 @@
  :revision 1
  :lifecycle :transient
  :inputs
- {:spawn {:position :vec3 :duration-ticks :long :ring-from :double
-          :ring-to :double :ring-segments :long :ring-color :object
-          :fade-at :long :fade-to-tick :long :fade-ring-from :double
-          :fade-ring-to :double :fade-segments :long :fade-color :object
-          :sound-id :string :sound-volume :double :sound-pitch :double}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:position :vec3 :duration-ticks :int :ring-from :float
+          :ring-to :float :ring-segments :int :ring-color :any
+          :fade-at :int :fade-to-tick :int :fade-ring-from :float
+          :fade-ring-to :float :fade-segments :int :fade-color :any
+          :sound-id :string :sound-volume :float :sound-pitch :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks {:ref [:input :duration-ticks]}
          :children [{:at 0
@@ -42,3 +42,4 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius 1.4}}
+

@@ -8,11 +8,11 @@
  ;; Generic electric/energy strike: a caster ray and zero or more
  ;; impact-to-target arcs. The effect has no ability-specific constants.
  :inputs
- {:spawn {:start :vec3 :end :vec3 :aoe-origin :vec3 :aoe-points :object
-          :arc-life-ticks :long :pattern :keyword :hand-origin? :boolean
-          :sound-id :string :sound-volume :double :sound-pitch :double
-          :sound-position :vec3 :bounds-radius :double}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:start :vec3 :end :vec3 :aoe-origin :vec3 :aoe-points :any
+          :arc-life-ticks :int :pattern :resource-id :hand-origin? :bool
+          :sound-id :string :sound-volume :float :sound-pitch :float
+          :sound-position :vec3 :bounds-radius :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/arc-strike
          :start {:ref [:input :start]}
          :end {:ref [:input :end]}
@@ -31,3 +31,4 @@
           :start {:ref [:input :start]}
           :end {:ref [:input :end]}
           :radius {:ref [:input :bounds-radius]}}}
+

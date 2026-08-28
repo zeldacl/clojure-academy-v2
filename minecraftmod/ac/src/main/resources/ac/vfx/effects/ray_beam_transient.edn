@@ -5,9 +5,9 @@
  :id :ray-beam-transient
  :revision 1
  :lifecycle :transient
- :inputs {:spawn {:start :vec3 :end :vec3 :life-ticks :long
-                  :grow-ticks :long :style :object :bounds-radius :double}}
- :state-slots {:age :double :seed :long}
+ :inputs {:spawn {:start :vec3 :end :vec3 :life-ticks :int
+                  :grow-ticks :int :style :any :bounds-radius :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/ray-beam
          :start {:ref [:input :start]}
          :end {:ref [:input :end]}
@@ -18,3 +18,4 @@
           :start {:ref [:input :start]}
           :end {:ref [:input :end]}
           :radius {:ref [:input :bounds-radius]}}}
+

@@ -6,10 +6,10 @@
  :revision 1
  :lifecycle :session
  :inputs {:spawn {:position :vec3 :sound-id :string
-                  :volume :double :pitch :double}
+                  :volume :float :pitch :float}
           :update {:position :vec3}
-          :destroy {:fade-ticks :long}}
- :state-slots {:age :double}
+          :destroy {:fade-ticks :int}}
+ :state-slots {:age :float}
  :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
@@ -20,3 +20,4 @@
                             :pitch {:ref [:input :pitch]}
                             :instance-key [:effect-instance :audio-loop]
                             :stop-on-destroy? true}}]}}
+

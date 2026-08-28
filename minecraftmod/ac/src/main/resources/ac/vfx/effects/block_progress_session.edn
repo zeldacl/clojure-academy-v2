@@ -6,14 +6,15 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:target :vec3 :progress :double :color :object
-          :pulse-period {:type :double :default 0.3}}
-  :update {:target {:type :vec3} :progress {:type :double}
-           :color {:type :object} :pulse-period {:type :double}}
-  :destroy {:fade-ticks :long}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:target :vec3 :progress :float :color :any
+          :pulse-period {:type :float :default 0.3}}
+  :update {:target {:type :vec3} :progress {:type :float}
+           :color {:type :any} :pulse-period {:type :float}}
+  :destroy {:fade-ticks :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/block-progress
          :target {:ref [:input :target]}
          :progress {:ref [:input :progress]}
          :color {:ref [:input :color]}
          :pulse-period {:ref [:input :pulse-period]}}}
+

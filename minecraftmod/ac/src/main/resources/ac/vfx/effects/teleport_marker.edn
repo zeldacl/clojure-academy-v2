@@ -8,12 +8,12 @@
  :inputs
  {:spawn {:owner :owner-id
           :position :vec3
-          :color :object
-          :particle-chance :double}
+          :color :any
+          :particle-chance :float}
   :update {:position :vec3
-           :color :object
-           :particle-chance :double}}
- :state-slots {:age :double :seed :long}
+           :color :any
+           :particle-chance :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
   :duration-ticks 120
   :children [{:at 0
@@ -45,3 +45,4 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius 1.2}}
+

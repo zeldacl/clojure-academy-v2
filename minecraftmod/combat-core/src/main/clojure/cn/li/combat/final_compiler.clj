@@ -46,11 +46,11 @@
           (contains? #{:resource/try-spend :cooldown/start :progression/mark
                        :score/mark} component) :policy
           (contains? #{:energy/target :target/raycast :target/raycast-fan
-                       :target/beam-trace :target/entities :target/blocks
+                       :target/beam :target/entities :target/blocks
                        :target/entity-snapshot :target/item-held
                        :target/saved-location :target/resolve-destination
                        :target/block-placement :target/directional-destination-query
-                       :owner/snapshot :terrain/propagate} component) :query
+                       :owner/snapshot :terrain/wave-plan} component) :query
           (contains? #{:owner/can-fly :energy/charge :resource/add
                        :resource/enforce-floor} component) :action
           :else
@@ -107,3 +107,4 @@
   (let [compiled (compile-node program [:program] {:mutated? false :deferred? false})]
     {:schema-version 1 :program program :instructions (:instructions compiled)
      :content-hash (str (hash (pr-str program)))}))
+

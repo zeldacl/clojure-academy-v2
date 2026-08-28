@@ -39,7 +39,7 @@
    {:id :entity/configure, :inputs {:world-id {:type :any, :default nil}, :place-when-collide? {:type :any, :default nil}, :projectile-damage {:type :any, :default nil}, :block-id {:type :any, :default nil}, :add-tags {:type :any, :default nil}, :entity {:type :any, :default nil}, :velocity {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/discard, :inputs {:world-id {:type :any, :default nil}, :entity {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/mark, :inputs {:requires-ability {:type :any, :default nil}, :duration-ticks {:type :any, :default nil}, :target {:type :any, :default nil}, :mark-type {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :entity/radial-impulse, :inputs {:world-id {:type :any, :default nil}, :speed-max {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :center {:type :any, :default nil}, :speed-min {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
+   {:id :motion/radial-impulse, :inputs {:world-id {:type :any, :default nil}, :speed-max {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :center {:type :any, :default nil}, :speed-min {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/reset-fall-damage, :inputs {:target {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :entity/spawn, :inputs {:add-tags {:type :any, :default nil}, :barrier? {:type :any, :default nil}, :entity-type {:type :any, :default nil}, :life-ticks {:type :any, :default nil}, :world-id {:type :any, :default nil}, :position {:type :any, :default nil}, :velocity {:type :any, :default nil}, :owner {:type :any, :default nil}}, :outputs {:entity-id {:type :any}, :status {:type :any}}, :children {}}
    {:id :entity/teleport, :inputs {:dismount? {:type :any, :default nil}, :world-id {:type :any, :default nil}, :reset-fall-damage? {:type :any, :default nil}, :position {:type :any, :default nil}, :target {:type :any, :default nil}}, :outputs {}, :children {}}
@@ -59,7 +59,6 @@
    {:id :flow/once, :inputs {:key {:type :any, :default nil}, :scope {:type :any, :default nil}, :strategy {:type :any, :default nil}, :storage-path {:type :any, :default nil}}, :outputs {}, :children {:body {:kind :single, :flow :closed}, :on-first {:kind :single, :flow :closed}}}
    {:id :flow/phases, :inputs {}, :outputs {}, :children {:start {:kind :single, :flow :sequential}, :pulse {:kind :single, :flow :sequential}, :release {:kind :single, :flow :sequential}, :abort {:kind :single, :flow :sequential}, :events {:kind :case-map, :flow :branch}}}
    {:id :flow/sequence, :inputs {}, :outputs {}, :children {:steps {:kind :seq, :flow :sequential}}}
-   {:id :host/beam-trace, :inputs {:block-limit {:type :any, :default nil}, :query-radius {:type :any, :default nil}, :entity-limit {:type :any, :default nil}, :radius {:type :any, :default nil}, :damage {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :result {:type :any, :default nil}, :trace-origin {:type :any, :default nil}, :length {:type :any, :default nil}, :origin {:type :any, :default nil}, :reflection-policy {:type :any, :default nil}, :step {:type :any, :default nil}, :direction {:type :any, :default nil}, :visual-length {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :inventory/consume, :inputs {:source {:type :any, :default nil}, :count {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :inventory/place-or-drop, :inputs {:source {:type :any, :default nil}, :count {:type :any, :default nil}, :creative? {:type :any, :default nil}, :plan {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :inventory/settle, :inputs {:source {:type :any, :default nil}, :count {:type :any, :default nil}, :creative? {:type :any, :default nil}, :position {:type :any, :default nil}, :drop? {:type :any, :default nil}}, :outputs {}, :children {}}
@@ -76,7 +75,7 @@
    {:id :score/mark, :inputs {:weight {:type :any, :default nil}, :tag {:type :any, :default nil}, :progression {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :session/read, :inputs {:key {:type :any, :default nil}}, :outputs {:value {:type :any}}, :children {}}
    {:id :session/write, :inputs {:key {:type :any, :default nil}, :value {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :target/beam-trace, :inputs {:block-limit {:type :any, :default nil}, :query-radius {:type :any, :default nil}, :entity-limit {:type :any, :default nil}, :radius {:type :any, :default nil}, :damage {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :trace-origin {:type :any, :default nil}, :length {:type :any, :default nil}, :origin {:type :any, :default nil}, :reflection-policy {:type :any, :default nil}, :step {:type :any, :default nil}, :direction {:type :any, :default nil}, :visual-length {:type :any, :default nil}}, :outputs {:beam {:type :any}}, :children {}}
+   {:id :target/beam, :inputs {:block-limit {:type :any, :default nil}, :query-radius {:type :any, :default nil}, :entity-limit {:type :any, :default nil}, :radius {:type :any, :default nil}, :damage {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :trace-origin {:type :any, :default nil}, :length {:type :any, :default nil}, :origin {:type :any, :default nil}, :reflection-policy {:type :any, :default nil}, :step {:type :any, :default nil}, :direction {:type :any, :default nil}, :visual-length {:type :any, :default nil}}, :outputs {:beam {:type :any}}, :children {}}
    {:id :target/block-placement, :inputs {:hit {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
    {:id :target/blocks, :inputs {:limit {:type :any, :default nil}, :shape {:type :any, :default nil}, :projection {:type :any, :default nil}}, :outputs {:blocks {:type :any}}, :children {}}
    {:id :target/directional-destination-query, :inputs {:look {:type :any, :default nil}, :eye-y {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
@@ -87,7 +86,7 @@
    {:id :target/raycast-fan, :inputs {:pitch-angles {:type :any, :default nil}, :limit {:type :any, :default nil}, :yaw-range-degrees {:type :any, :default nil}, :seed {:type :any, :default nil}, :result {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :target/resolve-destination, :inputs {:hit {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
    {:id :target/saved-location, :inputs {:location-name {:type :any, :default nil}}, :outputs {:location {:type :any}}, :children {}}
-   {:id :terrain/propagate, :inputs {:launch-base {:type :any, :default nil}, :launch-span {:type :any, :default nil}, :spread {:type :any, :default nil}, :mastery-radius {:type :any, :default nil}, :ground-break-probability {:type :any, :default nil}, :mastery-threshold {:type :any, :default nil}, :entity-search-radius {:type :any, :default nil}, :max-iterations {:type :any, :default nil}, :energy-cost {:type :any, :default nil}, :seed {:type :any, :default nil}, :result {:type :any, :default nil}, :drop-probability {:type :any, :default nil}, :origin {:type :any, :default nil}, :mastery-hardness-cap {:type :any, :default nil}, :block-transforms {:type :any, :default nil}, :mastery {:type :any, :default nil}, :initial-energy {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {}, :children {}}
+   {:id :terrain/wave-plan, :inputs {:launch-base {:type :any, :default nil}, :launch-span {:type :any, :default nil}, :spread {:type :any, :default nil}, :mastery-radius {:type :any, :default nil}, :ground-break-probability {:type :any, :default nil}, :mastery-threshold {:type :any, :default nil}, :entity-search-radius {:type :any, :default nil}, :max-iterations {:type :any, :default nil}, :energy-cost {:type :any, :default nil}, :seed {:type :any, :default nil}, :result {:type :any, :default nil}, :drop-probability {:type :any, :default nil}, :origin {:type :any, :default nil}, :mastery-hardness-cap {:type :any, :default nil}, :block-transforms {:type :any, :default nil}, :mastery {:type :any, :default nil}, :initial-energy {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :vfx/arc-field, :inputs {:count-limit {:type :any, :default nil}, :life-ticks {:type :any, :default nil}, :start {:type :any, :default nil}, :radius {:type :any, :default nil}, :seed {:type :any, :default nil}, :end {:type :any, :default nil}, :spacing {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :vfx/arc-strike, :inputs {:hand-origin? {:type :any, :default nil}, :sound-position {:type :any, :default nil}, :sound-pitch {:type :any, :default nil}, :sound-volume {:type :any, :default nil}, :start {:type :any, :default nil}, :seed {:type :any, :default nil}, :sound-id {:type :any, :default nil}, :arc-life-ticks {:type :any, :default nil}, :aoe-points {:type :any, :default nil}, :aoe-origin {:type :any, :default nil}, :end {:type :any, :default nil}, :bounds-radius {:type :any, :default nil}, :pattern {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :vfx/audio-loop, :inputs {:pitch {:type :any, :default nil}, :stop-on-destroy? {:type :any, :default nil}, :instance-key {:type :any, :default nil}, :volume {:type :any, :default nil}, :sound-id {:type :any, :default nil}, :position {:type :any, :default nil}}, :outputs {}, :children {}}
@@ -121,52 +120,52 @@
    ])
 
 (def ^:private composite-only-ids
-  #{:combat/area-damage :combat/beam-strike :combat/break-budget :combat/impact-strike
+  #{:combat/area-damage :combat/beam-strike :terrain/apply-break-budget :combat/impact-strike
     :combat/teleport-group :target/hold-destination :target/penetration-destination
-    :target/raycast-destination})
+    :target/raycast-destination :motion/radial-impulse :terrain/break-area
+    :terrain/random-break :terrain/wave-plan :combat/release-with-cost
+    :fx/lightning-strike :combat/charged-area-damage :combat/projectile-reflection-scan
+    :target/directional-destination})
 
-;; These identifiers occur in the VFX graph language but are not composites.
-;; They are structural/render primitives; registering them as empty :mid nodes
-;; would make the generic expander replace a real graph node with nil whenever
-;; no external composite document is present.
 (def ^:private vfx-runtime-specs
-  "Explicit ABI for structural/render nodes handled by vfx-core's sampler.
-   These are primitives from node-core's point of view (they have no external
-   Minecraft side effect), but their fields/child ports are still declared so
-   catalog validation and editor tooling cannot silently accept an arbitrary
-   shape."
-  [{:id :vfx/beam-bounds
-    :inputs {:start {:type :any} :end {:type :any} :radius {:type :any}}
-    :outputs {:bounds {:type :any}}}
-   {:id :vfx/branch
-    :inputs {:when {:type :any}}
-    :outputs {} :children {:then {:kind :single :flow :sequential}
-                           :else {:kind :single :flow :sequential}}}
-   {:id :vfx/group
-    :inputs {} :outputs {}
-    :children {:children {:kind :seq :flow :sequential}}}
-   {:id :vfx/let
-    :inputs {:bindings {:type :any}}
-    :outputs {} :children {:child {:kind :single :flow :sequential}}}
-   {:id :vfx/line
-    :inputs {:from {:type :any} :to {:type :any} :color {:type :any}
-             :material {:type :any} :geometry {:type :any}}
-    :outputs {}}
-   {:id :vfx/model-marker
-    :inputs {:anchor {:type :any} :texture-pattern {:type :any}
-             :frame-count {:type :any} :frame-period-ticks {:type :any}
-             :color {:type :any} :facing {:type :any} :owner {:type :any}
-             :parts {:type :any} :no-depth-test? {:type :any}
-             :no-cull? {:type :any}}
-    :outputs {}}
-   {:id :vfx/repeat
-    :inputs {:count {:type :any} :index-as {:type :any}}
-    :outputs {} :children {:body {:kind :single :flow :sequential}}}])
+  "Explicit ABI for structural/render nodes handled by vfx-core's sampler."
+  [{:id :vfx/beam-bounds :inputs {:start {:type :any} :end {:type :any} :radius {:type :any}} :outputs {:bounds {:type :any}}}
+   {:id :vfx/branch :inputs {:when {:type :any}} :outputs {} :children {:then {:kind :single :flow :sequential} :else {:kind :single :flow :sequential}}}
+   {:id :vfx/group :inputs {} :outputs {} :children {:children {:kind :seq :flow :sequential}}}
+   {:id :vfx/let :inputs {:bindings {:type :any}} :outputs {} :children {:child {:kind :single :flow :sequential}}}
+   {:id :vfx/line :inputs {:from {:type :any} :to {:type :any} :color {:type :any} :material {:type :any} :geometry {:type :any}} :outputs {}}
+   {:id :vfx/model-marker :inputs {:anchor {:type :any} :texture-pattern {:type :any} :frame-count {:type :any} :frame-period-ticks {:type :any} :color {:type :any} :facing {:type :any} :owner {:type :any} :parts {:type :any} :no-depth-test? {:type :any} :no-cull? {:type :any}} :outputs {}}
+   {:id :vfx/repeat :inputs {:count {:type :any} :index-as {:type :any}} :outputs {} :children {:body {:kind :single :flow :sequential}}}])
+
+(def ^:private kernel-specs
+  [{:id :kernel/break-area :revision 1 :layer :kernel :visibility :internal
+    :inputs {:origin {:type :vec3} :radius {:type :double} :hardness-max {:type :double} :limit {:type :long}}
+    :outputs {:broken-count {:type :long}}
+    :execution {:kind :combat-kernel :capability :terrain/break-area}}
+   {:id :kernel/random-break :revision 1 :layer :kernel :visibility :internal
+    :inputs {:origin {:type :vec3} :radius {:type :double} :attempts {:type :long} :hardness-max {:type :double} :seed {:type :long}}
+    :outputs {:broken-count {:type :long}}
+    :execution {:kind :combat-kernel :capability :terrain/random-break}}
+   {:id :kernel/apply-break-budget :revision 1 :layer :kernel :visibility :internal
+    :inputs {:blocks {:type [:list-of :map]} :energy {:type :double} :limit {:type :long} :drop-chance {:type :double}}
+    :outputs {:remaining-energy {:type :double}}
+    :execution {:kind :combat-kernel :capability :terrain/apply-break-budget}}
+   {:id :kernel/radial-impulse :revision 1 :layer :kernel :visibility :internal
+    :inputs {:center {:type :vec3} :radius {:type :double} :speed {:type :double} :limit {:type :long}}
+    :outputs {:affected-count {:type :long}}
+    :execution {:kind :combat-kernel :capability :motion/radial-impulse}}
+   {:id :kernel/terrain-wave-plan :revision 1 :layer :kernel :visibility :internal
+    :inputs {:origin {:type :vec3} :direction {:type :vec3} :initial-energy {:type :double} :max-iterations {:type :long} :seed {:type :long}}
+    :outputs {:transforms {:type [:list-of :map]} :broken-blocks {:type [:list-of :map]} :mastery-breaks {:type [:list-of :map]} :entities {:type [:list-of :map]}}
+    :execution {:kind :combat-kernel :capability :terrain/wave-plan}}
+   {:id :kernel/trace-beam :revision 1 :layer :kernel :visibility :internal
+    :inputs {:origin {:type :vec3} :direction {:type :vec3} :length {:type :double} :radius {:type :double}}
+    :outputs {:beam {:type :map}}
+    :execution {:kind :combat-kernel :capability :target/beam}}])
 
 (defn- composite-spec [id]
-  {:id id :revision 1 :layer :composite :category :final
-   :doc (str "Final node component " id)
-   :inputs {} :outputs {} :children {}})
+  {:id id :revision 1 :layer :composite :visibility :author :category :final
+   :doc (str "Final composite " id) :inputs {} :outputs {} :children {}})
 
 (defn- normalize-field [field]
   (cond-> (or field {:type :any})
@@ -175,37 +174,25 @@
 (defn- normalize-spec [spec]
   (-> spec
       (assoc :revision (long (or (:revision spec) 1))
+             :visibility (or (:visibility spec) :author)
              :category (or (:category spec) :final)
-             :doc (or (:doc spec) (str "Final node component " (:id spec)))
-             :inputs (into {} (map (fn [[k v]] [k (normalize-field v)])
-                                   (or (:inputs spec) {})))
-             :outputs (into {} (map (fn [[k v]] [k (normalize-field v)])
-                                    (or (:outputs spec) {})))
+             :doc (or (:doc spec) (str "Final node " (:id spec)))
+             :inputs (into {} (map (fn [[k v]] [k (normalize-field v)]) (or (:inputs spec) {})))
+             :outputs (into {} (map (fn [[k v]] [k (normalize-field v)]) (or (:outputs spec) {})))
              :children (or (:children spec) {}))))
 
-(defn descriptor-specs
-  "Return the complete AC vocabulary as immutable descriptor values. No
-   process-global registration occurs; each composition root owns its copy."
-  []
+(defn descriptor-specs []
   (mapv (fn [spec]
           (let [spec (normalize-spec spec)]
             (if (= :composite (:layer spec))
               spec
-              (assoc spec :layer :primitive :impl (fn [_ _] {})))))
-        (concat component-specs
-                (map composite-spec composite-only-ids)
-                vfx-runtime-specs)))
+              (if (= :kernel (:layer spec))
+                spec
+                (assoc spec :layer :primitive :impl (fn [_ _] {}))))))
+        (concat component-specs (map composite-spec composite-only-ids) kernel-specs vfx-runtime-specs)))
 
 (defn environment
-  "Build an AC-local NodeEnvironment, optionally extending it with loaded
-   composite documents. The returned value is immutable and can be safely
-   captured per server/player session without cross-player state."
   ([] (environment []))
   ([composites]
-   (let [loaded (into {} (map (fn [[id spec]] [id (normalize-spec spec)])
-                              (or composites {})))]
-     (descriptors/build
-      {:descriptors (concat (remove #(contains? loaded (:id %))
-                                   (descriptor-specs))
-                            (vals loaded))}))))
-
+   (let [loaded (into {} (map (fn [[id spec]] [id (normalize-spec spec)]) (or composites {})))]
+     (descriptors/build {:descriptors (concat (remove #(contains? loaded (:id %)) (descriptor-specs)) (vals loaded))}))))

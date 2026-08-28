@@ -1631,7 +1631,7 @@
    :item/held item-held!
    :entity/select entity-select!
    :block/select block-select!
-   :terrain/propagate terrain-propagate!
+   :terrain/wave-plan terrain-propagate!
    :interaction/resolve interaction-resolve!
    :saved-location saved-location!
    :owner/snapshot owner-snapshot!
@@ -1642,7 +1642,7 @@
    :entity/status entity-status!
    :combat/charged-area-damage charged-area-damage!
    :entity/impulse entity-impulse!
-   :entity/radial-impulse radial-impulse!
+   :motion/radial-impulse radial-impulse!
    :block/break break!
    :block/set set-block!
    :block/break-budget break-budget!
@@ -1682,3 +1682,4 @@
   (doseq [[capability handler] (action-handlers)]
     (when-not (contains? (:actions (capabilities/snapshot)) capability)
       (capabilities/register-action! capability handler))))
+

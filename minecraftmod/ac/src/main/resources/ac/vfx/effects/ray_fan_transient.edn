@@ -5,12 +5,12 @@
  :id :ray-fan-transient
  :revision 1
  :lifecycle :transient
- :inputs {:spawn {:origin :vec3 :direction :vec3 :length :double
-                  :count :long :yaw-range-degrees :object
-                  :pitch-range-degrees :object :life-ticks :long
-                  :grow-ticks :long :style :object :seed :long
-                  :bounds-radius :double}}
- :state-slots {:age :double :seed :long}
+ :inputs {:spawn {:origin :vec3 :direction :vec3 :length :float
+                  :count :int :yaw-range-degrees :any
+                  :pitch-range-degrees :any :life-ticks :int
+                  :grow-ticks :int :style :any :seed :int
+                  :bounds-radius :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/ray-fan
          :origin {:ref [:input :origin]}
          :direction {:ref [:input :direction]}
@@ -26,3 +26,4 @@
           :start {:ref [:input :origin]}
           :end {:ref [:input :origin]}
           :radius {:ref [:input :bounds-radius]}}}
+

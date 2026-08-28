@@ -6,10 +6,10 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:position :vec3 :width :double :height :double :color :object}
-  :update {:position :vec3 :width :double :height :double :color :object}
+ {:spawn {:position :vec3 :width :float :height :float :color :any}
+  :update {:position :vec3 :width :float :height :float :color :any}
   :destroy {}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/block-progress
   :target {:ref [:input :position]}
   :progress 0.0
@@ -22,3 +22,4 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius 1.2}}
+

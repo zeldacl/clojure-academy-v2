@@ -6,14 +6,14 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:mode :keyword :caster :vec3 :target :object
-          :block-pos :object :block-bounds :object :good? :boolean
-          :charge-ticks :long :visual-max-ticks :long :style :object}
-  :update {:mode :keyword :caster :vec3 :target :object
-           :block-pos :object :block-bounds :object :good? :boolean
-           :charge-ticks :long :visual-max-ticks :long :style :object}
-  :destroy {:fade-ticks :long}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:mode :resource-id :caster :vec3 :target :any
+          :block-pos :any :block-bounds :any :good? :bool
+          :charge-ticks :int :visual-max-ticks :int :style :any}
+  :update {:mode :resource-id :caster :vec3 :target :any
+           :block-pos :any :block-bounds :any :good? :bool
+           :charge-ticks :int :visual-max-ticks :int :style :any}
+  :destroy {:fade-ticks :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/channel-arc
          :mode {:ref [:input :mode]}
          :caster {:ref [:input :caster]}
@@ -29,3 +29,4 @@
           :start {:ref [:input :caster]}
           :end {:ref [:input :target]}
           :radius 2.0}}
+

@@ -169,6 +169,8 @@
           (when-not d (fail :unknown-component {:path path :component component}))
           (when (and (= :source (:layer d)) (seq stack))
             (fail :source-node-outside-ability {:path path :component component}))
+          (when (and (= :kernel (:layer d)) (empty? stack))
+            (fail :internal-kernel-not-authorable {:path path :component component}))
           (as-> node node*
             (reduce (fn [n [key {:keys [kind]}]]
                       (case kind
@@ -202,4 +204,5 @@
         descriptor-of (fn [id] (or (get composites id)
                                    (registry/descriptor environment id)))]
     (expand-node descriptor-of root #{} (volatile! 0) [:program])))
+
 

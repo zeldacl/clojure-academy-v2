@@ -6,17 +6,17 @@
  :revision 1
  :lifecycle :transient
  :inputs {:spawn {:origin :vec3 :look-dir :vec3
-                  :target-width :double :target-height :double
-                  :surface-hits :object :splash-count :long
-                  :splash-life-ticks :long
+                  :target-width :float :target-height :float
+                  :surface-hits :any :splash-count :int
+                  :splash-life-ticks :int
                   :splash-texture-pattern :string
-                  :splash-frame-count :long
-                  :splash-frame-duration-ms :long
-                  :splash-size :double :spray-textures :object
-                  :spray-life-ticks :long :spray-duplicates :long
-                  :seed :long}
+                  :splash-frame-count :int
+                  :splash-frame-duration-ms :int
+                  :splash-size :float :spray-textures :any
+                  :spray-life-ticks :int :spray-duplicates :int
+                  :seed :int}
           :destroy {}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/impact-burst
          :origin {:ref [:input :origin]}
          :look-dir {:ref [:input :look-dir]}
@@ -33,3 +33,4 @@
          :spray-life-ticks {:ref [:input :spray-life-ticks]}
          :spray-duplicates {:ref [:input :spray-duplicates]}
          :seed {:ref [:input :seed]}}}
+

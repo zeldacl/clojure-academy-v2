@@ -6,10 +6,10 @@
  :revision 1
  :lifecycle :transient
  :inputs
- {:spawn {:from :vec3 :to :vec3 :duration-ticks :long :rate-per-tick :long
-          :limit :long :particle :object :sound-id :string
-          :sound-volume :double :sound-pitch :double}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:from :vec3 :to :vec3 :duration-ticks :int :rate-per-tick :int
+          :limit :int :particle :any :sound-id :string
+          :sound-volume :float :sound-pitch :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks {:ref [:input :duration-ticks]}
          :children [{:at 0
@@ -34,3 +34,4 @@
           :start {:ref [:input :from]}
           :end {:ref [:input :to]}
           :radius 1.2}}
+

@@ -6,17 +6,18 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:stage :keyword
-          :phase-ticks :long
-          :duration-ticks :long
-          :curves :object}
-  :update {:stage :keyword
-           :phase-ticks :long
-           :duration-ticks :long}
+ {:spawn {:stage :resource-id
+          :phase-ticks :int
+          :duration-ticks :int
+          :curves :any}
+  :update {:stage :resource-id
+           :phase-ticks :int
+           :duration-ticks :int}
   :destroy {}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/first-person-motion
          :stage {:ref [:input :stage]}
          :phase-ticks {:ref [:input :phase-ticks]}
          :duration-ticks {:ref [:input :duration-ticks]}
          :curves {:ref [:input :curves]}}}
+

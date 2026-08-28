@@ -6,8 +6,8 @@
  :revision 1
  :lifecycle :transient
  :inputs {:spawn {:position :vec3 :sound-id :string
-                  :volume :double :pitch :double}}
- :state-slots {:age :double :seed :long}
+                  :volume :float :pitch :float}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 1
          :children [{:at 0
@@ -20,3 +20,4 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius 0.0}}
+

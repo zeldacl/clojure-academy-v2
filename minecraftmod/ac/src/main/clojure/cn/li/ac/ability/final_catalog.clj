@@ -38,13 +38,9 @@
                       (first type)))))
 
 (defn- normalize-type [type]
-  (case type
-    :boolean :bool
-    :long :int
-    :double :float
-    :keyword :resource-id
-    :object :any
-    type))
+  (when-not (final-type? type)
+    (throw (ex-info "non-canonical final type" {:type type})))
+  type)
 
 (defn- canonical [value]
   (cond
@@ -185,13 +181,7 @@
       :composites composites}))
 
 (defn- normalize-vfx-type [type]
-  (let [type (if (map? type) (:type type) type)]
-    (case type
-      :object :any
-      :keyword :resource-id
-      :long :int
-      :double :float
-      (normalize-type type))))
+  (normalize-type (if (map? type) (:type type) type)))
 
 (defn- graph-components [graph]
   (letfn [(walk [value]
@@ -347,6 +337,9 @@
                        :vfx-effects (:effect-count vfx)}
               :content-hash (content-hash
                              (ability-compose/catalog-fingerprint-input bundle)))))))
+
+
+
 
 
 

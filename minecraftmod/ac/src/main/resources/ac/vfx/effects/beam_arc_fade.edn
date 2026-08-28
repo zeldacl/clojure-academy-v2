@@ -7,13 +7,13 @@
  :lifecycle :transient
  :inputs
  {:spawn {:start :vec3 :end :vec3
-          :duration-ticks :long :beam-at :long :grow-ticks :long
-          :layers :object :arc-at :long :arc-spacing :object
-          :arc-radius :object :arc-count-limit :long :arc-life-ticks :long
-          :fade-at :long :fade-from-tick :long :fade-to-tick :long
-          :fade-from-alpha :double :fade-to-alpha :double
-          :ring-radius :object :ring-segments :long :ring-color :object}}
- :state-slots {:age :double :seed :long}
+          :duration-ticks :int :beam-at :int :grow-ticks :int
+          :layers :any :arc-at :int :arc-spacing :any
+          :arc-radius :any :arc-count-limit :int :arc-life-ticks :int
+          :fade-at :int :fade-from-tick :int :fade-to-tick :int
+          :fade-from-alpha :float :fade-to-alpha :float
+          :ring-radius :any :ring-segments :int :ring-color :any}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/beam-arc-fade
          :duration-ticks {:ref [:input :duration-ticks]}
          :beam-at {:ref [:input :beam-at]}
@@ -39,3 +39,4 @@
           :start {:ref [:input :start]}
           :end {:ref [:input :end]}
           :radius 1.2}}
+

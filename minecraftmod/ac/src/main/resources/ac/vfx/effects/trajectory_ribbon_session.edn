@@ -7,19 +7,19 @@
  :lifecycle :session
  :inputs
  {:spawn {:origin :vec3 :look-dir :vec3 :init-vel :vec3
-          :can-perform? :boolean :lateral-offset :double
-          :forward-offset :double :vertical-offset :double
-          :drag :double :gravity :double :dt :double
-          :segments :long :width :double :style :object}
+          :can-perform? :bool :lateral-offset :float
+          :forward-offset :float :vertical-offset :float
+          :drag :float :gravity :float :dt :float
+          :segments :int :width :float :style :any}
   :update {:origin {:type :vec3} :look-dir {:type :vec3}
-           :init-vel {:type :vec3} :can-perform? {:type :boolean}
-           :lateral-offset {:type :double} :forward-offset {:type :double}
-           :vertical-offset {:type :double} :drag {:type :double}
-           :gravity {:type :double} :dt {:type :double}
-           :segments {:type :long} :width {:type :double}
-           :style {:type :object}}
+           :init-vel {:type :vec3} :can-perform? {:type :bool}
+           :lateral-offset {:type :float} :forward-offset {:type :float}
+           :vertical-offset {:type :float} :drag {:type :float}
+           :gravity {:type :float} :dt {:type :float}
+           :segments {:type :int} :width {:type :float}
+           :style {:type :any}}
   :destroy {}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/trajectory-ribbon
          :origin {:ref [:input :origin]}
          :initial-velocity {:ref [:input :init-vel]}
@@ -38,3 +38,4 @@
           :start {:ref [:input :origin]}
           :end {:ref [:input :origin]}
           :radius 16.0}}
+

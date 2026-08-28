@@ -7,16 +7,16 @@
  :inputs {:origin {:type :vec3}
           :initial-velocity {:type :vec3}
           :look-dir {:type :vec3}
-          :lateral-offset {:type :double :default 0.0}
-          :forward-offset {:type :double :default 0.0}
-          :vertical-offset {:type :double :default 0.0}
-          :drag {:type :double :default 1.0}
-          :gravity {:type :double :default 0.0}
-          :dt {:type :double :default 0.02}
-          :segments {:type :long :default 2}
-          :width {:type :double :default 0.02}
+          :lateral-offset {:type :float :default 0.0}
+          :forward-offset {:type :float :default 0.0}
+          :vertical-offset {:type :float :default 0.0}
+          :drag {:type :float :default 1.0}
+          :gravity {:type :float :default 0.0}
+          :dt {:type :float :default 0.02}
+          :segments {:type :int :default 2}
+          :width {:type :float :default 0.02}
           :style {:type :map :default {}}
-          :can-perform? {:type :boolean :default false}}
+          :can-perform? {:type :bool :default false}}
  :outputs {}
  :body
  {:component :vfx/let
@@ -61,4 +61,5 @@
       :count {:expr :math/sub :args [{:ref [:input :segments-n]} 1.0]}
       :index-as :i
       :body {:component :vfx/line :from {:x {:expr :math/add :args [{:ref [:input :p0x]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :drag]}]} {:ref [:input :vx0]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:ref [:input :i]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:ref [:input :i]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]} :y {:expr :math/sub :args [{:expr :math/add :args [{:ref [:input :p0y]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :drag]}]} {:ref [:input :vy0]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:ref [:input :i]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:ref [:input :i]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :dt]}]} {:expr :math/mul :args [{:ref [:input :drag]} {:ref [:input :gravity]}]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:expr :math/div :args [{:expr :math/mul :args [{:ref [:input :i]} {:expr :math/sub :args [{:ref [:input :i]} 1.0]}]} 2.0]} {:expr :math/div :args [{:expr :math/sub :args [{:ref [:input :i]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:ref [:input :i]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:ref [:input :i]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]} :z {:expr :math/add :args [{:ref [:input :p0z]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :drag]}]} {:ref [:input :vz0]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:ref [:input :i]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:ref [:input :i]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]}} :to {:x {:expr :math/add :args [{:ref [:input :p0x]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :drag]}]} {:ref [:input :vx0]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:expr :math/add :args [{:ref [:input :i]} 1.0]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:expr :math/add :args [{:ref [:input :i]} 1.0]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]} :y {:expr :math/sub :args [{:expr :math/add :args [{:ref [:input :p0y]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :drag]}]} {:ref [:input :vy0]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:expr :math/add :args [{:ref [:input :i]} 1.0]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:expr :math/add :args [{:ref [:input :i]} 1.0]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :dt]}]} {:expr :math/mul :args [{:ref [:input :drag]} {:ref [:input :gravity]}]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:expr :math/div :args [{:expr :math/mul :args [{:expr :math/add :args [{:ref [:input :i]} 1.0]} {:expr :math/sub :args [{:expr :math/add :args [{:ref [:input :i]} 1.0]} 1.0]}]} 2.0]} {:expr :math/div :args [{:expr :math/sub :args [{:expr :math/add :args [{:ref [:input :i]} 1.0]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:expr :math/add :args [{:ref [:input :i]} 1.0]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:expr :math/add :args [{:ref [:input :i]} 1.0]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]} :z {:expr :math/add :args [{:ref [:input :p0z]} {:expr :math/mul :args [{:expr :math/mul :args [{:expr :math/mul :args [{:ref [:input :dt]} {:ref [:input :drag]}]} {:ref [:input :vz0]}]} {:expr :math/select :args [{:expr :math/eq :args [{:ref [:input :drag]} 1.0]} {:expr :math/add :args [{:ref [:input :i]} 1.0]} {:expr :math/div :args [{:expr :math/sub :args [1.0 {:expr :math/pow :args [{:ref [:input :drag]} {:expr :math/add :args [{:ref [:input :i]} 1.0]}]}]} {:expr :math/sub :args [1.0 {:ref [:input :drag]}]}]}]}]}]}} :color {:ref [:input :color]}}}}}}}}}
+
 

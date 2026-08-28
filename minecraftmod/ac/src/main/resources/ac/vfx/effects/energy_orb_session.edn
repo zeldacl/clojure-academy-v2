@@ -10,17 +10,17 @@
  ;; separate composable effect.
  :inputs
  {:spawn {:position :vec3
-          :radius :double
-          :segments :long
-          :outer-color :object
-          :inner-color :object
-          :core-color :object
-          :rate-per-tick :long
-          :limit :long
-          :particle :object}
+          :radius :float
+          :segments :int
+          :outer-color :any
+          :inner-color :any
+          :core-color :any
+          :rate-per-tick :int
+          :limit :int
+          :particle :any}
   :update {:position :vec3}
-  :destroy {:fade-ticks :long}}
- :state-slots {:age :double :seed :long}
+  :destroy {:fade-ticks :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
@@ -68,3 +68,4 @@
           :start {:ref [:input :position]}
           :end {:ref [:input :position]}
           :radius {:ref [:input :radius]}}}
+

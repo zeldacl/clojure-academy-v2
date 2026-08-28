@@ -8,11 +8,11 @@
  ;; Data-driven world block scan/highlight.  The component is neutral: the
  ;; filter, texture, palette and scan limits are supplied by each effect.
  :inputs
- {:spawn {:origin :vec3 :range :double :max-range :double
-          :filter :object :advanced? :boolean
-          :life-ticks :long :rescan-interval :long :max-results :long
-          :texture :string :base-color :object :tier-colors :object}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:origin :vec3 :range :float :max-range :float
+          :filter :any :advanced? :bool
+          :life-ticks :int :rescan-interval :int :max-results :int
+          :texture :string :base-color :any :tier-colors :any}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/block-scan
          :origin {:ref [:input :origin]}
          :range {:ref [:input :range]}
@@ -30,3 +30,4 @@
           :start {:ref [:input :origin]}
           :end {:ref [:input :origin]}
           :radius {:ref [:input :max-range]}}}
+

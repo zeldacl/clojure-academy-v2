@@ -9,14 +9,14 @@
  ;; orb, projectile or skill; callers choose the axis, geometry and palette
  ;; through the payload.
  :inputs
- {:spawn {:base :vec3 :axis :vec3 :height :double :spacing :object
-          :radius :object :count-limit :long :life-ticks :long
-          :seed :long :alpha {:type :double :default 1.0}
-          :orientation {:type :object :default nil}}
-  :update {:base :vec3 :alpha {:type :double :default 1.0}
-           :orientation {:type :object :default nil}}
-  :destroy {:fade-ticks :long}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:base :vec3 :axis :vec3 :height :float :spacing :any
+          :radius :any :count-limit :int :life-ticks :int
+          :seed :int :alpha {:type :float :default 1.0}
+          :orientation {:type :any :default nil}}
+  :update {:base :vec3 :alpha {:type :float :default 1.0}
+           :orientation {:type :any :default nil}}
+  :destroy {:fade-ticks :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
@@ -31,3 +31,4 @@
                             :count-limit {:ref [:input :count-limit]}
                             :life-ticks {:ref [:input :life-ticks]}
                             :seed {:ref [:input :seed]}}}]}}
+

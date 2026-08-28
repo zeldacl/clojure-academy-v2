@@ -7,10 +7,10 @@
  :lifecycle :session
  ;; Generic moving particle field.  Audio is deliberately a separate
  ;; transient effect so callers can compose either output independently.
- :inputs {:spawn {:position :vec3 :rate-per-tick :long :limit :long
-                  :particle :object}
+ :inputs {:spawn {:position :vec3 :rate-per-tick :int :limit :int
+                  :particle :any}
           :update {:position :vec3}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
@@ -19,3 +19,4 @@
                             :rate-per-tick {:ref [:input :rate-per-tick]}
                             :limit {:ref [:input :limit]}
                             :particle {:ref [:input :particle]}}}]}}
+

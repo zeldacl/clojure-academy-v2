@@ -10,10 +10,11 @@
  ;; overlay is inherently first-person-only -- broadcasting it would flash
  ;; nearby players' screens, not the caster's.
  :audience {:scope :self}
- :inputs {:spawn {:alpha :double :duration-ticks :long :color :object}
-          :update {:alpha :double}
+ :inputs {:spawn {:alpha :float :duration-ticks :int :color :any}
+          :update {:alpha :float}
           :destroy {}}
- :state-slots {:age :double}
+ :state-slots {:age :float}
  :control-graph {:component :vfx/timeline
          :duration-ticks {:ref [:input :duration-ticks]}
          :children []}}
+

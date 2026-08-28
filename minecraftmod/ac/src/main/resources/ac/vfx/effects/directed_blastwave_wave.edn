@@ -5,9 +5,9 @@
  :id :directed-blastwave-wave
  :revision 1
  :lifecycle :transient
- :inputs {:spawn {:position :vec3 :direction :vec3 :seed :long}
+ :inputs {:spawn {:position :vec3 :direction :vec3 :seed :int}
           :destroy {}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/directional-wave
          :position {:ref [:input :position]}
          :direction {:ref [:input :direction]}
@@ -35,3 +35,4 @@
          :texture "academy:textures/effects/glow_circle.png"
          :color [188 252 238 220]
          :seed {:ref [:input :seed]}}}
+

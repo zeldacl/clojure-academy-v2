@@ -8,10 +8,10 @@
  ;; Camera FOV is a first-person-only effect; broadcasting it to nearby
  ;; players would offset THEIR camera, not the caster's.
  :audience {:scope :self}
- :inputs {:spawn {:offset :double}
-          :update {:offset :double}
+ :inputs {:spawn {:offset :float}
+          :update {:offset :float}
           :destroy {}}
- :state-slots {:offset :double}
+ :state-slots {:offset :float}
  :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
@@ -19,3 +19,4 @@
                             :operation :fov-offset
                             :value {:ref [:input :offset]}
                             :duration-ticks 1}}]}}
+

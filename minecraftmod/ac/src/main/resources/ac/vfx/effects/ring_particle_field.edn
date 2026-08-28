@@ -5,11 +5,11 @@
  :id :ring-particle-field
  :revision 1
  :lifecycle :session
- :inputs {:spawn {:position :vec3 :ring-from :double :ring-to :double
-                  :segments :long :ring-color :object :rate-per-tick :long
-                  :limit :long :particle :object}
+ :inputs {:spawn {:position :vec3 :ring-from :float :ring-to :float
+                  :segments :int :ring-color :any :rate-per-tick :int
+                  :limit :int :particle :any}
           :update {:position :vec3}}
- :state-slots {:age :double :seed :long}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 4096
          :children [{:at 0
@@ -25,3 +25,4 @@
                             :rate-per-tick {:ref [:input :rate-per-tick]}
                             :limit {:ref [:input :limit]}
                             :particle {:ref [:input :particle]}}}]}}
+

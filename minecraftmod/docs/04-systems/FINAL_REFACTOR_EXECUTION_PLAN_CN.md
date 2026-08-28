@@ -9,7 +9,7 @@
 - 已完成：combat `StateTxnSet`、session read/write、VFX/feedback/events outbox、owner 生命周期；VFX replication 的 update 包只携带 dirty-mask 和变化参数，并支持 baseline/replay；冷却提交按 `[ability-id cooldown-name]` 保持键空间，progression/score 事件经 AC command runtime 写回技能经验。
 - 已完成：EDN 结构门禁递归检查 `:from/:tunable/:invariant`、旧 refs、旧 components、`:overrides`，任何残留均失败；没有运行时兼容 fallback。
 - 已完成：descriptor 不再由装配图动态推导；`final-vocabulary` 提供 source-controlled descriptor/schema，并通过 registry freeze 防止运行期扩展。
-- 本轮运行链路复核补齐：final engine 为 `:target/*`、`:owner/snapshot`、`:energy/target` 注入 owner/world/query-kind 并映射到 mcmod capability；`:domain/event` 明确写入 events outbox；`:combat/status`、`:combat/charged-area-damage` 与历史 `:host/beam-trace` 均有显式能力映射，其中 charged-area 具备有界半径、充能比例、距离衰减和统一 DamageBoundary action。该类“descriptor 存在但 host 没有 handler”的缺口已加入测试门禁。
+- 本轮运行链路复核补齐：final engine 为 `:target/*`、`:owner/snapshot`、`:energy/target` 注入 owner/world/query-kind 并映射到 mcmod capability；`:domain/event` 明确写入 events outbox；`:combat/status`、`:combat/charged-area-damage` 与历史 `:target/beam` 均有显式能力映射，其中 charged-area 具备有界半径、充能比例、距离衰减和统一 DamageBoundary action。该类“descriptor 存在但 host 没有 handler”的缺口已加入测试门禁。
 - 验收边界：本任务只做 headless/fake-mcmod 编译与测试；Minecraft 实机渲染、多人可见性和数值回归另开任务。
 - 二次代码审计已补齐作用域 ABI：`flow/foreach`/`data/bind` 的声明字段、查询节点的紧凑 `:result`、`combat/charged-area-damage` 的 `:ratio-slot` 以及 projectile callback 的闭合作用域均进入同一套 descriptor-driven scope/composite 规则；不再用全树局部变量预填充掩盖未绑定引用。真实 EDN coverage 已通过 9 tests / 25 assertions。
 
@@ -34,7 +34,7 @@
 17. `:vfx/beam-bounds`、`:vfx/model-marker`、`:vfx/line` 等 VFX 运行时/结构标识不能登记为空 `:mid`，否则唯一展开器会把没有外部文档的节点替换为 nil；它们已改为 final primitive/structural descriptors。AC EDN coverage 已验证 9 tests / 25 assertions，包含无未展开 composite 的断言。
 18. F3 的能力矩阵不再只是文档要求：`combat.final-engine/capability-matrix` 暴露 final component→neutral capability，combat headless 回归会逐项检查 action/query handler 闭合，并允许明确列出的 AC-owned query port（当前为 `:energy/target`）。当前 combat 测试为 31 tests / 56 assertions。
 19. 二次复核发现并修正了一个真实的严格检查缺口：`flow/once` 的 callback descriptor 原先把 `body/on-first` 标成 sequential，导致 projectile 局部变量无法沿回调边界传播；最终 ABI 现在标成 closed，projectile scan 通过 descriptor 的 `:child-binds-locals` 显式传入 `:projectile`。同时修复了 `contains?` 作用于 lazy sequence 的检查器错误；节点核心回归现为 77 tests / 133 assertions。
-20. 本轮再次直接审计执行器时发现 `:terrain/propagate` 虽然已经由 mcmod platform 暴露为 query，却被 final compiler 的 namespace 默认分支误判为 action；这会让 groundshock 等图拿不到 `:result`。现已把它加入显式 query ABI、query capability matrix，并用 fake host 回归验证不会进入 action 队列。
+20. 本轮再次直接审计执行器时发现 `:terrain/wave-plan` 虽然已经由 mcmod platform 暴露为 query，却被 final compiler 的 namespace 默认分支误判为 action；这会让 groundshock 等图拿不到 `:result`。现已把它加入显式 query ABI、query capability matrix，并用 fake host 回归验证不会进入 action 队列。
 21. `flow/foreach` 的 descriptor 已声明 `:index-as`，但 runtime 只绑定 `:as`；现已在每次迭代同时写入值和索引局部变量，并加入执行回归。`flow/once` 也不再用单一全局布尔值：支持 `:last-key`/`:set`/`:boolean`、`storage-path`、`on-first` 与 session patch，覆盖 vec-reflection 的 projectile 去重语义。
 22. Host action handler 的 apply 返回值原先被丢弃，导致 `:entity/mark` 返回的 VFX signal 无法发布；mcmod host 现在返回带 command/capability 的 `:results`，final engine 在 barrier 和最终 apply 两处把 `:vfx-signals/:feedback/:events` 合并进 outbox，并保留 `:action-results` 诊断记录。
 23. VFX server/headless `spawn!` 对未知 effect-id 原先会在参数校验处产生非结构化空引用；现已在分配句柄前硬拒绝 `{:effect-id ...}` 的结构化错误。当前回归为 Combat 31 tests / 56 assertions；Node 77/133、VFX 16/45、mcmod 191/569 全部通过。
@@ -169,3 +169,4 @@
 - 网络稳定：catalog hash 不一致拒绝执行；VFX update 使用 dirty mask，session/persistent 在 tracking enter、周期 replay 或显式 snapshot 时补发。
 - 依赖稳定：`node-core ← combat-core/vfx-core ← ability-runtime ← AC/BC/CC`；Minecraft 和网络能力由 mcmod 提供，组合层只通过明确端口使用。
 - 内容完整：最终 catalog 仍覆盖 39 source、50 specialization、36 effect；没有旧格式 fallback。
+

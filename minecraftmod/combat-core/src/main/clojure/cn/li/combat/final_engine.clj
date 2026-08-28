@@ -115,7 +115,7 @@
   {:combat/damage :entity/damage
    :combat/status :entity/status
    :combat/impulse :entity/impulse
-   :combat/break-budget :block/break-budget
+   :terrain/apply-break-budget :block/break-budget
    :combat/area-damage :entity/damage
    :combat/impact-strike :entity/damage
    :combat/charged-area-damage :combat/charged-area-damage
@@ -127,8 +127,8 @@
 (def ^:private query-capability-aliases
   {:target/raycast :raycast
    :target/raycast-fan :raycast
-   :target/beam-trace :beam-trace
-   :host/beam-trace :beam-trace
+   :target/beam :beam-trace
+   :target/beam :beam-trace
    :target/entities :entity/select
    :target/blocks :block/select
    :target/entity-snapshot :entity/snapshot
@@ -139,7 +139,7 @@
    :target/directional-destination-query :raycast
    :owner/snapshot :owner/snapshot
    :energy/target :energy/target
-   :terrain/propagate :terrain/propagate})
+   :terrain/wave-plan :terrain/wave-plan})
 
 (def ^:private query-kinds
   {:target/raycast-fan :raycast-fan
@@ -147,7 +147,7 @@
    :target/block-placement :block-placement
    :target/directional-destination-query :directional-destination
    :target/raycast :raycast
-   :target/beam-trace :beam-trace})
+   :target/beam :beam-trace})
 
 (defn capability-matrix
   "Static execution ABI used by audits and editor tooling.
@@ -563,3 +563,4 @@
          :feedback (:feedback (:outbox result))
          :events (:events (:outbox result))
          :scheduled (:scheduled result) :barriers (:barriers result) :host host-result}))))
+

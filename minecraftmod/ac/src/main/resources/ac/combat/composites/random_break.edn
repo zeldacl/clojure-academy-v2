@@ -1,0 +1,8 @@
+{:kind :composite, :id :terrain/random-break, :revision 1, :layer :composite, :category :world,
+ :doc "Select bounded random candidates from a sphere and delegate each mutation to the block/break primitive.",
+ :inputs {:origin {:type :vec3}, :radius {:type :float, :min 0.0}, :attempts {:type :int, :min 0, :max 256}, :hardness-max {:type :float}, :seed {:type :int}, :limit {:type :int, :default 256}},
+ :outputs {},
+ :body {:component :flow/sequence,
+        :steps [{:component :target/blocks, :shape {:type :sphere, :center {:ref [:input :origin]}, :radius {:ref [:input :radius]}}, :projection {:max-hardness {:ref [:input :hardness-max]}}, :limit {:ref [:input :limit]}, :bind {:candidates :blocks}}
+                {:component :flow/foreach, :items {:ref [:local :candidates]}, :as :candidate, :limit {:ref [:input :attempts]}, :body {:component :block/break, :position {:ref [:local :candidate :position]}}}]}}
+

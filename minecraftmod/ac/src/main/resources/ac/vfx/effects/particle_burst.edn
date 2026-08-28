@@ -6,8 +6,8 @@
  :revision 1
  :lifecycle :transient
  :inputs
- {:spawn {:position :vec3 :rate-per-tick :long :limit :long :particle :object}}
- :state-slots {:age :double :seed :long}
+ {:spawn {:position :vec3 :rate-per-tick :int :limit :int :particle :any}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/timeline
          :duration-ticks 1
          :children [{:at 0
@@ -16,3 +16,4 @@
                             :rate-per-tick {:ref [:input :rate-per-tick]}
                             :limit {:ref [:input :limit]}
                             :particle {:ref [:input :particle]}}}]}}
+

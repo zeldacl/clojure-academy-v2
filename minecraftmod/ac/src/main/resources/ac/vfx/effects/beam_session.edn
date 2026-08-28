@@ -6,13 +6,13 @@
  :revision 1
  :lifecycle :session
  :inputs
- {:spawn {:start :vec3 :end :vec3 :life-ticks :long :grow-ticks :long
-          :style :object :bounds-radius :double}
+ {:spawn {:start :vec3 :end :vec3 :life-ticks :int :grow-ticks :int
+          :style :any :bounds-radius :float}
   :update {:start {:type :vec3} :end {:type :vec3}
-           :life-ticks {:type :long} :grow-ticks {:type :long}
-           :style {:type :object} :bounds-radius {:type :double}}
-  :destroy {:fade-ticks :long}}
- :state-slots {:age :double :seed :long}
+           :life-ticks {:type :int} :grow-ticks {:type :int}
+           :style {:type :any} :bounds-radius {:type :float}}
+  :destroy {:fade-ticks :int}}
+ :state-slots {:age :float :seed :int}
  :control-graph {:component :vfx/ray-beam
          :start {:ref [:input :start]}
          :end {:ref [:input :end]}
@@ -23,3 +23,4 @@
           :start {:ref [:input :start]}
           :end {:ref [:input :end]}
           :radius {:ref [:input :bounds-radius]}}}
+
