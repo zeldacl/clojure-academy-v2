@@ -337,13 +337,10 @@
   ([{:keys [combat-manifest vfx-manifest combat-composites vfx-composites]
      :or {combat-manifest "ac/combat/manifest.edn"
           vfx-manifest "ac/vfx/manifest.edn"
-          combat-composites "ac/combat/composites_v3_manifest.edn"
-          vfx-composites "ac/vfx/composites_v3_manifest.edn"}}]
+          combat-composites "ac/combat/composites.edn"
+          vfx-composites "ac/vfx/composites.edn"}}]
    (let [combat-composite-docs (load-composite-docs combat-composites)
-         vfx-composite-docs (merge (load-composite-docs vfx-composites)
-                                   ;; The reusable timeline composites are
-                                   ;; part of the final VFX catalog as well.
-                                   (load-composite-docs "ac/vfx/components_manifest.edn"))
+         vfx-composite-docs (load-composite-docs vfx-composites)
          vfx (load-vfx vfx-manifest vfx-composite-docs)
          node-environment (vocabulary/environment combat-composite-docs)
          combat (load-combat combat-manifest node-environment combat-composite-docs)]
@@ -355,3 +352,5 @@
                        :vfx-effects (:effect-count vfx)}
               :content-hash (content-hash
                              (ability-compose/catalog-fingerprint-input bundle)))))))
+
+
