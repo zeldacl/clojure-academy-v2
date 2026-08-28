@@ -15,6 +15,8 @@
 (defn matrix-info-area-policy [initialized? is-owner?]
   (let [owner? (true? is-owner?)]
     (cond
+      (and (some? initialized?) (not (boolean? initialized?))) {:show-init? false :show-noinit? false
+                                      :editable-ssid? false :editable-password? false}
       (true? initialized?) {:show-init? false :show-noinit? false
                             :editable-ssid? owner? :editable-password? owner?}
       owner? {:show-init? true :show-noinit? false
