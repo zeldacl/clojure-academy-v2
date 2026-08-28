@@ -7,9 +7,9 @@
 
    expand is the ONLY place a :composite id can be resolved away: after it runs,
    every :component in the tree (below the ability's own top-level source
-   nodes) is a :primitive. A :source node found anywhere inside a
-   composite body is a compile error -- source nodes are only legal at an
-   ability document's own top level (NODE_LANGUAGE.md section 5)."
+   nodes) is a :primitive. A :source node found in a composite body is a
+   compile error; only a declared :node callback may carry caller-owned source
+   nodes across the composite boundary (NODE_LANGUAGE.md section 5)."
   (:require [cn.li.node.environment :as registry]
             [clojure.walk :as walk]))
 
@@ -86,50 +86,48 @@
          :else form))
      body)))
 
+(defn- mark-callsite-subtree
+  [value]
+  ;; Compiler-only metadata records that this callback executes in the caller
+  ;; lexical ability scope, not in the composite body scope.
+  (walk/postwalk
+   (fn [form]
+     (if (map? form)
+       (with-meta form (assoc (meta form) ::callsite-subtree true))
+       form))
+   value))
+
 (defn- substitute-inputs
-  "Replace {:ref [:input k & path]} anywhere in `body` (value position or
-   whole node position) with the resolved input value/subtree -- but ONLY
-   when `k` is one of this composite's own declared :inputs. A ref whose
-   key isn't in `inputs` is left untouched rather than substituted with
-   nil: a domain whose runtime value language also uses :input as a scope
-   name for something other than composite parameters (vfx-core's
-   :input/:state instance-signal scope, distinct from a composite's own
-   declared parameters) can nest a structural node inside a composite body
-   that introduces its OWN :input binding at a key the composite never
-   declared -- e.g. a :vfx/repeat body reading {:ref [:input :i]} for its
-   own loop-bound :index-as, not one of the composite's :inputs. Silently
-   substituting nil for that (the previous behavior) broke every such
-   nested binding; leaving it alone here defers it to whatever resolves
-   values at that domain's own runtime, exactly like a combat composite's
-   {:ref [:local ...]} forms are already left alone by this function (a
-   combat composite has no reason to ever write {:ref [:input ...]} except
-   to mean one of its own declared parameters, so this change is a no-op
-   for every existing combat composite)."
   [body inputs input-specs ns-prefix]
   (walk/postwalk
    (fn [form]
-     (if (and (map? form) (vector? (:ref form)) (= :input (first (:ref form))))
+     (if (and (map? form)
+              (vector? (:ref form))
+              (= :input (first (:ref form))))
        (let [[_ k & path] (:ref form)]
-         (if (contains? inputs k)
-           (let [v (get inputs k)]
+         (if-not (contains? inputs k)
+           form
+           (let [v (get inputs k)
+                 callsite-node? (= :node (get-in input-specs [k :type]))]
              (if (seq path)
                (get-in v (vec path))
-               (if-let [scope (get-in input-specs [k :scope])]
-                 (walk/postwalk
-                  (fn [callback-form]
-                    (if (and (map? callback-form)
-                             (vector? (:ref callback-form))
-                             (= :local (first (:ref callback-form)))
-                             (contains? scope (second (:ref callback-form))))
-                      (update-in callback-form [:ref 1]
-                                 #(keyword (str (name ns-prefix) "$" (name %))))
-                      callback-form))
-                  v)
-                 v)))
-           form))
+               (let [expanded (if-let [scope (get-in input-specs [k :scope])]
+                                (walk/postwalk
+                                 (fn [callback-form]
+                                   (if (and (map? callback-form)
+                                            (vector? (:ref callback-form))
+                                            (= :local (first (:ref callback-form)))
+                                            (contains? scope (second (:ref callback-form))))
+                                     (update-in callback-form [:ref 1]
+                                                #(keyword (str (name ns-prefix) "$" (name %))))
+                                     callback-form))
+                                 v)
+                                v)]
+                 (if callsite-node?
+                   (mark-callsite-subtree expanded)
+                   expanded))))))
        form))
    body))
-
 (defn- output-binds
   "Turn the call site's requested :bind {port -> caller-local} into extra
    :data/bind steps, reading the renamed internal name each declared
@@ -180,7 +178,7 @@
             (expand-node descriptor-of expanded-body (conj stack component) budget path)))
         (let [d (descriptor-of component)]
           (when-not d (fail :unknown-component {:path path :component component}))
-          (when (and (= :source (:layer d)) (seq stack))
+          (when (and (= :source (:layer d)) (seq stack) (not (::callsite-subtree (meta node))))
             (fail :source-node-outside-ability {:path path :component component}))
           (when (and (= :kernel (:layer d)) (empty? stack))
             (fail :internal-kernel-not-authorable {:path path :component component}))

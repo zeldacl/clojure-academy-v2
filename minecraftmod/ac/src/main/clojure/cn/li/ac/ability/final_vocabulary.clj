@@ -26,8 +26,11 @@
    {:id :damage/multiply, :inputs {:multiplier {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :damage/reduce, :inputs {:max-cost {:type :any, :default nil}, :rate {:type :any, :default nil}, :vfx {:type :any, :default nil}, :exp-scale {:type :any, :default nil}, :ignore-threshold {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :damage/reflect, :inputs {:multiplier {:type :any, :default nil}, :cost-per-damage {:type :any, :default nil}, :exp-scale {:type :any, :default nil}, :minimum {:type :any, :default nil}, :max-depth {:type :any, :default nil}}, :outputs {}, :children {}}
-   ;; A plain keyword :to binds the following sequential sibling.
-   {:id :data/bind, :inputs {:value {:type :any, :default nil}, :to {:type :any, :default nil}}, :outputs {}, :children {}, :binds-locals #{:to}}
+   ;; A plain keyword :to binds the following sequential sibling.  This is
+   ;; a lexical structural node, not an external source/context lookup: it is
+   ;; therefore explicitly primitive-layer so composite expansion may use it
+   ;; while the graph editor can still hide its runtime plumbing.
+   {:id :data/bind, :layer :primitive, :inputs {:value {:type :any, :default nil}, :to {:type :any, :default nil}}, :outputs {}, :children {}, :binds-locals #{:to}}
    {:id :data/random-item, :inputs {:result {:type :any, :default nil}, :items {:type :any, :default nil}}, :outputs {:item {:type :any}}, :children {}}
    {:id :domain/event, :inputs {:payload {:type :any, :default nil}, :event-type {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :effect/vfx, :inputs {:payload {:type :any, :default nil}, :operation {:type :any, :default nil}, :instance-key {:type :any, :default nil}, :audience {:type :any, :default nil}, :effect-id {:type :any, :default nil}}, :outputs {}, :children {}}
