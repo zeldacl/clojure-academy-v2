@@ -245,10 +245,15 @@
    :client-on-slot-key-tick! (fn [_ _] nil)
    :client-on-slot-key-up!
    (fn [player-uuid slot]
-     (when (combat-slot? player-uuid slot)
-       (send-combat-intent! player-uuid slot :release)))
+     (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
+       (when (and (not= :location-teleport ability-id)
+                  (combat-slot? player-uuid slot))
+         (send-combat-intent! player-uuid slot :release))))
    :client-on-slot-key-abort!
-   (fn [player-uuid slot] (send-combat-intent! player-uuid slot :abort))
+   (fn [player-uuid slot]
+     (when (not= :location-teleport
+                 (keybinds/get-skill-id-for-slot-public player-uuid slot))
+       (send-combat-intent! player-uuid slot :abort)))
    :client-on-movement-key-down!
    (fn [player-uuid movement-key]
      (send-movement-intent! player-uuid movement-key :press))
@@ -260,13 +265,14 @@
      (send-movement-intent! player-uuid movement-key :release))
    :client-on-slot-wheel!
    (fn [player-uuid slot delta]
-     (when (and (combat-slot? player-uuid slot)
+     (when (and (not= :location-teleport
+                    (keybinds/get-skill-id-for-slot-public player-uuid slot))
+                (combat-slot? player-uuid slot)
                 (number? delta)
                 (Double/isFinite (double delta))
                 (not (zero? (double delta))))
        (send-choice-intent! player-uuid slot
-                            (str "wheel:" (double delta)))))
-   :client-slot-visual-state slot-visual-state
+                            (str "wheel:" (double delta)))))   :client-slot-visual-state slot-visual-state
    :client-visual-state (fn [_ _] nil)
    :client-register-push-handlers! register-push-handlers!
    :client-clear-owner-state! clear-owner-state!
