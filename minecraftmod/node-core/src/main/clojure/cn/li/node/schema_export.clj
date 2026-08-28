@@ -6,7 +6,9 @@
 
 (defn- export-fields [fields]
   (reduce-kv (fn [acc k spec]
-               (assoc acc k (select-keys spec [:type :min :max :default :doc :scope])))
+               (if (= false (:editor-visible? spec))
+                 acc
+                 (assoc acc k (select-keys spec [:type :min :max :default :doc :scope]))))
              {} fields))
 
 (defn export-descriptor [d]
