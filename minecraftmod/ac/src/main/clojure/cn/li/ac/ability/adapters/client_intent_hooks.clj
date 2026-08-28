@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-reactive]
+            [cn.li.ac.content.ability.teleporter.location-teleport-presentation :as location-teleport]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
@@ -221,6 +222,7 @@
            #(into #{} (remove (fn [entry] (= uuid (second entry))) %)))
     (skill-tree-screen/close-screen! owner-value)
     (preset-editor-screen/close-screen! owner-value)
+    (location-teleport/close! uuid)
     (reactive-hud/clear-vm-wave-for-owner! [(current-session) :client-ui-hooks uuid])
     (reactive-hud/clear-charging-arcs-for-owner! [(current-session) :client-ui-hooks uuid])
     (keybinds/clear-client-keybind-state! uuid)
@@ -235,8 +237,11 @@
      (skill-query/get-skill-by-controllable category-id ctrl-id))
    :client-on-slot-key-down!
    (fn [player-uuid slot]
-     (when (combat-slot? player-uuid slot)
-       (send-combat-intent! player-uuid slot :start)))
+     (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
+       (if (= :location-teleport ability-id)
+         (location-teleport/open! (client-bridge/get-client-player))
+         (when (combat-slot? player-uuid slot)
+           (send-combat-intent! player-uuid slot :start)))))
    :client-on-slot-key-tick! (fn [_ _] nil)
    :client-on-slot-key-up!
    (fn [player-uuid slot]
