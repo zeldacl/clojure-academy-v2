@@ -647,7 +647,7 @@ if (target.loader != "none") {
                 // emitted class while excluding its matching source file.
                 // Clear only that stale sibling representation before require
                 // resolution; never prune the newly emitted target closure.
-                ([mcmodProject] + contentProjects).each { Project neutralProject ->
+                ([mcmodProject] + runtimeProjects + contentProjects).unique { it.path }.each { Project neutralProject ->
                     deleteNeutralSourceNamespaceClasses(
                         neutralProject.layout.buildDirectory.dir("classes/java/main").get().asFile)
                 }
