@@ -473,8 +473,7 @@
                       (contracts/assoc-owner-in (:txn context) owner path* value))]
             (assoc context :txn txn))
           :action
-          (let [
-                id (command-id engine path)
+          (let [id (command-id engine path)
                 command (contracts/host-command {:id id
                                                  :capability (or (:capability node)
                                                                  (when (contains? (:actions (:host engine)) component)
