@@ -156,17 +156,19 @@
 
 (defn- hit-collection [node rect env px py]
   (let [items (collection-items env node)
-        templates (vec (:children node))
-        template (or (first templates) {:type :text :layout {}})
+        raw-templates (vec (:children node))
+        template (or (first raw-templates) {:type :text :layout {}})
+        templates (if (seq raw-templates) raw-templates [template])
         direction (if (= :grid (:type node)) :row :column)
         item-rects (child-rects rect direction
                                 (mapv (constantly template) items))]
     (some (fn [[index item item-rect]]
-            (hit-action template item-rect
-                        (assoc env :item item :index index)
-                        px py))
+            (some (fn [template]
+                    (hit-action template item-rect
+                                (assoc env :item item :index index)
+                                px py))
+                  templates))
           (map vector (range) items item-rects))))
-
 (defn- hit-action
   ([node parent px py]
    (hit-action node parent {:state {}} px py))
