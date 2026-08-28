@@ -65,4 +65,4 @@
 
 ## Deferred ownership
 
-Combat Core owns neutral settlement (`beam-settlement`) only. The instance-local continuation queue belongs to `ability-runtime`; AC/BC/CC install one composition runtime and supply lifecycle/result callbacks. A graph `flow/after` is a graph-local scheduling construct in the AC composition root and is not a second beam/deferred implementation. No combat module stores a global pending queue.
+Combat Core owns neutral settlement (`beam-settlement`) only. The instance-local continuation queue belongs to `ability-runtime`; AC/BC/CC install one composition runtime and supply lifecycle/result callbacks. A graph `flow/after` is currently an AC composition-root-only graph construct (none of the 50 migrated skills use it), not a second beam/deferred implementation. If BC/CC later expose graph-level delay, the capability must be promoted into this same `ability-runtime` continuation contract; they must not create an AC-private or content-private queue. No combat module stores a global pending queue.
