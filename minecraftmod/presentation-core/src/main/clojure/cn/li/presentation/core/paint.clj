@@ -151,8 +151,13 @@
                       [(RenderCommand$UiItemPreview. item-id (+ x (/ width 2.0)) (+ y (/ height 2.0)) scale)])
       :model-preview (let [model-id (str (or (when (map? value) (:model-id value)) value ""))]
                        [(RenderCommand$UiModelPreview. model-id x y width height)])
-      :slot-anchor [(RenderCommand$UiQuadBatch.
-                     [(RenderCommand$UiQuad. x y width height (unchecked-int 0x22000000))])]
+      :slot-anchor (let [item (or (:item env) {})
+                         ix (float (or (:x item) x))
+                         iy (float (or (:y item) y))
+                         iw (float (or (:width item) width))
+                         ih (float (or (:height item) height))]
+                     [(RenderCommand$UiQuadBatch.
+                       [(RenderCommand$UiQuad. ix iy iw ih (unchecked-int 0x22000000))])])
       :clip [(RenderCommand$PushClip. x y width height)]
       :composite (let [item (or (:item env) {})
                        kind (:kind item)

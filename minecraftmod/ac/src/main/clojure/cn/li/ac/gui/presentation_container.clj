@@ -99,7 +99,8 @@
                                                        1 [[:button-right {:label (str (or label ""))}]]
                                                        []))
                                                    (or (:presentation-buttons container) [])))
-                            values (merge base-values extra-values text-values button-values)]
+                            values (merge base-values extra-values text-values button-values
+                                          {:slot-anchors anchors})]
                         (menu-bridge/update-snapshot! bridge @revision values)
                         (menu-bridge/snapshot bridge)))
         dispatch-action! (fn [action payload]
