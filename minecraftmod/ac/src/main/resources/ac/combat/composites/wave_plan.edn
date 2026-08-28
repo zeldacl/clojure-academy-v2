@@ -5,3 +5,4 @@
  :body {:component :kernel/terrain-wave-plan,
         :origin {:ref [:input :origin]}, :direction {:ref [:input :direction]}, :initial-energy {:ref [:input :initial-energy]}, :max-iterations {:ref [:input :max-iterations]}, :seed {:ref [:input :seed]}, :spread {:ref [:input :spread]}, :energy-cost {:ref [:input :energy-cost]}, :block-transforms {:ref [:input :block-transforms]}, :mastery {:ref [:input :mastery]}, :mastery-threshold {:ref [:input :mastery-threshold]}, :mastery-radius {:ref [:input :mastery-radius]}, :mastery-hardness-cap {:ref [:input :mastery-hardness-cap]}, :ground-break-probability {:ref [:input :ground-break-probability]}, :drop-probability {:ref [:input :drop-probability]}, :launch-base {:ref [:input :launch-base]}, :launch-span {:ref [:input :launch-span]}, :entity-search-radius {:ref [:input :entity-search-radius]}, :bind {:transforms :transforms, :broken-blocks :broken-blocks, :mastery-breaks :mastery-breaks, :entities :entities}}}
 
+

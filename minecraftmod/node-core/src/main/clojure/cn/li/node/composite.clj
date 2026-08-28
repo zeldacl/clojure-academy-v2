@@ -5,7 +5,7 @@
    :outputs without leaking hardcoded slot names (see NODE_LANGUAGE.md
    section 7).
 
-   expand is the ONLY place a :mid id can be resolved away: after it runs,
+   expand is the ONLY place a :composite id can be resolved away: after it runs,
    every :component in the tree (below the ability's own top-level source
    nodes) is a :primitive. A :source node found anywhere inside a
    composite body is a compile error -- source nodes are only legal at an
@@ -204,5 +204,6 @@
         descriptor-of (fn [id] (or (get composites id)
                                    (registry/descriptor environment id)))]
     (expand-node descriptor-of root #{} (volatile! 0) [:program])))
+
 
 

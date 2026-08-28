@@ -1020,7 +1020,7 @@ tasks.register("verifyNodeCoreDependencyDirection") {
 
 tasks.register("verifyNodeLayerDiscipline") {
     group = "verification"
-    description = "Mechanical half of the three-layer rule (NODE_LANGUAGE.md section 1): a :layer :mid component must be pure EDN, never a Clojure case-branch/handler. NodeEnvironment normalization rejects implementation functions on :mid descriptors; this gate covers what normalization alone cannot -- a :mid composite's own :id literally appearing as a dispatch target inside a domain vm.clj, which would let a 'mid' component silently execute as if it were a primitive."
+    description = "Mechanical half of the three-layer rule (NODE_LANGUAGE.md section 1): a :layer :composite component must be pure EDN, never a Clojure case-branch/handler. NodeEnvironment normalization rejects implementation functions on :mid descriptors; this gate covers what normalization alone cannot -- a :composite document's own :id literally appearing as a dispatch target inside a domain vm.clj, which would let a 'mid' component silently execute as if it were a primitive."
     dependsOn ":node-core:checkClojure"
     doLast {
         def violations = []
@@ -1036,7 +1036,7 @@ tasks.register("verifyNodeLayerDiscipline") {
                         (text =~ /:id\s+(:[A-Za-z0-9!?*\/-]+)/).each { match ->
                             def id = match[1].toString()
                             if (vmSourceWithoutComments.contains(id)) {
-                                violations << "${doc}: :mid component ${id} appears as a literal dispatch target in ${pair.vm} -- mid components must only ever be reached through composite expansion, never a case branch in the domain VM"
+                                violations << "${doc}: :composite component ${id} appears as a literal dispatch target in ${pair.vm} -- mid components must only ever be reached through composite expansion, never a case branch in the domain VM"
                             }
                         }
                     }
@@ -2313,4 +2313,6 @@ gradle.projectsEvaluated {
         }
     }
 }
+
+
 

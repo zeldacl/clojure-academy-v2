@@ -30,7 +30,7 @@
 13. AC 全量 test source 仍包含历史测试基础设施引用（`hud-render-data`、`node-info-area-policy`），它们不影响 `:ac:checkClojure`、final catalog assembly 或 EDN coverage；执行计划必须把“生产编译门”和“历史全量测试清理”分开，不能用后者阻塞 final runtime 交付。
 14. 本轮已补回纯测试支撑 `hud_render_data` 和 `node-info-area-policy`；AC 全量 test compile 仍会暴露更多明确的旧测试引用（`panel_reactive`、`console_reactive`、`skill-runtime`，以及 focused classpath 对 node-core 的缺失）。这些是旧测试迁移/Gradle test classpath 工作，不是生产源码入口；F7 以 production `checkClojure`、模块 headless 执行器测试、mcmod headless 测试和 EDN coverage 为本次交付门，AC 历史测试清理仍单列但不改变生产入口。
 15. 本轮实际网络审计发现固定 `input-edge` 解码原先接受合法包后的尾随字节；现已在 `fixed-channel` 拒绝尾随数据，并加入回归断言。通用 `binary-codec` 现对字符串、集合计数、字节负值/上限和解码尾随字节做硬校验；字符串上限为 1 MiB，以保留现有大于 64 KiB 的能力 payload 语义。网络门禁必须覆盖这些 malformed packet，而不只验证 round-trip。
-16. 本轮实际 VFX 审计发现客户端未知 `effect-id` 会创建 descriptor=nil 的静默空实例；现已改为抛出结构化 `:unknown-effect`。最终 VFX catalog 现在同时加载 `composites_v3_manifest.edn` 与 `components_manifest.edn`，并在 timeline 的 `{:at :node}` 包装内递归展开 composite；VFX graph 在展开后逐节点校验 descriptor，避免“descriptor 已注册但图仍含 composite”的假通过。
+16. 本轮实际 VFX 审计发现客户端未知 `effect-id` 会创建 descriptor=nil 的静默空实例；现已改为抛出结构化 `:unknown-effect`。最终 VFX catalog 现在同时加载 `composites.edn` 与 `composites.edn`，并在 timeline 的 `{:at :node}` 包装内递归展开 composite；VFX graph 在展开后逐节点校验 descriptor，避免“descriptor 已注册但图仍含 composite”的假通过。
 17. `:vfx/beam-bounds`、`:vfx/model-marker`、`:vfx/line` 等 VFX 运行时/结构标识不能登记为空 `:mid`，否则唯一展开器会把没有外部文档的节点替换为 nil；它们已改为 final primitive/structural descriptors。AC EDN coverage 已验证 9 tests / 25 assertions，包含无未展开 composite 的断言。
 18. F3 的能力矩阵不再只是文档要求：`combat.final-engine/capability-matrix` 暴露 final component→neutral capability，combat headless 回归会逐项检查 action/query handler 闭合，并允许明确列出的 AC-owned query port（当前为 `:energy/target`）。当前 combat 测试为 31 tests / 56 assertions。
 19. 二次复核发现并修正了一个真实的严格检查缺口：`flow/once` 的 callback descriptor 原先把 `body/on-first` 标成 sequential，导致 projectile 局部变量无法沿回调边界传播；最终 ABI 现在标成 closed，projectile scan 通过 descriptor 的 `:child-binds-locals` 显式传入 `:projectile`。同时修复了 `contains?` 作用于 lazy sequence 的检查器错误；节点核心回归现为 77 tests / 133 assertions。
@@ -169,4 +169,5 @@
 - 网络稳定：catalog hash 不一致拒绝执行；VFX update 使用 dirty mask，session/persistent 在 tracking enter、周期 replay 或显式 snapshot 时补发。
 - 依赖稳定：`node-core ← combat-core/vfx-core ← ability-runtime ← AC/BC/CC`；Minecraft 和网络能力由 mcmod 提供，组合层只通过明确端口使用。
 - 内容完整：最终 catalog 仍覆盖 39 source、50 specialization、36 effect；没有旧格式 fallback。
+
 

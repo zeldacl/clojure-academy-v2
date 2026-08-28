@@ -28,12 +28,12 @@ Minecraft，放在 `node-core` 模块。`combat-core`/`vfx-core` 各自在其上
 | 层 | `:layer` | 形态 | 可以做什么 | 注册方式 |
 |---|---|---|---|---|
 | 底层原语 | `:primitive` | Clojure 函数 | 可调用 mcmod / Minecraft；**不可调用其它节点** | `register-primitive!`，必须带 `:impl` |
-| 中层语义 | `:mid` | 纯 EDN（composite 文档） | 只能组合已注册的原语/中层节点 | `register-composite!`，**禁止** `:impl` |
+| 中层语义 | `:mid` | 纯 EDN（composite 文档） | 只能组合已注册的原语/中层节点 | `load-composite!`，**禁止** `:impl` |
 | 上层技能 | `:ability` | 纯 EDN（technique 文档） | 组合中层与底层；唯一允许使用 source 节点的层 | manifest 文档 |
 
 机械强制（见 §7 门禁）：
-- 注册期直接拒绝 `:layer :mid` 且携带 `:impl` 的描述符——语言实现层面不给"中层用函数抄近路"留出口。
-- 静态扫描：任何 `:layer :mid` 的组件 id，不得出现在任何 `defmethod`/handler-table/capability-table 里——防止有人绕开 `register-composite!` 直接在解释器里为某个"中层" id 加分支。
+- 注册期直接拒绝 `:layer :composite` 且携带 `:impl` 的描述符——语言实现层面不给"中层用函数抄近路"留出口。
+- 静态扫描：任何 `:layer :composite` 的组件 id，不得出现在任何 `defmethod`/handler-table/capability-table 里——防止有人绕开 `load-composite!` 直接在解释器里为某个"中层" id 加分支。
 - 原语总数被测试钉死（一个显式的 pin 常量），新增原语必须显式修改这个 pin——防止中层逻辑在无人注意时悄悄"降级"为一批新原语。
 
 ## 2. 描述符 = 完整端口契约
@@ -162,8 +162,8 @@ descriptor 用 `:reads-environment #{:tunables}` 之类的标记声明它读取�
 ## 7. Composite（中层）文档
 
 ```clojure
-;; ac/src/main/resources/ac/combat/components/target_raycast_destination.edn
-{:kind :composite :id :target/raycast-destination :revision 1 :layer :mid
+;; ac/src/main/resources/ac/combat/composites/target_raycast_destination.edn
+{:kind :composite :id :target/raycast-destination :revision 1 :layer :composite
  :doc "沿方向找一个可放置/命中的落点。"
  :category :targeting
  :inputs  {:origin {:type :vec3} :direction {:type :vec3} :distance {:type :double :default 32.0}}
@@ -189,8 +189,8 @@ descriptor 用 `:reads-environment #{:tunables}` 之类的标记声明它读取�
 用户举的例子。这是一个中层节点，纯 EDN，组合三个已有原语/composite：
 
 ```clojure
-;; ac/src/main/resources/ac/combat/components/lightning_strike.edn
-{:kind :composite :id :fx/lightning-strike :revision 1 :layer :mid
+;; ac/src/main/resources/ac/combat/composites/lightning_strike.edn
+{:kind :composite :id :fx/lightning-strike :revision 1 :layer :composite
  :doc "在一点召唤闪电：范围伤害 + 闪电视觉 + 冲击特效 + 雷鸣，一次调用。"
  :category :elemental
  :inputs {:position {:type :vec3}
@@ -232,13 +232,13 @@ vfx-core 词汇表复用 §1-§7 的全部规则，额外约定：
 - 叶子原语：`:vfx/line :vfx/quad :vfx/plasma-body :vfx/audio :vfx/camera :vfx/post`。
 - 环境传播（旧 `ctx :modifiers` 机制：`:vfx/fade`/`:vfx/scale` 悄悄改后代节点的 alpha/scale）被删除——一律用显式 `:vfx/transform` 包裹 + 显式颜色/alpha 输入。
 - `:state-slots` 是真正的类型化每实例状态（`{:key {:type t}}`），由 `:vfx/let`/`:vfx/curve` 之类的节点读写，不再是死数据。
-- 10 个现存的"语义大节点"（`directional-wave`/`impact-burst`/`arc-strike`/`channel-arc`/`block-scan`/`charge-ring`/`trajectory-ribbon`/`vortex-column`/`block-progress`/`first-person-motion`）全部是 `:layer :mid` 的 composite，不是 Clojure 函数。
+- 10 个现存的"语义大节点"（`directional-wave`/`impact-burst`/`arc-strike`/`channel-arc`/`block-scan`/`charge-ring`/`trajectory-ribbon`/`vortex-column`/`block-progress`/`first-person-motion`）全部是 `:layer :composite` 的 composite，不是 Clojure 函数。
 
 ## 10. 伤害反应（reactions）并入同一 VM
 
 现行 `combat-core/reactions.clj` 是第二套解释器：自己的表达式求值器、自己的作用域（`:context :request :param :session :state`，没有 `:slot`/`:from`），`:damage/reflect`/`:absorb`/`:critical`/`:reduce` 五个节点只在这里合法。这违反"一套节点模型"。
 
-目标形态：伤害反应在**同一个 node-core VM**、同一套 §4 作用域规则下执行；命中事实由一个新增 source 节点 `:ability/damage-request` 显式提供（而不是隐式挂在 `:context` 里）；`:damage/reflect`/`:absorb`/`:critical`/`:reduce` 从 Clojure 原语降级为 `:layer :mid` 的 EDN composite——它们各自的本质是"算术 + 扣费 + 给经验 + 产伤害"的组合，正是中层该有的形态，底层只需要 `:combat/damage`、`:resource/*`、`:score/mark` 这些已有原语。
+目标形态：伤害反应在**同一个 node-core VM**、同一套 §4 作用域规则下执行；命中事实由一个新增 source 节点 `:ability/damage-request` 显式提供（而不是隐式挂在 `:context` 里）；`:damage/reflect`/`:absorb`/`:critical`/`:reduce` 从 Clojure 原语降级为 `:layer :composite` 的 EDN composite——它们各自的本质是"算术 + 扣费 + 给经验 + 产伤害"的组合，正是中层该有的形态，底层只需要 `:combat/damage`、`:resource/*`、`:score/mark` 这些已有原语。
 
 ## 11. 错误契约
 
@@ -268,5 +268,6 @@ vfx-core 词汇表复用 §1-§7 的全部规则，额外约定：
 | combat `dataflow.clj`（确定赋值分析） | `node-core/scope.clj`（作用域链 + 类型检查） |
 | combat 26 操作码字节码 VM（`ir.clj`，不可达） | 删除；解释器是树遍历，不再假装有字节码层 |
 | vfx `ctx :modifiers`（`:vfx/fade`/`:vfx/scale` 环境传播） | 显式 `:vfx/transform` + 显式颜色/alpha 输入 |
-| vfx 10 个语义大节点（Clojure 函数） | 同名 `:layer :mid` composite |
+| vfx 10 个语义大节点（Clojure 函数） | 同名 `:layer :composite` composite |
 | `reactions.clj` 独立解释器 | 并入同一 node-core VM，`:damage/*` 降级为 composite |
+

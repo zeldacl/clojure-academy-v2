@@ -58,7 +58,7 @@
    Pending skills remain metadata-only and are rejected by the server gate."
   []
   (combat-catalog/initialize!)
-  (doseq [skill-spec (combat-catalog/migrated-skill-specs)]
+  (doseq [skill-spec (combat-catalog/skill-specs)]
     ;; Final entries enter the executable skill registry; the registry is a
     ;; UI/progression index and never an alternate graph evaluator.
     (skill-registry/register-skill! skill-spec))
@@ -112,3 +112,4 @@
   []
   (install/reset-framework-once-flag-for-test! ::combat-ability-content-installed)
   nil)
+

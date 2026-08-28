@@ -53,3 +53,4 @@
                              :segments {:ref [:input :ring-segments]}
                              :color {:ref [:input :ring-color]}}}}]}}
 
+

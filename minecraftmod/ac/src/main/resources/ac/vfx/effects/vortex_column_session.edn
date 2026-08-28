@@ -32,3 +32,4 @@
                             :life-ticks {:ref [:input :life-ticks]}
                             :seed {:ref [:input :seed]}}}]}}
 
+

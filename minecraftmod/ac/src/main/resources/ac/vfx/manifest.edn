@@ -107,3 +107,4 @@
              {:kind :vfx/system
               :id :particle-burst-trail-transient
               :resource "ac/vfx/effects/particle_burst_trail_transient.edn"}]}
+

@@ -6,3 +6,4 @@
   {:kind :composite :id :vfx/beam-arc-fade :resource "ac/vfx/composites/beam_arc_fade.edn"}
   {:kind :composite :id :vfx/humanoid-marker :resource "ac/vfx/composites/humanoid_marker.edn"}]}
 
+

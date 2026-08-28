@@ -23,7 +23,7 @@
 
 ```
 :layer :primitive   Clojure 函数，可调 mcmod        components.clj 的 register-primitive!
-:layer :mid          纯 EDN composite                ac/src/main/resources/ac/combat/components/*.edn
+:layer :composite          纯 EDN composite                ac/src/main/resources/ac/combat/composites/*.edn
 :layer :ability       纯 EDN 技能文档                  ac/src/main/resources/ac/combat/abilities/*.edn
 ```
 
@@ -31,7 +31,7 @@
 
 ## 运行时流程
 
-1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/components_manifest.edn`、`vfx/manifest.edn`、`vfx/components_manifest.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
+1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/composites.edn`、`vfx/manifest.edn`、`vfx/composites.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
 2. 客户端 CombatIntent 驱动 `skill_runtime/dispatch!`：具体化 tunable → `vm/execute!` 树遍历 → 产出 `{:actions :events :vfx-signals :query-results :status}`。
 3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 作为中立 Intent 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播。
 4. 任意入站伤害（技能命中或 vanilla 击中）都先经过 `combat-core/interception.clj` 的 `intercept!`——这是唯一的伤害决策边界，platform 事实（world-id/目标位置/攻击者朝向）与反应管线（`reactions.clj`，逐步并入同一 VM，见 NODE_LANGUAGE.md §10）都在这一步完成，结果只返回给调用方提交，不在中途落地。
@@ -39,7 +39,7 @@
 ## 扩展点
 
 - 新增底层原语：在 `components.clj` 用 `register-primitive!` 登记完整 v3 描述符（`:inputs`/`:outputs`/`:effects`/`:impl`），先确认它确实"只做一件事且必须触碰宿主"——否则应该是新增中层 composite 而不是新增原语。
-- 新增中层语义：在 `ac/src/main/resources/ac/combat/components/*.edn` 加一个 `:layer :mid` composite 文档，登记进 `components_manifest.edn`。**禁止**给它写任何 Clojure 实现。
+- 新增中层语义：在 `ac/src/main/resources/ac/combat/composites/*.edn` 加一个 `:layer :composite` composite 文档，登记进 `composites.edn`。**禁止**给它写任何 Clojure 实现。
 - 新增技能：在 `ac/src/main/resources/ac/combat/abilities/*.edn` 加文档，登记进 `manifest.edn`。技能文档顶层可以用 source 节点（`:ability/caster`/`:ability/tunable`/…，见 NODE_LANGUAGE.md §5）读取环境；中层/底层节点内部不可以。
 
 ## 排障手册
@@ -52,10 +52,11 @@
 ## 变更风险
 
 - `combat-core` 只产出计划/直接调用已注册的 mcmod 端口，绝不写 AC 的玩家存档 schema——这条边界由 `verifyAcNoWorldCapabilities`/`verifyCombatSingleDamagePath` 等门禁强制；新增 `:mutate` 原语时确认它落地的是 mcmod 端口而不是绕道 AC。
-- `:layer :mid` 组件不得有 `:impl`，不得出现在任何 `defmethod`/handler 表里——`verifyNodeLayerDiscipline` 强制。
+- `:layer :composite` 组件不得有 `:impl`，不得出现在任何 `defmethod`/handler 表里——`verifyNodeLayerDiscipline` 强制。
 - 中层/底层节点不得读取 `{:from …}`/`{:tunable …}`/`{:ref [:context …]}` 等环境形式——`verifyNoImplicitDependency` 强制。
 
 ## 兼容性约束
 
 - `combat-core` 只依赖 `node-core` 与 `mcmod`；VFX 信号是中立数据 ABI，不依赖 `vfx-core`。不得依赖 `ac`/`platform`/任何具体 loader 命名空间，由 `verifyCombatDependencyDirection` 强制。
 - `node-core` 不得依赖 `combat-core`/`vfx-core`/`mcmod`/`ac`，由 `verifyNodeCoreDependencyDirection` 强制。
+

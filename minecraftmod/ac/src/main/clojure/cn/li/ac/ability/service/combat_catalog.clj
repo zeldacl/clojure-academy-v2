@@ -1,49 +1,29 @@
 (ns cn.li.ac.ability.service.combat-catalog
-  "Compatibility-free AC view over the final typed catalog.
+  "Read-only projection of the single final catalog.
+   This service contains no migration status, evaluator fallback or skill-specific
+   suffix logic; all behavior and passive effects come from the compiled EDN.")
 
-   The namespace name is retained because AC UI/config callers consume the
-   catalog service, but no legacy recipe, VM, composite loader, or VFX loader
-   is required. Every ability entry is a final compiled registration."
-  (:require [cn.li.ac.ability.skill-config :as skill-config]))
-
-(defonce ^:private state* (atom {:initialized? false :status :cold}))
+(defonce ^:private state* (atom {:status :cold}))
 (defn- final-var [symbol]
   (or (requiring-resolve symbol)
       (throw (ex-info "final catalog service unavailable" {:symbol symbol}))))
-(defn- source-map [assembled]
-  (get-in assembled [:combat :sources] {}))
+
+(defn- source-map [assembled] (get-in assembled [:combat :sources] {}))
 (defn- registration-map [assembled]
   (into {} (map (juxt :id identity)) (get-in assembled [:combat :registrations])))
+
 (defn- ability-map [assembled]
   (into {}
         (map (fn [[id entry]]
                (let [source (get (source-map assembled) (:source-id entry) {})
-                     bindings (:bindings entry)
-                     metadata (or (:metadata bindings) {})
-                     ;; The final graph owns execution. This typed table is
-                     ;; consulted only for progression/UI identity fields
-                     ;; absent from a source graph; it never selects or
-                     ;; evaluates a program.
-                     progression (select-keys
-                                  (get skill-config/skill-definitions-by-id id)
-                                  [:category-id :level :controllable?])]
+                     bindings (:bindings entry)]
                  [id (merge source
-                            ;; Registration metadata is part of the final
-                            ;; catalog ABI.  It must be projected here before
-                            ;; the AC progression/UI registry is populated;
-                            ;; otherwise specialization entries lose their
-                            ;; category/prerequisite identity at startup.
-                            progression
-                            metadata
-                            {:id id :source-id (:source-id entry)
+                            (or (:metadata bindings) {})
+                            {:id id
+                             :source-id (:source-id entry)
                              :bindings bindings
                              :presentation (:presentation bindings)
-                             :program (:compiled entry)
-                             ;; final-catalog-service aborts initialization
-                             ;; unless every entry is ready, so a successful
-                             ;; projection has one execution status only.
-                             :status :migrated
-                             :engine :final})])))
+                             :program (:compiled entry)})])))
         (registration-map assembled)))
 
 (defn initialize! []
@@ -61,26 +41,16 @@
                       :by-id (registration-map assembled)
                       :trigger-index trigger-index
                       :errors {})
-        value {:initialized? true
-               :status :ready
-               :schema-version (:schema-version assembled)
-               :migration (into {} (map (fn [[id ability]] [id (:status ability)])) abilities)
-               :combat combat
-               :vfx (:vfx assembled)
-               :content-hash (:content-hash assembled)}]
+        value (assoc assembled :status :ready :combat combat)]
     (reset! state* value)
     value))
 
 (defn state [] @state*)
 (defn catalog [] @state*)
-(defn migration-status [ability-id]
-  (get-in @state* [:migration ability-id] :pending))
 (defn available? [ability-id]
-  (and (= :migrated (migration-status ability-id))
-       (contains? (get-in @state* [:combat :abilities]) ability-id)))
+  (contains? (get-in @state* [:combat :abilities]) ability-id))
 (defn ui-state [ability-id]
-  {:ability-id ability-id :migrated? (available? ability-id)
-   :enabled? (available? ability-id) :status (migration-status ability-id)})
+  {:ability-id ability-id :available? (available? ability-id) :enabled? (available? ability-id)})
 
 (defn resolve-trigger [source facts]
   (some (fn [trigger]
@@ -95,38 +65,26 @@
         (get-in @state* [:combat :trigger-index source])))
 
 (defn require-available [ability-id]
-  (when-not (available? ability-id)
-    (throw (ex-info "ability-not-migrated"
-                    {:reason :ability-not-migrated :ability-id ability-id
-                     :status (migration-status ability-id)})))
-  (get-in @state* [:combat :abilities ability-id]))
+  (or (get-in @state* [:combat :abilities ability-id])
+      (throw (ex-info "ability is unavailable" {:reason :ability-unavailable :ability-id ability-id}))))
 
 (defn apply-passive-resource-modifiers
-  "Apply the generic course modifiers owned by AC's ability data.
-
-  Course registrations are shared final graphs, but their resource effects
-  are player-local progression rules. Keeping this reducer pure avoids a
-  second evaluator and makes the multiplayer boundary explicit: only the
-  supplied owner's immutable `:learned-skills` set is inspected.
-  "
+  "Apply passive effects declared by learned course registrations.
+   The reducer is generic over EDN `:passive-effects` and has no skill-name
+   knowledge, so adding a course does not require code changes."
   [ability-data values]
   (let [learned (set (or (:learned-skills ability-data) #{}))
-        has-suffix? (fn [suffix]
-                      (boolean
-                       (some (fn [skill-id]
-                               (and (keyword? skill-id) (= suffix (name skill-id))))
-                             learned)))
-        cp-speed (double (or (:cp-recovery-speed values) 0.0))]
-    (cond-> values
-      (has-suffix? "brain-course")
-      (update :max-cp (fnil + 0.0) 1000.0)
-
-      (has-suffix? "brain-course-advanced")
-      (-> (update :max-cp (fnil + 0.0) 1500.0)
-          (update :max-overload (fnil + 0.0) 100.0))
-
-      (has-suffix? "mind-course")
-      (assoc :cp-recovery-speed (* cp-speed 1.2)))))
+        abilities (get-in @state* [:combat :abilities])]
+    (reduce (fn [result skill-id]
+              (reduce (fn [acc {:keys [target operation value]}]
+                        (case operation
+                          :add (update acc target (fnil + 0.0) (double value))
+                          :multiply (update acc target (fnil * 1.0) (double value))
+                          :set (assoc acc target value)
+                          acc))
+                      result
+                      (get-in abilities [skill-id :passive-effects])))
+            values learned)))
 
 (defn- normalize-translations [translations]
   (into {}
@@ -136,21 +94,15 @@
                                      entries))]))
         (or translations {})))
 
-(defn migrated-skill-specs []
+(defn skill-specs []
   (mapv (fn [[ability-id ability]]
-          (let [category-id (or (:category-id ability) :generic)]
-            {:id ability-id :category-id category-id
-             :level (:level ability)
-             :controllable? (:controllable? ability)
-             :name-key (:name-key ability)
-             :description-key (:description-key ability)
-             :icon (:icon ability)
-             :ctrl-id (or (:ctrl-id ability) ability-id)
-             :pattern (or (:pattern ability) :passive)
-             :actions (or (:actions ability) {})
-             :translations (normalize-translations (:translations ability))
-             ;; Registry schema validates this as a presentation/progression
-             ;; field; actual cooldown policy is owned by the final graph.
-             :cooldown {:mode :default} :execution :final}))
-        (sort-by first (filter (fn [[id _]] (available? id))
-                               (get-in @state* [:combat :abilities])))))
+          {:id ability-id :category-id (or (:category-id ability) :generic)
+           :level (:level ability) :controllable? (:controllable? ability)
+           :name-key (:name-key ability) :description-key (:description-key ability)
+           :icon (:icon ability) :ctrl-id (or (:ctrl-id ability) ability-id)
+           :pattern (or (:pattern ability) :passive) :actions (or (:actions ability) {})
+           :translations (normalize-translations (:translations ability))
+           :cooldown {:mode :default} :execution :final})
+        (sort-by first (get-in @state* [:combat :abilities]))))
+
+
