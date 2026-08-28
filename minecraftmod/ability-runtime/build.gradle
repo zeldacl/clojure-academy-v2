@@ -60,10 +60,7 @@ tasks.named("jar").configure { dependsOn clearNeutralAotOutput }
 // Runtime source/class roots are consumed by the platform target through the
 // selected content project (AC today, BC/CC content packs later).  The
 // composition layer owns this closure; AC no longer enumerates core modules.
-ext.neutralRuntimeSourceRoots = sourceSets.main.clojure.srcDirs +
-        [project(":node-core").file("src/main/clojure"),
-         project(":combat-core").file("src/main/clojure"),
-         project(":vfx-core").file("src/main/clojure")]
+ext.neutralRuntimeSourceRoots = sourceSets.main.clojure.srcDirs
 ext.neutralRuntimeClassDirs = [
         project(":presentation-core").layout.buildDirectory.dir("classes/java/main").get().asFile,
         project(":presentation-core").layout.buildDirectory.dir("clojure/main").get().asFile,

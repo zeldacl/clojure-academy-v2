@@ -919,7 +919,7 @@ tasks.register("verifyVfxDependencyDirection") {
 tasks.register("verifyVfxAotBoundary") {
     group = "verification"
     description = "Verify source-first VFX packaging and the platform AOT exclusion boundary."
-    dependsOn ":ac:assembleNeutralRuntimeSources"
+    dependsOn ":platform:prepareNeutralClojureRuntimeSources"
     doLast {
         def violations = []
         def vfxBuild = file("vfx-core/build.gradle").text
@@ -1316,7 +1316,7 @@ tasks.register("verifyAcNoWorldCapabilities") {
 tasks.register("verifyNeutralSourceAotXor") {
     group = "verification"
     description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
-    dependsOn ":ac:assembleNeutralRuntimeSources"
+    dependsOn ":platform:prepareNeutralClojureRuntimeSources"
     doLast {
         def violations = []
         rootProject.ext.neutralSourceFirstProjects.each { projectPath ->
