@@ -144,8 +144,13 @@ if (target.loader != "none") {
     if (contentProjectIds.isEmpty()) {
         throw new GradleException("Target '${targetId}' must declare contentProjects")
     }
-    contentProjectIds.each { evaluationDependsOn(":${it}") }
+
     def contentProjects = contentProjectIds.collect { project(":${it}") }
+    def runtimeProjectIds = (target.runtimeProjects ?: []).collect { it.toString() }
+    def runtimeProjects = runtimeProjectIds.collect { project(":${it}") }
+    def packagedRuntimeProjects = (runtimeProjects + contentProjects).unique { it.path }
+    def allRuntimeProjectIds = (runtimeProjectIds + contentProjectIds).unique()
+    allRuntimeProjectIds.each { evaluationDependsOn(":${it}") }
     def sourceComponentIds = target.sourceComponents.collect { it.toString() }
     def testComponentIds = (target.testComponents ?: []).collect { it.toString() }
     def sourceComponents = sourceComponentIds.collect { componentSourceRoot(it) }
@@ -281,13 +286,13 @@ if (target.loader != "none") {
         mcmodContract rootProject.project(mcmodProject.path)
         compileOnly runtimeClassOutput(mcmodProject)
         runtimeOnly runtimeClassOutput(mcmodProject)
-        contentProjects.each { contentProject ->
+        packagedRuntimeProjects.each { runtimeProject ->
             // Keep the target's source/output fast path. ProjectDependency
             // edges are intentionally absent from Loom classpaths (Loom
             // 1.13.469 calls the Gradle-removed ProjectDependency.getPath()).
             // The selected content project is still packaged and task-linked
             // below, while its compiled output is the actual classpath input.
-            runtimeOnly runtimeClassOutput(contentProject)
+            runtimeOnly runtimeClassOutput(runtimeProject)
         }
         clojureRuntimeLibraries.each { dependencyNotation ->
             implementation dependencyNotation
@@ -310,7 +315,7 @@ if (target.loader != "none") {
 
     tasks.named("compileJava").configure {
         dependsOn runtimeClassTasks(apiProject)
-        contentProjects.each { contentProject -> dependsOn runtimeClassTasks(contentProject) }
+        packagedRuntimeProjects.each { contentProject -> dependsOn runtimeClassTasks(contentProject) }
         dependsOn runtimeClassTasks(mcmodProject)
     }
 
@@ -359,13 +364,19 @@ if (target.loader != "none") {
             : [contentProject.file("src/main/clojure")]
         roots as List
     }
+    def runtimeNeutralSourceRoots = runtimeProjects.collectMany { runtimeProject ->
+        def roots = runtimeProject.hasProperty("neutralRuntimeSourceRoots")
+            ? runtimeProject.neutralRuntimeSourceRoots
+            : [runtimeProject.file("src/main/clojure")]
+        roots as List
+    }
     def platformClojureSourceClasspath = files(sourceComponents.collect { component ->
         componentDir(component, "clojure")
-    } + [mcmodProject.file("src/main/clojure")] + contentNeutralSourceRoots)
+    } + [mcmodProject.file("src/main/clojure")] + runtimeNeutralSourceRoots + contentNeutralSourceRoots)
 
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
     def neutralClojureSourceRoots = [mcmodProject.file("src/main/clojure")] +
-        contentNeutralSourceRoots
+        runtimeNeutralSourceRoots + contentNeutralSourceRoots
     def neutralClojureResourceDir = layout.buildDirectory.dir("generated/neutral-clojure-resources")
     def neutralClojureReportDir = layout.buildDirectory.dir("reports/neutral-clojure")
     def neutralAotBasesManifest = neutralClojureReportDir.map { it.file("aot-bases.txt") }
@@ -411,7 +422,7 @@ if (target.loader != "none") {
             def aotClasses = new TreeSet<String>()
             def platformAotClassRoot = clojureAotDir.get().asFile
             def staleAotClassRoots = [platformAotClassRoot] +
-                ([mcmodProject] + contentProjects).collect { it.layout.buildDirectory.dir("clojure/main").get().asFile }
+                ([mcmodProject] + packagedRuntimeProjects).collect { it.layout.buildDirectory.dir("clojure/main").get().asFile }
             staleAotClassRoots.each { File aotDir ->
                 if (aotDir.isDirectory()) {
                     fileTree(aotDir) { include "**/*.class" }.files.each { File classFile ->
@@ -988,7 +999,7 @@ if (target.loader != "none") {
 
     configurePackagedRuntimeProject(apiProject, "Api")
     configurePackagedRuntimeProject(mcmodProject, "Mcmod")
-    contentProjects.each { contentProject ->
+    packagedRuntimeProjects.each { contentProject ->
         def label = contentProject.name.replaceAll(/[^A-Za-z0-9]/, "_").capitalize()
         configurePackagedRuntimeProject(contentProject, label)
     }

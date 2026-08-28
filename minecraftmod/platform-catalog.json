@@ -208,6 +208,7 @@
         "server": [], "client": [], "datagen": []
       },
       "neutralAotWhitelist": [],
+      "runtimeProjects": ["presentation-core", "ability-runtime", "node-core", "combat-core", "vfx-core"],
       "contentProjects": ["ac"],
       "sourceComponents": [
         "platform-shared",
@@ -290,6 +291,7 @@
         "server": [], "client": [], "datagen": []
       },
       "neutralAotWhitelist": [],
+      "runtimeProjects": ["presentation-core", "ability-runtime", "node-core", "combat-core", "vfx-core"],
       "contentProjects": ["ac"],
       "sourceComponents": [
         "platform-shared",
@@ -377,6 +379,7 @@
         "server": [], "client": [], "datagen": []
       },
       "neutralAotWhitelist": [],
+      "runtimeProjects": ["presentation-core", "ability-runtime", "node-core", "combat-core", "vfx-core"],
       "contentProjects": ["ac"],
       "sourceComponents": [
         "platform-shared",
@@ -464,6 +467,7 @@
         "server": [], "client": [], "datagen": []
       },
       "neutralAotWhitelist": [],
+      "runtimeProjects": ["presentation-core", "ability-runtime", "node-core", "combat-core", "vfx-core"],
       "contentProjects": ["ac"],
       "sourceComponents": [
         "platform-shared",
@@ -541,6 +545,7 @@
         "server": [], "client": [], "datagen": []
       },
       "neutralAotWhitelist": [],
+      "runtimeProjects": ["presentation-core", "ability-runtime", "node-core", "combat-core", "vfx-core"],
       "contentProjects": ["ac"],
       "sourceComponents": [
         "platform-shared",
@@ -618,6 +623,7 @@
         "server": [], "client": [], "datagen": []
       },
       "neutralAotWhitelist": [],
+      "runtimeProjects": ["presentation-core", "ability-runtime", "node-core", "combat-core", "vfx-core"],
       "contentProjects": ["ac"],
       "sourceComponents": [
         "platform-shared",

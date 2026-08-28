@@ -1822,6 +1822,31 @@ tasks.register("verifyPresentationArtifacts") {
     }
 }
 
+tasks.register("verifyPresentationMigrationInventory") {
+    group = "verification"
+    description = "Verify the main-branch UI contract includes code-built, native and declarative surfaces."
+    doLast {
+        def contract = file("docs/06-gui/presentation/main-ui-contract.edn")
+        if (!contract.isFile()) throw new GradleException("Main UI migration contract missing: " + contract)
+        def text = contract.getText("UTF-8")
+        def required = [":baseline", ":source-kinds", ":surfaces", ":unreachable-candidates", ":required-migration-fields",
+                        ":main-evidence", ":state-schema", ":actions", ":effects", ":layout", ":assets", ":semantics", ":artifact", ":reducer", ":targets", ":snapshot-fixtures"]
+        def missing = required.findAll { !text.contains(it) }
+        if (!missing.isEmpty()) throw new GradleException("Main UI contract is incomplete: " + missing)
+        def kinds = [":xml", ":static-code", ":dynamic-code", ":direct-render", ":native-menu", ":mixed"]
+        def missingKinds = kinds.findAll { !text.contains(it) }
+        if (!missingKinds.isEmpty()) throw new GradleException("Main UI contract misses source kinds: " + missingKinds)
+        def surfaceCount = (text =~ /:id\s+:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/).count
+        if (surfaceCount < 35) throw new GradleException("Main UI contract has too few surfaces: " + surfaceCount)
+        ["ac/src/main/clojure/cn/li/ac/block/wireless_matrix/matrix_info_reactive.clj",
+         "ac/src/main/clojure/cn/li/ac/block/wireless_node/node_info_reactive.clj",
+         "ac/src/main/clojure/cn/li/ac/ability/client/reactive_hud.clj",
+         "ac/src/main/clojure/cn/li/ac/terminal/client/runtime.clj"].each { path ->
+            if (!file(path).isFile()) throw new GradleException("Code-built UI evidence missing: " + path)
+        }
+        logger.lifecycle("[verifyPresentationMigrationInventory] ok (${surfaceCount} main-branch surfaces; code-built UI included)")
+    }
+}
 tasks.register("verifyPresentationSurfaceCoverage") {
     group = "verification"
     description = "Verify the logical Presentation surface inventory and its quantitative acceptance counts."

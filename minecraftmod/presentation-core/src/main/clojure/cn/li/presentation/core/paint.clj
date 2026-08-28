@@ -4,7 +4,7 @@
    Collection nodes expand from immutable state and leaf nodes emit only
    neutral Ui* commands. This namespace has no Minecraft/backend dependency."
   (:import [cn.li.mcmod.runtime RenderCommand$UiImage RenderCommand$UiImageBatch
-            RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText
+            RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText RenderCommand$UiItemPreview RenderCommand$UiModelPreview RenderCommand$PushClip RenderCommand$PopClip
             UiResourceRef UiResourceRef$Kind]))
 
 (defn- state-value [env path]
@@ -129,6 +129,24 @@
                                   (str (:path resource))
                                   UiResourceRef$Kind/TEXTURE)
                   [(RenderCommand$UiImage. x y width height rgba*)])])
+      :nine-slice [(RenderCommand$UiQuadBatch.
+                    [(RenderCommand$UiQuad. x y width height rgba*)])]
+      :line [(RenderCommand$UiQuadBatch.
+              [(RenderCommand$UiQuad. x y width (max 1.0 height) rgba*)])]
+      :gradient [(RenderCommand$UiQuadBatch.
+                  [(RenderCommand$UiQuad. x y width height rgba*)])]
+      :radial-progress (let [ratio (float (max 0.0 (min 1.0 (double (or value 0.0)))))]
+                         [(RenderCommand$UiQuadBatch.
+                           [(RenderCommand$UiQuad. x y width height (unchecked-int 0x55202020))
+                            (RenderCommand$UiQuad. x y (* width ratio) height rgba*)])])
+      :item-preview (let [item-id (int (or (when (map? value) (:item-id value)) value 0))
+                          scale (float (or (get-in node [:style :scale]) 1.0))]
+                      [(RenderCommand$UiItemPreview. item-id (+ x (/ width 2.0)) (+ y (/ height 2.0)) scale)])
+      :model-preview (let [model-id (str (or (when (map? value) (:model-id value)) value ""))]
+                       [(RenderCommand$UiModelPreview. model-id x y width height)])
+      :slot-anchor [(RenderCommand$UiQuadBatch.
+                     [(RenderCommand$UiQuad. x y width height (unchecked-int 0x22000000))])]
+      :clip [(RenderCommand$PushClip. x y width height)]
       nil)))
 
 (defn- collection-values [env node]
@@ -172,14 +190,28 @@
           (let [child-rects (if direction
                               (child-rects rect direction children)
                               (mapv (constantly rect) children))]
-            (into (vec (command-for node rect env))
-                  (mapcat (fn [child child-rect]
-                            (paint-node child child-rect env))
-                          children child-rects))))))))
+            (let [commands (command-for node rect env)
+                  child-commands (mapcat (fn [child child-rect]
+                                           (paint-node child child-rect env))
+                                         children child-rects)]
+              (vec (concat commands child-commands
+                           (when (= :clip type) [(RenderCommand$PopClip.)]))))))))))
+(defn- geometry-dimension [geometry key accessor]
+  (cond
+    (map? geometry) (get geometry key)
+    (some? geometry) (try (accessor geometry) (catch Throwable _ nil))
+    :else nil))
+
+(defn- normalized-geometry [geometry]
+  {:x (float (or (geometry-dimension geometry :origin-x #(.originX ^cn.li.presentation.core.HostGeometry %)) 0.0))
+   :y (float (or (geometry-dimension geometry :origin-y #(.originY ^cn.li.presentation.core.HostGeometry %)) 0.0))
+   :width (float (max 1 (or (geometry-dimension geometry :viewport-width #(.viewportWidth ^cn.li.presentation.core.HostGeometry %)) 1)))
+   :height (float (max 1 (or (geometry-dimension geometry :viewport-height #(.viewportHeight ^cn.li.presentation.core.HostGeometry %)) 1)))
+   :scale (float (or (geometry-dimension geometry :scale #(.scale ^cn.li.presentation.core.HostGeometry %)) 1.0))})
 
 (defn paint-view [artifact state geometry]
   (let [root (:nodes artifact)
-        rect {:x 0.0 :y 0.0
-              :width (float (max 1 (:viewport-width geometry 1)))
-              :height (float (max 1 (:viewport-height geometry 1)))}]
+        host (normalized-geometry geometry)
+        rect {:x (:x host) :y (:y host)
+              :width (:width host) :height (:height host)}]
     (vec (paint-node root (rect-for rect (:layout root)) {:state state}))))

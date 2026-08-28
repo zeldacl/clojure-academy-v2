@@ -173,7 +173,8 @@
                    (sort-by #(.toString (.toPath ^File %))))
         entries (for [^File file files
                       :let [source (edn/read-string (slurp file :encoding "UTF-8"))
-                            artifact (assoc (compile-source source (.getPath file))
+                            relative-source (.replace (.toString (.relativize source-root (.toPath file))) "\\" "/")
+                            artifact (assoc (compile-source source relative-source)
                                             :content-id content-id)
                             view-id (:view-id artifact)
                             relative (str "assets/" content-id "/presentation-compiled/"

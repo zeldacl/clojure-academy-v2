@@ -88,6 +88,16 @@
 (defn- layout-dimension [value fallback]
   (if (number? value) (float value) (float fallback)))
 
+(defn- geometry-rect [geometry]
+  {:x (float (.originX ^HostGeometry geometry))
+   :y (float (.originY ^HostGeometry geometry))
+   :width (float (max 1 (.viewportWidth ^HostGeometry geometry)))
+   :height (float (max 1 (.viewportHeight ^HostGeometry geometry)))})
+
+(defn- event-point [event geometry]
+  (let [rect (geometry-rect geometry)]
+    {:x (+ (float (:x event 0.0)) (:x rect))
+     :y (+ (float (:y event 0.0)) (:y rect))}))
 (defn- node-rect [parent node]
   (let [{px :x py :y pw :width ph :height} parent
         layout (:layout node)]
@@ -152,14 +162,14 @@
     event
     (let [focus (:focus instance)]
       (case (:type event)
-        :pointer (if (= :down (:event-type event))
-                   (or (hit-action (:nodes (:artifact instance))
-                                   {:x 0.0 :y 0.0
-                                    :width (.viewportWidth ^HostGeometry (:geometry instance))
-                                    :height (.viewportHeight ^HostGeometry (:geometry instance))}
-                                   (:x event) (:y event))
-                       {:action :input/pointer :payload event})
-                   {:action :input/pointer :payload event})
+        :pointer (let [point (event-point event (:geometry instance))
+                       event (assoc event :x (:x point) :y (:y point))
+                       hit (when (= :down (:event-type event))
+                             (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                                        (:x event) (:y event)))]
+                   (if hit
+                     hit
+                     {:action :input/pointer :payload event}))
         :key (let [key-code (int (or (:key-code event) -1))
                    submit-action (get-in focus [:on :submit])]
                (cond
