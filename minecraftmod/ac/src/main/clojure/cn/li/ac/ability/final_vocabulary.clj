@@ -73,8 +73,8 @@
    {:id :resource/add, :inputs {:amount {:type :any, :default nil}, :resource {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :resource/enforce-floor, :inputs {:resource {:type :any, :default nil}, :minimum {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :score/mark, :inputs {:weight {:type :any, :default nil}, :tag {:type :any, :default nil}, :progression {:type :any, :default nil}}, :outputs {}, :children {}}
-   {:id :session/read, :inputs {:key {:type :any, :default nil}}, :outputs {:value {:type :any}}, :children {}}
-   {:id :session/write, :inputs {:key {:type :any, :default nil}, :value {:type :any, :default nil}}, :outputs {}, :children {}}
+   {:id :state/read, :inputs {:key {:type :any, :default nil}}, :outputs {:value {:type :any}}, :children {}}
+   {:id :state/write, :inputs {:key {:type :any, :default nil}, :value {:type :any, :default nil}}, :outputs {}, :children {}}
    {:id :target/beam, :inputs {:block-limit {:type :any, :default nil}, :query-radius {:type :any, :default nil}, :entity-limit {:type :any, :default nil}, :radius {:type :any, :default nil}, :damage {:type :any, :default nil}, :damage-type {:type :any, :default nil}, :trace-origin {:type :any, :default nil}, :length {:type :any, :default nil}, :origin {:type :any, :default nil}, :reflection-policy {:type :any, :default nil}, :step {:type :any, :default nil}, :direction {:type :any, :default nil}, :visual-length {:type :any, :default nil}}, :outputs {:beam {:type :any}}, :children {}}
    {:id :target/block-placement, :inputs {:hit {:type :any, :default nil}, :policy {:type :any, :default nil}, :origin {:type :any, :default nil}, :distance {:type :any, :default nil}, :direction {:type :any, :default nil}}, :outputs {:destination {:type :any}}, :children {}}
    {:id :target/blocks, :inputs {:limit {:type :any, :default nil}, :shape {:type :any, :default nil}, :projection {:type :any, :default nil}}, :outputs {:blocks {:type :any}}, :children {}}
@@ -196,3 +196,5 @@
   ([composites]
    (let [loaded (into {} (map (fn [[id spec]] [id (normalize-spec spec)]) (or composites {})))]
      (descriptors/build {:descriptors (concat (remove #(contains? loaded (:id %)) (descriptor-specs)) (vals loaded))}))))
+
+

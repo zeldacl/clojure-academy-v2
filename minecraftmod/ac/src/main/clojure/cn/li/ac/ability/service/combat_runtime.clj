@@ -282,14 +282,14 @@
       (let [runtime (final-runtime/install-production!
                      {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
                       :commit-state! commit-final-state!
-                      :session-provider (fn [owner]
+                      :ability-state-provider (fn [owner]
                                           (or (combat-sessions/session (str owner)) {}))
-                      :commit-session! (fn [owner patches]
+                      :commit-ability-state! (fn [owner patches]
                                          (when (seq patches)
                                            (combat-sessions/apply-actions!
                                             (str owner)
                                             [{:type :session-patch :entries patches}])))
-                      :remove-session! (fn [owner]
+                      :remove-ability-state! (fn [owner]
                                          (combat-sessions/remove! (str owner)))} )]
         (reset! final-runtime* runtime)
         (reset! catalog* @(:catalog runtime))
@@ -1121,11 +1121,9 @@
   "Commit reaction-owned session patches after the native damage decision.
    These patches are neutral session state, never AC player-state mutations."
   [owner result]
-  (let [patches (vec (or (:session-patches result) []))]
+  (let [patches (vec (or (:ability-state-patches result) []))]
     (when (seq patches)
-      (combat-sessions/apply-actions!
-       (server-session-id) (str owner)
-       [{:type :session-patch :entries patches}]))))
+      (combat-sessions/apply-actions! (str owner) [{:type :session-patch :entries patches}]))))
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary and publish its
    authoritative VFX/domain outbox after the state decision is known."
@@ -1241,3 +1239,6 @@
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
   nil)
+
+
+

@@ -10,18 +10,18 @@
   (or (requiring-resolve symbol)
       (throw (ex-info "final runtime dependency is unavailable" {:symbol symbol}))))
 
-(defn create-runtime [{:keys [host state-provider commit-state! session-provider commit-session! remove-session!] :as options}]
+(defn create-runtime [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
   (when-not (map? host) (throw (ex-info "final runtime requires neutral host" {})))
   (when-not (ifn? state-provider) (throw (ex-info "final runtime requires state-provider" {})))
   (when-not (ifn? commit-state!) (throw (ex-info "final runtime requires commit-state!" {})))
   (let [create-engine (resolve-var 'cn.li.combat.final-engine/create-engine)]
     {:options options
-     :remove-session! remove-session!
+     :remove-ability-state! remove-ability-state!
      :engine (create-engine {:host host
                              :state-provider state-provider
                              :commit-state! commit-state!
-                             :session-provider session-provider
-                             :commit-session! commit-session!})
+                             :ability-state-provider ability-state-provider
+                             :commit-ability-state! commit-ability-state!})
      :catalog (atom nil)
      :scheduled (atom [])}))
 
@@ -31,7 +31,7 @@
    Query handlers receive plain request maps.  Action handlers are wrapped so
    the final host can preflight every command without invoking a mutating
    Minecraft operation; only the apply phase crosses the mcmod boundary."
-  [{:keys [state-provider commit-state! session-provider commit-session! remove-session!] :as options}]
+  [{:keys [state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
   (let [snapshot ((resolve-var 'cn.li.mcmod.runtime.capabilities/snapshot))
         create-host (resolve-var 'cn.li.mcmod.runtime.host/create)
         host (create-host
@@ -49,9 +49,9 @@
     (create-runtime {:host host
                      :state-provider state-provider
                       :commit-state! commit-state!
-                      :session-provider session-provider
-                      :commit-session! commit-session!
-                      :remove-session! remove-session!})))
+                      :ability-state-provider ability-state-provider
+                      :commit-ability-state! commit-ability-state!
+                      :remove-ability-state! remove-ability-state!})))
 
 (defn initialize! [runtime]
   (let [initialize-catalog (resolve-var 'cn.li.ac.ability.final-catalog-service/initialize!)]
@@ -86,8 +86,8 @@
         (let [execute (resolve-var 'cn.li.combat.final-engine/execute!)
               result (assoc (execute (:engine runtime) (:compiled entry) frame)
                             :owner (:owner frame))]
-          (when (and (:finish-session? result) (ifn? (:remove-session! runtime)))
-            ((:remove-session! runtime) (:owner frame)))
+          (when (and (:finish-ability? result) (ifn? (:remove-ability-state! runtime)))
+            ((:remove-ability-state! runtime) (:owner frame)))
           (swap! (:scheduled runtime)
                  into (map #(assoc % :ability-id ability-id :frame frame)
                            (:scheduled result)))
@@ -130,12 +130,12 @@
   "Install the one server-side final runtime instance used by AC's
    composition root.  The caller supplies neutral state callbacks; this
    function owns no Minecraft objects and is safe to invoke once at startup."
-  [{:keys [state-provider commit-state! session-provider commit-session! remove-session!]}]
+  [{:keys [state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!]}]
   (let [runtime (create-from-capabilities {:state-provider state-provider
                                            :commit-state! commit-state!
-                                           :session-provider session-provider
-                                           :commit-session! commit-session!
-                                           :remove-session! remove-session!})]
+                                           :ability-state-provider ability-state-provider
+                                           :commit-ability-state! commit-ability-state!
+                                           :remove-ability-state! remove-ability-state!})]
     (initialize! runtime)
     (reset! production-runtime* runtime)
     runtime))
@@ -160,3 +160,4 @@
                                 (hash [owner ability-id (:server-tick intent)])))
                 :input (dissoc intent :owner :ability-id)})
     {:status :rejected :reason :final-runtime-not-installed}))
+

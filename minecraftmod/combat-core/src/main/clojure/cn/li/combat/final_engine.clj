@@ -4,13 +4,13 @@
          '[cn.li.node.contracts :as contracts]
          '[cn.li.node.expr :as expr]
          '[cn.li.combat.final-compiler :as compiler])
-(defn create-engine [{:keys [host state-provider commit-state! session-provider commit-session!]}]
+(defn create-engine [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state!]}]
   (when-not (map? host) (throw (ex-info "final combat engine requires host" {})))
   (when-not (ifn? state-provider) (throw (ex-info "final combat engine requires state-provider" {})))
   (when-not (ifn? commit-state!) (throw (ex-info "final combat engine requires commit-state!" {})))
   {:host host :state-provider state-provider :commit-state! commit-state!
-   :session-provider (or session-provider (fn [_] {}))
-   :commit-session! (or commit-session! (fn [_ _] nil))
+   :ability-state-provider (or ability-state-provider (fn [_] {}))
+   :commit-ability-state! (or commit-ability-state! (fn [_ _] nil))
    :next-command (atom 0)})
 
 (defn- ref-value [reference context]
@@ -19,7 +19,7 @@
                :frame (:frame context)
                :input (get-in (:frame context) [:input])
                :local (:locals context)
-               :session (:session context)
+               :state (:ability-state context)
                nil)]
     (if (= :local scope)
       (if (seq path) (get-in (get root key) path) (get root key))
@@ -111,23 +111,26 @@
   ;; query form. Both are final ABI, and neither may disappear at runtime.
   (or (:bind node) (:result node)))
 
-(def ^:private capability-aliases
+(def ^:private capability-routes
   {:combat/damage :entity/damage
    :combat/status :entity/status
    :combat/impulse :entity/impulse
-   :terrain/apply-break-budget :block/break-budget
-   :combat/area-damage :entity/damage
-   :combat/impact-strike :entity/damage
+   :terrain/apply-break-budget :terrain/apply-break-budget
+   :motion/radial-impulse :motion/radial-impulse
+   :terrain/break-area :terrain/break-area
+   :terrain/random-break :terrain/random-break
+   :terrain/wave-plan :terrain/wave-plan
+   :combat/area-damage :combat/area-damage
+   :combat/impact-strike :combat/impact-strike
    :combat/charged-area-damage :combat/charged-area-damage
-   :combat/teleport-group :entity/teleport-group
+   :combat/teleport-group :combat/teleport-group
    :world/sound :world/sound
    :world/lightning :world/lightning
    :world/explosion :world/explosion})
 
-(def ^:private query-capability-aliases
+(def ^:private query-capabilities
   {:target/raycast :raycast
    :target/raycast-fan :raycast
-   :target/beam :beam-trace
    :target/beam :beam-trace
    :target/entities :entity/select
    :target/blocks :block/select
@@ -153,12 +156,12 @@
   "Static execution ABI used by audits and editor tooling.
 
    Keys are final graph component ids; values are the neutral host capability
-   requested after aliasing. AC-owned ports (for example :energy/target) are
+   requested from the explicit descriptor route. AC-owned ports (for example :energy/target) are
    intentionally visible here even though their handler is installed by AC at
    the composition root rather than by combat-core."
   []
-  {:queries query-capability-aliases
-   :actions capability-aliases})
+  {:queries query-capabilities
+   :actions capability-routes})
 
 (defn- action-args [node context]
   (let [structural #{:component :kind :bind :capability :operation :on-fail :guards
@@ -215,18 +218,18 @@
       :ability/cooldown (get-in input [:cooldowns name])
       :ability/invariant (get-in input [:invariants name])
       :ability/context (get-in input [:context name])
-      :session/read (get-in (:session context) [(:key node)])
+      :state/read (get-in (:ability-state context) [(:key node)])
       :data/bind (resolve-value (:value node) context)
       (resolve-value (:value node) context))))
 
-(defn- bind-session! [context node]
+(defn- bind-state! [context node]
   (let [key (:key node)
         value (resolve-value (:value node) context)
-        session (assoc-in (:session context) [key] value)
+        ability-state (assoc-in (:ability-state context) [key] value)
         patch {:path [key] :mode :assign :value value}]
     (-> context
-        (assoc :session session)
-        (update :session-patches (fnil conj []) patch))))
+        (assoc :ability-state ability-state)
+        (update :ability-state-patches (fnil conj []) patch))))
 
 (defn- contains-in?
   [m path]
@@ -241,8 +244,8 @@
   (let [storage-path (vec (or (:storage-path node) [:once-complete?]))
         strategy (or (:strategy node) (when (:key node) :last-key) :boolean)
         key (when (contains? node :key) (resolve-value (:key node) context))
-        present? (contains-in? (:session context) storage-path)
-        previous (get-in (:session context) storage-path)
+        present? (contains-in? (:ability-state context) storage-path)
+        previous (get-in (:ability-state context) storage-path)
         first? (case strategy
                  :last-key (or (not present?) (not= previous key))
                  :set (not (contains? (if (set? previous) previous #{}) key))
@@ -254,8 +257,8 @@
                        :set (conj (if (set? previous) previous #{}) key)
                        true)
         context (-> context
-                    (assoc-in [:session] (assoc-in (:session context) storage-path next-storage))
-                    (update :session-patches (fnil conj [])
+                    (assoc-in [:ability-state] (assoc-in (:ability-state context) storage-path next-storage))
+                    (update :ability-state-patches (fnil conj [])
                             {:path storage-path :mode :assign :value next-storage}))
         child (if first? (or (:on-first node) (:body node)) (:body node))]
     (if child
@@ -372,12 +375,12 @@
                                (assoc-in [:locals :outcome] (:outcome node))
                                (assoc :halt? true))
                      (:next-phase node) (assoc :next-phase (:next-phase node))
-                     (:finish-session? node) (assoc :finish-session? true))
+                     (:finish-ability? node) (assoc :finish-ability? true))
       :finalize (cond-> (-> context
                             (assoc-in [:locals :outcome] (:outcome node))
                             (assoc :halt? true))
                      (:next-phase node) (assoc :next-phase (:next-phase node))
-                     (:finish-session? node) (assoc :finish-session? true))
+                     (:finish-ability? node) (assoc :finish-ability? true))
       :flow/once (run-once engine node context path)
       :flow/branch (if-let [selected (if (resolve-value (:when node) context) (:then node) (:else node))]
                       (run-node engine selected context (conj path :branch))
@@ -421,7 +424,7 @@
               (assoc-in [:locals (:bind node)] true))
           (assoc-in context [:locals (:bind node)] false)))
       :data/bind (bind-result context (:to node) (resolve-value (:value node) context))
-      :session/write (bind-session! context node)
+      :state/write (bind-state! context node)
       :cost/spend (spend-budget engine context node path)
       :cooldown/start
       (let [owner (or (:owner node) (:owner (:frame context)))
@@ -463,7 +466,7 @@
       :end (assoc-in context [:locals :outcome] (or (:outcome node) :ended))
       :stop-vfx (emit context :vfx (assoc (normalize-vfx node context path) :op :destroy))
       :effect/vfx (emit context :vfx (normalize-vfx node context path))
-      (let [kind (compiler/node-kind node)]
+      (let [kind (compiler/node-kind nil node)]
         (case kind
           :query
           (let [context (flush-command-prefix engine context)]
@@ -480,7 +483,7 @@
                                                          (:world (:frame context))))
                               query-kind (assoc :query-kind query-kind))
                     capability (or (:capability node)
-                                   (get query-capability-aliases component)
+                                   (get query-capabilities component)
                                    component)
                     result (host/query! (:host engine) capability request
                                         {:frame (:frame context)})]
@@ -503,7 +506,7 @@
                                                  :capability (or (:capability node)
                                                                  (when (contains? (:actions (:host engine)) component)
                                                                    component)
-                                                                 (get capability-aliases component)
+                                                                 (get capability-routes component)
                                                                  component)
                                                  :owner (:owner (:frame context))
                                                  :world-id (:world (:frame context))
@@ -524,14 +527,14 @@
         supplied ((:state-provider engine) owner)
         owner-record (if (contains? supplied :state) supplied {:revision 0 :state supplied})
         txn (contracts/state-txn-set {owner owner-record})
-        session-record ((:session-provider engine) owner)
+        ability-state-record ((:ability-state-provider engine) owner)
         ;; Session metadata (notably :ability-id) and mutable :state are both
         ;; part of the neutral session contract. Keep metadata visible to
-        ;; event graphs while flattening state for :session/read/write.
-        session (merge (dissoc (or session-record {}) :state)
-                       (or (:state session-record) {}))
-        initial {:frame frame :locals {} :session session
-                 :session-patches [] :seed* (atom (:seed frame))
+        ;; event graphs while flattening state for :state/read/write.
+        ability-state (merge (dissoc (or ability-state-record {}) :state)
+                       (or (:state ability-state-record) {}))
+        initial {:frame frame :locals {} :ability-state ability-state
+                 :ability-state-patches [] :seed* (atom (:seed frame))
                  :txn txn :commands [] :barriers [] :command-binds {}
                  :outbox (contracts/outbox) :scheduled []
                  :vfx-order* (atom 0)}
@@ -551,16 +554,23 @@
       (do
         ((:commit-state! engine)
          (mapv #(assoc % :frame frame) (contracts/txn-entries (:txn result))))
-        ((:commit-session! engine) owner (:session-patches result))
+        ((:commit-ability-state! engine) owner (:ability-state-patches result))
         {:status :accepted :txn (contracts/txn-entries (:txn result))
-         :session-patches (:session-patches result)
+         :ability-state-patches (:ability-state-patches result)
          :locals (:locals result)
          :outcome (get-in result [:locals :outcome])
          :next-phase (:next-phase result)
-         :finish-session? (boolean (:finish-session? result))
+         :finish-ability? (boolean (:finish-ability? result))
          :outbox (:outbox result)
          :vfx-signals (:vfx (:outbox result))
          :feedback (:feedback (:outbox result))
          :events (:events (:outbox result))
          :scheduled (:scheduled result) :barriers (:barriers result) :host host-result}))))
+
+
+
+
+
+
+
 

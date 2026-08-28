@@ -58,16 +58,11 @@
     {:descriptor-count (count (schema/export-environment environment))
      :schema (schema/export-environment environment)}))
 
-(defn- compile-registration [registration]
-  (when-not (= :final (:engine registration))
-    (throw (ex-info "final catalog source is not final"
-                    {:reason :source-engine-not-final
-                     :id (:id registration)
-                     :engine (:engine registration)})))
+(defn- compile-registration [environment registration]
   (try
     (assoc registration
            :status :ready
-           :compiled ((compiler-api) (:graph registration)))
+           :compiled ((compiler-api) environment (:graph registration)))
     (catch clojure.lang.ExceptionInfo error
       (throw (ex-info "final catalog graph compilation failed"
                       (merge {:reason :final-graph-compile-failed
@@ -83,7 +78,7 @@
   ([assemble-options]
    (let [assembled ((catalog-api) assemble-options)
          node-schema (strict-graphs! assembled)
-         registrations (mapv compile-registration
+         registrations (mapv #(compile-registration (:node-environment assembled) %)
                              (get-in assembled [:combat :registrations]))
          by-id (into {} (map (juxt :id identity) registrations))
          result (assoc assembled
@@ -127,3 +122,7 @@
      :entries (mapv (fn [entry]
                       (select-keys entry [:id :source-id :status :compile-error]))
                     (sort-by (comp str :id) registrations))}))
+
+
+
+

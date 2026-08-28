@@ -113,9 +113,7 @@
      :source-id (or source-id (:id source))
      :source-resource resource
      :bindings bindings
-     :graph (:program source)
-     :status (or (:status source) :final)
-     :engine (or (:engine source) :final)}))
+     :graph (:program source)}))
 
 (defn- validate-manifest [manifest kind]
   (when-not (= schema-version (:schema-version manifest))
@@ -337,6 +335,7 @@
                        :vfx-effects (:effect-count vfx)}
               :content-hash (content-hash
                              (ability-compose/catalog-fingerprint-input bundle)))))))
+
 
 
 

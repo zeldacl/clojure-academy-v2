@@ -1025,8 +1025,8 @@ tasks.register("verifyNodeLayerDiscipline") {
     doLast {
         def violations = []
         [
-            [dir: file("ac/src/main/resources/ac/combat/components"), vm: file("combat-core/src/main/clojure/cn/li/combat/vm.clj")],
-            [dir: file("ac/src/main/resources/ac/vfx/components"), vm: file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")]
+            [dir: file("ac/src/main/resources/ac/combat/composites"), vm: file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj")],
+            [dir: file("ac/src/main/resources/ac/vfx/composites"), vm: file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj")]
         ].each { pair ->
             if (pair.dir.directory && pair.vm.file) {
                 def vmSourceWithoutComments = pair.vm.text.replaceAll(/(?m);.*$/, "")
@@ -2155,10 +2155,10 @@ def effectRuntimeClojureRoots = [
     file("combat-core/src/main/clojure/cn/li/combat/components.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/recipe.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/host.clj"),
-    file("combat-core/src/main/clojure/cn/li/combat/vm.clj"),
+    file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/effect_schema.clj"),
-    file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj"),
-    file("vfx-core/src/main/clojure/cn/li/vfx/final_client.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/effect_contract.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
 ]
@@ -2313,3 +2313,4 @@ gradle.projectsEvaluated {
         }
     }
 }
+

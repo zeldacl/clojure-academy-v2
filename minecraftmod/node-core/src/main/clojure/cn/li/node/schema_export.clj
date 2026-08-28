@@ -3,7 +3,6 @@
 
    Runtime injection, capabilities, kernel descriptors and host transaction
    details are intentionally excluded from the visual editor schema.")
-  (:require [cn.li.node.environment :as registry]))
 
 (defn- export-fields [fields]
   (reduce-kv (fn [acc k spec]
@@ -27,7 +26,9 @@
 (defn export-environment
   "Export one immutable author-facing node catalog in stable id order."
   [environment]
-  (->> (registry/all-descriptors environment)
+  (->> (vals (:descriptors environment))
        (sort-by :id)
        (keep export-descriptor)
        vec))
+
+
