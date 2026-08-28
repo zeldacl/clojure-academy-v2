@@ -45,7 +45,8 @@
                   :geometry (HostGeometry/identity 0 0)
                   :dirty #{:structure :layout :paint :semantics}
                   :commands []
-                  :focus nil}]
+                  :focus nil
+                  :pointer-capture nil}]
     (vswap! (:state runtime)
             (fn [snapshot]
               (-> snapshot
@@ -95,10 +96,15 @@
    :height (float (max 1 (.viewportHeight ^HostGeometry geometry)))})
 
 (defn- event-point [event geometry]
-  (let [rect (geometry-rect geometry)]
-    {:x (+ (float (:x event 0.0)) (:x rect))
-     :y (+ (float (:y event 0.0)) (:y rect))}))
-(defn- node-rect [parent node]
+  (let [rect (geometry-rect geometry)
+        x (float (:x event 0.0))
+        y (float (:y event 0.0))]
+    ;; Version hosts normally provide mount-local coordinates. Explicit
+    ;; :viewport coordinates are accepted for overlays whose origin is nonzero.
+    (if (= :viewport (:space event))
+      {:x x :y y}
+      {:x (+ x (:x rect))
+       :y (+ y (:y rect))})))(defn- node-rect [parent node]
   (let [{px :x py :y pw :width ph :height} parent
         layout (:layout node)]
     {:x (+ px (float (or (:x layout) 0.0)))
@@ -168,8 +174,14 @@
                              (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
                                         (:x event) (:y event)))]
                    (if hit
-                     hit
+                     (update hit :payload merge
+                                    (cond-> {}
+                                      (and (contains? event :button) (not= 0 (:button event)))
+                                      (assoc :button (:button event))
+                                      (= :viewport (:space event))
+                                      (assoc :space :viewport)))
                      {:action :input/pointer :payload event}))
+        :focus {:action :input/focus :payload event}
         :key (let [key-code (int (or (:key-code event) -1))
                    submit-action (get-in focus [:on :submit])]
                (cond
