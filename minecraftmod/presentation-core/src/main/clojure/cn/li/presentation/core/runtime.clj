@@ -137,32 +137,69 @@
       (.contains key "right") 1
       :else nil)))
 
-(defn- hit-action [node parent px py]
-  (let [rect (node-rect parent node)
-        children (:children node)
-        direction (or (get-in node [:layout :direction])
-                      (when (= :row (:type node)) :row)
-                      (when (= :column (:type node)) :column))
-        child-rects* (if direction (child-rects rect direction children)
-                       (mapv (constantly rect) children))
-        hit-child (some (fn [[child child-rect]]
-                          (hit-action child child-rect px py))
-                        (reverse (map vector children child-rects*)))]
-    (or hit-child
-        (when (point-in-rect? rect px py)
-          (cond
-            (= :button (:type node))
-            {:action (get-in node [:on :activate])
-             :payload (cond-> {:target (:key node)}
-                        (some? (button-id node))
-                        (assoc :button-id (button-id node)))}
+(defn- bound-value [env node key]
+  (let [path (get-in node [:bind key])]
+    (cond
+      (and (vector? path) (= :state (first path)))
+      (get-in (:state env) (subvec path 1))
+      (and (vector? path) (= :item (first path)))
+      (get-in (:item env) (subvec path 1))
+      (and (vector? path) (= :parent (first path)))
+      (get-in (:parent env) (subvec path 1))
+      :else path)))
 
-            (= :text-input (:type node))
-            {:focus {:key (:key node)
-                     :path (get-in node [:bind :text])
-                     :field (get-in node [:semantics :field])
-                     :on (:on node)}}
-            :else nil)))))
+(defn- collection-items [env node]
+  (let [items (bound-value env node :items)]
+    (if (sequential? items) (vec items) [])))
+
+(declare hit-action)
+
+(defn- hit-collection [node rect env px py]
+  (let [items (collection-items env node)
+        templates (vec (:children node))
+        template (or (first templates) {:type :text :layout {}})
+        direction (if (= :grid (:type node)) :row :column)
+        item-rects (child-rects rect direction
+                                (mapv (constantly template) items))]
+    (some (fn [[index item item-rect]]
+            (hit-action template item-rect
+                        (assoc env :item item :index index)
+                        px py))
+          (map vector (range) items item-rects))))
+
+(defn- hit-action
+  ([node parent px py]
+   (hit-action node parent {:state {}} px py))
+  ([node parent env px py]
+   (let [rect (node-rect parent node)
+         type (:type node)]
+     (or (when (#{:scroll :grid :repeater} type)
+           (hit-collection node rect env px py))
+         (let [children (:children node)
+               direction (or (get-in node [:layout :direction])
+                             (when (= :row type) :row)
+                             (when (= :column type) :column))
+               child-rects* (if direction (child-rects rect direction children)
+                              (mapv (constantly rect) children))]
+           (some (fn [[child child-rect]]
+                   (hit-action child child-rect env px py))
+                 (reverse (map vector children child-rects*))))
+         (when (point-in-rect? rect px py)
+           (cond
+             (= :button type)
+             {:action (get-in node [:on :activate])
+              :payload (cond-> {:target (:key node)}
+                         (some? (button-id node))
+                         (assoc :button-id (button-id node))
+                         (contains? env :item)
+                         (assoc :item (:item env) :index (:index env)))}
+
+             (= :text-input type)
+             {:focus {:key (:key node)
+                      :path (get-in node [:bind :text])
+                      :field (get-in node [:semantics :field])
+                      :on (:on node)}}
+             :else nil))))))
 (defn- routed-event [instance event]
   (if (:action event)
     event
@@ -172,6 +209,7 @@
                        event (assoc event :x (:x point) :y (:y point))
                        hit (when (= :down (:event-type event))
                              (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                                        {:state (:view-state instance)}
                                         (:x event) (:y event)))]
                    (if hit
                      (update hit :payload merge

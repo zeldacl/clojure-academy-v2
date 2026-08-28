@@ -101,6 +101,28 @@
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                   :x 75 :y 10 :button 0})))
     (is (= [:demo/right {:target :right :button-id 1}] @seen))))
+(deftest runtime-routes-repeater-button-with-item-context
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/repeater-input
+                  :nodes {:id :root :type :scroll :layout {:width 100 :height 40}
+                          :bind {:items [:state :items]}
+                          :children [{:type :button :key :row/action
+                                      :layout {:height 20}
+                                      :bind {:text [:item :label]}
+                                      :on {:activate :demo/item}}]}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {:items [{:label "One"} {:label "Two"}]}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
+    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                                  :x 10 :y 30 :button 0})))
+    (is (= [:demo/item {:target :row/action
+                        :item {:label "Two"}
+                        :index 1}] @seen))))
 (deftest runtime-routes-text-input
   (let [seen (atom [])
         rt (runtime/create-runtime)
