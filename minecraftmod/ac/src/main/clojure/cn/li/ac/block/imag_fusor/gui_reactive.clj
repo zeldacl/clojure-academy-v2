@@ -15,7 +15,10 @@
 (def fusor-gui-type :imag-fusor) (def fusor-slot-schema-id :imag-fusor)
 (def ^:private fusor-sync (gui-sync/schema-sync-fns fusor-schema/imag-fusor-schema))
 (defn- phase-liquid-unit? [stack] (and stack (= (recipes/item-id-from-stack stack) cfg/matter-unit-item-id)))
-(defn- create-container [tile player] (assoc (gui-sync/create-schema-container fusor-schema/imag-fusor-schema tile player fusor-gui-type {:gui-id (gui-manifest/gui-id :imag-fusor)}) :presentation-close-fn (:on-close fusor-sync)))
+(defn- create-container [tile player] (assoc (gui-sync/create-schema-container fusor-schema/imag-fusor-schema tile player fusor-gui-type {:gui-id (gui-manifest/gui-id :imag-fusor)})
+                                           :presentation-close-fn (:on-close fusor-sync)
+                                           :presentation-wireless {:domain :developer :role :receiver}
+                                           :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn- get-slot-count [_] (slot-schema/tile-slot-count fusor-slot-schema-id))
 (defn- get-slot-item [c i] (common/get-slot-item-be c i))
 (defn- set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))

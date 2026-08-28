@@ -6,7 +6,12 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.gui.container.common :as container-common]
             [cn.li.ac.gui.presentation :as presentation]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.gui.container.action-payload :as action-payload]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.ac.wireless.gui.tab.role-config :as role-config]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def binding-ids
   {:slots 0 :slot-anchors 1 :energy-ratio 2 :progress-ratio 3 :machine-state 4
@@ -25,6 +30,37 @@
       (container-common/get-slot-item-be container index))
     (catch Exception _ nil)))
 
+(defn- wireless-config [container]
+  (:presentation-wireless container))
+
+(defn- wireless-state [container]
+  (or (some-> (:presentation-wireless-state container) deref)
+      {:linked nil :avail [] :password ""}))
+
+(defn- wireless-items [container]
+  (let [cfg (wireless-config container)
+        data (wireless-state container)
+        name-fn (or (:name-fn (get role-config/role-config (:role cfg)))
+                    (fn [item] (or (:node-name item) (:ssid item) "Node")))]
+    (mapv (fn [item]
+            {:label (str (name-fn item)) :action-label "Link"
+             :node-x (:pos-x item) :node-y (:pos-y item) :node-z (:pos-z item)
+             :is-encrypted? (boolean (:is-encrypted? item))})
+          (:avail data))))
+
+(defn- send-wireless! [container action payload callback]
+  (when-let [{:keys [domain]} (wireless-config container)]
+    (let [owner (or (:owner container) (runtime-hooks/default-client-owner))
+          message-id (msg-registry/msg domain action)]
+      (net-client/send-to-server owner message-id
+        (action-payload/action-payload container payload)
+        callback))))
+
+(defn- update-wireless-state! [container response]
+  (when-let [state* (:presentation-wireless-state container)]
+    (swap! state* merge {:linked (:linked response)
+                         :avail (vec (or (:avail response) []))}))
+  nil)
 (defn- generic-info-area [container]
   "Project the common code-built InfoArea contract into declarative state.
    Block-specific controllers may replace this with richer typed data."
@@ -44,7 +80,9 @@
      :fields fields
      :load-ratio (max 0.0 (min 1.0 (/ progress max-progress)))}))
 (defn- snapshot-for [container revision slot-count]
-  (let [energy (double (or (value-of (:energy container)) 0.0))
+  (let [network (wireless-state container)
+        linked (:linked network)
+        energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
         progress (double (or (value-of (:progress container)) 0.0))
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
@@ -56,7 +94,17 @@
                                  (value-of (:machine-state container))
                                  (value-of (:mode container))
                                  "IDLE")
-              :info-area (generic-info-area container)}}))
+              :info-area (generic-info-area container)
+              :network-visible (boolean (wireless-config container))
+              :network-state (if linked "Connected" "Not connected")
+              :network-owner (str "Node: " (or (:node-name linked) "-"))
+              :network-range (str "Range: " (or (:range linked) "-"))
+              :network-bandwidth (str "Bandwidth: " (or (:bandwidth linked) "-"))
+              :network-load 0.0
+              :network-nodes (wireless-items container)
+              :network-password (str (or (:password network) ""))
+              :network-disconnect {:label "Disconnect"}
+              :network-available-label {:label "Available"}}}))
 
 (defn mount-container!
   ([runtime menu-bridge snapshot-fn dispatch-action!]
@@ -92,7 +140,10 @@
   [container menu player schema-id template-id]
   (let [revision (atom 0)
         refresh* (atom nil)
+        wireless* (or (:presentation-wireless-state container) (atom {:linked nil :avail [] :password ""}))
         container (assoc container
+                     :minecraft-container menu
+                     :presentation-wireless-state wireless*
                      :presentation-refresh! (fn []
                        (when-let [refresh @refresh*] (refresh))))
         layout (or (slot-schema/get-slot-layout schema-id) {:slots []})
@@ -128,6 +179,28 @@
                         (menu-bridge/snapshot bridge)))
         dispatch-action! (fn [action payload]
                            (cond
+                             (= action :container/wireless-password)
+                             (swap! wireless* assoc :password (str (or (:value payload) "")))
+
+                             (= action :container/wireless-connect)
+                             (let [cfg (wireless-config container)
+                                   role-cfg (get role-config/role-config (:role cfg))
+                                   item (:item payload)
+                                   password (str (or (:password @wireless*) ""))
+                                   payload* (if-let [build (:connect-payload-fn role-cfg)]
+                                              (build {} item password)
+                                              item)]
+                               (send-wireless! container :connect payload*
+                                 (fn [response]
+                                   (update-wireless-state! container response)
+                                   (when-let [refresh @refresh*] (refresh)))))
+
+                             (= action :container/wireless-disconnect)
+                             (send-wireless! container :disconnect {}
+                               (fn [response]
+                                 (update-wireless-state! container response)
+                                 (when-let [refresh @refresh*] (refresh))))
+
                              (contains? #{:container/text-change :container/text-submit} action)
                              (when-let [handler (if (= action :container/text-submit)
                                                    (:presentation-text-submit! container)
@@ -139,8 +212,7 @@
                                (dispatch action payload)
                                (when (= action :container/button)
                                  (when-let [button (:button-click-fn container)]
-                                   (button container (:button-id payload) player))))))]
-    {:type :presentation-container-screen
+                                   (button container (:button-id payload) player))))))]    {:type :presentation-container-screen
      :template-id template-id
      :container container
      :menu menu
@@ -148,6 +220,13 @@
      :mount-fn (fn [_]
                  (let [vm (mount-container! nil bridge snapshot-fn dispatch-action! template-id)]
                    (reset! refresh* (:refresh! vm))
+                   (when-let [on-mount (:presentation-on-mount! container)]
+                     (on-mount container))
+                   (when (wireless-config container)
+                     (send-wireless! container :list-nodes {}
+                       (fn [response]
+                         (update-wireless-state! container response)
+                         (when-let [refresh @refresh*] (refresh)))))
                    {:mount (:mount vm)
                     :on-close (fn []
                                 (when-let [close (or (:presentation-close-fn container)

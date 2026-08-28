@@ -16,7 +16,9 @@
 (defn create-container [tile player]
   (assoc (gui-sync/create-schema-container solar-schema/unified-solar-schema tile player :solar
                                            {:gui-id (gui-manifest/gui-id :solar-gen)})
-         :presentation-close-fn (:on-close solar-sync)))
+         :presentation-close-fn (:on-close solar-sync)
+         :presentation-wireless {:domain :generator :role :generator}
+         :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn get-slot-count [_] (slot-schema/tile-slot-count solar-gen-id))
 (defn can-place-item? [_ _ s] (energy/is-energy-item-supported? s))
 (defn get-slot-item [c i] (common/get-slot-item-be c i))

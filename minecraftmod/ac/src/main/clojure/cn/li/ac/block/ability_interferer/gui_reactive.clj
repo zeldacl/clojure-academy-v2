@@ -15,7 +15,10 @@
 (def ^:private slot-schema-id :ability-interferer) (def ^:private gui-type :ability-interferer)
 (def ^:private sync (gui-sync/schema-sync-fns interferer-schema/ability-interferer-schema))
 (defn- msg [action] (msg-registry/msg gui-type action))
-(defn create-container [tile player] (assoc (gui-sync/create-schema-container interferer-schema/ability-interferer-schema tile player gui-type {:gui-id (gui-manifest/gui-id :ability-interferer)}) :presentation-close-fn (:on-close sync)))
+(defn create-container [tile player] (assoc (gui-sync/create-schema-container interferer-schema/ability-interferer-schema tile player gui-type {:gui-id (gui-manifest/gui-id :ability-interferer)})
+                                             :presentation-close-fn (:on-close sync)
+                                             :presentation-wireless {:domain :ability-interferer :role :ability-interferer}
+                                             :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn get-slot-count [_] (slot-schema/tile-slot-count slot-schema-id))
 (defn get-slot-item [c i] (common/get-slot-item-be c i))
 (defn set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))

@@ -110,6 +110,27 @@
   (when-let [f (:presentation-refresh! container)]
     (f)))
 
+(defn- wireless-state [state]
+  (or (:wireless @state) {:linked nil :avail [] :password ""}))
+
+(defn- send-wireless! [container action payload callback]
+  (let [owner (owner-of container)
+        message-id (msg-registry/msg :developer action)]
+    (net-client/send-to-server owner message-id
+      (action-payload/action-payload container payload)
+      callback)))
+
+(defn- apply-wireless-response! [container state response]
+  (swap! state update :wireless merge
+         {:linked (:linked response) :avail (vec (or (:avail response) []))})
+  (refresh! container))
+
+(defn- wireless-items [state]
+  (mapv (fn [item]
+          {:label (str (or (:node-name item) "Node"))
+           :action-label "Link"
+           :node-x (:pos-x item) :node-y (:pos-y item) :node-z (:pos-z item)})
+        (:avail (wireless-state state))))
 (defn- start-development! [container player state action skill-id]
   (let [extra (cond-> {} skill-id (assoc :skill-id (name skill-id)))
         callback (fn [response]
@@ -167,7 +188,9 @@
         energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
         dtype (developer-type container)
-        dspec (developer/developer-spec dtype)]
+        dspec (developer/developer-spec dtype)
+        wireless (wireless-state state)
+        linked (:linked wireless)]
     (merge @state
            {:title "Ability Developer"
             :mode (name mode)
@@ -177,6 +200,16 @@
             :energy-ratio (max 0.0 (min 1.0 (/ energy max-energy)))
             :sync-rate (double (or (:sync-rate dspec) 0.7))
             :skills rows
+            :wireless-visible (not= :portable (:tier container))
+            :wireless-state (if linked "Connected" "Not connected")
+            :wireless-owner (str "Node: " (or (:node-name linked) "-"))
+            :wireless-range (str "Range: " (or (:range linked) "-"))
+            :wireless-bandwidth (str "Bandwidth: " (or (:bandwidth linked) "-"))
+            :wireless-load 0.0
+            :wireless-nodes (wireless-items state)
+            :wireless-password (str (or (:password wireless) ""))
+            :wireless-disconnect {:label "Disconnect"}
+            :wireless-available-label {:label "Available"}
             :selected-skill (if selected-row
                               (str "Selected: " (:label selected-row))
                               "No skill selected")
@@ -191,7 +224,7 @@
 
 (defn- ensure-state [container]
   (or (:presentation-developer-state container)
-      (let [state (atom {:selected-skill nil :console-lines [] :console-input "" :status nil})]
+      (let [state (atom {:selected-skill nil :console-lines [] :console-input "" :status nil :wireless {:linked nil :avail [] :password ""}})]
         state)))
 
 (defn prepare-container [container player]
@@ -214,10 +247,28 @@
                    (start-development! container player state :reset nil)
                    (append-console! state "Reset requirements are not met."))
                  :developer/wireless
-                 (swap! state assoc :status "Wireless configuration is available from the node controls")
+                 (send-wireless! container :list-nodes {}
+                   (fn [response]
+                     (apply-wireless-response! container state response)
+                     (swap! state assoc :status "Wireless nodes refreshed")))
+                 :developer/wireless-password
+                 (swap! state update :wireless assoc :password (str (or (:value payload) "")))
+                 :developer/wireless-connect
+                 (let [item (:item payload)
+                       password (str (or (:password (wireless-state state)) ""))
+                       payload* (assoc item :password password :need-auth? true)]
+                   (send-wireless! container :connect payload*
+                     (fn [response] (apply-wireless-response! container state response))))
+                 :developer/wireless-disconnect
+                 (send-wireless! container :disconnect {}
+                   (fn [response] (apply-wireless-response! container state response)))
                  nil)
                nil))
-           :presentation-text-change!
+           :presentation-on-mount!
+           (fn [c]
+             (when (not= :portable (:tier c))
+               (send-wireless! c :list-nodes {}
+                 (fn [response] (apply-wireless-response! c state response)))))           :presentation-text-change!
            (fn [_ value] (swap! state assoc :console-input (str value)))
            :presentation-text-submit!
            (fn [_ value] (submit-console! container player state value)))))
