@@ -1,6 +1,13 @@
 # 系统维护文档索引
 
 本文档用于维护视角的系统分层与优先级导航，仅覆盖系统架构、边界、流程与排障，不记录具体技能、具体 UI 页面、具体无线节点配置。
+## 架构文档优先级与防回退规则
+
+能力迁移的当前规范只认 `ABILITY_MIGRATION_MATRIX_CN.md`、`COMBAT_CORE.md`、
+`VFX_CORE.md`、`NODE_LANGUAGE.md` 及代码中的 final catalog/vocabulary。带有“audit”、
+“gaps”或“plan”标题的文档是历史证据，除非明确标注为当前规范，否则不得作为实现
+指令或 TODO。任何修复都必须保持单一 final 路径，不得恢复旧 VM/recipe、旧节点字段、
+大 primitive、singleton/channel 旁路或兼容 facade；实机验证缺口另开任务处理。
 
 ## 一级核心系统（优先维护）
 
@@ -9,7 +16,7 @@
 | 能力系统（Ability） | [ABILITY_SYSTEM_MAINTENANCE.md](ABILITY_SYSTEM_MAINTENANCE.md)（**reducer-only** 唯一写路径） | `ac/ability`、`ac/content/ability`、`mcmod/ability`、`forge1201/ability` |
 | 战斗核心（Combat Core） | [COMBAT_CORE.md](COMBAT_CORE.md) | `:combat-core`、`ac/ability/service/combat_content.clj`、`ac/ability/service/combat_runtime.clj` |
 | 特效核心（VFX Core） | [VFX_CORE.md](VFX_CORE.md) | `:vfx-core`、`ac/client/effect_controller.clj`、`ac/ability/client/fx_spec.clj` |
-| Combat/VFX 平台缺口工单 | [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md)（未完成工作清单，非架构文档） | 同上两行 |
+| Combat/VFX 平台缺口工单 | [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md)（历史审计档案，非当前工单/架构文档） | 同上两行 |
 | UI 系统（GUI/CGUI，legacy） | [UI_SYSTEM_MAINTENANCE.md](UI_SYSTEM_MAINTENANCE.md) | `ac/gui`、`mcmod/gui`、`forge1201/gui` |
 | Presentation Runtime | [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md) | `:presentation-core`、`:presentation-compiler`、`ac/gui/reactive/register.clj` |
 | 无线系统（Wireless） | [WIRELESS_SYSTEM_MAINTENANCE.md](WIRELESS_SYSTEM_MAINTENANCE.md) | `ac/wireless` |

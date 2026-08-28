@@ -1,6 +1,14 @@
 # VFX Core 维护手册
 
-本文描述当前唯一的 final VFX 路径。旧的 `vm.clj`、`recipe.clj`、`runtime.clj`、component registry 和 singleton 聚合模型不属于当前生产架构；源码级检查不允许它们重新成为入口。
+本文描述当前唯一的 final VFX 路径。旧的 `vm.clj`、`recipe.clj`、`runtime.clj`、component registry 和 singleton 聚合模型不属于当前生产架构；源码级检查不允许它们重新成为入口。历史缺口档案中的“Batch/尚未迁移”文字不构成当前 TODO。
+
+## 当前 ABI 锁定（不可回退）
+
+生产入口固定为 `final catalog → final-client/final-engine → presentation adapter`，服务端
+信号经 `ability-runtime`/AC adapter 后只走 mcmod fixed-channel。不得恢复 effect-id 硬编码
+handler、channel/topic 总线、singleton 状态或兼容 VFX runtime。可视图只暴露效果业务参数；
+`instance-key`、`instance-id`、owner/world、event-seq、dirty-mask 和 tombstone 是内部复制
+ABI，不得作为编辑器节点输入输出。未知 effect、旧操作或 malformed packet 必须 fail-closed。
 
 ## 模块边界
 
@@ -8,7 +16,7 @@
 - `vfx-core/src/main/clojure/cn/li/vfx/compiler.clj`：独立的 VFX composite 展开器。VFX 不依赖 Combat 的运行时解释器，但与 Combat 共享 node-core 的描述符、表达式和作用域语言内核。
 - `vfx-core/src/main/clojure/cn/li/vfx/final-engine.clj`：headless/fake-host 的 final graph sampler 与生命周期测试端口。
 - `vfx-core/src/main/clojure/cn/li/vfx/final-client.clj`：客户端 per-instance runtime、四阶段采样、Java frame 投影、乱序/墓碑处理。
-- `vfx-core/src/main/clojure/cn/li/vfx/replication.clj`：服务端 tracking、baseline、snapshot/replay、release/destroy 生命周期。
+- `vfx-core/src/main/clojure/cn/li/vfx/replication.clj`：服务端 tracking、baseline、snapshot/replay、destroy/clear-owner 生命周期。
 - `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：读取 final VFX system EDN、展开 composite、生成 emitter stages 和静态 descriptor，再通过 ability-runtime 组合 catalog。
 - `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：将 VFX catalog 与 Combat、Presentation、NodeEnvironment 组合；VFX Core 本身不反向依赖这些内容模块。
 - `ac/src/main/clojure/cn/li/ac/client/effect_controller.clj`：AC composition root；只安装 catalog、转发 signal、采样 frame，不持有旧 handler 或 singleton aggregate。
@@ -31,7 +39,7 @@ System
 
 ## 生命周期与网络
 
-信号操作只有 `spawn/update/trigger/destroy/release/clear-owner/snapshot`。实例身份由 `effect-id + owner + world-id + instance-key` 或远端 `instance-id` 组成；`state-seq` 和 `event-seq` 独立检查。`snapshot` 只建立 baseline，不重放历史 event；`release` 只删除 tracking client 的本地副本；`destroy` 写入 tombstone，阻止延迟 update 复活。
+信号操作只有 `spawn/update/trigger/destroy/clear-owner/snapshot`。实例身份由 `effect-id + owner + world-id + instance-key` 或远端 `instance-id` 组成；`state-seq` 和 `event-seq` 独立检查。`snapshot` 只建立 baseline，不重放历史 event；`clear-owner` 清理 owner 作用域；`destroy` 写入 tombstone，阻止延迟 update 复活。旧 `release`/`signal` 操作不属于当前生产 contract。
 
 网络分两层：
 

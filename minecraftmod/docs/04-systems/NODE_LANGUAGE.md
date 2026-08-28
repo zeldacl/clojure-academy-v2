@@ -7,6 +7,16 @@
 > 背景与设计过程记录在 `C:\Users\lxy\.claude\plans\ac-combat-core-combat-core-vfx-core-ac-mossy-wren.md`
 > （诊断、决策依据、执行阶段）。本文档只记录**最终规格**，不记录过程。
 
+## 当前 ABI 锁定（2026-08-28）
+
+本文与 `final_vocabulary.clj`、`node-core` descriptor/schema export 共同构成唯一节点
+ABI。旧 VM、旧 recipe、运行时 composite loader 和迁移字段只可作为历史对照，不能作为
+实现模板或兼容入口。可视编辑器只显示业务 source/primitive/composite 的声明输入输出；
+`session-key`、`instance-key`、event sequence、owner/world 路由、continuation 句柄和
+`kernel/*` 都是隐藏运行时数据。任何包含查询+循环+提交的“大 primitive”必须拆成
+composite + hidden kernel；六个永久禁用 ID 为 `block/area-break`、`block/random-break`、
+`block/break-budget`、`entity/radial-impulse`、`terrain/propagate`、`host/beam-trace`。
+
 ## 0. 目标
 
 技能与特效内容用一棵节点树描述，分四类节点：
@@ -182,7 +192,7 @@ descriptor 用 `:reads-environment #{:tunables}` 之类的标记声明它读取�
 
 `:outputs` 的 `:from` 指向 body 作用域内的一个局部名——这是 composite 唯一允许向外暴露的东西。没有声明 `:outputs` 的 composite 只产生副作用（伤害/位移/VFX 等），不返回值，这是完全合法的（例如 §8 的例子）。
 
-`:kind :composite` 文档本身没有 `:layer` 之外的运行时形态——它在编译期被**展开**（宏替换）进调用方的树，不是运行期函数调用。展开器（`node-core/composite.clj`）做深度上限、节点数上限、循环检测（同 combat-core 现行 `recipe.clj` 的预算）。
+`:kind :composite` 文档本身没有 `:layer` 之外的运行时形态——它在编译期被**展开**（宏替换）进调用方的树，不是运行期函数调用。展开器（`node-core/composite.clj`）做深度上限、节点数上限、循环检测，并使用 node-core 统一的 composite expansion budget；`combat-core/recipe.clj` 不是技能执行预算，也不得被复制为运行时路径。
 
 ## 8. 完整例子：释放闪电
 
@@ -255,6 +265,10 @@ vfx-core 词汇表复用 §1-§7 的全部规则，额外约定：
 沿用 combat-core 现行的 fail-closed 策略（Design E）：一份技能/效果文档编译失败只disable它自己，不影响其它文档；错误集中收集，不止进日志（见计划 R6，暴露到 dev 命令/网络）。
 
 ## 12. 与旧设计的映射（迁移期间的对照表）
+
+本节仅用于阅读历史 EDN 和审计差异，**不是新代码的实现来源**。映射中的旧名称不得
+重新出现在生产资源、descriptor 或 adapter 中；新节点必须先在 final vocabulary 声明
+完整 inputs/outputs，再由唯一 compiler/engine 使用。
 
 | 旧概念 | 新概念 |
 |---|---|

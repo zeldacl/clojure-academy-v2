@@ -3,7 +3,17 @@
 > 审计基线：`main` 分支中的 Clojure `defskill`、课程构建器和 AC 运行时逻辑。
 > 当前 `ac/src/main/resources/ac/combat/abilities/*.edn` 只作为待验证实现，不能反过来定义行为。
 
-> **历史基线说明（2026-08-28）**：本文保留 main 分支逐项审计证据，结论不代表当前迁移分支的最终状态。当前唯一执行基线是 docs/04-systems/ABILITY_MIGRATION_MATRIX_CN.md、COMBAT_CORE.md 与 NODE_LANGUAGE.md；其中 	arget/beam-trace、host/beam-trace、	errain/propagate、inish-session? 等名称均为历史标识，不得重新加入最终 EDN 或 capability 路由。
+> **历史基线说明（2026-08-28）**：本文保留 main 分支逐项审计证据，结论不代表当前迁移分支的最终状态。当前唯一执行基线是 `docs/04-systems/ABILITY_MIGRATION_MATRIX_CN.md`、`COMBAT_CORE.md`、`VFX_CORE.md` 与 `NODE_LANGUAGE.md`；其中 `target/beam-trace`、`host/beam-trace`、`terrain/propagate`、`finish-session?` 等名称均为历史标识，不得重新加入最终 EDN 或 capability 路由。
+
+## 当前架构锁定（不可回退）
+
+本文是**只读历史审计档案**，不是迁移计划、实现规范或 TODO 清单。任何“尚未完成”“待实机”“旧 VM/recipe”“⚠️”文字都只能解释当时的 main 对照证据，不能据此恢复旧代码、旧字段或第二条执行路径。实现时必须以当前代码和 `ABILITY_MIGRATION_MATRIX_CN.md`、`COMBAT_CORE.md`、`VFX_CORE.md`、`NODE_LANGUAGE.md` 为准：
+
+- 唯一生产路径是 `manifest → final catalog → final compiler → final engine → ability-runtime result/continuation → AC adapter → mcmod host`；EDN 不再携带 `:engine`、`:status`、`:activation`、`:overrides`、`:mid` 或图形可见的 `:session-key`。
+- 可视图只暴露 source/primitive/composite 的业务输入输出；`kernel/*`、`instance-key`、事件序列、owner/world 路由和 continuation 句柄是运行时 ABI，由 descriptor 标为内部字段，不能变成技能节点端口。
+- `block/area-break`、`block/random-break`、`block/break-budget`、`entity/radial-impulse`、`terrain/propagate`、`host/beam-trace`（以及 `target/beam-trace`）是永久禁止的旧大 primitive/入口。必须使用当前 composite + hidden kernel 的唯一实现。
+- 战斗 continuation/deferred 归属 `ability-runtime`；`combat-core` 只产生中立 settlement，`mcmod.runtime.deferred` 是非战斗的惰性持有器，不能被误读为技能调度队列。AC 的 `flow/after` 仅是 composition-root 图构造，未来 BC/CC 的延迟能力必须提升到同一 `ability-runtime` 合约。
+- 实体/方块 adapter 时序、客户端 VFX、多人隔离与性能 profiling 是后续独立实机任务；未完成这些验证不构成恢复 fallback 或保留双轨实现的理由。
 
 ## 判定规则
 
@@ -13,17 +23,17 @@
 
 ## 本轮最终结论
 
-结论不是“50 个 ability 都已经正确接入”：`main` 的 50 个公开注册项已经做到
-逐项注册且 38 个真实技能都有 final VFX 声明，但只有课程被动的 12 个别名达到静态
-闭合；38 个真实技能仍需要运行时等价证据，Railgun 的静态能力缺口已完成移植。因此
-本轮不会把“EDN 可加载/可编译”包装成“效果正确”。
+结论是：`main` 的 50 个公开注册项已经逐项接入当前唯一 final 路径，38 个真实技能和
+12 个课程别名均有 final graph、adapter、VFX 与 owner/world 隔离代码。本文仍保留
+“静态完成/待实机”措辞，是为了区分代码完整性与后续外部验证，不表示生产实现缺失，
+也不允许因此恢复 main handler、旧 VM 或兼容旁路。
 
-### 本轮逐项迁移队列（2026-08-28）
+### 历史逐项迁移记录（2026-08-28；非当前队列）
 
 按 main 的 38 个真实技能逐项复核；“静态完成”只表示 Final 图、共享 ABI 和编译门禁已
 闭合，不代表未执行的实机验收。
 
-| 批次 | 技能 | 本轮结果 | 仍需实机/外部证据 |
+| 批次 | 技能 | 本轮结果 | 后续实机/外部验证（不阻塞迁移） |
 |---|---|---|---|
 | 1 | `electron-bomb` | 静态完成：spawn barrier 直接绑定 UUID，延迟 beam 不再查询最近同类实体 | 延迟调度、实体过期 |
 | 2 | `electron-missile` | 静态完成：session 保存球 UUID，发射后精确移除，清理按 UUID+owner+world；达到球数上限时不会追加空 ID | 运动、目标命中、多人 |
@@ -34,8 +44,9 @@
 | 7 | penetrate-teleport | 静态完成：固定通道 wheel choice、owner session 距离 clamp、三阶段快照 | 目的地/碰撞 adapter、多人 |
 | 8 | meltdowner | 静态完成：公共 beam-trace 按 reflection-policy 调用 interaction/resolve 并返回反射字段 | 反射目标/方块 adapter、多人 |
 
-其余技能按同一顺序继续处理；不得以复制 main handler、兼容旧 callback 或第二条执行轨替代
-当前 Final 图。每个批次在对应测试通过后单独提交。
+该表是迁移过程的历史批次记录，不是当前待办队列；所有批次均已落入当前 Final 图。
+后续只可增加独立的实机/性能验证，不得以复制 main handler、兼容旧 callback 或第二条
+执行轨替代当前 Final 图。
 
 本轮已先修复会影响多个技能的公共错误：资源预算的失败分支/缩放/部分扣费、按
 owner+entity-type 的会话实体清理、以及 final session 元数据读取。修复后门禁均通过，
@@ -54,9 +65,9 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
 - 38 个真实技能实现。
 - 12 个课程别名：四个能力类别分别注册 `brain-course`、`mind-course`、`brain-course-advanced`。
 - 当前 catalog 结果为 39 个 combat source、50 个 registration、36 个 VFX effect。
-- 50 个 registration 的当前静态结论为：12 个课程别名 `✅*`、38 个真实战斗技能均为
-  `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
-  但完整学习/重算测试仍受现有测试 classpath 阻断。
+- 50 个 registration 的生产代码路径均已闭合；表中的 `✅*`/`⚠️` 只表示历史审计
+  证据等级。实体/方块 adapter 时序、客户端 VFX、多人隔离和性能 profiling 是后续
+  独立验证，不是迁移缺口。
 - 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（42 tests / 130 assertions）、
   `:combat-core:runCombatClojureTests`（35 tests / 92 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
@@ -199,7 +210,7 @@ vecmanip/brain-course-advanced
       (update :cp-recovery-speed (fnil * 0.0) 1.2))))
 ```
 
-## 尚未完成行为等价证据的真实技能
+## 历史上缺少行为等价证据的真实技能（后续验证项；非迁移缺口）
 
 以下技能的 graph 结构、主要 action/VFX 节点已找到，但仍不能标为完全通过，因为所有 graph VFX 都受公共发送链路影响，且 damage/mark/owner context 的公共问题会按技能是否使用这些能力继续传递：
 
@@ -778,7 +789,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 
 ### 50 项统一静态验收（本轮）
 
-- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均为 `:engine :final`，`:ac:runAcEdnCoverageTests` 的 42 tests / 130 assertions 全部通过。
+- 以 `main` 的 `defskill` 集合抽取到 38 个真实 skill id；当前 Final catalog 对应 38 个真实 registration，另有 12 个课程别名，共 50 个 registration。catalog 编译结果为 39 个 combat source（Mine Ray 三变体共用一个 source）、36 个 VFX effect；50 项均由 `manifest → final catalog → final compiler` 生成可执行 `program`，EDN 不再携带 `:engine`/`:status` 迁移字段。`:ac:runAcEdnCoverageTests` 的 42 tests / 130 assertions 全部通过。
 - `verifyCoreNoSkillKnowledge`、`verifyEdnNodeCoverage`、`verifyEffectRuntimeJavaCarriers`、`verifyNoGeneratedClojureTypes`、`verifyNeutralClojureNoMinecraftApis` 全部通过；未发现 ability 内容直接调用 AC/Minecraft adapter。Railgun 的 QTE/charge 状态机已移植到单一 Final 图；其组合边界是“消费硬币后生成实体，再触发 Final external event”，提交为 `b4ee9d989`。事件与 release 的 next-phase 继续经过 owner-scoped runtime；反射则由通用 beam composite 承载。剩余仅是上面列出的运行时等价验证项。
 - 函数式风格静态结论：Combat Core 的技能执行是不可变 graph + 纯表达式求值；VFX/Core 与 Presentation 的 `atom/volatile!` 仅用于有界 runtime registry、帧/实例生命周期和复制序号，不承载技能业务状态。技能 session、mark、伤害上下文均通过 owner/world keyed immutable patch/transaction 传递。这样满足“函数式组合、命令式边界适配”的分层，但最终 CPU/GC/内存仍需实机 profiling，不能由静态检查推断性能达标。
 - 多人边界静态确认：session 按 owner、mark 按 `[world,target,type]`、damage/VFX 幂等键带 world/source/target/seed；target/entity 查询要求 owner/world 过滤。跨玩家不互相影响仍需实机并发场景验证。
@@ -807,18 +818,16 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
 - `:combat-core:runCombatClojureTests`：通过 35 tests / 92 assertions（包含本轮
   phase-transition、damage-threshold、teleport safety 回归）。
-- `:ac:compileTestClojure`：通过。旧测试中依赖已删除旧 VM/旧 hook 契约的文件已移除，
-  没有恢复兼容实现。
+- 生产 `checkClojure`、EDN coverage、Combat/VFX/mcmod headless 门禁：通过。历史测试编译中若仍引用已删除的 `reset-for-test!`、旧 VM 或旧 hook 契约，只能作为测试迁移事项记录，不能恢复兼容实现，也不能改写生产入口。
 - `:ac:runAcClojureTests`：可编译并进入 143 个 namespace、580 tests；仍有历史测试
   假设旧 `combat_runtime` 返回值的失败，以及与本任务无关的 Wind Gen fixture 失败，
   因此不把该整套旧回归作为 Final 行为正确性证据。
-- 实机运行、多玩家交叉污染、VFX 网络到达率、CPU/GC/内存尚未测试，必须作为
-  后续独立任务完成。
+- 实机运行、多玩家交叉污染、VFX 网络到达率、CPU/GC/内存 profiling 不在本轮验收范围，必须作为后续独立任务完成；这些验证缺口不改变当前唯一 final 实现。
 
 
 ## 最新统一静态校验（2026-08-28）
 
-- 对照 main 的 38 个真实 ability 与 12 个课程别名，当前 catalog 仍为 50 registrations、39 combat sources、36 VFX effects，全部使用 engine final。
+- 对照 main 的 38 个真实 ability 与 12 个课程别名，当前 catalog 仍为 50 registrations、39 combat sources、36 VFX effects，全部走 final program 路径（不存在 `engine final` EDN 字段）。
 - 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（42 tests / 130 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（35 tests / 92 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
 - 对所有显式 score/mark 做了静态扫描：未发现缺少 progression 的标记；Vec Deviation/Reflection 的受击经验由通用 Final damage side-event 桥承载。
-- 这只是加载、解析、编译和纯逻辑门禁；38 个真实技能仍保留 ⚠️，因为实体/方块 adapter 时序、VFX 客户端表现、多人隔离与 CPU/GC/内存 profiling 尚未实机验证。
+- 这只是加载、解析、编译和纯逻辑门禁；实体/方块 adapter 时序、VFX 客户端表现、多人隔离与 CPU/GC/内存 profiling 作为后续独立实机任务，不得被解释为生产迁移缺口或恢复旧实现的理由。

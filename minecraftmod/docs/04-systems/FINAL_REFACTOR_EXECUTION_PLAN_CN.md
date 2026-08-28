@@ -2,6 +2,22 @@
 
 本计划是对 `ac-combat-core-combat-core-vfx-core-ac-mossy-wren` 的执行版修订。目标是最终只保留一套图语言、战斗执行器、VFX 执行器和 mcmod 中转边界；旧 VM、旧 recipe、旧 composite、旧反应解释器只允许在迁移阶段存在，最终必须删除。
 
+## 当前状态锁定（2026-08-28）
+
+本文件记录迁移过程和验收证据；F0-F7 中已经标记“已完成”的步骤不得再次执行，
+“退出条件/待清理”只保留为历史验收标准，不是当前 TODO。当前唯一实施规范是
+`ABILITY_MIGRATION_MATRIX_CN.md`、`COMBAT_CORE.md`、`VFX_CORE.md`、`NODE_LANGUAGE.md`
+及代码中的 `final_vocabulary`/`final_catalog`/`final_runtime`。任何新增或修改必须
+继续使用 `manifest → final catalog → final compiler → final engine → ability-runtime`
+路径，不得恢复旧 VM、旧 recipe/runtime/composite loader、兼容 facade 或双轨 EDN。
+
+不可回退清单：EDN 禁止 `:engine`、`:status`、`:activation`、`:overrides`、`:mid` 和
+图形可见的 `:session-key`；`kernel/*`、实例身份、事件序列、owner/world 路由属于内部
+运行时 ABI；`block/area-break`、`block/random-break`、`block/break-budget`、
+`entity/radial-impulse`、`terrain/propagate`、`host/beam-trace`/`target/beam-trace`
+永久禁止。战斗 deferred/continuation 统一由 `ability-runtime` 持有，AC 的
+`flow/after` 仅为 composition-root 构造，BC/CC 必须复用同一合约。
+
 ## 本轮复核结论（以当前代码为准）
 
 - 已完成：39 份 ability/composite EDN 已物理迁移为 final 格式，manifest 的 `:overrides` 已改为显式 `:bindings`；catalog 直接读取 final EDN，不再执行旧 lowering。
@@ -15,7 +31,7 @@
 
 ## 已确认的矛盾与遗漏
 
-1. 原计划把“旧 VM 删除”写成可直接执行；本轮已完成“最终 catalog → final compile → AC 调度切换”，生产入口不再依赖 `skill-runtime`/旧 VM，剩余 F6 只需继续由静态门禁确认旧文件无生产引用。
+1. 原计划把“旧 VM 删除”写成可直接执行；本轮已完成“最终 catalog → final compile → AC 调度切换”，生产入口不再依赖 `skill-runtime`/旧 VM；F6 已关闭，后续仅允许用静态门禁防止回归。
 2. 原计划保留 `combat-core → vfx-core`，但用户要求最终依赖方向清晰。现在 Combat 只产生中立 VFX signal，AC 组合 VFX catalog，已移除该直接边；计划中的验证门禁必须更新为禁止该边。
 3. 原计划把 catalog hash、输入边沿、VFX 状态同步混在一起。正确分层是：固定字节协议（mcmod）只传 catalog hello/ack、输入 edge、feedback、VFX spawn/update/trigger/destroy/clear-owner/snapshot；技能图、资源值和世界查询永不下发。
 4. 原计划写了“VFX catalog/replication”，但缺少 VFX 执行引擎。现已补充 typed effect instance runtime、graph sampler、recipient baseline/replay 和 dirty-mask 增量包；旧 VFX runtime/recipe 生产路径已不再被引用。
@@ -99,7 +115,7 @@
 - Feedback/VFX：`effect/vfx`, `domain/event`, `vfx/*`（arc/beam/ray/ring/particle/emitter/timeline/fade/repeat/group/branch、audio、camera、first-person、marker、scan、trajectory、vortex 等全部 descriptor 均固定在同一词汇表）。
 
 为避免 `vfx/*` 这种省略造成漏实现，当前词汇表的 VFX primitive/structural ID 必须逐项覆盖：
-`vfx/arc-field`, `vfx/arc-strike`, `vfx/audio-loop`, `vfx/audio-one-shot`, `vfx/beam`, `vfx/beam-arc-fade`, `vfx/billboard-sequence`, `vfx/block-progress`, `vfx/block-scan`, `vfx/camera`, `vfx/channel-arc`, `vfx/charge-ring`, `vfx/charge-slow`, `vfx/directional-wave`, `vfx/emitter`, `vfx/fade`, `vfx/first-person-motion`, `vfx/humanoid-marker`, `vfx/impact-burst`, `vfx/mark-sparks`, `vfx/particle-trail`, `vfx/ray-beam`, `vfx/ray-fan`, `vfx/ring`, `vfx/timeline`, `vfx/trajectory-ribbon`, `vfx/vortex-column`，以及结构节点 `vfx/beam-bounds`, `vfx/branch`, `vfx/group`, `vfx/let`, `vfx/line`, `vfx/model-marker`, `vfx/repeat`。最终 combat composite ID 为 `combat/area-damage`, `combat/beam-strike`, `terrain/apply-break-budget`, `combat/impact-strike`, `combat/teleport-group`；target composite ID 为 `target/hold-destination`, `target/penetration-destination`, `target/raycast-destination`。这些 ID 的 inputs/outputs/children/default/doc 以 `final_vocabulary.clj` 为唯一 ABI 来源，VFX source graph 必须在 catalog 装配时先展开再校验。
+`vfx/arc-field`, `vfx/arc-strike`, `vfx/audio-loop`, `vfx/audio-one-shot`, `vfx/beam`, `vfx/beam-arc-fade`, `vfx/billboard-sequence`, `vfx/block-progress`, `vfx/block-scan`, `vfx/camera`, `vfx/channel-arc`, `vfx/charge-ring`, `vfx/charge-slow`, `vfx/directional-wave`, `vfx/emitter`, `vfx/fade`, `vfx/first-person-motion`, `vfx/humanoid-marker`, `vfx/impact-burst`, `vfx/mark-sparks`, `vfx/particle-trail`, `vfx/ray-beam`, `vfx/ray-fan`, `vfx/ring`, `vfx/timeline`, `vfx/trajectory-ribbon`, `vfx/vortex-column`，以及结构节点 `vfx/beam-bounds`, `vfx/branch`, `vfx/group`, `vfx/let`, `vfx/line`, `vfx/model-marker`, `vfx/repeat`。combat/target/terrain/motion composite 的完整 ID 集合（包括 `terrain/break-area`、`terrain/random-break`、`terrain/apply-break-budget`、`motion/radial-impulse`、`terrain/wave-plan`、`combat/charged-area-damage`、`combat/release-with-cost`、`target/directional-destination`）和 hidden kernel 映射不得在本文手工复制；以 `final_vocabulary.clj` 与 `ABILITY_MIGRATION_MATRIX_CN.md` 为唯一 ABI 来源。六个大 primitive `block/area-break`、`block/random-break`、`block/break-budget`、`entity/radial-impulse`、`terrain/propagate`、`host/beam-trace` 永久禁止。VFX source graph 必须在 catalog 装配时先展开再校验。
 
 注册顺序是 vocabulary → validate → scope → `descriptor/freeze!`；任何运行期从图形推导 descriptor、未知字段自动放行或重新安装节点都视为失败。
 
@@ -110,7 +126,7 @@
 - 按批次迁移 39 source、50 registrations：source 节点只读显式 capability；中层 composite 只能是 EDN；技能 graph 最终产出 final IR。
 - 每批必须保持覆盖计数 39/50/36，失败技能记录结构化 error 并在最终切换前清零。
 - 机械迁移规则已落地到资源：`[:slot k]→[:local k]`；`:session/patch→:session/read + :session/write`；`:guard/resource→:cost/spend + flow/branch`；`:from/:tunable/:invariant` 改成 source node + local bind。VFX 中的 `:from/:to` 仅在曲线/插值语义下保留，并由 schema 明确区分。catalog 不再包含迁移函数。
-- 退出条件：`final_catalog/assemble` 中所有 registration `:status :ready`，无 `:pending-final-node-migration`；资源门禁对上述旧结构返回 0 命中，而不是依赖运行时兼容解析。
+- 退出条件（历史验收标准，已满足）：`final_catalog/assemble` 返回 ready catalog，且无 `:pending-final-node-migration`；`:status` 只可作为运行时返回状态，禁止写回 EDN registration。
 - AC 启动投影必须把 registration 的 `:bindings/:metadata/:presentation` 先合并到 player-facing skill index；缺失的 category/level/controllable 只能从静态 progression definition 补齐，不能用它选择或执行 graph。固定测试必须验证 50 个 registration 均可写入 skill index。
 
 ### F5：AC 调度切换
@@ -121,12 +137,12 @@
 - 退出条件：AC 相关静态检查和 headless tests 通过，final catalog report 的 pending 数固定为 0；资源迁移、schema 门禁和旧 combat/vfx namespace 的生产引用清理已完成。
 - 网络退出条件：CombatIntent 只走 mcmod fixed-channel 的 `seq/control-id/edge/choice/client-tick`；服务端完成单调序列、限频和生命周期 abort 后才进入 final runtime，不能再从客户端 payload 接收 ability-id/目标/数值。
 
-### F6：删除旧设计
+### F6：删除旧设计（已关闭；保留为回归门禁）
 
 - 删除 combat `vm.clj` 的旧解释路径、旧 `recipe.clj`、旧 combat/vfx composite loader、旧 `skill-runtime`、旧 `reactions/interception` 双解释器；保留 node-core 的 final compile-time composite expansion kernel，但不得保留运行时兼容 façade。
 - 删除 vfx `vm.clj`、旧 runtime/recipe/composite 路径及无消费者组件；保留 `final-engine`、typed schema、replication、render-op adapter。
 - 删除旧 manifest 字段和旧资源格式；不提供旧 EDN 自动转换或运行时 fallback。一次性迁移 runner 已删除，正式源码只保留 final EDN。
-- 退出条件：`rg` 不再找到 combat/VFX 技能生产代码对旧 VM、旧 recipe、旧 composite loader 或兼容 façade 的引用；与 JEI 配方、GUI 迁移和其它非技能领域无关的 `compat`/`recipe-loader` 不属于本架构门禁；clean production build 能编译。
+- 退出条件（已满足）：`rg` 不再找到 combat/VFX 技能生产代码对旧 VM、旧 recipe、旧 composite loader 或兼容 façade 的引用；与 JEI 配方、GUI 迁移和其它非技能领域无关的 `compat`/`recipe-loader` 不属于本架构门禁。若未来扫描出现命中，应视为回归缺陷，不能新增兼容层。
 
 ### F7：最终构建验收（不含实机）
 
@@ -175,4 +191,4 @@
 
 本文保留为审计记录，不是当前执行入口。当前唯一执行路径与节点命名以
 `COMBAT_CORE.md`、`ABILITY_MIGRATION_MATRIX_CN.md` 及代码中的 final catalog 为准；
-其中出现的 `target/beam`、`target/beam-trace`、`terrain/propagate`、旧 VM 和旧迁移字段均不得重新引入。
+其中出现的 `target/beam`、`target/beam-trace`、`terrain/propagate`、旧 VM 和旧迁移字段均不得重新引入；本段是回归防护，不是待迁移清单。

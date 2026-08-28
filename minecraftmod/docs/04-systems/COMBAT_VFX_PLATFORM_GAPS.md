@@ -1,4 +1,4 @@
-# Combat Core / VFX Core 平台缺口工单
+# Combat Core / VFX Core 平台缺口工单（历史审计档案）
 
 > **当前状态（2026-08-25）**：本文保留为历史审计记录，不再定义生产架构或剩余任务。
 > 最终重构已采用单一 final VFX 路径：AC `effect_controller` 不再有 `:singleton`/handlers/level-hand
@@ -6,9 +6,18 @@
 > 以 [FINAL_REFACTOR_EXECUTION_PLAN_CN.md](FINAL_REFACTOR_EXECUTION_PLAN_CN.md) 的 F0-F7 和生产门禁为准；
 > 本文中“11 个 singleton”“Batch 0-7 尚未迁移”等段落仅说明当时发现的问题，不能作为当前代码状态结论。
 
+## 当前状态锁定（不可作为 TODO）
+
+整篇文档是历史 forensic 记录，不是当前架构规范或迁移顺序。文中“待迁移/未完成/剩余”
+数量属于旧时间点快照；当前生产路径和节点 ABI 以 `COMBAT_CORE.md`、`VFX_CORE.md`、
+`NODE_LANGUAGE.md`、`ABILITY_MIGRATION_MATRIX_CN.md` 及代码中的 final catalog 为准。
+不得按本文恢复旧 singleton、旧 handler/channel、旧 VM/recipe、`host/beam-trace`、
+`terrain/propagate` 或其它兼容旁路。实机 adapter 时序、客户端表现、多人隔离和性能
+profiling 的未验证项必须另开后续任务，不能用双轨实现填补。
+
 ## 这是什么
 
-这是一份**未完成工作清单**，不是系统架构文档（架构说明见 [COMBAT_CORE.md](COMBAT_CORE.md)、[VFX_CORE.md](VFX_CORE.md)）。记录的是 2026-08-17 一轮 combat-core/vfx-core/presentation-core 执行会话中发现、但因为需要新写 touch 真实 Minecraft API 的平台代码、或需要本仓库里找不到答案的游戏设计判断，因而**明确推迟未做**的条目。每一条都已经定位到具体文件和函数，接手时不需要重新排查"这一层到底有没有 wired"——已经排查过了，结论写在下面。
+这是一份**历史缺口清单**，不是系统架构文档（架构说明见 [COMBAT_CORE.md](COMBAT_CORE.md)、[VFX_CORE.md](VFX_CORE.md)）。记录的是 2026-08-17 一轮执行会话中的发现、修复记录和当时推迟的判断；后文的原始措辞只用于审计追溯，不能直接转化为当前实现任务。
 
 **为什么专门写一份工单，不直接在代码里留 TODO**：这些条目的完成度评估在执行过程中被反复推翻——每次以为"这一层应该已经接好了"，深入一层就发现还差一截（host-port 从未安装、`now-tick` 恒为 nil、`validate-host-api` 恒失败、11 个 world-effect 执行器整体缺失）。把最终核实过的结论集中写下来，比散在各处的 TODO 更不容易被下一次"看起来已经完成了"的误判绕过。
 
@@ -143,7 +152,12 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3 全部完成——P1.3 删死代码、P1.1/P1.2 计划内 24/24 个效果迁移到 :transient，Batch 7 收尾审计已跑完）
+### E. vfx-core 通用化剩余部分（历史记录；已由当前 final VFX ABI 取代）
+
+> 本节中的 `:singleton`、旧 `dispatch-signal!` 旁路、Batch 数量和“本轮不做”只描述当时
+> 的代码快照。当前实现以 `VFX_CORE.md` 的 final-client/fixed-channel 合约为准；阅读
+> 本节不得恢复旧聚合实例、handler、channel/topic 或双轨生命周期。仍需的真实游戏验证
+> 另开任务，不通过回退架构解决。
 
 不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 

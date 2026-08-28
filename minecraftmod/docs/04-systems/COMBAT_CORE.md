@@ -2,6 +2,19 @@
 
 > 语言本体（描述符/表达式/作用域/composite 展开）的完整规格见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md)——本文只讲 combat-core 如何使用这套语言、模块边界、以及排障。
 
+## 当前架构锁定（2026-08-28）
+
+本文是当前实现规范。技能唯一执行路径为 `final catalog → final compiler → final engine`，
+经 `ability-runtime` 输出 continuation/result，再由 AC adapter 调用 mcmod host；不得恢复
+旧 VM、旧 recipe/runtime/composite loader、旧 EDN 字段或任何兼容/双轨实现。`recipe.clj`
+若被保留，只能服务非技能文档读取，绝不是技能执行入口或迁移参考。
+
+禁止重新引入的入口/大 primitive：`block/area-break`、`block/random-break`、
+`block/break-budget`、`entity/radial-impulse`、`terrain/propagate`、
+`host/beam-trace`、`target/beam-trace`。查询、循环、预算和提交必须由当前 composite
+拆分并通过 hidden kernel 完成；`kernel/*`、`instance-key`、event sequence、owner/world
+和 continuation 句柄不属于可视技能节点输入输出。
+
 ## 系统职责
 
 `combat-core` 加载 `node-core` 语言之上的**战斗词汇表**（原语 + 组合层 composite），执行全部技能。它是纯数据驱动、平台中立的执行引擎：技能是编译期校验过的 EDN 节点树，由树遍历解释器执行，只产出中立的结果计划（`:actions`/`:events`/`:vfx-signals`/`:query-results`）——从不直接改动 Minecraft 状态；真正落地世界效果、伤害、位移是通过 `mcmod` 端口 + 已注册的 host capability 完成的，AC 只负责组装与自己领域（技能学习/资源/成就）的注入。
@@ -11,9 +24,9 @@
 - `node-core/**`：语言本体，不依赖 Minecraft，也不依赖 combat-core/vfx-core/ac。
 - `combat-core/src/main/clojure/cn/li/combat/final_engine.clj`：唯一 final graph 执行器；只处理编译后的节点树，产出中立 actions/events/VFX 信号。
 - `combat-core/src/main/clojure/cn/li/combat/final_compiler.clj`：唯一 final graph 编译器；展开后的 composite 必须通过 descriptor、作用域和引用检查。
-- `combat-core/src/main/clojure/cn/li/combat/recipe.clj`：仅保留为非技能内容的文档读取工具，不是技能执行入口。
-- `combat-core/src/main/clojure/cn/li/combat/interception.clj`：伤害拦截决策边界（含反应管线），platform 事实采集（raycast/entity-motion）与 `:entity/damage` capability 调用都在这里直接完成，不经过 AC 转发。
-- `combat-core/src/main/clojure/cn/li/combat/skill_runtime.clj`：技能激活编排——tunable 具体化、VFX 信号规范化、结果组装。
+- 历史 `combat/recipe.clj`：不属于当前模块；若在旧审计或构建缓存中出现，仅可作为非技能文档证据，绝不能成为技能执行入口或迁移参考。
+- `combat-core/src/main/clojure/cn/li/combat/final_damage.clj`：统一 DamageEvent 收集/确定性 resolve 与 `mcmod` DamageBoundary 结果。
+- `combat-core/src/main/clojure/cn/li/combat/beam_settlement.clj`：beam settlement 的中立结算数据；延迟 continuation 不在此模块持有。
 - `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host query/action capability 表。
 - `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：唯一同时组合 node/combat/vfx/presentation 值的中立边界；AC、BC、CC 都通过它组装 catalog、result 和 frame。
 - `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：AC 侧内容加载器，读取 AC manifest 并将 combat/vfx/node 值交给 ability-runtime 组合。
@@ -32,9 +45,9 @@
 ## 运行时流程
 
 1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/composites.edn`、`vfx/manifest.edn`、`vfx/composites.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
-2. 客户端 CombatIntent 驱动 AC final runtime：具体化 tunable → composite 展开 → `final_compiler/compile-program` → `final_engine/execute!`，产出 `{:commands :events :vfx :status}`。
+2. 客户端 CombatIntent 驱动 AC final runtime：具体化 tunable → composite 展开 → `final_compiler/compile-program` → `final_engine/execute!`，产出中立 `{:actions :events :vfx-signals :feedback :query-results ...}`；AC 只做结果提交与协议投影。
 3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 作为中立 Intent 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播。
-4. 任意入站伤害（技能命中或 vanilla 击中）都先经过 `combat-core/interception.clj` 的 `intercept!`——这是唯一的伤害决策边界，platform 事实（world-id/目标位置/攻击者朝向）与反应管线（`reactions.clj`，逐步并入同一 VM，见 NODE_LANGUAGE.md §10）都在这一步完成，结果只返回给调用方提交，不在中途落地。
+4. 任意入站伤害（技能命中或 vanilla 击中）都进入 `final_damage.clj` 的统一 DamageEvent 收集/resolve 边界；platform 事实通过已注册 capability 提供，结果只返回给调用方提交，不在中途落地。伤害反应使用 node-core 同一套 descriptor/composite 规则，不存在第二个 reactions 解释器。
 
 ## 扩展点
 

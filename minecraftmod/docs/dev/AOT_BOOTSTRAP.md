@@ -9,6 +9,10 @@ Never touch Minecraft registry/bootstrap-dependent state from top-level forms th
 Use:
 - `cn.li.mcmod.aot/ensure-runtime!`
 - `cn.li.mcmod.runtime.deferred/deferred`
+> **边界说明（2026-08-28）**：这里的 `deferred` 仅是 AOT 安全的惰性持有器，用于注册器、
+> 属性和桥接对象初始化；它不是战斗技能的延迟结算/continuation 队列。Combat 的
+> deferred/continuation 统一由 `ability-runtime` 提供，AC/BC/CC 共享同一合约；不要把
+> 两者合并，也不要在内容模块新增私有 pending queue。
 
 ## Static verification
 

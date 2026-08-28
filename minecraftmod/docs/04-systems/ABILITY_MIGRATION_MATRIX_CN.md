@@ -2,6 +2,21 @@
 
 本表由 `ac/combat/manifest.edn` 生成，registration 与 source 分离；每项最终都必须经过同一套 ability-runtime → combat-core → vfx-core → presentation-core。
 
+## 当前唯一实施规范（2026-08-28）
+
+本矩阵是 50 个 registration 的当前清单，不是待迁移队列。每项都必须保持
+`manifest → final catalog → final compiler → final engine → ability-runtime → AC adapter`
+这一条生产路径；不得引入 `:engine`、`:status`、`:activation`、`:overrides`、`:mid` 或
+图形可见的 `:session-key`。可视图只包含业务 source/primitive/composite 输入输出，
+`kernel/*`、实例身份、event sequence、owner/world 路由和 continuation 句柄由内部 ABI
+承载并从 schema export 隐藏。
+
+以下六个大 primitive/旧入口永久禁止，不能以兼容别名或第二实现复活：
+`block/area-break`、`block/random-break`、`block/break-budget`、`entity/radial-impulse`、
+`terrain/propagate`、`host/beam-trace`（以及 `target/beam-trace`）。对应查询、循环、预算
+和提交必须使用下表的 composite + hidden kernel。combat deferred/continuation 统一属于
+`ability-runtime`；AC 的 `flow/after` 仅为 composition-root 构造，BC/CC 将复用同一合约。
+
 | # | registration | source | EDN | 迁移组合 | adapter/VFX 隔离 |
 |---:|---|---|---|---|---|
 | 1 | `:railgun` | `:railgun` | `ac/combat/abilities/railgun.edn` | source → combat/beam-strike composite → kernel/trace-beam → damage → beam VFX | owner-scoped state + event-seq VFX |
@@ -65,10 +80,12 @@
 | `terrain/break-area`、`terrain/random-break`、`terrain/apply-break-budget` | `kernel/terrain-break-area`、`kernel/terrain-random-break`、`kernel/terrain-apply-break-budget` | groundshock、mine、地形技 |
 | `terrain/wave-plan` | `kernel/terrain-wave-plan` | groundshock / terrain shockwave |
 | `combat/projectile-reflection-scan` | entity query + owner-scoped `state` | vec-deviation、vec-reflection |
+| `combat/release-with-cost`、`combat/charged-area-damage` | cost/charge + bounded area/damage kernels | plasma-cannon、thunder-clap、railgun 等蓄力/范围技能 |
+| `fx/lightning-strike`、`target/directional-destination` | effect/timing 与方向目标 kernel | 闪电冲击、方向传送/射线技能 |
 
 ## 每项完成条件
 
-- registration 只含显式 `bindings`，不含 `status/engine/activation` 迁移字段。
+- registration 只含显式 `bindings`，不含 `:status/:engine/:activation/:overrides` 迁移字段。
 - 图中只能出现 `source/primitive/composite`；kernel 只在 lowering 后执行，schema-export 永不导出。
 - adapter 必须以 owner + ability-id + activation-seed 作为隔离键；VFX signal 必须带 owner/world/event-seq。
 - block/entity 操作按 query → bounded plan → ordered action barrier 提交，禁止在 primitive 内隐藏循环。
