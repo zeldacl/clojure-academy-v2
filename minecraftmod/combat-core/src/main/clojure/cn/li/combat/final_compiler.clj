@@ -84,7 +84,7 @@
           (let [instructions (inc (reduce + 0 (map :instructions compiled)))]
             (when (> instructions max-instructions)
               (fail :instruction-budget-exceeded {:path path :count instructions :max max-instructions}))
-            {:node (assoc node :kind kind) :children compiled :instructions instructions :mutated? (:mutated? current-flags)}))))))
+            {:node (cond-> (assoc node :kind kind) (:layer descriptor) (assoc :layer (:layer descriptor))) :children compiled :instructions instructions :mutated? (:mutated? current-flags)}))))))
 (defn compile-program [environment program]
   (validate-reference-scopes program [:program])
   (let [compiled (compile-node environment program [:program] {:mutated? false :deferred? false})]
