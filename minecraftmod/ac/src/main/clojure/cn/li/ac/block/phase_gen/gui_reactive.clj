@@ -8,6 +8,7 @@
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.block.phase-gen.schema :as phase-schema]
             [cn.li.ac.block.phase-gen.config :as phase-config]))
 
@@ -28,6 +29,13 @@
 (defn can-place-item? [_ i s] (case (int i) (0 1) (phase-liquid-unit? s) 2 false 3 (energy/is-energy-item-supported? s) false))
 (defn still-valid? [_ _] true) (def server-menu-sync! (:server-menu-sync! sync))
 (def on-close (:on-close sync)) (defn handle-button-click! [_ _ _] nil)
+(def ^:private quick-move-config
+  (delay (slot-schema/build-quick-move-config slot-schema-id
+           {:inventory-pred (fn [i s] (>= i s))
+            :rules [{:accept? energy/is-energy-item-supported? :slot-ids [:energy]}
+                    {:accept? phase-liquid-unit? :slot-ids [:input-1 :input-2]}]})))
+(defn- quick-move-stack [c i s]
+  (move-common/quick-move-with-rules c i s @quick-move-config))
 
 (defn create-screen [container menu player]
   (presentation-container/presentation-screen-data
@@ -38,5 +46,5 @@
   (install/framework-once! ::phase-gen-reactive-installed?
   (fn []
     (slot-schema/register-slot-schema! {:schema-id slot-schema-id :slots [{:id :input-1 :type :input :x 30 :y 20} {:id :input-2 :type :input :x 48 :y 20} {:id :output :type :output :x 120 :y 52} {:id :energy :type :energy :x 42 :y 81}]})
-    (gui-reg/register-block-gui! (gui-manifest/gui-name :phase-gen) (merge (gui-manifest/gui-registration :phase-gen) {:container-predicate container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil)}))
+    (gui-reg/register-block-gui! (gui-manifest/gui-name :phase-gen) (merge (gui-manifest/gui-registration :phase-gen) {:container-predicate container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil) :quick-move-fn quick-move-stack}))
     (log/info "Phase Generator GUI initialized (reactive)"))))
