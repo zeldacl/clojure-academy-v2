@@ -19,15 +19,18 @@
 (defn snapshot
   [data policy]
   (let [initialized? (boolean (:initialized data))
-        owner? (boolean (:owner? policy))]
-    {:initialized? initialized?
+        owner? (boolean (:owner? policy))
+        load-ratio (max 0.0 (min 1.0 (/ (double (or (:load data) 0))
+                                         (max 1.0 (double (or (:max-capacity data) 1))))))]
+    {:title "Info"
+     :initialized? initialized?
      :editable? (and initialized? owner?)
+     :load-ratio load-ratio
      :fields [{:id :owner :label "Owner" :value (or (:owner data) "Unknown")}
               {:id :range :label "Range" :value (or (:range data) 0)}
               {:id :bandwidth :label "Bandwidth" :value (or (:bandwidth data) 0)}
-              {:id :load :label "Load" :ratio (max 0.0 (min 1.0 (/ (double (or (:load data) 0))
-                                                                      (max 1.0 (double (or (:max-capacity data) 1))))))}]}))
-
+              {:id :load :label "Load" :value (format "%.0f%%" (* 100.0 load-ratio))
+               :ratio load-ratio}]}))
 (defn create-model [initial]
   {:state (atom initial) :revision (atom 0)})
 
