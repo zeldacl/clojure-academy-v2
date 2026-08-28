@@ -106,10 +106,14 @@
   (session-cleanup/tick-connection-change! {})
   (particle/tick-particles!)
   (sound/tick-sounds!)
+  ;; Raw physical state is polled EVERY tick (Screen open or not) and
+  ;; screen-open? gates event dispatch — upstream KeyManager keeps tracking
+  ;; physical key state while a GUI is open and ClientRuntime gates dispatch
+  ;; on ClientUtils.isPlayerInGame(), so the click that closes a Screen is
+  ;; absorbed instead of re-firing a bound skill.
   (client-session/with-current-client-session
     #(power-runtime/client-tick-keys!
-       (if (screen-open?) glfw-polling/no-key-down-fn glfw-polling/glfw-key-state-fn)
-       get-player-uuid-str))
+       glfw-polling/glfw-key-state-fn get-player-uuid-str (screen-open?)))
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^ClientTickEvent$Post evt]

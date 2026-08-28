@@ -52,9 +52,9 @@
      (font-init/init-fonts!))
 
    :client-tick-keys!
-   (fn [key-state-fn get-player-uuid-fn]
+   (fn [key-state-fn get-player-uuid-fn screen-open?]
      (binding [cn.li.ac.ability.client.keybinds/*get-player-uuid-fn* get-player-uuid-fn]
-       (client-keybinds/tick-keys! key-state-fn)))
+       (client-keybinds/tick-keys! key-state-fn screen-open?)))
 
    :client-tick-hand-effects!
    (fn []

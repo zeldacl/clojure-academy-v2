@@ -34,8 +34,8 @@
       (java.util.UUID/randomUUID))))
 
 ;; ===== Key State Function for keybinds/tick-keys! =====
-;; slot/movement/screen key maps + glfw-key-state-fn/no-key-down-fn now live
-;; in cn.li.mcbase.glfw-polling-core, shared with Forge's runtime_bridge.clj —
+;; slot/movement/screen key maps + glfw-key-state-fn now live in
+;; cn.li.mcbase.glfw-polling-core, shared with Forge's runtime_bridge.clj —
 ;; a key remap only needs to change one place.
 
 (defn- get-player-uuid-str
@@ -62,10 +62,14 @@
                                          {:suppress-triggers? screen-open?})
           ;; Poll per-frame held keys (skill slots + movement + GUI) via keybinds
           ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
+          ;; Raw physical state is polled EVERY tick (Screen open or not) and
+          ;; screen-open? gates event dispatch — upstream KeyManager keeps
+          ;; tracking physical key state while a GUI is open and ClientRuntime
+          ;; gates dispatch on ClientUtils.isPlayerInGame(), so the click that
+          ;; closes a Screen is absorbed instead of re-firing a bound skill.
           (client-session/with-current-client-session
             #(power-runtime/client-tick-keys!
-               (if screen-open? glfw-polling/no-key-down-fn glfw-polling/glfw-key-state-fn)
-               get-player-uuid-str)))))
+               glfw-polling/glfw-key-state-fn get-player-uuid-str screen-open?)))))
     (catch Exception e
       (log/warn e "Error polling Fabric keyboard inputs"))))
 

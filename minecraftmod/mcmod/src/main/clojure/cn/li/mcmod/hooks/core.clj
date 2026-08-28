@@ -724,8 +724,10 @@
   ((:client-font-init! (hooks-core-state-snapshot))))
 
 (defn client-tick-keys!
-  [key-state-fn get-player-uuid-fn]
-  (client-tick-keys-fn key-state-fn get-player-uuid-fn))
+  "Per-frame key polling hook. key-state-fn reports raw physical key state;
+  screen-open? gates event dispatch (a Screen is open — see keybinds/tick-keys!)."
+  [key-state-fn get-player-uuid-fn screen-open?]
+  (client-tick-keys-fn key-state-fn get-player-uuid-fn screen-open?))
 
 (defn client-active-contexts
   []

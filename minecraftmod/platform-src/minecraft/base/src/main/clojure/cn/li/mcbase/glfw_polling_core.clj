@@ -279,9 +279,7 @@
         (key-provider/query-key-down? :original key-code)
         (catch Throwable _ false)))))
 
-(def no-key-down-fn
-  "key-state-fn used while a Screen (chat/inventory/GUI) is open: report every
-   key as released so typed characters never fire gameplay keybinds (e.g. 'm'
-   while typing '/aim' in chat opening the preset editor) and held keys get a
-   clean release transition instead of sticking."
-  (constantly false))
+;; NOTE: while a Screen is open, glfw-key-state-fn still reports the RAW
+;; physical state — the loaders pass screen-open? to client-tick-keys!, which
+;; suppresses event dispatch (upstream KeyManager tracks physical state every
+;; tick and ClientRuntime gates dispatch on ClientUtils.isPlayerInGame()).

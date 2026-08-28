@@ -172,6 +172,105 @@
        :on-short-up (fn [] (swap! emitted conj :short-up))})
     (is (empty? @emitted))))
 
+(defn- register-recording-skill-delegate!
+  "Register a skill delegate on slot 0 that records every key event."
+  [events]
+  (keybinds/register-key-delegate!
+    :default 0
+    {:skill-id     :railgun
+     :on-key-down  (fn [uuid] (swap! events conj [:down uuid]))
+     :on-key-tick  (fn [uuid] (swap! events conj [:tick uuid]))
+     :on-key-up    (fn [uuid] (swap! events conj [:up uuid]))
+     :on-key-abort (fn [uuid] (swap! events conj [:abort uuid]))}))
+
+(deftest screen-open-close-click-never-fires-bound-skill-test
+  ;; Reported bug: in ability mode with LMB bound to a skill, pressing Esc and
+  ;; clicking "Back to Game" fired the skill once. The pause menu closes on the
+  ;; mouse press while the button is still physically held; the next in-game
+  ;; tick then saw a "fresh" press. Upstream instead polls the raw physical
+  ;; state every tick and gates only dispatch on ClientUtils.isPlayerInGame(),
+  ;; so the press that happened under the Screen is absorbed.
+  (store/set-player-state! :session-a "player-a" (activated-state))
+  (let [events (atom [])]
+    (register-recording-skill-delegate! events)
+    (binding [keybinds/*client-session-id* :session-a
+              keybinds/*get-player-uuid-fn* (constantly "player-a")]
+      ;; In game, LMB up.
+      (keybinds/on-skill-key-event 0 false)
+      ;; Esc → pause menu opens (first suppressed tick, nothing held).
+      (keybinds/on-skill-key-event 0 false true true)
+      ;; Click "Back to Game": LMB pressed while the menu is open — the press
+      ;; is tracked but must not dispatch.
+      (keybinds/on-skill-key-event 0 true true false)
+      ;; Menu closes while LMB is still physically held — no fresh press edge.
+      (keybinds/on-skill-key-event 0 true false false)
+      ;; LMB released.
+      (keybinds/on-skill-key-event 0 false false false))
+    (is (not-any? (fn [[event _]] (= event :down)) @events)
+        "the menu-close click must never reach the skill's on-key-down")
+    (is (= [[:tick "player-a"] [:up "player-a"]] @events)
+        "the absorbed hold only produces no-op tick/up against the dead slot")))
+
+(deftest screen-open-aborts-held-skill-once-and-absorbs-the-hold-test
+  ;; Upstream ClientRuntime: `state.state && shouldAbort → onKeyAbort` — a
+  ;; skill key held when a Screen opens is aborted once; the ongoing physical
+  ;; hold is absorbed (realState keeps tracking), so it cannot restart the
+  ;; skill; a fresh press after release works normally.
+  (store/set-player-state! :session-a "player-a" (activated-state))
+  (let [events (atom [])]
+    (register-recording-skill-delegate! events)
+    (binding [keybinds/*client-session-id* :session-a
+              keybinds/*get-player-uuid-fn* (constantly "player-a")]
+      ;; Hold LMB in game — skill starts.
+      (keybinds/on-skill-key-event 0 true false false)
+      ;; Pause menu opens while LMB held → one abort (upstream onKeyAbort).
+      (keybinds/on-skill-key-event 0 true true true)
+      ;; Still held under the menu — nothing more fires.
+      (keybinds/on-skill-key-event 0 true true false)
+      ;; Released while the menu is open — suppressed but tracked.
+      (keybinds/on-skill-key-event 0 false true false)
+      ;; Menu closes with LMB up.
+      (keybinds/on-skill-key-event 0 false false false)
+      ;; Fresh press in game works normally.
+      (keybinds/on-skill-key-event 0 true false false)
+      (keybinds/on-skill-key-event 0 false false false))
+    (is (= [[:down "player-a"] [:abort "player-a"]
+            [:down "player-a"] [:up "player-a"]]
+           @events))))
+
+(deftest tick-keys-screen-open-boundary-uses-physical-state-test
+  ;; End-to-end through tick-keys!: the loader passes glfw-key-state-fn always
+  ;; plus screen-open?; the boundary latch must fire the abort exactly once and
+  ;; absorb the close-while-held press.
+  (store/set-player-state! :session-a "player-a" (activated-state))
+  (let [events  (atom [])
+        physical (atom {[:slot 0] false})]
+    (register-recording-skill-delegate! events)
+    (let [key-state-fn (fn [[kind sub-key]]
+                         (case kind
+                           :slot   (get @physical [:slot sub-key] false)
+                           :movement false
+                           :screen   false
+                           :raw     false))]
+      (binding [keybinds/*client-session-id* :session-a
+                keybinds/*get-player-uuid-fn* (constantly "player-a")]
+        ;; In game, LMB up.
+        (keybinds/tick-keys! key-state-fn false)
+        ;; Pause menu opens; player clicks "Back to Game" (LMB down under the
+        ;; menu) — press tracked, not dispatched.
+        (keybinds/tick-keys! key-state-fn true)
+        (reset! physical {[:slot 0] true})
+        (keybinds/tick-keys! key-state-fn true)
+        ;; Menu closes while LMB is still physically held.
+        (keybinds/tick-keys! key-state-fn false)
+        ;; LMB released.
+        (reset! physical {[:slot 0] false})
+        (keybinds/tick-keys! key-state-fn false))
+      (is (not-any? (fn [[event _]] (= event :down)) @events)
+          "menu-close click never fires the skill through tick-keys!")
+      (is (not-any? (fn [[event _]] (= event :abort)) @events)
+          "nothing was held when the screen opened — no abort"))))
+
 (deftest vanilla-override-key-codes-follow-upstream-control-overrider-test
   (binding [keybinds/*client-session-id* :session-a
             keybinds/*get-player-uuid-fn* (constantly "p1")]
