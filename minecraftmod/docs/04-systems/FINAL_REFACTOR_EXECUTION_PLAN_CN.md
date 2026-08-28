@@ -171,3 +171,8 @@
 - 内容完整：最终 catalog 仍覆盖 39 source、50 specialization、36 effect；没有旧格式 fallback。
 
 
+# 历史方案（已被 final graph 迁移实现取代）
+
+本文保留为审计记录，不是当前执行入口。当前唯一执行路径与节点命名以
+`COMBAT_CORE.md`、`ABILITY_MIGRATION_MATRIX_CN.md` 及代码中的 final catalog 为准；
+其中出现的 `target/beam`、`terrain/propagate`、旧 VM 和旧迁移字段均不得重新引入。
