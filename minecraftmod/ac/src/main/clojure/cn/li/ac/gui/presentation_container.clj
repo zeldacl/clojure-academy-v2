@@ -100,7 +100,14 @@
         linked (:linked network)
         energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
-        progress (double (or (when-let [f (:presentation-progress-fn container)] (f container)) (value-of (:progress container)) 0.0))
+        progress (double (or (when-let [f (:presentation-progress-fn container)] (f container))
+                              (value-of (:progress container))
+                              (value-of (:work-progress container))
+                              (when (and (some? (value-of (:crafting-progress container)))
+                                         (some? (value-of (:max-progress container))))
+                                (/ (double (or (value-of (:crafting-progress container)) 0.0))
+                                   (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))))
+                              0.0))
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
     {:revision @revision
      :values {:slots (mapv #(slot-value container %) (range slot-count))
@@ -116,7 +123,9 @@
               :network-owner (str "Node: " (or (:node-name linked) "-"))
               :network-range (str "Range: " (or (:range linked) "-"))
               :network-bandwidth (str "Bandwidth: " (or (:bandwidth linked) "-"))
-              :network-load 0.0
+              :network-load (let [load (double (or (:load linked) 0.0))
+                                  capacity (max 1.0 (double (or (:max-capacity linked) 1.0)))]
+                              (max 0.0 (min 1.0 (/ load capacity))))
               :network-nodes (wireless-items container)
               :network-password (str (or (:password network) ""))
               :network-disconnect {:label "Disconnect"}
