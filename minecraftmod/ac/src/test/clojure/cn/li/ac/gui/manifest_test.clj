@@ -70,8 +70,9 @@
 
 (deftest presentation-surface-coverage-catalog-test
   (testing "the executable inventory matches the quantitative acceptance table"
-    (is (= 12 (count surface-manifest/application-surfaces)))
+    (is (= 13 (count surface-manifest/application-surfaces)))
     (is (= 11 (count surface-manifest/container-surfaces)))
-    (is (= 23 (count surface-manifest/active-surfaces)))
-    (is (= 7 (count (set (map :artifact surface-manifest/active-surfaces)))))
-    (is (= 23 (count (filter :controller surface-manifest/active-surfaces))))))
+    (is (= 24 (count surface-manifest/active-surfaces)))
+    (is (= 8 (count (set (map :artifact surface-manifest/active-surfaces)))))
+    (is (= 24 (count (filter :controller surface-manifest/active-surfaces))))))
+
