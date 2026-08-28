@@ -62,14 +62,51 @@
     VfxOutputKind/SCREEN (RenderCommand$PostProcess. (.value output) (.amount output))
     nil))
 
+(def ^:private vfx-output->render-stage
+  {VfxOutputKind/AUDIO RenderStage/AUDIO
+   VfxOutputKind/CAMERA RenderStage/CAMERA
+   VfxOutputKind/SCREEN RenderStage/POST_PROCESS})
+
+(def ^:private render-stage-order
+  [RenderStage/WORLD_AFTER_SKY
+   RenderStage/WORLD_BEFORE_TRANSLUCENT
+   RenderStage/WORLD_AFTER_TRANSLUCENT
+   RenderStage/WORLD_ALWAYS_ON_TOP
+   RenderStage/WORLD_GLOW
+   RenderStage/FIRST_PERSON
+   RenderStage/CAMERA
+   RenderStage/HUD_UNDERLAY
+   RenderStage/HUD
+   RenderStage/HUD_OVERLAY
+   RenderStage/SCREEN
+   RenderStage/POST_PROCESS
+   RenderStage/AUDIO])
+
 (defn- merge-vfx-passes
   [_vfx-context frame-id partial-tick ^FramePacket packet]
   (let [^VfxFrame vfx (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick})
-        commands (vec (concat (map vfx-command (.batches vfx))
-                              (keep vfx-output-command (.outputs vfx))))
-        passes (mapv (fn [^RenderPass pass]
-                       (RenderPass. (.stage pass) (vec (concat (.commands pass) commands))))
-                     (.passes packet))]
+        vfx-pairs (concat
+                   (map (fn [^cn.li.mcmod.runtime.vfx.VfxBatch batch]
+                          [(get vfx-stage->render-stage (.stage batch)) (vfx-command batch)])
+                        (.batches vfx))
+                   (keep (fn [^cn.li.mcmod.runtime.vfx.VfxOutput output]
+                           (when-let [stage (get vfx-output->render-stage (.kind output))]
+                             [stage (vfx-output-command output)]))
+                         (.outputs vfx)))
+        existing (mapcat (fn [^RenderPass pass]
+                           (map (fn [command] [(.stage pass) command]) (.commands pass)))
+                         (.passes packet))
+        commands-by-stage (reduce (fn [acc [stage command]]
+                                    (if stage
+                                      (update acc stage (fnil conj []) command)
+                                      acc))
+                                  {}
+                                  (concat existing vfx-pairs))
+        passes (->> render-stage-order
+                    (keep (fn [stage]
+                            (when-let [commands (seq (get commands-by-stage stage))]
+                              (RenderPass. stage commands))))
+                    vec)]
     (FramePacket. (.frameId packet) passes)))
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
