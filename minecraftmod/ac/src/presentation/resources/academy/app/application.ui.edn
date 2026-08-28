@@ -1,6 +1,6 @@
 {:view/id :academy.app/application
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
- :state-schema {:title :string :lines :vector :items :vector :input :string :scroll :number :modal :map :button-left :map :button-right :map}
+ :state-schema {:title :string :lines :vector :items :vector :input :string :scroll :number :modal :map :status :string :button-left :map :button-right :map}
  :root {:type :column :key :application/root :layout {:x 8 :y 8 :width 304 :height 224}
         :children [{:type :text :key :application/title :bind {:text [:state :title]} :semantics {:role :heading}}
                    {:type :row :key :application/navigation

@@ -66,7 +66,7 @@
                                   (keep :message-domain)
                                   set)]
       (is (empty? (manifest/missing-message-domains referenced-domains)))
-      (is (= [:alternate] (manifest/message-actions :metal-former))))))
+      (is (= [:alternate :list-nodes :connect :disconnect] (manifest/message-actions :metal-former))))))
 
 (deftest presentation-surface-coverage-catalog-test
   (testing "the executable inventory matches the quantitative acceptance table"

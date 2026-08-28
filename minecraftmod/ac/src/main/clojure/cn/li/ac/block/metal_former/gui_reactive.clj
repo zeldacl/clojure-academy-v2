@@ -30,7 +30,9 @@
 (defn- create-container [tile player]
   (assoc (gui-sync/create-schema-container former-gui-schema tile player former-gui-type
                                             {:gui-id (gui-manifest/gui-id :metal-former)})
-         :presentation-close-fn (:on-close former-sync)))
+         :presentation-close-fn (:on-close former-sync)
+         :presentation-wireless {:domain :metal-former :role :machine}
+         :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn- get-slot-count [_] (slot-schema/tile-slot-count former-slot-schema-id))
 (defn- get-slot-item [c i] (common/get-slot-item-be c i))
 (defn- set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))

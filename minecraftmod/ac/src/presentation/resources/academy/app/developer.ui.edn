@@ -1,8 +1,8 @@
 {:view/id :academy.app/developer
  :host {:kind :container :design-width 400 :design-height 230 :scale-policy :fit}
- :state-schema {:title :string :mode :keyword :ability-name :string :level-label :string
+ :state-schema {:title :string :mode :string :ability-name :string :level-label :string
                 :exp-label :string :energy-ratio :number :sync-rate :number
-                :skills :vector :selected-skill :map :console-lines :vector
+                :skills :vector :selected-skill :string :console-lines :vector
                 :console-input :string :wireless-visible :boolean :wireless-state :string :wireless-owner :string :wireless-range :string :wireless-bandwidth :string :wireless-load :number :wireless-nodes :vector :wireless-password :string :wireless-disconnect :map :wireless-available-label :map :status :string :button-upgrade :map
                 :button-reset :map :button-wireless :map}
  :root {:type :column :key :developer/root :layout {:x 8 :y 8 :width 384 :height 171}

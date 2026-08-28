@@ -18,7 +18,10 @@
 (defn- stack-id [s] (when-not (stack-empty? s) (try (some-> s pitem/object pitem/registry-name str) (catch Exception _ nil))))
 (defn- phase-liquid-unit? [s] (and (not (stack-empty? s)) (= (stack-id s) phase-config/matter-unit-item-id) (= (int (try (pitem/damage s) (catch Exception _ -1))) phase-config/matter-unit-phase-liquid-meta)))
 
-(defn create-container [tile player] (assoc (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player gui-type {:gui-id (gui-manifest/gui-id :phase-gen)}) :presentation-close-fn (:on-close sync)))
+(defn create-container [tile player] (assoc (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player gui-type {:gui-id (gui-manifest/gui-id :phase-gen)})
+                                      :presentation-close-fn (:on-close sync)
+                                      :presentation-wireless {:domain :generator :role :generator}
+                                      :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn get-slot-count [_] (slot-schema/tile-slot-count slot-schema-id))
 (defn get-slot-item [c i] (common/get-slot-item-be c i))
 (defn set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))

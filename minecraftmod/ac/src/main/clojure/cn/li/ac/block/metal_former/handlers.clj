@@ -4,14 +4,15 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
+            [cn.li.ac.block.machine.wireless-handlers :as wireless-handlers]
+            [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.block.metal-former.logic :as former-logic]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- msg [action] (msg-registry/msg :metal-former action))
-
-(defn- open-tile [payload player]
-  (machine-handlers/open-container-tile payload player))
+(defn- open-tile [payload player] (machine-handlers/open-container-tile payload player))
 
 (defn handle-alternate [payload player]
   (let [tile (open-tile payload player)
@@ -23,6 +24,17 @@
         (machine-runtime/commit-from-tile! tile former-logic/former-default-state next-state)
         {:success true :mode (:mode next-state)}))))
 
+(defn- linked-node [tile]
+  (when-let [conn (wireless-api/get-node-conn-by-receiver tile)]
+    (node-conn/get-node conn (platform-be/be-get-world-safe tile))))
+(defn- link! [tile node password need-auth?]
+  (wireless-api/link-receiver-to-node! tile node password need-auth?))
+(defn- unlink! [tile]
+  (wireless-api/unlink-receiver-from-node! tile))
+
 (defn register-network-handlers! []
   (net-server/register-handler (msg :alternate) handle-alternate)
+  (wireless-handlers/register-link-handlers!
+    {:message-domain :metal-former :get-linked-node linked-node
+     :link! link! :unlink! unlink! :log-label "Metal Former wireless"})
   (log/info "Metal Former network handlers registered"))

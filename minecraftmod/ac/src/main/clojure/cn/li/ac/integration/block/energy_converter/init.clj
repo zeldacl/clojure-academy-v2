@@ -17,6 +17,7 @@
 	          [cn.li.ac.gui.open :as gui-open]
 	          [cn.li.mcmod.runtime.install :as install]
 						[cn.li.ac.integration.block.energy-converter.platform-bridge :as ec-bridge]
+                        [cn.li.ac.integration.block.energy-converter.handlers :as ec-handlers]
 						[cn.li.mcmod.util.log :as log])
 		(:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
@@ -78,6 +79,7 @@
 	(install/framework-once! ::converters-loaded?
   (fn []
     (ec-bridge/install-energy-integration-hooks!)
+    (ec-handlers/register-network-handlers!)
 		(log/info "Energy converters loaded"
 							{:count (count ec-config/supported-blocks)}))))
 

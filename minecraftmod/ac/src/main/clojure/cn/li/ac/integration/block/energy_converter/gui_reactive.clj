@@ -57,7 +57,9 @@
        :base {:block-id block-id
               :wireless-mode (atom (block-wireless-mode block-id))
               :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})
-          :presentation-close-fn (:on-close converter-sync))))
+          :presentation-close-fn (:on-close converter-sync)
+          :presentation-wireless {:domain :energy-converter :role :machine}
+          :presentation-wireless-state (atom {:linked nil :avail [] :password ""}))))
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count converter-slot-schema-id))

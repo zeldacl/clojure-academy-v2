@@ -200,7 +200,7 @@
             :energy-ratio (max 0.0 (min 1.0 (/ energy max-energy)))
             :sync-rate (double (or (:sync-rate dspec) 0.7))
             :skills rows
-            :wireless-visible (not= :portable (:tier container))
+            :wireless-visible (not= :portable (value-of (:tier container)))
             :wireless-state (if linked "Connected" "Not connected")
             :wireless-owner (str "Node: " (or (:node-name linked) "-"))
             :wireless-range (str "Range: " (or (:range linked) "-"))
@@ -215,7 +215,7 @@
                               "No skill selected")
             :button-upgrade {:label (if (level-up-ready? pstate) "Level Up" "Level Up (locked)")}
             :button-reset {:label (if (= mode :reset-console) "Reset" "Reset")}
-            :button-wireless {:label (if (= :portable (:tier container)) "Unavailable" "Wireless")}
+            :button-wireless {:label (if (= :portable (value-of (:tier container))) "Unavailable" "Wireless")}
             :status (or (:status @state)
                         (case mode
                           :console "Type help, levelup, or reset"
@@ -240,6 +240,8 @@
                  :developer/select-skill
                  (do (swap! state assoc :selected-skill sid :status (str "Selected " (display-name sid)))
                      (refresh! container))
+                 :developer/console-submit
+                 (submit-console! container player state (:value payload))
                  :developer/level-up
                  (start-development! container player state :level-up nil)
                  :developer/reset
@@ -266,7 +268,7 @@
                nil))
            :presentation-on-mount!
            (fn [c]
-             (when (not= :portable (:tier c))
+             (when (not= :portable (value-of (:tier c)))
                (send-wireless! c :list-nodes {}
                  (fn [response] (apply-wireless-response! c state response)))))           :presentation-text-change!
            (fn [_ value] (swap! state assoc :console-input (str value)))

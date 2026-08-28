@@ -15,9 +15,10 @@
 	{:matrix [:gather-info :init :change-ssid :change-password]
 	 :node [:change-name :change-password :list-networks :connect :disconnect]
 	 :generator [:list-nodes :connect :disconnect]
-	 :metal-former [:alternate]
+	 :metal-former [:alternate :list-nodes :connect :disconnect]
 	 :developer [:start-development :stop-development :list-nodes :connect :disconnect]
-	 :ability-interferer [:change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist :list-nodes :connect :disconnect]})
+	 :ability-interferer [:change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist :list-nodes :connect :disconnect]
+         :energy-converter [:list-nodes :connect :disconnect]})
 
 (def message-domain-contracts
 	"Registry-phase handler contracts for wireless GUI message domains.
@@ -117,7 +118,7 @@
 				    :registry-name "energy_converter_gui"
 				    :screen-factory-fn-kw :create-energy-converter-screen
 				    :slot-schema-id :energy-converter
-				    :message-domain nil
+				    :message-domain :energy-converter
 }
 	 :ability-interferer {:gui-name "ability-interferer"
 				       :gui-id 15
