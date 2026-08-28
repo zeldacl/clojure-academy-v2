@@ -61,3 +61,8 @@
 - `node-core` 不得依赖 `combat-core`/`vfx-core`/`mcmod`/`ac`，由 `verifyNodeCoreDependencyDirection` 强制。
 
 
+
+
+## Deferred ownership
+
+Combat Core owns neutral settlement (`beam-settlement`) only. The instance-local continuation queue belongs to `ability-runtime`; AC/BC/CC install one composition runtime and supply lifecycle/result callbacks. A graph `flow/after` is a graph-local scheduling construct in the AC composition root and is not a second beam/deferred implementation. No combat module stores a global pending queue.
