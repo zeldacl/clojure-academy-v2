@@ -56,8 +56,14 @@
   [request]
   (schedule! (runtime) request))
 
-(defn tick-installed-owner! [owner]\n  (when-let [rt @runtime*]\n    (tick-owner! rt owner)))
+(defn tick-installed-owner! [owner]
+  (when-let [rt @runtime*]
+    (tick-owner! rt owner)))
 
-(defn cancel-installed-owner! [owner]\n  (when-let [rt @runtime*]\n    (cancel-owner! rt owner)))
+(defn cancel-installed-owner! [owner]
+  (when-let [rt @runtime*]
+    (cancel-owner! rt owner)))
 
-(defn cancel-installed-all! []\n  (when-let [rt @runtime*]\n    (cancel-all! rt)))
+(defn cancel-installed-all! []
+  (when-let [rt @runtime*]
+    (cancel-all! rt)))
