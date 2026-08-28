@@ -12,6 +12,17 @@
              {:component :flow/sequence
               :steps [{:component :combat/damage :args {:amount 1}}
                       {:component :target/raycast :bind :hit}]}))))
+(deftest compiler-rejects-unsupported-reference-scope-test
+  (let [error (try
+                (compiler/compile-program
+                 {:component :data/bind
+                  :to :target-position
+                  :value {:ref [:item :position]}})
+                nil
+                (catch clojure.lang.ExceptionInfo error error))]
+    (is (instance? clojure.lang.ExceptionInfo error))
+    (is (= :unsupported-reference-scope (:reason (ex-data error))))
+    (is (= [:item :position] (:reference (ex-data error))))))
 (deftest flow-finish-next-phase-is-propagated-test
   (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                        :state-provider (fn [_] {})

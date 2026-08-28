@@ -3,7 +3,37 @@
 (require '[cn.li.node.contracts :as contracts])
 (def ^:const max-instructions (:max-ir-instructions contracts/budgets))
 (def ^:const max-iteration (:max-iteration contracts/budgets))
+(def ^:private supported-reference-scopes #{:frame :input :local :session})
 (defn- fail [reason data] (throw (ex-info (name reason) (assoc data :reason reason))))
+
+(defn- validate-reference-scopes
+  "Reject references that the Final evaluator cannot resolve.
+
+   Scope checking historically validated only lexical :local bindings. That
+   allowed a typo such as [:item :position] to compile and become nil at
+   runtime. Final's value evaluator has a closed set of roots; keep that ABI
+   explicit and fail the graph compilation at the offending path instead of
+   silently producing a nil input for a later action.
+  "
+  [value path]
+  (cond
+    (and (map? value) (vector? (:ref value)))
+    (let [reference (:ref value)
+          scope (first reference)]
+      (when-not (contains? supported-reference-scopes scope)
+        (fail :unsupported-reference-scope
+              {:path path :reference reference :scope scope
+               :supported (vec (sort supported-reference-scopes))})))
+
+    (map? value)
+    (doseq [[key child] value]
+      (validate-reference-scopes child (conj path key)))
+
+    (sequential? value)
+    (doseq [[index child] (map-indexed vector value)]
+      (validate-reference-scopes child (conj path index)))
+
+    :else nil))
 (defn node-kind [node]
   (or (:kind node)
       (let [component (:component node)]
@@ -73,6 +103,7 @@
               (fail :instruction-budget-exceeded {:path path :count instructions :max max-instructions}))
             {:node node :children compiled :instructions instructions :mutated? (:mutated? current-flags)}))))))
 (defn compile-program [program]
+  (validate-reference-scopes program [:program])
   (let [compiled (compile-node program [:program] {:mutated? false :deferred? false})]
     {:schema-version 1 :program program :instructions (:instructions compiled)
      :content-hash (str (hash (pr-str program)))}))

@@ -56,7 +56,7 @@ owner+entity-type 的会话实体清理、以及 final session 元数据读取�
   `⚠️`（待运行时等价证据）。`✅*` 的星号表示课程被动 reducer 已接入，
   但完整学习/重算测试仍受现有测试 classpath 阻断。
 - 当前最终静态门禁：`:ac:checkClojure`、`:ac:runAcEdnCoverageTests`（40 tests / 122 assertions）、
-  `:combat-core:runCombatClojureTests`（34 tests / 89 assertions）均通过；这些门禁不执行
+  `:combat-core:runCombatClojureTests`（35 tests / 92 assertions）均通过；这些门禁不执行
   main 行为等价性或实机多人测试。
 
 ## 逐注册项结论
@@ -548,7 +548,7 @@ thunder-bolt
 - `vec-reflection` 与 `vec-deviation` 均通过 owner-scoped `flow/once` 去重 projectile，
   使用统一 reflection scan、damage policy、overload floor 和终止 VFX；未恢复 main 的
   旧 projectile callback。`vec-deviation` 的所有终止分支均为无状态 session；本轮补齐首次偏转的 deflect progression 与受击 damage/reduce progression，`vec-reflection` 补齐首次重定向的 reflect-entity progression 与受击 damage/reflect progression，均保留 owner-scoped once 与 difficulty weight。多人隔离仍由 owner/world query 边界负责，待实机确认。
-- `:ac:runAcEdnCoverageTests` 通过（40 tests / 122 assertions）；Combat Core damage/reduce 与 damage/reflect 的受击经验桥已由 34 tests / 89 assertions 覆盖。Groundshock 的实体/方块
+- `:ac:runAcEdnCoverageTests` 通过（40 tests / 122 assertions）；Combat Core damage/reduce 与 damage/reflect 的受击经验桥已由 35 tests / 92 assertions 覆盖。Groundshock 的实体/方块
   adapter 与多人并发结果仍需实机验证，总表继续保持 `⚠️`。
 ### railgun checkpoint（逐项移植）
 
@@ -724,6 +724,11 @@ vecmanip/mind-course
 - Final `flow/finish` 现在真正终止当前 sequence/foreach 的后续节点；`flow/control` 的
   `:skip-item` 只跳过当前 foreach 项；无 `:else` 的 branch 安全地 no-op。这避免了
   资源失败分支继续落入伤害、传送或其它副作用。
+- Final 编译器现在在 lowering 前扫描所有 `:ref`，只允许 evaluator 已定义的
+  `:frame`、`:input`、`:local`、`:session` 根作用域；未知根（例如
+  `[:item :position]`）直接抛出 `:unsupported-reference-scope`，不会再编译成运行时
+  的 nil。该规则由 Combat Core 编译器回归测试覆盖，并针对 thunder-clap 的历史错误
+  引用保留专门样例。
 - `entity/teleport` 端口现在兑现 EDN 中的 `:dismount?` 与
   `:reset-fall-damage?`：传送前尝试解除玩家载具，传送成功后清除摔落伤害状态；
   非玩家实体在没有玩家运动适配器时仍可正常传送。这样标记、穿透、转移和危险传送
@@ -793,7 +798,7 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 - `:ac:checkClojure`：通过（包含本轮 catalog、runtime 改动）。
 - `:ac:runAcEdnCoverageTests`：通过 40 tests / 122 assertions；该门禁只验证
   EDN 解析、注册和有限图执行，不代表与 `main` 行为等价。
-- `:combat-core:runCombatClojureTests`：通过 34 tests / 89 assertions（包含本轮
+- `:combat-core:runCombatClojureTests`：通过 35 tests / 92 assertions（包含本轮
   phase-transition、damage-threshold、teleport safety 回归）。
 - `:ac:compileTestClojure`：通过。旧测试中依赖已删除旧 VM/旧 hook 契约的文件已移除，
   没有恢复兼容实现。
@@ -807,6 +812,6 @@ owner 的另一技能实体；提交为 `c70a49f0c`。这属于公共实体 ABI�
 ## 最新统一静态校验（2026-08-28）
 
 - 对照 main 的 38 个真实 ability 与 12 个课程别名，当前 catalog 仍为 50 registrations、39 combat sources、36 VFX effects，全部使用 engine final。
-- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（40 tests / 122 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（34 tests / 89 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
+- 本次统一命令通过：ac checkClojure、ac runAcEdnCoverageTests（40 tests / 122 assertions）、combat-core checkClojure、combat-core runCombatClojureTests（35 tests / 92 assertions），以及 verifyCoreNoSkillKnowledge、verifyEdnNodeCoverage、verifyEdnNoConfigBackReferences、verifyEffectRuntimeJavaCarriers、verifyNeutralClojureNoMinecraftApis、verifyNoGeneratedClojureTypes。
 - 对所有显式 score/mark 做了静态扫描：未发现缺少 progression 的标记；Vec Deviation/Reflection 的受击经验由通用 Final damage side-event 桥承载。
 - 这只是加载、解析、编译和纯逻辑门禁；38 个真实技能仍保留 ⚠️，因为实体/方块 adapter 时序、VFX 客户端表现、多人隔离与 CPU/GC/内存 profiling 尚未实机验证。
