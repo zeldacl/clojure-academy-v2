@@ -204,48 +204,70 @@
   differ per call site — see surround-arc-ops' depth-write note)."
   [camera-pos {:keys [lines]} point-transform width-scale max-local-x effect-part
    extra-op-keys]
-  (vec
-   (mapcat
-    (fn [line]
-      (let [segs (vec
-                  (keep (fn [{:keys [start end alpha]}]
-                          (let [start-local ^V3 (:pos start)]
-                            (when (or (nil? max-local-x)
-                                      (<= (.-x start-local) (double max-local-x)))
-                              {:p0 (point-transform start-local)
-                               :p1 (point-transform ^V3 (:pos end))
-                               :start-width (* (double width-scale)
-                                               (double (:width start)))
-                               :end-width (* (double width-scale)
-                                             (double (:width end)))
-                               :alpha (double alpha)})))
-                        line))
-            rights (mapv (fn [{:keys [p0 p1]}]
-                           (ru/beam-right-axis p0 p1 camera-pos))
-                         segs)]
-        (mapv (fn [seg-idx {:keys [p0 p1 start-width end-width alpha]}]
-                ;; Same carry-across as upstream handleSegment's lastDir: the
-                ;; quad's START width axis is the previous segment's, so
-                ;; adjacent quads share one axis at the junction and the strip
-                ;; stays watertight through every kink (per-segment
-                ;; independent axes notch the outside of each bend). The
-                ;; template's widths are already continuous at the joints —
-                ;; split-line halves the shared midpoint's width.
-                (let [start-right (nth rights (if (zero? seg-idx) 0 (dec seg-idx)))
-                      end-right (nth rights seg-idx)
-                      s-off (v/v* start-right start-width)
-                      e-off (v/v* end-right end-width)]
-                  (cond-> (assoc
-                           (ru/quad-op line-texture
-                                       (v/v+ p0 s-off)
-                                       (v/v- p0 s-off)
-                                       (v/v- p1 e-off)
-                                       (v/v+ p1 e-off)
-                                       (white-argb (* 255.0 alpha)))
-                           :effect-part effect-part)
-                    extra-op-keys (merge extra-op-keys))))
-              (range (count segs)) segs)))
-    lines)))
+  (let [;; Upstream ArcFactory.handleSegment: width axis = cross(segDir,
+        ;; normal) against the template's FIXED normal (local +Z), carried
+        ;; across segments as lastDir. The fixed normal keeps every width
+        ;; axis in one plane — camera-facing per-segment axes can rotate past
+        ;; 90° into anti-parallel (segments straddling the camera), twisting
+        ;; the quad into a self-intersecting bowtie whose GL fill tears a
+        ;; visible gap, worst on the wide outer layer.
+        normal-raw (v/v- (point-transform (v/v3 0.0 0.0 1.0))
+                         (point-transform (v/v3 0.0 0.0 0.0)))
+        normal (if (> (v/vlen normal-raw) 1.0e-5)
+                 (v/vnorm normal-raw)
+                 v/unit-x)]
+    (vec
+     (mapcat
+      (fn [line]
+        (let [segs (vec
+                    (keep (fn [{:keys [start end alpha]}]
+                            (let [start-local ^V3 (:pos start)]
+                              (when (or (nil? max-local-x)
+                                        (<= (.-x start-local) (double max-local-x)))
+                                {:p0 (point-transform start-local)
+                                 :p1 (point-transform ^V3 (:pos end))
+                                 :start-width (* (double width-scale)
+                                                 (double (:width start)))
+                                 :end-width (* (double width-scale)
+                                               (double (:width end)))
+                                 :alpha (double alpha)})))
+                          line))
+              laterals (loop [i 0
+                              acc []
+                              prev v/unit-x]
+                         (if (>= i (count segs))
+                           acc
+                           (let [seg (nth segs i)
+                                 dir-vec (v/v- (:p1 seg) (:p0 seg))
+                                 raw (v/vcross dir-vec normal)
+                                 lateral (if (> (v/vlen raw) 1.0e-5)
+                                           (v/vnorm raw)
+                                           ;; segment parallel to the normal —
+                                           ;; keep the carried axis (lastDir).
+                                           prev)]
+                             (recur (inc i) (conj acc lateral) lateral))))]
+          (mapv (fn [seg-idx {:keys [p0 p1 start-width end-width alpha]}]
+                  ;; Same carry-across as upstream handleSegment's lastDir: the
+                  ;; quad's START width axis is the previous segment's, so
+                  ;; adjacent quads share one axis at the junction and the strip
+                  ;; stays watertight through every kink. The template's widths
+                  ;; are already continuous at the joints — split-line halves
+                  ;; the shared midpoint's width.
+                  (let [start-right (nth laterals (if (zero? seg-idx) 0 (dec seg-idx)))
+                        end-right (nth laterals seg-idx)
+                        s-off (v/v* start-right start-width)
+                        e-off (v/v* end-right end-width)]
+                    (cond-> (assoc
+                             (ru/quad-op line-texture
+                                         (v/v+ p0 s-off)
+                                         (v/v- p0 s-off)
+                                         (v/v- p1 e-off)
+                                         (v/v+ p1 e-off)
+                                         (white-argb (* 255.0 alpha)))
+                             :effect-part effect-part)
+                      extra-op-keys (merge extra-op-keys))))
+                (range (count segs)) segs)))
+      lines))))
 
 (defn entity-arc-ops
   "Render the original chargingArc template from start toward end.

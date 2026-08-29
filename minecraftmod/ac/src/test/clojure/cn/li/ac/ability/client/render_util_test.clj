@@ -39,14 +39,34 @@
       (is (= {:kind :line :p1 start :p2 end :color line}
              (nth ops 2))))))
 
+(defn- segs-cross?
+  "Proper segment-intersection test in the plane with normal n: AB and CD
+  cross iff their endpoints straddle each other's lines."
+  [n a b c d]
+  (let [orient (fn [p q r] (v3/vdot (v3/vcross (v3/v- q p) (v3/v- r p)) n))]
+    (and (neg? (* (orient a b c) (orient a b d)))
+         (neg? (* (orient c d a) (orient c d b))))))
+
+(defn- quad-simple?
+  "True when the quad's two opposite edge pairs do not cross. A bowtie — the
+  width axes of adjacent quads anti-parallel, so the quad folds over itself —
+  fails; its GL fill covers the wrong half, tearing a visible gap. (Concave-
+  but-simple quads pass and render fine — GL splits on the p0-p2 diagonal.)"
+  [{:keys [p0 p1 p2 p3]}]
+  (let [n (v3/vnorm (v3/vcross (v3/v- p2 p0) (v3/v- p3 p1)))]
+    (not (or (segs-cross? n p0 p1 p2 p3)
+             (segs-cross? n p1 p2 p3 p0)))))
+
 (deftest zigzag-arc-junctions-are-watertight-test
-  ;; Upstream ArcFactory.handleSegment carries lastDir — the previous
-  ;; segment's width axis — into the next quad, so adjacent quads share one
-  ;; axis at the junction and the strip stays continuous through every kink.
-  ;; Independent per-segment billboards meet at the vertex but fan apart
-  ;; along their own axes, notching the outside of each bend; ThunderBolt's
-  ;; wide, strongly-jagged strongArc (width 0.3) made those notches read as
-  ;; the arc breaking into separate segments.
+  ;; Upstream ArcFactory.handleSegment: width axis = cross(segDir, normal)
+  ;; against the arc's FIXED normal (template local +Z), carried across
+  ;; segments as lastDir. Adjacent quads share one axis at the junction, so
+  ;; the strip stays continuous through every kink — and the fixed normal
+  ;; keeps every width axis in one plane, so a quad can never twist past 90°
+  ;; into a self-intersecting bowtie. Camera-facing per-segment axes could:
+  ;; segments straddling the camera get anti-parallel axes, and the torn GL
+  ;; fill read as the arc breaking into separate segments (ThunderBolt's
+  ;; strongArc, worst on the wide light-blue outer layer).
   (let [vertices [{:pos (v3/v3 0.0 0.0 0.0) :u 0.0 :v 0.0}
                   {:pos (v3/v3 0.0 1.0 0.0) :u 0.5 :v 0.0}
                   {:pos (v3/v3 1.0 1.0 0.0) :u 1.0 :v 0.0}]
@@ -57,12 +77,17 @@
         ops (ru/zigzag-arc-ops (v3/v3 0.5 0.5 1.0) vertices pattern
                                {:life-ratio 0.5 :wiggle-phase 0.0 :effective-wiggle 0.0})
         [o0 i0 _ o1 i1 _] ops
-        axis-0 (ru/beam-right-axis (v3/v3 0.0 0.0 0.0) (v3/v3 0.0 1.0 0.0)
-                                   (v3/v3 0.5 0.5 1.0))
-        axis-1 (ru/beam-right-axis (v3/v3 0.0 1.0 0.0) (v3/v3 1.0 1.0 0.0)
-                                   (v3/v3 0.5 0.5 1.0))]
-    (is (not= axis-0 axis-1) "the two segments genuinely fan apart")
+        ;; The fixed normal of this arc (start (0,0,0) -> end (1,1,0)) is
+        ;; cross(forward, up) = (0,0,1); the two segments' in-plane laterals
+        ;; genuinely differ.
+        lateral-0 (v3/vcross (v3/v- (v3/v3 0.0 1.0 0.0) (v3/v3 0.0 0.0 0.0))
+                             (v3/v3 0.0 0.0 1.0))
+        lateral-1 (v3/vcross (v3/v- (v3/v3 1.0 1.0 0.0) (v3/v3 0.0 1.0 0.0))
+                             (v3/v3 0.0 0.0 1.0))]
+    (is (not= lateral-0 lateral-1) "the two segments genuinely fan apart")
     (is (= (:p2 o0) (:p1 o1)) "outer quads share the junction edge")
     (is (= (:p3 o0) (:p0 o1)))
     (is (= (:p2 i0) (:p1 i1)) "core quads share the junction edge")
-    (is (= (:p3 i0) (:p0 i1)))))
+    (is (= (:p3 i0) (:p0 i1)))
+    (is (every? quad-simple? (filter #(= :quad (:kind %)) ops))
+        "no quad may self-intersect (bowtie)")))

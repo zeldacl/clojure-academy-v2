@@ -98,7 +98,20 @@
     (is (= 2 (count ops)))
     (is (= (:p2 (nth ops 0)) (:p1 (nth ops 1)))
         "adjacent quads share the junction edge")
-    (is (= (:p3 (nth ops 0)) (:p0 (nth ops 1))))))
+    (is (= (:p3 (nth ops 0)) (:p0 (nth ops 1))))
+    ;; no quad may self-intersect (bowtie): anti-parallel width axes fold the
+    ;; quad over itself and its GL fill tears a visible gap.
+    (is (every?
+         (fn [{:keys [p0 p1 p2 p3]}]
+           (let [n (v/vnorm (v/vcross (v/v- p2 p0) (v/v- p3 p1)))
+                 cross? (fn [a b c d]
+                          (let [orient (fn [p q r]
+                                         (v/vdot (v/vcross (v/v- q p) (v/v- r p)) n))]
+                            (and (neg? (* (orient a b c) (orient a b d)))
+                                 (neg? (* (orient c d a) (orient c d b))))))]
+             (not (or (cross? p0 p1 p2 p3)
+                      (cross? p1 p2 p3 p0)))))
+         ops))))
 
 (deftest surround-batch-never-collapses-to-zero-geometry-test
   (let [salt 20260803

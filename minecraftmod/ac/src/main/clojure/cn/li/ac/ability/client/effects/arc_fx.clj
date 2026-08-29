@@ -191,24 +191,37 @@
 (defn- segment->quads
   "Convert a list of arc segments to render ops (textured quads).
 
-  Matches upstream ArcFactory.handleSegment: each quad's START width axis is
-  the PREVIOUS segment's axis (lastDir), so adjacent quads share one axis at
-  the junction and the strip stays watertight through every kink. Independent
-  per-segment axes (each with its own ±15° random twist) meet at the shared
-  vertex but fan apart along their own directions, notching the outside of
-  every bend — ThunderClap's bold surround and the railgun arcs showed it as
-  the arc breaking into separate segments."
+  Matches upstream ArcFactory.handleSegment: the width axis is
+  cross(segDir, normal) against the template's FIXED normal (local +Z — the
+  upstream ArcFactory constant), twisted ±15° per segment, and each quad
+  carries the PREVIOUS segment's axis (lastDir) at its start, so adjacent
+  quads share one axis at the junction and the strip stays watertight through
+  every kink. The fixed normal keeps every width axis in one plane — camera-
+  facing per-segment axes can rotate past 90° into anti-parallel, twisting
+  the quad into a self-intersecting bowtie whose GL fill tears a visible gap
+  (ThunderClap's bold surround and the railgun arcs showed that as the arc
+  breaking into separate segments)."
   [segments]
   (let [texture (modid/asset-path "textures" "effects/arc/line_segment.png")
         segs (vec segments)
         ;; One random-rotate per segment, consumed in segment order — the same
         ;; draw order as the original for-loop, so the global rand sequence is
         ;; unchanged for every caller.
-        perps (mapv (fn [{:keys [start end]}]
-                      (let [dir-vec (v- (:pos end) (:pos start))]
+        perps (loop [i 0
+                     acc []
+                     prev (vec3/v3 0.0 1.0 0.0)]
+                (if (>= i (count segs))
+                  acc
+                  (let [{:keys [start end]} (nth segs i)
+                        dir-vec (v- (:pos end) (:pos start))
                         ;; Create perpendicular direction for quad width
-                        (v-normalize (v-cross dir-vec (random-rotate 15.0 dir-vec)))))
-                    segs)]
+                        perp-raw (v-cross dir-vec (vec3/v3 0.0 0.0 1.0))
+                        perp (if (> (v-length perp-raw) 1.0e-5)
+                               (v-normalize (random-rotate 15.0 perp-raw))
+                               ;; segment parallel to the normal — keep the
+                               ;; carried axis (lastDir semantics).
+                               prev)]
+                    (recur (inc i) (conj acc perp) perp))))]
     (vec
      (mapv (fn [seg-idx {:keys [start end alpha]}]
              (let [start-pos (:pos start)

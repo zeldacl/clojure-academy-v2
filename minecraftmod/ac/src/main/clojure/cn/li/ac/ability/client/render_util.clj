@@ -100,19 +100,43 @@
         core-ratio  (double (or (:core-ratio pattern) 0.45))
         core-width  (* width core-ratio)
         segment-count (dec (count vertices))
-        ;; Per-segment billboard axes, resolved up front so each quad reuses
-        ;; its predecessor's axis at the shared vertex — upstream's
-        ;; ArcFactory.handleSegment carries lastDir across quads, keeping the
-        ;; strip watertight at every kink. Independent per-segment billboards
-        ;; meet at the vertex but fan apart along their own axes, notching the
-        ;; outside of each bend; on a wide, strongly-jagged arc (ThunderBolt's
-        ;; strongArc, width 0.3) the notches read as the arc breaking into
-        ;; separate segments.
-        rights (mapv (fn [i]
-                       (let [v0 (nth vertices i)
-                             v1 (nth vertices (inc i))]
-                         (beam-right-axis (shift (:pos v0)) (shift (:pos v1)) cam-pos)))
-                     (range segment-count))
+        start (shift (:pos (first vertices)))
+        end (shift (:pos (peek vertices)))
+        ;; Upstream ArcFactory.handleSegment: the width axis is
+        ;; cross(segDir, normal) against the arc's FIXED normal (template
+        ;; local +Z — the world right axis of a horizontal beam), and each
+        ;; quad carries the previous segment's axis (lastDir) at its start, so
+        ;; adjacent quads share one axis at the junction and the strip stays
+        ;; watertight through every kink.
+        ;;
+        ;; The fixed normal is the load-bearing half: every width axis lies
+        ;; in one plane, so consecutive axes can never rotate past 90° into
+        ;; anti-parallel. Camera-facing per-segment axes COULD — segments
+        ;; straddling the camera get opposite to-cam vectors, the quad's two
+        ;; width edges flip and the GL fill of the self-intersecting bowtie
+        ;; covers the wrong half, tearing a visible gap — worst on the wide
+        ;; outer layer (ThunderBolt's strongArc light-blue shell).
+        forward (vec3/vnorm (vec3/v- end start))
+        normal-raw (vec3/vcross forward vec3/unit-y)
+        normal (if (> (vec3/vlen normal-raw) 1.0e-5)
+                 (vec3/vnorm normal-raw)
+                 vec3/unit-x)
+        laterals (loop [i 0
+                        acc []
+                        prev vec3/unit-x]
+                   (if (>= i segment-count)
+                     acc
+                     (let [v0 (nth vertices i)
+                           v1 (nth vertices (inc i))
+                           dir-vec (vec3/v- (shift (:pos v1))
+                                            (shift (:pos v0)))
+                           raw (vec3/vcross dir-vec normal)
+                           lateral (if (> (vec3/vlen raw) 1.0e-5)
+                                     (vec3/vnorm raw)
+                                     ;; segment parallel to the normal — keep
+                                     ;; the carried axis (lastDir semantics).
+                                     prev)]
+                       (recur (inc i) (conj acc lateral) lateral))))
         seg-quads
         (mapcat (fn [i]
                   (let [v0 (nth vertices i)
@@ -121,12 +145,8 @@
                         seg-end   (shift (:pos v1))
                         seg-t     (:u v0 0.0)
                         wiggle (* effective-wiggle (Math/sin (+ wiggle-phase (* seg-t 3.0))))
-                        ;; A single arc-wide axis would leave every segment that
-                        ;; happens to run parallel to it edge-on (zero-width
-                        ;; sliver); the camera-facing beam-right-axis fallback
-                        ;; handles the segment-pointing-at-camera degenerate.
-                        right-start (nth rights (if (zero? i) 0 (dec i)))
-                        right-end (nth rights i)
+                        right-start (nth laterals (if (zero? i) 0 (dec i)))
+                        right-end (nth laterals i)
                         outer-s (vec3/v* right-start width)
                         outer-e (vec3/v* right-end width)
                         core-s (vec3/v* right-start core-width)
