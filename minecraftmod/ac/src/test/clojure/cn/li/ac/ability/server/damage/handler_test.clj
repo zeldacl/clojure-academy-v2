@@ -1,6 +1,10 @@
 (ns cn.li.ac.ability.server.damage.handler-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.server.damage.handler :as h]))
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.server.damage.handler :as h]
+            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.test.support.player-state :as ps-fix]))
 
 (defn- reset-registries! [f]
   (h/reset-attack-check-registries-for-test!)
@@ -62,3 +66,35 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Attack check registries are frozen"
                         (h/register-attack-precheck-side-effect! :new-fx (fn [_ _ _ _] true)))))
+
+(deftest toggle-damage-handler-registers-without-adapter-test
+  (testing "register-toggle-damage-handler! registers directly into the AC
+            damage registry even when no :damage-interception adapter is
+            installed (content init! runs during mod-constructor
+            runtime-activation, before the platform adapter installs in
+            common setup), and only rewrites damage while the toggle context
+            is active"
+    (let [handler-id :test-toggle-damage
+          skill-id   :test-toggle-skill
+          owner      {:logical-side :server :server-session-id :test-session :player-uuid "p1"}]
+      (ps-fix/with-test-player-state-owner
+        (fn []
+          (store/reset-store!)
+          (ps-fix/seed-player-state! "p1" {})
+          (try
+            (h/register-toggle-damage-handler!
+             handler-id skill-id
+             (fn [_ _ damage _] [(- (double damage) 1.0) {}])
+             50)
+            (is (contains? (set (damage-runtime/get-active-handlers)) handler-id)
+                "handler registered into the AC registry without any adapter")
+            (is (= 10.0 (damage-runtime/process-damage! "p1" nil 10.0 nil))
+                "toggle inactive → damage passes through unchanged")
+            (ctx/with-context-owner owner
+              (ctx/register-context!
+               (assoc (ctx/new-server-context "p1" skill-id "c1" owner)
+                      :skill-state {:toggle {skill-id {:active true}}})))
+            (is (= 9.0 (damage-runtime/process-damage! "p1" nil 10.0 nil))
+                "toggle active → handler rewrites damage")
+            (finally
+              (damage-runtime/unregister-damage-handler! handler-id))))))))

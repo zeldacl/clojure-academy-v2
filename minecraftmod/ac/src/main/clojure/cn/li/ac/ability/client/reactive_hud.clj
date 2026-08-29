@@ -512,25 +512,70 @@
   (.remove snapshot-cache-by-owner owner-key)
   nil)
 
+(defn fx-effect-active?
+  "True when effect-id's client-side fx state carries an active entry — set by
+  its fx-start channel, cleared by fx-end/terminate. Message-driven, so it
+  lights HUD feedback on ANY connection topology, unlike the server-context
+  projection, which only sees server contexts when client and server share
+  one runtime (single-player). Matches build-movement-hints-data's 'Driven by
+  the LEVEL FX state, not the client context mirror' precedent."
+  [effect-id]
+  (boolean
+    (some (fn [[_k v]] (true? (:active? v)))
+          (:effect-state (level-effects/effect-state-snapshot effect-id)))))
+
+(defn fx-effect-ticks
+  "Tick counter of effect-id's active client fx entry (incremented per fx
+  tick), or 0. Fallback source for the reflection crosshair intensity when the
+  server-context skill-state (total-ticks) is not visible on this client."
+  [effect-id]
+  (long
+   (or (some (fn [[_k v]] (:ticks v))
+             (:effect-state (level-effects/effect-state-snapshot effect-id)))
+       0)))
+
 (defn- scan-vm-state
   "Reduce over an already-fetched contexts list (see cached-frame-inputs) —
   callers must not re-fetch via read-model here, since build-snapshot's caller
-  already pays for that fetch once per underlying player-state change."
+  already pays for that fetch once per underlying player-state change.
+
+  Active when the server context carries the toggle OR the client-side fx
+  state says the effect is up (fx-start received) — the latter keeps the
+  feedback working on dedicated/remote servers where the server context is
+  never visible to the client render thread."
   [contexts]
-  (reduce
-    (fn [acc ctx-data]
-      (if (ctx/active-context? ctx-data)
-        (cond-> acc
-          (toggle/is-toggle-active? ctx-data :vec-reflection)
-          (-> (assoc :reflection-active? true)
-              (assoc :reflection-intensity
-                     (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))]
-                       (double (min 1.0 (/ ticks 20.0))))))
-          (toggle/is-toggle-active? ctx-data :vec-deviation)
-          (assoc :deviation-active? true))
-        acc))
-    {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
-    contexts))
+  (let [fx-reflection (fx-effect-active? :vec-reflection)
+        fx-deviation (fx-effect-active? :vec-deviation)]
+    (reduce
+      (fn [acc ctx-data]
+        (if (ctx/active-context? ctx-data)
+          (cond-> acc
+            (or (toggle/is-toggle-active? ctx-data :vec-reflection) fx-reflection)
+            (-> (assoc :reflection-active? true)
+                (assoc :reflection-intensity
+                       (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))
+                             fx-ticks (fx-effect-ticks :vec-reflection)]
+                         (double (min 1.0 (/ (max ticks fx-ticks) 20.0))))))
+            (or (toggle/is-toggle-active? ctx-data :vec-deviation) fx-deviation)
+            (assoc :deviation-active? true))
+          acc))
+      {:reflection-active? fx-reflection
+       :deviation-active? fx-deviation
+       :reflection-intensity 0.0}
+      contexts)))
+
+(defn with-fx-active-contexts
+  "Append synthetic alive/active contexts for fx-active skills so skill-slot
+  delegate state (context-to-delegate-state reads :input-state, which the
+  server projection only writes in a shared single-player runtime) lights up
+  on any connection topology. The synthetic maps carry exactly the fields
+  delegate-state-for-slot matches on: skill-id and status, plus input-state."
+  [contexts]
+  (let [extra (keep (fn [effect-id]
+                      (when (fx-effect-active? effect-id)
+                        {:skill-id effect-id :status :alive :input-state :active}))
+                    [:vec-reflection :vec-deviation])]
+    (if (seq extra) (concat contexts extra) contexts)))
 
 (def ^:private movement-hint-keys
   "Upstream StormWing/Flashing key-group order: forward/back/left/right with
@@ -605,6 +650,12 @@
    opts: {:activated-override :showing-numbers? :last-show-value-change-ms :active-overlay-app :now-ms}"
   [player-uuid screen-w screen-h opts]
   (let [now-ms (long (or (:now-ms opts) (System/currentTimeMillis)))
+        ;; VM-wave lifecycle runs on GAME time (upstream GameTimer.getTime =
+        ;; worldTime + partialTick): tick-vm-wave! stamps circles with it and
+        ;; the render-side alpha/expansion math must use the same clock. The
+        ;; wall-clock now-ms (HUD animations) would make elapsed enormous and
+        ;; every ripple's alpha collapse to 0.
+        vm-wave-now-ms (long (bridge/game-time-ms))
         ok (owner-key player-uuid)
         player-state (read-model/get-player-state ok)
         resource-data (:resource-data player-state)
@@ -626,7 +677,8 @@
                       (-> skill-slot-shape
                   (hud/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
                                         :skill-exps skill-exps})
-                          (hud/patch-skill-slot-visual contexts player-uuid now-ms)))
+                          (hud/patch-skill-slot-visual
+                           (with-fx-active-contexts contexts) player-uuid now-ms)))
         preset-indicators (hud/build-preset-indicators-data preset-state now-ms)
         numbers-texts (hud/build-numbers-texts-data hud-model showing-numbers? last-show-ms now-ms)
         vm (scan-vm-state contexts)
@@ -656,7 +708,7 @@
                    :intensity (double (or (:reflection-intensity vm) 1.0))
                    :x (int (/ screen-w 2))
                    :y (int (/ screen-h 2))})
-     :vm-waves (build-vm-wave-items player-uuid now-ms vm-tint)
+     :vm-waves (build-vm-wave-items player-uuid vm-wave-now-ms vm-tint)
      :charging (build-charging-layer player-uuid screen-w screen-h now-ms)
      :charging-arcs (or (build-arc-particle-items player-uuid screen-w screen-h now-ms) [])
      :coin-qte (build-coin-qte-layer player-uuid screen-w screen-h now-ms)

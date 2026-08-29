@@ -6,6 +6,7 @@
    builder — see client_ui_hooks_overlay_cache_test.clj)."
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.ability.registry.category :as category]
@@ -37,6 +38,7 @@
                                                                 :is-item false :good? false
                                                                 :charge-ticks 0 :charge-ratio 0.0})
                  bridge/call-adapter (fn [& _#] nil)
+                 bridge/game-time-ms (fn [] 1000)
                  toast/build-toast-layouts (fn [& _#] [])
                  tutorial-notification/build-notification-layout (fn [& _#] nil)
                  ~@extra-bindings]
@@ -160,3 +162,54 @@
         (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
         (is (= 2 @shape-calls)
             "clearing the cache must force a rebuild, not leak stale shapes"))))))
+
+(deftest build-snapshot-vm-waves-from-fx-state-test
+  (fresh!)
+  (let [preset-data (preset-data-with-slot :vec-deviation)]
+    (with-snapshot-stubs
+      [read-model/get-player-state (fn [_#] (player-state-with preset-data {}))
+       category/get-category (fn [_#] {:color [0.0 0.0 0.0] :icon "textures/x.png"})
+       skill-query/get-skill-by-controllable (fn [_# _#] :vec-deviation)
+       skill-registry/get-skill (fn [_#] {:name "VecDeviation"})
+       skill-query/get-skill-icon-path (fn [_#] "textures/skills/vec_deviation.png")
+       read-model/get-player-contexts-for-player (fn [& _#] [])]
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session}
+        (fn []
+          (with-redefs [level-effects/effect-state-snapshot
+                        (fn [effect-id]
+                          (case effect-id
+                            :vec-deviation {:effect-state {[:ctx "ctx-dev"] {:active? true :ticks 3}}}
+                            {}))]
+            ;; a wave circle born now so it is alive at now-ms
+            (reactive-hud/seed-vm-wave-state-for-test!
+             "p1" [{:x 10.0 :y 10.0 :born-ms 0 :life-ms 60000
+                    :start-size 100.0 :end-size 200.0 :seed 0.0}]
+             0)
+            (let [snap (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+                  waves (:vm-waves snap)]
+              (is (seq waves) "vm-waves rendered from fx state alone")
+              (is (some? (:tint (first waves))) "wave carries the deviation tint"))))))))
+
+(deftest build-snapshot-skill-slot-active-from-fx-state-test
+  (fresh!)
+  (let [preset-data (preset-data-with-slot :vec-deviation)]
+    (with-snapshot-stubs
+      [read-model/get-player-state (fn [_#] (player-state-with preset-data {}))
+       category/get-category (fn [_#] {:color [0.0 0.0 0.0] :icon "textures/x.png"})
+       skill-query/get-skill-by-controllable (fn [_# _#] :vec-deviation)
+       skill-registry/get-skill (fn [_#] {:name "VecDeviation"})
+       skill-query/get-skill-icon-path (fn [_#] "textures/skills/vec_deviation.png")
+       read-model/get-player-contexts-for-player (fn [& _#] [])
+       level-effects/effect-state-snapshot
+       (fn [effect-id]
+         (case effect-id
+           :vec-deviation {:effect-state {[:ctx "ctx-dev"] {:active? true :ticks 3}}}
+           {}))]
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session}
+        (fn []
+          (let [snap (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+                slot (first (:skill-slots snap))]
+            (is (some? slot))
+            (is (= :active (:visual-state slot))
+                "skill slot lights :active from the fx signal in the real build-snapshot path")
+            (is (some? (:glow-color slot)) "glow present")))))))

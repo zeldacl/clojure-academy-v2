@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks-test
   (:require
             [cn.li.ac.ability.service.runtime-store :as store]
-[clojure.test :refer [deftest is use-fixtures]]
+[clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.effects.particles :as particles]
@@ -9,8 +9,11 @@
             [cn.li.ac.test.support.hud-render-data :as hud-rd]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
+            [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vdfx]
             [cn.li.ac.content.ability.teleporter.location-teleport-reactive :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
@@ -19,7 +22,8 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.service.context-manager :as ctx-mgr]            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]            [cn.li.ac.ability.util.toggle :as toggle]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
@@ -598,3 +602,93 @@
         (let [plan (client-ui-hooks/build-client-overlay-plan
                     "p1" 320 180 {:now-ms 1000})]
           (is (some #{:movement-hints} (mapv :kind (:elements plan)))))))))
+
+(deftest scan-vm-contexts-detects-server-toggle-via-real-registration-test
+  (testing "a server context activated through the real toggle command path is
+            visible to the client-side scan-vm-contexts in a shared
+            (single-player) runtime — get-all-contexts projection carries the
+            skill-state from the store, not from a stubbed context map"
+    (let [owner {:logical-side :server :server-session-id :test-session :player-uuid "p1"}]
+      (ps-fix/with-test-player-state-owner
+        (fn []
+          (store/reset-store!)
+          (ps-fix/seed-player-state! "p1" {})
+          (ctx/with-context-owner owner
+            (ctx/register-context!
+             (assoc (ctx/new-server-context "p1" :vec-deviation "ctx-dev" owner)
+                    :status ctx/STATUS-ALIVE
+                    :last-keepalive-ms 0))
+            (toggle/activate-toggle! "ctx-dev" :vec-deviation)
+            (is (true? (:deviation-active? (@#'client-ui-hooks/scan-vm-contexts "p1")))
+                "client overlay scan sees the server toggle through store projection")
+            (is (false? (:reflection-active? (@#'client-ui-hooks/scan-vm-contexts "p1")))
+                "vec-reflection stays inactive")))))))
+
+(deftest scan-vm-contexts-detects-fx-state-without-server-context-test
+  (testing "server-mode (dedicated/remote) client: no server context is
+            visible, but the fx-start channel already delivered active state —
+            scan-vm-contexts must light the vm feedback from the fx signal"
+    (with-redefs [ctx/get-all-contexts (fn [] {})  ;; no server contexts at all
+                  level-effects/effect-state-snapshot
+                  (fn [effect-id]
+                    (case effect-id
+                      :vec-deviation {:effect-state {[:ctx "ctx-dev"] {:active? true :ticks 3}}}
+                      :vec-reflection {:effect-state {}}
+                      {}))]
+      (is (true? (:deviation-active? (@#'client-ui-hooks/scan-vm-contexts "p1")))
+          "deviation detected purely from fx state")
+      (is (false? (:reflection-active? (@#'client-ui-hooks/scan-vm-contexts "p1")))
+          "reflection stays inactive without fx state"))))
+
+(deftest overlay-plan-renders-vm-wave-from-fx-state-alone-test
+  (testing "server-mode client: build-client-overlay-plan renders the vm wave
+            when the fx-start channel delivered active state, even though the
+            context registry holds nothing"
+    (runtime-hooks/with-client-ctx-fn {:session-id :test-session}
+      (fn []
+        (with-redefs [store/get-player-state
+                      (fn [_ _]
+                        {:resource-data {:activated true
+                                         :cur-cp 80.0
+                                         :cur-overload 0.0
+                                         :max-overload 100.0}
+                         :cooldown-data {}
+                         :preset-data {}})
+                      ctx/get-all-contexts (fn [] {})
+                      level-effects/effect-state-snapshot
+                      (fn [effect-id]
+                        (case effect-id
+                          :vec-deviation {:effect-state {[:ctx "ctx-dev"] {:active? true :ticks 3}}}
+                          {}))
+                      client-keybinds/get-activate-hint (fn [_] nil)
+                      client-keybinds/get-preset-switch-state (fn [_] nil)]
+          (client-ui-hooks/seed-vm-wave-state-for-test!
+           "p1"
+           [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
+             :start-size 10.0 :end-size 50.0 :seed 0.0}])
+          (let [plan (client-ui-hooks/build-client-overlay-plan
+                      "p1" 320 180 {:now-ms 1000})]
+            (is (some #{:blit-texture} (mapv :kind (:elements plan)))
+                "vm wave blit renders from fx state alone")))))))
+
+(deftest fx-start-channel-writes-active-state-and-scan-detects-test
+  (testing "the real fx message flow — server fx/send! → client channel push →
+            fx-registry → vec-deviation level effect-state — writes :active?,
+            which scan-vm-contexts reads for the HUD feedback signal"
+    (vdfx/init!)
+    ;; on-context-channel-push! (private) forwards the channel to
+    ;; fx-registry/dispatch-fx-channel! — drive that public dispatch point
+    ;; directly, same as the client message handler does.
+    (fx-registry/dispatch-fx-channel!
+     "ctx-dev" :vec-deviation/fx-start {:mode :start})
+    (is (true? (reactive-hud/fx-effect-active? :vec-deviation))
+        "effect-state carries the active entry after the fx-start push")
+    (is (true? (:deviation-active? (@#'client-ui-hooks/scan-vm-contexts "p1")))
+        "scan sees deviation active from the fx state alone")
+    ;; fx-end clears it again — the toggle off message ends the feedback
+    (fx-registry/dispatch-fx-channel!
+     "ctx-dev" :vec-deviation/fx-end {:mode :end})
+    (is (false? (reactive-hud/fx-effect-active? :vec-deviation))
+        "fx-end clears the active entry")
+    (is (false? (:deviation-active? (@#'client-ui-hooks/scan-vm-contexts "p1")))
+        "scan returns to inactive after fx-end")))

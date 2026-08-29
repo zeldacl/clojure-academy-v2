@@ -5,7 +5,8 @@
   This module manages the registration and provides utilities for common patterns.
 
   No Minecraft imports."
-  (:require 
+  (:require
+            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -45,34 +46,42 @@
   ([handler-id skill-id handler-fn]
    (register-toggle-damage-handler! handler-id skill-id handler-fn 100))
   ([handler-id skill-id handler-fn priority]
-   (when (damage-interception-available?)
-     (let [session-id (runtime-hooks/require-player-state-session-id "damage.handler")
-           wrapped-handler (fn [player-id attacker-id damage damage-source]
-                            ;; Check if toggle skill is active by looking for active contexts
-                            (if (runtime-player-state-in-session session-id player-id)
-                              ;; Try to find an active context with this toggle skill
-                              (let [active-contexts (ctx/get-all-contexts)
-                                    player-contexts (filter (fn [[_ctx-id ctx-data]]
-                                                             (= (:player-uuid ctx-data) player-id))
-                                                           active-contexts)
-                                    has-active-toggle? (some (fn [[_ctx-id ctx-data]]
-                                                              (toggle/is-toggle-active? ctx-data skill-id))
-                                                            player-contexts)]
-                                (if has-active-toggle?
-                                  ;; Toggle is active - call handler
-                                  (try
-                                    (handler-fn player-id attacker-id damage damage-source)
-                                    (catch Exception e
-                                      (log/warn "Toggle damage handler" handler-id "failed:" (ex-message e))
-                                      [damage nil]))
-                                  ;; Toggle not active - pass through
-                                  [damage nil]))
-                              ;; No player state - pass through
-                              [damage nil]))]
-       (damage-interception-call :register-damage-handler!
-                                 handler-id
-                                 wrapped-handler
-                                 priority)))))
+   ;; Registered directly into the AC damage registry (the same store the
+   ;; :damage-interception adapter's :register-damage-handler! forwards into),
+   ;; NOT via the adapter: content init! runs during mod-constructor
+   ;; runtime-activation, before the platform adapter installs in common
+   ;; setup, so damage-interception-available? was false there and the old
+   ;; registration silently no-oped — vec-deviation/vec-reflection never
+   ;; reduced damage. The session is resolved at damage time instead of
+   ;; captured at registration: the pipeline binds the victim's server
+   ;; session around each handler call (damage-process-result's
+   ;; with-damaged-player-owner), while registration runs with no player
+   ;; bound at all.
+   (damage-runtime/register-damage-handler!
+    handler-id
+    (fn [player-id attacker-id damage damage-source]
+      ;; Check if toggle skill is active by looking for active contexts
+      (if (runtime-player-state player-id)
+        ;; Try to find an active context with this toggle skill
+        (let [active-contexts (ctx/get-all-contexts)
+              player-contexts (filter (fn [[_ctx-id ctx-data]]
+                                        (= (:player-uuid ctx-data) player-id))
+                                      active-contexts)
+              has-active-toggle? (some (fn [[_ctx-id ctx-data]]
+                                         (toggle/is-toggle-active? ctx-data skill-id))
+                                       player-contexts)]
+          (if has-active-toggle?
+            ;; Toggle is active - call handler
+            (try
+              (handler-fn player-id attacker-id damage damage-source)
+              (catch Exception e
+                (log/warn "Toggle damage handler" handler-id "failed:" (ex-message e))
+                [damage nil]))
+            ;; Toggle not active - pass through
+            [damage nil]))
+        ;; No player state - pass through
+        [damage nil]))
+    priority)))
 
 (defn unregister-damage-handler!
   "Unregister a damage handler.

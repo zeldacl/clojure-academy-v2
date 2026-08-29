@@ -751,7 +751,10 @@
     (if (and glow (not= visual :idle))
       (let [icon-w (* 62.0 skill-slot-scale)   ;; upstream ICON_SIZE=62
             icon-h (* 62.0 skill-slot-scale)
-            glow-sz (Math/max 1.0 (* icon-w (/ 5.0 62.0)))    ;; upstream size=5 / ICON_SIZE=62
+            ;; upstream size=5 / ICON_SIZE=62 — the 5px edge glow reads as a
+            ;; faint outline; 10px makes the :active state actually visible on
+            ;; the skill bar (port enhancement; upstream has no active state).
+            glow-sz (Math/max 1.0 (* icon-w (/ 10.0 62.0)))
             [gr gg gb ga] glow
             tint-alpha (int (* (double (or ga 255)) this-sin-alpha))
             argb (unchecked-int (bit-or (bit-shift-left tint-alpha 24)
@@ -777,8 +780,12 @@
         this-sin-alpha (if sin-effect? (sin-alpha (double now-ms)) 1.0)
         in-cd? (boolean (:in-cooldown slot))
         ;; Upstream KeyHintUI.drawSingle: alpha = 0.4 flat while on cooldown,
-        ;; else state.alpha * (0.4 + sinAlpha*0.6).
-        icon-alpha (if in-cd? 0.4 (* state-alpha (+ 0.4 (* this-sin-alpha 0.6))))
+        ;; else state.alpha * (0.4 + sinAlpha*0.6). The sine trough dips to
+        ;; 0.4 — DARKER than the :idle 0.7 — so an :active/:charge slot reads
+        ;; dimmer than idle half the time and the activation is invisible on
+        ;; the bar. Lift the floor to 0.85: pulsing states stay clearly
+        ;; brighter than idle through the whole cycle, pulse shape unchanged.
+        icon-alpha (if in-cd? 0.4 (* state-alpha (+ 0.85 (* this-sin-alpha 0.15))))
         key-label-raw (:key-label slot)
         ;; Upstream KeyHintUI.drawSingle draws no key character for
         ;; MOUSE_LEFT/MOUSE_RIGHT (the mouse icon texture stands alone).

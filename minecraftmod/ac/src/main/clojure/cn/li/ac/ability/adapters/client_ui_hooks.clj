@@ -794,23 +794,34 @@
 
 (defn- scan-vm-contexts
   "Single-pass context walk: returns reflection-active?, deviation-active?, and
-   crosshair-intensity in one traversal. Replaces three separate get-all-contexts calls."
+   crosshair-intensity in one traversal. Replaces three separate get-all-contexts calls.
+
+   Active when the server context carries the toggle OR the client-side fx
+   state says the effect is up (fx-start received, no fx-end yet) — the fx
+   signal works on any connection topology, while the server-context
+   projection only sees server contexts when client and server share one
+   runtime (single-player)."
   [player-uuid]
-  (reduce
-    (fn [acc [_ctx-id ctx-data :as _entry]]
-      (if (and (= (:player-uuid ctx-data) player-uuid)
-               (ctx/active-context? ctx-data))
-        (cond-> acc
-          (toggle/is-toggle-active? ctx-data :vec-reflection)
-          (-> (assoc :reflection-active? true)
-              (assoc :reflection-intensity
-                     (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))]
-                       (double (min 1.0 (/ ticks 20.0))))))
-          (toggle/is-toggle-active? ctx-data :vec-deviation)
-          (assoc :deviation-active? true))
-        acc))
-    {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
-    (ctx/get-all-contexts)))
+  (let [fx-reflection (reactive-hud/fx-effect-active? :vec-reflection)
+        fx-deviation (reactive-hud/fx-effect-active? :vec-deviation)]
+    (reduce
+      (fn [acc [_ctx-id ctx-data :as _entry]]
+        (if (and (= (:player-uuid ctx-data) player-uuid)
+                 (ctx/active-context? ctx-data))
+          (cond-> acc
+            (or (toggle/is-toggle-active? ctx-data :vec-reflection) fx-reflection)
+            (-> (assoc :reflection-active? true)
+                (assoc :reflection-intensity
+                       (let [ticks (long (or (get-in ctx-data [:skill-state :toggle :vec-reflection :total-ticks]) 0))
+                             fx-ticks (reactive-hud/fx-effect-ticks :vec-reflection)]
+                         (double (min 1.0 (/ (max ticks fx-ticks) 20.0))))))
+            (or (toggle/is-toggle-active? ctx-data :vec-deviation) fx-deviation)
+            (assoc :deviation-active? true))
+          acc))
+      {:reflection-active? fx-reflection
+       :deviation-active? fx-deviation
+       :reflection-intensity 0.0}
+      (ctx/get-all-contexts))))
 
 (defn- vm-wave-elements [player-uuid now-ms tint]
   (reactive-hud/build-vm-wave-overlay-elements player-uuid now-ms tint))
@@ -1031,7 +1042,9 @@
                       (-> (cached-skill-slot-shapes owner-key hud-model screen-width screen-height preset-data)
                           (hud-renderer/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
                                                      :skill-exps skill-exps})
-                          (hud-renderer/patch-skill-slot-visual active-contexts player-uuid now-ms)))
+                          (hud-renderer/patch-skill-slot-visual
+                           (reactive-hud/with-fx-active-contexts active-contexts)
+                           player-uuid now-ms)))
         movement-hints (reactive-hud/build-movement-hints-data
                         player-uuid active-contexts screen-width screen-height)
         hud-render-data (when (or (:activated hud-model) preset-indicator showing-numbers?
