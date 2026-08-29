@@ -81,6 +81,6 @@
                     :children [{:type :text :bind {:text [:item :label]}}]}
                    {:type :text-input :key :developer/input :layout {:height 20}
                     :bind {:text [:state :console-input]}
-                    :on {:submit :developer/console-submit}
+                    :on {:change :developer/console-input :submit :developer/console-submit}
                     :semantics {:role :textbox :field :developer-console}}
                    {:type :text :key :developer/status :bind {:text [:state :status]}}]}}

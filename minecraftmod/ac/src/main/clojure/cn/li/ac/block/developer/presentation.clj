@@ -276,7 +276,10 @@
                  (do (swap! state assoc :condition-hover
                             (when (:hover? payload)
                               (:condition-index (:item payload))))
-                     (refresh! container))                 :developer/console-submit
+                     (refresh! container))
+                 :developer/console-input
+                 (swap! state assoc :console-input (str (or (:value payload) "")))
+                 :developer/console-submit
                  (submit-console! container player state (:value payload))
                  :developer/level-up
                  (start-development! container player state :level-up nil)
