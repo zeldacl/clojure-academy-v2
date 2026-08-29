@@ -14,7 +14,7 @@
    {:id :freq-transmitter-scan :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.freq-transmitter-reactive/open!}
    {:id :media-player :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.media-reactive/open!}
    {:id :settings :artifact :academy.app/settings :controller 'cn.li.ac.terminal.client.apps.settings-reactive/open!}
-   {:id :tutorial :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.tutorial-reactive/open!}
+   {:id :tutorial :artifact :academy.app/tutorial :controller 'cn.li.ac.terminal.client.apps.tutorial-reactive/open!}
    {:id :ui-customize :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.ui-customize-reactive/open!}
    {:id :skill-tree :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.skill-tree/open!}
    {:id :preset-editor :artifact :academy.app/application :controller 'cn.li.ac.ability.client.screens.preset-editor-reactive/open!}

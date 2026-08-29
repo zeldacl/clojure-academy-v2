@@ -173,6 +173,9 @@
                                (composite-resource (:src item))
                                [(RenderCommand$UiImage. ix iy iw ih color)])]
                      :text [(RenderCommand$UiText. 0 (item-label (:text item)) ix iy color)]
+                     :model [(RenderCommand$UiModelPreview.
+                              (str (or (:model-id item) (:src item) ""))
+                              ix iy iw ih)]
                      []))
       :transform [(RenderCommand$Transform. (str (or (get-in node [:style :transform-id]) "identity")) (or (get-in node [:style :transform]) {}))]
       :mask [(RenderCommand$Mask. (str (or (get-in node [:style :mask-id]) "none")) (or (get-in node [:style :mask]) {}))]

@@ -421,6 +421,30 @@
 ;; Navigation state — two-level (ViewGroup × SubView), reused verbatim
 ;; ============================================================================
 
+(defn preview-items
+  "Flatten the current tutorial sub-view into Presentation composite items.
+   Coordinates are local to the preview pane; model ids use the neutral
+   `item:`/`block:` discriminator understood by version-owned backends."
+  [view]
+  (let [spec (build-preview-spec view :current-preview)]
+    (->> (tree-seq #(seq (:children %)) :children spec)
+         (keep (fn [node]
+                 (let [props (:props node)]
+                   (case (:kind node)
+                     :image {:kind :image :src (:src props)
+                             :x (:x props) :y (:y props)
+                             :w (or (:w props) 16.0) :h (or (:h props) 16.0)}
+                     :preview-item {:kind :model
+                                    :model-id (str "item:" (:item-id props))
+                                    :x (:x props) :y (:y props)
+                                    :w (or (:w props) 16.0) :h (or (:h props) 16.0)}
+                     :preview-3d {:kind :model
+                                  :model-id (str (if (= :block (:render-type props)) "block:" "item:")
+                                                 (or (:block-id props) (:item-id props) ""))
+                                  :x (:x props) :y (:y props)
+                                  :w (or (:w props) 134.0) :h (or (:h props) 134.0)}
+                     nil))))
+         vec)))
 (defn create-preview-state [tut-id]
   (let [groups (build-view-groups tut-id)]
     {:view-groups groups :group-index 0 :sub-indices {}}))

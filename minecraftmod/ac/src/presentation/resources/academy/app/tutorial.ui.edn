@@ -1,0 +1,48 @@
+{:view/id :academy.app/tutorial
+ :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :tutorial-items :vector :tag-items :vector :brief-lines :vector
+                :content-lines :vector :preview-items :vector :status :string
+                :button-left :map :button-right :map :selected :number}
+ :root {:type :column :key :tutorial/root :layout {:x 4 :y 4 :width 419 :height 232}
+        :children [{:type :text :key :tutorial/title :layout {:height 18}
+                    :bind {:text [:state :title]} :semantics {:role :heading}}
+                   {:type :row :key :tutorial/body :layout {:height 194}
+                    :children [{:type :scroll :key :tutorial/list :layout {:width 76}
+                                :bind {:items [:state :tutorial-items]} :semantics {:role :list}
+                                :children [{:type :row :layout {:height 18}
+                                            :children [{:type :text :layout {:width 56}
+                                                        :bind {:text [:item :label]}}
+                                                       {:type :button :layout {:width 18 :height 16}
+                                                        :bind {:text [:item :action-label]}
+                                                        :on {:activate :tutorial/select}
+                                                        :semantics {:role :button}}]}]}
+                               {:type :column :layout {:width 190}
+                                :children [{:type :text :key :tutorial/status
+                                            :bind {:text [:state :status]}}
+                                           {:type :scroll :key :tutorial/tags :layout {:height 20}
+                                            :bind {:items [:state :tag-items]}
+                                            :semantics {:role :list}
+                                            :children [{:type :button :layout {:height 18}
+                                                        :bind {:text [:item :label]}
+                                                        :on {:activate :tutorial/tag}
+                                                        :semantics {:role :button}}]}
+                                           {:type :repeater :key :tutorial/preview
+                                            :layout {:height 134}
+                                            :bind {:items [:state :preview-items]}
+                                            :children [{:type :composite :bind {:item [:state :item]}}]}
+                                           {:type :scroll :key :tutorial/brief :layout {:height 26}
+                                            :bind {:items [:state :brief-lines]}
+                                            :semantics {:role :list}
+                                            :children [{:type :text :bind {:text [:item :label]}}]}
+                                           {:type :row :key :tutorial/navigation :layout {:height 18}
+                                            :children [{:type :button :layout {:width 72 :height 18}
+                                                        :bind {:text [:state :button-left]}
+                                                        :on {:activate :tutorial/prev}
+                                                        :semantics {:role :button}}
+                                                       {:type :button :layout {:width 72 :height 18}
+                                                        :bind {:text [:state :button-right]}
+                                                        :on {:activate :tutorial/next}
+                                                        :semantics {:role :button}}]}]}
+                               {:type :scroll :key :tutorial/content :layout {:width 146}
+                                :bind {:items [:state :content-lines]} :semantics {:role :list}
+                                :children [{:type :text :bind {:text [:item :label]}}]}]}]}}

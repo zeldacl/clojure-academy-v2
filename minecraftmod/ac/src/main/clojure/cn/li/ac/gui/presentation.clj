@@ -32,6 +32,7 @@
       "academy:combat_hud" :academy.app/combat-hud
       "academy:terminal" :academy.app/terminal
       "academy:application" :academy.app/application
+      "academy:tutorial" :academy.app/tutorial
       "academy:settings" :academy.app/settings
       "academy:machine_container" :academy.app/machine-container
       "academy:developer" :academy.app/developer
