@@ -38,14 +38,21 @@
              :x (+ (double x) 0.5) :y (+ (double y) 1.0) :z (+ (double z) 0.5)
              :count (+ 4 (rand-int 4)) :speed 0.2
              :offset-x 1.0 :offset-y 0.6 :offset-z 1.0})
+          ;; Upstream spawns a SmokeEffect entity per affected block (0.5
+          ;; prob): a ~0.6-block-wide dark gray smoke blob at the block top
+          ;; that drifts upward (motionY 0.03-0.06). The earlier port spawned
+          ;; ONE vanilla smoke particle with a 0.04 offset — a single wisp
+          ;; that was invisible in practice. Spawn a burst of vanilla smoke
+          ;; particles spread over the same 0.6-block volume with a modest
+          ;; upward velocity instead.
           (when (< (rand) 0.5)
             (client-particles/queue-current-particle-effect!
               {:type :particle :particle-type :smoke
                :x (+ (double x) 0.5 (- (* (rand) 0.6) 0.3))
                :y (+ (double y) 1.0 (* (rand) 0.2))
                :z (+ (double z) 0.5 (- (* (rand) 0.6) 0.3))
-               :count 1 :speed 0.04
-               :offset-x 0.04 :offset-y 0.05 :offset-z 0.04})))
+               :count 8 :speed 0.06
+               :offset-x 0.3 :offset-y 0.4 :offset-z 0.3})))
         (or store {:hand-state {}}))
       (or store {:hand-state {}}))))
 
