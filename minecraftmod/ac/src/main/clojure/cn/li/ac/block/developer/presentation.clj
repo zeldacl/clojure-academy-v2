@@ -84,7 +84,11 @@
                            "  " (format "%.0f%%" (* 100.0 (double (or (:exp node) 0.0)))))
                :select-label (if selected? "Selected" "Select")
                :learned? (boolean (:learned node))
-               :can-learn? (boolean (:can-learn node))}))
+               :can-learn? (boolean (:can-learn node))
+               :skill-name (:skill-name node)
+               :skill-description (:skill-description node)
+               :skill-level (:skill-level node)
+               :conditions (:conditions node)}))
           nodes)))
 
 (defn- level-up-ready? [pstate]
@@ -185,6 +189,30 @@
         selected (:selected-skill @state)
         rows (if (= mode :skill-tree) (skill-rows container player pstate selected) [])
         selected-row (some #(when (= selected (:skill-id %)) %) rows)
+        development-progress (max 0.0 (min 1.0 (double (or (value-of (:development-progress container)) 0.0))))
+        development-active? (boolean (value-of (:is-developing container)))
+        selected-conditions (skill-tree/condition-items (:conditions selected-row))
+        hover-index (:condition-hover @state)
+        hover-condition (when (integer? hover-index)
+                          (nth selected-conditions hover-index nil))
+        selected-detail (if selected-row
+                          {:title (str (:skill-name selected-row))
+                           :level (str "Required level: " (:skill-level selected-row))
+                           :description (str (or (:skill-description selected-row) ""))
+                           :condition-label "Req."
+                           :condition-items selected-conditions
+                           :condition-hint (if hover-condition
+                                             (str "(" (:hint-text hover-condition) ")") "")
+                           :learn-label (if (:learned? selected-row) "Learned" "Learn")
+                           :can-learn? (and (not development-active?) (boolean (:can-learn? selected-row)))
+                           :development-progress development-progress
+                           :development-label (if development-active?
+                                               (str "Progress " (format "%.0f%%" (* 100.0 development-progress)))
+                                               "")}
+                          {:title "Select a skill" :level "" :description ""
+                           :condition-label "" :condition-items []
+                           :condition-hint "" :learn-label "Learn" :can-learn? false
+                           :development-progress 0.0 :development-label ""})
         energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
         dtype (developer-type container)
@@ -210,6 +238,7 @@
             :wireless-password (str (or (:password wireless) ""))
             :wireless-disconnect {:label "Disconnect"}
             :wireless-available-label {:label "Available"}
+            :selected-detail selected-detail
             :selected-skill (if selected-row
                               (str "Selected: " (:label selected-row))
                               "No skill selected")
@@ -224,7 +253,7 @@
 
 (defn- ensure-state [container]
   (or (:presentation-developer-state container)
-      (let [state (atom {:selected-skill nil :console-lines [] :console-input "" :status nil :wireless {:linked nil :avail [] :password ""}})]
+      (let [state (atom {:selected-skill nil :condition-hover nil :console-lines [] :console-input "" :status nil :wireless {:linked nil :avail [] :password ""}})]
         state)))
 
 (defn prepare-container [container player]
@@ -235,12 +264,19 @@
            :presentation-dispatch-action!
            (fn [action payload]
              (let [item (:item payload)
-                   sid (some-> (:skill-id item) keyword)]
+                   sid (or (some-> (:skill-id item) keyword) (:selected-skill @state))]
                (case action
                  :developer/select-skill
-                 (do (swap! state assoc :selected-skill sid :status (str "Selected " (display-name sid)))
+                 (do (swap! state assoc :selected-skill sid :condition-hover nil :status (str "Selected " (display-name sid)))
                      (refresh! container))
-                 :developer/console-submit
+                 :developer/learn-skill
+                 (when (and sid (:can-learn? (:selected-detail (snapshot container player state))))
+                   (start-development! container player state :learn-skill sid))
+                 :developer/condition-hover
+                 (do (swap! state assoc :condition-hover
+                            (when (:hover? payload)
+                              (:condition-index (:item payload))))
+                     (refresh! container))                 :developer/console-submit
                  (submit-console! container player state (:value payload))
                  :developer/level-up
                  (start-development! container player state :level-up nil)

@@ -4,7 +4,7 @@
                 :exp-label :string :energy-ratio :number :sync-rate :number
                 :skills :vector :selected-skill :string :console-lines :vector
                 :console-input :string :wireless-visible :boolean :wireless-state :string :wireless-owner :string :wireless-range :string :wireless-bandwidth :string :wireless-load :number :wireless-nodes :vector :wireless-password :string :wireless-disconnect :map :wireless-available-label :map :status :string :button-upgrade :map
-                :button-reset :map :button-wireless :map}
+                :button-reset :map :button-wireless :map :selected-detail :map}
  :root {:type :column :key :developer/root :layout {:x 8 :y 8 :width 384 :height 171}
         :children [{:type :text :key :developer/title :layout {:height 18}
                     :bind {:text [:state :title]} :semantics {:role :heading}}
@@ -44,6 +44,29 @@
                                             :children [{:type :text :layout {:width 300} :bind {:text [:item :label]}}
                                                        {:type :button :layout {:width 80 :height 16} :bind {:text [:item :action-label]} :on {:activate :developer/wireless-connect} :semantics {:role :button}}]}]}]}                   {:type :text :key :developer/selected :layout {:height 18}
                     :bind {:text [:state :selected-skill]}}
+                   {:type :text :key :developer/detail-title :layout {:height 16}
+                    :bind {:text [:state :selected-detail :title]}}
+                   {:type :text :key :developer/detail-level :layout {:height 16}
+                    :bind {:text [:state :selected-detail :level]}}
+                   {:type :text :key :developer/detail-description :layout {:height 18}
+                    :bind {:text [:state :selected-detail :description]}}
+                   {:type :text :key :developer/detail-conditions-label :layout {:height 16}
+                    :bind {:text [:state :selected-detail :condition-label]}}
+                   {:type :grid :key :developer/detail-conditions :layout {:height 18}
+                    :bind {:items [:state :selected-detail :condition-items]}
+                    :children [{:type :composite :layout {:height 18}
+                                :bind {:item [:state :item]}
+                                :on {:hover :developer/condition-hover}}]}
+                   {:type :text :key :developer/detail-condition-hint :layout {:height 16}
+                    :bind {:text [:state :selected-detail :condition-hint]}}
+                   {:type :progress :key :developer/detail-progress :layout {:height 6 :width 180}
+                    :bind {:value [:state :selected-detail :development-progress]}}
+                   {:type :text :key :developer/detail-development-label :layout {:height 16}
+                    :bind {:text [:state :selected-detail :development-label]}}
+                   {:type :button :key :developer/detail-learn :layout {:height 18 :width 84}
+                    :bind {:text [:state :selected-detail :learn-label] :visible [:state :selected-detail :can-learn?]}
+                    :on {:activate :developer/learn-skill}
+                    :semantics {:role :button}}
                    {:type :scroll :key :developer/skills :layout {:height 42}
                     :bind {:items [:state :skills]} :semantics {:role :list}
                     :children [{:type :row :layout {:height 18}

@@ -240,7 +240,7 @@
 (defn- selected-node [nodes selected]
   (some #(when (= selected (:skill-id %)) %) nodes))
 
-(defn- condition-items [conditions]
+(defn condition-items [conditions]
   (->> conditions
        (map-indexed (fn [idx condition]
                       (when-let [{:keys [icon-path hint-text]} (condition-icons/condition-display-info condition)]
