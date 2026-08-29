@@ -126,6 +126,22 @@
 
 (declare presentation-host-api)
 
+
+(defn- refresh-stage-state!
+  [stage width height]
+  (case stage
+    :hud
+    (do
+      (media/refresh-active!)
+      (when-let [refresh! (:refresh! @combat-hud*)]
+        (refresh! width height {})))
+    :screen
+    (do
+      (media/refresh-active!)
+      (when-let [refresh! (:refresh! @terminal*)]
+        (refresh!)))
+    nil))
+
 (defn- frame-packet
   [frame-id stage frame-context]
   (let [api (presentation-host-api)
@@ -162,13 +178,10 @@
                  :dispatch-action! (fn [_ _ current] current)
                  :on-close nil}))
      :frame! (fn [frame-id _delta-seconds width height]
-               (media/refresh-active!)
-               (when-let [refresh! (:refresh! @combat-hud*)]
-                 (refresh! width height {}))
-               (when-let [refresh! (:refresh! @terminal*)]
-                 (refresh!))
+               (refresh-stage-state! :screen width height)
                (frame-packet frame-id :screen {:width width :height height}))
      :frame-with-context! (fn [stage frame-id delta-seconds width height vfx-context]
+                            (refresh-stage-state! stage width height)
                             (let [frame (frame-packet frame-id stage
                                                   {:width width :height height})]
                               (merge-vfx-passes vfx-context frame-id delta-seconds frame)))
