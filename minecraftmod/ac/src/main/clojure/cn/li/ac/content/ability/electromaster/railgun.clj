@@ -300,7 +300,6 @@
                             :ctx-id          ctx-id
                             :world-id        world-id
                             :eye-pos         muzzle
-                            :trace-pos       trace-pos
                             :look-dir        look-vec}
                            reflection)                    {:radius          (cfg-double :beam.radius)
                      :query-radius    (cfg-double :beam.query-radius)
@@ -315,7 +314,12 @@
                      :break-blocks?   true
                      :skill-id        :railgun
                      :block-energy    (cfg-lerp :beam.block-energy exp)
-                     :fx-topic        :railgun/fx-shot})
+                     :fx-topic        :railgun/fx-shot
+                     ;; execute-beam! reads :trace-pos from params (the evt
+                     ;; entry above was dead): the damage/block/visual-end
+                     ;; anchor is the feet, upstream startPos — only the fx
+                     ;; start stays at the hand muzzle.
+                     :trace-pos       trace-pos})
             beam-result (or (:beam-result result) {:performed? false})]
         (when (and (:performed? beam-result) (world-effects/available?))
           (world-effects/play-sound!

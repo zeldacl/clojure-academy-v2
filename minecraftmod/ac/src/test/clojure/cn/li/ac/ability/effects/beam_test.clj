@@ -150,3 +150,31 @@
           "the disk-plane cells (ground under the shooter) survive")
       (is (some #{[0 63 1]} @broken*)
           "the cells in front of the disk plane are still carved"))))
+
+(deftest beam-visual-ray-follows-upstream-eye-to-feet-shape-test
+  ;; Upstream EntityMDRay renders from eye + look×1 to feet + look×length —
+  ;; a ray that descends eye→feet as it travels, unlike the old flat
+  ;; eye-level start/end. The fx payload must use that shape so the visual
+  ;; coincides with the damage/block origin (trace) at the far end.
+  (let [captured* (atom nil)]
+    (with-redefs [fx/send-local-and-nearby!
+                  (fn [& args] (reset! captured* (last args)))]
+      (beam/execute-beam!
+        {:ctx-id "ctx-vis"
+         :player-id "p1"
+         :world-id "w1"
+         :eye-pos {:x 10.0 :y 20.0 :z 30.0}
+         :look-dir {:x 0.0 :y 0.0 :z 1.0}}
+        {:max-distance 8.0
+         :visual-distance 5.0
+         :damage 0.0
+         :break-blocks? false
+         :block-energy 0.0
+         :fx-topic :test/fx
+         ;; execute-beam! reads :trace-pos from params, not evt.
+         :trace-pos {:x 10.0 :y 10.0 :z 30.0}}))
+    (is (= {:x 10.0 :y 20.0 :z 31.0} (:start @captured*))
+        "start = eye + look×1, one unit ahead of the eye")
+    (is (= {:x 10.0 :y 10.0 :z 35.0} (:end @captured*))
+        "end = trace + look×visual-dist — anchored at the feet plane")
+    (is (= 5.0 (double (:hit-distance @captured*))))))

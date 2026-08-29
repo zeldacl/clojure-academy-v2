@@ -286,8 +286,12 @@
         current-rays (all-rays)
         ;; Original ViewOptimize: translate rays to the hand so the tube AND
         ;; glow board issue from off the caster's view axis and stay visible
-        ;; in first person.
-        fixed-rays (arc-beam/view-fix-rays hand-center-pos current-rays)
+        ;; in first person. Upstream only fixes the START — "Don't fix end to
+        ;; get accurate pointing direction" (RendererRayBaseGlow) — so the far
+        ;; end lands exactly on the true feet-anchored aim point; third-person
+        ;; viewers otherwise see the whole beam ~0.8 below its real position.
+        fixed-rays (arc-beam/view-fix-rays hand-center-pos current-rays
+                                            {:fix-end? false})
         ^V3 cam-v (vec3/map->v3 camera-pos)
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))

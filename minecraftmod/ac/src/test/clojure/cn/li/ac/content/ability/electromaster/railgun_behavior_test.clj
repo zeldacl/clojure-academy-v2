@@ -31,7 +31,11 @@
 
 (use-fixtures :each reset-state!)
 
-(deftest beam-uses-trace-origin-but-keeps-visual-origin-test
+(deftest beam-uses-trace-origin-and-upstream-visual-shape-test
+  ;; Logic (entity search, damage, block breaking) anchors at :trace-pos; the
+  ;; fx payload follows upstream EntityMDRay — start = eye + look×1, end =
+  ;; trace + look×visual-dist — so the visual coincides with the damage
+  ;; origin at the far end.
   (let [calls (atom [])]
     (with-redefs [world-effects/available? (constantly true)
                   world-effects/find-entities-in-radius
@@ -61,8 +65,8 @@
                                          :fx-topic :railgun/fx-shot})]
         (is (true? (get-in out [:beam-result :performed?])))
         (is (= ["w1" 1.0 2.0 3.0 10.0] (vec (second (first @calls)))))
-        (is (= [:fx :railgun/fx-shot {:start {:x 10.0 :y 20.0 :z 30.0}
-                                      :end {:x 10.0 :y 20.0 :z 35.0}
+        (is (= [:fx :railgun/fx-shot {:start {:x 10.0 :y 20.0 :z 31.0}
+                                      :end {:x 1.0 :y 2.0 :z 8.0}
                                       :hit-distance 5.0}]
                (second @calls)))
         (is (not-any? #(= :damage (first %)) @calls))))))

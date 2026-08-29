@@ -238,13 +238,41 @@
                                     {:player-uuid "other" :x 0.0 :y 64.0 :z 0.0} 0)))
 
 (defn- axis-radius
-  "Distance from a vertex to the ray axis. The test ray runs along +x at
-  y = 64, z = 0 — view-fix-rays shifts it by a hand offset, so measure from
-  the quad's own centre line instead of an absolute axis."
-  [op key centre-y centre-z]
-  (let [^cn.li.mcmod.math.V3 p (get op key)]
-    (Math/sqrt (+ (Math/pow (- (.-y p) centre-y) 2)
-                  (Math/pow (- (.-z p) centre-z) 2)))))
+  "Perpendicular distance (yz plane) from a vertex to the fitted ray axis.
+  The test ray runs along +x at y = 64, z = 0. view-fix-rays shifts only the
+  START by a hand offset (upstream 'don't fix end'), so the tube is slightly
+  tilted — fit the axis from the near and far ring centres instead of an
+  absolute one."
+  [op key near far]
+  (let [^cn.li.mcmod.math.V3 p (get op key)
+        [ay az] near
+        [by bz] far
+        dy (- by ay)
+        dz (- bz az)
+        len (Math/sqrt (+ (* dy dy) (* dz dz)))]
+    (if (< len 1.0e-6)
+      (Math/sqrt (+ (Math/pow (- (.-y p) ay) 2)
+                    (Math/pow (- (.-z p) az) 2)))
+      (/ (Math/abs (- (* dy (- (.-z p) az))
+                      (* dz (- (.-y p) ay))))
+         len))))
+
+(defn- ray-axis
+  "Fit the ray axis (near ring centre, far ring centre) in the yz plane from
+  the tube's own vertices."
+  [tubes]
+  (let [p0-x (fn [op] (.-x ^cn.li.mcmod.math.V3 (:p0 op)))
+        xs (map p0-x tubes)
+        min-x (apply min xs)
+        max-x (apply max xs)
+        ring-mean (fn [pred]
+                    (let [pts (filter pred tubes)
+                          n (count pts)
+                          ys (map (fn [op] (.-y ^cn.li.mcmod.math.V3 (:p0 op))) pts)
+                          zs (map (fn [op] (.-z ^cn.li.mcmod.math.V3 (:p0 op))) pts)]
+                      [(/ (reduce + ys) n) (/ (reduce + zs) n)]))]
+    [(ring-mean #(< (p0-x %) (+ min-x 0.5)))
+     (ring-mean #(> (p0-x %) (- max-x 0.5)))]))
 
 (deftest ray-uses-the-mdray-composite-test
   ;; MDRayRender: cylinderIn radius 0.17 rgba(216,248,216,230), cylinderOut
@@ -257,12 +285,8 @@
     (let [ops (ray-ops)
           glow (filter #(re-find #"effects/mdray/" (str (:texture %))) ops)
           tubes (remove #(re-find #"effects/mdray/" (str (:texture %))) ops)
-          ;; the ray's own centre line: average the tube vertices
-          ys (map (fn [op] (.-y ^cn.li.mcmod.math.V3 (:p0 op))) tubes)
-          zs (map (fn [op] (.-z ^cn.li.mcmod.math.V3 (:p0 op))) tubes)
-          cy (/ (reduce + ys) (count ys))
-          cz (/ (reduce + zs) (count zs))
-          radii (map #(axis-radius % :p0 cy cz) tubes)]
+          [near far] (ray-axis tubes)
+          radii (map #(axis-radius % :p0 near far) tubes)]
       (is (= 3 (count glow)) "blend_in / tile / blend_out")
       (is (seq tubes))
       (is (< 0.2 (apply max radii) 0.26)

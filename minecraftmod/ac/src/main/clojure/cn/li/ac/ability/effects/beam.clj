@@ -243,7 +243,12 @@
                                  candidates)
             block-dist   (min md (double (or (:reflection-distance result) md)))
             visual-dist  (min vd (double (or (:reflection-distance result) vd)))
-            end-pos      (geom/v+ eye (geom/v* dir visual-dist))]
+            ;; Upstream EntityMDRay: start = eye + look×1, end = feet + look×
+            ;; length — the visual ray descends from one unit ahead of the eye
+            ;; down to the feet plane as it travels. Anchor the end at trace
+            ;; (the damage/block origin) so the visual and the effect coincide
+            ;; at the far end.
+            end-pos      (geom/v+ trace (geom/v* dir visual-dist))]
         (when (and break-blocks? (pos? benergy))
           (break-blocks! skill-id player-id world-id trace dir block-dist benergy r st))
         (when fx-topic
@@ -253,7 +258,7 @@
           ;; sendToAllAround — nearby players must see the shot, not just the
           ;; shooter.
           (fx/send-local-and-nearby! (:ctx-id evt) {:topic fx-topic :mode :perform} evt
-                    {:start eye
+                    {:start (geom/v+ eye (geom/v* dir 1.0))
                      :end end-pos
                      :hit-distance visual-dist}))
         (assoc evt :beam-result {:performed?       true
