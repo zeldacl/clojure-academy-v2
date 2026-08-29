@@ -2,6 +2,7 @@ package cn.li.mcver;
 
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 
 /**
  * Client-only accessors for player/level/server APIs that drift by mapping.
@@ -29,6 +30,27 @@ public final class McClientAccess {
         // 1.21.1: getTimer(); 26.2 renamed to getDeltaTracker().
         var tracker = mc.getTimer();
         return tracker == null ? 0.0d : tracker.getGameTimeDeltaPartialTick(false);
+    }
+
+    /**
+     * Render-frame pose of the local player: the partial-tick interpolated
+     * position/orientation the character model is drawn at. Body-anchored
+     * level effects (storm-wing tornadoes etc.) must anchor to this pose, or
+     * they run ahead of the rendered character by up to one tick of travel
+     * while moving — the upstream StormWingEffect is a world entity whose
+     * renderer interpolates between the same two player tick positions, so it
+     * always tracks the model. Returns {x, y, z, eyeY, yawDeg, pitchDeg,
+     * bodyYawDeg}.
+     */
+    public static double[] playerRenderPosition(LocalPlayer player, double partialTick) {
+        double x = player.xo + (player.getX() - player.xo) * partialTick;
+        double y = player.yo + (player.getY() - player.yo) * partialTick;
+        double z = player.zo + (player.getZ() - player.zo) * partialTick;
+        double eyeY = y + (player.getEyeY() - player.getY());
+        double yaw = player.yRotO + (player.getYRot() - player.yRotO) * partialTick;
+        double pitch = player.xRotO + (player.getXRot() - player.xRotO) * partialTick;
+        double bodyYaw = player.yBodyRotO + (player.yBodyRot - player.yBodyRotO) * partialTick;
+        return new double[] {x, y, z, eyeY, yaw, pitch, bodyYaw};
     }
 
     /** Close the current screen if any (Minecraft.screen vs Minecraft.gui.screen). */
