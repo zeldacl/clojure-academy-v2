@@ -53,7 +53,11 @@
     (fn [resp] (when-let [mode (:mode resp)] (reset! (:mode container) (recipes/normalize-mode mode))))))
 
 (defn- handle-button-click! [container button-id _player]
-  (when (#{-1 1} (int button-id)) (request-alternate! container button-id)))
+  ;; Presentation shared machine-container artifact emits canonical button ids 0 (left) and 1 (right).
+  ;; The server protocol still models direction as -1/+1; normalize it at this AC boundary.
+  (let [button-id (int button-id)]
+    (when (#{0 1} button-id)
+      (request-alternate! container (if (zero? button-id) -1 1)))))
 
 (defn- quick-move-stack [c i s]
   (let [config (slot-schema/build-quick-move-config former-slot-schema-id
@@ -65,7 +69,7 @@
 (defn create-screen [container menu player]
   (let [container* (assoc container
                           :presentation-buttons
-                          [{:id :left :button-id -1 :x 12 :y 12 :width 24 :height 18 :label "<"}
+                          [{:id :left :button-id 0 :x 12 :y 12 :width 24 :height 18 :label "<"}
                            {:id :right :button-id 1 :x 42 :y 12 :width 24 :height 18 :label ">"}]
                           :presentation-dispatch-action!
                           (fn [action payload]

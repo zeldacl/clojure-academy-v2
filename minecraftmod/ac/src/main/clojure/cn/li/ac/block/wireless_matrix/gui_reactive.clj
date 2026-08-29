@@ -103,8 +103,15 @@
              :presentation-snapshot-fn
              (fn [c _]
                (let [data @(:presentation-network c)
+                     initialized? (boolean (:initialized data))
+                     owner? (boolean (matrix-logic/owner-authorized? state player))
                      max-capacity (max 1.0 (double (or (:max-capacity data) 1)))]
-                 {:network-state (if (:initialized data) "Initialized" "Not initialized")
+                 {:network-input-visible? owner?
+                  :network-editable? (and initialized? owner?)
+                  :network-readonly? (and initialized? (not owner?))
+                  :network-init-form? (and (not initialized?) owner?)
+                  :network-noinit? (and (not initialized?) (not owner?)) :network-init-label "Initialize network" :network-noinit-label "Network unavailable"
+                  :network-state (if (:initialized data) "Initialized" "Not initialized")
                   :network-owner (str "Owner: " (or (:owner data) "Unknown"))
                   :network-range (str "Range: " (or (:range data) 0))
                   :network-bandwidth (str "Bandwidth: " (or (:bandwidth data) 0) " IF/T")

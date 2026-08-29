@@ -19,11 +19,11 @@
 
 (defn send-change-name [container value]
   (net-client/send-to-server (send-owner) (msg :change-name)
-    (action-payload/action-payload container {:value (str value)}) nil))
+    (action-payload/action-payload container {:node-name (str value)}) nil))
 
 (defn send-change-password [container value]
   (net-client/send-to-server (send-owner) (msg :change-password)
-    (action-payload/action-payload container {:value (str value)}) nil))
+    (action-payload/action-payload container {:password (str value)}) nil))
 
 (defn info-area-snapshot
   "Build the declarative AC InfoArea projection for a node."

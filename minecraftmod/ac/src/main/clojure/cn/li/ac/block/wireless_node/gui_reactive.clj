@@ -57,6 +57,8 @@
                 :network-range (str "Range: " (or (value-of :range 0) 0))
                 :network-bandwidth (str "Energy: " (long energy) "/" (long max-energy) " IF")
                 :network-load (max 0.0 (min 1.0 (/ load max-load)))
+                :node-editable? (boolean (node-logic/owner-authorized? state player))
+                :node-readonly? (not (boolean (node-logic/owner-authorized? state player)))
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
                               :owner (node-logic/owner-name state)

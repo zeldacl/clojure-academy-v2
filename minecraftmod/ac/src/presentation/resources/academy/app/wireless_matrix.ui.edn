@@ -1,14 +1,18 @@
 {:view/id :academy.app/wireless-matrix
  :host {:kind :screen :design-width 220 :design-height 180 :scale-policy :fit}
- :state-schema {:network-state :string :network-owner :string :network-range :string :network-bandwidth :string :network-load :number :network-ssid :string :network-password :string :info-area :map :button-left :map :button-right :map}
+ :state-schema {:network-state :string :network-owner :string :network-range :string :network-bandwidth :string :network-load :number :network-ssid :string :network-password :string :network-input-visible? :boolean :network-editable? :boolean :network-readonly? :boolean :network-init-form? :boolean :network-noinit? :boolean :network-init-label :string :network-noinit-label :string :info-area :map :button-left :map :button-right :map}
  :root {:type :column :key :matrix/root :layout {:x 8 :y 8 :width 204 :height 164}
         :children [{:type :text :key :matrix/title :bind {:text [:state :network-state]}}
                    {:type :text :key :matrix/owner :bind {:text [:state :network-owner]}}
                    {:type :text :key :matrix/range :bind {:text [:state :network-range]}}
                    {:type :text :key :matrix/bandwidth :bind {:text [:state :network-bandwidth]}}
                    {:type :progress :key :matrix/load :layout {:height 6} :bind {:value [:state :network-load]} :semantics {:role :progress}}
-                   {:type :text-input :key :matrix/ssid :layout {:height 20} :bind {:text [:state :network-ssid]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :ssid}}
-                   {:type :text-input :key :matrix/password :layout {:height 20} :bind {:text [:state :network-password]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :password}}
+                   {:type :text :key :matrix/init-hint :layout {:height 18} :bind {:text [:state :network-init-label] :visible [:state :network-init-form?]}}
+                   {:type :text-input :key :matrix/ssid :layout {:height 20} :bind {:text [:state :network-ssid] :visible [:state :network-input-visible?]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :ssid}}
+                   {:type :text-input :key :matrix/password :layout {:height 20} :bind {:text [:state :network-password] :visible [:state :network-input-visible?]} :on {:change :container/text-change :submit :container/text-submit} :semantics {:role :textbox :field :password}}
+                   {:type :text :key :matrix/ssid-readonly :layout {:height 20} :bind {:text [:state :network-ssid] :visible [:state :network-readonly?]}}
+                   {:type :text :key :matrix/password-readonly :layout {:height 20} :bind {:text [:state :network-password] :visible [:state :network-readonly?]}}
+                   {:type :text :key :matrix/noinit :layout {:height 20} :bind {:text [:state :network-noinit-label] :visible [:state :network-noinit?]}}
                    {:type :row :key :matrix/actions
                     :children [{:type :button :key :matrix/action-left :layout {:width 72 :height 20} :bind {:text [:state :button-left]} :on {:activate :container/button} :semantics {:role :button}}
                                {:type :button :key :matrix/action-right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :container/button} :semantics {:role :button}}]} 
