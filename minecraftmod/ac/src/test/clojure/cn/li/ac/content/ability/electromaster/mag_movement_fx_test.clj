@@ -135,6 +135,69 @@
       (is (= #{180 220 160} alphas)
           "outer/inner/line render at life-fade-alpha's flat full-brightness values"))))
 
+(deftest arc-anchors-to-the-caster-eye-with-viewoptimize-offset-test
+  ;; Upstream: setFromTo(caster eye -> target) then ViewOptimize.fix rigidly
+  ;; translates the WHOLE arc in the beam's local frame — fp for the caster's
+  ;; own first-person view, tp for everyone else. The port previously drew
+  ;; from the viewer's own hand (0.35 ahead of the eye), which at close range
+  ;; crossed INTO the target block past the 0.3 collision standoff and buried
+  ;; the arc under the surface. Both endpoints must carry the same shift —
+  ;; "Don't fix end" does not apply here, EntityArc translates the whole arc.
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)]
+    (invoke-level-enqueue! "ctx-vis" :mag-movement/fx-start
+      {:mode :start :source-player-id "player-a"
+       :caster-pos {:x 0.0 :y 65.0 :z 0.0}})
+    (invoke-level-enqueue! "ctx-vis" :mag-movement/fx-update
+      {:mode :update :source-player-id "player-a"
+       :caster-pos {:x 0.0 :y 65.0 :z 0.0}
+       :target {:x 0.0 :y 65.0 :z 5.0}})
+    (let [lines (filter #(= :line (:kind %))
+                        (:ops (arc-beam/effect-build-plan :mag-movement
+                                                          {:x 0.0 :y 65.0 :z 0.0}
+                                                          {:player-uuid "player-a"
+                                                           :x 0.3 :y 64.8 :z 0.2
+                                                           :first-person? true}
+                                                          0)))
+          near (-> lines first :p1)
+          far (-> lines last :p2)]
+      (is (seq lines))
+      ;; fp (-0.05, -0.25, 0.2) as [forward up right] on a +z beam:
+      ;; right = cross(fwd, up) = -x, so the shift is world (-0.2, -0.25, -0.05).
+      (is (< (Math/abs (- -0.2 (.-x ^cn.li.mcmod.math.V3 near))) 1.0e-6)
+          "near end = caster eye + fp")
+      (is (< (Math/abs (- 64.75 (.-y ^cn.li.mcmod.math.V3 near))) 1.0e-6))
+      (is (< (Math/abs (- -0.05 (.-z ^cn.li.mcmod.math.V3 near))) 1.0e-6))
+      ;; the far end gets the SAME rigid shift — upstream moves both ends.
+      (is (< (Math/abs (- -0.2 (.-x ^cn.li.mcmod.math.V3 far))) 1.0e-6))
+      (is (< (Math/abs (- 64.75 (.-y ^cn.li.mcmod.math.V3 far))) 1.0e-6))
+      (is (< (Math/abs (- 4.95 (.-z ^cn.li.mcmod.math.V3 far))) 1.0e-6)))))
+
+(deftest bystanders-see-the-arc-anchored-to-the-caster-test
+  ;; Upstream broadcasts EFFECT_START/UPDATE to everyone nearby and each
+  ;; client anchors its arc to the CASTER entity; the previous per-viewer
+  ;; player-uuid state match dropped the arc entirely for every non-caster
+  ;; viewer. A bystander must draw the caster's arc with the tp offset.
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)]
+    (invoke-level-enqueue! "ctx-vis" :mag-movement/fx-start
+      {:mode :start :source-player-id "player-a"
+       :caster-pos {:x 0.0 :y 65.0 :z 0.0}})
+    (invoke-level-enqueue! "ctx-vis" :mag-movement/fx-update
+      {:mode :update :source-player-id "player-a"
+       :caster-pos {:x 0.0 :y 65.0 :z 0.0}
+       :target {:x 0.0 :y 65.0 :z 5.0}})
+    (let [ops (:ops (arc-beam/effect-build-plan :mag-movement
+                                                {:x 5.0 :y 65.0 :z 5.0}
+                                                {:player-uuid "viewer-b"
+                                                 :x 5.0 :y 64.0 :z 5.0
+                                                 :first-person? false}
+                                                0))
+          near (-> (first (filter #(= :line (:kind %)) ops)) :p1)]
+      (is (seq ops) "a bystander sees the caster's arc")
+      ;; tp (0.15, -0.8, 0.23) on the same +z beam -> world (-0.23, -0.8, 0.15)
+      (is (< (Math/abs (- -0.23 (.-x ^cn.li.mcmod.math.V3 near))) 1.0e-6))
+      (is (< (Math/abs (- 64.2 (.-y ^cn.li.mcmod.math.V3 near))) 1.0e-6))
+      (is (< (Math/abs (- 0.15 (.-z ^cn.li.mcmod.math.V3 near))) 1.0e-6)))))
+
 (deftest two-owners-keep-mag-movement-state-independent-test
   (invoke-level-enqueue! "ctx-a" :mag-movement/fx-start {:mode :start :target {:x 1.0 :y 2.0 :z 3.0}})
   (invoke-level-enqueue! "ctx-b" :mag-movement/fx-start {:mode :start :target {:x 4.0 :y 5.0 :z 6.0}})

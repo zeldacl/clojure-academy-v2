@@ -259,11 +259,16 @@
         ;; (owner + nearby) — the arc + loop sound are ordinary world FX, not
         ;; gated to isLocal like MineDetect's overlay.
         ;; :source-player-id is what anchors the looping sound to the caster on
-        ;; every recipient's client (original FollowEntitySound(player, SOUND)).
+        ;; every recipient's client (original FollowEntitySound(player, SOUND));
+        ;; :caster-pos (the eye) is what the client anchors the arc to —
+        ;; upstream setFromTo(player.posX, player.posY + getHeightFix, ...)
+        ;; uses the CASTER's own position, not each viewer's hand.
         (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-start :mode :start} nil
-                  {:source-player-id player-id})
+                  {:source-player-id player-id
+                   :caster-pos (geom/eye-pos player-id)})
         (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                   {:source-player-id player-id
+                   :caster-pos (geom/eye-pos player-id)
                    :target {:x (double target-x)
                             :y (double target-y)
                             :z (double target-z)}})
@@ -340,8 +345,12 @@
                   ;; branch merges base-meta over the stored state, so omitting
                   ;; it here nulled :source-player-id and every viewer then drew
                   ;; the arc from their OWN hand instead of only the caster's.
+                  ;; :caster-pos rides along for the same reason — the arc is
+                  ;; anchored to the caster's eye (upstream setFromTo), not the
+                  ;; viewer's hand.
                   (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                             {:source-player-id player-id
+                             :caster-pos (geom/eye-pos player-id)
                              :target {:x tx :y ty :z tz}})
                   (when (zero? (mod movement-ticks 10))
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))

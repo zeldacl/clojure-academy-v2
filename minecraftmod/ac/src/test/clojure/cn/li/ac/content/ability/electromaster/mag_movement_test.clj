@@ -384,6 +384,51 @@
          (cb/apply-invoke down! :ctx-id ctx-id :player-id "p1" :exp 0.5)))
     (is (= 77.0 (get-in @ctx* [:skill-state :overload-floor])))))
 
+(deftest fx-payloads-carry-the-caster-eye-for-anchoring-test
+  ;; The client's build-plan anchors the arc to the CASTER's eye (upstream
+  ;; setFromTo(player.posX, player.posY + 1.6, ...)) plus the ViewOptimize
+  ;; shift — without the eye in the payload every viewer drew the arc from
+  ;; their own hand, which at close range crossed into the target block and
+  ;; vanished. Every fx-start/fx-update must carry :caster-pos.
+  (let [ctx-id "ctx-anchor"
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {})
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
+        down! (get (skill-actions) :down!)
+        tick! (get (skill-actions) :tick!)]
+    (with-mag-env
+      #(with-redefs [mag-movement/resolve-target
+                     (fn [_]
+                       {:target-kind :block
+                        :target-world-id "w"
+                        :target-x 1.0 :target-y 2.0 :target-z 3.0
+                        :target-block-id "minecraft:iron_block"})
+                     mag-movement/player-pos (fn [_] {:x 0.0 :y 1.0 :z 2.0})
+                     geom/eye-pos (fn [_] {:x 0.0 :y 2.62 :z 2.0})
+                     mag-movement/cfg-lerp (fn [_ _] 45.0)
+                     mag-movement/cfg-double (fn [k]
+                                               (case k
+                                                 :movement.acceleration 0.08
+                                                 0.0))
+                     motion-op/player-motion-available? (constantly false)
+                     skill-effects/get-player-state
+                     (fn [_] {:resource-data {:cur-overload 77.0}})
+                     state-op/execute-overload-floor! (fn [& _] nil)
+                     ctx/get-context get-context
+                     ctx/terminate-context! terminate-context!
+                     ctx-skill/update-skill-state-root! update-skill-state-root!
+                     ctx-skill/assoc-skill-state! assoc-skill-state!
+                     ctx-skill/clear-skill-state! clear-skill-state!
+                     fx/send! send!]
+         (cb/apply-invoke down! :ctx-id ctx-id :player-id "p1" :exp 0.5)
+         (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? true)))
+    (is (= 6 (count @calls*))
+        "down! = start + update, tick! = update — each fanned out to owner + nearby")
+    (doseq [[_ _ _ payload] @calls*]
+      (is (= {:x 0.0 :y 2.62 :z 2.0} (:caster-pos payload))
+          "every fx payload anchors the arc to the caster eye"))))
+
 (deftest up-then-abort-does-not-double-finalize-test
   (let [ctx-id "ctx-up-abort"
         terminated* (atom [])

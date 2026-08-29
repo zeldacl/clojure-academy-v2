@@ -6,7 +6,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.ac.ability.client.fx-templates.arc-beam]))
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]))
 
 (def ^:private loop-sound (modid/namespaced-path "em.move_loop"))
 (defn- loop-sound-key [ctx-id] (str "mag-movement/" ctx-id))
@@ -39,7 +39,7 @@
                  (or store {:effect-state {}})
                  {:effect-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode target source-player-id world-id]} (or payload {})
+        {:keys [mode target caster-pos source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
@@ -51,13 +51,15 @@
       (do
         (start-loop-sound! ctx-id source-player-id)
         (assoc-in store* [:effect-state owner-key*]
-                  (merge base-meta {:active? true :target target :ticks 0})))
+                  (merge base-meta {:active? true :target target
+                                    :caster-pos caster-pos :ticks 0})))
       :update
       (update-in store* [:effect-state owner-key*]
                  (fn [st]
                    (if (:active? st)
-                     (merge st base-meta {:target target})
-                     (merge base-meta {:active? true :target target :ticks 0}))))
+                     (merge st base-meta {:target target :caster-pos caster-pos})
+                     (merge base-meta {:active? true :target target
+                                       :caster-pos caster-pos :ticks 0}))))
       :end
       (do
         (stop-loop-sound! ctx-id)
@@ -81,40 +83,80 @@
 (def ^:private mag-movement-pattern
   (arc-patterns/get-pattern :thin-continuous))
 
+(defn- own-state?
+  "Original isFirstPerson(): the caster's own arc seen through their own
+  first-person eyes gets the small fp offset; F5 or any other viewer gets
+  the tp offset that drops the arc to the model's hand."
+  [st hand-center-pos]
+  (and (:first-person? hand-center-pos true)
+       (:player-uuid hand-center-pos)
+       (:source-player-id st)
+       (= (str (:player-uuid hand-center-pos))
+          (str (:source-player-id st)))))
+
 (defn- build-plan
-  "Continuously-guided beam (hand-position -> live target): the zigzag path
+  "Continuously-guided beam (caster eye -> live target): the zigzag path
   is re-derived every frame from the two live endpoints — unlike a fire-and-
   forget arc it has no fixed lifetime to precompute vertices once for, so
   only the per-arc constants (pattern lookup, wiggle phase/amplitude) are
   hoisted out of the segment loop, matching build-arc-plan's per-call cost
-  shape in arc_beam.clj."
+  shape in arc_beam.clj.
+
+  Geometry matches upstream setFromTo(player.posX, player.posY + 1.6, ...)
+  + ViewOptimize.fix: the beam runs from the CASTER's eye to the target and
+  the whole arc is rigidly translated by the viewer-dependent hand offset —
+  fp for the caster's own first-person view, tp for everyone else. The port
+  previously started the arc at each VIEWER's own hand, which at close range
+  put the start 0.35 ahead of the eye — past the 0.3 collision-box standoff,
+  inside the target block — so the arc buried itself under the surface and
+  vanished. Everyone nearby draws the arc anchored to the caster, as the
+  broadcast EFFECT_START/UPDATE implied but the old player-uuid state match
+  never delivered."
   [camera-pos hand-center-pos tick]
-  (let [mag-move (some (fn [st]
-                         (when (and (:active? st)
-                                    (or (nil? (:source-player-id st))
-                                        (nil? (:player-uuid hand-center-pos))
-                                        (= (str (:source-player-id st))
-                                           (str (:player-uuid hand-center-pos)))))
-                           st))
-                       (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mag-movement))))]
-    (when (and hand-center-pos
-               (:active? mag-move)
-               (map? (:target mag-move)))
-      (let [hand-v (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
-            target-v (vec3/map->v3 (:target mag-move))
-            vertices (arc-patterns/generate-zigzag-segments hand-v target-v mag-movement-pattern)]
-        {:ops (vec (ru/zigzag-arc-ops (vec3/map->v3 camera-pos) vertices mag-movement-pattern
-                                      ;; life-fade-alpha fades OUT over the last
-                                      ;; 20% of life, so life-ratio 1.0 ("about to
-                                      ;; die") multiplies every colour by alpha 0
-                                      ;; — the arc was emitted fully transparent
-                                      ;; every frame. This arc is upstream's
-                                      ;; thinContiniousArc: it lives as long as the
-                                      ;; skill and never fades, so it sits in the
-                                      ;; curve's flat full-brightness middle.
-                                      {:life-ratio 0.5
-                                       :wiggle-phase (arc-patterns/wiggle-phase)
-                                       :effective-wiggle (arc-patterns/effective-wiggle-amount mag-movement-pattern 0.5)}))}))))
+  (when hand-center-pos
+    (let [hand-v (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
+          cam-v (vec3/map->v3 camera-pos)
+          states (filter :active?
+                         (vals (:effect-state (arc-beam/snapshot :mag-movement))))
+          ops (vec
+               (mapcat
+                (fn [st]
+                  (when-let [target (:target st)]
+                    (when (map? target)
+                      (let [caster-pos (:caster-pos st)
+                            base (if (map? caster-pos)
+                                   (vec3/map->v3 caster-pos)
+                                   hand-v)
+                            target-v (vec3/map->v3 target)
+                            ;; Rigid ViewOptimize shift of BOTH endpoints, like
+                            ;; the original's post-rotation glTranslate — the
+                            ;; near end rides ~0.2 off the eye, the far end
+                            ;; floats the same amount past the true hit point.
+                            origin-offset (when (map? caster-pos)
+                                            (arc-beam/local-frame-offset
+                                             base target-v
+                                             (if (own-state? st hand-center-pos)
+                                               arc-beam/first-person-view-offset
+                                               arc-beam/third-person-view-offset)))
+                            vertices (arc-patterns/generate-zigzag-segments
+                                      base target-v mag-movement-pattern)]
+                        (ru/zigzag-arc-ops
+                         cam-v vertices mag-movement-pattern
+                         ;; life-fade-alpha fades OUT over the last 20% of
+                         ;; life, so life-ratio 1.0 ("about to die") multiplies
+                         ;; every colour by alpha 0 — the arc was emitted fully
+                         ;; transparent every frame. This arc is upstream's
+                         ;; thinContiniousArc: it lives as long as the skill
+                         ;; and never fades, so it sits in the curve's flat
+                         ;; full-brightness middle.
+                         {:life-ratio 0.5
+                          :wiggle-phase (arc-patterns/wiggle-phase)
+                          :effective-wiggle (arc-patterns/effective-wiggle-amount
+                                             mag-movement-pattern 0.5)
+                          :origin-offset origin-offset})))))
+                states))]
+      (when (seq ops)
+        {:ops ops}))))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mag-movement :level] [_ _] {:effect-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mag-movement :level]
