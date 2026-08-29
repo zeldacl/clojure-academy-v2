@@ -59,3 +59,21 @@
 (deftest random-rotate-respects-a-zero-budget-test
   (let [dir (rv3/v3 1.0 0.0 0.0)]
     (is (< (angle-deg dir (random-rotate 0.0 dir)) 1.0e-9))))
+
+(deftest segment-quads-stay-watertight-through-kinks-test
+  ;; Upstream handleSegment carries lastDir — the previous segment's width
+  ;; axis — into the next quad, so adjacent quads share one axis at the
+  ;; junction. Independent per-segment axes (each with its own ±15° random
+  ;; twist) meet at the shared vertex but fan apart, notching the outside of
+  ;; every bend — ThunderClap's bold surround and the railgun arcs showed
+  ;; that as the arc breaking into separate segments.
+  (let [kink (rv3/v3 1.0 0.5 0.0)
+        s1 {:start {:pos (rv3/v3 0.0 0.0 0.0) :width 0.2}
+            :end {:pos kink :width 0.2}
+            :alpha 1.0}
+        s2 {:start {:pos kink :width 0.2}
+            :end {:pos (rv3/v3 2.0 0.0 0.0) :width 0.2}
+            :alpha 1.0}
+        [q0 q1] (#'arc-fx/segment->quads [s1 s2])]
+    (is (= (:p2 q0) (:p1 q1)) "adjacent quads share the junction edge")
+    (is (= (:p3 q0) (:p0 q1)))))

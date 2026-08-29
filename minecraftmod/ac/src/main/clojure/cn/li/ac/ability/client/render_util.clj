@@ -100,6 +100,19 @@
         core-ratio  (double (or (:core-ratio pattern) 0.45))
         core-width  (* width core-ratio)
         segment-count (dec (count vertices))
+        ;; Per-segment billboard axes, resolved up front so each quad reuses
+        ;; its predecessor's axis at the shared vertex — upstream's
+        ;; ArcFactory.handleSegment carries lastDir across quads, keeping the
+        ;; strip watertight at every kink. Independent per-segment billboards
+        ;; meet at the vertex but fan apart along their own axes, notching the
+        ;; outside of each bend; on a wide, strongly-jagged arc (ThunderBolt's
+        ;; strongArc, width 0.3) the notches read as the arc breaking into
+        ;; separate segments.
+        rights (mapv (fn [i]
+                       (let [v0 (nth vertices i)
+                             v1 (nth vertices (inc i))]
+                         (beam-right-axis (shift (:pos v0)) (shift (:pos v1)) cam-pos)))
+                     (range segment-count))
         seg-quads
         (mapcat (fn [i]
                   (let [v0 (nth vertices i)
@@ -108,23 +121,24 @@
                         seg-end   (shift (:pos v1))
                         seg-t     (:u v0 0.0)
                         wiggle (* effective-wiggle (Math/sin (+ wiggle-phase (* seg-t 3.0))))
-                        ;; Per-segment billboard axis: widening a segment along
-                        ;; one arc-wide axis leaves every segment that happens to
-                        ;; run parallel to it edge-on (zero-width sliver). The
-                        ;; degenerate case this guards against — segment pointing
-                        ;; straight at the camera — is already handled by
-                        ;; beam-right-axis's fallback.
-                        right (beam-right-axis seg-start seg-end cam-pos)
-                        outer-o (vec3/v* right width)
-                        core-o  (vec3/v* right core-width)
-                        p0 (vec3/v+ seg-start outer-o)
-                        p1 (vec3/v- seg-start outer-o)
-                        p2 (vec3/v- seg-end outer-o)
-                        p3 (vec3/v+ seg-end outer-o)
-                        c0 (vec3/v+ seg-start core-o)
-                        c1 (vec3/v- seg-start core-o)
-                        c2 (vec3/v- seg-end core-o)
-                        c3 (vec3/v+ seg-end core-o)
+                        ;; A single arc-wide axis would leave every segment that
+                        ;; happens to run parallel to it edge-on (zero-width
+                        ;; sliver); the camera-facing beam-right-axis fallback
+                        ;; handles the segment-pointing-at-camera degenerate.
+                        right-start (nth rights (if (zero? i) 0 (dec i)))
+                        right-end (nth rights i)
+                        outer-s (vec3/v* right-start width)
+                        outer-e (vec3/v* right-end width)
+                        core-s (vec3/v* right-start core-width)
+                        core-e (vec3/v* right-end core-width)
+                        p0 (vec3/v+ seg-start outer-s)
+                        p1 (vec3/v- seg-start outer-s)
+                        p2 (vec3/v- seg-end outer-e)
+                        p3 (vec3/v+ seg-end outer-e)
+                        c0 (vec3/v+ seg-start core-s)
+                        c1 (vec3/v- seg-start core-s)
+                        c2 (vec3/v- seg-end core-e)
+                        c3 (vec3/v+ seg-end core-e)
                         u0-seg (+ (:u v0 0.0) wiggle)
                         u1-seg (+ (:u v1 0.0) wiggle)]
                     [(quad-op texture p0 p1 p2 p3 u0-seg u1-seg 0.0 1.0 outer-color)

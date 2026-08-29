@@ -207,28 +207,44 @@
   (vec
    (mapcat
     (fn [line]
-      (keep
-       (fn [{:keys [start end alpha]}]
-         (let [start-local ^V3 (:pos start)]
-           (when (or (nil? max-local-x)
-                     (<= (.-x start-local) (double max-local-x)))
-             (let [p0 (point-transform start-local)
-                   p1 (point-transform ^V3 (:pos end))
-                   right (ru/beam-right-axis p0 p1 camera-pos)
-                   start-width (* (double width-scale) (double (:width start)))
-                   end-width (* (double width-scale) (double (:width end)))
-                   s-off (v/v* right start-width)
-                   e-off (v/v* right end-width)]
-               (cond-> (assoc
-                        (ru/quad-op line-texture
-                                    (v/v+ p0 s-off)
-                                    (v/v- p0 s-off)
-                                    (v/v- p1 e-off)
-                                    (v/v+ p1 e-off)
-                                    (white-argb (* 255.0 alpha)))
-                        :effect-part effect-part)
-                 extra-op-keys (merge extra-op-keys))))))
-       line))
+      (let [segs (vec
+                  (keep (fn [{:keys [start end alpha]}]
+                          (let [start-local ^V3 (:pos start)]
+                            (when (or (nil? max-local-x)
+                                      (<= (.-x start-local) (double max-local-x)))
+                              {:p0 (point-transform start-local)
+                               :p1 (point-transform ^V3 (:pos end))
+                               :start-width (* (double width-scale)
+                                               (double (:width start)))
+                               :end-width (* (double width-scale)
+                                             (double (:width end)))
+                               :alpha (double alpha)})))
+                        line))
+            rights (mapv (fn [{:keys [p0 p1]}]
+                           (ru/beam-right-axis p0 p1 camera-pos))
+                         segs)]
+        (mapv (fn [seg-idx {:keys [p0 p1 start-width end-width alpha]}]
+                ;; Same carry-across as upstream handleSegment's lastDir: the
+                ;; quad's START width axis is the previous segment's, so
+                ;; adjacent quads share one axis at the junction and the strip
+                ;; stays watertight through every kink (per-segment
+                ;; independent axes notch the outside of each bend). The
+                ;; template's widths are already continuous at the joints —
+                ;; split-line halves the shared midpoint's width.
+                (let [start-right (nth rights (if (zero? seg-idx) 0 (dec seg-idx)))
+                      end-right (nth rights seg-idx)
+                      s-off (v/v* start-right start-width)
+                      e-off (v/v* end-right end-width)]
+                  (cond-> (assoc
+                           (ru/quad-op line-texture
+                                       (v/v+ p0 s-off)
+                                       (v/v- p0 s-off)
+                                       (v/v- p1 e-off)
+                                       (v/v+ p1 e-off)
+                                       (white-argb (* 255.0 alpha)))
+                           :effect-part effect-part)
+                    extra-op-keys (merge extra-op-keys))))
+              (range (count segs)) segs)))
     lines)))
 
 (defn entity-arc-ops

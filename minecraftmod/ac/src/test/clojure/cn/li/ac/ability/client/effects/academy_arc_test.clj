@@ -75,6 +75,31 @@
     (is (seq ops))
     (is (every? #(= :current-charging/surround (:effect-part %)) ops))))
 
+(deftest template-ops-strip-stays-watertight-through-kinks-test
+  ;; Upstream handleSegment carries lastDir so adjacent quads share one width
+  ;; axis at the junction. Per-segment independent axes notch the outside of
+  ;; each bend — the current-charging beam would otherwise read as separate
+  ;; segments on its sharpest kinks.
+  (let [kink (v/v3 1.0 0.5 0.0)
+        line [{:start {:pos (v/v3 0.0 0.0 0.0) :width 0.2}
+               :end {:pos kink :width 0.2}
+               :alpha 1.0}
+              {:start {:pos kink :width 0.2}
+               :end {:pos (v/v3 2.0 0.0 0.0) :width 0.2}
+               :alpha 1.0}]
+        ops (#'academy-arc/template-ops
+             (v/v3 5.0 0.0 5.0)
+             {:lines [line]}
+             identity
+             1.0
+             nil
+             :test/part
+             nil)]
+    (is (= 2 (count ops)))
+    (is (= (:p2 (nth ops 0)) (:p1 (nth ops 1)))
+        "adjacent quads share the junction edge")
+    (is (= (:p3 (nth ops 0)) (:p0 (nth ops 1))))))
+
 (deftest surround-batch-never-collapses-to-zero-geometry-test
   (let [salt 20260803
         body {:x 0.5 :y 0.0 :z 0.5

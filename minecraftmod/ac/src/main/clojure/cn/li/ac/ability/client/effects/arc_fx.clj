@@ -189,31 +189,46 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- segment->quads
-  "Convert a list of arc segments to render ops (textured quads)."
+  "Convert a list of arc segments to render ops (textured quads).
+
+  Matches upstream ArcFactory.handleSegment: each quad's START width axis is
+  the PREVIOUS segment's axis (lastDir), so adjacent quads share one axis at
+  the junction and the strip stays watertight through every kink. Independent
+  per-segment axes (each with its own ±15° random twist) meet at the shared
+  vertex but fan apart along their own directions, notching the outside of
+  every bend — ThunderClap's bold surround and the railgun arcs showed it as
+  the arc breaking into separate segments."
   [segments]
-  (let [texture (modid/asset-path "textures" "effects/arc/line_segment.png")]
+  (let [texture (modid/asset-path "textures" "effects/arc/line_segment.png")
+        segs (vec segments)
+        ;; One random-rotate per segment, consumed in segment order — the same
+        ;; draw order as the original for-loop, so the global rand sequence is
+        ;; unchanged for every caller.
+        perps (mapv (fn [{:keys [start end]}]
+                      (let [dir-vec (v- (:pos end) (:pos start))]
+                        ;; Create perpendicular direction for quad width
+                        (v-normalize (v-cross dir-vec (random-rotate 15.0 dir-vec)))))
+                    segs)]
     (vec
-     (for [[{:keys [start end alpha]} seg-idx] (map vector segments (range))
-           :let [start-pos (:pos start)
-                 end-pos (:pos end)
-                 dir-vec (v- end-pos start-pos)
-                 ;; Create perpendicular direction for quad width
-                 perp (random-rotate 15.0 dir-vec)
-                 perp (v-normalize (v-cross dir-vec perp))
-                 perp (v* perp 1.0)
-                 half-w1 (* 0.5 (:width start 0.15))
-                 half-w2 (* 0.5 (:width end 0.15))
-                 p0 (v+ start-pos (v* perp half-w1))
-                 p1 (v+ start-pos (v* perp (- half-w1)))
-                 p2 (v+ end-pos (v* perp (- half-w2)))
-                 p3 (v+ end-pos (v* perp half-w2))
-                 r 255 g 255 b 255
-                 a (int (min 255 (* 255 alpha)))]]
-       {:kind :quad
-        :texture texture
-        :p0 p0 :p1 p1 :p2 p2 :p3 p3
-        :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
-        :color {:r r :g g :b b :a a}}))))
+     (mapv (fn [seg-idx {:keys [start end alpha]}]
+             (let [start-pos (:pos start)
+                   end-pos (:pos end)
+                   start-perp (nth perps (if (zero? seg-idx) 0 (dec seg-idx)))
+                   end-perp (nth perps seg-idx)
+                   half-w1 (* 0.5 (:width start 0.15))
+                   half-w2 (* 0.5 (:width end 0.15))
+                   p0 (v+ start-pos (v* start-perp half-w1))
+                   p1 (v+ start-pos (v* start-perp (- half-w1)))
+                   p2 (v+ end-pos (v* end-perp (- half-w2)))
+                   p3 (v+ end-pos (v* end-perp half-w2))
+                   r 255 g 255 b 255
+                   a (int (min 255 (* 255 alpha)))]
+               {:kind :quad
+                :texture texture
+                :p0 p0 :p1 p1 :p2 p2 :p3 p3
+                :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+                :color {:r r :g g :b b :a a}}))
+           (range (count segs)) segs))))
 
 ;; ---------------------------------------------------------------------------
 ;; Public API: descending strike bolt
