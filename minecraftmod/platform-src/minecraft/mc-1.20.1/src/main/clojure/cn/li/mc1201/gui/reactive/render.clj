@@ -1357,20 +1357,24 @@
   (let [cx (unchecked-int (node-abs-x node))
         cy (unchecked-int (node-abs-y node))
         p (double (.getDSlot node 0))
-        amp (double (.getDSlot node 1))
+        amp (max 0.0 (min 1.0 (double (.getDSlot node 1))))
         pulse (+ 1.0 (* 0.5 (Math/sin (* 2.0 Math/PI p))))
         radius (+ 11.0 (* 4.0 pulse amp))
-        gap (+ 6 (int (* 2.0 pulse amp)))
-        len (+ 8 (int (* 2.0 pulse amp)))
-        line-color 0xB4E8F8FF
-        ring-color 0x88DDF2FF]
+        gap (int (* 2.0 pulse amp))
+        len (int (* 2.0 pulse amp))
+        ;; ARGB literals above 0x7FFFFFFF are longs in Clojure; GuiGraphics.fill
+        ;; takes an int color, and the interop cast (toIntExact) overflowed —
+        ;; unchecked-int reproduces the signed-ARGB bit pattern the original
+        ;; Java call passes.
+        line-color (unchecked-int 0xB4E8F8FF)
+        ring-color (unchecked-int 0x88DDF2FF)]
     (.fill gg (- cx len) (dec cy) (- cx gap) (inc cy) line-color)
     (.fill gg (+ cx gap) (dec cy) (+ cx len) (inc cy) line-color)
     (.fill gg (dec cx) (- cy len) (inc cx) (- cy gap) line-color)
     (.fill gg (dec cx) (+ cy gap) (inc cx) (+ cy len) line-color)
     (doseq [[cos-a sin-a] crosshair-ring-unit-vecs]
-      (let [rx (+ cx (int (Math/round (* radius cos-a))))
-            ry (+ cy (int (Math/round (* radius sin-a))))]
+      (let [rx (unchecked-int (+ cx (Math/round (* radius cos-a))))
+            ry (unchecked-int (+ cy (Math/round (* radius sin-a))))]
         (.fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))
     (end-vanilla-draw!)))
 
