@@ -50,16 +50,20 @@
         {:x 0.0 :y 0.0 :z 1.0})))
 
 (defn- rotated-spread-vector
-  "Match Vec3d.rotateYaw(90): the original passes 90 radians, not 90 degrees."
+  "Match Vec3d.rotateYaw(90): the original passes 90 radians, not 90 degrees,
+  and rotates POSITIVE-yaw: x' = x*cos - z*sin, z' = x*sin + z*cos. The earlier
+  port had the two signs swapped (the -90 rotation); floor() is not linear
+  under scaling, so the mirrored ±2*rot cells landed on DIFFERENT blocks than
+  upstream and the energy drain (and thus the plowed path length) drifted."
   [look-dir]
   (let [angle 90.0
         cos-a (Math/cos angle)
         sin-a (Math/sin angle)
         x (double (:x look-dir))
         z (double (:z look-dir))]
-    {:x (+ (* x cos-a) (* z sin-a))
+    {:x (- (* x cos-a) (* z sin-a))
      :y (double (:y look-dir))
-     :z (- (* z cos-a) (* x sin-a))}))
+     :z (+ (* x sin-a) (* z cos-a))}))
 
 (defn- cp-cost [exp]
   (cfg-lerp :cost.up.cp exp))
