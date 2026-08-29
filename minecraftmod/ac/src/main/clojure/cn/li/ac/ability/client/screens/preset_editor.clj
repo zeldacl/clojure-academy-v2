@@ -5,11 +5,8 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.i18n :as i18n]))
 
-;; Forward declares for functions called by widget factory (defined later)
-(declare build-preset-editor-render-data)
 
 ;; Editor state
 (def ^:private default-editor-state
@@ -191,25 +188,3 @@
   "Close preset editor screen."
   ([owner]
    (managed-screens/clear-screen-state! screen-id (editor-owner-key owner))))
-
-;; ============================================================================
-;; CGui Widget Factory for :ac/preset-editor.
-;; ============================================================================
-
-(defn create-preset-editor-widget
-  "Widget factory for :ac/preset-editor — returns reactive screen descriptor.
-   owner comes from open-screen-dispatcher payload, which only provides :player-uuid
-   when invoked from a GUI key press (M key). Fall back to runtime-hooks for
-   client-session-id when the payload doesn't supply one."
-  [{:keys [player-uuid client-session-id]}]
-  (let [owner {:client-session-id (or client-session-id
-                                      (try ((requiring-resolve 'cn.li.mcmod.hooks.core/client-session-id))
-                                           (catch Throwable _ "")))
-               :player-uuid player-uuid}
-        create-runtime (requiring-resolve 'cn.li.ac.ability.client.screens.preset-editor-reactive/create-runtime)
-        on-close! (requiring-resolve 'cn.li.ac.ability.client.screens.preset-editor-reactive/on-close!)
-        r (create-runtime owner)]
-    {:type :reactive-screen
-     :runtime r
-     :title "Preset Editor"
-     :on-close #(on-close! owner)}))

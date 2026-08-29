@@ -132,5 +132,3 @@
 (defn on-close! [owner]
   (editor/close-screen! owner)
   nil)
-
-(defn install-widget-factory! [] nil)
