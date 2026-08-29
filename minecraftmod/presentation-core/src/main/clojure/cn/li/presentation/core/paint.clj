@@ -24,6 +24,11 @@
 (defn- bound-value [env node key]
   (state-value env (get-in node [:bind key])))
 
+(defn- visible-value? [value]
+  (or (nil? value)
+      (and (not (false? value))
+           (not (and (string? value) (clojure.string/blank? value))))))
+
 (defn- dimension [value fallback]
   (cond
     (number? value) (float value)
@@ -222,7 +227,7 @@
 (defn- paint-node [node rect env]
   (let [type (:type node)
         visible (bound-value env node :visible)]
-    (if (and (some? visible) (not (boolean visible)))
+    (if (not (visible-value? visible))
       []
       (let [children (:children node)
             direction (or (get-in node [:layout :direction])

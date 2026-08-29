@@ -267,3 +267,18 @@
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 55 :button 0})
     (is (not-any? #(#{:demo/hidden :demo/hidden-hover :demo/item :demo/item-hover} (first %)) @seen))))
+(deftest runtime-treats-blank-visibility-as-hidden
+  (let [rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/blank-visibility
+                  :nodes {:type :button :key :hint :layout {:width 80 :height 20}
+                          :bind {:visible [:state :hint] :text [:state :hint]}
+                          :on {:activate :demo/hint}}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {:hint ""}
+                                  :reduce (fn [state _action _payload]
+                                            {:state state :event-result :pass})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
+    (is (empty? (:commands (first (:mounts (runtime/extract-stage! rt :screen {:width 100 :height 40}))))))
+    (is (= :pass (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                               :x 10 :y 10 :button 0})))))

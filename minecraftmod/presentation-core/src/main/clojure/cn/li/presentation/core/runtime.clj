@@ -4,7 +4,8 @@
    This namespace intentionally has no dependency on presentation-compiler or
    Minecraft. It owns mount state, host geometry, input routing, reducer
    commits, and effect ordering; rendering is supplied by later renderer code."
-  (:require [cn.li.presentation.core.artifact :as artifact])
+  (:require [cn.li.presentation.core.artifact :as artifact]
+            [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]))
 
 (defrecord UiRuntime [state owner-thread])
@@ -178,6 +179,11 @@
       (get-in (:parent env) (subvec path 1))
       :else path)))
 
+(defn- visible-value? [value]
+  (or (nil? value)
+      (and (not (false? value))
+           (not (and (string? value) (string/blank? value))))))
+
 (defn- collection-items [env node]
   (let [items (bound-value env node :items)]
     (if (sequential? items) (vec items) [])))
@@ -205,7 +211,7 @@
    (let [rect (node-rect parent node)
          type (:type node)
          visible (bound-value env node :visible)]
-     (when (or (nil? visible) (boolean visible))
+     (when (visible-value? visible)
        (or (when (and (= :scroll type) (point-in-rect? rect px py))
              (let [items (collection-items env node)
                    templates (vec (:children node))
@@ -252,7 +258,7 @@
    (let [rect (node-rect parent node)
          type (:type node)
          visible (bound-value env node :visible)]
-     (when (or (nil? visible) (boolean visible))
+     (when (visible-value? visible)
        (or (when (and (= :scroll type) (point-in-rect? rect px py))
              (let [items (collection-items env node)
                    templates (vec (:children node))
@@ -309,7 +315,7 @@
    (let [rect (node-rect parent node)
          type (:type node)
          visible (bound-value env node :visible)]
-     (when (or (nil? visible) (boolean visible))
+     (when (visible-value? visible)
        (or (when (and (= :scroll type) (point-in-rect? rect px py))
            (hit-collection node rect env px py))
          (when (#{:grid :repeater} type)
