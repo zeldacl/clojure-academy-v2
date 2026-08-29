@@ -111,6 +111,50 @@
         :w (:width cp-bar 100) :h (:height cp-bar 10)
         :rgba (unchecked-int 0x66FFFFFF)}])))
 
+(defn- skill-slot-items
+  "Project HUD skill-slot identity, icon, key hint and cooldown into neutral
+   composite primitives. AC remains responsible for all cooldown semantics."
+  [skills]
+  (vec
+    (mapcat
+      (fn [{:keys [x y skill-icon skill-name key-label cooldown-remaining
+                   cooldown-total in-cooldown alpha]}]
+        (let [x (double (or x 0.0))
+              y (double (or y 0.0))
+              icon-size 18.0
+              ratio (if (and in-cooldown (pos? (double (or cooldown-total 0))))
+                       (max 0.0 (min 1.0 (/ (double (or cooldown-remaining 0))
+                                             (double cooldown-total))))
+                       0.0)
+              tint (argb255 [255 255 255]
+                            (Math/round (* 255.0 (double (or alpha 1.0)))))]
+          (concat
+            [{:kind :quad :x x :y y :w icon-size :h icon-size
+              :rgba (unchecked-int 0x66202020)}]
+            (when skill-icon
+              [{:kind :image :src skill-icon :x x :y y :w icon-size :h icon-size
+                :rgba tint}])
+            (when (pos? ratio)
+              [{:kind :quad :x x :y y :w icon-size :h (* icon-size ratio)
+                :rgba (unchecked-int 0xAA000000)}])
+            [{:kind :text :text (str (or key-label "") " " (or skill-name ""))
+              :x (+ x icon-size 4.0) :y (+ y 4.0) :rgba tint}]
+            (when (pos? ratio)
+              [{:kind :text :text (format "%.1fs" (/ (double (or cooldown-remaining 0)) 20.0))
+                :x (+ x icon-size 4.0) :y (+ y 13.0)
+                :rgba (unchecked-int 0xFFFFCC66)}]))))
+      (or skills []))))
+
+(defn- crosshair-items
+  "Render reflection crosshair state as a small marker rather than a color map."
+  [{:keys [x y intensity]}]
+  (let [x (double (or x 0.0))
+        y (double (or y 0.0))
+        power (max 0.0 (min 1.0 (double (or intensity 1.0))))
+        size (+ 6.0 (* 4.0 power))
+        color (argb255 [255 255 255] (Math/round (* 255.0 power)))]
+    [{:kind :quad :x (- x (/ size 2.0)) :y (- y 1.0) :w size :h 1.0 :rgba color}
+     {:kind :quad :x (- x 1.0) :y (- y (/ size 2.0)) :w 1.0 :h size :rgba color}]))
 (defn- movement-hints-items [{:keys [x y items]}]
   (let [icon-size 14 gap 18]
     (vec
@@ -263,6 +307,8 @@
                 (sequential? value) value
                 :else []))
             [(background-mask-rect snapshot)
+             (skill-slot-items (:skill-slots snapshot []))
+             (when-let [crosshair (:crosshair snapshot)] (crosshair-items crosshair))
              (cp-full-glow-items snapshot)
              (when-let [hints (:movement-hints snapshot)] (movement-hints-items hints))
              (when-let [indicator (:activation-indicator snapshot)] (activation-indicator-items indicator))
