@@ -209,7 +209,7 @@
     (is (= :consume (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})))
     (is (= :input/scroll (first @seen)))
     (is (= :list (get-in @seen [1 :target])))
-    (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))))
+    (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))`r`n    (runtime/dispatch! rt mount {:type :pointer :event-type :drag :x 5 :y 10 :drag-y -5.0})`r`n    (is (= true (get-in @seen [1 :drag?])))`r`n    (is (= 17.0 (double (get-in @seen [1 :scroll-offset]))))))
 (deftest runtime-applies-frame-host-geometry
   (let [rt (runtime/create-runtime)
         artifact {:magic :pui3 :schema 3 :view-id :academy/test/fill

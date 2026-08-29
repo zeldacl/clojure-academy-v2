@@ -329,6 +329,15 @@
                                           {:state (:view-state instance)
                                            :scroll-offsets (:scroll-offsets instance)}
                                           (:x event) (:y event)))
+                       drag-target (when (= :drag (:event-type event))
+                                    (hit-scroll (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                                               {:state (:view-state instance)
+                                                :scroll-offsets (:scroll-offsets instance)}
+                                               (:x event) (:y event)))
+                       drag-key (:key drag-target)
+                       drag-current (float (or (get-in instance [:scroll-offsets drag-key]) 0.0))
+                       drag-next (float (max 0.0 (min (float (or (:max-offset drag-target) 0.0))
+                                                     (+ drag-current (* -1.0 (double (or (:drag-y event) 0.0)))))))
                        previous (:hover-target instance)
                        changed? (and (= :move (:event-type event))
                                      (not= (:target hover) (:target previous)))
@@ -336,6 +345,10 @@
                                       (or (:action hover)
                                           (when previous (:action previous))))]
                    (cond
+                     (and (= :drag (:event-type event)) drag-key)
+                     {:action :input/scroll
+                      :scroll-offsets (assoc (:scroll-offsets instance) drag-key drag-next)
+                      :payload (assoc event :target drag-key :scroll-offset drag-next :drag? true)}
                      changed?
                      {:action (or hover-action :input/hover)
                       :hover-target hover
