@@ -8,6 +8,7 @@
    [cn.li.ac.ability.registry.category :as category]
    [cn.li.ac.ability.registry.skill :as skill-registry]
    [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+   [cn.li.ac.ability.client.condition-icons :as condition-icons]
    [cn.li.ac.ability.model.ability :as adata]
    [cn.li.ac.ability.config :as cfg]
    [cn.li.ac.config.modid :as modid]
@@ -109,6 +110,8 @@
         ad (:ability-data player-state)
         learned? (adata/is-learned? ad sid)
         conds (check-learn-conditions sid ad (:level ad) developer-type)
+        display-conditions (learning-rules/conditions-with-status
+                            skill ad (:level ad) developer-type)
         exp (double (or (adata/get-skill-exp ad sid) 0.0))
         prog (clamp01 exp)
         ;; Upstream treats "no parent" as parent-learned, both for mAlpha and
@@ -119,7 +122,7 @@
                       parent-learned? 0.7
                       :else 0.25)]
     {:x x :y y :idx idx :learned learned? :can-learn (:pass? conds)
-     :conditions (:failures conds) :skill-id sid
+     :conditions display-conditions :skill-id sid
      :skill-name (or (:name skill) (translate-field skill :name-key (name sid)) (name sid))
      :skill-description (translate-field skill :description-key "")
      :skill-icon (skill/get-skill-icon-path sid)
@@ -183,8 +186,8 @@
 (defn on-skill-click [owner sid]
   (let [st (screen-state-snapshot owner)]
     (if (= sid (:selected-skill st))
-      (swap-screen-state! owner assoc :selected-skill nil)
-      (swap-screen-state! owner assoc :selected-skill sid))))
+      (swap-screen-state! owner assoc :selected-skill nil :condition-hover nil)
+      (swap-screen-state! owner assoc :selected-skill sid :condition-hover nil))))
 
 
 (defn open-screen!
@@ -237,6 +240,18 @@
 (defn- selected-node [nodes selected]
   (some #(when (= selected (:skill-id %)) %) nodes))
 
+(defn- condition-items [conditions]
+  (->> conditions
+       (map-indexed (fn [idx condition]
+                      (when-let [{:keys [icon-path hint-text]} (condition-icons/condition-display-info condition)]
+                        {:kind :condition
+                         :condition-index idx
+                         :icon-path icon-path
+                         :hint-text hint-text
+                         :accepted? (boolean (:accepted condition))})))
+       (remove nil?)
+       vec))
+
 (defn- presentation-state [owner]
   (let [data (or (build-screen-render-data owner) {})
         info (:ability-info data)
@@ -255,13 +270,20 @@
                      [{:kind :level-up :label "Ability level-up available"
                        :action-label "Level Up"}])
         detail (if selected-data
-                 {:title (str (:skill-name selected-data))
-                  :level (str "Required level: " (:skill-level selected-data))
-                  :description (str (or (:skill-description selected-data) ""))
-                  :status (if (:learned selected-data) "Learned"
-                              (if (:can-learn selected-data) "Ready to learn" "Locked"))
-                  :learn-label (if (:learned selected-data) "Learned" "Learn")}
+                 (let [conditions (condition-items (:conditions selected-data))
+                       hover-index (:condition-hover (screen-state-snapshot owner))
+                       hover-item (when (integer? hover-index) (nth conditions hover-index nil))]
+                   {:title (str (:skill-name selected-data))
+                    :level (str "Required level: " (:skill-level selected-data))
+                    :description (str (or (:skill-description selected-data) ""))
+                    :condition-label "Req."
+                    :condition-items conditions
+                    :condition-hint (if hover-item (str "(" (:hint-text hover-item) ")") "")
+                    :status (if (:learned selected-data) "Learned"
+                                (if (:can-learn selected-data) "Ready to learn" "Locked"))
+                    :learn-label (if (:learned selected-data) "Learned" "Learn")})
                  {:title "Select a skill" :level "" :description ""
+                  :condition-label "" :condition-items [] :condition-hint ""
                   :status "Select a node to view details" :learn-label "Learn"})]
     {:title "Skill Tree"
      :category (str "Category: " (or (:category-name info) "unknown"))
@@ -323,6 +345,11 @@
                           (presentation-state owner)))
                       :skill-tree/refresh
                       (presentation-state owner)
+                      :skill-tree/condition-hover
+                      (do (swap-screen-state! owner assoc :condition-hover
+                                              (when (:hover? payload)
+                                                (:condition-index (:item payload))))
+                          (presentation-state owner))
                       :skill-tree/level-up
                       (do (api/req-level-up! owner (fn [_] (refresh)))
                           (presentation-state owner))

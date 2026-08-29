@@ -3,6 +3,7 @@
 	(:require [cn.li.ac.ability.registry.skill :as skill]
 					[cn.li.ac.ability.skill-config :as skill-config]
 					[cn.li.ac.config.modid :as modid]
+                    [cn.li.mcmod.i18n :as i18n]
 					[clojure.string :as str]))
 
 (defn list-skills
@@ -50,6 +51,18 @@
 		(if (and (seq icon) (not (str/includes? icon ":")))
 			(str modid/MOD-ID ":" icon)
 			icon)))
+
+(defn skill-display-name
+  "Return the localized display name for a skill, with stable raw fallbacks."
+  [skill-id]
+  (let [spec (skill/get-skill skill-id)
+        nk (:name-key spec)]
+    (if nk
+      (let [translated (i18n/translate nk)]
+        (if (not= translated nk)
+          translated
+          (or (:name spec) (some-> skill-id name))))
+      (or (:name spec) (some-> skill-id name)))))
 
 (defn controllable-key
 	[skill-id]

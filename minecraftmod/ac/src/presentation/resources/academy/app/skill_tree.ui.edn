@@ -25,6 +25,15 @@
                    {:type :text :key :skill-tree/detail-level :bind {:text [:state :detail :level]}}
                    {:type :text :key :skill-tree/detail-description :layout {:height 18}
                     :bind {:text [:state :detail :description]}}
+                   {:type :text :key :skill-tree/detail-conditions-label :layout {:height 16}
+                    :bind {:text [:state :detail :condition-label]}}
+                   {:type :grid :key :skill-tree/detail-conditions :layout {:height 18}
+                    :bind {:items [:state :detail :condition-items]}
+                    :children [{:type :composite :layout {:height 18}
+                                :bind {:item [:state :item]}
+                                :on {:hover :skill-tree/condition-hover}}]}
+                   {:type :text :key :skill-tree/detail-condition-hint :layout {:height 16}
+                    :bind {:text [:state :detail :condition-hint]}}
                    {:type :row :key :skill-tree/actions :layout {:height 18}
                     :children [{:type :button :layout {:width 72 :height 16}
                                 :bind {:text [:state :button-left]}

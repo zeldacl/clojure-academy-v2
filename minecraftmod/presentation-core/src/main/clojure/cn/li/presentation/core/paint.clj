@@ -178,6 +178,11 @@
                                (composite-resource (:src item))
                                [(RenderCommand$UiImage. ix iy iw ih color)])]
                      :text [(RenderCommand$UiText. 0 (item-label (:text item)) ix iy color)]
+                     :condition (let [icon (composite-resource (:icon-path item))
+                                      accepted? (boolean (:accepted? item))
+                                      icon-color (if accepted? color (unchecked-int 0xFF555555))]
+                                  [(RenderCommand$UiImageBatch.
+                                    icon [(RenderCommand$UiImage. ix iy (min 14.0 iw) (min 14.0 ih) icon-color)])])
                      :model [(RenderCommand$UiModelPreview.
                               (str (or (:model-id item) (:src item) ""))
                               ix iy iw ih)]
