@@ -14,6 +14,7 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
+            [cn.li.ac.terminal.client.apps.media-reactive :as media]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks])
   (:import [java.util ArrayList HashMap]))
@@ -648,6 +649,7 @@
      :coin-qte (build-coin-qte-layer player-uuid screen-w screen-h now-ms)
      :toasts (toast/build-toast-layouts screen-w screen-h now-ms)
      :tutorial-notification (tutorial-notification/build-notification-layout screen-w screen-h now-ms)
+     :media-overlay (media/hud-overlay screen-w screen-h)
      :debug-lines (or (debug-overlay/build-debug-line-items player-state) [])
      :screen-flash-alpha (vfx-level/screen-flash-alpha player-uuid)
      :overload-pulse-intensity (when (> ol-pct 0.8) (* (- ol-pct 0.8) 5.0))

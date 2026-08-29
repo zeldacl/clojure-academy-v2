@@ -1,0 +1,30 @@
+{:view/id :academy.app/ui-customize
+ :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :items :vector :selected :number :edit-x :string :edit-y :string :status :string}
+ :root {:type :column :key :customize/root :layout {:x 16 :y 16 :width 288 :height 208}
+        :children [{:type :text :key :customize/title :layout {:height 18}
+                    :bind {:text [:state :title]} :semantics {:role :heading}}
+                   {:type :scroll :key :customize/items :layout {:height 90}
+                    :bind {:items [:state :items]} :semantics {:role :list}
+                    :children [{:type :row :layout {:height 20}
+                                :children [{:type :text :layout {:width 220}
+                                            :bind {:text [:item :label]}}
+                                           {:type :button :layout {:width 52 :height 18}
+                                            :bind {:text [:item :action-label]}
+                                            :on {:activate :customize/select}
+                                            :semantics {:role :button}}]}]}
+                   {:type :row :key :customize/coordinates :layout {:height 22}
+                    :children [{:type :text-input :layout {:width 120 :height 20}
+                                :bind {:text [:state :edit-x]}
+                                :on {:change :customize/x-change :submit :customize/x-submit}
+                                :semantics {:role :textbox :field :x}}
+                               {:type :text-input :layout {:width 120 :height 20}
+                                :bind {:text [:state :edit-y]}
+                                :on {:change :customize/y-change :submit :customize/y-submit}
+                                :semantics {:role :textbox :field :y}}]}
+                   {:type :row :key :customize/actions :layout {:height 20}
+                    :children [{:type :button :layout {:width 112 :height 18}
+                                :bind {:text [:state :reset-label]}
+                                :on {:activate :customize/reset}
+                                :semantics {:role :button}}
+                               {:type :text :bind {:text [:state :status]}}]}]}}

@@ -274,6 +274,7 @@
              (when-let [coin (:coin-qte snapshot)] (coin-qte-items coin))
              (toast-items (:toasts snapshot []))
              (when-let [notif (:tutorial-notification snapshot)] (tutorial-notification-items notif))
+             (:media-overlay snapshot)
              (debug-line-items (:debug-lines snapshot []))
              (overload-pulse-items snapshot)
              (screen-flash-rect snapshot)

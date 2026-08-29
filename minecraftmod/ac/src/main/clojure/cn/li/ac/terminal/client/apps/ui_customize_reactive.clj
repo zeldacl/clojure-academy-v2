@@ -1,8 +1,8 @@
 (ns cn.li.ac.terminal.client.apps.ui-customize-reactive
   "Presentation Runtime HUD-position editor.
 
-   Position data remains in the gameplay config registry; the Screen itself
-   is now a typed application ViewModel rather than an XML/reactive tree."
+   AC owns position validation and persistence; Presentation owns selection,
+   text-input focus and retained rendering."
   (:require [cn.li.ac.config.common :as config-common]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.gui.presentation-application :as application]
@@ -22,34 +22,78 @@
     (platform/call-adapter fw-atom :config-persist :persist!
                            config-common/gameplay-domain config-key position)))
 
-(defn- lines []
-  (mapv (fn [{:keys [id]}]
-          (let [[x y] (gameplay/hud-position id)]
+(defn- position [element]
+  (gameplay/hud-position (:id element)))
+
+(defn- items []
+  (mapv (fn [{:keys [id] :as element}]
+          (let [[x y] (position element)]
             {:label (format "%s: %.0f, %.0f" (name id) (double x) (double y))
-             :id id}))
+             :action-label "Select"
+             :element-id id
+             :element element}))
         elements))
 
+(defn- parse-coordinate [value]
+  (try
+    (let [n (Double/parseDouble (str value))]
+      (when (and (Double/isFinite n) (<= -4096.0 n 4096.0)) n))
+    (catch Throwable _ nil)))
+
+(defn- snapshot [ctx current]
+  (let [idx (int (or (:selected @ctx) 0))
+        element (nth elements (max 0 (min (dec (count elements)) idx)))
+        [x y] (position element)]
+    {:title "Customize UI"
+     :items (items)
+     :selected idx
+     :edit-x (or (:edit-x current) (str x))
+     :edit-y (or (:edit-y current) (str y))
+     :reset-label "Reset position"
+     :status (str "Selected " (name (:id element)))}))
+
 (defn open! []
-  (let [state {:title "Customize UI"
-               :lines (lines)
-               :status "Select an element with left/right, Enter to reset"
-               :button-left {:label "Previous" :visible? true}
-               :button-right {:label "Next" :visible? true}
-               :selected 0}]
+  (let [ctx (atom {:selected 0})
+        [x y] (position (first elements))
+        initial {:title "Customize UI" :items (items) :selected 0
+                 :edit-x (str x) :edit-y (str y) :reset-label "Reset position"
+                 :status "Select an element and edit X/Y"}]
     (application/mount!
       "application/ui-customize"
       "Customize UI"
-      state
+      initial
       (fn [action current]
-        (let [idx (int (or (:selected current) 0))
-              next-idx (case action
-                         :application/left (mod (dec idx) (count elements))
-                         :application/right (mod (inc idx) (count elements))
-                         idx)
-              element (nth elements next-idx)]
-          (when (= action :application/activate)
-            (persist! (:config-key element) [0.0 0.0]))
-          {:selected next-idx
-           :lines (lines)
-           :status (str "Selected " (name (:id element))) }))
-      nil)))
+        (let [selected-item (:selected-item current)
+              item-index (int (or (:selected-index current) (:selected @ctx) 0))
+              selected (or (:element selected-item)
+                           (nth elements (max 0 (min (dec (count elements)) item-index))))
+              [old-x old-y] (position selected)
+              x-value (parse-coordinate (:edit-x current))
+              y-value (parse-coordinate (:edit-y current))]
+          (case action
+            :customize/select
+            (do (reset! ctx {:selected item-index})
+                (let [[sx sy] (position selected)]
+                  {:title "Customize UI" :items (items) :selected item-index
+                   :edit-x (str sx) :edit-y (str sy)
+                   :reset-label "Reset position"
+                   :status (str "Selected " (name (:id selected)))}))
+
+            :customize/x-submit
+            :customize/y-submit
+            (let [x* (or x-value old-x) y* (or y-value old-y)]
+              (persist! (:config-key selected) [x* y*])
+              (snapshot ctx (assoc current :edit-x (str x*) :edit-y (str y*))))
+
+            :customize/x-change
+            :customize/y-change
+            (snapshot ctx current)
+
+            :customize/reset
+            (do (persist! (:config-key selected) [0.0 0.0])
+                (snapshot ctx (assoc current :edit-x "0.0" :edit-y "0.0")))
+
+            (snapshot ctx current))))
+      nil
+      :screen
+      :academy.app/ui-customize)))

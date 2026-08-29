@@ -5,6 +5,7 @@
             [cn.li.ability.compose :as ability-compose]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
+            [cn.li.ac.terminal.client.apps.media-reactive :as media]
             [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
@@ -161,6 +162,7 @@
                  :dispatch-action! (fn [_ _ current] current)
                  :on-close nil}))
      :frame! (fn [frame-id _delta-seconds width height]
+               (media/refresh-active!)
                (when-let [refresh! (:refresh! @combat-hud*)]
                  (refresh! width height {}))
                (when-let [refresh! (:refresh! @terminal*)]

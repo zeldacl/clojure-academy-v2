@@ -33,7 +33,9 @@
       "academy:terminal" :academy.app/terminal
       "academy:application" :academy.app/application
       "academy:tutorial" :academy.app/tutorial
+      "academy:ui_customize" :academy.app/ui-customize
       "academy:settings" :academy.app/settings
+      "academy:media" :academy.app/media
       "academy:machine_container" :academy.app/machine-container
       "academy:developer" :academy.app/developer
       "academy:ability_interferer" :academy.app/ability-interferer

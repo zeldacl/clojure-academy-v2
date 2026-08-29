@@ -23,7 +23,9 @@
                    (let [current (cond-> (assoc current :selected-target (:target payload))
                                    (contains? payload :item)
                                    (assoc :selected-item (:item payload)
-                                          :selected-index (:index payload)))
+                                          :selected-index (:index payload))
+                                   (contains? payload :key-code)
+                                   (assoc :key-code (:key-code payload)))
                          result (dispatch-action! action current)]
                      (if (map? result) result current)))
          vm (presentation/mount-view! {:view-id view-id

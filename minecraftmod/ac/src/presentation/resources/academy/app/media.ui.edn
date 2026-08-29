@@ -1,0 +1,59 @@
+{:view/id :academy.app/media
+ :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :items :vector :selected :number :status :string
+                :current-track :string :progress :number :elapsed :string :duration :string
+                :volume :number}
+ :root {:type :column :key :media/root :layout {:x 12 :y 12 :width 296 :height 216}
+        :children [{:type :text :key :media/title :layout {:height 18}
+                    :bind {:text [:state :title]} :semantics {:role :heading}}
+                   {:type :scroll :key :media/tracks :layout {:height 100}
+                    :bind {:items [:state :items]} :semantics {:role :list}
+                    :children [{:type :row :layout {:height 18}
+                                :children [{:type :text :layout {:width 232}
+                                            :bind {:text [:item :label]}}
+                                           {:type :button :layout {:width 56 :height 16}
+                                            :bind {:text [:item :action-label]}
+                                            :on {:activate :media/play}
+                                            :semantics {:role :button}}]}]}
+                   {:type :text :key :media/current :bind {:text [:state :current-track]}}
+                   {:type :progress :key :media/progress :layout {:height 6}
+                    :bind {:value [:state :progress]} :semantics {:role :progress}}
+                   {:type :text :key :media/time
+                    :bind {:text [:state :elapsed]}}
+                   {:type :text :key :media/volume
+                    :bind {:text [:state :volume]}}
+                   {:type :row :key :media/actions :layout {:height 20}
+                    :children [{:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :button-left]}
+                                :on {:activate :media/previous}
+                                :semantics {:role :button}}
+                               {:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :button-right]}
+                                :on {:activate :media/next}
+                                :semantics {:role :button}}
+                               {:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :play-pause]}
+                                :on {:activate :media/toggle}
+                                :semantics {:role :button}}
+                               {:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :stop]}
+                                :on {:activate :media/stop}
+                                :semantics {:role :button}}]}
+                   {:type :row :key :media/seek-volume :layout {:height 20}
+                    :children [{:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :seek-back]}
+                                :on {:activate :media/seek-back}
+                                :semantics {:role :button}}
+                               {:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :seek-forward]}
+                                :on {:activate :media/seek-forward}
+                                :semantics {:role :button}}
+                               {:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :volume-down]}
+                                :on {:activate :media/volume-down}
+                                :semantics {:role :button}}
+                               {:type :button :layout {:width 64 :height 18}
+                                :bind {:text [:state :volume-up]}
+                                :on {:activate :media/volume-up}
+                                :semantics {:role :button}}]}
+                   {:type :text :key :media/status :bind {:text [:state :status]}}]}}
