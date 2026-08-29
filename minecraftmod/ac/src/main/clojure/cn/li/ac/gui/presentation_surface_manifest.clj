@@ -18,7 +18,7 @@
    {:id :ui-customize :artifact :academy.app/ui-customize :controller 'cn.li.ac.terminal.client.apps.ui-customize-reactive/open!}
    {:id :skill-tree :artifact :academy.app/skill-tree :controller 'cn.li.ac.terminal.client.apps.skill-tree/open!}
    {:id :preset-editor :artifact :academy.app/preset-editor :controller 'cn.li.ac.ability.client.screens.preset-editor-reactive/open!}
-   {:id :portable-developer :artifact :academy.app/application :controller 'cn.li.ac.item.developer-portable-reactive/open!}
+   {:id :portable-developer :artifact :academy.app/developer :controller 'cn.li.ac.item.developer-portable-reactive/open!}
    {:id :install-effect :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.install-effect-reactive/open!'} 
    {:id :location-teleport :artifact :academy.app/location-teleport :controller 'cn.li.ac.content.ability.teleporter.location-teleport-presentation/open!'}])
 
