@@ -112,39 +112,70 @@
         :rgba (unchecked-int 0x66FFFFFF)}])))
 
 (defn- skill-slot-items
-  "Project HUD skill-slot identity, icon, key hint and cooldown into neutral
-   composite primitives. AC remains responsible for all cooldown semantics."
+  "Project the complete KeyHintUI slot into neutral composite primitives.
+   Coordinates are supplied by the AC HUD projection; this function only
+   expands the shared key-cap, icon backplate, icon, cooldown wipe and labels."
   [skills]
-  (vec
-    (mapcat
-      (fn [{:keys [x y skill-icon skill-name key-label cooldown-remaining
-                   cooldown-total in-cooldown alpha]}]
-        (let [x (double (or x 0.0))
-              y (double (or y 0.0))
-              icon-size 18.0
-              ratio (if (and in-cooldown (pos? (double (or cooldown-total 0))))
-                       (max 0.0 (min 1.0 (/ (double (or cooldown-remaining 0))
-                                             (double cooldown-total))))
-                       0.0)
-              tint (argb255 [255 255 255]
-                            (Math/round (* 255.0 (double (or alpha 1.0)))))]
-          (concat
-            [{:kind :quad :x x :y y :w icon-size :h icon-size
-              :rgba (unchecked-int 0x66202020)}]
-            (when skill-icon
-              [{:kind :image :src skill-icon :x x :y y :w icon-size :h icon-size
-                :rgba tint}])
-            (when (pos? ratio)
-              [{:kind :quad :x x :y y :w icon-size :h (* icon-size ratio)
-                :rgba (unchecked-int 0xAA000000)}])
-            [{:kind :text :text (str (or key-label "") " " (or skill-name ""))
-              :x (+ x icon-size 4.0) :y (+ y 4.0) :rgba tint}]
-            (when (pos? ratio)
-              [{:kind :text :text (format "%.1fs" (/ (double (or cooldown-remaining 0)) 20.0))
-                :x (+ x icon-size 4.0) :y (+ y 13.0)
-                :rgba (unchecked-int 0xFFFFCC66)}]))))
-      (or skills []))))
-
+  (let [scale 0.23
+        icon-size (* 62.0 scale)
+        key-cap-size (* 70.0 scale)]
+    (vec
+      (mapcat
+        (fn [{:keys [x y skill-icon skill-name key-label cooldown-remaining
+                     cooldown-total in-cooldown alpha glow-color sin-effect?]}]
+          (let [x (double (or x 0.0))
+                y (double (or y 0.0))
+                key-cap-src (case key-label
+                              :mouse-left "academy:textures/guis/key_hint/mouse_left.png"
+                              :mouse-right "academy:textures/guis/key_hint/mouse_right.png"
+                              (when (seq (str (or key-label "")))
+                                (if (<= (count (str key-label)) 2)
+                                  "academy:textures/guis/key_hint/key_short.png"
+                                  "academy:textures/guis/key_hint/key_long.png")))
+                key-text (if (keyword? key-label) "" (str (or key-label "")))
+                state-alpha (double (or alpha 1.0))
+                icon-alpha (if in-cooldown 0.4 state-alpha)
+                tint (argb255 [255 255 255]
+                              (Math/round (* 255.0 (max 0.0 (min 1.0 icon-alpha)))))
+                ratio (if (and in-cooldown (pos? (double (or cooldown-total 0))))
+                        (max 0.0 (min 1.0 (/ (double (or cooldown-remaining 0))
+                                              (double cooldown-total))))
+                        0.0)
+                dim-tint (unchecked-int 0xFF363636)
+                glow-rgba (when (and sin-effect? glow-color) (argb255 glow-color))]
+            (concat
+              [{:kind :image :src "academy:textures/guis/key_hint/back.png"
+                :x (- x (* 99.0 scale)) :y (- y (* 10.0 scale))
+                :w (* 185.0 scale) :h (* 83.0 scale) :rgba tint}
+               {:kind :image :src "academy:textures/guis/key_hint/icon_back.png"
+                :x (- x (* 5.0 scale)) :y (- y (* 5.0 scale))
+                :w (* 72.0 scale) :h (* 72.0 scale) :rgba tint}]
+              (when key-cap-src
+                [{:kind :image :src key-cap-src
+                  :x (- x (* 75.0 scale)) :y y
+                  :w key-cap-size :h key-cap-size
+                  :rgba (if (or in-cooldown (< state-alpha 1.0)) dim-tint
+                            (unchecked-int 0xFFFFFFFF))}])
+              (when (seq key-text)
+                [{:kind :text :text key-text
+                  :x (- x (* 50.0 scale)) :y (+ y (* 17.0 scale))
+                  :rgba (unchecked-int 0xFF194246)}])
+              (when glow-rgba
+                [{:kind :quad :x (- x 1.0) :y (- y 1.0) :w (+ icon-size 2.0) :h 1.0 :rgba glow-rgba}
+                 {:kind :quad :x (- x 1.0) :y (+ y icon-size) :w (+ icon-size 2.0) :h 1.0 :rgba glow-rgba}
+                 {:kind :quad :x (- x 1.0) :y y :w 1.0 :h icon-size :rgba glow-rgba}
+                 {:kind :quad :x (+ x icon-size) :y y :w 1.0 :h icon-size :rgba glow-rgba}])
+              (when skill-icon
+                [{:kind :image :src skill-icon :x x :y y :w icon-size :h icon-size
+                  :rgba tint}])
+              (when (pos? ratio)
+                [{:kind :quad :x x :y (+ y (* icon-size (- 1.0 ratio)))
+                  :w icon-size :h (* icon-size ratio)
+                  :rgba (unchecked-int 0x4D999999)}
+                 {:kind :text :text (format "%.1fs" (/ (double (or cooldown-remaining 0)) 20.0))
+                  :x (+ x icon-size 4.0) :y (+ y 4.0)
+                  :rgba (unchecked-int 0xFFFFFFFF)}]))))
+        (or skills [])))))
 (defn- crosshair-items
   "Render reflection crosshair state as a small marker rather than a color map."
   [{:keys [x y intensity]}]

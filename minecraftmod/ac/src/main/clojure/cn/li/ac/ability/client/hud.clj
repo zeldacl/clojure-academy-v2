@@ -151,8 +151,10 @@
           (when skill-id
             {:type :skill-slot
              :idx idx
-             :x (- screen-width 120)
-             :y (+ (- screen-height 100) (* idx 22))
+             :x (+ (- (double screen-width) (* 140.0 0.23))
+                   (* -200.0 0.23) (* 221.0 0.23))
+             :y (+ (- (/ (double screen-height) 2.0) (* 210.0 0.23 0.5))
+                   30.0 (* idx 92.0 0.23) (* 10.0 0.23))
              ;; Upstream ClientHandler.keyIDsInit default: MOUSE_LEFT,
              ;; MOUSE_RIGHT, R, F. Mouse slots carry a keyword (no text glyph
              ;; upstream draws a mouse icon instead — see KeyHintUI.drawSingle
