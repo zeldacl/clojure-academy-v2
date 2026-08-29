@@ -1,0 +1,49 @@
+{:view/id :academy.app/preset-editor
+ :host {:kind :screen :design-width 420 :design-height 260 :scale-policy :fit}
+ :state-schema {:title :string :preset-label :string :active-label :string
+                :preset-tabs :vector :slots :vector :available-skills :vector
+                :selected-slot :number :status :string :button-left :string :button-right :string}
+ :root {:type :column :key :preset/root :layout {:x 10 :y 10 :width 400 :height 240}
+        :children [{:type :text :key :preset/title :layout {:height 18}
+                    :bind {:text [:state :title]} :semantics {:role :heading}}
+                   {:type :row :key :preset/tabs :layout {:height 18}
+                    :children [{:type :repeater :layout {:width 280}
+                                :bind {:items [:state :preset-tabs]}
+                                :children [{:type :button :layout {:width 68 :height 16}
+                                            :bind {:text [:item :action-label]}
+                                            :on {:activate :preset/select-tab}
+                                            :semantics {:role :button}}]}
+                               {:type :text :bind {:text [:state :active-label]}}]}
+                   {:type :row :key :preset/navigation :layout {:height 18}
+                    :children [{:type :button :layout {:width 84 :height 16}
+                                :bind {:text [:state :button-left]}
+                                :on {:activate :preset/previous}
+                                :semantics {:role :button}}
+                               {:type :text :bind {:text [:state :preset-label]}}
+                               {:type :button :layout {:width 84 :height 16}
+                                :bind {:text [:state :button-right]}
+                                :on {:activate :preset/next}
+                                :semantics {:role :button}}]}
+                   {:type :scroll :key :preset/slots :layout {:height 74}
+                    :bind {:items [:state :slots]} :semantics {:role :list}
+                    :children [{:type :row :layout {:height 18}
+                                :children [{:type :button :layout {:width 260 :height 16}
+                                            :bind {:text [:item :label]}
+                                            :on {:activate :preset/select-slot}
+                                            :semantics {:role :button}}
+                                           {:type :button :layout {:width 80 :height 16}
+                                            :bind {:text [:item :remove-label]}
+                                            :on {:activate :preset/remove-slot}
+                                            :semantics {:role :button}}]}]}
+                   {:type :text :key :preset/available-title :layout {:height 18}
+                    :bind {:text [:state :status]}}
+                   {:type :scroll :key :preset/available :layout {:height 60}
+                    :bind {:items [:state :available-skills]} :semantics {:role :list}
+                    :children [{:type :row :layout {:height 18}
+                                :children [{:type :text :layout {:width 300}
+                                            :bind {:text [:item :label]}}
+                                           {:type :button :layout {:width 80 :height 16}
+                                            :bind {:text [:item :action-label]}
+                                            :on {:activate :preset/assign}
+                                            :semantics {:role :button}}]}]}
+                   {:type :text :key :preset/status :bind {:text [:state :status]}}]}}

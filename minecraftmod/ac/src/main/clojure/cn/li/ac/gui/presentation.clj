@@ -32,6 +32,8 @@
       "academy:combat_hud" :academy.app/combat-hud
       "academy:terminal" :academy.app/terminal
       "academy:application" :academy.app/application
+      "academy:skill_tree" :academy.app/skill-tree
+      "academy:preset_editor" :academy.app/preset-editor
       "academy:tutorial" :academy.app/tutorial
       "academy:ui_customize" :academy.app/ui-customize
       "academy:settings" :academy.app/settings

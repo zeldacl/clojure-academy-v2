@@ -3,7 +3,7 @@
    Presentation Runtime migration: applications launch through the typed
    application ViewModel helper. Their open! fns take no player arg (unused
    in old impls too, aside from settings which ignored it) so launch! wraps them to match the
-   (fn [player]) launcher contract. skill-tree stays on the old path."
+   (fn [player]) launcher contract. skill-tree uses its dedicated Presentation artifact."
   (:require [cn.li.ac.terminal.client.apps.about-reactive :as about]
             [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-transmitter]
             [cn.li.ac.terminal.client.apps.media-reactive :as media]

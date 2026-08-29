@@ -15,7 +15,7 @@
    [cn.li.mcmod.runtime.install :as install]
    [cn.li.mcmod.client.platform-bridge :as client-bridge]
    [cn.li.mcmod.util.log :as log]
-   [cn.li.ac.gui.presentation-application :as application]))
+   [cn.li.ac.gui.presentation :as presentation]))
 
 ;; Forward declares for functions used by widget factory (defined later in file)
 (declare ensure-screen-player-state! swap-screen-state! on-mouse-move handle-screen-click!)
@@ -314,55 +314,134 @@
 (defn close-screen! [owner]
   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner)))
 
+(defn- skill-icon-src [icon]
+  (if (and (string? icon) (seq icon) (not (.contains ^String icon ":")))
+    (modid/namespaced-path icon)
+    icon))
+
+(defn- skill-tree-composite [nodes connections selected]
+  (let [scale-x 0.62 scale-y 0.52
+        node-items
+        (mapcat (fn [{:keys [skill-id skill-name skill-icon x y learned exp]}]
+                  (let [px (+ 12.0 (* scale-x (double (or x 0.0))))
+                        py (+ 8.0 (* scale-y (double (or y 0.0))))
+                        selected? (= skill-id selected)
+                        color (if selected? 0xFF68B5FF (if learned 0xFF65D58A 0xFF626A78))]
+                    (vec (remove nil?
+                           [{:kind :quad :x px :y py :w 18 :h 18 :rgba color}
+                            (when skill-icon {:kind :image :src (skill-icon-src skill-icon) :x (+ px 2) :y (+ py 2) :w 14 :h 14})
+                            {:kind :text :text (str (or skill-name (name skill-id)) " "
+                                                    (format "%.0f%%" (* 100.0 (double (or exp 0.0)))))
+                             :x (+ px 21) :y (+ py 4) :rgba 0xFFFFFFFF}]))))
+                nodes)
+        connection-items
+        (mapcat (fn [{:keys [from-x from-y to-x to-y]}]
+                  (let [x1 (+ 21.0 (* scale-x (double (or from-x 0.0))))
+                        y1 (+ 17.0 (* scale-y (double (or from-y 0.0))))
+                        x2 (+ 21.0 (* scale-x (double (or to-x 0.0))))
+                        y2 (+ 17.0 (* scale-y (double (or to-y 0.0))))
+                        x (min x1 x2) y (min y1 y2)
+                        w (max 1.0 (Math/abs (- x2 x1)))
+                        h (max 1.0 (Math/abs (- y2 y1)))]
+                    [{:kind :quad :x x :y y :w w :h h :rgba 0x6688AACC}]))
+                connections)]
+    (vec (concat [{:kind :quad :x 4 :y 4 :w 300 :h 108 :rgba 0xAA10151F}]
+                 connection-items node-items))))
+
+(defn- selected-node [nodes selected]
+  (some #(when (= selected (:skill-id %)) %) nodes))
+
 (defn- presentation-state [owner]
   (let [data (or (build-screen-render-data owner) {})
         info (:ability-info data)
         nodes (vec (:skill-nodes data))
+        selected (:selected-skill (screen-state-snapshot owner))
+        selected-data (selected-node nodes selected)
         skill-items (mapv (fn [{:keys [skill-id learned exp skill-name can-learn]}]
-                            {:kind :skill
-                             :skill-id skill-id
+                            {:kind :skill :skill-id skill-id
                              :label (str (if learned "[learned] " "[ ] ")
-                                         (or skill-name (name skill-id))
-                                         " " (format "%.0f%%" (* 100.0 (double (or exp 0.0)))))
-                             :action-label (if learned "View" (if can-learn "Learn" "Locked"))})
+                                         (or skill-name (name skill-id)) " "
+                                         (format "%.0f%%" (* 100.0 (double (or exp 0.0)))))
+                             :action-label (if (= skill-id selected) "Learn/View" "Select")
+                             :learned? (boolean learned) :can-learn? (boolean can-learn)})
                           nodes)
         level-item (when (get info :can-level-up)
-                     [{:kind :level-up :label "Ability level-up available" :action-label "Level Up"}])]
-    {:lines [{:label (str "Category: " (or (:category-name info) "unknown"))}
-             {:label (str "Level: " (or (:level info) 0))}]
+                     [{:kind :level-up :label "Ability level-up available"
+                       :action-label "Level Up"}])
+        detail (if selected-data
+                 {:title (str (:skill-name selected-data))
+                  :level (str "Required level: " (:skill-level selected-data))
+                  :description (str (or (:skill-description selected-data) ""))
+                  :status (if (:learned selected-data) "Learned"
+                              (if (:can-learn selected-data) "Ready to learn" "Locked"))
+                  :learn-label (if (:learned selected-data) "Learned" "Learn")}
+                 {:title "Select a skill" :level "" :description ""
+                  :status "Select a node to view details" :learn-label "Learn"})]
+    {:title "Skill Tree"
+     :category (str "Category: " (or (:category-name info) "unknown"))
+     :level (str "Level: " (or (:level info) 0))
      :items (vec (concat level-item skill-items))
-     :status "Select a skill, then activate again to learn it"
-     :button-left {:label "Refresh" :visible? true}
-     :button-right {:label "Refresh" :visible? true}}))
+     :selected (double (or (some->> skill-items
+                                    (keep-indexed (fn [i item]
+                                                   (when (= (:skill-id item) selected) i)))
+                                    first) 0))
+     :selected-skill (str (or selected ""))
+     :detail detail
+     :composite-list (skill-tree-composite nodes (:connections data) selected)
+     :status "Select a skill; activate it again to learn"
+     :button-left "Refresh" :button-right "Refresh"}))
+
+(defn- request-learn! [owner sid callback]
+  (let [st (screen-state-snapshot owner)
+        ok (screen-owner-key owner)
+        ps (and (:player-uuid st) (get-screen-player-state ok))
+        ad (:ability-data ps)
+        dt (or (:developer-type (:learn-context st)) :normal)
+        checks (when ad (check-learn-conditions sid ad (:level ad) dt))
+        ctx (:learn-context st)
+        extra (when (and ctx (every? number? [(:pos-x ctx) (:pos-y ctx) (:pos-z ctx)]))
+                (select-keys ctx [:pos-x :pos-y :pos-z]))]
+    (when (and ps (:pass? checks))
+      (api/req-learn-skill! owner sid extra callback))))
+(defn- present! [mount owner]
+  (when-let [present (:present! mount)]
+    (present (presentation-state owner))))
 
 (defn open-presentation! [player-uuid & [learn-context]]
   (let [owner (read-model/local-client-owner player-uuid "skill-tree")
         mount* (atom nil)]
     (open-screen! owner learn-context)
-    (let [vm (application/mount!
-               (str "application/skill-tree/" player-uuid)
-               "Skill Tree"
-               (presentation-state owner)
-               (fn [action current]
-                 (if (= action :application/activate)
-                   (let [item (:selected-item current)
-                         sid (:skill-id item)]
-                     (cond
-                       (= :level-up (:kind item))
-                       (api/req-level-up! owner
-                         (fn [_]
-                           (when-let [mounted @mount*]
-                             ((:refresh! mounted) (presentation-state owner)))))
-                       (and (= :skill (:kind item)) sid)
-                       (if (= sid (:selected-skill (screen-state-snapshot owner)))
-                         (api/req-learn-skill! owner sid nil
-                           (fn [_]
-                             (when-let [mounted @mount*]
-                               ((:refresh! mounted) (presentation-state owner)))))
-                         (on-skill-click owner sid))))
-                   nil)
-                 (assoc (presentation-state owner) :selected-item nil))
-               #(close-screen! owner))]
+    (let [vm (presentation/mount-view!
+               {:view-id :academy.app/skill-tree :host-kind :screen
+                :state (presentation-state owner)
+                :dispatch-action!
+                (fn [action payload _current]
+                  (let [item (:item payload)
+                        selected (:selected-skill (screen-state-snapshot owner))
+                        sid (or (:skill-id item) selected)
+                        refresh #(present! @mount* owner)]
+                    (case action
+                      :skill-tree/select
+                      (do (on-skill-click owner sid) (presentation-state owner))
+                      :skill-tree/learn
+                      (if (= :level-up (:kind item))
+                        (do (api/req-level-up! owner (fn [_] (refresh)))
+                            (presentation-state owner))
+                        (do (when sid
+                            (if (= sid selected)
+                              (let [node (some #(when (= sid (:skill-id %)) %)
+                                               (:skill-nodes (or (build-screen-render-data owner) {})))]
+                                (when (:can-learn node)
+                                  (request-learn! owner sid (fn [_] (refresh)))))
+                              (on-skill-click owner sid)))
+                          (presentation-state owner)))
+                      :skill-tree/refresh
+                      (presentation-state owner)
+                      :skill-tree/level-up
+                      (do (api/req-level-up! owner (fn [_] (refresh)))
+                          (presentation-state owner))
+                      (presentation-state owner))))
+                :on-close #(close-screen! owner)})]
       (reset! mount* vm)
       vm)))
 ;; ============================================================================
