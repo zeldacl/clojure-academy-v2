@@ -37,7 +37,6 @@
                    (let [value (get container key default)]
                      (if (instance? clojure.lang.IDeref value) @value value)))]
     (assoc container
-           :presentation-info-area (atom nil)
            :presentation-form-state (atom {:node-name (str (value-of :ssid ""))
                                 :password (str (value-of :password ""))})
            :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145 :width 52 :height 18 :label "Save"}

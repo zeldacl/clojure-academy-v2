@@ -86,7 +86,6 @@
              :presentation-network (atom {:initialized false :ssid "" :password ""
                                            :owner "Unknown" :load 0 :max-capacity 16
                                            :range 64 :bandwidth 100})
-             :presentation-info-area (atom nil)
              :presentation-form-state (atom {:ssid nil :password nil})
              :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
                                      :width 52 :height 18 :label "Init/Refresh"}
@@ -226,13 +225,6 @@
 ;; ============================================================================
 ;; Reactive rendering bindings
 ;; ============================================================================
-
-(defn attach-binds! [r container menu _player _signals]
-  ;; Carry the live Minecraft menu on the container so the info-area's server
-  ;; requests (gather-info/init/change-ssid/change-password) can resolve the
-  ;; container-id — the container map doesn't carry it on its own (same pattern
-  ;; as wireless_node/send-link-query!'s (assoc container :minecraft-container)).
-  (matrix-info/attach! r (assoc container :minecraft-container menu) _player))
 
 (defn create-screen [container menu player]
   (let [screen (presentation-container/presentation-screen-data

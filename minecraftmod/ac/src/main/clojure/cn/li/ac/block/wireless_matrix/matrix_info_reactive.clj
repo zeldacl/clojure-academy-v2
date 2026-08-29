@@ -62,25 +62,3 @@
   "Build the declarative AC InfoArea projection from network data and policy."
   [data is-owner?]
   (info-area/snapshot data {:owner? is-owner?}))
-
-(defn attach!
-  ([model initial]
-   (info-area/attach! model initial))
-  ([container _menu _player]
-   (let [slot (:presentation-info-area container)
-         data (if-let [network (:presentation-network container)] @network {})
-         model (info-area/attach! (when slot @slot)
-                                  (info-area-snapshot data false))]
-     (when slot (reset! slot model))
-     model)))
-
-(defn rebuild!
-  ([model next-snapshot]
-   (info-area/rebuild! model next-snapshot))
-  ([container data is-owner?]
-   (let [slot (:presentation-info-area container)
-         model (when slot @slot)
-         next-snapshot (info-area-snapshot data is-owner?)
-         model (info-area/rebuild! model next-snapshot)]
-     (when slot (reset! slot model))
-     model)))
