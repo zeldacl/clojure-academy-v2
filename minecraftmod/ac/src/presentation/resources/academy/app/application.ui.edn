@@ -13,6 +13,6 @@
                                 :children [{:type :text :layout {:width 220} :bind {:text [:item :label]}}
                                            {:type :button :layout {:width 72 :height 16} :bind {:text [:item :action-label]} :on {:activate :application/activate} :semantics {:role :button}}]}]}
                    {:type :text :key :application/status :bind {:text [:state :status]}}
-                   {:type :text-input :key :application/input :layout {:height 20} :bind {:text [:state :input]} :semantics {:role :textbox}}
+                   {:type :text-input :key :application/input :layout {:height 20} :bind {:text [:state :input]} :on {:change :application/input :submit :application/input} :semantics {:role :textbox :field :application-input}}
                    {:type :progress :key :application/scroll :layout {:height 6} :bind {:value [:state :scroll]} :semantics {:role :progress}}
                    {:type :portal :key :application/modal :bind {:visible [:state :modal]} :semantics {:role :dialog}}]}}
