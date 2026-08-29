@@ -99,15 +99,17 @@
     :texture           ??override texture path (default: effects/arc/line_segment.png)
     :origin-offset     ??rigid world-space translation applied to the whole arc
                          (the caller's ViewOptimize-style hand offset)
-    :seed              ??per-arc seed for the fork layout (default 0)"
-  [cam-pos vertices pattern {:keys [life-ratio texture origin-offset seed]
-                             :or {life-ratio 0.5 seed 0}}]
+    :seed              ??per-arc seed for the fork layout (default 0)
+    :alpha-scale       ??multiplier on the segment alpha (branches render at
+                         upstream's 0.9)"
+  [cam-pos vertices pattern {:keys [life-ratio texture origin-offset seed alpha-scale]
+                             :or {life-ratio 0.5 seed 0 alpha-scale 1.0}}]
   (let [texture     (or texture default-zigzag-texture)
         shift       (if origin-offset
                       (fn [^V3 p] (vec3/v+ p origin-offset))
                       identity)
         lr          (double life-ratio)
-        base-alpha  (arc/life-fade-alpha 255 lr)
+        base-alpha  (* (double alpha-scale) (arc/life-fade-alpha 255 lr))
         color       (white-argb base-alpha)
         width       (double (or (:width pattern) 0.1))
         segment-count (dec (count vertices))
@@ -171,27 +173,45 @@
         (when (pos? fork-count)
           (let [beam-vec (vec3/v- end start)
                 beam-len (vec3/vlen beam-vec)
-                dir (vec3/vnorm beam-vec)
+                beam-dir (vec3/vnorm beam-vec)
                 perp1 (beam-right-axis start end cam-pos)
                 perp2 (if (> (vec3/vlen perp1) 0.01)
-                        (vec3/vnorm (vec3/vcross dir perp1))
+                        (vec3/vnorm (vec3/vcross beam-dir perp1))
                         vec3/unit-x)
                 fork-rng (java.util.Random. (long (hash [seed :forks])))
-                n (inc (.nextInt fork-rng fork-count))]
+                n (inc (.nextInt fork-rng fork-count))
+                branch-length (* beam-len fork-length)
+                ;; Upstream branches (ArcFactory.handleSingle) run roughly
+                ;; ALONG the bolt — dir = (displaced midpoint - segment start)
+                ;; x lengthShrink — and are refined into jagged sub-arcs. The
+                ;; port's straight sticks in the perpendicular plane read as
+                ;; stray horizontal beams sticking out of the bolt; re-render
+                ;; each fork as a small meandering bolt instead (same
+                ;; single-quad strip, width 0.7x and alpha 0.9x like
+                ;; widthShrink/alphaShrink).
+                branch-pattern (assoc pattern
+                                      :fork-count 0
+                                      :width (* width 0.7))]
             (mapcat (fn [_]
                       (let [t (.nextDouble fork-rng)
                             mid (vec3/v+ start (vec3/v* beam-vec t))
                             angle (* fork-angle (- (* 2.0 (.nextDouble fork-rng)) 1.0))
-                            rot-dir (vec3/v+ (vec3/v* perp1 (Math/cos angle))
-                                        (vec3/v* perp2 (Math/sin angle)))
-                            fork-end (vec3/v+ mid (vec3/v* rot-dir (* beam-len fork-length)))
-                            fork-w (* width 0.7)
-                            fr (beam-right-axis mid fork-end cam-pos)
-                            fo (vec3/v* fr fork-w)]
-                        [(quad-op texture
-                           (vec3/v+ mid fo) (vec3/v- mid fo)
-                           (vec3/v- fork-end fo) (vec3/v+ fork-end fo)
-                           (white-argb (* 0.9 base-alpha)))]))
+                            phi (* 2.0 Math/PI (.nextDouble fork-rng))
+                            tilt (vec3/v+ (vec3/v* perp1 (Math/cos phi))
+                                          (vec3/v* perp2 (Math/sin phi)))
+                            dir (vec3/vnorm (vec3/v+ (vec3/v* beam-dir (Math/cos angle))
+                                                     (vec3/v* tilt (Math/sin angle))))
+                            fork-end (vec3/v+ mid (vec3/v* dir branch-length))
+                            branch-seed (.nextLong fork-rng)
+                            vertices (arc/generate-zigzag-segments
+                                      mid fork-end
+                                      {:segments 6
+                                       :amplitude 0.3
+                                       :seed (long branch-seed)})]
+                        (zigzag-arc-ops cam-pos vertices branch-pattern
+                                        {:life-ratio lr
+                                         :seed (long branch-seed)
+                                         :alpha-scale 0.9})))
                     (range n))))]
     (vec (concat seg-quads fork-quads))))
 
