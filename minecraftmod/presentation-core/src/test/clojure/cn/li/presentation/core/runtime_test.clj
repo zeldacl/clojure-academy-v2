@@ -243,3 +243,27 @@
     (runtime/dispatch! rt mount {:type :pointer :event-type :drag
                                   :x 75 :y 5 :drag-x 50})
     (is (= 0.75 (double (get-in @seen [1 :value]))))))
+
+(deftest runtime-ignores-hidden-and-clipped-interaction-nodes
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/visibility
+                  :nodes {:type :column :layout {:width 100 :height 60}
+                          :children [{:type :button :key :hidden :layout {:height 20}
+                                      :bind {:visible [:state :hidden?]}
+                                      :on {:activate :demo/hidden :hover :demo/hidden-hover}}
+                                     {:type :scroll :key :list :layout {:height 20}
+                                      :bind {:items [:state :items]}
+                                      :children [{:type :button :layout {:height 10}
+                                                  :on {:activate :demo/item :hover :demo/item-hover}}]}]}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {:hidden? false :items [{:id 1} {:id 2} {:id 3}]}
+                                  :reduce (fn [state action payload]
+                                            (swap! seen conj [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 60 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 10})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 55 :button 0})
+    (is (not-any? #(#{:demo/hidden :demo/hidden-hover :demo/item :demo/item-hover} (first %)) @seen))))

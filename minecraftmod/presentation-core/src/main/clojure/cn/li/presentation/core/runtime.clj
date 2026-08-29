@@ -203,31 +203,41 @@
    (hit-scroll node parent {:state {}} px py))
   ([node parent env px py]
    (let [rect (node-rect parent node)
-         type (:type node)]
-     (or (when (#{:scroll :grid :repeater} type)
-           (let [items (collection-items env node)
-                 templates (vec (:children node))
-                 item-rects (collection-item-rects rect node items env)]
-             (some (fn [[item item-rect]]
-                     (some #(hit-scroll % item-rect (assoc env :item item) px py)
-                           templates))
-                   (map vector items item-rects))))
-         (when (and (= :scroll type) (point-in-rect? rect px py))
-           {:key (:key node) :rect rect
-            :max-offset (let [items (collection-items env node)
-                              template (or (first (:children node)) {:layout {}})
-                              extent (layout-dimension (get-in template [:layout :height])
-                                                       (/ (:height rect) (max 1 (count items))))]
-                          (float (max 0.0 (- (* extent (count items)) (:height rect)))) )})
-         (let [children (:children node)
-               direction (or (get-in node [:layout :direction])
-                             (when (= :row type) :row)
-                             (when (= :column type) :column))
-               child-rects* (if direction (child-rects rect direction children)
-                              (mapv (constantly rect) children))]
-           (some (fn [[child child-rect]]
-                   (hit-scroll child child-rect env px py))
-                 (reverse (map vector children child-rects*))))))))
+         type (:type node)
+         visible (bound-value env node :visible)]
+     (when (or (nil? visible) (boolean visible))
+       (or (when (and (= :scroll type) (point-in-rect? rect px py))
+             (let [items (collection-items env node)
+                   templates (vec (:children node))
+                   item-rects (collection-item-rects rect node items env)]
+               (some (fn [[item item-rect]]
+                       (some #(hit-scroll % item-rect (assoc env :item item) px py)
+                             templates))
+                     (map vector items item-rects))))
+           (when (#{:grid :repeater} type)
+             (let [items (collection-items env node)
+                   templates (vec (:children node))
+                   item-rects (collection-item-rects rect node items env)]
+               (some (fn [[item item-rect]]
+                       (some #(hit-scroll % item-rect (assoc env :item item) px py)
+                             templates))
+                     (map vector items item-rects))))
+           (when (and (= :scroll type) (point-in-rect? rect px py))
+             {:key (:key node) :rect rect
+              :max-offset (let [items (collection-items env node)
+                                template (or (first (:children node)) {:layout {}})
+                                extent (layout-dimension (get-in template [:layout :height])
+                                                         (/ (:height rect) (max 1 (count items))))]
+                            (float (max 0.0 (- (* extent (count items)) (:height rect)))) )})
+           (let [children (:children node)
+                 direction (or (get-in node [:layout :direction])
+                               (when (= :row type) :row)
+                               (when (= :column type) :column))
+                 child-rects* (if direction (child-rects rect direction children)
+                                (mapv (constantly rect) children))]
+             (some (fn [[child child-rect]]
+                     (hit-scroll child child-rect env px py))
+                   (reverse (map vector children child-rects*)))))))))
 (declare hit-action)
 (defn- hover-target-key [node env]
   {:id (:id node)
@@ -240,34 +250,47 @@
    (hit-hover node parent {:state {}} px py))
   ([node parent env px py]
    (let [rect (node-rect parent node)
-         type (:type node)]
-     (or (when (#{:scroll :grid :repeater} type)
-           (let [items (collection-items env node)
-                 templates (vec (:children node))
-                 item-rects (collection-item-rects rect node items env)]
-             (some (fn [[index item item-rect]]
-                     (some (fn [template]
-                             (hit-hover template item-rect
-                                        (assoc env :item item :index index)
-                                        px py))
-                           templates))
-                   (map vector (range) items item-rects))))
-         (let [children (:children node)
-               direction (or (get-in node [:layout :direction])
-                             (when (= :row type) :row)
-                             (when (= :column type) :column))
-               child-rects* (if direction (child-rects rect direction children)
-                              (mapv (constantly rect) children))]
-           (some (fn [[child child-rect]]
-                   (hit-hover child child-rect env px py))
-                 (reverse (map vector children child-rects*))))
-         (when (and (point-in-rect? rect px py)
-                    (get-in node [:on :hover]))
-           {:target (hover-target-key node env)
-            :action (get-in node [:on :hover])
-            :payload (cond-> {:target (:key node)}
-                       (contains? env :item)
-                        (assoc :item (:item env) :index (:index env)))})))))
+         type (:type node)
+         visible (bound-value env node :visible)]
+     (when (or (nil? visible) (boolean visible))
+       (or (when (and (= :scroll type) (point-in-rect? rect px py))
+             (let [items (collection-items env node)
+                   templates (vec (:children node))
+                   item-rects (collection-item-rects rect node items env)]
+               (some (fn [[index item item-rect]]
+                       (some (fn [template]
+                               (hit-hover template item-rect
+                                          (assoc env :item item :index index)
+                                          px py))
+                             templates))
+                     (map vector (range) items item-rects))))
+           (when (#{:grid :repeater} type)
+             (let [items (collection-items env node)
+                   templates (vec (:children node))
+                   item-rects (collection-item-rects rect node items env)]
+               (some (fn [[index item item-rect]]
+                       (some (fn [template]
+                               (hit-hover template item-rect
+                                          (assoc env :item item :index index)
+                                          px py))
+                             templates))
+                     (map vector (range) items item-rects))))
+           (let [children (:children node)
+                 direction (or (get-in node [:layout :direction])
+                               (when (= :row type) :row)
+                               (when (= :column type) :column))
+                 child-rects* (if direction (child-rects rect direction children)
+                                (mapv (constantly rect) children))]
+             (some (fn [[child child-rect]]
+                     (hit-hover child child-rect env px py))
+                   (reverse (map vector children child-rects*))))
+           (when (and (point-in-rect? rect px py)
+                      (get-in node [:on :hover]))
+             {:target (hover-target-key node env)
+              :action (get-in node [:on :hover])
+              :payload (cond-> {:target (:key node)}
+                         (contains? env :item)
+                          (assoc :item (:item env) :index (:index env)))}))))))
 (defn- hit-collection [node rect env px py]
   (let [items (collection-items env node)
         templates (if (seq (:children node)) (:children node) [{:type :text :layout {}}])
@@ -287,7 +310,9 @@
          type (:type node)
          visible (bound-value env node :visible)]
      (when (or (nil? visible) (boolean visible))
-       (or (when (#{:scroll :grid :repeater} type)
+       (or (when (and (= :scroll type) (point-in-rect? rect px py))
+           (hit-collection node rect env px py))
+         (when (#{:grid :repeater} type)
            (hit-collection node rect env px py))
          (let [children (:children node)
                direction (or (get-in node [:layout :direction])
