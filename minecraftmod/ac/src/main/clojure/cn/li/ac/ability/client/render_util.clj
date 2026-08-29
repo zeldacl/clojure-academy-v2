@@ -47,6 +47,20 @@
 (def ^:private default-beam-texture
   (modid/asset-path "textures" "effects/arc.png"))
 
+;; Upstream EntityArc renders every segment with arc/line_segment.png — a
+;; bright white core with a faint blue halo — tinted white (glColor4d(1,1,1,
+;; alpha)). The port's arc.png is a soft blue band that read as a washed-out
+;; ribbon next to upstream's bright bolt.
+(def ^:private default-zigzag-texture
+  (modid/asset-path "textures" "effects/arc/line_segment.png"))
+
+(defn- white-argb
+  "White tint at alpha — upstream glColor4d(1,1,1,alpha): the texture carries
+  the colour."
+  [alpha]
+  (let [a (int (max 0 (min 255 (long alpha))))]
+    (unchecked-int (bit-or (bit-shift-left a 24) 0x00FFFFFF))))
+
 (declare beam-right-axis camera-facing-right-axis)
 
 (defn- rand-offset
@@ -61,44 +75,41 @@
   "Generate zigzag lightning arc render ops matching original AcademyCraft
   EntityArc + ArcPatterns visual style.
 
-  `vertices` is the precomputed zigzag path (arc-patterns/generate-zigzag-segments,
-  computed once when the arc was enqueued — its shape is fixed for the arc's
-  lifetime, so it is not recomputed per frame). `pattern` is the resolved
-  arc-patterns/get-pattern map. `wiggle-phase` is the current global wiggle
-  clock (arc-patterns/wiggle-phase) — compute once per plan build, not once
-  per arc/segment. `effective-wiggle` is this arc's wiggle amplitude for its
-  current life-ratio (arc-patterns/effective-wiggle-amount) — compute once
-  per arc, not once per segment.
+  `vertices` is the zigzag path (arc-patterns/generate-zigzag-segments).
+  `pattern` is the resolved arc-patterns/get-pattern map.
 
-  Differences from billboard-beam-ops:
-    - Zigzag path (not random jitter)
-    - Deterministic sin-based UV wiggle per segment (not random endpoint offset)
-    - Multi-segment quads along the zigzag path (not single beam quad)
-    - Life-ratio based fade (showWiggle/hideWiggle handled via effective-wiggle)
+  Faithful to upstream ArcFactory.handleSegment:
+    - ONE textured quad per segment, tinted WHITE at the segment alpha
+      (glColor4d(1,1,1,alpha)) — the line_segment texture carries the colour
+      (bright core + blue halo). The port's earlier three-layer stack (outer
+      shell + inner core + line) read as a soft blue band, not a bright bolt.
+    - u runs 0..1 across EACH segment, so every segment displays the full
+      texture — a chain of bright blobs, not one texture stretched over the
+      whole arc. The corner order [start+right, start-right, end-right,
+      end+right] is upstream's addVert layout (u along the beam, v across the
+      width) — the swapped order would sample the texture sideways (the
+      railgun glow-board bug, b199c8b7b).
+    - Width axis cross(segDir, normal) against the arc's FIXED normal,
+      carried across segments as lastDir (watertight strip, no bowties).
+    - Forks derived from the arc's :seed — upstream bakes branches into the
+      template at generation; per-frame rand made the forks jitter.
 
   Params:
     :life-ratio        ??0.0 (just spawned) to 1.0 (about to die)
-    :texture           ??override texture path (default: effects/arc.png)
-    :wiggle-phase      ??current arc-patterns/wiggle-phase value
-    :effective-wiggle  ??this arc's arc-patterns/effective-wiggle-amount value
+    :texture           ??override texture path (default: effects/arc/line_segment.png)
     :origin-offset     ??rigid world-space translation applied to the whole arc
-                         (the caller's ViewOptimize-style hand offset)"
-  [cam-pos vertices pattern {:keys [life-ratio texture wiggle-phase effective-wiggle origin-offset]
-                             :or {life-ratio 0.5 wiggle-phase 0.0 effective-wiggle 0.0}}]
-  (let [texture     (or texture default-beam-texture)
+                         (the caller's ViewOptimize-style hand offset)
+    :seed              ??per-arc seed for the fork layout (default 0)"
+  [cam-pos vertices pattern {:keys [life-ratio texture origin-offset seed]
+                             :or {life-ratio 0.5 seed 0}}]
+  (let [texture     (or texture default-zigzag-texture)
         shift       (if origin-offset
                       (fn [^V3 p] (vec3/v+ p origin-offset))
                       identity)
         lr          (double life-ratio)
-        outer-alpha (arc/life-fade-alpha 180 lr)
-        inner-alpha (arc/life-fade-alpha 220 lr)
-        line-alpha  (arc/life-fade-alpha 160 lr)
-        outer-color (arc/pattern-color pattern :color-outer outer-alpha)
-        inner-color (arc/pattern-color pattern :color-inner inner-alpha)
-        line-color  (arc/pattern-color pattern :color-line line-alpha)
+        base-alpha  (arc/life-fade-alpha 255 lr)
+        color       (white-argb base-alpha)
         width       (double (or (:width pattern) 0.1))
-        core-ratio  (double (or (:core-ratio pattern) 0.45))
-        core-width  (* width core-ratio)
         segment-count (dec (count vertices))
         start (shift (:pos (first vertices)))
         end (shift (:pos (peek vertices)))
@@ -143,60 +154,44 @@
                         v1 (nth vertices (inc i))
                         seg-start (shift (:pos v0))
                         seg-end   (shift (:pos v1))
-                        seg-t     (:u v0 0.0)
-                        wiggle (* effective-wiggle (Math/sin (+ wiggle-phase (* seg-t 3.0))))
                         right-start (nth laterals (if (zero? i) 0 (dec i)))
                         right-end (nth laterals i)
                         outer-s (vec3/v* right-start width)
                         outer-e (vec3/v* right-end width)
-                        core-s (vec3/v* right-start core-width)
-                        core-e (vec3/v* right-end core-width)
                         p0 (vec3/v+ seg-start outer-s)
                         p1 (vec3/v- seg-start outer-s)
                         p2 (vec3/v- seg-end outer-e)
-                        p3 (vec3/v+ seg-end outer-e)
-                        c0 (vec3/v+ seg-start core-s)
-                        c1 (vec3/v- seg-start core-s)
-                        c2 (vec3/v- seg-end core-e)
-                        c3 (vec3/v+ seg-end core-e)
-                        u0-seg (+ (:u v0 0.0) wiggle)
-                        u1-seg (+ (:u v1 0.0) wiggle)]
-                    [(quad-op texture p0 p1 p2 p3 u0-seg u1-seg 0.0 1.0 outer-color)
-                     (quad-op texture c0 c1 c2 c3 u0-seg u1-seg 0.0 1.0 inner-color)
-                     (line-op seg-start seg-end line-color)]))
+                        p3 (vec3/v+ seg-end outer-e)]
+                    [(quad-op texture p0 p1 p2 p3 0.0 1.0 0.0 1.0 color)]))
                 (range segment-count))
         fork-count   (int (or (:fork-count pattern) 0))
         fork-length  (double (or (:fork-length pattern) 0.5))
         fork-angle   (double (or (:fork-angle pattern) 0.5))
         fork-quads
         (when (pos? fork-count)
-          (let [start (shift (:pos (first vertices)))
-                end   (shift (:pos (peek vertices)))
-                beam-vec (vec3/v- end start)
+          (let [beam-vec (vec3/v- end start)
                 beam-len (vec3/vlen beam-vec)
                 dir (vec3/vnorm beam-vec)
                 perp1 (beam-right-axis start end cam-pos)
                 perp2 (if (> (vec3/vlen perp1) 0.01)
                         (vec3/vnorm (vec3/vcross dir perp1))
                         vec3/unit-x)
-                n (inc (rand-int fork-count))]
+                fork-rng (java.util.Random. (long (hash [seed :forks])))
+                n (inc (.nextInt fork-rng fork-count))]
             (mapcat (fn [_]
-                      (let [t (rand)
+                      (let [t (.nextDouble fork-rng)
                             mid (vec3/v+ start (vec3/v* beam-vec t))
-                            angle (* fork-angle (- (* 2.0 (rand)) 1.0))
+                            angle (* fork-angle (- (* 2.0 (.nextDouble fork-rng)) 1.0))
                             rot-dir (vec3/v+ (vec3/v* perp1 (Math/cos angle))
                                         (vec3/v* perp2 (Math/sin angle)))
                             fork-end (vec3/v+ mid (vec3/v* rot-dir (* beam-len fork-length)))
-                            fork-w (* width 0.5)
+                            fork-w (* width 0.7)
                             fr (beam-right-axis mid fork-end cam-pos)
-                            fo (vec3/v* fr fork-w)
-                            fork-alpha (int (* outer-alpha 0.6))]
+                            fo (vec3/v* fr fork-w)]
                         [(quad-op texture
                            (vec3/v+ mid fo) (vec3/v- mid fo)
                            (vec3/v- fork-end fo) (vec3/v+ fork-end fo)
-                           (arc/pattern-color pattern :color-outer fork-alpha))
-                         (line-op mid fork-end
-                           (arc/pattern-color pattern :color-line (int (* line-alpha 0.5))))]))
+                           (white-argb (* 0.9 base-alpha)))]))
                     (range n))))]
     (vec (concat seg-quads fork-quads))))
 

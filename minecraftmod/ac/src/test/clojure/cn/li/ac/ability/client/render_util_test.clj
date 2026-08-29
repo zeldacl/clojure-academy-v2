@@ -75,8 +75,8 @@
                  :color-inner {:r 230 :g 245 :b 255}
                  :color-line {:r 200 :g 240 :b 255}}
         ops (ru/zigzag-arc-ops (v3/v3 0.5 0.5 1.0) vertices pattern
-                               {:life-ratio 0.5 :wiggle-phase 0.0 :effective-wiggle 0.0})
-        [o0 i0 _ o1 i1 _] ops
+                               {:life-ratio 0.5})
+        [o0 o1] ops
         ;; The fixed normal of this arc (start (0,0,0) -> end (1,1,0)) is
         ;; cross(forward, up) = (0,0,1); the two segments' in-plane laterals
         ;; genuinely differ.
@@ -85,9 +85,6 @@
         lateral-1 (v3/vcross (v3/v- (v3/v3 1.0 1.0 0.0) (v3/v3 0.0 1.0 0.0))
                              (v3/v3 0.0 0.0 1.0))]
     (is (not= lateral-0 lateral-1) "the two segments genuinely fan apart")
-    (is (= (:p2 o0) (:p1 o1)) "outer quads share the junction edge")
+    (is (= (:p2 o0) (:p1 o1)) "adjacent quads share the junction edge")
     (is (= (:p3 o0) (:p0 o1)))
-    (is (= (:p2 i0) (:p1 i1)) "core quads share the junction edge")
-    (is (= (:p3 i0) (:p0 i1)))
-    (is (every? quad-simple? (filter #(= :quad (:kind %)) ops))
-        "no quad may self-intersect (bowtie)")))
+    (is (every? quad-simple? ops) "no quad may self-intersect (bowtie)")))

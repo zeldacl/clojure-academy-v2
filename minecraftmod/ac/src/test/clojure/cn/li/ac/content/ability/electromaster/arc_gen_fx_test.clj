@@ -81,9 +81,14 @@
          :end {:x 3.0 :y 64.0 :z 3.0}
          :sound-pos {:x 0.0 :y 62.38 :z 0.0}
          :hit-type :block})
-      (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0 nil)]
-        (is (some? plan))
-        (is (seq (:ops plan))))
+      ;; The arc flickers on upstream's show/hide Markov chain (0.2/0.2
+      ;; duty) — pin visibility so the plan-shape assertions aren't
+      ;; seed-dependent.
+      (with-redefs-fn {#'arc-beam/arc-visible? (constantly true)}
+        (fn []
+          (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0 nil)]
+            (is (some? plan))
+            (is (seq (:ops plan))))))
       (is (= 1 (count (get (:arcs (arc-fx/fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= {:type :sound
@@ -115,10 +120,19 @@
                                                      :hand-origin? true
                                                      :channels []})))
           cam {:x 5.0 :y 70.0 :z 5.0}
-          ;; ops per segment are [outer-quad inner-quad line]; the line's :p1 is
-          ;; the arc's first vertex, which midpoint displacement leaves anchored
-          ;; exactly on the (shifted) start.
-          arc-start-for (fn [view-ctx] (:p1 (nth (:ops (build-plan cam view-ctx 0 nil)) 2)))
+          ;; Upstream handleSegment emits one quad per segment; the width
+          ;; edges straddle the centerline symmetrically, so their midpoint is
+          ;; the arc's first vertex — which midpoint displacement leaves
+          ;; anchored exactly on the (shifted) start.
+          edge-mid (fn [op]
+                     (let [^cn.li.mcmod.math.V3 a (:p0 op)
+                           ^cn.li.mcmod.math.V3 b (:p1 op)]
+                       (v3/v3 (/ (+ (.-x a) (.-x b)) 2.0)
+                               (/ (+ (.-y a) (.-y b)) 2.0)
+                               (/ (+ (.-z a) (.-z b)) 2.0))))
+          arc-start-for (fn [view-ctx]
+                          (edge-mid (first (filter #(= :quad (:kind %))
+                                                   (:ops (build-plan cam view-ctx 0 nil))))))
           ;; Beam runs along +Z, so local right is -X and local up is world up.
           first-person-start (v3/v3 -0.2 63.75 -0.05)
           third-person-start (v3/v3 -0.23 63.2 0.15)]

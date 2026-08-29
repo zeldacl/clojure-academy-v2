@@ -207,6 +207,14 @@
             :max-ttl arc-life
             :pattern-key pattern-key*
             :hit-type hit-type
+            ;; :start/:end/:seed let build-plan regenerate the zigzag per
+            ;; tick — EntityArc re-rolls its template with texWiggle
+            ;; probability every tick, so the bolt must reshape, not hold one
+            ;; frozen path for its whole life. :vertices stays for
+            ;; diagnostics/tests.
+            :start start-v3
+            :end end-v3
+            :seed seed
             :vertices vertices}
            ;; Both candidates are resolved here because they depend only on the
            ;; arc's direction; the viewer-dependent pick happens per frame.
@@ -299,15 +307,43 @@
         view-offset-own
         view-offset-other))))
 
+(defn- arc-visible?
+  "EntityArc.onUpdate's show/hide Markov chain: a visible arc hides with
+  showWiggle probability per tick, a hidden one reshows with hideWiggle
+  (defaults 0.2/0.2 — a ~50% duty flicker, which is the upstream bolt's
+  crackle). Rolled deterministically from the arc's seed so the same chain
+  prefix is replayed for every ttl — stable within a tick, stable across
+  viewers."
+  [pattern seed ttl]
+  (let [show-w (double (or (:show-wiggle pattern) 0.2))
+        hide-w (double (or (:hide-wiggle pattern) 0.2))
+        rng (java.util.Random. (long seed))]
+    (loop [t 0 visible true]
+      (if (>= t (long ttl))
+        visible
+        (recur (inc t)
+               (if visible
+                 (not (< (.nextDouble rng) show-w))
+                 (< (.nextDouble rng) hide-w)))))))
+
 (defn- arc-ops
-  [cam-v3 view-ctx wiggle-phase {:keys [vertices pattern-key ttl max-ttl] :as item}]
+  [cam-v3 view-ctx wiggle-phase {:keys [start end pattern-key ttl max-ttl seed] :as item}]
   (let [pattern (arc-patterns/get-pattern pattern-key)
         life-ratio (- 1.0 (/ (double ttl) (double (max 1 max-ttl))))]
-    (ru/zigzag-arc-ops cam-v3 vertices pattern
-      {:life-ratio life-ratio
-       :wiggle-phase wiggle-phase
-       :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)
-       :origin-offset (view-origin-offset view-ctx item)})))
+    (when (arc-visible? pattern seed ttl)
+      (let [;; EntityArc.onUpdate re-rolls its template with texWiggle
+            ;; probability per tick — reseed the zigzag from the ttl so the
+            ;; bolt reshapes once per tick and stays stable within it.
+            seed* (hash [seed ttl])
+            vertices (arc-patterns/generate-zigzag-segments
+                      start end
+                      {:segments (:segments pattern)
+                       :amplitude (:amplitude pattern)
+                       :seed seed*})]
+        (ru/zigzag-arc-ops cam-v3 vertices pattern
+          {:life-ratio life-ratio
+           :origin-offset (view-origin-offset view-ctx item)
+           :seed seed})))))
 
 (defn- build-arc-plan
   [opts camera-pos hand-center-pos _tick]

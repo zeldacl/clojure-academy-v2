@@ -91,7 +91,11 @@
             "AOE arcs start at AttackData.point, not at the full-range main endpoint"))
       (is (= 1 (count @sounds*)))
       (is (= "academy:em.arc_strong" (:sound-id (first @sounds*))))
-      (is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0)))
+      ;; The arcs flicker on upstream's show/hide Markov chain (0.2/0.2 duty)
+      ;; — pin visibility so the plan-shape assertions below aren't
+      ;; seed-dependent.
+      (with-redefs-fn {#'arc-beam/arc-visible? (constantly true)}
+        #(is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 30]
         (level-effects/update-effect-state! :thunder-bolt-strike
           (fn [store] (arc-beam/effect-tick-state! :level :thunder-bolt-strike store))))
@@ -179,6 +183,39 @@
     (is (every? (fn [a] (<= 15 (:ttl a) 25)) aoe))
     (is (= #{[0.0 21.0] [0.0 19.0]} (set endpoints))
         "each starts at the impact point and ends on its victim")))
+
+(deftest bolt-reshapes-every-tick-test
+  ;; EntityArc.onUpdate re-rolls its template with texWiggle probability per
+  ;; tick — the bolt crackles instead of holding one frozen path for its
+  ;; whole life. The zigzag is reseeded from the arc's (seed, ttl), so the
+  ;; shape changes once per tick and stays stable within it.
+  (let [cam {:x 0.0 :y 65.0 :z 0.0}]
+    (with-redefs-fn {#'arc-beam/arc-visible? (constantly true)}
+      (fn []
+        (perform-arcs)
+        (let [ops20 (:ops (arc-beam/effect-build-plan :thunder-bolt-strike cam nil 0))]
+          (level-effects/update-effect-state! :thunder-bolt-strike
+            (fn [store] (arc-beam/effect-tick-state! :level :thunder-bolt-strike store)))
+          (let [ops19 (:ops (arc-beam/effect-build-plan :thunder-bolt-strike cam nil 0))]
+            (is (seq ops20))
+            (is (not= ops20 ops19)
+                "the zigzag path must differ between ticks (template re-roll)")))))))
+
+(deftest arc-show-hide-chain-follows-upstream-markov-test
+  ;; EntityArc.onUpdate: a visible arc hides with showWiggle probability per
+  ;; tick, a hidden one reshows with hideWiggle (defaults 0.2/0.2 — a ~50%
+  ;; duty flicker). Rolled deterministically from the arc's seed, so the
+  ;; same chain prefix is replayed for every ttl. Seed 0's actual nextDouble
+  ;; sequence (draw n -> state after n+1 ticks): 0.731, 0.241, 0.637, 0.550,
+  ;; 0.598, 0.333, 0.385, 0.985, 0.879, 0.941, 0.275, 0.129, 0.147, 0.023,
+  ;; 0.547, 0.964, 0.104, ...
+  (let [pattern {:show-wiggle 0.2 :hide-wiggle 0.2}]
+    (is (true? (#'arc-beam/arc-visible? pattern 0 5)) "all first draws >= 0.2")
+    (is (true? (#'arc-beam/arc-visible? pattern 0 11)) "0.275 at draw 10 keeps it visible")
+    (is (false? (#'arc-beam/arc-visible? pattern 0 12)) "0.129 < 0.2 hides at draw 11")
+    (is (true? (#'arc-beam/arc-visible? pattern 0 13)) "0.147 < 0.2 reshows at draw 12")
+    (is (false? (#'arc-beam/arc-visible? pattern 0 14)) "0.023 < 0.2 re-hides at draw 13")
+    (is (true? (#'arc-beam/arc-visible? pattern 0 20)) "0.104 < 0.2 reshows at draw 16, then visible")))
 
 (deftest arc-patterns-match-upstream-arc-factory-test
   ;; ArcPatterns' strongArc/aoeArc: width and maxOffset over a 20-block

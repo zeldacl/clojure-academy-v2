@@ -32,9 +32,12 @@
     :amplitude     0.12      ;; matching original offset ratio
     :width         0.1       ;; matching original ArcFactory.width = 0.1
     :core-ratio    0.45
-    :tex-wiggle    0.7
-    :show-wiggle   0.1
-    :hide-wiggle   0.4
+    ;; EntityArc defaults (showWiggle/hideWiggle 0.2, texWiggle 0.5) — the
+    ;; ~50% duty flicker + per-tick template re-roll are the upstream bolt's
+    ;; crackle; the port's earlier guesses (0.1/0.4, 0.7) froze the shape.
+    :tex-wiggle    0.5
+    :show-wiggle   0.2
+    :hide-wiggle   0.2
     :life-ticks    10
     ;; Original uses glColor4d(1,1,1,alpha) — pure white
     :color-outer   {:r 255 :g 255 :b 255}
@@ -58,8 +61,8 @@
     :width         0.3
     :core-ratio    0.4
     :tex-wiggle    0.5
-    :show-wiggle   0.15
-    :hide-wiggle   0.3
+    :show-wiggle   0.2
+    :hide-wiggle   0.2
     :life-ticks    20
     :color-outer   {:r 130 :g 210 :b 255}
     :color-inner   {:r 230 :g 245 :b 255}
@@ -80,9 +83,9 @@
     :amplitude     0.06
     :width         0.13
     :core-ratio    0.4
-    :tex-wiggle    0.6
-    :show-wiggle   0.1
-    :hide-wiggle   0.35
+    :tex-wiggle    0.5
+    :show-wiggle   0.2
+    :hide-wiggle   0.2
     :life-ticks    20                      ;; ranged 15-25 in original
     :color-outer   {:r 120 :g 200 :b 255}
     :color-inner   {:r 220 :g 240 :b 255}
