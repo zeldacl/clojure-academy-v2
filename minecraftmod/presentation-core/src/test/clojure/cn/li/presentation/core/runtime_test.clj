@@ -183,3 +183,30 @@
     (is (= true (get-in @seen [0 1 :hover?])))
     (is (= :leave (get-in @seen [1 1 :hover-event])))
     (is (= false (get-in @seen [1 1 :hover?])))))
+(deftest runtime-routes-scroll-and-paints-clipped-offsets
+  (let [seen (atom nil)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/scroll
+                  :nodes {:type :scroll :key :list :layout {:width 100 :height 20}
+                          :bind {:items [:state :items]}
+                          :children [{:type :text :layout {:height 10}
+                                      :bind {:text [:item :label]}}]}}
+        state {:items (mapv (fn [n] {:label (str n)}) (range 4))}
+        commands (paint/paint-view artifact
+                                    (assoc state :presentation/scroll-offsets {:list 10.0})
+                                    {:viewport-width 100 :viewport-height 20}
+                                    )
+        rt (runtime/create-runtime)
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state state
+                                  :reduce (fn [s action payload]
+                                            (reset! seen [action payload])
+                                            {:state s :event-result :consume})})]
+    (is (instance? cn.li.mcmod.runtime.RenderCommand$PushClip (first commands)))
+    (is (= -10.0 (double (.y ^cn.li.mcmod.runtime.RenderCommand$UiText
+                              (second commands)))))
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (is (= :consume (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})))
+    (is (= :input/scroll (first @seen)))
+    (is (= :list (get-in @seen [1 :target])))
+    (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))))

@@ -47,7 +47,8 @@
                   :commands []
                   :focus nil
                   :pointer-capture nil
-                  :hover-target nil}]
+                  :hover-target nil
+                  :scroll-offsets {}}]
     (vswap! (:state runtime)
             (fn [snapshot]
               (-> snapshot
@@ -153,6 +154,52 @@
   (let [items (bound-value env node :items)]
     (if (sequential? items) (vec items) [])))
 
+(defn- collection-item-rects [rect node items env]
+  (let [template (or (first (:children node)) {:type :text :layout {}})
+        direction (if (= :grid (:type node)) :row :column)
+        layout (:layout template)
+        count* (max 1 (count items))
+        fallback (if (= :row direction) (/ (:width rect) count*) (/ (:height rect) count*))
+        extent (layout-dimension (if (= :row direction) (:width layout) (:height layout)) fallback)
+        offset (float (or (get-in env [:scroll-offsets (:key node)]) 0.0))]
+    (mapv (fn [index _item]
+            (if (= :row direction)
+              (assoc rect :x (+ (:x rect) (* index extent) (- offset))
+                           :width extent)
+              (assoc rect :y (+ (:y rect) (* index extent) (- offset))
+                           :height extent)))
+          (range) items)))
+
+(defn- hit-scroll
+  ([node parent px py]
+   (hit-scroll node parent {:state {}} px py))
+  ([node parent env px py]
+   (let [rect (node-rect parent node)
+         type (:type node)]
+     (or (when (#{:scroll :grid :repeater} type)
+           (let [items (collection-items env node)
+                 templates (vec (:children node))
+                 item-rects (collection-item-rects rect node items env)]
+             (some (fn [[item item-rect]]
+                     (some #(hit-scroll % item-rect (assoc env :item item) px py)
+                           templates))
+                   (map vector items item-rects))))
+         (when (and (= :scroll type) (point-in-rect? rect px py))
+           {:key (:key node) :rect rect
+            :max-offset (let [items (collection-items env node)
+                              template (or (first (:children node)) {:layout {}})
+                              extent (layout-dimension (get-in template [:layout :height])
+                                                       (/ (:height rect) (max 1 (count items))))]
+                          (float (max 0.0 (- (* extent (count items)) (:height rect)))) )})
+         (let [children (:children node)
+               direction (or (get-in node [:layout :direction])
+                             (when (= :row type) :row)
+                             (when (= :column type) :column))
+               child-rects* (if direction (child-rects rect direction children)
+                              (mapv (constantly rect) children))]
+           (some (fn [[child child-rect]]
+                   (hit-scroll child child-rect env px py))
+                 (reverse (map vector children child-rects*))))))))
 (declare hit-action)
 (defn- hover-target-key [node env]
   {:id (:id node)
@@ -160,11 +207,7 @@
    :index (:index env)})
 
 (defn- hit-hover
-  "Return the deepest node declaring `:on :hover` under a pointer.
-
-   Collection templates retain their item/index context, just like button
-   hit-testing. The returned target is data-only so it can be compared across
-   pointer moves without retaining renderer objects."
+  "Return the deepest node declaring `:on :hover` under a pointer."
   ([node parent px py]
    (hit-hover node parent {:state {}} px py))
   ([node parent env px py]
@@ -172,12 +215,8 @@
          type (:type node)]
      (or (when (#{:scroll :grid :repeater} type)
            (let [items (collection-items env node)
-                 raw-templates (vec (:children node))
-                 template (or (first raw-templates) {:type :text :layout {}})
-                 templates (if (seq raw-templates) raw-templates [template])
-                 direction (if (= :grid type) :row :column)
-                 item-rects (child-rects rect direction
-                                         (mapv (constantly template) items))]
+                 templates (vec (:children node))
+                 item-rects (collection-item-rects rect node items env)]
              (some (fn [[index item item-rect]]
                      (some (fn [template]
                              (hit-hover template item-rect
@@ -200,16 +239,11 @@
             :action (get-in node [:on :hover])
             :payload (cond-> {:target (:key node)}
                        (contains? env :item)
-                       (assoc :item (:item env) :index (:index env)))})))))
-
+                        (assoc :item (:item env) :index (:index env)))})))))
 (defn- hit-collection [node rect env px py]
   (let [items (collection-items env node)
-        raw-templates (vec (:children node))
-        template (or (first raw-templates) {:type :text :layout {}})
-        templates (if (seq raw-templates) raw-templates [template])
-        direction (if (= :grid (:type node)) :row :column)
-        item-rects (child-rects rect direction
-                                (mapv (constantly template) items))]
+        templates (if (seq (:children node)) (:children node) [{:type :text :layout {}}])
+        item-rects (collection-item-rects rect node items env)]
     (some (fn [[index item item-rect]]
             (some (fn [template]
                     (hit-action template item-rect
@@ -259,11 +293,13 @@
                        event (assoc event :x (:x point) :y (:y point))
                        hit (when (= :down (:event-type event))
                              (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
-                                        {:state (:view-state instance)}
+                                        {:state (:view-state instance)
+                                         :scroll-offsets (:scroll-offsets instance)}
                                         (:x event) (:y event)))
                        hover (when (= :move (:event-type event))
                                (hit-hover (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
-                                          {:state (:view-state instance)}
+                                          {:state (:view-state instance)
+                                           :scroll-offsets (:scroll-offsets instance)}
                                           (:x event) (:y event)))
                        previous (:hover-target instance)
                        changed? (and (= :move (:event-type event))
@@ -303,7 +339,21 @@
                  :else {:action :input/key :payload event}))
         :character {:action (or (get-in focus [:on :change]) :input/character)
                     :payload event}
-        :scroll {:action :input/scroll :payload event}
+        :scroll (let [point (event-point event (:geometry instance))
+                       target (hit-scroll (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                                          {:state (:view-state instance)
+                                           :scroll-offsets (:scroll-offsets instance)}
+                                          (:x point) (:y point))
+                       key (:key target)
+                       current (float (or (get-in instance [:scroll-offsets key]) 0.0))
+                       delta (float (* -12.0 (double (or (:delta event) 0.0))))
+                       next-offset (float (max 0.0 (min (float (or (:max-offset target) 0.0))
+                                                        (+ current delta))))]
+                   {:action :input/scroll
+                    :scroll-offsets (if key (assoc (:scroll-offsets instance) key next-offset)
+                                       (:scroll-offsets instance))
+                    :payload (cond-> event
+                               key (assoc :target key :scroll-offset next-offset))})
         {:action :input/unknown :payload event}))))
 
 (defn- focus-path [focus]
@@ -342,6 +392,9 @@
         _ (when (contains? routed :hover-target)
             (vswap! (:state runtime) assoc-in [:mounts mount :hover-target]
                     (:hover-target routed)))
+        _ (when (contains? routed :scroll-offsets)
+            (vswap! (:state runtime) assoc-in [:mounts mount :scroll-offsets]
+                    (:scroll-offsets routed)))
         state-before (:view-state instance)
         state-edited (edit-input-state state-before focus action payload)
         payload (input-payload state-edited focus action payload)
@@ -375,7 +428,9 @@
                            commands (if repaint?
                                       (vec ((:paint-fn instance)
                                             (:artifact instance)
-                                            (:view-state instance)
+                                            (assoc (:view-state instance)
+                                                   :presentation/scroll-offsets
+                                                   (:scroll-offsets instance))
                                             (:geometry instance)))
                                       (:commands instance))
                            dirty (if repaint?

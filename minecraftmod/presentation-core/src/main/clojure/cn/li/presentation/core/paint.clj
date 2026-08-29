@@ -192,14 +192,26 @@
 
 (declare paint-node)
 
+(defn- collection-item-rects [node rect env items]
+  (let [template (or (first (:children node)) {:type :text :layout {}})
+        direction (if (= :grid (:type node)) :row :column)
+        layout (:layout template)
+        count* (max 1 (count items))
+        fallback (if (= :row direction) (/ (:width rect) count*) (/ (:height rect) count*))
+        extent (dimension (if (= :row direction) (:width layout) (:height layout)) fallback)
+        offset (float (or (get-in env [:scroll-offsets (:key node)]) 0.0))]
+    (mapv (fn [index _item]
+            (if (= :row direction)
+              (assoc rect :x (+ (:x rect) (* index extent) (- offset)) :width extent)
+              (assoc rect :y (+ (:y rect) (* index extent) (- offset)) :height extent)))
+          (range) items)))
+
 (defn- paint-collection [node rect env]
   (let [items (collection-values env node)
         templates (if (= :repeater (:type node))
                     (if (seq (:children node)) (:children node) [(item-template node)])
                     [(item-template node)])
-        direction (if (= :grid (:type node)) :row :column)
-        item-rects (child-rects rect direction
-                                (mapv (fn [_] (first templates)) items))]
+        item-rects (collection-item-rects node rect env items)]
     (vec
      (mapcat (fn [item item-rect]
                (let [item-env (assoc env :item item)]
@@ -207,7 +219,6 @@
                            (paint-node template item-rect item-env))
                          templates)))
              items item-rects))))
-
 (defn- paint-node [node rect env]
   (let [type (:type node)
         visible (bound-value env node :visible)]
@@ -217,8 +228,17 @@
             direction (or (get-in node [:layout :direction])
                           (when (= :row type) :row)
                           (when (= :column type) :column))]
-        (if (#{:scroll :grid :repeater} type)
+        (cond
+          (= :scroll type)
+          (vec (concat [(RenderCommand$PushClip. (float (:x rect)) (float (:y rect))
+                                             (float (:width rect)) (float (:height rect)))]
+                       (paint-collection node rect env)
+                       [(RenderCommand$PopClip.)]))
+
+          (#{:grid :repeater} type)
           (paint-collection node rect env)
+
+          :else
           (let [child-rects (if direction
                               (child-rects rect direction children)
                               (mapv (constantly rect) children))]
@@ -250,4 +270,6 @@
         host (normalized-geometry geometry)
         rect {:x (:x host) :y (:y host)
               :width (:width host) :height (:height host)}]
-    (vec (paint-node root (rect-for rect (:layout root)) {:state state}))))
+     (vec (paint-node root (rect-for rect (:layout root))
+                          {:state state
+                           :scroll-offsets (get state :presentation/scroll-offsets)}))))
