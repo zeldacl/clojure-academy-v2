@@ -31,15 +31,3 @@
               {:id :bandwidth :label "Bandwidth" :value (or (:bandwidth data) 0)}
               {:id :load :label "Load" :value (format "%.0f%%" (* 100.0 load-ratio))
                :ratio load-ratio}]}))
-(defn create-model [initial]
-  {:state (atom initial) :revision (atom 0)})
-
-(defn rebuild! [model next-snapshot]
-  (swap! (:revision model) inc)
-  (reset! (:state model) next-snapshot)
-  @(:state model))
-
-(defn attach! [model initial]
-  (if model
-    (rebuild! model initial)
-    (create-model initial)))
