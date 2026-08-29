@@ -72,6 +72,14 @@
         (when-let [last (:last-track @playback-session)]
           (play-track! last)))))
 
+(defn- edit-track-field! [track field value]
+  (when (and (:external? track) (:id track))
+    (let [value (str (or value ""))]
+      (catalog/update-external-media! (:id track) {field value})
+      (when-let [fw-atom (fw/fw-atom)]
+        (platform/call-adapter fw-atom :media-library :save-track-meta!
+                               (clojure.core/name (:id track)) field value)))))
+
 (defn- seek-relative! [seconds]
   (let [state (playback-state)
         track (current-track)
@@ -113,6 +121,10 @@
                    (display-length (:length-secs current)))
      :duration (display-length (:length-secs current))
      :volume (format "Volume: %d%%" (int (* 100.0 (double (or (:volume playback) 1.0)))))
+     :volume-ratio (double (or (:volume playback) 1.0))
+     :editing-external (boolean (:external? track))
+     :edit-name (str (or (:name track) ""))
+     :edit-desc (str (or (:desc track) ""))
      :button-left "Previous"
      :button-right "Next"
      :play-pause (case (:status playback) :playing "Pause" "Play")
@@ -204,6 +216,21 @@
                               :media/seek-forward (do (seek-relative! 10.0) "Seeked +10s")
                               :media/volume-down (do (volume-relative! -0.1) "Volume decreased")
                               :media/volume-up (do (volume-relative! 0.1) "Volume increased")
+                              :media/seek (do
+                                            (let [fraction (max 0.0 (min 1.0 (double (or (:value current) 0.0))))
+                                                  length (double (or (:length-secs selected-track) 0.0))]
+                                              (media-playback-call :seek! (* fraction length)))
+                                            "Seek position updated")
+                              :media/volume-set (do
+                                                   (volume-relative! (- (double (or (:value current) 0.0))
+                                                                        (double (or (:volume (playback-state)) 1.0))))
+                                                   "Volume updated")
+                              :media/edit-name (do
+                                                 (edit-track-field! selected-track :name (:value current))
+                                                 "Name updated")
+                              :media/edit-desc (do
+                                                 (edit-track-field! selected-track :desc (:value current))
+                                                 "Description updated")
                               (if track (str "Selected " (:name track)) "No media available"))]
                  (refresh! next-idx status)))
              #(stop-playback!))]

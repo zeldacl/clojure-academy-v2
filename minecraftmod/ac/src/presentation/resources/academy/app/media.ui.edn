@@ -2,7 +2,7 @@
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :items :vector :selected :number :status :string
                 :current-track :string :progress :number :elapsed :string :duration :string
-                :volume :number}
+                :volume :string :volume-ratio :number :editing-external :boolean :edit-name :string :edit-desc :string}
  :root {:type :column :key :media/root :layout {:x 12 :y 12 :width 296 :height 216}
         :children [{:type :text :key :media/title :layout {:height 18}
                     :bind {:text [:state :title]} :semantics {:role :heading}}
@@ -10,18 +10,29 @@
                     :bind {:items [:state :items]} :semantics {:role :list}
                     :children [{:type :row :layout {:height 18}
                                 :children [{:type :text :layout {:width 232}
-                                            :bind {:text [:item :label]}}
+                                            :bind {:text [:item :label]} :on {:activate :media/play}}
                                            {:type :button :layout {:width 56 :height 16}
                                             :bind {:text [:item :action-label]}
                                             :on {:activate :media/play}
                                             :semantics {:role :button}}]}]}
                    {:type :text :key :media/current :bind {:text [:state :current-track]}}
                    {:type :progress :key :media/progress :layout {:height 6}
-                    :bind {:value [:state :progress]} :semantics {:role :progress}}
+                    :bind {:value [:state :progress]} :on {:change :media/seek} :semantics {:role :progress}}
                    {:type :text :key :media/time
                     :bind {:text [:state :elapsed]}}
+                   {:type :progress :key :media/volume-control :layout {:height 6}
+                    :bind {:value [:state :volume-ratio]} :on {:change :media/volume-set} :semantics {:role :progress}}
                    {:type :text :key :media/volume
                     :bind {:text [:state :volume]}}
+                   {:type :row :key :media/editing :bind {:visible [:state :editing-external]}
+                    :children [{:type :text-input :key :media/edit-name :layout {:width 140 :height 18}
+                                :bind {:text [:state :edit-name]}
+                                :on {:change :media/edit-name :submit :media/edit-name}
+                                :semantics {:role :textbox :field :media-name}}
+                               {:type :text-input :key :media/edit-desc :layout {:width 140 :height 18}
+                                :bind {:text [:state :edit-desc]}
+                                :on {:change :media/edit-desc :submit :media/edit-desc}
+                                :semantics {:role :textbox :field :media-desc}}]}
                    {:type :row :key :media/actions :layout {:height 20}
                     :children [{:type :button :layout {:width 64 :height 18}
                                 :bind {:text [:state :button-left]}

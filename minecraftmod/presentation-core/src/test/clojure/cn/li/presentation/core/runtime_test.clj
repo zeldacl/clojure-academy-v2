@@ -222,3 +222,24 @@
     (is (= 320 (.viewportWidth ^HostGeometry geometry)))
     (is (= 180 (.viewportHeight ^HostGeometry geometry)))
     (runtime/unmount! rt mount)))
+
+(deftest runtime-routes-progress-input
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/progress-input
+                  :nodes {:type :progress :key :seek :layout {:width 100 :height 10}
+                          :on {:change :media/seek}}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 10 1.0))
+    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                                  :x 25 :y 5 :button 0})))
+    (is (= :media/seek (first @seen)))
+    (is (= 0.25 (double (get-in @seen [1 :value]))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :drag
+                                  :x 75 :y 5 :drag-x 50})
+    (is (= 0.75 (double (get-in @seen [1 :value]))))))

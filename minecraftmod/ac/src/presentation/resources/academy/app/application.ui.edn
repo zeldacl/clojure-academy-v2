@@ -7,7 +7,7 @@
                     :children [{:type :button :key :application/left :layout {:width 72 :height 20} :bind {:text [:state :button-left]} :on {:activate :application/left} :semantics {:role :button}}
                                {:type :button :key :application/right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :application/right} :semantics {:role :button}}]}
                    {:type :scroll :key :application/lines :layout {:height 86} :bind {:items [:state :lines]} :semantics {:role :list}
-                    :children [{:type :text :bind {:text [:item :label]}}]}
+                    :children [{:type :text :bind {:text [:item :label]} :on {:activate :application/activate}}]}
                    {:type :scroll :key :application/items :layout {:height 72} :bind {:items [:state :items]} :semantics {:role :list}
                     :children [{:type :row :layout {:height 18}
                                 :children [{:type :text :layout {:width 220} :bind {:text [:item :label]}}

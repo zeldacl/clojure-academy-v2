@@ -7,7 +7,8 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.presentation-application :as application]
             [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.awt Desktop Desktop$Action] [java.net URI]))
 
 (def ^:private link-slot 2)
 
@@ -40,7 +41,7 @@
     (concat
       (map str (take link-slot text))
       (map (fn [{:keys [text url]}]
-             (str text (when (seq url) (str "  <" url ">")))) links)
+             {:label text :url url}) links)
       (map str (drop link-slot text)))))
 
 (defn- initial-state []
@@ -54,6 +55,15 @@
      :button-right {:label "Donate" :visible? true :rgba 0xCC315A78}
      :about-data data}))
 
+(defn- open-link! [url]
+  (try
+    (if (and (Desktop/isDesktopSupported)
+             (.isSupported (Desktop/getDesktop) Desktop$Action/BROWSE))
+      (.browse (Desktop/getDesktop) (URI. (str url)))
+      (log/warn "Desktop URL browsing is unavailable:" url))
+    (catch Throwable e
+      (log/warn "Cannot open URL" url (ex-message e)))))
+
 (defn- dispatch-action [data action state]
   (case action
     :application/left
@@ -65,7 +75,10 @@
            :lines (donation-lines (:donation data)) :scroll 0.0)
 
     :application/activate
-    (assoc state :status (str (:status state) " - selected"))
+    (if-let [url (get-in state [:selected-item :url])]
+      (do (open-link! url)
+          (assoc state :status (str "Opened " url)))
+      (assoc state :status (str (:status state) " - selected")))
 
     :application/scroll state
     state))

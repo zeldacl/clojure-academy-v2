@@ -284,8 +284,10 @@
    (hit-action node parent {:state {}} px py))
   ([node parent env px py]
    (let [rect (node-rect parent node)
-         type (:type node)]
-     (or (when (#{:scroll :grid :repeater} type)
+         type (:type node)
+         visible (bound-value env node :visible)]
+     (when (or (nil? visible) (boolean visible))
+       (or (when (#{:scroll :grid :repeater} type)
            (hit-collection node rect env px py))
          (let [children (:children node)
                direction (or (get-in node [:layout :direction])
@@ -311,7 +313,20 @@
                       :path (get-in node [:bind :text])
                       :field (get-in node [:semantics :field])
                       :on (:on node)}}
-             :else nil))))))
+             (= :progress type)
+             (let [ratio (if (pos? (:width rect))
+                           (max 0.0 (min 1.0 (/ (- (float px) (:x rect)) (:width rect))))
+                           0.0)]
+               {:action (or (get-in node [:on :change])
+                            (get-in node [:on :activate])
+                            :input/progress)
+                :payload {:target (:key node) :value ratio :progress ratio :progress-input true}})
+             (get-in node [:on :activate])
+             {:action (get-in node [:on :activate])
+              :payload (cond-> {:target (:key node)}
+                         (contains? env :item)
+                         (assoc :item (:item env) :index (:index env)))}
+             :else nil)))))))
 (defn- routed-event [instance event]
   (if (:action event)
     event
@@ -319,7 +334,7 @@
       (case (:type event)
         :pointer (let [point (event-point event (:geometry instance))
                        event (assoc event :x (:x point) :y (:y point))
-                       hit (when (= :down (:event-type event))
+                       hit (when (#{:down :drag} (:event-type event))
                              (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
                                         {:state (:view-state instance)
                                          :scroll-offsets (:scroll-offsets instance)}
@@ -345,6 +360,9 @@
                                       (or (:action hover)
                                           (when previous (:action previous))))]
                    (cond
+                     (and (= :drag (:event-type event))
+                          (get-in hit [:payload :progress-input]))
+                     hit
                      (and (= :drag (:event-type event)) drag-key)
                      {:action :input/scroll
                       :scroll-offsets (assoc (:scroll-offsets instance) drag-key drag-next)

@@ -222,7 +222,7 @@
 (defn- paint-node [node rect env]
   (let [type (:type node)
         visible (bound-value env node :visible)]
-    (if (and (= :portal type) (some? visible) (not (boolean visible)))
+    (if (and (some? visible) (not (boolean visible)))
       []
       (let [children (:children node)
             direction (or (get-in node [:layout :direction])
