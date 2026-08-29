@@ -12,6 +12,11 @@
   <!-- Templates must be direct children of <Ui> — collect-templates only
        scans the root's direct children (same layout as settings.xml). -->
   <template name="t_row" pos="0.0,0.0" size="442.0,80.0" align="left,top">
+    <!-- Row hover/fade highlight (upstream wrapBack colorRect + the
+         add_template Tint): transparent box painted BEHIND the row content
+         (first child, z 0) so it never wins hit-testing — the per-frame
+         rows-tick animates its :tint to blend*(0.1 idle | 0.4 hovered). -->
+    <box id="hl" pos="0.0,0.0" size="442.0,80.0" align="left,top" fill="#00000000"/>
     <!-- elem_template: name text + teleport/remove icons -->
     <group id="elem-row" pos="0.0,0.0" size="442.0,80.0" align="left,top">
       <text id="name" pos="45.28,16.13" size="377.78,55.56" align="left,center" text="" font-size="43.0" color="#FFC1CFD5"/>
