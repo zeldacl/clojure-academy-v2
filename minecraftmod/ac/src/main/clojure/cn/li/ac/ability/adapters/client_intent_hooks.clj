@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.adapters.client-intent-hooks
   "Client-side CombatIntent composition.  No Context/slot packet runtime."
   (:require [cn.li.ac.ability.client.api :as client-api]
-            [cn.li.ac.ability.client.combat-notice :as combat-notice]
+            
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
@@ -29,10 +29,6 @@
 (defonce ^:private intent-seq* (atom 0))
 (defonce ^:private active-slots* (atom #{}))
 (defonce ^:private handlers-registered?* (atom false))
-(defonce ^:private notice-component*
-  (delay (combat-notice/create-combat-notice-component
-          {:now-ms-fn #(client-bridge/game-time-ms)})))
-
 (defn- current-session []
   (or keybinds/*client-session-id* (runtime-hooks/client-session-id)))
 
@@ -147,11 +143,10 @@
         (when (instance? (Class/forName "[B") wire)
           (try
             (let [result (fixed-channel/decode-combat-feedback wire)]
-              (doseq [[idx feedback] (map-indexed vector (:feedback result))]
-                (combat-notice/show-notice! @notice-component*
-                                            (current-session)
-                                            (keyword (str "combat-" idx))
-                                            (or feedback {:text "Combat rejected"}))))
+              (doseq [feedback (:feedback result)]
+                (reactive-hud/show-combat-notice!
+                 :combat-critical
+                 (or feedback {:text "Combat rejected"}))))
             (catch Throwable error
               (log/warn "Rejected malformed fixed combat feedback packet"
                         {:error (.getMessage error)}))))))
@@ -225,6 +220,8 @@
     (location-teleport/close! uuid)
     (reactive-hud/clear-vm-wave-for-owner! [(current-session) :client-ui-hooks uuid])
     (reactive-hud/clear-charging-arcs-for-owner! [(current-session) :client-ui-hooks uuid])
+    (reactive-hud/clear-combat-notices!)
+    (reactive-hud/clear-coin-qte-for-owner! uuid)
     (keybinds/clear-client-keybind-state! uuid)
     (combat-vfx/clear-owner! uuid)
     (toast/cleanup-expired!)
@@ -273,7 +270,7 @@
                 (not (zero? (double delta))))
        (send-choice-intent! player-uuid slot
                             (str "wheel:" (double delta)))))   :client-slot-visual-state slot-visual-state
-   :client-visual-state (fn [_ _] nil)
+   :client-visual-state reactive-hud/visual-state
    :client-register-push-handlers! register-push-handlers!
    :client-clear-owner-state! clear-owner-state!
    :client-abort-all!
@@ -303,6 +300,11 @@
      (client-api/req-switch-preset! (client-owner p) preset callback))
    :client-trigger-mode-switch! (fn [p] (keybinds/trigger-mode-switch! p))
    :client-trigger-preset-switch! (fn [p] (keybinds/switch-preset! p))
-   :client-show-combat-notice! (fn [_ _] nil)
-   :client-notify-visual-event! (fn [_ _] nil)
+   :client-show-combat-notice! reactive-hud/show-combat-notice!
+   :client-notify-visual-event! (fn [event-key payload]
+                                     (case event-key
+                                       :ac/charge-coin-throw
+                                       (reactive-hud/notify-charge-coin-throw!
+                                        (:player-uuid payload) (:now-ms payload))
+                                       nil))
 })

@@ -7,6 +7,7 @@
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.read-model :as read-model]
+            [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
@@ -26,15 +27,38 @@
 (defn- owner-key [player-uuid]
   (read-model/owner-key {:player-uuid player-uuid} nil))
 
-(defn- body-intensify-charge-state
-  [player-uuid]
-  ;; AC adapter hooks live in hooks-core, not the platform bridge — the
-  ;; bridge has no :client-visual-state op, so call-adapter silently returned
-  ;; nil and this layer never rendered.
-  (or (runtime-hooks/client-visual-state :ac/body-intensify-charge
-                                         {:player-uuid player-uuid})
-      {:active? false :charge-ticks 0 :charge-ratio 0.0}))
+(defonce ^:private ^HashMap coin-qte-windows-by-owner (HashMap.))
+(defonce ^:private combat-notice-component*
+  (delay (combat-notice/create-combat-notice-component
+          {:now-ms-fn #(bridge/game-time-ms)})))
 
+(defn- active-context-for [player-uuid skill-id]
+  (some (fn [ctx]
+          (when (and (= skill-id (:skill-id ctx))
+                     (not= :terminated (:status ctx)))
+            ctx))
+        (read-model/get-player-contexts-for-player player-uuid)))
+
+(defn- hold-ticks-from-context [ctx]
+  (max 0 (long (or (get-in ctx [:skill-state :hold-ticks])
+                   (:hold-ticks ctx)
+                   0))))
+
+(defn- body-intensify-charge-state [player-uuid]
+  (let [ctx (active-context-for player-uuid :body-intensify)
+        hold-ticks (hold-ticks-from-context ctx)
+        max-ticks (max 1 (long (skill-config/tunable-int :body-intensify :charge.max-ticks)))]
+    {:active? (boolean ctx)
+     :charge-ticks hold-ticks
+     :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))
+
+(defn show-combat-notice! [notice-id payload]
+  (when-let [session-id (runtime-hooks/client-session-id)]
+    (combat-notice/show-notice! @combat-notice-component* session-id notice-id payload)))
+
+(defn clear-combat-notices! []
+  (when-let [session-id (runtime-hooks/client-session-id)]
+    (combat-notice/clear-session! @combat-notice-component* session-id)))
 (defonce ^:private ^HashMap vm-waves-by-owner (HashMap.))
 (defonce ^:private ^HashMap vm-wave-spawn-by-owner (HashMap.))
 
@@ -215,11 +239,75 @@
 (defn- railgun-coin-active-threshold []
   (skill-config/tunable-double :railgun :qte.coin-active-threshold))
 
+(def ^:private coin-flight-init-vel 0.92)
+(def ^:private coin-flight-gravity 0.06)
+(def ^:private coin-flight-end-ms
+  (* 50.0 (/ (* 2.0 coin-flight-init-vel) coin-flight-gravity)))
+
+(defn notify-charge-coin-throw!
+  [player-uuid payload-now-ms]
+  (let [uuid (str (or player-uuid (bridge/local-player-uuid)))]
+    (when-not (= uuid "nil")
+      (.put coin-qte-windows-by-owner
+            (owner-key uuid)
+            {:start-ms (long (or payload-now-ms (bridge/game-time-ms)))
+             :window-ms (max 1 (long (skill-config/tunable-int :railgun :qte.coin-window-ms)))})))
+  nil)
+
+(defn- coin-flight-progress [elapsed-ms]
+  (let [apex-ms (* 50.0 (/ coin-flight-init-vel coin-flight-gravity))
+        t (double (max 0.0 elapsed-ms))]
+    (if (<= t apex-ms)
+      (* 0.5 (/ t apex-ms))
+      (let [fall-ratio (/ (- t apex-ms) apex-ms)]
+        (min 1.0 (+ 0.5 (* 0.5 fall-ratio fall-ratio)))))))
+
 (defn- coin-qte-visual-state [player-uuid now-ms]
-  ;; Same as body-intensify-charge-state: hooks-core adapter, not the bridge.
-  (or (runtime-hooks/client-visual-state :ac/charge-coin
-                                         {:player-uuid player-uuid :now-ms now-ms})
-      {:active? false :coin-active? false :coin-progress 0.0}))
+  (let [ctx (active-context-for player-uuid :railgun)
+        mode (get-in ctx [:skill-state :mode])]
+    (if (= mode :item-charge)
+      (let [charge-ticks (max 0 (long (or (get-in ctx [:skill-state :charge-ticks])
+                                          (:charge-ticks ctx) 0)))
+            max-ticks (max 1 (long (skill-config/tunable-int :railgun :charge.item-charge-ticks)))]
+        {:active? true :charge-ticks charge-ticks :coin-active? false
+         :coin-progress 0.0 :charge-start-ms nil
+         :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-ticks))))})
+      (let [ok (owner-key player-uuid)
+            {:keys [start-ms window-ms]} (.get coin-qte-windows-by-owner ok)
+            has-window? (and now-ms start-ms window-ms)
+            game-now (long (or (try (bridge/game-time-ms) (catch Exception _ nil)) now-ms))
+            elapsed (if has-window? (- game-now (long start-ms)) 0)
+            window-limit (if has-window?
+                           (max (long (Math/ceil coin-flight-end-ms)) (max 1 (long window-ms)))
+                           1)
+            progress (if has-window?
+                       (coin-flight-progress (max 0 (min elapsed window-limit)))
+                       0.0)
+            active-window? (and has-window? (<= elapsed window-limit))
+            ratio (max 0.0 (min 1.0 progress))
+            coin-active? (and active-window?
+                              (>= ratio (double (skill-config/tunable-double :railgun :qte.coin-active-threshold))))]
+        (when (and has-window? (not active-window?))
+          (.remove coin-qte-windows-by-owner ok))
+        {:active? (boolean active-window?) :charge-ticks 0
+         :charge-start-ms start-ms :coin-active? (boolean coin-active?)
+         :coin-progress ratio :charge-ratio ratio}))))
+
+(defn clear-coin-qte-for-owner!
+  [player-uuid]
+  (.remove coin-qte-windows-by-owner (owner-key (str player-uuid)))
+  nil)
+(defn visual-state
+  [state-key payload]
+  (let [player-uuid (:player-uuid payload)
+        now-ms (:now-ms payload)]
+    (case state-key
+      :ac/body-intensify-charge (body-intensify-charge-state player-uuid)
+      :ac/charge-coin (coin-qte-visual-state player-uuid now-ms)
+      :ac.delegate-state/railgun
+      (let [{:keys [active? coin-active?]} (coin-qte-visual-state player-uuid now-ms)]
+        (when active? (if coin-active? :active :charge)))
+      nil)))
 
 (defn- build-charging-layer [player-uuid _screen-w _screen-h now-ms]
   (let [ok (owner-key player-uuid)
@@ -648,6 +736,7 @@
      :charging-arcs (or (build-arc-particle-items player-uuid screen-w screen-h now-ms) [])
      :coin-qte (build-coin-qte-layer player-uuid screen-w screen-h now-ms)
      :toasts (toast/build-toast-layouts screen-w screen-h now-ms)
+     :combat-notice (hud/build-combat-notice-data @combat-notice-component* now-ms)
      :tutorial-notification (tutorial-notification/build-notification-layout screen-w screen-h now-ms)
      :media-overlay (media/hud-overlay screen-w screen-h)
      :debug-lines (or (debug-overlay/build-debug-line-items player-state) [])

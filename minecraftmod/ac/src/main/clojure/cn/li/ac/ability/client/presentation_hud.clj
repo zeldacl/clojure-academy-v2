@@ -252,6 +252,10 @@
       (when pct-text [{:kind :text :text (:text pct-text) :x (:x pct-text) :y (:y pct-text)
                        :rgba (argb255 (:color pct-text))}]))))
 
+(defn- combat-notice-items [{:keys [text y color]}]
+  (when text
+    [{:kind :text :text (str text) :x 8 :y (or y 26)
+      :rgba (argb255 color)}]))
 (defn- toast-items [toasts]
   (vec
     (mapcat
@@ -350,6 +354,7 @@
              (charging-arc-items (:charging-arcs snapshot []))
              (when-let [coin (:coin-qte snapshot)] (coin-qte-items coin))
              (toast-items (:toasts snapshot []))
+             (when-let [notice (:combat-notice snapshot)] (combat-notice-items notice))
              (when-let [notif (:tutorial-notification snapshot)] (tutorial-notification-items notif))
              (:media-overlay snapshot)
              (debug-line-items (:debug-lines snapshot []))
