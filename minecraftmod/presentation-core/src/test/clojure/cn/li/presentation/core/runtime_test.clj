@@ -210,3 +210,15 @@
     (is (= :input/scroll (first @seen)))
     (is (= :list (get-in @seen [1 :target])))
     (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))))
+(deftest runtime-applies-frame-host-geometry
+  (let [rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/fill
+                  :nodes {:type :rect :layout {:width :fill :height :fill}}}
+        mount (runtime/mount! rt {:host {:stage :hud}
+                                  :artifact artifact
+                                  :paint-fn (fn [_ _ geometry] [geometry])})
+        packet (runtime/extract-stage! rt :hud {:width 320 :height 180})
+        geometry (-> packet :mounts first :commands first)]
+    (is (= 320 (.viewportWidth ^HostGeometry geometry)))
+    (is (= 180 (.viewportHeight ^HostGeometry geometry)))
+    (runtime/unmount! rt mount)))

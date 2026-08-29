@@ -24,6 +24,34 @@
 
 (defn- runtime-state [^UiRuntime runtime] @(:state runtime))
 
+(defn- update-stage-geometry! [^UiRuntime runtime stage frame-context]
+  (let [width (:width frame-context)
+        height (:height frame-context)]
+    (when (and (map? frame-context) (number? width) (number? height)
+               (pos? width) (pos? height))
+      (vswap! (:state runtime)
+              (fn [snapshot]
+                (update snapshot :mounts
+                        (fn [mounts]
+                          (reduce-kv
+                           (fn [result mount instance]
+                             (if (= stage (get-in instance [:host :stage]))
+                               (let [geometry (:geometry instance)
+                                     next-geometry (HostGeometry.
+                                                    (.originX ^HostGeometry geometry)
+                                                    (.originY ^HostGeometry geometry)
+                                                    (int width)
+                                                    (int height)
+                                                    (.scale ^HostGeometry geometry))]
+                                 (assoc result mount
+                                        (if (= geometry next-geometry)
+                                          instance
+                                          (-> instance
+                                              (assoc :geometry next-geometry)
+                                              (update :dirty into #{:layout :paint :semantics})))))
+                               (assoc result mount instance)))
+                           {} mounts))))))))
+
 (defn mount!
   [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close! paint-fn]
                      :or {state {}
@@ -418,6 +446,7 @@
    clears the dependent dirty flags."
   [^UiRuntime runtime stage frame-context]
   (owner-thread! runtime)
+  (update-stage-geometry! runtime stage frame-context)
   (let [instances (->> (:mounts (runtime-state runtime))
                         vals
                         (filter #(= stage (get-in % [:host :stage]))))]
