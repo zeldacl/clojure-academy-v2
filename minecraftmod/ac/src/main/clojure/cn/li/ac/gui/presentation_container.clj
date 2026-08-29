@@ -94,6 +94,15 @@
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
     {:title "Machine Info"
      :fields fields
+          :histograms (cond-> []
+                   (contains? container :energy)
+                   (conj {:id :energy :label "Energy"
+                          :ratio (max 0.0 (min 1.0 (/ (double (or (value-of (:energy container)) 0.0))
+                                                       (max 1.0 (double (or (value-of (:max-energy container)) 1.0))))))})
+                   (or (contains? container :capacity) (contains? container :max-capacity))
+                   (conj {:id :capacity :label "Capacity"
+                          :ratio (max 0.0 (min 1.0 (/ (double (or (value-of (:capacity container)) 0.0))
+                                                       (max 1.0 (double (or (value-of (:max-capacity container)) 1.0))))))}))
      :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
 (defn- snapshot-for [container revision slot-count]
   (let [network (wireless-state container)
@@ -257,4 +266,3 @@
                                 (when-let [close (or (:presentation-close-fn container)
                                                      (:close-fn container))]
                                   (close container)))}))}))
-

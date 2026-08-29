@@ -60,6 +60,9 @@
                 :node-readonly? (not (boolean (node-logic/owner-authorized? state player)))
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
+                              :energy energy
+                              :max-energy max-energy
+                              :capacity load
                               :owner (node-logic/owner-name state)
                               :range (or (value-of :range 0) 0)
                               :bandwidth (long energy)

@@ -18,6 +18,11 @@
                                {:type :button :key :matrix/action-right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :container/button} :semantics {:role :button}}]} 
                    {:type :column :key :matrix/info-area :layout {:height 72}
                     :children [{:type :text :key :matrix/info-title :bind {:text [:state :info-area :title]}}
+                               {:type :repeater :key :matrix/info-histograms :layout {:height 24}
+                                :bind {:items [:state :info-area :histograms]} :semantics {:role :list}
+                                :children [{:type :row :layout {:height 12}
+                                            :children [{:type :text :layout {:width 72 :height 12} :bind {:text [:item :label]}}
+                                                       {:type :progress :layout {:width 88 :height 6} :bind {:value [:item :ratio]} :semantics {:role :progress}}]}]}
                                {:type :scroll :key :matrix/info-fields :layout {:height 42}
                                 :bind {:items [:state :info-area :fields]} :semantics {:role :list}
                                 :children [{:type :row :layout {:height 18}
