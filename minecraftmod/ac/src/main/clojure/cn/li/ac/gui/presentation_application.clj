@@ -26,6 +26,11 @@
                                           :selected-index (:index payload))
                                    (contains? payload :key-code)
                                    (assoc :key-code (:key-code payload)))
+                         current (cond-> current
+                                   (contains? payload :hover-event)
+                                   (assoc :hover-event (:hover-event payload)
+                                          :hover? (:hover? payload)
+                                          :previous-hover (:previous-hover payload)))
                          result (dispatch-action! action current)]
                      (if (map? result) result current)))
          vm (presentation/mount-view! {:view-id view-id

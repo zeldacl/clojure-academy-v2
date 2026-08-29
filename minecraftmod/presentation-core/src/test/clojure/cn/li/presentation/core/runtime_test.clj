@@ -161,3 +161,25 @@
     (runtime/present! rt mount {:value 2})
     (runtime/extract-stage! rt :screen {})
     (is (= 2 @paints))))
+(deftest runtime-routes-hover-enter-and-leave
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/hover
+                  :nodes {:type :row :layout {:width 100 :height 20}
+                          :children [{:type :button :key :tag
+                                      :layout {:width 50 :height 20}
+                                      :on {:hover :demo/hover}}]}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {}
+                                  :reduce (fn [state action payload]
+                                            (swap! seen conj [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 10})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 90 :y 10})
+    (is (= :demo/hover (ffirst @seen)))
+    (is (= :enter (get-in @seen [0 1 :hover-event])))
+    (is (= true (get-in @seen [0 1 :hover?])))
+    (is (= :leave (get-in @seen [1 1 :hover-event])))
+    (is (= false (get-in @seen [1 1 :hover?])))))

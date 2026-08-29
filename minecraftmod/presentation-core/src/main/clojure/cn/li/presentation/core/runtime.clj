@@ -46,7 +46,8 @@
                   :dirty #{:structure :layout :paint :semantics}
                   :commands []
                   :focus nil
-                  :pointer-capture nil}]
+                  :pointer-capture nil
+                  :hover-target nil}]
     (vswap! (:state runtime)
             (fn [snapshot]
               (-> snapshot
@@ -153,6 +154,53 @@
     (if (sequential? items) (vec items) [])))
 
 (declare hit-action)
+(defn- hover-target-key [node env]
+  {:id (:id node)
+   :key (:key node)
+   :index (:index env)})
+
+(defn- hit-hover
+  "Return the deepest node declaring `:on :hover` under a pointer.
+
+   Collection templates retain their item/index context, just like button
+   hit-testing. The returned target is data-only so it can be compared across
+   pointer moves without retaining renderer objects."
+  ([node parent px py]
+   (hit-hover node parent {:state {}} px py))
+  ([node parent env px py]
+   (let [rect (node-rect parent node)
+         type (:type node)]
+     (or (when (#{:scroll :grid :repeater} type)
+           (let [items (collection-items env node)
+                 raw-templates (vec (:children node))
+                 template (or (first raw-templates) {:type :text :layout {}})
+                 templates (if (seq raw-templates) raw-templates [template])
+                 direction (if (= :grid type) :row :column)
+                 item-rects (child-rects rect direction
+                                         (mapv (constantly template) items))]
+             (some (fn [[index item item-rect]]
+                     (some (fn [template]
+                             (hit-hover template item-rect
+                                        (assoc env :item item :index index)
+                                        px py))
+                           templates))
+                   (map vector (range) items item-rects))))
+         (let [children (:children node)
+               direction (or (get-in node [:layout :direction])
+                             (when (= :row type) :row)
+                             (when (= :column type) :column))
+               child-rects* (if direction (child-rects rect direction children)
+                              (mapv (constantly rect) children))]
+           (some (fn [[child child-rect]]
+                   (hit-hover child child-rect env px py))
+                 (reverse (map vector children child-rects*))))
+         (when (and (point-in-rect? rect px py)
+                    (get-in node [:on :hover]))
+           {:target (hover-target-key node env)
+            :action (get-in node [:on :hover])
+            :payload (cond-> {:target (:key node)}
+                       (contains? env :item)
+                       (assoc :item (:item env) :index (:index env)))})))))
 
 (defn- hit-collection [node rect env px py]
   (let [items (collection-items env node)
@@ -212,15 +260,35 @@
                        hit (when (= :down (:event-type event))
                              (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
                                         {:state (:view-state instance)}
-                                        (:x event) (:y event)))]
-                   (if hit
+                                        (:x event) (:y event)))
+                       hover (when (= :move (:event-type event))
+                               (hit-hover (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                                          {:state (:view-state instance)}
+                                          (:x event) (:y event)))
+                       previous (:hover-target instance)
+                       changed? (and (= :move (:event-type event))
+                                     (not= (:target hover) (:target previous)))
+                       hover-action (when changed?
+                                      (or (:action hover)
+                                          (when previous (:action previous))))]
+                   (cond
+                     changed?
+                     {:action (or hover-action :input/hover)
+                      :hover-target hover
+                      :payload (merge (or (:payload hover)
+                                          (:payload previous)
+                                          {})
+                                      {:hover? (boolean hover)
+                                       :hover-event (if hover :enter :leave)
+                                       :previous-hover (:target previous)})}
+                     hit
                      (update hit :payload merge
                                     (cond-> {}
                                       (and (contains? event :button) (not= 0 (:button event)))
                                       (assoc :button (:button event))
                                       (= :viewport (:space event))
                                       (assoc :space :viewport)))
-                     {:action :input/pointer :payload event}))
+                     :else {:action :input/pointer :payload event}))
         :focus {:action :input/focus :payload event}
         :key (let [key-code (int (or (:key-code event) -1))
                    submit-action (get-in focus [:on :submit])]
@@ -271,6 +339,9 @@
         focus (or focus (:focus instance))
         _ (when (contains? routed :focus)
             (vswap! (:state runtime) assoc-in [:mounts mount :focus] focus))
+        _ (when (contains? routed :hover-target)
+            (vswap! (:state runtime) assoc-in [:mounts mount :hover-target]
+                    (:hover-target routed)))
         state-before (:view-state instance)
         state-edited (edit-input-state state-before focus action payload)
         payload (input-payload state-edited focus action payload)
@@ -322,7 +393,6 @@
                    instances)}))
 (defn semantics [^UiRuntime runtime mount]
   (get-in (instance! runtime mount) [:artifact :semantics]))
-
 (defn unmount! [^UiRuntime runtime mount]
   (owner-thread! runtime)
   (when-let [instance (get-in (runtime-state runtime) [:mounts mount])]

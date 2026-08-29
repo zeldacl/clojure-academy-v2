@@ -1,7 +1,7 @@
 {:view/id :academy.app/tutorial
  :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :tutorial-items :vector :tag-items :vector :brief-lines :vector
-                :content-lines :vector :preview-items :vector :status :string
+                :content-lines :vector :preview-items :vector :tag-tooltip :string :status :string
                 :button-left :map :button-right :map :selected :number}
  :root {:type :column :key :tutorial/root :layout {:x 4 :y 4 :width 419 :height 232}
         :children [{:type :text :key :tutorial/title :layout {:height 18}
@@ -24,8 +24,11 @@
                                             :semantics {:role :list}
                                             :children [{:type :button :layout {:height 18}
                                                         :bind {:text [:item :label]}
-                                                        :on {:activate :tutorial/tag}
+                                                        :on {:activate :tutorial/tag :hover :tutorial/tag-hover}
                                                         :semantics {:role :button}}]}
+                                           {:type :portal :key :tutorial/tag-tooltip :layout {:height 16}
+                                            :bind {:visible [:state :tag-tooltip]}
+                                            :semantics {:role :dialog}}
                                            {:type :repeater :key :tutorial/preview
                                             :layout {:height 134}
                                             :bind {:items [:state :preview-items]}

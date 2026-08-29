@@ -67,6 +67,10 @@
                          :tag-index idx})
                       (map-indexed vector (or (:view-groups @pvs) [])))
      :preview-items (if view (preview/preview-items view) [])
+     :tag-tooltip (or (some-> (:hovered-tag @ctx)
+                              (nth (or (:view-groups @pvs) []) nil)
+                              :display-text)
+                         "")
      :button-left {:label "Previous" :visible? (pos? (count (or (:sub-views vg) [])))}
      :button-right {:label "Next" :visible? (pos? (count (or (:sub-views vg) [])))}}))
 
@@ -96,6 +100,11 @@
       :tutorial/tag
       (when-let [idx (:tag-index selected-item)]
         (preview/switch-view-group! (:pvs @ctx) (int idx)))
+
+      :tutorial/tag-hover
+      (if (= :enter (:hover-event current))
+        (swap! ctx assoc :hovered-tag (:tag-index selected-item))
+        (swap! ctx assoc :hovered-tag nil))
 
       :tutorial/prev
       (preview/cycle-sub-view! (:pvs @ctx) :prev)
