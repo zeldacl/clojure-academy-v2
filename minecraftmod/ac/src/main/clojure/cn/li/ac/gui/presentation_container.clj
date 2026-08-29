@@ -94,16 +94,26 @@
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
     {:title "Machine Info"
      :fields fields
-          :histograms (cond-> []
+'     :histograms (cond-> []
                    (contains? container :energy)
-                   (conj {:id :energy :label "Energy"
-                          :ratio (max 0.0 (min 1.0 (/ (double (or (value-of (:energy container)) 0.0))
-                                                       (max 1.0 (double (or (value-of (:max-energy container)) 1.0))))))})
+                   (conj (let [value (double (or (value-of (:energy container)) 0.0))
+                               maximum (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))]
+                           {:id :energy :label "Energy"
+                            :ratio (max 0.0 (min 1.0 (/ value maximum)))
+                            :value (format "%.0f IF" value)}))
                    (or (contains? container :capacity) (contains? container :max-capacity))
-                   (conj {:id :capacity :label "Capacity"
-                          :ratio (max 0.0 (min 1.0 (/ (double (or (value-of (:capacity container)) 0.0))
-                                                       (max 1.0 (double (or (value-of (:max-capacity container)) 1.0))))))}))
-     :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
+                   (conj (let [value (double (or (value-of (:capacity container)) 0.0))
+                               maximum (max 1.0 (double (or (value-of (:max-capacity container)) 1.0)))]
+                           {:id :capacity :label "Capacity"
+                            :ratio (max 0.0 (min 1.0 (/ value maximum)))
+                            :value (format "%.0f/%.0f" value maximum)}))
+                   (contains? container :liquid-amount)
+                   (conj (let [value (double (or (value-of (:liquid-amount container)) 0.0))
+                               maximum (max 1.0 (double (or (value-of (:tank-size container)) 1.0)))]
+                           {:id :liquid :label "Liquid"
+                            :ratio (max 0.0 (min 1.0 (/ value maximum)))
+                            :value (format "%.0f mB" value)})))
+'     :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
 (defn- snapshot-for [container revision slot-count]
   (let [network (wireless-state container)
         linked (:linked network)

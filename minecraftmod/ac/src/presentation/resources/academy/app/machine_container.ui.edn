@@ -38,8 +38,9 @@
                                {:type :repeater :key :container/info-histograms :layout {:height 24}
                                 :bind {:items [:state :info-area :histograms]} :semantics {:role :list}
                                 :children [{:type :row :layout {:height 12}
-                                            :children [{:type :text :layout {:width 72 :height 12} :bind {:text [:item :label]}}
-                                                       {:type :progress :layout {:width 88 :height 6} :bind {:value [:item :ratio]} :semantics {:role :progress}}]}]}
+                                            :children [{:type :text :layout {:width 64 :height 12} :bind {:text [:item :label]}}
+                                                       {:type :progress :layout {:width 64 :height 6} :bind {:value [:item :ratio]} :semantics {:role :progress}}
+                                                       {:type :text :layout {:width 40 :height 12} :bind {:text [:item :value]}}]}]}
                                {:type :scroll :key :container/info-fields :layout {:height 36}
                                 :bind {:items [:state :info-area :fields]} :semantics {:role :list}
                                 :children [{:type :row :layout {:height 18}
