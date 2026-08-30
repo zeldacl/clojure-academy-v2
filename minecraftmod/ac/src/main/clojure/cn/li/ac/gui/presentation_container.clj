@@ -150,6 +150,14 @@
               :network-disconnect {:label "Disconnect"}
               :network-available-label {:label "Available"}}}))
 
+(defn- runtime-owned-action?
+  "Presentation Runtime owns hover/scroll/pointer/key routing. These must never
+   cross the MenuBridge allow-list gate or mouseMoved will crash containers."
+  [action]
+  (or (nil? action)
+      (and (keyword? action)
+           (= "input" (namespace action)))))
+
 (defn mount-container!
   ([runtime menu-bridge snapshot-fn dispatch-action!]
    (mount-container! runtime menu-bridge snapshot-fn dispatch-action!
@@ -163,9 +171,20 @@
               :host-kind :container
               :state (state-fn)
               :dispatch-action!
-              (fn [action payload _current]
-                (menu-bridge/dispatch-action menu-bridge action payload dispatch-action!)
-                (state-fn))})]
+              (fn [action payload current]
+                (cond
+                  (runtime-owned-action? action)
+                  current
+
+                  (contains? (:allowed-actions menu-bridge) action)
+                  (do (menu-bridge/dispatch-action menu-bridge action payload dispatch-action!)
+                      (state-fn))
+
+                  ;; Content-owned actions (wireless/text/custom) bypass the
+                  ;; slot allow-list but still reach the container dispatcher.
+                  :else
+                  (do (dispatch-action! action payload)
+                      (state-fn))))})]
     (assoc vm
            :snapshot (atom (state-fn))
            :refresh! (fn []

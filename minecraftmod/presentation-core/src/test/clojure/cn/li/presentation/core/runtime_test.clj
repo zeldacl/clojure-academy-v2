@@ -1,5 +1,6 @@
 (ns cn.li.presentation.core.runtime-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.string :as str]
+            [clojure.test :refer :all]
             [cn.li.presentation.core.runtime :as runtime]
             [cn.li.presentation.core.paint :as paint])
   (:import [cn.li.presentation.core HostGeometry]))
@@ -209,7 +210,10 @@
     (is (= :consume (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})))
     (is (= :input/scroll (first @seen)))
     (is (= :list (get-in @seen [1 :target])))
-    (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))`r`n    (runtime/dispatch! rt mount {:type :pointer :event-type :drag :x 5 :y 10 :drag-y -5.0})`r`n    (is (= true (get-in @seen [1 :drag?])))`r`n    (is (= 17.0 (double (get-in @seen [1 :scroll-offset]))))))
+    (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :drag :x 5 :y 10 :drag-y -5.0})
+    (is (= true (get-in @seen [1 :drag?])))
+    (is (= 17.0 (double (get-in @seen [1 :scroll-offset]))))))
 (deftest runtime-applies-frame-host-geometry
   (let [rt (runtime/create-runtime)
         artifact {:magic :pui3 :schema 3 :view-id :academy/test/fill
@@ -282,3 +286,135 @@
     (is (empty? (:commands (first (:mounts (runtime/extract-stage! rt :screen {:width 100 :height 40}))))))
     (is (= :pass (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                :x 10 :y 10 :button 0})))))
+
+
+(deftest painter-packs-row-children-by-declared-width
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/pack-row
+                  :host {:kind :screen :design-width 100 :design-height 20 :scale-policy :fit}
+                  :nodes {:type :row :layout {:width 100 :height 20}
+                          :children [{:type :rect :key :a :layout {:width 20 :height 20}
+                                      :style {:rgba (unchecked-int 0xFF0000FF)}}
+                                     {:type :rect :key :b :layout {:width 50 :height 20}
+                                      :style {:rgba (unchecked-int 0xFF00FF00)}}
+                                     {:type :rect :key :c :layout {:width 30 :height 20}
+                                      :style {:rgba (unchecked-int 0xFFFF0000)}}]}}
+        commands (paint/paint-view artifact {} {:viewport-width 100 :viewport-height 20})
+        quads (->> commands
+                   (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch %))
+                   (mapcat #(.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch %))
+                   vec)]
+    (is (= 3 (count quads)))
+    (is (= 0.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 0)))))
+    (is (= 20.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 0)))))
+    (is (= 20.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 1)))))
+    (is (= 50.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 1)))))
+    (is (= 70.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 2)))))
+    (is (= 30.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 2)))))))
+
+(deftest painter-centers-design-box-with-fit-policy
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/fit
+                  :host {:kind :screen :design-width 40 :design-height 20 :scale-policy :fit}
+                  :nodes {:type :rect :layout {:width 40 :height 20}
+                          :style {:rgba (unchecked-int 0xFFFFFFFF)}}}
+        commands (paint/paint-view artifact {} {:viewport-width 100 :viewport-height 60})
+        quad (-> ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch (first commands)
+                 (.quads) first)]
+    (is (= 30.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
+    (is (= 20.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
+    (is (= 40.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
+    (is (= 20.0 (float (.height ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))))
+
+(deftest painter-applies-absolute-child-offsets
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/absolute
+                  :nodes {:type :absolute :layout {:width 100 :height 80}
+                          :children [{:type :rect :layout {:x 10 :y 15 :width 20 :height 12}
+                                      :style {:rgba (unchecked-int 0xFFFFFFFF)}}]}}
+        commands (paint/paint-view artifact {} {:viewport-width 100 :viewport-height 80})
+        quad (-> ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch (first commands)
+                 (.quads) first)]
+    (is (= 10.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
+    (is (= 15.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
+    (is (= 20.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
+    (is (= 12.0 (float (.height ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))))
+
+(deftest runtime-hits-packed-row-and-centered-design
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/hit-fit
+                  :host {:kind :screen :design-width 100 :design-height 20 :scale-policy :fit}
+                  :nodes {:type :row :layout {:width 100 :height 20}
+                          :children [{:type :button :key :left :layout {:width 40 :height 20}
+                                      :on {:activate :demo/left}}
+                                     {:type :button :key :right :layout {:width 60 :height 20}
+                                      :on {:activate :demo/right}}]}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state {}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 200 40 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 60 :y 20 :button 0})
+    (is (= :demo/left (first @seen)))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 120 :y 20 :button 0})
+    (is (= :demo/right (first @seen)))))
+
+(deftest runtime-scrollbar-tracks-content-offset
+  (let [seen (atom nil)
+        artifact {:magic :pui3 :schema 3 :view-id :academy/test/scrollbar
+                  :nodes {:type :absolute :layout {:width 120 :height 40}
+                          :children [{:type :scroll :key :content
+                                      :layout {:x 0 :y 0 :width 100 :height 20}
+                                      :bind {:items [:state :items]}
+                                      :children [{:type :text :layout {:height 10}
+                                                  :bind {:text [:item :label]}}]}
+                                     {:type :image :key :track
+                                      :layout {:x 110 :y 0 :width 10 :height 40}
+                                      :style {:resource {:namespace "academy" :path "t.png"}
+                                              :scrollbar {:for :content :min-y 0.0 :max-y 20.0}}}
+                                     {:type :image :key :thumb
+                                      :layout {:x 110 :y 0 :width 10 :height 10}
+                                      :style {:resource {:namespace "academy" :path "t.png"}
+                                              :scrollbar {:for :content :min-y 0.0 :max-y 20.0 :thumb? true}}}]}}
+        state {:items (mapv (fn [n] {:label (str n)}) (range 4))}
+        rt (runtime/create-runtime)
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact
+                                  :state state
+                                  :reduce (fn [s action payload]
+                                            (reset! seen [action payload])
+                                            {:state s :event-result :consume})})
+        painted (paint/paint-view artifact
+                                   (assoc state :presentation/scroll-offsets {:content 10.0})
+                                   {:viewport-width 120 :viewport-height 40})
+        thumb (->> painted
+                   (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiImageBatch %))
+                   last)
+        imgs (.images ^cn.li.mcmod.runtime.RenderCommand$UiImageBatch thumb)]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 120 40 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 115 :y 20 :button 0})
+    (is (= :input/scroll (first @seen)))
+    (is (= :content (get-in @seen [1 :target])))
+    (is (= 20.0 (double (get-in @seen [1 :scroll-offset]))))
+    (is (= 1 (count imgs)))
+    (is (= 10.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiImage (first imgs)))))))
+
+(deftest paint-glow-line-emits-textured-segments
+  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/glow
+                  :nodes {:type :glow-line :layout {:x 100 :y 50 :width 0 :height 0}
+                          :bind {:x0 [:state :x0] :x1 [:state :x1]
+                                 :line-y [:state :line-y]
+                                 :line-w [:state :line-w]
+                                 :glow-sz [:state :glow-sz]}}}
+        commands (paint/paint-view artifact
+                                   {:x0 10.0 :x1 40.0 :line-y 2.0 :line-w 2.0 :glow-sz 2.0}
+                                   {:viewport-width 200 :viewport-height 100})
+        batches (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiImageBatch %) commands)
+        paths (mapv (fn [^cn.li.mcmod.runtime.RenderCommand$UiImageBatch b]
+                      (.path (.resource b)))
+                    batches)]
+    ;; 8 glow segments + center line
+    (is (= 9 (count batches)))
+    (is (some #(str/includes? % "glow_lu") paths))
+    (is (some #(str/includes? % "line.png") paths))))
+

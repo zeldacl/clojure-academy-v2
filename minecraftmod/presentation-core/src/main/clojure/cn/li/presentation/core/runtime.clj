@@ -5,6 +5,7 @@
    Minecraft. It owns mount state, host geometry, input routing, reducer
    commits, and effect ordering; rendering is supplied by later renderer code."
   (:require [cn.li.presentation.core.artifact :as artifact]
+            [cn.li.presentation.core.scrollbar :as scrollbar]
             [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]))
 
@@ -118,13 +119,30 @@
   geometry)
 
 (defn- layout-dimension [value fallback]
-  (if (number? value) (float value) (float fallback)))
+  (cond
+    (number? value) (float value)
+    (= :fill value) (float fallback)
+    :else (float fallback)))
 
 (defn- geometry-rect [geometry]
   {:x (float (.originX ^HostGeometry geometry))
    :y (float (.originY ^HostGeometry geometry))
    :width (float (max 1 (.viewportWidth ^HostGeometry geometry)))
    :height (float (max 1 (.viewportHeight ^HostGeometry geometry)))})
+
+(defn- content-rect
+  "Center the artifact design box inside host geometry when scale-policy is :fit."
+  [artifact geometry]
+  (let [host (geometry-rect geometry)
+        ah (or (:host artifact) {})
+        dw (:design-width ah)
+        dh (:design-height ah)]
+    (if (and (= :fit (:scale-policy ah)) (number? dw) (number? dh))
+      {:x (float (+ (:x host) (/ (- (:width host) dw) 2.0)))
+       :y (float (+ (:y host) (/ (- (:height host) dh) 2.0)))
+       :width (float dw)
+       :height (float dh)}
+      host)))
 
 (defn- event-point [event geometry]
   (let [rect (geometry-rect geometry)
@@ -135,7 +153,9 @@
     (if (= :viewport (:space event))
       {:x x :y y}
       {:x (+ x (:x rect))
-       :y (+ y (:y rect))})))(defn- node-rect [parent node]
+       :y (+ y (:y rect))})))
+
+(defn- node-rect [parent node]
   (let [{px :x py :y pw :width ph :height} parent
         layout (:layout node)]
     {:x (+ px (float (or (:x layout) 0.0)))
@@ -147,19 +167,35 @@
   (and (<= x (float px) (+ x width))
        (<= y (float py) (+ y height))))
 
-(defn- child-rects [rect direction children]
-  (let [count* (max 1 (count children))
-        horizontal (= :row direction)
-        available (if horizontal (:width rect) (:height rect))
-        each (/ available count*)]
-    (mapv (fn [index child]
-            (let [layout (:layout child)]
-              (if horizontal
-                (assoc rect :x (+ (:x rect) (* index each))
-                           :width (layout-dimension (:width layout) each))
-                (assoc rect :y (+ (:y rect) (* index each))
-                           :height (layout-dimension (:height layout) each)))))
-          (range) children)))
+(defn- child-rects
+  "Pack children along row/column by declared main-axis sizes.
+   Unspecified sizes share the remaining space equally."
+  [rect direction children]
+  (let [horizontal? (= :row direction)
+        main-size (float (if horizontal? (:width rect) (:height rect)))
+        explicit (mapv (fn [child]
+                         (let [v (if horizontal?
+                                   (get-in child [:layout :width])
+                                   (get-in child [:layout :height]))]
+                           (when (number? v) (float v))))
+                       children)
+        known (reduce + 0.0 (keep identity explicit))
+        unknown (count (filter nil? explicit))
+        fill (if (pos? unknown)
+               (float (max 0.0 (/ (- main-size known) unknown)))
+               0.0)]
+    (loop [remaining (map vector children explicit)
+           cursor (float (if horizontal? (:x rect) (:y rect)))
+           acc []]
+      (if (empty? remaining)
+        acc
+        (let [[_child size*] (first remaining)
+              size (float (or size* fill))
+              child-rect (if horizontal?
+                           (assoc rect :x cursor :width size)
+                           (assoc rect :y cursor :height size))]
+          (recur (rest remaining) (float (+ cursor size)) (conj acc child-rect)))))))
+
 
 (defn- button-id [node]
   (let [key (name (or (:key node) :button))]
@@ -352,6 +388,24 @@
                             (get-in node [:on :activate])
                             :input/progress)
                 :payload {:target (:key node) :value ratio :progress ratio :progress-input true}})
+
+             (let [sb (scrollbar/spec node)]
+               (and sb (:for sb) (not (:thumb? sb))))
+             (let [sb (scrollbar/spec node)
+                   target (:for sb)
+                   scroll-node (scrollbar/find-node (:nodes env) target)
+                   max-off (or (scrollbar/max-offset scroll-node env) 0.0)
+                   next-offset (scrollbar/offset-for-pointer sb rect py max-off)]
+               {:action :input/scroll
+                :scroll-offsets {target next-offset}
+                :payload {:target target
+                          :scroll-offset next-offset
+                          :progress (scrollbar/progress next-offset max-off)
+                          :progress-input true
+                          :scrollbar? true
+                          :sb sb
+                          :rect rect}})
+
              (get-in node [:on :activate])
              {:action (get-in node [:on :activate])
               :payload (cond-> {:target (:key node)}
@@ -365,19 +419,53 @@
       (case (:type event)
         :pointer (let [point (event-point event (:geometry instance))
                        event (assoc event :x (:x point) :y (:y point))
+                       root-rect (content-rect (:artifact instance) (:geometry instance))
                        hit (when (#{:down :drag} (:event-type event))
-                             (hit-action (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                             (hit-action (:nodes (:artifact instance)) root-rect
                                         {:state (:view-state instance)
+                                         :nodes (:nodes (:artifact instance))
                                          :scroll-offsets (:scroll-offsets instance)}
                                         (:x event) (:y event)))
+                       ;; Keep scrollbar dragging alive even if the pointer leaves the track.
+                       hit (or (when (and (= :drag (:event-type event))
+                                          (get-in instance [:pointer-capture :scrollbar?]))
+                                 (let [cap (:pointer-capture instance)
+                                       sb (:sb cap)
+                                       target (:target cap)
+                                       env {:state (:view-state instance)
+                                            :nodes (:nodes (:artifact instance))
+                                            :scroll-offsets (:scroll-offsets instance)}
+                                       scroll-node (scrollbar/find-node (:nodes env) target)
+                                       max-off (float (or (:max-off cap)
+                                                          (scrollbar/max-offset scroll-node env)
+                                                          0.0))
+                                       next-offset (scrollbar/offset-for-drag
+                                                     sb
+                                                     (float (or (:start-offset cap) 0.0))
+                                                     (float (or (:start-py cap) (:y event)))
+                                                     (:y event)
+                                                     max-off)]
+                                   {:action :input/scroll
+                                    :scroll-offsets {target next-offset}
+                                    :pointer-capture cap
+                                    :payload {:target target
+                                              :scroll-offset next-offset
+                                              :progress (scrollbar/progress next-offset max-off)
+                                              :progress-input true
+                                              :scrollbar? true
+                                              :drag? true}}))
+                               hit)
                        hover (when (= :move (:event-type event))
-                               (hit-hover (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                               (hit-hover (:nodes (:artifact instance)) root-rect
                                           {:state (:view-state instance)
+                                           :nodes (:nodes (:artifact instance))
                                            :scroll-offsets (:scroll-offsets instance)}
                                           (:x event) (:y event)))
-                       drag-target (when (= :drag (:event-type event))
-                                    (hit-scroll (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
+                       drag-target (when (and (= :drag (:event-type event))
+                                              (not (get-in hit [:payload :scrollbar?])))
+                                    (hit-scroll (:nodes (:artifact instance)) root-rect
                                                {:state (:view-state instance)
+                                                :nodes (:nodes (:artifact instance))
                                                 :scroll-offsets (:scroll-offsets instance)}
                                                (:x event) (:y event)))
                        drag-key (:key drag-target)
@@ -391,6 +479,11 @@
                                       (or (:action hover)
                                           (when previous (:action previous))))]
                    (cond
+                     (= :up (:event-type event))
+                     {:action :input/pointer
+                      :pointer-capture nil
+                      :payload event}
+
                      (and (= :drag (:event-type event))
                           (get-in hit [:payload :progress-input]))
                      hit
@@ -407,6 +500,24 @@
                                       {:hover? (boolean hover)
                                        :hover-event (if hover :enter :leave)
                                        :previous-hover (:target previous)})}
+                     (get-in hit [:payload :scrollbar?])
+                     (let [target (get-in hit [:payload :target])
+                           sb (get-in hit [:payload :sb])
+                           start-offset (float (or (get-in hit [:payload :scroll-offset])
+                                                   (get-in instance [:scroll-offsets target])
+                                                   0.0))
+                           max-off (float (or (scrollbar/max-offset
+                                                (scrollbar/find-node (:nodes (:artifact instance)) target)
+                                                {:state (:view-state instance)
+                                                 :nodes (:nodes (:artifact instance))})
+                                              0.0))]
+                       (assoc hit :pointer-capture {:scrollbar? true
+                                                    :sb sb
+                                                    :rect (get-in hit [:payload :rect])
+                                                    :target target
+                                                    :start-py (float (:y event))
+                                                    :start-offset start-offset
+                                                    :max-off max-off}))
                      hit
                      (update hit :payload merge
                                     (cond-> {}
@@ -430,15 +541,28 @@
         :character {:action (or (get-in focus [:on :change]) :input/character)
                     :payload event}
         :scroll (let [point (event-point event (:geometry instance))
-                       target (hit-scroll (:nodes (:artifact instance)) (geometry-rect (:geometry instance))
-                                          {:state (:view-state instance)
-                                           :scroll-offsets (:scroll-offsets instance)}
+                       root-rect (content-rect (:artifact instance) (:geometry instance))
+                       env {:state (:view-state instance)
+                            :nodes (:nodes (:artifact instance))
+                            :scroll-offsets (:scroll-offsets instance)}
+                       target (hit-scroll (:nodes (:artifact instance))
+                                          root-rect env
                                           (:x point) (:y point))
-                       key (:key target)
+                       ;; Wheel over the scrollbar track should scroll the linked content.
+                       bar (when-not target
+                             (let [h (hit-action (:nodes (:artifact instance)) root-rect env
+                                                 (:x point) (:y point))]
+                               (when (get-in h [:payload :scrollbar?]) h)))
+                       key (or (:key target) (get-in bar [:payload :target]))
+                       max-off (float (or (:max-offset target)
+                                          (when key
+                                            (scrollbar/max-offset
+                                              (scrollbar/find-node (:nodes env) key)
+                                              env))
+                                          0.0))
                        current (float (or (get-in instance [:scroll-offsets key]) 0.0))
                        delta (float (* -12.0 (double (or (:delta event) 0.0))))
-                       next-offset (float (max 0.0 (min (float (or (:max-offset target) 0.0))
-                                                        (+ current delta))))]
+                       next-offset (float (max 0.0 (min max-off (+ current delta))))]
                    {:action :input/scroll
                     :scroll-offsets (if key (assoc (:scroll-offsets instance) key next-offset)
                                        (:scroll-offsets instance))
@@ -482,9 +606,13 @@
         _ (when (contains? routed :hover-target)
             (vswap! (:state runtime) assoc-in [:mounts mount :hover-target]
                     (:hover-target routed)))
+        _ (when (contains? routed :pointer-capture)
+            (vswap! (:state runtime) assoc-in [:mounts mount :pointer-capture]
+                    (:pointer-capture routed)))
         _ (when (contains? routed :scroll-offsets)
-            (vswap! (:state runtime) assoc-in [:mounts mount :scroll-offsets]
-                    (:scroll-offsets routed)))
+            (vswap! (:state runtime) update-in [:mounts mount :scroll-offsets]
+                    (fn [current]
+                      (merge (or current {}) (:scroll-offsets routed)))))
         state-before (:view-state instance)
         state-edited (edit-input-state state-before focus action payload)
         payload (input-payload state-edited focus action payload)

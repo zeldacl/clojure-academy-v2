@@ -4,17 +4,23 @@
    The profile advertises streaming/UBO/instancing capabilities. The concrete
    mapped upload path is the only version-specific implementation point; it
    must preserve the neutral Render IR ordering and stage semantics."
-  (:require [cn.li.mcmod.runtime.presentation-backend :as neutral])
+  (:require [cn.li.mcmod.runtime.presentation-backend :as neutral]
+            [cn.li.mc262.gui.cgui.font :as cgui-font])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
-            RenderCommand$UiImageBatch RenderCommand$UiItemPreview RenderCommand$UiModelPreview
+            RenderCommand$UiImage RenderCommand$UiImageBatch RenderCommand$UiItemPreview
+            RenderCommand$UiModelPreview
             RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText
             RenderCommand$Transform RenderCommand$Mask RenderCommand$AudioContribution
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PopClip RenderCommand$PostProcess
-            RenderCommand$PushClip RenderCommand$Ribbon RenderPass]
+            RenderCommand$PushClip RenderCommand$Ribbon RenderPass
+            UiResourceRef]
+           [cn.li.mc262.client GuiGraphicsHelper]
+           [cn.li.mcver ResourceLocations]
            [net.minecraft.client Minecraft]
-           [net.minecraft.client.gui GuiGraphicsExtractor Font]))
+           [net.minecraft.client.gui GuiGraphicsExtractor Font]
+           [net.minecraft.resources Identifier]))
 
 (def profile :mc-26-2)
 
@@ -29,6 +35,20 @@
     (when-let [f (get context key)]
       (when (fn? f) (apply f values)))))
 
+(defn- draw-ui-images!
+  [^GuiGraphicsExtractor graphics ^UiResourceRef resource images]
+  (when (and graphics resource)
+    (let [^Identifier rl (ResourceLocations/of (.namespace resource) (.path resource))]
+      (doseq [^RenderCommand$UiImage img images]
+        (let [x0 (int (.x img))
+              y0 (int (.y img))
+              x1 (int (+ (.x img) (.width img)))
+              y1 (int (+ (.y img) (.height img)))]
+          (GuiGraphicsHelper/blitTintedQuad graphics rl
+                                            x0 y0 x1 y1
+                                            0.0 1.0 0.0 1.0
+                                            (.rgba img)))))))
+
 (defn- draw-command! [^GuiGraphicsExtractor graphics stage context ^RenderCommand command]
   (condp instance? command
     RenderCommand$UiQuadBatch
@@ -41,13 +61,18 @@
 
     RenderCommand$UiImageBatch
     (let [^RenderCommand$UiImageBatch c command]
-      (callback! context :draw-ui-image-batch!
-                 [graphics stage (.resource c) (.images c)]))
+      (if (and (map? context) (fn? (:draw-ui-image-batch! context)))
+        (callback! context :draw-ui-image-batch!
+                   [graphics stage (.resource c) (.images c)])
+        (draw-ui-images! graphics (.resource c) (.images c))))
 
     RenderCommand$UiText
-    (let [^RenderCommand$UiText c command
-          ^Minecraft mc (Minecraft/getInstance)]
-       (.text graphics (.-font mc) (.text c) (int (.x c)) (int (.y c)) (.rgba c)))
+    (let [^RenderCommand$UiText c command]
+      (if (and (map? context) (fn? (:draw-ui-text! context)))
+        (callback! context :draw-ui-text!
+                   [graphics stage (.fontId c) (.text c) (.x c) (.y c) (.rgba c) (.fontSize c)])
+        (cgui-font/draw-text! graphics nil (.text c)
+                              (.x c) (.y c) (.fontSize c) (.rgba c) :left true)))
 
     RenderCommand$UiItemPreview
     (let [^RenderCommand$UiItemPreview c command]
@@ -64,7 +89,7 @@
                                (int (+ (.x c) (.width c))) (int (+ (.y c) (.height c)))))
 
     RenderCommand$PopClip (.disableScissor graphics)
-
+
     RenderCommand$Transform
     (let [^RenderCommand$Transform c command]
       (callback! context :apply-transform! [graphics stage (.transformId c) (.payload c)]))

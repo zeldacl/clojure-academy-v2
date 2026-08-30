@@ -27,8 +27,15 @@ public sealed interface RenderCommand
             images = List.copyOf(images == null ? List.of() : images);
         }
     }
-    record UiText(int fontId, String text, float x, float y, int rgba) implements RenderCommand {
-        public UiText { text = text == null ? "" : text; }
+    record UiText(int fontId, String text, float x, float y, int rgba, float fontSize) implements RenderCommand {
+        public UiText {
+            text = text == null ? "" : text;
+            if (fontSize <= 0.0f) fontSize = 8.0f;
+        }
+        /** Backward-compatible ctor; default MSDF size matches tutorial markdown. */
+        public UiText(int fontId, String text, float x, float y, int rgba) {
+            this(fontId, text, x, y, rgba, 8.0f);
+        }
     }
     record UiItemPreview(int itemId, float x, float y, float scale) implements RenderCommand {}
     record UiModelPreview(String modelId, float x, float y, float width, float height) implements RenderCommand {

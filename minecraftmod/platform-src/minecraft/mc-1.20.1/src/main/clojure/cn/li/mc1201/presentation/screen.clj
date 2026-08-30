@@ -10,7 +10,9 @@
 (defn open! [mount title & [on-close]]
   (let [value (doto (DelegatingScreen.
                       (Component/literal (str title))
-                      (fn [s ^GuiGraphics graphics _mouse-x _mouse-y partial-tick]
+                      (fn [s ^GuiGraphics graphics mouse-x mouse-y partial-tick]
+                        ;; Match main reactive host: vanilla dark/blur scrim behind the UI.
+                        (.renderBackground ^DelegatingScreen s graphics)
                         (presentation/submit-current-frame!
                           :screen (float partial-tick) (.-width ^DelegatingScreen s)
                           (.-height ^DelegatingScreen s) (merge {:graphics graphics} (preview/backend-context))))

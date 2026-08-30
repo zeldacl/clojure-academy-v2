@@ -17,9 +17,11 @@
         (let [^Item item (.get BuiltInRegistries/ITEM rl)]
           (when item (ItemStack. item)))))))
 
-(defn draw-model-preview! [^GuiGraphics graphics _stage model-id x y _width _height]
+(defn draw-model-preview! [^GuiGraphics graphics _stage model-id x y width height]
   (when-let [stack (stack-for model-id)]
-    (.renderItem graphics stack (int x) (int y))))
+    (let [ix (int (+ (float x) (/ (- (float width) 16.0) 2.0)))
+          iy (int (+ (float y) (/ (- (float height) 16.0) 2.0)))]
+      (.renderItem graphics stack ix iy))))
 
 (defn backend-context []
   {:draw-ui-model-preview! draw-model-preview!})

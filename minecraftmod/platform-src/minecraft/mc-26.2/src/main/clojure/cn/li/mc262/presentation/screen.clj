@@ -9,7 +9,13 @@
 (defn open! [mount title & [on-close]]
   (let [value (doto (DelegatingScreen.
                       (Component/literal (str title))
-                      (fn [s ^GuiGraphicsExtractor graphics _mouse-x _mouse-y partial-tick]
+                      (fn [s ^GuiGraphicsExtractor graphics mouse-x mouse-y partial-tick]
+                        ;; Same as 1.20.1/1.21.1: draw the vanilla dark/blur scrim.
+                        ;; Reactive host skips a second extractBackground because its
+                        ;; extractRenderState path already did one; Presentation's
+                        ;; DelegatingScreen.render replaces that path entirely.
+                        (.renderBackground ^DelegatingScreen s graphics
+                                           (int mouse-x) (int mouse-y) (float partial-tick))
                         (presentation/submit-current-frame!
                           :screen (float partial-tick) (.-width ^DelegatingScreen s)
                           (.-height ^DelegatingScreen s) graphics))

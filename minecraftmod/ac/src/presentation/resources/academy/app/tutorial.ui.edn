@@ -1,51 +1,170 @@
+;; Layout mirrors main-branch guis/new/tutorial.xml (frame 427×240).
+;; Absolute positions resolve left/right/center align math from that tree.
 {:view/id :academy.app/tutorial
  :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :tutorial-items :vector :tag-items :vector :brief-lines :vector
                 :content-lines :vector :preview-items :vector :tag-tooltip :string :status :string
-                :button-left :map :button-right :map :selected :number}
- :root {:type :column :key :tutorial/root :layout {:x 4 :y 4 :width 419 :height 232}
-        :children [{:type :text :key :tutorial/title :layout {:height 18}
-                    :bind {:text [:state :title]} :semantics {:role :heading}}
-                   {:type :row :key :tutorial/body :layout {:height 194}
-                    :children [{:type :scroll :key :tutorial/list :layout {:width 76}
-                                :bind {:items [:state :tutorial-items]} :semantics {:role :list}
-                                :children [{:type :row :layout {:height 18}
-                                            :children [{:type :text :layout {:width 56}
-                                                        :bind {:text [:item :label]}}
-                                                       {:type :button :layout {:width 18 :height 16}
-                                                        :bind {:text [:item :action-label]}
-                                                        :on {:activate :tutorial/select}
-                                                        :semantics {:role :button}}]}]}
-                               {:type :column :layout {:width 190}
-                                :children [{:type :text :key :tutorial/status
-                                            :bind {:text [:state :status]}}
-                                           {:type :scroll :key :tutorial/tags :layout {:height 20}
-                                            :bind {:items [:state :tag-items]}
-                                            :semantics {:role :list}
-                                            :children [{:type :button :layout {:height 18}
-                                                        :bind {:text [:item :label]}
-                                                        :on {:activate :tutorial/tag :hover :tutorial/tag-hover}
-                                                        :semantics {:role :button}}]}
-                                           {:type :portal :key :tutorial/tag-tooltip :layout {:height 16}
-                                            :bind {:visible [:state :tag-tooltip]}
-                                            :semantics {:role :dialog}}
-                                           {:type :repeater :key :tutorial/preview
-                                            :layout {:height 134}
-                                            :bind {:items [:state :preview-items]}
-                                            :children [{:type :composite :bind {:item [:state :item]}}]}
-                                           {:type :scroll :key :tutorial/brief :layout {:height 26}
-                                            :bind {:items [:state :brief-lines]}
-                                            :semantics {:role :list}
-                                            :children [{:type :text :bind {:text [:item :label]}}]}
-                                           {:type :row :key :tutorial/navigation :layout {:height 18}
-                                            :children [{:type :button :layout {:width 72 :height 18}
-                                                        :bind {:text [:state :button-left]}
-                                                        :on {:activate :tutorial/prev}
-                                                        :semantics {:role :button}}
-                                                       {:type :button :layout {:width 72 :height 18}
-                                                        :bind {:text [:state :button-right]}
-                                                        :on {:activate :tutorial/next}
-                                                        :semantics {:role :button}}]}]}
-                               {:type :scroll :key :tutorial/content :layout {:width 146}
-                                :bind {:items [:state :content-lines]} :semantics {:role :list}
-                                :children [{:type :text :bind {:text [:item :label]}}]}]}]}}
+                :button-left :map :button-right :map :selected :number
+                :panels-visible? :boolean :logos-visible? :boolean :list-visible? :boolean
+                :glow-visible? :boolean
+                :glow-right-x0 :number :glow-right-x1 :number
+                :glow-left-x0 :number :glow-left-x1 :number
+                :glow-y :number :glow-line-w :number :glow-sz :number
+                :left-bg-rgba :vector :logo0-rgba :vector :logo1-rgba :vector
+                :logo2-rgba :vector :logo3-rgba :vector :logo3-y :number}
+ :root
+ {:type :absolute :key :tutorial/root :layout {:width 427 :height 240}
+  :children
+  [;; Left panel — pos 7,0 size 85×220.5 align left,center → y=(240-220.5)/2
+   {:type :absolute :key :tutorial/left-panel
+    :layout {:x 7.0 :y 9.75 :width 85.0 :height 220.5}
+    :children
+    [{:type :image :key :tutorial/left-bg
+      :layout {:width 85.0 :height 220.5}
+      :style {:resource {:namespace "academy" :path "textures/guis/window_tutorial_left.png"}}
+      :bind {:rgba [:state :left-bg-rgba]}
+      :semantics {:role :image}}
+     {:type :scroll :key :tutorial/list
+      :layout {:x 6.6 :y 7.0 :width 72.0 :height 207.0}
+      :bind {:items [:state :tutorial-items] :visible [:state :list-visible?]}
+      :semantics {:role :list}
+      :children
+      [{:type :text :layout {:height 12.0}
+        :style {:font-size 9.0}
+        :bind {:text [:item :label]}
+        :on {:activate :tutorial/select}
+        :semantics {:role :button}}]}]}
+
+   ;; Right panel — pos 92,0 size 332×220.5 align left,center
+   {:type :absolute :key :tutorial/right-panel
+    :layout {:x 92.0 :y 9.75 :width 332.0 :height 220.5}
+    :children
+    [;; Logos (scale 0.25 baked into layout size).
+     {:type :image :key :tutorial/logo0
+      :layout {:x 53.625 :y 9.25 :width 224.75 :height 137.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo0.png"}}
+      :bind {:visible [:state :logos-visible?] :rgba [:state :logo0-rgba]}
+      :semantics {:role :image}}
+     {:type :image :key :tutorial/logo1
+      :layout {:x 53.625 :y 139.75 :width 224.75 :height 59.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo1.png"}}
+      :bind {:visible [:state :logos-visible?] :rgba [:state :logo1-rgba]}
+      :semantics {:role :image}}
+     {:type :image :key :tutorial/logo2
+      :layout {:x 53.625 :y 139.75 :width 224.75 :height 59.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo2.png"}}
+      :bind {:visible [:state :logos-visible?] :rgba [:state :logo2-rgba]}
+      :semantics {:role :image}}
+     {:type :image :key :tutorial/logo3
+      :layout {:x 147.375 :y 55.625 :width 37.25 :height 37.25}
+      :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo3.png"}}
+      :bind {:visible [:state :logos-visible?] :rgba [:state :logo3-rgba] :y [:state :logo3-y]}
+      :semantics {:role :image}}
+
+     ;; Glow lines — anchor at logo1 screen center (right-panel local 166,169.25).
+     ;; Geometry offsets (post 0.25 scale) come from anim state.
+     {:type :glow-line :key :tutorial/glow-right
+      :layout {:x 166.0 :y 169.25 :width 0.0 :height 0.0}
+      :bind {:visible [:state :glow-visible?]
+             :x0 [:state :glow-right-x0] :x1 [:state :glow-right-x1]
+             :line-y [:state :glow-y] :line-w [:state :glow-line-w]
+             :glow-sz [:state :glow-sz]}
+      :semantics {:role :image}}
+     {:type :glow-line :key :tutorial/glow-left
+      :layout {:x 166.0 :y 169.25 :width 0.0 :height 0.0}
+      :bind {:visible [:state :glow-visible?]
+             :x0 [:state :glow-left-x0] :x1 [:state :glow-left-x1]
+             :line-y [:state :glow-y] :line-w [:state :glow-line-w]
+             :glow-sz [:state :glow-sz]}
+      :semantics {:role :image}}
+
+     ;; Center markdown — 160×210.5 at (2,0) align left,center
+     {:type :scroll :key :tutorial/content
+      :layout {:x 2.0 :y 5.0 :width 160.0 :height 210.5}
+      :bind {:items [:state :content-lines] :visible [:state :panels-visible?]}
+      :semantics {:role :list}
+      :children
+      [{:type :text :layout {:height 13.0}
+        :style {:font-size 8.0}
+        :bind {:text [:item :label] :font-size [:item :font-size]}
+        :semantics {:role :list-item}}]}
+
+     ;; Scrollbar — track is the hit target; thumb follows content scroll.
+     {:type :absolute :key :tutorial/scroll-container
+      :layout {:x 0.0 :y 0.0 :width 172.0 :height 220.5}
+      :bind {:visible [:state :panels-visible?]}
+      :children
+      [{:type :image :key :tutorial/scroll-track
+        :layout {:x 162.5 :y 2.0 :width 9.5 :height 216.5}
+        :style {:resource {:namespace "academy" :path "textures/guis/button/widget_scroll_1.png"}
+                :scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0}}
+        :semantics {:role :scrollbar}}
+       {:type :image :key :tutorial/scroll-thumb
+        :layout {:x 162.5 :y 2.0 :width 9.5 :height 53.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/button/widget_scroll_2.png"}
+                :rgba [1.0 1.0 1.0 0.8]
+                :scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0 :thumb? true}}
+        :semantics {:role :image}}]}
+
+     ;; Preview window — 158.5×136 align right,top
+     {:type :absolute :key :tutorial/show-window
+      :layout {:x 173.5 :y 0.0 :width 158.5 :height 136.0}
+      :bind {:visible [:state :panels-visible?]}
+      :children
+      [{:type :repeater :key :tutorial/preview
+        :layout {:x 12.25 :y 0.0 :width 134.0 :height 134.0}
+        :bind {:items [:state :preview-items]}
+        :children [{:type :composite :bind {:item [:state :item]}}]}
+       {:type :grid :key :tutorial/tags
+        :layout {:x 12.0 :y 120.75 :width 133.0 :height 18.0}
+        :bind {:items [:state :tag-items]}
+        :semantics {:role :list}
+        :children
+        [{:type :composite :layout {:width 18.0 :height 18.0}
+          :bind {:item [:state :item]}
+          :on {:activate :tutorial/tag :hover :tutorial/tag-hover}
+          :semantics {:role :button}}]}
+       {:type :image :key :tutorial/btn-left
+        :layout {:x 5.0 :y 41.75 :width 12.0 :height 52.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/button/button_left_2.png"}
+                :rgba [1.0 1.0 1.0 0.8]}
+        :bind {:visible [:state :button-left :visible?]}
+        :on {:activate :tutorial/prev}
+        :semantics {:role :button}}
+       {:type :image :key :tutorial/btn-right
+        :layout {:x 140.0 :y 41.75 :width 12.0 :height 52.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/button/button_right_2.png"}
+                :rgba [1.0 1.0 1.0 0.8]}
+        :bind {:visible [:state :button-right :visible?]}
+        :on {:activate :tutorial/next}
+        :semantics {:role :button}}]}
+
+     ;; Right text window — brief clipped to 146×50; wrap width 130 in controller.
+     {:type :absolute :key :tutorial/right-window
+      :layout {:x 173.5 :y 138.5 :width 158.5 :height 82.0}
+      :bind {:visible [:state :panels-visible?]}
+      :children
+      [{:type :image :key :tutorial/right-window-bg
+        :layout {:width 158.5 :height 82.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/window_tutorial_left.png"}}
+        :semantics {:role :image}}
+       {:type :text :key :tutorial/status
+        :layout {:x 3.0 :y 6.25 :width 146.0 :height 12.0}
+        :style {:font-size 10.0}
+        :bind {:text [:state :status]}
+        :semantics {:role :heading}}
+       {:type :scroll :key :tutorial/brief
+        :layout {:x 8.0 :y 18.25 :width 130.0 :height 50.0}
+        :bind {:items [:state :brief-lines]}
+        :semantics {:role :list}
+        :children
+        [{:type :text :layout {:height 13.0}
+          :style {:font-size 8.0}
+          :bind {:text [:item :label] :font-size [:item :font-size]}
+          :semantics {:role :list-item}}]}]}]}
+
+   {:type :text :key :tutorial/tag-tooltip
+    :layout {:x 200.0 :y 120.0 :width 120.0 :height 14.0}
+    :style {:font-size 10.0}
+    :bind {:text [:state :tag-tooltip] :visible [:state :tag-tooltip]}
+    :semantics {:role :generic}}]}}

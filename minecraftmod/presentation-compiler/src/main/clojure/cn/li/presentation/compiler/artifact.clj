@@ -16,11 +16,11 @@
 
 (def primitive-types
   #{:absolute :row :column :grid :stack :clip :scroll :portal :repeater :conditional :switch :transform :mask
-    :rect :image :nine-slice :text :line :gradient :progress :radial-progress
+    :rect :image :nine-slice :text :line :gradient :progress :radial-progress :glow-line
     :button :text-input :item-preview :model-preview :slot-anchor :composite})
 
 (def semantic-roles
-  #{:generic :heading :button :textbox :dialog :list :list-item :image :slot :progress})
+  #{:generic :heading :button :textbox :dialog :list :list-item :image :slot :progress :scrollbar})
 
 (defn- canonicalize [value]
   (cond

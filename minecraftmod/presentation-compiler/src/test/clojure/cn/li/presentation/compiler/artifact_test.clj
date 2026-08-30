@@ -28,6 +28,16 @@
                           :root {:type :legacy-template}}
                          "bad.ui.edn"))))
 
+(deftest accepts-glow-line-primitive
+  (let [compiled (artifact/compile-source
+                   {:view/id :academy/test/glow
+                    :root {:type :glow-line
+                           :bind {:x0 [:state :gx0] :x1 [:state :gx1]
+                                  :line-y [:state :gy]}
+                           :semantics {:role :image}}}
+                   "glow.ui.edn")]
+    (is (= :glow-line (get-in compiled [:nodes :type])))
+    (is (= 3 (count (:bindings compiled))))))
 (deftest canonicalization-is-deterministic
   (let [a (artifact/compile-source
            {:root {:type :rect :style {:z 1 :a 2}}

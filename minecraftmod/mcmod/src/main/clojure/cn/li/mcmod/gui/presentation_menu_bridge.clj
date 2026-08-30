@@ -36,8 +36,12 @@
   (assoc @(:snapshot bridge) :visible? @(:visible? bridge)
          :slot-anchors (:slot-anchors bridge)))
 
-(defn dispatch-action [bridge action payload dispatch!]
-  (when-not (contains? (:allowed-actions bridge) action)
-    (throw (ex-info "menu action rejected" {:action action :menu-id (:menu-id bridge)})))
-  (dispatch! action payload)
-  :accepted)
+(defn dispatch-action
+  "Forward a MenuBridge-gated action. Unknown actions return :rejected instead
+   of throwing — callers that need hard rejection can still check the result.
+   Runtime-owned input (hover/pointer/scroll) must not be sent here."
+  [bridge action payload dispatch!]
+  (if (contains? (:allowed-actions bridge) action)
+    (do (dispatch! action payload)
+        :accepted)
+    :rejected))

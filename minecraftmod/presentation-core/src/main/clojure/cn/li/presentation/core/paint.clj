@@ -3,7 +3,8 @@
 
    Collection nodes expand from immutable state and leaf nodes emit only
    neutral Ui* commands. This namespace has no Minecraft/backend dependency."
-  (:require [clojure.string])
+  (:require [clojure.string]
+            [cn.li.presentation.core.scrollbar :as scrollbar])
   (:import [cn.li.mcmod.runtime RenderCommand$UiImage RenderCommand$UiImageBatch
             RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText RenderCommand$UiItemPreview RenderCommand$UiModelPreview RenderCommand$PushClip RenderCommand$PopClip RenderCommand$Transform RenderCommand$Mask
             UiResourceRef UiResourceRef$Kind]))
@@ -24,6 +25,18 @@
 (defn- bound-value [env node key]
   (state-value env (get-in node [:bind key])))
 
+(defn- bound-layout [env node]
+  (let [layout (or (:layout node) {})
+        bx (bound-value env node :x)
+        by (bound-value env node :y)
+        bw (bound-value env node :width)
+        bh (bound-value env node :height)]
+    (cond-> layout
+      (number? bx) (assoc :x (float bx))
+      (number? by) (assoc :y (float by))
+      (number? bw) (assoc :width (float bw))
+      (number? bh) (assoc :height (float bh)))))
+
 (defn- visible-value? [value]
   (or (nil? value)
       (and (not (false? value))
@@ -42,19 +55,34 @@
      :width (dimension width pw)
      :height (dimension height ph)}))
 
-(defn- child-rects [rect direction children]
-  (let [count* (max 1 (count children))
-        horizontal (= :row direction)
-        available (if horizontal (:width rect) (:height rect))
-        each (/ available count*)]
-    (mapv (fn [index child]
-            (let [layout (:layout child)]
-              (if horizontal
-                (assoc rect :x (+ (:x rect) (* index each))
-                           :width (dimension (:width layout) each))
-                (assoc rect :y (+ (:y rect) (* index each))
-                           :height (dimension (:height layout) each)))))
-          (range) children)))
+(defn- child-rects
+  "Pack children along row/column by declared main-axis sizes.
+   Unspecified sizes share the remaining space equally."
+  [rect direction children]
+  (let [horizontal? (= :row direction)
+        main-size (float (if horizontal? (:width rect) (:height rect)))
+        explicit (mapv (fn [child]
+                         (let [v (if horizontal?
+                                   (get-in child [:layout :width])
+                                   (get-in child [:layout :height]))]
+                           (when (number? v) (float v))))
+                       children)
+        known (reduce + 0.0 (keep identity explicit))
+        unknown (count (filter nil? explicit))
+        fill (if (pos? unknown)
+               (float (max 0.0 (/ (- main-size known) unknown)))
+               0.0)]
+    (loop [remaining (map vector children explicit)
+           cursor (float (if horizontal? (:x rect) (:y rect)))
+           acc []]
+      (if (empty? remaining)
+        acc
+        (let [[child size*] (first remaining)
+              size (float (or size* fill))
+              child-rect (if horizontal?
+                           (assoc rect :x cursor :width size)
+                           (assoc rect :y cursor :height size))]
+          (recur (rest remaining) (float (+ cursor size)) (conj acc child-rect)))))))
 
 (defn- component [value default]
   (let [number (double (or value default))]
@@ -91,6 +119,54 @@
                     (or (not-empty path) (str source))
                     UiResourceRef$Kind/TEXTURE)))
 
+(defn- glow-texture [name]
+  (UiResourceRef. "academy"
+                  (str "textures/guis/" name ".png")
+                  UiResourceRef$Kind/TEXTURE))
+
+(defn- glow-quad-cmd
+  "One textured axis-aligned glow segment as a UiImageBatch."
+  [tex x0 y0 x1 y1 rgba*]
+  (let [w (float (- x1 x0))
+        h (float (- y1 y0))]
+    (when (and (pos? w) (pos? h))
+      (RenderCommand$UiImageBatch.
+        tex
+        [(RenderCommand$UiImage. (float x0) (float y0) w h rgba*)]))))
+
+(defn- glow-line-commands
+  "Emit corner/edge(/center) quads matching reactive CGUI :glow-line.
+
+   Anchor (x,y) is the line origin (logo1 screen center for tutorial).
+   Offsets x0/x1/line-y are in the same coordinate space as the anchor."
+  [x y x0 x1 line-y line-w glow-sz rgba* no-center?]
+  (let [gx0 (float (+ x x0))
+        gx1 (float (+ x x1))
+        gy (float (+ y line-y))
+        lw (float (max 1.0 line-w))
+        s (float (max 1.0 glow-sz))
+        hw (/ lw 2.0)
+        glx0 (- gx0 s) glx1 (+ gx1 s)
+        gly0 (- gy s) gly1 (+ gy s)
+        gy0 (- gy hw) gy1 (+ gy hw)
+        lu (glow-texture "glow_lu") ru (glow-texture "glow_ru")
+        ld (glow-texture "glow_ld") rd (glow-texture "glow_rd")
+        l (glow-texture "glow_left") r (glow-texture "glow_right")
+        u (glow-texture "glow_up") d (glow-texture "glow_down")
+        line (glow-texture "line")]
+    (vec
+     (keep identity
+           [(glow-quad-cmd lu glx0 gly0 gx0 gy0 rgba*)
+            (glow-quad-cmd ru gx1 gly0 glx1 gy0 rgba*)
+            (glow-quad-cmd ld glx0 gy1 gx0 gly1 rgba*)
+            (glow-quad-cmd rd gx1 gy1 glx1 gly1 rgba*)
+            (glow-quad-cmd l glx0 gy0 gx0 gy1 rgba*)
+            (glow-quad-cmd r gx1 gy0 glx1 gy1 rgba*)
+            (glow-quad-cmd u gx0 gly0 gx1 gy0 rgba*)
+            (glow-quad-cmd d gx0 gy1 gx1 gly1 rgba*)
+            (when-not no-center?
+              (glow-quad-cmd line gx0 (- gy hw) gx1 (+ gy hw) rgba*))]))))
+
 (defn- command-for [node rect env]
   (let [type (:type node)
         value (bound-value env node :value)
@@ -99,7 +175,10 @@
         style-rgba (get-in node [:style :rgba])
         bound-color (or (bound-value env node :rgba)
                         (bound-value env node :alpha))
-        rgba* (rgba (or style-rgba bound-color) 0xFFFFFFFF)
+        rgba* (rgba (or bound-color style-rgba) 0xFFFFFFFF)
+        font-size (float (or (bound-value env node :font-size)
+                             (get-in node [:style :font-size])
+                             8.0))
         x (float (:x rect)) y (float (:y rect))
         width (float (:width rect)) height (float (:height rect))]
     (case type
@@ -114,7 +193,7 @@
                     [(RenderCommand$UiQuad. x y width height (unchecked-int 0x55202020))
                      (RenderCommand$UiQuad. x y (* width ratio) height
                                              (unchecked-int 0xFF35C7FF))])])
-      :text [(RenderCommand$UiText. 0 (item-label text-value) x y rgba*)]
+      :text [(RenderCommand$UiText. 0 (item-label text-value) x y rgba* font-size)]
       :button [(RenderCommand$UiQuadBatch.
                  [(RenderCommand$UiQuad. x y width height rgba*)])
                (RenderCommand$UiText. 0
@@ -123,24 +202,39 @@
                                                        text-value
                                                        (get-in node [:semantics :label])))
                                        (+ x 4.0) (+ y 4.0)
-                                       (unchecked-int 0xFFFFFFFF))]
+                                       (unchecked-int 0xFFFFFFFF)
+                                       font-size)]
       :portal [(RenderCommand$UiQuadBatch.
                  [(RenderCommand$UiQuad. x y width height (unchecked-int 0xAA000000))])
                 (RenderCommand$UiText. 0 (item-label visible-value)
                                         (+ x 6.0) (+ y 6.0)
-                                        (unchecked-int 0xFFFFFFFF))]
+                                        (unchecked-int 0xFFFFFFFF)
+                                        font-size)]
       :text-input [(RenderCommand$UiQuadBatch.
                      [(RenderCommand$UiQuad. x y width height
                                              (unchecked-int 0x66000000))])
                    (RenderCommand$UiText. 0 (item-label text-value)
                                            (+ x 4.0) (+ y 4.0)
-                                           (unchecked-int 0xFFFFFFFF))]
+                                           (unchecked-int 0xFFFFFFFF)
+                                           font-size)]
       :image (when-let [resource (get-in node [:style :resource])]
                [(RenderCommand$UiImageBatch.
                   (UiResourceRef. (str (or (:namespace resource) "academy"))
                                   (str (:path resource))
                                   UiResourceRef$Kind/TEXTURE)
                   [(RenderCommand$UiImage. x y width height rgba*)])])
+      :glow-line (let [gx0 (float (or (bound-value env node :x0) 0.0))
+                       gx1 (float (or (bound-value env node :x1) 0.0))
+                       line-y (float (or (bound-value env node :line-y) 0.0))
+                       line-w (float (or (bound-value env node :line-w)
+                                         (get-in node [:style :line-w])
+                                         1.0))
+                       glow-sz (float (or (bound-value env node :glow-sz)
+                                          (get-in node [:style :glow-sz])
+                                          1.0))
+                       no-center? (boolean (or (bound-value env node :no-center?)
+                                               (get-in node [:style :no-center?])))]
+                   (glow-line-commands x y gx0 gx1 line-y line-w glow-sz rgba* no-center?))
       :nine-slice [(RenderCommand$UiQuadBatch.
                     [(RenderCommand$UiQuad. x y width height rgba*)])]
       :line [(RenderCommand$UiQuadBatch.
@@ -166,8 +260,10 @@
       :clip [(RenderCommand$PushClip. x y width height)]
       :composite (let [item (or (:item env) {})
                        kind (:kind item)
-                       ix (float (or (:x item) x))
-                       iy (float (or (:y item) y))
+                       ;; Item x/y are offsets within the composite node's rect
+                       ;; (combat HUD and tutorial preview both author local coords).
+                       ix (float (+ x (or (:x item) 0.0)))
+                       iy (float (+ y (or (:y item) 0.0)))
                        iw (float (or (:w item) width))
                        ih (float (or (:h item) height))
                        color (rgba (:rgba item) rgba*)]
@@ -177,7 +273,8 @@
                      :image [(RenderCommand$UiImageBatch.
                                (composite-resource (:src item))
                                [(RenderCommand$UiImage. ix iy iw ih color)])]
-                     :text [(RenderCommand$UiText. 0 (item-label (:text item)) ix iy color)]
+                     :text [(RenderCommand$UiText. 0 (item-label (:text item)) ix iy color
+                                                     (float (or (:font-size item) font-size)))]
                      :condition (let [icon (composite-resource (:icon-path item))
                                       accepted? (boolean (:accepted? item))
                                       icon-color (if accepted? color (unchecked-int 0xFF555555))]
@@ -231,7 +328,8 @@
              items item-rects))))
 (defn- paint-node [node rect env]
   (let [type (:type node)
-        visible (bound-value env node :visible)]
+        visible (bound-value env node :visible)
+        rect (scrollbar/apply-thumb-rect node rect env)]
     (if (not (visible-value? visible))
       []
       (let [children (:children node)
@@ -249,19 +347,22 @@
           (paint-collection node rect env)
 
           :else
-          (let [child-rects (if direction
-                              (child-rects rect direction children)
-                              (mapv (constantly rect) children))]
+          (let [slots (if direction
+                        (child-rects rect direction children)
+                        (mapv (constantly rect) children))]
             (let [commands (command-for node rect env)
-                  child-commands (mapcat (fn [child child-rect]
-                                           (paint-node child child-rect env))
-                                         children child-rects)]
+                  child-commands (mapcat (fn [child slot]
+                                           (paint-node child
+                                                       (rect-for slot (bound-layout env child))
+                                                       env))
+                                         children slots)]
               (vec (concat commands child-commands
                            (when (= :clip type) [(RenderCommand$PopClip.)])
                            (when (= :transform type)
                              [(RenderCommand$Transform. "identity" {})])
                            (when (= :mask type)
                              [(RenderCommand$Mask. "none" {})]))))))))))
+
 (defn- geometry-dimension [geometry key accessor]
   (cond
     (map? geometry) (get geometry key)
@@ -275,11 +376,24 @@
    :height (float (max 1 (or (geometry-dimension geometry :viewport-height #(.viewportHeight ^cn.li.presentation.core.HostGeometry %)) 1)))
    :scale (float (or (geometry-dimension geometry :scale #(.scale ^cn.li.presentation.core.HostGeometry %)) 1.0))})
 
+(defn- content-rect
+  "Center the artifact design box inside host geometry when scale-policy is :fit."
+  [artifact geometry]
+  (let [host (normalized-geometry geometry)
+        ah (or (:host artifact) {})
+        dw (:design-width ah)
+        dh (:design-height ah)]
+    (if (and (= :fit (:scale-policy ah)) (number? dw) (number? dh))
+      {:x (float (+ (:x host) (/ (- (:width host) dw) 2.0)))
+       :y (float (+ (:y host) (/ (- (:height host) dh) 2.0)))
+       :width (float dw)
+       :height (float dh)}
+      host)))
+
 (defn paint-view [artifact state geometry]
   (let [root (:nodes artifact)
-        host (normalized-geometry geometry)
-        rect {:x (:x host) :y (:y host)
-              :width (:width host) :height (:height host)}]
+        rect (content-rect artifact geometry)]
      (vec (paint-node root (rect-for rect (:layout root))
                           {:state state
+                           :nodes root
                            :scroll-offsets (get state :presentation/scroll-offsets)}))))

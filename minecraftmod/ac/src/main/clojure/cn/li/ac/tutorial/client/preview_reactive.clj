@@ -433,7 +433,8 @@
                    (case (:kind node)
                      :image {:kind :image :src (:src props)
                              :x (:x props) :y (:y props)
-                             :w (or (:w props) 16.0) :h (or (:h props) 16.0)}
+                             :w (* (float (or (:w props) 16.0)) (float (or (:scale props) 1.0)))
+                             :h (* (float (or (:h props) 16.0)) (float (or (:scale props) 1.0)))}
                      :preview-item {:kind :model
                                     :model-id (str "item:" (:item-id props))
                                     :x (:x props) :y (:y props)

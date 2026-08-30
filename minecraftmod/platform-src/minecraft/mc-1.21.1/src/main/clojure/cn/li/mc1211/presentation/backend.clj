@@ -3,17 +3,24 @@
 
    Only the version mapping is owned here. Commands and lifecycle remain the
    neutral frame contract supplied by mcmod."
-  (:require [cn.li.mcmod.runtime.presentation-backend :as neutral])
+  (:require [cn.li.mcmod.runtime.presentation-backend :as neutral]
+            [cn.li.mc1211.gui.cgui.font :as cgui-font])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
-            RenderCommand$UiImageBatch RenderCommand$UiItemPreview RenderCommand$UiModelPreview
+            RenderCommand$UiImage RenderCommand$UiImageBatch RenderCommand$UiItemPreview
+            RenderCommand$UiModelPreview
             RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText
             RenderCommand$Transform RenderCommand$Mask RenderCommand$AudioContribution
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PopClip RenderCommand$PostProcess
-            RenderCommand$PushClip RenderCommand$Ribbon RenderPass]
+            RenderCommand$PushClip RenderCommand$Ribbon RenderPass
+            UiResourceRef]
+           [cn.li.mc1211.client GuiGraphicsHelper]
+           [cn.li.mcver ResourceLocations]
+           [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraft.client Minecraft]
-           [net.minecraft.client.gui GuiGraphics Font]))
+           [net.minecraft.client.gui GuiGraphics Font]
+           [net.minecraft.resources ResourceLocation]))
 
 (def profile :mc-1-21-1)
 
@@ -28,6 +35,28 @@
     (when-let [f (get context key)]
       (when (fn? f) (apply f values)))))
 
+(defn- rgba-components [^long rgba]
+  (let [a (float (/ (bit-and (unsigned-bit-shift-right rgba 24) 0xff) 255.0))
+        r (float (/ (bit-and (unsigned-bit-shift-right rgba 16) 0xff) 255.0))
+        g (float (/ (bit-and (unsigned-bit-shift-right rgba 8) 0xff) 255.0))
+        b (float (/ (bit-and rgba 0xff) 255.0))]
+    [r g b a]))
+
+(defn- draw-ui-images!
+  [^GuiGraphics graphics ^UiResourceRef resource images]
+  (when (and graphics resource)
+    (let [^ResourceLocation rl (ResourceLocations/of (.namespace resource) (.path resource))]
+      (.flush graphics)
+      (doseq [^RenderCommand$UiImage img images]
+        (let [[r g b a] (rgba-components (long (.rgba img)))
+              x (.x img) y (.y img)
+              x2 (+ x (.width img)) y2 (+ y (.height img))]
+          (RenderSystem/setShaderColor r g b a)
+          (GuiGraphicsHelper/blitTexturedQuad graphics rl
+                                              (float x) (float y) (float x2) (float y2)
+                                              0.0 0.0 1.0 0.0 1.0)
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
+
 (defn- draw-command! [^GuiGraphics graphics stage context ^RenderCommand command]
   (condp instance? command
     RenderCommand$UiQuadBatch
@@ -40,13 +69,18 @@
 
     RenderCommand$UiImageBatch
     (let [^RenderCommand$UiImageBatch c command]
-      (callback! context :draw-ui-image-batch!
-                 [graphics stage (.resource c) (.images c)]))
+      (if (and (map? context) (fn? (:draw-ui-image-batch! context)))
+        (callback! context :draw-ui-image-batch!
+                   [graphics stage (.resource c) (.images c)])
+        (draw-ui-images! graphics (.resource c) (.images c))))
 
     RenderCommand$UiText
-    (let [^RenderCommand$UiText c command
-          ^Minecraft mc (Minecraft/getInstance)]
-      (.drawString graphics (.-font mc) (.text c) (int (.x c)) (int (.y c)) (.rgba c)))
+    (let [^RenderCommand$UiText c command]
+      (if (and (map? context) (fn? (:draw-ui-text! context)))
+        (callback! context :draw-ui-text!
+                   [graphics stage (.fontId c) (.text c) (.x c) (.y c) (.rgba c) (.fontSize c)])
+        (cgui-font/draw-text! graphics nil (.text c)
+                              (.x c) (.y c) (.fontSize c) (.rgba c) :left true)))
 
     RenderCommand$UiItemPreview
     (let [^RenderCommand$UiItemPreview c command]
@@ -63,7 +97,7 @@
                                (int (+ (.x c) (.width c))) (int (+ (.y c) (.height c)))))
 
     RenderCommand$PopClip (.disableScissor graphics)
-
+
     RenderCommand$Transform
     (let [^RenderCommand$Transform c command]
       (callback! context :apply-transform! [graphics stage (.transformId c) (.payload c)]))
