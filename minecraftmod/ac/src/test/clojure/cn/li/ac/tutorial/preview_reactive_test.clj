@@ -140,3 +140,4 @@
             "switching tags must not disturb another group's page")
         (preview/switch-view-group! state a)
         (is (= 1 (get (:sub-indices @state) a)))))))
+

@@ -8,7 +8,7 @@
     (registry/reset-for-test!)
     (registry/register-primitive!
      {:id :test/leaf :revision 1
-      :inputs {:amount {:type :double} :label {:type :string :default "x"}}
+      :inputs {:amount {:type :float} :label {:type :string :default "x"}}
       :impl (fn [_ _] {})})
     (registry/register-primitive!
      {:id :test/wrapper :revision 1
@@ -57,3 +57,4 @@
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"missing-required-field"
        (validate/validate! {:component :test/with-callback :on-each {:component :test/leaf}}))))
+

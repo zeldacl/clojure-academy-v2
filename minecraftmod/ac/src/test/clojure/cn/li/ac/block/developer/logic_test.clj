@@ -33,3 +33,4 @@
       (#'dev-logic/developer-after-commit! :tile nil nil {} state)
       (is (= 1 @completed))
       (is (= 1 @cleared)))))
+

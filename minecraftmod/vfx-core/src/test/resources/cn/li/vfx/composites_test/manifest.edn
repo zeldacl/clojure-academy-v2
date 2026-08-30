@@ -1,2 +1,3 @@
 {:schema-version 1
  :documents [{:kind :composite :id :test/ring :resource "cn/li/vfx/composites_test/ring.edn"}]}
+

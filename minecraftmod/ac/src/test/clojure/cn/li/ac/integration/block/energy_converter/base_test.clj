@@ -13,3 +13,4 @@
     (is (false? (.canReceive out-cap)))
     (is (false? (.canExtract unknown-cap)))
     (is (false? (.canReceive unknown-cap)))))
+

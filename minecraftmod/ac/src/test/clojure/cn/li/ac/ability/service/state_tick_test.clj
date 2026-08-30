@@ -40,3 +40,4 @@
                   ps-fix/test-session-id "p-recovering" nil)]
       (is (some? result))
       (is (not= (:resource-data before) (:resource-data (:state result)))))))
+

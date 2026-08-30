@@ -15,19 +15,19 @@
      {:id :test/resolve :revision 1 :inputs {:hit {:type :hit-result}} :outputs {:destination {:type :destination}}
       :impl (fn [_ _] {})})
     (registry/register-composite!
-     {:id :test/query-destination :revision 1 :layer :mid
+     {:id :test/query-destination :revision 1 :layer :composite
       :inputs {:origin {:type :vec3}}
       :outputs {:destination {:type :destination :from [:local :dest]}}
       :body {:component :flow/sequence
              :steps [{:component :test/query :origin {:ref [:input :origin]} :bind {:hit :h}}
                      {:component :test/resolve :hit {:ref [:local :h]} :bind {:destination :dest}}]}})
     (registry/register-composite!
-     {:id :test/no-output :revision 1 :layer :mid
+     {:id :test/no-output :revision 1 :layer :composite
       :inputs {}
       :outputs {}
       :body {:component :test/query :origin {:vec3 [0.0 0.0 0.0]}}})
     (registry/register-composite!
-     {:id :test/source :revision 1 :layer :source :outputs {:value {:type :double}}})
+     {:id :test/source :revision 1 :layer :source :outputs {:value {:type :float}}})
     ;; Mimics a domain whose own runtime value language also uses :input as
     ;; a scope name for something other than composite parameters (vfx-
     ;; core's :input instance-signal scope) -- a structural primitive that
@@ -83,7 +83,7 @@
 
 (deftest source-node-inside-composite-body-throws-test
   (registry/register-composite!
-   {:id :test/bad-composite :revision 1 :layer :mid :inputs {} :outputs {}
+   {:id :test/bad-composite :revision 1 :layer :composite :inputs {} :outputs {}
     :body {:component :test/source}})
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"source-node-outside-ability"
@@ -98,7 +98,7 @@
   ;; ref node got silently replaced with nil instead of surviving for that
   ;; domain's own runtime resolver to handle later.
   (registry/register-composite!
-   {:id :test/wraps-native-scope :revision 1 :layer :mid
+   {:id :test/wraps-native-scope :revision 1 :layer :composite
     :inputs {:declared {:type :any}}
     :outputs {}
     :body {:component :test/native-scope
@@ -109,7 +109,7 @@
 
 (deftest declared-input-ref-inside-nested-native-scope-still-substitutes-test
   (registry/register-composite!
-   {:id :test/wraps-native-scope-2 :revision 1 :layer :mid
+   {:id :test/wraps-native-scope-2 :revision 1 :layer :composite
     :inputs {:declared {:type :any}}
     :outputs {}
     :body {:component :test/native-scope
@@ -127,7 +127,7 @@
   ;; matched at runtime (caught by combat-core's :combat/area-damage
   ;; composite test, which got nil for the loop-bound entity every time).
   (registry/register-composite!
-   {:id :test/uses-foreach :revision 1 :layer :mid
+   {:id :test/uses-foreach :revision 1 :layer :composite
     :inputs {:items {:type [:list-of :any]}}
     :outputs {}
     :body {:component :flow/foreach :items {:ref [:input :items]} :as :target
@@ -149,7 +149,7 @@
   ;; :to :remaining, read back one :flow/foreach iteration later), which
   ;; got nil for :remaining on the very first iteration.
   (registry/register-composite!
-   {:id :test/uses-data-bind :revision 1 :layer :mid
+   {:id :test/uses-data-bind :revision 1 :layer :composite
     :inputs {}
     :outputs {}
     :body {:component :flow/sequence
@@ -164,8 +164,9 @@
 
 (deftest cycle-detection-throws-test
   (registry/register-composite!
-   {:id :test/cyclic :revision 1 :layer :mid :inputs {} :outputs {}
+   {:id :test/cyclic :revision 1 :layer :composite :inputs {} :outputs {}
     :body {:component :test/cyclic}})
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"composite-expansion-cycle"
        (composite/expand {:component :test/cyclic}))))
+

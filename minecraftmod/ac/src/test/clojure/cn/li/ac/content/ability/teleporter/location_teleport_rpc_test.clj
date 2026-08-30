@@ -21,3 +21,4 @@
   ;; A very short hop is floored at the 8.0 minimum distance multiplier, not
   ;; sqrt(1.0) = 1.0.
   (is (= 1400.0 (#'rpc/cp-cost 0.5 1.0 false))))
+

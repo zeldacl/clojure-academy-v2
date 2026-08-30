@@ -26,3 +26,4 @@
       "family segment follows the ability path segment")
   (is (true? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/mine-ray-fx)))
   (is (false? (core/fx-namespace? 'cn.li.ac.content.ability.meltdowner/electron-missile))))
+

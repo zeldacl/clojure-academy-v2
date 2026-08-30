@@ -8,3 +8,4 @@
                             'cn.li.combat.final-damage-test
                             'cn.li.combat.dependency-direction-test)]
     (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))
+

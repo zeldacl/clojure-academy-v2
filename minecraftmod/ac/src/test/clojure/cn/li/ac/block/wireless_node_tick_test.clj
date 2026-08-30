@@ -55,3 +55,4 @@
                     (fn [_ _ _] (swap! blockstate-calls inc))]
         (#'node-logic/sync-blockstate-if-changed! nil :level :pos old new)
         (is (= 1 @blockstate-calls)))))))
+

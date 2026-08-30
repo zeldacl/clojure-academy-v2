@@ -21,3 +21,4 @@
     (is (= {:editable-node-name? false
             :editable-password? false}
            (#'node-info/node-info-area-policy nil)))))
+

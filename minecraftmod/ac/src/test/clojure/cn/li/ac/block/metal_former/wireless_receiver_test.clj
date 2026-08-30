@@ -19,3 +19,4 @@
   ;; TileMetalFormer: super("metal_former", 3, 3000, IFConstants.LATENCY_MK1)
   (is (= 3000.0 former-config/max-energy))
   (is (= 50.0 former-config/receiver-bandwidth)))
+

@@ -41,3 +41,4 @@
 
 (deftest ac-static-text-resources-do-not-use-legacy-my-mod-namespace
 	(is (empty? (resource-files-containing-legacy-namespace))))
+

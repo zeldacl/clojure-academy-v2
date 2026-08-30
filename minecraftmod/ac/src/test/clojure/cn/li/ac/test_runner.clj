@@ -8,3 +8,4 @@
   (runner/run-tests! {:root-segments ["src" "test" "clojure" "cn" "li" "ac"]
                       :base-ns "cn.li.ac"
                       :only-property "ac.test.only"}))
+

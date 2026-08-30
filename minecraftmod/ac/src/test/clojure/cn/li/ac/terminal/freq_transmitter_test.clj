@@ -7,3 +7,4 @@
     (is (= :freq-transmitter (:id app)))
     (is (= "Frequency Transmitter" (:name app)))
     (is (= :wireless (:category app)))))
+

@@ -101,3 +101,4 @@
                               (msg-registry/register-block-messages! :new-domain [:x]))))
       (finally
         (msg-registry/reset-registry-for-test! snapshot)))))
+

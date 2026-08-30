@@ -81,3 +81,4 @@
                         (energy-api/register-provider! {:server-session-id :test-session}
                                                        :tank
                                                        (atom (container/energy-container 10.0 0.0))))))
+

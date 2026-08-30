@@ -150,3 +150,4 @@
     (is (= 1 (ParticleKernel/integrate particles start (.reservedEnd particles) 0.05)))
     (is (= 1 (.size particles)))
     (is (< (Math/abs (- 0.05 (double (aget (.age particles) 0)))) 1.0e-5))))
+

@@ -148,3 +148,4 @@
           (is (= (:executed a) (:executed b))))
         (finally
           (store/reset-store!))))))
+

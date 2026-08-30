@@ -46,3 +46,4 @@
          (expr/evaluate :test/double [5.0] 0
                         {:test/double (fn [args _seed]
                                         (* 2.0 (double (first args))))}))))
+

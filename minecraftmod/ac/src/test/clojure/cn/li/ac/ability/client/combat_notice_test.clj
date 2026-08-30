@@ -29,3 +29,4 @@
       (is (empty? (notice/session-notices-snapshot component :session-a)))
       (notice/dispose! component)
       (is (empty? (notice/notices-snapshot component))))))
+

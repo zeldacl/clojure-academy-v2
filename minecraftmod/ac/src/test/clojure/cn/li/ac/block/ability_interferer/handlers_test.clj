@@ -55,3 +55,4 @@
       (is (= {:success false}
              (#'handlers/handle-remove-from-whitelist (assoc payload :player-name "")
                                                       :player))))))
+

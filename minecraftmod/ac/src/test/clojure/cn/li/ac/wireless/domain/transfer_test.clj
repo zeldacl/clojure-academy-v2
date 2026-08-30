@@ -65,3 +65,4 @@
   (is (= [:only] (transfer/rotated [:only] 7)))
   (is (= [:a :b] (transfer/rotated [:a :b] 0)))
   (is (= [:b :a] (transfer/rotated [:a :b] 1))))
+

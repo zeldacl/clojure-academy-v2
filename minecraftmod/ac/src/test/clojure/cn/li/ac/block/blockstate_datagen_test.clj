@@ -58,3 +58,4 @@
           ;; Sanity: every condition map should be unique (mutually exclusive mapping).
           (is (= (count parts) (count (set (map :condition parts))))
               (str "conditions must be unique for " (:registry-name definition))))))))
+

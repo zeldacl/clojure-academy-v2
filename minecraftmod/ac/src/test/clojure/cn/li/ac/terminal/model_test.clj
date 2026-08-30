@@ -18,3 +18,4 @@
     (is (= #{:media-player :map}
            (:installed-apps (model/install-apps with-app #{:map}))))
     (is (= #{} (:installed-apps (model/uninstall-terminal with-app))))))
+

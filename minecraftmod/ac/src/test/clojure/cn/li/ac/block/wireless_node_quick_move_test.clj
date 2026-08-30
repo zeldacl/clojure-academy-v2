@@ -54,3 +54,4 @@
         (is (= 100 (:player-inventory-start @called)))
         (is (fn? (get-in @called [:cfg :inventory-pred])))
         (is (seq (get-in @called [:cfg :rules])))))))
+

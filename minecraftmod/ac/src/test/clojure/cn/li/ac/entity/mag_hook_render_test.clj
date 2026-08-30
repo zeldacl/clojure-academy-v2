@@ -32,3 +32,4 @@
 (deftest orientation-matches-upstream-test
   ;; glRotated(-yaw + 90, 0,1,0) then glRotated(pitch - 90, 0,0,1)
   (is (= [[:y 60.0] [:z -70.0]] (:rotations (render-with false)))))
+

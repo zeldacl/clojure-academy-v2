@@ -30,3 +30,4 @@
             :wireless-bandwidth 333.0}
            (cfg/tier-config :normal)))
     (is (= 9999.0 (:max-energy (cfg/tier-config :advanced))))))
+

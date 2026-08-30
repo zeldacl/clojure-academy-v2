@@ -91,3 +91,4 @@
     (with-redefs [wireless-api/is-node-linked? (fn [_] (throw (ex-info "no" {})))]
       (is (false? (op/is-node-connected? :n "pw")))
       (is (false? (op/is-node-connected? :n ""))))))
+

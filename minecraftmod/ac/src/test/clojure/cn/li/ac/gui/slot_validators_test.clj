@@ -19,3 +19,4 @@
 
 (deftest output-slot-validator-blocks
   (is (false? (v/output-slot-validator :anything))))
+

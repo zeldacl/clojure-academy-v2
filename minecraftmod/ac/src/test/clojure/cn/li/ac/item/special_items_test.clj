@@ -166,3 +166,4 @@
   (let [{:keys [result removed]} (run-matter-unit! :none (matter-hit {}))]
     (is (= {:consume? false} result))
     (is (empty? removed))))
+

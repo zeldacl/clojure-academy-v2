@@ -101,3 +101,4 @@
     (testing "output slot accepts energy items only"
       (is (true? (node-gui/can-place-item? nil 1 :energy-item)))
       (is (false? (node-gui/can-place-item? nil 1 :ordinary-item))))))
+

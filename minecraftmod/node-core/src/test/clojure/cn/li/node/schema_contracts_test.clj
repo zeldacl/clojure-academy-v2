@@ -37,3 +37,4 @@
     (is (= 7 (get-in txn [:owners :alice :working-state :energy])))
     (is (= 9 (get (contracts/owner-state txn :bob) :energy)))
     (is (= #{:alice :bob} (set (map :owner (contracts/txn-entries txn)))))))
+

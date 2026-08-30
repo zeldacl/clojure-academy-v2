@@ -25,3 +25,4 @@
              (:skill-namespaces meltdowner)))
       (is (= ['cn.li.ac.content.ability.meltdowner/mine-ray-fx]
              (:fx-namespaces meltdowner))))))
+

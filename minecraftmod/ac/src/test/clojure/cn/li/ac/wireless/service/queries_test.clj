@@ -65,3 +65,4 @@
                                                    (vb/pos-of node-vb)))
                   lookup/get-node-connection (constantly nil)]
       (is (= 1 (count (query/find-available-nodes-at world 0 0 0)))))))
+

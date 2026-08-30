@@ -137,3 +137,4 @@
         "the /aim cheat switch round-trips like any other persisted domain")
     (is (= [:electromaster :railgun]
            (get-in decoded [:preset-data :slots [0 0]])))))
+

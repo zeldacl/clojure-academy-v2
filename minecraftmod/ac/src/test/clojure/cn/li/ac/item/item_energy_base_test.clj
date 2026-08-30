@@ -67,3 +67,4 @@
       (is (= 5.0 (sd/get-double tag "energy")))
       (is (= 5.0 (im/pull-energy-from-item stk 100.0 true)))
       (is (= 0.0 (sd/get-double tag "energy"))))))
+

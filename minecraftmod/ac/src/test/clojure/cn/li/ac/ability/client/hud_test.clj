@@ -129,3 +129,4 @@
     (is (false? (:in-cooldown slot)))
     (is (= 0 (:cooldown-remaining slot)))
     (is (= 100 (:cooldown-total slot)))))
+

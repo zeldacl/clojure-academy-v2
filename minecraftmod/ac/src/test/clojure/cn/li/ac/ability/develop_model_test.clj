@@ -43,3 +43,4 @@
     (is (develop/idle? d4))
     (is (develop/idle? d5))
     (is (= 0 (:stim d5)))))
+

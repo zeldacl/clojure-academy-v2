@@ -26,3 +26,4 @@
 (deftest due-degenerate-interval-test
   (is (true? (sched/due? 123 1 [0 0 0])))
   (is (true? (sched/due? 123 0 [0 0 0]))))
+

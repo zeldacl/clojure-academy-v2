@@ -50,3 +50,4 @@
                        {}
                        {:player-id "p1" :skill-exps {}}))]
       (is (= 240 (:cooldown-total slot))))))
+

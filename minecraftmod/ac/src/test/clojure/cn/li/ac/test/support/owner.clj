@@ -27,3 +27,4 @@
 (defn default-client-owner
   ([] (client-owner default-client-session-id))
   ([player-uuid] (client-owner default-client-session-id player-uuid)))
+

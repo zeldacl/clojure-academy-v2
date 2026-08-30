@@ -33,3 +33,4 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Conflicting Imaginary Fusor recipe id"
                           (recipes/replace-recipes! [custom (assoc-in custom [:output :count] 2)])))))
+

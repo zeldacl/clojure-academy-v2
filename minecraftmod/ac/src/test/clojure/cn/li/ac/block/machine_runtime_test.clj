@@ -5,7 +5,7 @@
             [cn.li.mcmod.platform.world :as world]))
 
 (def test-schema
-  [{:key :energy :type :double :default 0.0 :persist? true}
+  [{:key :energy :type :float :default 0.0 :persist? true}
    {:key :update-ticker :type :int :default 0 :persist? false}])
 
 (def test-runtime (runtime/schema-runtime test-schema :server-only? true))
@@ -97,3 +97,4 @@
         (handler :p :w :part-pos :developer)
         (is (= {:player :p :gui-type :developer :world :w :pos :controller-pos}
                @opened))))))
+

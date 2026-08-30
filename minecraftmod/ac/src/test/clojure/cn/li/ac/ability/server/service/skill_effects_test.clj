@@ -66,3 +66,4 @@
   (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"
                           (skill-effects/current-cp "p1"))))))
+

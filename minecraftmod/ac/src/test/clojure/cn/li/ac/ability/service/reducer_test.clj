@@ -167,3 +167,4 @@
                             (assoc (ddata/new-develop-data) :state :developing))]
     (is (false? (reducer/server-tick-noop? player-state)))))
 
+

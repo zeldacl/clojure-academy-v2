@@ -40,3 +40,4 @@
     (is (= :release (:op (first left))))
     (is (= :destroy (:op (:packet destroyed))))
     (is (some? (replication/tombstone service (:instance-id (:handle spawned)))))))
+

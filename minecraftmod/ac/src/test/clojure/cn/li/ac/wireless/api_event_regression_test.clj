@@ -156,3 +156,4 @@
           (is (not (:success result)))
           (is (= :password (:reason result)))
           (is (empty? @events)))))))
+

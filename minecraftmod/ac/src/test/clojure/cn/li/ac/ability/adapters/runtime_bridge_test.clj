@@ -53,3 +53,4 @@
                                                    (swap! aborted conj player-uuid))]
       (runtime-hooks/on-player-dimension-change! "dimension-player" "minecraft:overworld" "minecraft:the_nether")
       (is (= ["dimension-player"] @aborted)))))
+

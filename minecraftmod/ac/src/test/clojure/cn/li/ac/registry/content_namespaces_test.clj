@@ -34,3 +34,4 @@
      :init-fns []})
   (let [plan (content-ns/current-content-load-plan)]
     (is (= :demo-extension (:phase (last plan))))))
+

@@ -37,3 +37,4 @@
     (registry-verify/finalize-gui-network-registration!)
     (is (true? (:frozen? (net-server/handlers-snapshot))))
     (is (true? (:frozen? (msg-registry/registry-snapshot))))))
+

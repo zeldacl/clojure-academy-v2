@@ -31,3 +31,4 @@
             materialized (get-in ability [:tunables :damage])]
         (is (contains? materialized :range))
         (is (= 2 (count (:range materialized))))))))
+

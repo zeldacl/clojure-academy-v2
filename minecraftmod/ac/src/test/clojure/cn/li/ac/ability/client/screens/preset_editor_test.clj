@@ -30,3 +30,4 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Client read model owner requires :player-uuid"
                         (screen/editor-state-snapshot {:client-session-id :session-a}))))
+

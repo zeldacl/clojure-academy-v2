@@ -82,3 +82,4 @@
                   msg-registry/msg (fn [_ action] [:developer action])]
       (handlers/register-network-handlers!)
       (is (= 5 (count @calls))))))
+

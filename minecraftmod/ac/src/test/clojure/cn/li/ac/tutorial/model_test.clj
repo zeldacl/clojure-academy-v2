@@ -88,3 +88,4 @@
 (deftest energy-bridge-not-registered
   (is (nil? (registry/tutorial-by-id :energy_bridge))
       "energy_bridge.md exists but should NOT be registered (matches upstream AC)"))
+

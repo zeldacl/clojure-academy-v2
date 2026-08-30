@@ -21,8 +21,8 @@
   (let [docs (fake-loader
               {"manifest.edn" {:documents [{:kind :composite :id :test/a :resource "a.edn"}
                                            {:kind :composite :id :test/b :resource "b.edn"}]}
-               "a.edn" {:kind :composite :id :test/a :revision 1 :layer :mid :inputs {} :outputs {} :body {:component :x}}
-               "b.edn" {:kind :composite :id :test/b :revision 1 :layer :mid :inputs {} :outputs {} :body {:component :y}}})
+               "a.edn" {:kind :composite :id :test/a :revision 1 :layer :composite :inputs {} :outputs {} :body {:component :x}}
+               "b.edn" {:kind :composite :id :test/b :revision 1 :layer :composite :inputs {} :outputs {} :body {:component :y}}})
         result (loader/install! {:manifest-resource "manifest.edn" :document-loader docs})]
     (is (= [:test/a :test/b] (:registered result)))
     (is (empty? (:errors result)))
@@ -42,9 +42,9 @@
               {"manifest.edn" {:documents [{:kind :composite :id :test/good :resource "good.edn"}
                                            {:kind :composite :id :test/bad :resource "bad.edn"}
                                            {:kind :composite :id :test/also-good :resource "also-good.edn"}]}
-               "good.edn" {:kind :composite :id :test/good :revision 1 :layer :mid :inputs {} :outputs {} :body {:component :x}}
-               "bad.edn" {:kind :composite :id :test/wrong-id :revision 1 :layer :mid :inputs {} :outputs {} :body {:component :x}}
-               "also-good.edn" {:kind :composite :id :test/also-good :revision 1 :layer :mid :inputs {} :outputs {} :body {:component :x}}})
+               "good.edn" {:kind :composite :id :test/good :revision 1 :layer :composite :inputs {} :outputs {} :body {:component :x}}
+               "bad.edn" {:kind :composite :id :test/wrong-id :revision 1 :layer :composite :inputs {} :outputs {} :body {:component :x}}
+               "also-good.edn" {:kind :composite :id :test/also-good :revision 1 :layer :composite :inputs {} :outputs {} :body {:component :x}}})
         result (loader/install! {:manifest-resource "manifest.edn" :document-loader docs})]
     (is (= [:test/good :test/also-good] (:registered result)))
     (is (= 1 (count (:errors result))))
@@ -66,3 +66,4 @@
         result (loader/install! {:manifest-resource "manifest.edn" :document-loader docs})]
     (is (empty? (:registered result)))
     (is (= 1 (count (:errors result))))))
+

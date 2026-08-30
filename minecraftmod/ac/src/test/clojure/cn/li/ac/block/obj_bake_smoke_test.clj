@@ -69,3 +69,4 @@
           (is (obj/baked-has-part? baked part))
           (obj/render-baked-part! baked part fake-pose fake-vc 0 0))
         (is (pos? @calls))))))
+

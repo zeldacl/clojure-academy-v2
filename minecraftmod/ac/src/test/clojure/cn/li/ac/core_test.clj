@@ -81,3 +81,4 @@
     ;; back to no model at all.
     (is (some #{[:entity-render-ns "entity_mag_hook" "cn.li.ac.entity.mag-hook-render"]}
               @calls))))
+

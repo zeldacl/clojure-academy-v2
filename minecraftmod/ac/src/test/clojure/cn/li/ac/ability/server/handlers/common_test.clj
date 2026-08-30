@@ -26,3 +26,4 @@
   (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound :server-session-id"
                           (handlers-common/get-state "p2"))))))
+

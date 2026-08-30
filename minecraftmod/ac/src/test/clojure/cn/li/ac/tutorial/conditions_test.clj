@@ -116,3 +116,4 @@
     (is (= 1 (count cond-map)))
     (is (contains? cond-map :ores))
     (is (not (contains? cond-map :welcome)))))
+

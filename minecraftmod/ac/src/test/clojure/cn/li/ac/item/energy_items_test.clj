@@ -18,3 +18,4 @@
     (is (= {:consume? true}
            (#'energy-items/open-portable-developer! {:player :player-1
                                                      :side :server})))))
+

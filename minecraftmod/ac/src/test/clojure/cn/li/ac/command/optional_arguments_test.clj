@@ -33,3 +33,4 @@
         "the skill itself stays required, as upstream reports invalid without it")
     (is (not (:optional? (subcommand-arg subs :learn "skill")))
         "setters that upstream has no query form for stay required")))
+

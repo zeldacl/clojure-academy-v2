@@ -157,3 +157,4 @@
       (is (every? (set (:gui-data-slot-status-codes status))
                   ["IDLE" "BASE_ONLY" "NO_TOP" "COMPLETE" "COMPLETE_NOT_WORKING"])
           "status codes must cover every value base-tick-state can produce"))))
+

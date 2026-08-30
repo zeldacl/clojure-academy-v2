@@ -48,3 +48,4 @@
             (is (some #(= % "font must be a string") errors)))))
       (finally
         (config-reg/set-config-values! config-common/gameplay-domain gameplay/default-values)))))
+

@@ -14,3 +14,4 @@
       (is (map? (:translation ach)))
       (is (contains? (:translation ach) :en_us))
       (is (contains? (:translation ach) :zh_cn)))))
+

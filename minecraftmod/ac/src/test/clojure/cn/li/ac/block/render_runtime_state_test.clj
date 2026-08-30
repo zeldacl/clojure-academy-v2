@@ -17,3 +17,4 @@
       (is (fn? @registered*))
       (@registered*)
       (is (true? @invoked*)))))
+

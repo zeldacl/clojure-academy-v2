@@ -107,3 +107,4 @@
     (is (= [{:type :score/mark :tag :damaged :progression 0.2
              :owner nil :ability-id :vec-reflection}] (:side-events result)))
     (is (= 1 (count (:reflections result))))))
+

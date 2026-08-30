@@ -96,3 +96,4 @@
       "no player state means no cheats, never a fail-open")
   (is (false? (commands/cheats-enabled? {}))
       "and a context without a player resolves to off"))
+

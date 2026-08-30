@@ -26,3 +26,4 @@
     (is (= [:ac :x] (get-in r [:slots [3 0]])))
     (is (= [:ac :y] (get-in r [:slots [3 1]])))
     (is (= d r))))
+

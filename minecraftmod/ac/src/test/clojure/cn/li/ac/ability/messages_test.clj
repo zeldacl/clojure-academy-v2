@@ -28,3 +28,4 @@
          (message-registry/msg-id :sync-v2)))
   (is (= ability-messages/MSG-REQ-SAVED-POS-PERFORM
          (message-registry/msg-id :req-saved-pos-perform))))
+

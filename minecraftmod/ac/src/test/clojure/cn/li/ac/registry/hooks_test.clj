@@ -72,3 +72,4 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"AC hook registry is frozen"
                         (hooks/register-client-renderer! 'a.b/init!))))
+

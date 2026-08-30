@@ -13,7 +13,7 @@
     (registry/register-primitive!
      {:id :test/emit :revision 1 :inputs {:value {:type :any}} :outputs {} :impl (fn [_ _] {})})
     (registry/register-primitive!
-     {:id :test/produce :revision 1 :inputs {} :outputs {:result {:type :double}} :impl (fn [_ _] {:result 1.0})})
+     {:id :test/produce :revision 1 :inputs {} :outputs {:result {:type :float}} :impl (fn [_ _] {:result 1.0})})
     (registry/register-primitive!
      {:id :test/seq :revision 1 :children {:steps {:kind :seq :flow :sequential}} :impl (fn [_ _] {})})
     (registry/register-primitive!
@@ -40,7 +40,7 @@
       :impl (fn [_ _] {})})
     (registry/register-primitive!
      {:id :test/with-callback :revision 1
-      :inputs {:on-each {:type :node :scope {:item {:type :double}}}}
+      :inputs {:on-each {:type :node :scope {:item {:type :float}}}}
       :impl (fn [_ _] {})})
     (f)
     (registry/reset-for-test!)))
@@ -147,3 +147,4 @@
 
 (deftest seed-bound-is-honored-test
   (is (nil? (scope/check! {:component :test/emit :value {:ref [:local :seeded]}} #{:seeded}))))
+

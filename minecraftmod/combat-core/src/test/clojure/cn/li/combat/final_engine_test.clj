@@ -50,10 +50,10 @@
                  :commit-session! (fn [_ patches] (swap! commits conj patches))})
         program (compiler/compile-program
                  {:component :flow/sequence
-                  :steps [{:component :session/read :key :charge :bind {:value :charge}}
+                  :steps [{:component :state/read :key :charge :bind {:value :charge}}
                           {:component :data/bind :to :next
                            :value {:expr :math/add :args [{:ref [:local :charge]} 1]}}
-                          {:component :session/write :key :charge :value {:ref [:local :next]}}
+                          {:component :state/write :key :charge :value {:ref [:local :next]}}
                           {:component :cost/spend :budget {:resources {:mana 2}}
                            :bind {:insufficient? :insufficient?}}
                           {:component :effect/vfx :effect-id :ring :operation :spawn

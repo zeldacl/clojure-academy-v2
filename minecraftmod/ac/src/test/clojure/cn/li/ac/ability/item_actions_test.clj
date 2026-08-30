@@ -64,3 +64,4 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Item action registries are frozen"
                         (ia/register-item-entity-spawn! "academy:new" {:entity-id "e"}))))
+

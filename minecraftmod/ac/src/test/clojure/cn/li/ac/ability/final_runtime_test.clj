@@ -53,3 +53,4 @@
            (resolve-world {:world-id "world:explicit"
                            :context {:world-id "world:nether"}})))
     (is (= "minecraft:overworld" (resolve-world {})))))
+

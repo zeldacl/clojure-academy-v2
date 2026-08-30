@@ -77,3 +77,4 @@
                  used (gen/double* {:min 0.0 :max 10000.0 :infinite? false :NaN? false})]
     (let [d (resource/consume-cp {:cur-cp cur} used 0)]
       (>= (:cur-cp d) 0.0))))
+

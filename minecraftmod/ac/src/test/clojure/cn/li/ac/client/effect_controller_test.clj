@@ -43,3 +43,4 @@
     (let [instance (first (vals @(:instances (controller/runtime))))]
       (is (= 11 (:event-seq instance)))
       (is (= 2.0 (get-in instance [:params :value]))))))
+

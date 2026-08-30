@@ -25,3 +25,4 @@
                             'cn.li.node.schema-contracts-test
                             'cn.li.node.dependency-direction-test)]
     (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))
+

@@ -1,14 +1,15 @@
 {:kind :composite
  :id :test/strike
  :revision 1
- :layer :mid
+ :layer :composite
  :doc "Test fixture composite for cn.li.combat.composite-loader's own test suite: strikes lightning at a position and damages one target."
  :inputs {:target {:type :entity-ref}
           :position {:type :vec3}
-          :amount {:type :double}}
+          :amount {:type :float}}
  :outputs {}
  :body
  {:component :flow/sequence
   :steps
   [{:component :world/lightning :position {:ref [:input :position]}}
    {:component :combat/damage :target {:ref [:input :target]} :amount {:ref [:input :amount]}}]}}
+

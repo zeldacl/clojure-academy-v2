@@ -62,3 +62,4 @@
            (get-in translations [:zh_cn "ability.skill.teleporter.dim_folding_theorem.desc"])))
     (is (= "暴击 %s"
            (get-in translations [:zh_cn "ability.teleporter.critical_hit"]))))))
+

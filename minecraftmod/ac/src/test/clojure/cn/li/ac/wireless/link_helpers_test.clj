@@ -71,3 +71,4 @@
   (testing "invalid node position"
     (is (false? (link-helpers/valid-node-position?
                   (link-helpers/payload-node-position {:node-x 1 :node-z 3}))))))
+

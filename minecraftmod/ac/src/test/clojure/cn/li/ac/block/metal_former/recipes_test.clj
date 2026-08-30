@@ -37,3 +37,4 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Conflicting Metal Former recipe id"
                           (recipes/replace-recipes! [custom (assoc-in custom [:output :count] 2)])))))
+

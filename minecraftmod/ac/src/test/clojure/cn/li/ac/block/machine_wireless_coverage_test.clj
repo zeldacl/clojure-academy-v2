@@ -76,3 +76,4 @@
     (when-let [spec (tdsl/get-tile tile-id)]
       (is (not (contains? (:capability-keys spec #{}) :wireless-generator))
           (str tile-id " is not the energy-bearing tile upstream")))))
+

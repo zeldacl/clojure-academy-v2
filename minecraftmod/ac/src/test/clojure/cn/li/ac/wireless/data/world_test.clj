@@ -167,3 +167,4 @@
       (is (some? restored))
       (is (empty? (world-registry/networks restored)))
       (is (empty? (world-registry/connections restored))))))
+

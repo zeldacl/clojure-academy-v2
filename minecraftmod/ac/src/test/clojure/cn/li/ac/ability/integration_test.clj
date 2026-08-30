@@ -33,3 +33,4 @@
       (is (true? (get-in updated [:resource-data :activated])))
       (is (< (get-in updated [:resource-data :cur-cp])
              (get-in updated [:resource-data :max-cp]))))))
+

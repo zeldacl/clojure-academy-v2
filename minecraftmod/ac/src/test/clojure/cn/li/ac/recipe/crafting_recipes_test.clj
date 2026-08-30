@@ -31,3 +31,4 @@
     (is (pos? (count recipes)))
     (doseq [r recipes]
       (is (valid-recipe? r) (str "invalid recipe: " (pr-str (:id r)))))))
+

@@ -67,3 +67,4 @@
            ;; the recorded duration holds until the entry expires entirely
            (or (zero? (cooldown/get-remaining d1 :k :main))
                (= ticks (cooldown/get-max d1 :k :main)))))))
+

@@ -51,3 +51,4 @@
       (let [result (commands/change-network-ssid! network1 "net2")]
         (is (not (:success result)))
         (is (= :ssid-taken (:reason result)))))))
+

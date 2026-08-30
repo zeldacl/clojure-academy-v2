@@ -115,3 +115,4 @@
                                wd (lookup/get-network-by-ssid wd "cap-net") far-node "pw" nil))))
           (is (:success (commands/link-node-to-network!
                           wd (lookup/get-network-by-ssid wd "cap-net") near-b "pw" nil))))))))
+

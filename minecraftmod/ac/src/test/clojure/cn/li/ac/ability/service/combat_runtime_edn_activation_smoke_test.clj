@@ -95,3 +95,4 @@
       (is (= :accepted (:status railgun-result)))
       (is (seq (:vfx-signals railgun-result))
           "railgun's :start spawns the railgun-charge VFX; it must appear in :vfx-signals"))))
+

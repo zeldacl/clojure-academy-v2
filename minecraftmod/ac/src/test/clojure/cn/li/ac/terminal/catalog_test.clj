@@ -26,3 +26,4 @@
                  #{:about :tutorial :skill-tree}))))
   (is (= "app.academy.freq_transmitter"
          (catalog/app-name-key (catalog/app-by-id :freq-transmitter)))))
+

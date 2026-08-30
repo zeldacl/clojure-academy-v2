@@ -44,3 +44,4 @@
       (let [result (handlers/handle-change-password (assoc payload :password "x") :player)]
         (is (false? (:success result)))
         (is (seq (:messages result)))))))
+

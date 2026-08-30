@@ -6,3 +6,4 @@
 (defn -main [& _]
   (let [result (t/run-tests 'cn.li.vfx.replication-contract-test 'cn.li.vfx.final-engine-test 'cn.li.vfx.dependency-direction-test 'cn.li.vfx.network-contract-test)]
     (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))
+

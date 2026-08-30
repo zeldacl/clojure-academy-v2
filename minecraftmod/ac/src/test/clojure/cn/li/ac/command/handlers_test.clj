@@ -114,3 +114,4 @@
       (is (re-find #"EDN compile errors \(2\):" (:message result)))
       (is (re-find #"combat/railgun: bad shape" (:message result)))
       (is (re-find #"vfx/beam-arc-fade: unknown field" (:message result))))))
+

@@ -70,3 +70,4 @@
                  :ctx-id nil
                  :session-id "effect-session"}]
                (second @captured-effects))))))))
+

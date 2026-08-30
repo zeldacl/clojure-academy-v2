@@ -15,3 +15,4 @@
       (f)
       (finally
         (alter-var-root #'fw/framework (constantly prev))))))
+

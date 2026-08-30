@@ -45,3 +45,4 @@
                       eps (max 1.0e-9 (* 1.0e-12 (max (Math/abs lo) (Math/abs hi) 1.0)))]
                   (and (<= (- lo eps) v)
                        (<= v (+ hi eps))))))
+

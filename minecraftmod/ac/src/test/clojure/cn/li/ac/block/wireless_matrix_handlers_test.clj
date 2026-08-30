@@ -70,3 +70,4 @@
       (let [result (handlers/handle-change-ssid {:new-ssid "new"} :player)]
         (is (handler-failure? result))
         (is (= :exception (:reason result)))))))
+

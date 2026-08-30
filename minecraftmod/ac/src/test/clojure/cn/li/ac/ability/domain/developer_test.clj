@@ -41,3 +41,4 @@
       (is (= (:energy spec) (:max-energy config)))
       (is (= (:cps spec) (:energy-per-stimulation config)))
       (is (= (:tps spec) (:stimulation-interval-ticks config))))))
+

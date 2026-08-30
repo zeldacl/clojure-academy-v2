@@ -35,3 +35,4 @@
     (let [cfg (node-blockstate/get-node-model-texture-config "node_basic_energy_3_connected")]
       (is (= "academy:block/node_basic_side_3" (:side cfg)))
       (is (= "academy:block/node_top_1" (:vert cfg))))))
+

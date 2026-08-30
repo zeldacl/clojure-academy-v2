@@ -34,3 +34,4 @@
   "Drop optional :callback entries from captured send-to-server calls."
   [sent-coll]
   (mapv #(dissoc % :callback) sent-coll))
+

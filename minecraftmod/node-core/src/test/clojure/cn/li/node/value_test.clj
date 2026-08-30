@@ -17,3 +17,4 @@
 (deftest literal-passes-through-test
   (is (= "beam" (value/resolve-value "beam" {} 0)))
   (is (= [1 2 3] (value/resolve-value [1 2 3] {} 0))))
+

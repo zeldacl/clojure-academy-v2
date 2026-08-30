@@ -233,3 +233,4 @@
                                         nil (tick-ctx cooldown 510))))
         (is (= 1 (count (node-conn/get-generators (lookup/get-node-connection wd node-vb))))
             "cooldown must restart after recovery, not reuse the old timestamp")))))
+

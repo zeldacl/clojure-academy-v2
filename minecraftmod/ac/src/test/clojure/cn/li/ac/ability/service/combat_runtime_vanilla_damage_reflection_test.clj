@@ -156,3 +156,4 @@
                           {:attacker-front? true :damage-type :mob})]
             (is (= 10.0 residual))
             (is (empty? @seen))))))))
+

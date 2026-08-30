@@ -22,3 +22,4 @@
       (testing "DSL specs are not accepted as runtime item stacks"
         (is (false? (core/is-mat-core? {:id "mat_core_0"})))
         (is (false? (plate/is-constraint-plate? {:id "constraint_plate"})))))))
+

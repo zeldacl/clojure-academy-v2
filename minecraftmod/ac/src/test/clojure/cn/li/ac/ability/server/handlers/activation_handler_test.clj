@@ -72,3 +72,4 @@
       (activation-handler/handle-set-activated-request {:activated true} uuid)
       (is (true? (get-in (store/get-player-state test-player/test-session-id uuid) [:resource-data :activated]))))))
 
+

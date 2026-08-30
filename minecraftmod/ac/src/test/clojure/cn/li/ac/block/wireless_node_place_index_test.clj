@@ -33,3 +33,4 @@
               (is (contains? (si/positions-in-index (world-registry/spatial-index wd)
                                                     (si/nearby-chunk-keys 0 0 0 1))
                              [0 0 0])))))))))
+

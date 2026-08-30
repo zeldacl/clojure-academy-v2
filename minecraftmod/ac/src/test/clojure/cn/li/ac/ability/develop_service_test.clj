@@ -105,3 +105,4 @@
         {:keys [develop-data completed?]} (develop/tick-develop (:develop-data started))]
     (is (false? completed?))
     (is (= :developing (:state develop-data)))))
+

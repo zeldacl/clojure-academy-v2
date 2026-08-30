@@ -29,3 +29,4 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Content discovery provider registry is frozen"
                         (discovery/unregister-provider! :demo))))
+

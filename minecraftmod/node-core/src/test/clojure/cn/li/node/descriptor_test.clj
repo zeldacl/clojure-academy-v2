@@ -12,7 +12,7 @@
 (deftest register-composite-rejects-impl-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"mid-layer component must not have :impl"
-       (registry/register-composite! {:id :test/fake-mid :revision 1 :layer :mid :impl (fn [_ _] nil)}))))
+       (registry/register-composite! {:id :test/fake-mid :revision 1 :layer :composite :impl (fn [_ _] nil)}))))
 
 (deftest register-source-rejects-impl-test
   (is (thrown-with-msg?
@@ -32,7 +32,7 @@
 
 (deftest lookup-and-primitive-count-test
   (registry/register-primitive! {:id :test/a :revision 1 :impl (fn [_ _] {})})
-  (registry/register-composite! {:id :test/b :revision 1 :layer :mid :body {:component :test/a}})
+  (registry/register-composite! {:id :test/b :revision 1 :layer :composite :body {:component :test/a}})
   (is (= :test/a (:id (registry/descriptor :test/a))))
   (is (nil? (registry/descriptor :test/missing)))
   (is (= 1 (registry/primitive-count))))
@@ -40,3 +40,4 @@
 (deftest invalid-layer-rejected-test
   (is (thrown? clojure.lang.ExceptionInfo
                (registry/register-composite! {:id :test/bad-layer :revision 1 :layer :nonsense}))))
+

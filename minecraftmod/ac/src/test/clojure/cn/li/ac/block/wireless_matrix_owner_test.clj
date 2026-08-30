@@ -58,3 +58,4 @@
       (handler :player :world :pos :wireless-matrix)
       (is (= "test-uuid-123" (:placer-uuid @saved-state)))
       (is (= "alice" (:placer-name @saved-state))))))
+

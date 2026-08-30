@@ -325,3 +325,4 @@
           {key "not-a-list"})
         (is (= ["minecraft:item" "minecraft:xp_bottle" "minecraft:experience_bottle"]
                (skill-config/tunable-string-list :vec-deviation :targeting.excluded-entity-ids)))))))
+

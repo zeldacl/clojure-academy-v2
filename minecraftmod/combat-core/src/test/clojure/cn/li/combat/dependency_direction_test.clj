@@ -66,3 +66,4 @@
 
 (deftest sanity-scanned-more-than-a-handful-of-files-test
   (is (>= (count (clj-files "src/main/clojure")) 8)))
+

@@ -231,3 +231,4 @@
     (is (empty? violations)
         (str "Legacy :session-id owner usage (use mcmod.runtime.owner):\n"
              (str/join "\n" violations)))))
+

@@ -9,3 +9,4 @@
 
 (deftest unknown-app-launch-fails-test
   (is (false? (client-apps/launch! :missing-app :player))))
+

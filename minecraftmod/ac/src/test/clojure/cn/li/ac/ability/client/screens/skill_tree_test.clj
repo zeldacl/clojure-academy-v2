@@ -85,3 +85,4 @@
     (screen/close-screen! "player-1")
     (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
     (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2"))))))
+

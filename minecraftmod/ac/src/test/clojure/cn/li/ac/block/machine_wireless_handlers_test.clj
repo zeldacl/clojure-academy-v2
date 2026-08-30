@@ -84,3 +84,4 @@
                     pos/block-pos identity]
         (is (true? (:success ((:disconnect handlers) base-payload :player))))
         (is (= 1 @unlink-calls))))))
+

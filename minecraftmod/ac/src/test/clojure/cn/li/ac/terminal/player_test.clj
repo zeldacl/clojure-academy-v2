@@ -50,3 +50,4 @@
 (deftest fresh-state-when-uninitialized-test
   (let [player (mock-player)]
     (is (= (model/fresh-state) (player/state player)))))
+

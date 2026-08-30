@@ -90,3 +90,4 @@
         (is (= "" (:text (nth segs 1))))  ;; empty line
         (is (str/includes? (:text (nth segs 2)) "Misaka No.5000"))
         (is (str/includes? (:text (nth segs 3)) "Open Data Terminal"))))))
+

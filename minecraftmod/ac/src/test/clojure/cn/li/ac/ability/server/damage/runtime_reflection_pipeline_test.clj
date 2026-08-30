@@ -36,3 +36,4 @@
         (is (true? ((:should-cancel-attack-interception? hooks-map)
                     "p" "a" 8.0 :src)))
         (is (= [["p" "a" 8.0 :src]] @calls))))))
+

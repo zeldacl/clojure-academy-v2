@@ -17,3 +17,4 @@
   ;; result must always be the updated state map.
   (is (map? (player/mark-conditions-dirty (model/fresh-state) [1])))
   (is (map? (player/mark-conditions-dirty (model/fresh-state) [1 2 3]))))
+

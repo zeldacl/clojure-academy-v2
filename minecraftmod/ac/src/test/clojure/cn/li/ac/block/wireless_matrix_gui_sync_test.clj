@@ -20,3 +20,4 @@
         (is (= 2 @(:core-level container)))
         (is (false? @(:is-working container)))
         (is (= 40 @(:bandwidth container)))))))
+

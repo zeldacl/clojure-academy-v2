@@ -118,3 +118,4 @@
     (is (= 1 (:level ability-data)))
     (is (= 1 (count events)))
     (is (dev/idle? develop-data))))
+
