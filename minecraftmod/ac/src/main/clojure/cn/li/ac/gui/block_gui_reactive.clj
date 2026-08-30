@@ -223,8 +223,8 @@
         _ (when custom-bind! (custom-bind! r container menu player signals))
         _ (when wireless? (rt/put-user-signal! r :wireless-role (sig/signal-o (name wireless-role))))]
     (screen-config r signals container menu properties histograms
-                   current-tab-atom tech-ui custom-bind!
-                   (or update-fn update-signals!))))
+             current-tab-atom tech-ui custom-bind!
+             (or update-fn update-signals!))))
 
 ;; ============================================================================
 ;; Open screen (replaces create-screen-fn + registration)

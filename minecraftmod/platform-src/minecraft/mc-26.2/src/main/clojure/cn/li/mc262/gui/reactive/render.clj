@@ -10,7 +10,7 @@
             [clojure.string :as str]
             [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mc262.client GuiGraphicsHelper]
-           [cn.li.mc262.client.render ReactivePreviewRenderState]
+           [cn.li.mc262.client.render GuiPerspectiveWarp ReactivePreviewRenderState]
            [com.mojang.blaze3d.pipeline RenderPipeline]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
@@ -354,7 +354,7 @@
           x0 (unchecked-int seg-start)
           x1 (unchecked-int seg-end)
           color (unchecked-int (long tint))]
-      (if (pos? diag)
+      (if (and (pos? diag) (GuiPerspectiveWarp/active))
         (let [lean (* diag bar-h)
               ^Matrix3x2fStack pose (.pose gg)
               shear (Matrix3x2f. (float 1.0) (float 0.0) (float diag)
