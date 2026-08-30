@@ -251,6 +251,8 @@
   (let [baked (.getOSlot node SLOT-TEXT-BAKED)]
     (when baked
       (let [{:keys [text color font-size font-desc align x-off y-off]} baked
+            editable? (boolean (get (.getStaticProps node) :editable?))
+            focused? (.hasFlag node node/FLAG-FOCUSED)
             align-kw (or align :left)
             ;; font-size / text offsets are authored in local design units (same
             ;; as w/h). Images/boxes already multiply by cum-scale; text must too
@@ -271,7 +273,16 @@
             x (+ (node-abs-x node) x-off h-off)
             y (+ (node-abs-y node) y-off v-off)]
         (cgui-font/draw-text! gg (or font-desc {}) ^String text
-                              x y font-size color align-kw true)))))
+                      x y font-size color align-kw true)
+          (when (and editable? focused?
+                 (< (rem (System/currentTimeMillis) 600) 300))
+            (let [text-w (cgui-font/text-width (or font-desc {}) ^String text font-size)
+              cursor-x (case align-kw
+                     :center (+ x (/ text-w 2.0))
+                     :right x
+                     (+ x text-w))]
+            (cgui-font/draw-text! gg (or font-desc {}) "|"
+                        cursor-x (- y 1.0) font-size color :left false)))))))
 
 (defn bake-progress! [^INode node]
   (let [bg    (.getOSlot node 1)
