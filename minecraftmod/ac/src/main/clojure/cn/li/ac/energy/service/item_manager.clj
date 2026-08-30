@@ -64,7 +64,8 @@
       (sd/set-double! tag "energy" clamped-energy)
       (sd/set-double! tag "maxEnergy" max-energy)
       (sd/set-double! tag "bandwidth" bandwidth)
-      (sd/set-string! tag "batteryType" battery-type))
+      (sd/set-string! tag "batteryType" battery-type)
+      (item/set-custom-data! item-stack tag))
     nil))
 
 ;; ============================================================================
