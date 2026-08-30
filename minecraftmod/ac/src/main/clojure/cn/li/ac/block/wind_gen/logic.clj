@@ -76,23 +76,16 @@
     :west [z y (- x)]
     [x y z]))
 
-(defn- no-obstacle? [level p direction]
-  (loop [i -7]
-    (if (> i 7)
-      true
-      (if (loop [j -7]
-            (cond
-              (> j 7) nil
-              (and (zero? i) (zero? j)) (recur (inc j))
-              :else
-              (let [[dx dy dz] (rotate-offset direction [i j -1])
-                    check-pos (pos/create-block-pos (+ (pos/pos-x p) dx)
-                                                    (+ (pos/pos-y p) dy)
-                                                    (+ (pos/pos-z p) dz))
-                    st (world/get-block-state level check-pos)]
-                (if (world/block-state-is-air st) (recur (inc j)) j))))
-        false
-        (recur (inc i))))))
+(defn- no-obstacle? [level p _direction]
+  ;; Upstream TileWindGenMain checks only the six blocks directly above the
+  ;; rotor; weather particles and blocks around the tower do not obstruct it.
+  (every? (fn [y-offset]
+            (world/block-state-is-air
+              (world/get-block-state level
+                                     (pos/create-block-pos (pos/pos-x p)
+                                                           (+ (pos/pos-y p) y-offset)
+                                                           (pos/pos-z p)))))
+          (range 1 7)))
 
 (defn- find-base-below [level p]
   (loop [y (dec (pos/pos-y p)) pillars 0]

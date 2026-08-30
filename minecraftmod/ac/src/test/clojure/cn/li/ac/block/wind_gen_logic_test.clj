@@ -22,6 +22,9 @@
 (def ^:private find-main-above-from-base
   (var-get #'cn.li.ac.block.wind-gen.logic/find-main-above-from-base))
 
+(def ^:private no-obstacle?
+  (var-get #'cn.li.ac.block.wind-gen.logic/no-obstacle?))
+
 ;; ============================================================================
 ;; Position + world mocks
 ;; ============================================================================
@@ -81,6 +84,18 @@
     (let [blocks (tower-blocks 0 64 0 0)  ;; main directly on the part
           result (scan-completeness blocks 0 64 0)]
       (is (= :base-only (:completeness result))))))
+
+(deftest obstacle-check-only-scans-six-blocks-above-the-main
+  (install-pos-mocks!)
+  (with-redefs [world/get-block-state (fn [_ block-pos]
+                                        (if (= block-pos [0 72 0]) :stone :air))
+                world/block-state-is-air (fn [state] (= state :air))]
+    (is (true? (no-obstacle? :level [0 64 0] :north))
+        "a side block must not obstruct the rotor")
+    (with-redefs [world/get-block-state (fn [_ block-pos]
+                                          (if (= block-pos [0 67 0]) :stone :air))]
+      (is (false? (no-obstacle? :level [0 64 0] :north))
+          "a block within the six cells directly above must obstruct the rotor"))))
 
 ;; ============================================================================
 ;; main-tick-fn - structure fields must sync to the client (fan render)
