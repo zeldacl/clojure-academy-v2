@@ -314,30 +314,35 @@
   [player-uuid skills screen-w screen-h now-ms]
   (let [ok (owner-key player-uuid)
         active? (boolean (seq skills))
-        ^ArrayList circles (or (.get vm-waves-by-owner ok)
-                               (when active?
-                                 (let [created (ArrayList.)]
-                                   (.put vm-waves-by-owner ok created)
-                                   created)))]
-    (when circles
-      (loop [i (dec (.size circles))]
-        (when (>= i 0)
-          (let [{:keys [born-ms life-ms]} (.get circles i)]
-            (when (>= (- now-ms (long born-ms)) (long life-ms))
-              (.remove circles (int i))))
-          (recur (dec i))))
-      ;; update(): `if (RandUtils.nextFloat < deltaTime * intensity)` -- a
-      ;; Poisson-ish roll averaging `intensity` ripples a second, not a fixed
-      ;; cadence. The port fired one every 90 ms, about seven times too many.
-      (let [last-ms (long (or (.get vm-wave-spawn-by-owner ok) now-ms))
-            delta-s (/ (double (max 0 (- now-ms last-ms))) 1000.0)]
-        (when active?
+        ^ArrayList circles (.get vm-waves-by-owner ok)]
+    (if-not active?
+      ;; Upstream VecDeviationContextC.l_terminate unregisters the overlay
+      ;; listener on MSG_TERMINATED, so the ripples vanish the same frame the
+      ;; toggle ends — there is no 1.5-2.5s decay tail. Drop the whole circle
+      ;; list on the first inactive tick instead of letting circles age out.
+      (do
+        (when circles (.clear circles))
+        (.remove vm-waves-by-owner ok)
+        (.remove vm-wave-spawn-by-owner ok))
+      (let [circles* (or circles
+                        (let [created (ArrayList.)]
+                          (.put vm-waves-by-owner ok created)
+                          created))]
+        (loop [i (dec (.size circles*))]
+          (when (>= i 0)
+            (let [{:keys [born-ms life-ms]} (.get circles* i)]
+              (when (>= (- now-ms (long born-ms)) (long life-ms))
+                (.remove circles* (int i))))
+            (recur (dec i))))
+        ;; update(): `if (RandUtils.nextFloat < deltaTime * intensity)` -- a
+        ;; Poisson-ish roll averaging `intensity` ripples a second, not a fixed
+        ;; cadence. The port fired one every 90 ms, about seven times too many.
+        (let [last-ms (long (or (.get vm-wave-spawn-by-owner ok) now-ms))
+              delta-s (/ (double (max 0 (- now-ms last-ms))) 1000.0)]
           (when (< (rand) (* delta-s (vm-wave-param skills :intensity)))
-            (.add circles (spawn-vm-wave-circle skills screen-w screen-h now-ms)))
-          (.put vm-wave-spawn-by-owner ok (long now-ms))))
-      (when (.isEmpty circles)
-        (.remove vm-waves-by-owner ok))))
-  nil)
+            (.add circles* (spawn-vm-wave-circle skills screen-w screen-h now-ms)))
+          (.put vm-wave-spawn-by-owner ok (long now-ms)))))
+    nil))
 
 (defn seed-vm-wave-state-for-test!
   ([owner circles]

@@ -78,16 +78,23 @@
 
 (defn- active-vec-deviation-ctx-id
   "First context of `player-id` whose vec-deviation toggle is active,
-  optionally excluding `exclude-ctx-id`."
+  optionally excluding `exclude-ctx-id`. Returns the context's plain string id
+  (ctx-data :id), NOT the transport key — get-all-contexts keys can be
+  `[:side route ctx-id]` vectors, and the toggle/fx state the activate path
+  wrote is keyed on the string id carried by the key-down message, so the
+  deactivate path must use the same id or its fx-end never matches the
+  fx-start owner-key on the client."
   ([player-id]
    (active-vec-deviation-ctx-id player-id nil))
   ([player-id exclude-ctx-id]
    (->> (ctx/get-all-contexts)
-        (filter (fn [[ctx-id ctx-data]]
-                  (and (not= ctx-id exclude-ctx-id)
-                       (= (:player-uuid ctx-data) player-id)
-                       (toggle/is-toggle-active? ctx-data :vec-deviation))))
-        first
+        (keep (fn [[ctx-id ctx-data]]
+                (let [id (or (:id ctx-data)
+                             (if (vector? ctx-id) (last ctx-id) ctx-id))]
+                  (when (and (not= id exclude-ctx-id)
+                             (= (:player-uuid ctx-data) player-id)
+                             (toggle/is-toggle-active? ctx-data :vec-deviation))
+                    id))))
         first)))
 
 (defn- set-skill-state-key! [ctx-id k v]
