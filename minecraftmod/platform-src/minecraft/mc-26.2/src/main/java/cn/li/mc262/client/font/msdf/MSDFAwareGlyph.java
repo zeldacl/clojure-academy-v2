@@ -25,11 +25,8 @@ import net.minecraft.client.gui.font.glyphs.BakedGlyph;
  * the bitmap top, the two per-glyph terms cancel and the compensation is a
  * CONSTANT shift per font — no per-glyph term (that would re-introduce the
  * bitmap-top variation for t/r/h vs a/m/n):
- * {@code ((pixelHeight - descenderPx - 3) * f) - 7}, where {@code f} is the
- * ratio of the rasterizer's pixel size to the 32px reference
- * ({@link MsdfFontFace#stbEquivalentFactor()}). The bake() wraps the
- * Stitcher so the FreeType glyph's bitmap can be shifted before it is
- * stitched into the font texture.
+ * {@code ascentPx - (7 + 3)}. The bake() wraps the Stitcher so the FreeType
+ * glyph's bitmap can be shifted before it is stitched into the font texture.
  */
 public final class MSDFAwareGlyph implements UnbakedGlyph {
 
@@ -159,17 +156,14 @@ public final class MSDFAwareGlyph implements UnbakedGlyph {
          * opaque content) sits below the bitmap top by
          * (bearingTop - xheight). Both bearingTop terms cancel:
          *   visual top = 7 + shift - xheight
-         * So a CONSTANT shift aligns all x-height content on one line —
-         * per-glyph y0/bearingTop terms would re-introduce the bitmap-top
-         * variation (visible for t/r/h vs a/m/n) and must not be in the
-         * formula. The shift places the baseline at 1.20.1's
-         * (pixelHeight - descenderPx - 3) rescaled to the FreeType size.
+            * So a CONSTANT shift aligns all x-height content on one line —
+            * per-glyph y0/bearingTop terms would re-introduce the bitmap-top
+            * variation (visible for t/r/h vs a/m/n) and must not be in the
+            * formula. The FreeType provider already rasterizes at the matching
+            * size, so rescaling this compensation would shift the whole face.
          */
         private float verticalShift() {
-            float f = face.stbEquivalentFactor();
-            return ((MsdfFontManager.DESIGN_PIXEL_HEIGHT
-                    - face.descenderPixels() - LEGACY_RENDER_SHIFT) * f)
-                    - VANILLA_ASCENT;
+                return face.ascentPixels() - (VANILLA_ASCENT + LEGACY_RENDER_SHIFT);
         }
     }
 }
