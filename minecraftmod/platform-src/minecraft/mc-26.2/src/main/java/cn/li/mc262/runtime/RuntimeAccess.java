@@ -1,5 +1,6 @@
 package cn.li.mc262.runtime;
 
+import cn.li.mc262.bridge.ItemStackInterop;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -100,9 +101,7 @@ public final class RuntimeAccess {
     }
 
     public static Object itemStackOf(Object nbt) {
-        // 26.2 ItemStack parsing API changed; callers needing full NBT restore
-        // should use ItemData / ValueInput seams. EMPTY keeps AOT call sites compiling.
-        return ItemStack.EMPTY;
+        return ItemStackInterop.loadFromTag(nbt);
     }
 
     public static Object getEntityLevel(Object entity) {

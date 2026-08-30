@@ -67,17 +67,22 @@
 (defn set-slot-item-be!
   "Set item in a ScriptedBlockEntity slot via customState.
   - default-state: map used when customState is nil
-  - post-write:    (fn [state]) -> state', applied after assoc-in"
-  [container slot-index item-stack default-state post-write]
+  - post-write:    (fn [state]) -> state', applied after assoc-in
+  - options:       commit options for the scripted BE state"
+  ([container slot-index item-stack default-state post-write]
+   (set-slot-item-be! container slot-index item-stack default-state post-write {}))
+  ([container slot-index item-stack default-state post-write {:keys [sync-client?]
+                                                               :or {sync-client? false}}]
   (let [tile (:tile-entity container)]
     (try
       (machine-runtime/commit-transform! tile default-state
                                          (fn [state]
                                            (-> state
                                                (assoc-in [:inventory slot-index] item-stack)
-                                               post-write)))
+                                               post-write))
+                                         :sync-client? sync-client?)
       (catch Exception e
-        (log/stacktrace "set-slot-item-be! failed" e)))))
+        (log/stacktrace "set-slot-item-be! failed" e))))))
 
 (defn get-tile-state
   "Get the current Clojure state map from a tile entity.

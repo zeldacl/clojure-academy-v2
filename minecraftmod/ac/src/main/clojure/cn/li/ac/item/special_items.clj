@@ -95,6 +95,7 @@
     (if nbt-value
       (sd/set-string! tag "matterKind" nbt-value)
       (sd/remove-entry! tag "matterKind"))
+    (pitem/set-custom-data! item-stack tag)
     (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))
     ;; Upstream getTranslationKey() appends the material name (Empty Unit /
     ;; Imag Phase Liquid Unit). Use the same lang keys the creative-tab

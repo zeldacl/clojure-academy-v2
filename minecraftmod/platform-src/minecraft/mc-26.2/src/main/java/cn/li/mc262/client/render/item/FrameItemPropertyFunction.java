@@ -21,13 +21,10 @@ public enum FrameItemPropertyFunction implements RangeSelectItemModelProperty {
 
     @Override
     public float get(ItemStack stack, @Nullable ClientLevel level, @Nullable ItemOwner owner, int seed) {
-        if (level == null) {
-            return 0.0F;
-        }
-        // Upstream: frame = (int)(GameTimer.getTime() * 4) % 4 — one frame
-        // every 0.25s, the full 4-frame loop per second. Game time advances
-        // 20 ticks/s, so a 20-tick cycle at 5 ticks/frame matches it.
-        return (level.getGameTime() % 20) / 5.0F;
+        // Item models can be resolved outside a ClientLevel and cached across
+        // world ticks. A wall-clock frame is available in every display
+        // context and matches upstream's GameTimer-based 4 FPS animation.
+        return (System.currentTimeMillis() / 250L) % 4L;
     }
 
     @Override

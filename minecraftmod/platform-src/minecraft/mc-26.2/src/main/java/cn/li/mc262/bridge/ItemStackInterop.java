@@ -30,6 +30,16 @@ public final class ItemStackInterop {
             .orElseGet(CompoundTag::new);
     }
 
+    /** Decode a stack written by {@link #saveToTag(ItemStack)}. */
+    public static ItemStack loadFromTag(Object data) {
+        if (!(data instanceof CompoundTag tag) || tag.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        return ItemStack.CODEC.parse(NbtOps.INSTANCE, tag)
+            .result()
+            .orElse(ItemStack.EMPTY);
+    }
+
     public static void mergeSavedInto(ItemStack stack, CompoundTag data) {
         if (data == null) {
             return;

@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.imag-phase.handlers
 	(:require [cn.li.ac.block.phase-gen.config :as phase-config]
 						[cn.li.mcmod.platform.item :as pitem]
+						[cn.li.mcmod.platform.structured-data :as sd]
 						[cn.li.mcmod.platform.world :as world]))
 
 (defn- stack-empty? [stack]
@@ -17,7 +18,10 @@
 
 (defn- to-phase-liquid-matter-unit! [stack]
 	(try
-		(pitem/set-damage! stack phase-config/matter-unit-phase-liquid-meta)
+		(let [data (pitem/ensure-custom-data stack)]
+			(sd/set-string! data "matterKind" "phase-liquid")
+			(pitem/set-custom-data! stack data)
+			(pitem/set-damage! stack phase-config/matter-unit-phase-liquid-meta))
 		true
 		(catch Exception _ false)))
 

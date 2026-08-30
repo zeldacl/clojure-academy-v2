@@ -13,6 +13,7 @@
     :type :inventory
     :default [nil]
     :persist? true
+    :client-sync? true
     :gui-sync? false
     :load-fn inv-helpers/load-inventory
     :save-fn inv-helpers/save-inventory}

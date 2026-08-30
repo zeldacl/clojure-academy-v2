@@ -1,9 +1,11 @@
 package cn.li.mc262.client.render.item;
 
+import cn.li.mcver.ItemData;
 import com.mojang.serialization.MapCodec;
 import javax.annotation.Nullable;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.item.properties.numeric.RangeSelectItemModelProperty;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.item.ItemStack;
 
@@ -23,6 +25,12 @@ public enum MatterKindItemPropertyFunction implements RangeSelectItemModelProper
 
     @Override
     public float get(ItemStack stack, @Nullable ClientLevel level, @Nullable ItemOwner owner, int seed) {
+        if (ItemData.hasCustomData(stack)) {
+            CompoundTag tag = ItemData.getCustomDataCopy(stack);
+            if ("phase-liquid".equals(tag.getStringOr("matterKind", ""))) {
+                return 1.0F;
+            }
+        }
         return stack.getDamageValue() >= 1 ? 1.0F : 0.0F;
     }
 

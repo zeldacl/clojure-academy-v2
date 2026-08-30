@@ -43,6 +43,9 @@
 (defn same?               [stack other]  (call :item-is-equal? stack other))
 (defn save-to-data        [stack data]   (call :item-save-to-data stack data))
 (defn ensure-custom-data  [stack]        (call :item-ensure-custom-data stack))
+(defn set-custom-data!     [stack data]
+  (when-let [f (get (current-ops) :item-set-custom-data!)]
+    (f stack data)))
 (defn max-damage          [stack]        (call :item-get-max-damage stack))
 (defn set-damage!         [stack dmg]    (call :item-set-damage! stack dmg))
 (defn set-hover-name!     [stack name]  (call :item-set-hover-name! stack name))

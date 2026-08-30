@@ -191,6 +191,9 @@
                                       data)
         :item-ensure-custom-data   (fn [^ItemStack this]
                                       (ItemData/getOrCreateCustomData this))
+        :item-set-custom-data!     (fn [^ItemStack this ^CompoundTag data]
+                    (ItemData/setCustomData this data)
+                    this)
         :item-get-max-damage       (fn [^ItemStack this] (.getMaxDamage this))
         :item-set-damage!          (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
         :item-set-hover-name!     (fn [^ItemStack this name-key]

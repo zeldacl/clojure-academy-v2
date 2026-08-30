@@ -141,6 +141,9 @@
   "Bind universal BER for scripted tiles under EntityRenderersEvent.RegisterRenderers."
   [^EntityRenderersEvent$RegisterRenderers evt]
   (ensure-client-render-platform-for-ber!)
+  ;; Register the AC renderer loaders while the only BER registration event
+  ;; is still open. FMLClientSetupEvent occurs later on 26.2.
+  ((platform-bootstrap/client-init-callback!))
   (render-init/register-default-renderer-init-fns!)
   (render-init/register-all-renderers!)
   (log/debug "RegisterRenderers - attaching scripted block entity renderers")

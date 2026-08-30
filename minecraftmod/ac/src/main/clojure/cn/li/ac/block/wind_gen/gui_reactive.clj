@@ -33,7 +33,7 @@
 (defn- create-main-container [tile player] (gui-sync/create-schema-container wind-schema/wind-gen-main-schema tile player :wind-gen-main {:gui-id (gui-manifest/gui-id :wind-gen-main)}))
 (defn- main-slot-count [_] (slot-schema/tile-slot-count main-schema-id))
 (defn- main-get-slot [c i] (common/get-slot-item-be c i))
-(defn- main-set-slot! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))
+(defn- main-set-slot! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity {:sync-client? true}))
 (defn- main-can-place? [_ _ s] (fan-item-stack? s))
 (defn- main-still-valid? [_ _] true)
 (def ^:private main-server-sync! (:server-menu-sync! main-sync))
