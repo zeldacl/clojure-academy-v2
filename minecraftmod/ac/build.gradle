@@ -202,19 +202,26 @@ configurations {
 dependencies {
     presentationCompiler project(':presentation-compiler')
 }
+def presentationCodeSources = fileTree(dir: 'src/presentation/clojure')
 def compilePresentationViews = tasks.register('compilePresentationViews', JavaExec) {
     group = 'build'
     description = 'Compile declarative Presentation UI sources into runtime artifacts.'
     dependsOn ':presentation-compiler:classes'
+    // The code-built root is optional on a clean clone (empty directories
+    // are not represented by Git). A FileTree contributes no classpath entry
+    // when the root is absent, while preserving future helper namespaces.
     classpath = configurations.presentationCompiler +
-        files('src/presentation/clojure', 'src/presentation/resources', 'src/main/resources')
+        files('src/presentation/resources', 'src/main/resources') +
+        presentationCodeSources
     mainClass = 'clojure.main'
     args '-m', 'cn.li.presentation.compiler.main',
          '--source', file('src/presentation/resources').absolutePath,
          '--output', generatedPresentationResources.get().asFile.absolutePath,
          '--content-id', 'academy'
     inputs.dir file('src/presentation/resources')
-    inputs.dir file('src/presentation/clojure')
+    // Track helper sources when present, without requiring an empty directory
+    // to exist on a clean clone.
+    inputs.files(presentationCodeSources).optional()
     outputs.dir generatedPresentationResources
 }
 sourceSets.main.resources.srcDir generatedPresentationResources
