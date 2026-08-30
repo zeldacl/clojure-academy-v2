@@ -92,6 +92,14 @@
   []
   (vals @registered-key-mappings))
 
+(defn get-all-key-categories
+  "Get the category instances created for registered mappings.
+
+   NeoForge 26.2 requires these Identifier-backed categories to be registered
+   explicitly on RegisterKeyMappingsEvent before their mappings are exposed."
+  []
+  (vals @registered-categories))
+
 (defn get-key-mappings-by-input-id
   "Get registered KeyMappings map keyed by input-id.
 
