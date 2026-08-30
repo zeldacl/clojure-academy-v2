@@ -30,8 +30,10 @@
   []
   (or @shared-lifecycle*
       (let [value (create)]
-        (or (compare-and-set! shared-lifecycle* nil value)
-            @shared-lifecycle*))))
+        ;; compare-and-set! returns a boolean — return the map, not true/false.
+        (if (compare-and-set! shared-lifecycle* nil value)
+          value
+          @shared-lifecycle*))))
 
 (defn register-host! [lifecycle host-id host-kind runtime-api]
   (when-not (keyword? host-id)

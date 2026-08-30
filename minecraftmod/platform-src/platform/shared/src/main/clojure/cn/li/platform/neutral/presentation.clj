@@ -97,14 +97,28 @@
                                             (ensure-registered!) host-id))]
     (dispatch! mount event)))
 
+(defn- as-stage-result
+  "Normalize host frame extraction to {:stage :frame}.
+
+   `:frame!` returns a raw packet (wrapped by dispatch-runtime-stage!);
+   `:frame-with-context!` must return the same envelope. Tolerate a bare
+   packet so a mismatched host API cannot submit a nil stage."
+  [stage result]
+  (cond
+    (nil? result) nil
+    (and (map? result) (contains? result :frame)) result
+    :else {:stage stage :frame result}))
+
 (defn dispatch-stage-with-context!
   [stage frame-id delta-seconds width height context]
   (let [registry (ensure-registered!)
         api (lifecycle/host-api registry host-id)]
-    (if-let [frame-with-context! (:frame-with-context! api)]
-      (frame-with-context! stage frame-id delta-seconds width height context)
-      (lifecycle/dispatch-runtime-stage!
-        registry host-id stage frame-id delta-seconds width height))))
+    (as-stage-result
+     stage
+     (if-let [frame-with-context! (:frame-with-context! api)]
+       (frame-with-context! stage frame-id delta-seconds width height context)
+       (lifecycle/dispatch-runtime-stage!
+         registry host-id stage frame-id delta-seconds width height)))))
 
 (defn dispatch-stage!
   [stage frame-id delta-seconds width height]
