@@ -83,7 +83,7 @@
                       (.getTransforms model)
                       particle)
       (catch Exception e
-        (log/error "[obj-model-registration] could not build OBJ mesh from" obj-path "-" (.getMessage e))
+        (log/stacktrace (str "[obj-model-registration] could not build OBJ mesh from" obj-path "-" ) e)
         model))))
 
 (defn- after-bake
@@ -124,5 +124,5 @@
                        (reify ModelModifier$AfterBake
                          (modifyModelAfterBake [_ model ctx]
                            (after-bake model ctx meshes composites))))
-            (log/info "[obj-model-registration] OBJ item models registered:"
+            (log/debug "[obj-model-registration] OBJ item models registered:"
                       (mapv :item-id specs))))))))

@@ -78,7 +78,15 @@
          ;; The actual type is handled by a nested converter
          (throw (ex-info "Atom type needs explicit sub-type" {:key key})))
       :read (fn [_nbt key]
-        (throw (ex-info "Atom type needs explicit sub-type" {:key key})))}})
+        (throw (ex-info "Atom type needs explicit sub-type" {:key key})))}
+
+     :string-list
+     {:write (fn [nbt key value]
+         (sd/set-string-list! nbt key (vec (or value []))))
+      :read (fn [nbt key]
+        (sd/get-string-list nbt key))
+      :has-key? (fn [nbt key]
+        (sd/has-key-safe? nbt key))}})
 
 ;; ============================================================================
 ;; Field Accessor Helpers
@@ -316,7 +324,7 @@
          ~'tile)
        
        ;; Log registration
-       (log/info ~(str "Registered NBT serialization for: " name-str)))))
+       (log/debug ~(str "Registered NBT serialization for: " name-str)))))
 
 ;; ============================================================================
 ;; Macro: defworldnbt

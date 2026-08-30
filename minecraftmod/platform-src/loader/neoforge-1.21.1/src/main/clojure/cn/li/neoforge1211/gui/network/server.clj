@@ -28,7 +28,7 @@
            player
            respond-fn)))
     (catch Throwable t
-      (log/error "[GUI-NETWORK] req-handler UNCAUGHT:" (ex-message t) (.printStackTrace t)))))
+      (log/stacktrace "[GUI-NETWORK] req-handler UNCAUGHT:" t))))
 
 (defn- make-request-handler
   []

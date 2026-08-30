@@ -16,7 +16,7 @@
   (if-let [fw-atom (fw/fw-atom)]
     (let [missing (seq (remove (set (keys ops-map)) be-ops-keys))]
       (swap! fw-atom assoc-in [:platform :be-ops] ops-map)
-      (log/info "BeOps installed:" (pr-str (keys ops-map)))
+      (log/debug "BeOps installed:" (pr-str (keys ops-map)))
       (when missing
         (log/error "BeOps MISSING required keys:" (pr-str missing))))
     (log/error "BeOps install FAILED: Framework atom nil")))

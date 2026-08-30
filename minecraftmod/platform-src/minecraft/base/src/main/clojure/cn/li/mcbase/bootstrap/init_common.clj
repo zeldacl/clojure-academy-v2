@@ -12,7 +12,7 @@
 (defn set-platform-version!
   [platform-key]
   (platform-dispatch/install-platform-version! platform-key "mc1201-bootstrap")
-  (log/info "Set platform dispatch to" platform-key))
+  (log/debug "Set platform dispatch to" platform-key))
 
 (defn assert-platform-ready!
   [platform-key]
@@ -30,14 +30,14 @@
 (defn init-from-java!
   [platform-key on-runtime-init]
   (let [ctx (aot/compile-context)]
-    (log/info "[BOOTSTRAP_TRACE_INIT] init-from-java enter"
+    (log/debug "[BOOTSTRAP_TRACE_INIT] init-from-java enter"
               {:platform platform-key
                :compile-context ctx})
     (if (aot/compiling?)
-      (log/info "[BOOTSTRAP_TRACE_INIT] skip content init during compilation/check" {:platform platform-key})
+      (log/debug "[BOOTSTRAP_TRACE_INIT] skip content init during compilation/check" {:platform platform-key})
       (do
         (assert-platform-ready! platform-key)
         (set-platform-version! platform-key)
         (when (fn? on-runtime-init)
           (on-runtime-init))
-        (log/info "Platform adapter initialized" {:platform platform-key})))))
+        (log/debug "Platform adapter initialized" {:platform platform-key})))))

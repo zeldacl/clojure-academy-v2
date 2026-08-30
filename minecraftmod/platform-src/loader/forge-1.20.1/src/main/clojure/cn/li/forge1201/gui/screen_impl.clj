@@ -12,26 +12,25 @@
 
 (defn- register-one-screen!
   [gui-id menu-type screen-creator factory-fn-kw]
-  (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
+  (log/debug "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
   (when menu-type
     (MenuScreens/register
      menu-type
      (reify MenuScreens$ScreenConstructor
        (create [_ menu player-inventory title]
-         (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
+         (log/debug "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
          (try
            (let [screen (screen-creator menu player-inventory title)]
              screen)
            (catch Throwable e
-             (log/error "[SCREEN-FACTORY] Screen creation failed:" (.getMessage e))
              (log/stacktrace "[SCREEN-FACTORY] Exception:" e)
              (throw e))))))
-  (log/info "Registered screen for GUI ID" gui-id)))
+  (log/debug "Registered screen for GUI ID" gui-id)))
 
 (defn register-screens!
   "Register screen factories with Forge."
   []
-  (log/info "Registering GUI screens for Forge 1.20.1")
+  (log/debug "Registering GUI screens for Forge 1.20.1")
   (try
     (screen-registry/register-platform-screens!
      (target/current-target-key!)
@@ -42,12 +41,12 @@
       :register-menu-screen! register-one-screen!})
     (log/info "Screen factories registered successfully")
     (catch Exception e
-      (log/error "Failed to register screen factories:" (.getMessage e))
+      (log/stacktrace "Failed to register screen factories:" e)
       (.printStackTrace e))))
 
 (defn init-client!
   "Initialize client-side GUI system. Call during FMLClientSetupEvent."
   []
-  (log/info "Initializing Forge 1.20.1 client GUI system")
+  (log/debug "Initializing Forge 1.20.1 client GUI system")
   (register-screens!)
-  (log/info "Forge 1.20.1 client GUI system initialized"))
+  (log/debug "Forge 1.20.1 client GUI system initialized"))

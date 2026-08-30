@@ -24,6 +24,6 @@
               (when-let [factory (cap-registry/get-handler-factory k)]
                 (factory tile nil))
               (catch Exception e
-                (log/error "[wireless] tile-capability: factory threw for" k
-                           "on" tile-id ":" (ex-message e))
+                (log/debug "[wireless] tile-capability: factory threw for" k
+                          "on" tile-id ":" (ex-message e))
                 nil))))))))

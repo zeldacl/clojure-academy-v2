@@ -85,5 +85,4 @@
               (on-runtime-active platform-event validated-data))
             (event-handler validated-data))))
       (catch Throwable t
-        (log/error (str "Error handling " event-name " event:") (.getMessage t))
-        (log/error "Stack trace:" t)))))
+        (log/stacktrace (str "Error handling " event-name " event") t)))))

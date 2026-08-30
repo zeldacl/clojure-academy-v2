@@ -14,7 +14,7 @@
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc262.client.i18n :as i18n]
-            [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.neoforge262.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
             [cn.li.mc262.client.effects.particle :as particle]
             [cn.li.mc262.client.effects.sound :as sound]
@@ -44,7 +44,7 @@
             [cn.li.platform.neutral.client-runtime :as tesr-api]
             [cn.li.neoforgebase.registry.state :as registry-state])
   (:import [net.minecraft.client Minecraft KeyMapping KeyMapping$Category]
-           [cn.li.mcver McAccess]
+           [cn.li.mcver McAccess McClientAccess]
            [net.minecraft.client.renderer.block FluidModel$Unbaked]
            [net.minecraft.client.resources.model.sprite Material]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -186,13 +186,13 @@
                           (case effect-key
                             :mcmod/get-entity-position
                             (try
-                              (McAccess/clientEntitySnapshot
+                              (McClientAccess/clientEntitySnapshot
                                 (java.util.UUID/fromString (:entity-uuid payload)))
                               (catch Exception _ nil))
 
                             :mcmod/set-client-entity-motion
                             (try
-                              (McAccess/setClientEntityMotion
+                              (McClientAccess/setClientEntityMotion
                                 (java.util.UUID/fromString (:entity-uuid payload))
                                 (double (:vx payload)) (double (:vy payload)) (double (:vz payload)))
                               (catch Exception _ false))

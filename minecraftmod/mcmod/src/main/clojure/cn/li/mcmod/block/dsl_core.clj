@@ -154,7 +154,7 @@
   "Register a block specification. No-op during AOT compilation."
   [block-spec]
   (validators/validate-block-spec block-spec)
-  (log/info "Registering block:" (:id block-spec))
+  (log/debug "Registering block:" (:id block-spec))
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in [:registry :blocks (:id block-spec)] block-spec))
   block-spec)

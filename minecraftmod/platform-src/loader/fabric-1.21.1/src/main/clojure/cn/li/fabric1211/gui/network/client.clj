@@ -60,5 +60,5 @@
            (.execute client (fn [] (handle-response! bytes))))
          (fn [bytes ^Minecraft client]
            (.execute client (fn [] (handle-runtime-sync! bytes)))))
-       (log/info "Fabric 1.21.1 typed GUI network client transport initialized")))
+       (log/debug "Fabric 1.21.1 typed GUI network client transport initialized")))
   nil)

@@ -101,16 +101,26 @@
 
 (defn add-skill-exp
   "Add experience to a skill and accumulate level progress.
-  
-  Returns: {:data updated-ability-data :exp-delta float :events-needed []}."
+
+  Upstream AbilityData.addSkillExp semantics:
+  - skill exp gains scaled-exp (amount × skill exp-incr-speed), clamped at 1.0
+  - level progress always gains the FULL scaled-exp (× global rate) — even
+    when the skill is already mastered, using it still advances the level-up
+    progress (upstream addLevelProgress(amt) runs unconditionally)
+  - the global prog-incr-rate scales level progress only, never the skill exp
+    (upstream mul1 enters addLevelProgress alone)
+
+  Returns: {:data updated-ability-data
+            :exp-delta float (clamped amount actually added to skill exp)
+            :exp-scaled float (pre-clamp input, what events/level-progress use)
+            :events-needed []}."
   [ability-data skill-id raw-amount exp-incr-rate global-rate]
-  (let [scaled-amount (* (double raw-amount)
-                         (double (or exp-incr-rate 1.0))
-                         (double global-rate))
-        {:keys [data delta]} (adata/add-skill-exp ability-data skill-id scaled-amount)
-        data2 (adata/add-level-progress data delta)
-        events-needed (if (pos? delta) [:skill-exp-added :skill-exp-changed] [])]
-    {:data data2 :exp-delta delta :events-needed events-needed}))
+  (let [scaled-exp (* (double raw-amount)
+                      (double (or exp-incr-rate 1.0)))
+        {:keys [data delta]} (adata/add-skill-exp ability-data skill-id scaled-exp)
+        data2 (adata/add-level-progress data (* scaled-exp (double global-rate)))
+        events-needed (if (pos? scaled-exp) [:skill-exp-added :skill-exp-changed] [])]
+    {:data data2 :exp-delta delta :exp-scaled scaled-exp :events-needed events-needed}))
 
 ;; ============================================================================
 ;; Level-Up Progression

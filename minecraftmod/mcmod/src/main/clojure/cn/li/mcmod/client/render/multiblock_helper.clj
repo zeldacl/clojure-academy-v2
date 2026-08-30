@@ -289,7 +289,7 @@
           (finally
             (pose/pop-pose pose-stack))))
       (catch Exception e
-        (log/error "Error rendering multiblock:"(ex-message e))
+        (log/debug "Error rendering multiblock:" (ex-message e))
         (log/stacktrace "Error rendering multiblock" e)))))
 
 ;; ============================================================================

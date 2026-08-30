@@ -4,7 +4,7 @@
    Implements mcmod KeySchemeProvider SPI by querying keyboard/mouse state
    through Minecraft window + GLFW."
   (:require [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcver McAccess]
+  (:import [cn.li.mcver McClientAccess]
            [com.mojang.blaze3d.platform InputConstants$Type]
            [net.minecraft.client Minecraft]))
 
@@ -13,7 +13,7 @@
   []
   (let [mc (Minecraft/getInstance)
         window (.getWindow mc)]
-    (McAccess/windowHandle window)))
+    (McClientAccess/windowHandle window)))
 
 (defn- key-down?
   "Query GLFW key state for a keyboard key code.

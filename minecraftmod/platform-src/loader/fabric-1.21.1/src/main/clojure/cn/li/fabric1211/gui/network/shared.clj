@@ -27,7 +27,7 @@
   [^FriendlyByteBuf buf]
   (packet-base/decode-payload-bytes
     (.readByteArray buf)
-    #(log/error "Failed to deserialize Fabric network payload:" (ex-message %))))
+    #(log/stacktrace "Failed to deserialize Fabric network payload:" %)))
 
 (defn make-runtime-sync-buf
   [payload]
@@ -43,7 +43,7 @@
 
 (defn decode-map-bytes [^bytes payload]
   (packet-base/decode-payload-bytes payload
-    #(log/error "Failed to deserialize Fabric typed payload:" (ex-message %))))
+    #(log/stacktrace "Failed to deserialize Fabric typed payload:" %)))
 
 (defn- buffer->bytes [^FriendlyByteBuf buf]
   (let [length (.readableBytes buf)

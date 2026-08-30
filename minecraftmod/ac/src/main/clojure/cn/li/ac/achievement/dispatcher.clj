@@ -50,6 +50,6 @@
       (fn [{:keys [uuid skill-id]}]
         (fire-by-trigger! :skill-perform {:skill-id skill-id} uuid)))
 
-    (log/info "Achievement dispatcher initialized"))))
+    (log/debug "Achievement dispatcher initialized"))))
 
 

@@ -31,10 +31,9 @@
   [matter-unit-item-id none-meta count]
   (let [stack (pitem/stack-by-id matter-unit-item-id (int count))]
     (when stack
-      (try
-        (let [tag (pitem/ensure-custom-data stack)]
-          (sd/set-string! tag "matterKind" "none"))
-        (catch Exception _ nil))
+      ;; Empty unit: NO matterKind NBT (damage 0 means empty). A "none" tag
+      ;; made machine-produced empties NBT-incompatible with plain ones, so
+      ;; two empty stacks refused to merge (they swapped on drag instead).
       (try
         (pitem/set-damage! stack none-meta)
         (catch Exception _ nil))

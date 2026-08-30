@@ -8,6 +8,7 @@
   texture. The mesh is attached at bake time — see
   `cn.li.fabric262.client.obj-model-registration`."
   (:require [cn.li.platform.neutral.config :as modid]
+            [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
             [cn.li.mcbase.datagen.gson-util :as gson-util]
             [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
             [clojure.string :as str])
@@ -37,22 +38,12 @@
 (defn- model-ref [model-name]
   {:type "minecraft:model" :model (str modid/mod-id ":item/" model-name)})
 
-(defn- flat-item-model [{:keys [model-name json]}]
-  (let [overrides (:overrides json)]
-    (if (seq overrides)
-      {:type "minecraft:range_dispatch"
-       :property (str modid/mod-id ":energy")
-       :fallback (model-ref model-name)
-       :entries (->> overrides
-                     (map (fn [{:keys [predicate model]}]
-                            {:threshold (double (or (get predicate (str modid/mod-id ":energy")) 0.0))
-                             :model (model-ref (last (str/split (str model) #"/")))}))
-                     (sort-by :threshold) vec)}
-      (model-ref model-name))))
-
-(defn- item-definition [spec obj-bases]
+(defn- item-definition [spec obj-bases specs-by-name]
   (let [name (str (:model-name spec))
-        flat (flat-item-model spec)]
+        ;; Overrides become nested range_dispatch trees keyed on their
+        ;; predicate property (energy tiers: academy:energy; matter unit:
+        ;; minecraft:damage → academy:frame animation chain).
+        flat (item-model-core/item-model-tree specs-by-name name)]
     {:model (if (contains? obj-bases name)
               {:type "minecraft:select"
                :property "minecraft:display_context"
@@ -68,6 +59,28 @@
           (keep (fn [{:keys [model-name obj-model]}]
                   (when obj-model (str model-name))) models))))
 
+(defn- block-item-definitions
+  "items/*.json definitions for block items.
+
+  The blockstate provider writes models/item/*.json for block items but not
+  the 1.21.4+ client-item definition; without it ModelManager reports
+  \"Missing item model\" and renders the missing-mesh. Block items render
+  their own item model file, so the definition is a plain model reference."
+  [^PackOutput$PathProvider item-path-provider ^Gson gson models]
+  (keep (fn [{:keys [path-key id]}]
+          (when (and (= :item-model path-key) (string? id))
+            (let [block-item-name (second (str/split id #":"))]
+              (when (and block-item-name
+                         (not (contains? (into #{}
+                                               (map (fn [s] (str (:model-name s))))
+                                               models)
+                                         block-item-name)))
+                {:path (.json ^PackOutput$PathProvider item-path-provider
+                              (Identifier/fromNamespaceAndPath (str modid/mod-id) block-item-name))
+                 :json-tree (.toJsonTree gson
+                                         (gson-util/normalize-json {:model (model-ref block-item-name)}))}))))
+        (blockstate-core/blockstate-write-entries)))
+
 (defn create-provider
     [^PackOutput output]
   (let [^String mod-id (str modid/mod-id)
@@ -77,6 +90,7 @@
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [{:keys [all-item-count energy-tier-count simple-count models]} (item-model-core/gather-model-specs)
+              specs-by-name (into {} (map (fn [s] [(str (:model-name s)) s])) models)
               auxiliary (auxiliary-model-names models)
               obj-bases (into #{} (keep (fn [{:keys [model-name obj-model]}]
                                           (when (and obj-model (str/ends-with? (str model-name) "_3d"))
@@ -93,9 +107,12 @@
                   :when (not (contains? auxiliary (str model-name)))]
             (let [target-path (.json ^PackOutput$PathProvider item-path-provider
                                      (Identifier/fromNamespaceAndPath mod-id model-name))
-                  json-tree (.toJsonTree gson (gson-util/normalize-json (item-definition spec obj-bases)))]
+                  json-tree (.toJsonTree gson (gson-util/normalize-json (item-definition spec obj-bases specs-by-name)))]
               (swap! writes conj
                      (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))))
+          (doseq [{:keys [path json-tree]} (block-item-definitions item-path-provider gson models)]
+            (swap! writes conj
+                   (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path path)))
           (println (str "[item-model-provider/fabric] summary: items=" all-item-count
                         ", energy-tier=" energy-tier-count
                         ", simple-model=" simple-count))

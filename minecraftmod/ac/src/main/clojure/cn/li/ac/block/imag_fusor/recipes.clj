@@ -23,6 +23,14 @@
               (when (and (string? tail) (not (str/blank? tail)))
                 (str modid/MOD-ID ":" tail))))))))
 
+(defn- stack-empty?
+  "True when the slot holds nothing: nil or an empty ItemStack (upstream
+   ItemStack.isEmpty()). Slots can hold ItemStack.EMPTY rather than nil —
+   a nil-only check treated it as a real item and broke output acceptance."
+  [stack]
+  (or (nil? stack)
+      (try (boolean (pitem/empty? stack)) (catch Exception _ false))))
+
 (defn- stack-count
   [stack]
   (if stack
@@ -146,7 +154,7 @@
   (let [result-stack (recipe-output-stack recipe)]
     (cond
       (nil? result-stack) false
-      (nil? output-slot-item) true
+      (stack-empty? output-slot-item) true
       :else
       (and (try (pitem/same? output-slot-item result-stack) (catch Exception _ false))
            (<= (+ (stack-count output-slot-item) (stack-count result-stack))
@@ -182,7 +190,7 @@
        (>= (double energy) cfg/energy-per-tick)
        (>= (int liquid-amount) (int (:consume-liquid recipe 0)))
        (let [result-stack (recipe-output-stack recipe)]
-         (or (nil? output-item)
+         (or (stack-empty? output-item)
              (and result-stack
                   (try (= (item-id-from-stack output-item)
                           (item-id-from-stack result-stack))
@@ -198,7 +206,7 @@
             consume-count (int (get-in recipe [:input :count] 1))]
         (< input-count consume-count))
       (when-let [result-stack (recipe-output-stack recipe)]
-        (and output-item
+        (and (not (stack-empty? output-item))
              (try (= (item-id-from-stack output-item)
                      (item-id-from-stack result-stack))
                   (catch Exception _ false))

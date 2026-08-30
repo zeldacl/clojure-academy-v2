@@ -4,20 +4,6 @@
            [net.minecraftforge.event.entity.player PlayerInteractEvent PlayerInteractEvent$RightClickBlock]
            [net.minecraftforge.eventbus.api Event Event$Result]))
 
-(defn deny-right-click-use!
-  [evt]
-  (when (instance? PlayerInteractEvent$RightClickBlock evt)
-    (let [^PlayerInteractEvent$RightClickBlock right-click-evt evt]
-      (.setUseItem right-click-evt Event$Result/DENY)
-      (.setUseBlock right-click-evt Event$Result/DENY)))
-  evt)
-
-(defn cancel-player-interact-fail!
-  [^PlayerInteractEvent evt]
-  (.setCancellationResult evt InteractionResult/FAIL)
-  (.setCanceled evt true)
-  evt)
-
 (defn cancel-player-interact-consume!
   [^PlayerInteractEvent evt]
   (.setCancellationResult evt InteractionResult/CONSUME)

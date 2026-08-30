@@ -14,6 +14,6 @@
   (try
     (thunk)
     (catch Throwable t
-      (log/error (str "Error handling " label ":") (.getMessage t))
+      (log/stacktrace (str "Error handling " label ":") t)
       (.printStackTrace t)
       fallback)))

@@ -55,4 +55,4 @@
                                 "来自某某动画的ED曲"]
                       :model-texture "media_level5_judgelight"}
          :on-right-click (media-unlock-handler :media_2)}))
-    (log/info "Media items initialized: media-0, media-1, media-2"))))
+    (log/debug "Media items initialized: media-0, media-1, media-2"))))

@@ -201,14 +201,14 @@
 
 (defn handle-button-click! [container button-id _data]
   (case (int button-id)
-    0 (log/info "Toggled matrix working state")
+    0 (log/debug "Toggled matrix working state")
     1 (do
         (set-slot-item! container (slot-schema/slot-index matrix-slot-schema-id :core) nil)
-        (log/info "Ejected matrix core"))
+        (log/debug "Ejected matrix core"))
     2 (do
         (doseq [slot-idx (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate)]
           (set-slot-item! container slot-idx nil))
-        (log/info "Ejected all plates"))
+        (log/debug "Ejected all plates"))
     (log/warn "Unknown button ID:" button-id)))
 
 (defn quick-move-stack [container slot-index player-inventory-start]
@@ -268,4 +268,4 @@
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!
          :quick-move-fn quick-move-stack}))
-    (log/info "Wireless Matrix GUI initialized (reactive render + delegated container logic)"))))
+    (log/debug "Wireless Matrix GUI initialized (reactive render + delegated container logic)"))))

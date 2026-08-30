@@ -52,6 +52,12 @@
     :default ""
     :persist? true}
 
+   {:key :sound-cooldown
+    :type :int
+    :default 0
+    :persist? false
+    :gui-sync? false}
+
    {:key :inventory
     :nbt-key "Inventory"
     :type :inventory

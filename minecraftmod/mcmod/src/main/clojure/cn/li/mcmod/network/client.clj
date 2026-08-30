@@ -128,9 +128,9 @@
                    (try
                      (callback response)
                      (catch Exception e
-                       (log/error "Error in response callback (request-id=" request-id "):" (ex-message e))
+                       (log/stacktrace (str "Error in response callback (request-id=" request-id ")") e)
                        (log/stacktrace "Error in response callback" e))))
-                 (log/warn "No pending request for response" request-id))
+                 (log/debug "No pending request for response" request-id))
                nil)
              (register-owner-push-handler! [owner-key msg-id handler-fn]
                (.put push-handlers [owner-key msg-id] handler-fn)
@@ -151,7 +151,7 @@
                    (handler payload)
                    true
                    (catch Exception e
-                     (log/error "Error in push handler" msg-id ":" (ex-message e))
+                     (log/stacktrace (str "Error in push handler " msg-id) e)
                      (log/stacktrace "Error in push handler" e)
                      true))
                  false))]
@@ -338,7 +338,7 @@
    (let [owner-key (client-owner-key owner)]
      (if-let [session (resolve-client-network-session owner {:allow-install? false})]
        ((:handle-response! session) owner-key request-id response)
-       (log/warn "No pending request for response" request-id)))))
+       (log/debug "No pending request for response" request-id)))))
 
 (defn register-push-handler!
   "Register one-way client push handler.
@@ -381,19 +381,19 @@
      (try
        (handler payload)
        (catch Exception e
-         (log/error "Error in push handler" msg-id ":" (ex-message e))
+         (log/stacktrace (str "Error in push handler " msg-id) e)
          (log/stacktrace "Error in push handler" e)))
-     (log/warn "No push handler registered for" msg-id)))
+     (log/debug "No push handler registered for" msg-id)))
   ([owner msg-id payload]
    (if-let [session (resolve-client-network-session owner {:allow-install? false})]
      (if ((:handle-owner-push! session) (push-owner-key owner) msg-id payload)
        nil
        (if (or (owner-requires-scoped-push-handler? owner)
                ((:has-owner-push-handler-msg-id? session) msg-id))
-         (log/warn "No push handler registered for" msg-id)
+         (log/debug "No push handler registered for" msg-id)
          (handle-push msg-id payload)))
      (if (owner-requires-scoped-push-handler? owner)
-       (log/warn "No push handler registered for" msg-id)
+       (log/debug "No push handler registered for" msg-id)
        (handle-push msg-id payload)))))
 
 (defonce ^:private ^HashMap request-transports (HashMap.))

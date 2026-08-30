@@ -11,7 +11,7 @@
 // applying it: target, targetId, catalog, components, resolveComponent,
 // componentSourceRoot, sourceComponentIds, modId, generatedDatagenResources,
 // loaderResourceRoots, acResources, clojureRuntimeLibraries,
-// stripClassLocalVariableTables.
+// packagedRuntimeLibraries, stripClassLocalVariableTables.
 
 if (target.loader == "forge" || target.loader == "neoforge") {
     def forgeModClassRoots = [
@@ -96,9 +96,11 @@ dependencies {
     // Architectury Loom's include configuration is the Jar-in-Jar mechanism
     // for Forge, NeoForge, and Fabric. It creates nested dependency jars in
     // the final remapped archive instead of relying on users to install
-    // ordinary library jars in the mods directory.
+    // ordinary library jars in the mods directory. The packaged set embeds
+    // the slim clojure variant; the runtime classpath above keeps the full
+    // jar so dev runs do not pay load-time compilation.
     if (runtimeLibraryPackaging == "loom-include") {
-        clojureRuntimeLibraries.each { dependencyNotation ->
+        packagedRuntimeLibraries.each { dependencyNotation ->
             include(dependencyNotation)
         }
     }

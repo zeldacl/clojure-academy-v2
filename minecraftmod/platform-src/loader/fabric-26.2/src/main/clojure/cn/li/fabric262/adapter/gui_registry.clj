@@ -56,7 +56,7 @@
   nil)
 
 (defn register-screen-handler-types! []
-  (log/info "Fabric 26.2 menu payload API unavailable; GUI screen handler registration deferred")
+  (log/debug "Fabric 26.2 menu payload API unavailable; GUI screen handler registration deferred")
   nil)
 
 (defn open-gui-for-player [player gui-id tile-entity]
@@ -80,12 +80,12 @@
      :invalidate-menu-registry! clear-gui-handler-types!}))
 
 (defn register-gui-handler! []
-  (log/info "Registering GUI handler for Fabric 26.2")
+  (log/debug "Registering GUI handler for Fabric 26.2")
   (install-registry-contract!)
   (register-screen-handler-types!)
-  (log/info "Fabric 26.2 GUI handler registered"))
+  (log/debug "Fabric 26.2 GUI handler registered"))
 
 (defn init! []
-  (log/info "Initializing Fabric 26.2 GUI system")
+  (log/debug "Initializing Fabric 26.2 GUI system")
   (register-gui-handler!)
-  (log/info "Fabric 26.2 GUI system initialized"))
+  (log/debug "Fabric 26.2 GUI system initialized"))

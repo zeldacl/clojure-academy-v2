@@ -2,13 +2,15 @@ package cn.li.forge1201.integration;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
-import cn.li.forge1201.MyMod1201;
+import cn.li.forge1201.AcademyCraft1201;
 import cn.li.mcbase.clj.ClojureInterop;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
+import mezz.jei.api.registration.ISubtypeRegistration;
+import mezz.jei.api.registration.IGuiHandlerRegistration;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -19,7 +21,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 @JeiPlugin
 public class JEIPluginWrapper implements IModPlugin {
-    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "content_plugin");
+    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(AcademyCraft1201.MODID, "content_plugin");
 
     private IModPlugin clojurePlugin;
 
@@ -42,6 +44,13 @@ public class JEIPluginWrapper implements IModPlugin {
     }
 
     @Override
+    public void registerItemSubtypes(ISubtypeRegistration registration) {
+        if (clojurePlugin != null) {
+            clojurePlugin.registerItemSubtypes(registration);
+        }
+    }
+
+    @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
         if (clojurePlugin != null) {
             clojurePlugin.registerCategories(registration);
@@ -59,6 +68,13 @@ public class JEIPluginWrapper implements IModPlugin {
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         if (clojurePlugin != null) {
             clojurePlugin.registerRecipeCatalysts(registration);
+        }
+    }
+
+    @Override
+    public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        if (clojurePlugin != null) {
+            clojurePlugin.registerGuiHandlers(registration);
         }
     }
 }

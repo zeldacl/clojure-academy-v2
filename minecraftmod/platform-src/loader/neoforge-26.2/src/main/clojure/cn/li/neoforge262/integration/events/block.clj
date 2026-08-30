@@ -5,7 +5,8 @@
   (:require [cn.li.mcbase.integration.event-support :as event-support]
             [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.mc262.integration.event-handlers :as event-handlers]
-            [cn.li.neoforge262.integration.events.event-apply :as event-apply])
+            [cn.li.neoforge262.integration.events.event-apply :as event-apply]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.event.level BlockEvent$EntityPlaceEvent]
            [net.neoforged.neoforge.event.level.block BreakBlockEvent]))
 
@@ -36,6 +37,8 @@
                        :player entity
                        :world level
                        :block (.getBlock placed-state)})]
+            (log/info "[BLOCK-PLACE-EVENT] at (" (.getX pos) "," (.getY pos) "," (.getZ pos)
+                      ") placed=" placed-state " handler-ret=" ret)
             (when (and (map? ret) (:cancel-place? ret))
               (event-apply/cancel-event! evt))))))))
 

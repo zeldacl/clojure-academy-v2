@@ -47,6 +47,5 @@
           :create-menu-proxy-fn create-menu-proxy
           :log-prefix "[MENU-PROVIDER]"})
         (catch Exception e
-          (log/error "[MENU-PROVIDER] Error creating menu:" (.getMessage e))
-          (log/error "[MENU-PROVIDER] Stack trace:" e)
+          (log/stacktrace "[MENU-PROVIDER] Error creating menu" e)
           (throw e))))))

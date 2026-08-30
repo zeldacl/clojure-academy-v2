@@ -54,7 +54,7 @@
               (create-forge-energy-adapter content-energy (fe-conversion-rate))))
           (forge-energy-descriptors))
     (catch Exception e
-      (log/error "Error creating Forge EnergyHandler capability:" (ex-message e))
+      (log/stacktrace "Error creating Forge EnergyHandler capability:" e)
       nil)))
 
 (defn register-forge-energy-capability!
@@ -67,14 +67,14 @@
     (doseq [descriptor descriptors
             tile-id (target-tile-ids descriptor)]
       (tdsl/register-tile-capability-keys! tile-id (target-capability-key descriptor)))
-    (log/info "Forge EnergyHandler (Capabilities.Energy.BLOCK) bridge enabled"
+    (log/debug "Forge EnergyHandler (Capabilities.Energy.BLOCK) bridge enabled"
               {:descriptor-count (count descriptors)}))
   true)
 
 (defn init-forge-energy!
   []
-  (log/info "Initializing Forge Energy integration...")
+  (log/debug "Initializing Forge Energy integration...")
   (register-forge-energy-capability!)
-  (log/info "Forge Energy integration initialized"))
+  (log/debug "Forge Energy integration initialized"))
 
 (defn init! [& _] (init-forge-energy!))

@@ -41,6 +41,11 @@
 (def magnetic-coil-item-id (modid/namespaced-path "magnetic_coil"))
 (def ^:private matter-unit-item-id (modid/namespaced-path "matter_unit"))
 (def ^:private imag-phase-block-id (modid/namespaced-path "imag_phase"))
+;; place-block-by-id! resolves against the DSL-id-keyed block snapshot
+;; ("imag-phase"), NOT the registry id: `imag-phase-block-id` is the registry
+;; id returned by raytraces (the fill-branch comparison above needs it), while
+;; placement needs the block's DSL id.
+(def ^:private imag-phase-block-dsl-id "imag-phase")
 (def ^:private mag-hook-entity-id (modid/namespaced-path "entity_mag_hook"))
 
 (defn matter-unit-overlay-data
@@ -74,11 +79,30 @@
           1 :phase-liquid
           :none))))
 
+(def ^:private matter-kind->nbt
+  "Material kind -> matterKind NBT value. Empty units deliberately have NO
+   matterKind NBT (damage 0 means empty, like upstream's MAT_NONE): a none
+   tag would make some empty stacks NBT-tagged and some not, so
+   ItemStack.isSameItemSameTags refused to merge two empty stacks (they
+   swapped on drag instead of stacking). nil = remove the tag."
+  {:phase-liquid "phase-liquid"
+   :none nil})
+
 (defn- set-matter-kind!
   [item-stack kind]
-  (let [tag (pitem/ensure-custom-data item-stack)]
-    (sd/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
-    (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))))
+  (let [tag (pitem/ensure-custom-data item-stack)
+        nbt-value (get matter-kind->nbt kind)]
+    (if nbt-value
+      (sd/set-string! tag "matterKind" nbt-value)
+      (sd/remove-entry! tag "matterKind"))
+    (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))
+    ;; Upstream getTranslationKey() appends the material name (Empty Unit /
+    ;; Imag Phase Liquid Unit). Use the same lang keys the creative-tab
+    ;; filled-variant carries, so every instance localizes identically.
+    (pitem/set-hover-name! item-stack
+                           (if (= kind :phase-liquid)
+                             (str "item." modid/MOD-ID ".matter_unit_phase_liquid")
+                             (str "item." modid/MOD-ID ".matter_unit_none")))))
 
 (defn- make-matter-unit-stack
   [kind]
@@ -92,6 +116,11 @@
   (if (<= (int (pitem/stack-count item-stack)) 1)
     (set-matter-kind! item-stack target-kind)
     (do
+      ;; Upstream ItemMatterUnit.onItemRightClick: `if(!isCreativeMode)
+      ;; stack.shrink(1)` — the held stack shrinks in survival, but creative
+      ;; players keep their stack while the filled unit is merged into the
+      ;; inventory. player-consume-main-hand-item! mirrors exactly that
+      ;; (creative → no-op, true).
       (entity/player-consume-main-hand-item! player 1)
       (when-let [converted (make-matter-unit-stack target-kind)]
         (entity/player-give-item-stack! player converted)))))
@@ -103,8 +132,6 @@
     (let [kind (get-matter-kind item-stack)
           hit (entity/player-raytrace-block player 5.0 (= kind :none))
           level (entity/player-get-level player)]
-      (log/info "[matter-unit] use kind=" kind "hit=" (boolean hit)
-                "hit-block-id=" (:block-id hit) "expected=" imag-phase-block-id)
       (if-not hit
         {:consume? false}
         (let [{:keys [hit-pos place-pos block-id hit-replaceable? place-replaceable?
@@ -117,15 +144,12 @@
 
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              (let [removed? (world/remove-block! level hit-block-pos)]
-                (log/info "[matter-unit] collect removed=" removed?
-                          "kind-after=" (get-matter-kind item-stack)
-                          "damage=" (try (pitem/damage item-stack) (catch Exception _ -1))
-                          "count=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
-                (when removed?
-                  (mutate-or-convert-main-hand! player item-stack :phase-liquid)
-                  (log/info "[matter-unit] after-mutate kind=" (get-matter-kind item-stack)
-                            "damage=" (try (pitem/damage item-stack) (catch Exception _ -1)))))
+              ;; world/remove-block! now removes fluids via setBlock(air) in
+              ;; the loader bindings (Level.destroyBlock returns false for
+              ;; fluid blocks); plain place-block-by-id! "minecraft:air" does
+              ;; NOT work — air is not in the mod's block registry.
+              (when (world/remove-block! level hit-block-pos)
+                (mutate-or-convert-main-hand! player item-stack :phase-liquid))
               {:consume? true})
 
             (= kind :phase-liquid)
@@ -142,7 +166,7 @@
                     [place-block-pos place-replaceable? may-edit-place?])]
               (if (and target-replaceable?
                        may-edit?
-                       (world/place-block-by-id! level imag-phase-block-id target-pos 3))
+                       (world/place-block-by-id! level imag-phase-block-dsl-id target-pos 3))
                 (do
                   (mutate-or-convert-main-hand! player item-stack :none)
                   {:consume? true})
@@ -229,12 +253,27 @@
         "matter_unit"
         {:max-stack-size 16
          :creative-tab :misc
-         :properties {:tooltip ["Matter Unit (Empty)"
-                                "Right click to collect/place imaginary phase liquid"]
-                      :model-texture "matter_unit"
+         ;; No static tooltip: upstream ItemMatterUnit has none, and the
+         ;; empty/filled states are told apart by their hover names (lang
+         ;; keys item.<modid>.matter_unit_none / _phase_liquid).
+         ;; Item model: custom academy:matter_kind predicate reads ItemStack
+         ;; damage (0 = empty, 1 = imag phase liquid) — the filled model
+         ;; carries the 4-frame flowing-liquid animation (academy:frame),
+         ;; exactly like upstream's per-damage ModelLoader registration
+         ;; (ACItems.java:270-271).
+         :properties {:model-texture "matter_unit"
+                      :item-model-damage-frame
+                      {:texture-empty "matter_unit"
+                       :texture-filled "matter_unit_phase_liquid_0"
+                       :frames ["matter_unit_phase_liquid_1"
+                                "matter_unit_phase_liquid_2"
+                                "matter_unit_phase_liquid_3"]
+                       :frame-predicate "academy:frame"
+                       :damage-predicate "academy:matter_kind"
+                       :damage-threshold 1.0}
                       :filled-variant {:nbt {"matterKind" "phase-liquid"}
                                        :damage 1
                                        :label "phase-liquid"}}
          :on-right-click use-matter-unit!}))
-    (log/info "Special items initialized: induction factors, mag_hook, matter_unit"))))
+    (log/debug "Special items initialized: induction factors, mag_hook, matter_unit"))))
 

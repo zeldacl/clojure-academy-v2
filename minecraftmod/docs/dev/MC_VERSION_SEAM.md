@@ -37,7 +37,8 @@ these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver`
 | `EnderDragonParts` | Vanilla multipart parent (`EnderDragonPart.parentMob`) |
 | `RegistryDispatch` | `BuiltInRegistries` block/item/fluid register helpers |
 | `TextureSizeAccess` | Dynamic texture pixel size lookup |
-| `McAccess` | Player/level/server accessors (`serverOf`, `dimensionId`, `dayTime`, `gameTime`, `clientPartialTick`, …) |
+| `McAccess` | Server-safe player/level/server accessors (`serverOf`, `dimensionId`, `dayTime`, `gameTime`, `serverTickCount`, `hasCommandPermission`, …) — no client-only types in any signature |
+| `McClientAccess` | Client-only accessors (`windowHandle`, `clientPartialTick`, `closeScreen`, `setScreen`, `clientEntitySnapshot`, `setClientEntityMotion`) — split from `McAccess` so the dedicated-server dist never loads client-typed classes |
 | `RegistryLookups` | `holderOrThrow(Level, ResourceKey)` across registryOrThrow / lookupOrThrow |
 | `NbtAccess` | CompoundTag/ListTag reads across classic getters vs OrEmpty/Or-default |
 | `ItemUseResults` | `Item.use` success/pass (`InteractionResultHolder` vs `InteractionResult`) |
@@ -54,6 +55,19 @@ these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver`
 Do not add a seam member to one Minecraft version without adding the matching
 public type (same relative path / name) to every other `kind: "minecraft"`
 component.
+
+### Dist safety (dedicated server)
+
+A seam class is only safe to reference from server code when **none** of its
+public method signatures mention a client-only type (`@OnlyIn(CLIENT)`, e.g.
+`Window`, `Minecraft`, `Screen`, `ClientLevel`). Clojure compiles static-method
+calls (`Class/method`) by reflecting over every public method of the class
+(`Compiler$StaticMethodExpr` → `Class.getMethods()`), which resolves those
+signature types at compile time; on a dedicated server Forge's
+`RuntimeDistCleaner` then rejects loading them and the whole namespace fails to
+load. Keep server-used classes free of client types (`McAccess`) and put any
+method whose signature names a client-only type in a dedicated client-only
+class (`McClientAccess`) that only client code imports.
 
 ### `ResourceLocations`
 

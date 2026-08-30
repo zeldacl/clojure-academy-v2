@@ -2,6 +2,7 @@
   "CLIENT-ONLY: side-checked dynamic-load entry points for shared item handlers and client init."
   (:require [cn.li.ac.terminal.client.apps.skill-tree :as skill-tree]
             [cn.li.ac.terminal.client.apps.tutorial-reactive :as tutorial-app]
+            [cn.li.ac.terminal.client.runtime :as terminal-runtime]
             [cn.li.ac.terminal.client.shell-reactive :as shell-reactive]))
 
 (defn install-ui-hooks!
@@ -23,3 +24,9 @@
 (defn toggle-terminal!
   [player]
   (shell-reactive/toggle! player))
+
+(defn terminal-screen-open?
+  "True while the terminal UI is open on screen (see shell-reactive/
+   terminal-session-open?)."
+  []
+  (terminal-runtime/ui-open?))

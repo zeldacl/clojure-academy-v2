@@ -100,7 +100,7 @@
   (let [key (world-key world)]
     (when-let [fw-atom (fw/fw-atom)]
       (swap! fw-atom update-in worlds-path dissoc key))
-    (log/info (format "Removed WiWorldData for world: %s" key)))
+    (log/debug (format "Removed WiWorldData for world: %s" key)))
   nil)
 
 (defn- remove-session-entries

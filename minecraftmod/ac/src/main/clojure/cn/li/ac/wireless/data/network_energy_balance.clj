@@ -55,7 +55,15 @@
                  cap-cache resolver/resolve-matrix-cap world (:matrix network))]
       (let [entries (collect-active-nodes! network world cap-cache)]
         (when (seq entries)
-          (let [start (transfer/rotate-start (count entries) (long game-time))
+          ;; Rotation by PASS number (quot game-time interval), not game-time:
+          ;; with an even balance interval the game-time parity at consecutive
+          ;; passes never flips, so `game-time mod n` froze the walk order and
+          ;; the first node always consumed the whole budget — the take side
+          ;; starved the give side forever (upstream shuffles every tick; a
+          ;; deterministic rotation must advance per pass to be fair).
+          (let [interval (max 1 (long (get cfg :network-update-interval-ticks 1)))
+                start (transfer/rotate-start (count entries)
+                                             (quot (long game-time) interval))
                 matrix-bandwidth (double (.getMatrixBandwidth matrix))
                 buffer-max (double (get cfg :network-buffer-max))
                 buffer0 (double (network-state/get-buffer network))

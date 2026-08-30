@@ -30,4 +30,4 @@
                         (get [_] component))
                       false)))
     (catch Exception e
-      (log/error "Failed to send feedback:" (ex-message e)))))
+      (log/stacktrace "Failed to send feedback:" e))))

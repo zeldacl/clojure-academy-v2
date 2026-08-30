@@ -18,7 +18,7 @@
        :misaka-id       (tut-player/get-misaka-id player)
        :first-open?     (:first-open? tut-state)})
     (catch Exception e
-      (log/error "Error handling tutorial request-sync:" (ex-message e))
+      (log/stacktrace "Error handling tutorial request-sync" e)
       {:error (ex-message e)})))
 
 (defn handle-mark-first-open-done
@@ -28,7 +28,7 @@
     (tut-player/mark-first-open-done! player)
     {:ok true}
     (catch Exception e
-      (log/error "Error handling mark-first-open-done:" (ex-message e))
+      (log/stacktrace "Error handling mark-first-open-done" e)
       {:error (ex-message e)})))
 
 ;; --- Registration ---

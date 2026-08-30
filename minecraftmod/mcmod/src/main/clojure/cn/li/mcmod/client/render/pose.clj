@@ -19,7 +19,7 @@
   (if-let [fw-atom (fw/fw-atom)]
     (let [missing (seq (remove (set (keys ops-map)) pose-ops-keys))]
       (swap! fw-atom assoc-in [:platform :pose-ops] ops-map)
-      (log/info "Pose ops installed:" (pr-str (keys ops-map)))
+      (log/debug "Pose ops installed:" (pr-str (keys ops-map)))
       (when missing
         (log/error "Pose ops MISSING required keys:" (pr-str missing))))
     (log/error "Pose ops install FAILED: Framework atom nil")))
@@ -31,7 +31,7 @@
   (try
     (apply (pose-op k) args)
     (catch Exception e
-      (log/error (str "Pose operation failed: " (name k) ": ") (ex-message e))
+      (log/stacktrace (str "Pose operation failed: " (name k)) e)
       (log/stacktrace (str "Pose operation failed: " (name k)) e)
       (throw e))))
 

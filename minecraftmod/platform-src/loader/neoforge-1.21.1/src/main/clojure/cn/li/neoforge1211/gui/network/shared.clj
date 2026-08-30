@@ -73,7 +73,7 @@
   [payload-bytes]
   (packet-base/decode-payload-bytes
     payload-bytes
-    #(log/error "Failed to deserialize Forge request payload:" (ex-message %))))
+    #(log/stacktrace "Failed to deserialize Forge request payload:" %)))
 
 (defn decode-response-payload
   [request-id response-bytes]
@@ -84,7 +84,7 @@
        :payload (sync-codec/decode-bytes response-bytes)}
       (packet-base/decode-payload-bytes
         response-bytes
-        #(log/error "Failed to deserialize Forge response payload:" (ex-message %))))))
+        #(log/stacktrace "Failed to deserialize Forge response payload:" %)))))
 
 (defn invoke-network-static
   [method-name & args]
@@ -122,5 +122,5 @@
     (install/process-once! ::handlers-installed
       (fn []
         (invoke-network-static "init" @request-handler-ref @response-handler-ref)
-        (log/info "NeoForge 1.21.1 GUI network system initialized"))))
+        (log/debug "NeoForge 1.21.1 GUI network system initialized"))))
   nil)

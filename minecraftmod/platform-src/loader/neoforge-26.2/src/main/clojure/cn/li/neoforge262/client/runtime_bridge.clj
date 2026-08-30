@@ -1,6 +1,8 @@
 (ns cn.li.neoforge262.client.runtime-bridge
   "CLIENT-ONLY Forge adapter for runtime hooks."
   (:require [cn.li.mc262.client.effects.particle :as particle]
+            [cn.li.mc262.client.font.msdf-tick :as msdf-tick]
+
             [cn.li.mc262.client.effects.sound :as sound]
             [cn.li.mc262.client.session-cleanup :as session-cleanup]
             [cn.li.mcbase.client.session :as client-session]
@@ -29,6 +31,8 @@
 (defn camera-position [] (player-state/camera-position))
 (defn local-player-look-end [distance] (player-state/local-player-look-end distance))
 (defn local-player-block-aim [distance] (player-state/local-player-block-aim distance))
+(defn camera-raycast-visible? [from-x from-y from-z to-x to-y to-z]
+  (player-state/camera-raycast-visible? from-x from-y from-z to-x to-y to-z))
 
 (defn clear-client-activated-overlay! []
   (if-let [owner (client-session/current-local-player-owner)]
@@ -76,13 +80,18 @@
     (catch Throwable _ nil)))
 
 (defn tick-client! []
+  (msdf-tick/client-tick!)
   (session-cleanup/tick-connection-change! {})
   (particle/tick-particles!)
   (sound/tick-sounds!)
+  ;; Raw physical state is polled EVERY tick (Screen open or not) and
+  ;; screen-open? gates event dispatch — upstream KeyManager keeps tracking
+  ;; physical key state while a GUI is open and ClientRuntime gates dispatch
+  ;; on ClientUtils.isPlayerInGame(), so the click that closes a Screen is
+  ;; absorbed instead of re-firing a bound skill.
   (client-session/with-current-client-session
     #(power-runtime/client-tick-keys!
-       (if (screen-open?) glfw-polling/no-key-down-fn glfw-polling/glfw-key-state-fn)
-       get-player-uuid-str))
+       glfw-polling/glfw-key-state-fn get-player-uuid-str (screen-open?)))
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^ClientTickEvent$Post evt]
@@ -95,4 +104,4 @@
                    EventPriority/NORMAL false ClientTickEvent$Post
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-client-tick evt)))))
-  (log/info "Client runtime bridge initialized"))
+  (log/debug "Client runtime bridge initialized"))

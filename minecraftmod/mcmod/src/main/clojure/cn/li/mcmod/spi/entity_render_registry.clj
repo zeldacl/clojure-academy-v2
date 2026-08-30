@@ -10,7 +10,7 @@
   (assert (string? render-ns)
           (str "render-ns must be a string, got " (type render-ns)))
   (registry/register! (fw/fw-atom) :hooks [::entity-render (str hook-id)] render-ns)
-  (log/info "Entity render namespace registered:" hook-id "->" render-ns)
+  (log/debug "Entity render namespace registered:" hook-id "->" render-ns)
   nil)
 
 (defn get-entity-render-ns

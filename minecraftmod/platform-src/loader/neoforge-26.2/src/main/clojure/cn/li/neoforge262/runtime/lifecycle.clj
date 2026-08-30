@@ -120,4 +120,4 @@
   ;; Initialize damage handlers after all protocols are installed
   (power-runtime/init-damage-handlers!)
 
-  (log/info "Forge runtime lifecycle initialized"))
+  (log/debug "Forge runtime lifecycle initialized"))

@@ -29,4 +29,4 @@
                      (when (= tab (:tab entry))
                        (add-entry! entries entry)))
                    nil))))
-  (log/info "Fabric 1.21.1 creative tab population registered"))
+  (log/debug "Fabric 1.21.1 creative tab population registered"))

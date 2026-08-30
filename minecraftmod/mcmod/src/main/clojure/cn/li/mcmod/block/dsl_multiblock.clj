@@ -274,7 +274,7 @@
                   result))))
 
         (catch Exception e
-          (log/error "Error checking multi-block structure:"(ex-message e))
+          (log/stacktrace "Error checking multi-block structure" e)
           false)))))
 
 ;; ============================================================================

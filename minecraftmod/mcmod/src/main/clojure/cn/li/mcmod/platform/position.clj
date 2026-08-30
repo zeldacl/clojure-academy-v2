@@ -11,7 +11,7 @@
   (if-let [fw-atom (fw/fw-atom)]
     (let [missing (seq (remove (set (keys ops-map)) position-keys))]
       (swap! fw-atom assoc-in [:platform :position-ops] ops-map)
-      (log/info "Position ops installed:" (pr-str (keys ops-map)))
+      (log/debug "Position ops installed:" (pr-str (keys ops-map)))
       (when missing
         (log/error "Position ops MISSING required keys:" (pr-str missing)
                    "- position ops will fail silently!")))

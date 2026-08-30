@@ -93,5 +93,5 @@
                                  (on-runtime-sync-receive client _handler buf _sender)))]
         (ClientPlayNetworking/registerGlobalReceiver shared/s2c-channel receiver)
         (ClientPlayNetworking/registerGlobalReceiver shared/runtime-sync-s2c-channel runtime-receiver)
-        (log/info "Fabric GUI network client transport initialized"))))
+        (log/debug "Fabric GUI network client transport initialized"))))
   nil)

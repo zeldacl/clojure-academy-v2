@@ -90,7 +90,7 @@
   (install/process-once! [::scripted-hook install-key]
     #(doseq [[hook-id class-name] entries]
        (if (register-fn hook-id class-name)
-         (log/info success-label {:hook-id hook-id :class class-name})
+         (log/debug success-label {:hook-id hook-id :class class-name})
          (log/error (str "Failed to register " (str/lower-case success-label))
                     {:hook-id hook-id :class class-name}))))
   nil)

@@ -116,4 +116,4 @@
          :slot-set-fn set-slot-item!
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!}))
-    (log/info "Energy Converter GUI initialized (reactive: wireless panel, gui-id 14)"))))
+    (log/debug "Energy Converter GUI initialized (reactive: wireless panel, gui-id 14)"))))

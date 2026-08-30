@@ -18,8 +18,9 @@
   (:import [cn.li.mc262.bridge ItemStackInterop McAccess NbtAccess]
            [cn.li.mc262.runtime BlockRegistry RuntimeAccess]
            [cn.li.mcver ItemData ResourceLocations]
-           [net.minecraft.core BlockPos Holder]
-           [net.minecraft.nbt CompoundTag ListTag]
+           [net.minecraft.core BlockPos Direction Holder]
+           [net.minecraft.core.component DataComponents]
+           [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity Entity]
@@ -88,13 +89,14 @@
                                     (catch Throwable t
                                       (log/warn "Failed to send player feedback" player-uuid (ex-message t))
                                       false)))})
-      (log/info "mc262 player feedback installed"))))
+      (log/debug "mc262 player feedback installed"))))
 
 (defn install-block-state-protocol!
   [_adapter]
   (install/framework-once! ::block-state-protocols-installed
     (fn []
       (let [bs-ops {:block-state-is-air               (fn [^BlockState this] (.isAir this))
+                    :block-state-is-replaceable?      (fn [^BlockState this] (.canBeReplaced this))
                     :block-state-get-block            (fn [^BlockState this] (.getBlock this))
                     :block-state-get-state-definition (fn [^BlockState this] (.getStateDefinition (.getBlock this)))
                     :block-state-get-property         (fn [_this ^StateDefinition state-def prop-name]
@@ -116,7 +118,7 @@
                                                                          v))
                                                                      :else value)))}]
         (world/install-block-state-ops! bs-ops "mc262 block-state"))
-      (log/info "mc262 block-state ops initialized"))))
+      (log/debug "mc262 block-state ops initialized"))))
 
 (defn- install-structured-data! []
   (install/framework-once! ::structured-data-installed
@@ -125,12 +127,21 @@
         {:sd-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
          :sd-get-int       (fn [^CompoundTag this key] (NbtAccess/getInt this (str key)))
          :sd-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
+         :sd-set-string-list! (fn [^CompoundTag this key strings]
+                              (let [lst (ListTag.)]
+                                (doseq [s strings] (.add lst (StringTag/valueOf (str s))))
+                                (.put this (str key) lst))
+                              this)
+         :sd-get-string-list  (fn [^CompoundTag this key]
+                              (let [lst (.getListOrEmpty this (str key))]
+                                (vec (for [i (range (.size lst))] (.getStringOr lst i "")))))
          :sd-get-string    (fn [^CompoundTag this key] (NbtAccess/getString this (str key)))
          :sd-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
          :sd-get-boolean   (fn [^CompoundTag this key] (NbtAccess/getBoolean this (str key)))
          :sd-set-double!   (fn [^CompoundTag this key value] (.putDouble this (str key) (double value)) this)
          :sd-get-double    (fn [^CompoundTag this key] (NbtAccess/getDouble this (str key)))
          :sd-set-entry!    (fn [^CompoundTag this key entry] (.put this (str key) entry) this)
+         :sd-remove-entry! (fn [^CompoundTag this key] (.remove this (str key)))
          :sd-get-entry     (fn [^CompoundTag this key] (.get this (str key)))
          :sd-get-structured (fn [^CompoundTag this key] (NbtAccess/getCompound this (str key)))
          :sd-get-list      (fn [^CompoundTag this key] (NbtAccess/getList this (str key)))
@@ -182,6 +193,14 @@
                                       (ItemData/getOrCreateCustomData this))
         :item-get-max-damage       (fn [^ItemStack this] (.getMaxDamage this))
         :item-set-damage!          (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
+        :item-set-hover-name!     (fn [^ItemStack this name-key]
+                                    ;; name-key is a translation key, not
+                                    ;; literal text — keeps variants localized.
+                                    ;; 26.2 removed setHoverName; custom names
+                                    ;; are a data component now.
+                                    (.set this (DataComponents/CUSTOM_NAME) (Component/translatable (str name-key))))
+        :item-copy-stack          (fn [^ItemStack this] (.copy this))
+        :item-set-count!          (fn [^ItemStack this n] (.setCount this (int n)))
         :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))
         :item-get-item             (fn [^ItemStack this] (.getItem this))
         :item-get-custom-data      (fn [^ItemStack this]
@@ -220,7 +239,7 @@
                                              stack)))
                                        (catch Throwable _ nil)))}
        "mc262")
-      (log/info "mc262 shared item ops initialized"))))
+      (log/debug "mc262 shared item ops initialized"))))
 
 (defn- install-world! [adapter]
   (install/framework-once! ::world-installed
@@ -250,6 +269,9 @@
                          :player-spectator?      (fn [^Player this] (.isSpectator this))
                          :player-get-name        (fn [^Player this] (let [^Component nc (.getName this)] (.getString nc)))
                          :player-get-uuid        (fn [^Entity this] (.getUUID this))
+                         :player-get-horizontal-facing (fn [^Player this]
+                                                          (let [^Direction d (.getDirection this)]
+                                                            (.getSerializedName d)))
                          :player-get-main-hand-item-count (fn [^Player this]
                                                             (let [^ItemStack stack (.getMainHandItem this)]
                                                               (if (.isEmpty stack) 0 (int (.getCount stack)))))
@@ -322,7 +344,7 @@
                          :inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))
                          :menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))}]
         (entity/install-entity-ops! player-impl "mc262")
-        (log/info "mc262 shared entity protocols initialized")))))
+        (log/debug "mc262 shared entity protocols initialized")))))
 
 (defn- install-resource-location-factory! []
   (install/framework-once! ::resource-installed
@@ -332,26 +354,26 @@
                                              (if namespace
                                                (ResourceLocations/of (str namespace) (str path))
                                                (ResourceLocations/parse (str path))))})
-      (log/info "mc262 resource factory installed"))))
+      (log/debug "mc262 resource factory installed"))))
 
 (defn install-resource-factory!
   []
   (install-resource-location-factory!)
-  (log/info "mc262 shared resource factory initialized"))
+  (log/debug "mc262 shared resource factory initialized"))
 
 (defn install-be-fns!
   [fns-map]
   (install/framework-once! ::be-fns-installed
     (fn []
       (be/install-be-ops! fns-map "mc262")
-      (log/info "mc262 shared block-entity function hooks initialized"))))
+      (log/debug "mc262 shared block-entity function hooks initialized"))))
 
 (defn install-world-fns!
   [fns-map]
   (install/framework-once! ::world-fns-installed
     (fn []
       (world/install-world-ops! fns-map "mc262")
-      (log/info "mc262 shared world function hooks initialized"))))
+      (log/debug "mc262 shared world function hooks initialized"))))
 
 (defn install-platform-core!
   [adapter]
@@ -362,7 +384,7 @@
   (install-entity-protocols! adapter)
   (install-player-feedback!)
   (install-resource-location-factory!)
-  (log/info "mc262 shared installer initialized"))
+  (log/debug "mc262 shared installer initialized"))
 
 (defn install-platform-services!
   [adapter world-fns-map be-fns-map]
@@ -377,4 +399,4 @@
     (install-world-fns! world-fns-map))
   (when be-fns-map
     (install-be-fns! be-fns-map))
-  (log/info "mc262 platform services initialized"))
+  (log/debug "mc262 platform services initialized"))

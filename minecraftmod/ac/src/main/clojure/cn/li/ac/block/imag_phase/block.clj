@@ -39,15 +39,19 @@
          ;; Upstream BlockImagPhase sets quantaPerBlock 3, so a source spreads
          ;; only 2 blocks. 1.20 fluids are fixed at 8 levels, so the equivalent
          ;; is a decrease of 3 per block (8 -> 5 -> 2): same 3-tile reach.
+         ;; Flow parity with upstream: BlockFluidClassic's tickRate =
+         ;; viscosity / 200 (verified in forge 1.12.2 bytecode) = 6000/200 = 30
+         ;; ticks per flow step. The original port's 8 flowed ~4x too fast.
          :behavior {:slope-find-distance 3
                     :level-decrease-per-block 3
-                    :tick-rate 8
+                    :tick-rate 30
                     :explosion-resistance 100.0}
+         ;; No bucket — upstream ACFluids registers fluidImagProj without a
+         ;; bucket (FluidRegistry.registerFluid only); the local port's
+         ;; has-bucket? defaults true, so it must be turned off explicitly.
          :block {:block-id "imag-phase"
                  :registry-name "imag_phase"
-                 :has-bucket? true
-                 :bucket-registry-name "imag_phase_bucket"
-                 :bucket-item-id "imag-phase-bucket"}}))
+                 :has-bucket? false}}))
     ;; Register a tile so has-block-entity? returns true, enabling
     ;; ScriptedLiquidBlock creation and TESR attachment.
     (tdsl/register-tile!

@@ -33,7 +33,15 @@
 
 (defn world-remove-block
 	[^Level level pos]
-	(.destroyBlock level pos false))
+	(let [^net.minecraft.world.level.block.state.BlockState bs (.getBlockState level pos)]
+		;; destroyBlock returns false for fluid blocks (matter-unit collection);
+		;; remove fluids by setting air directly.
+		(if (.isEmpty (.getFluidState bs))
+			(.destroyBlock level pos false)
+			(.setBlock level pos
+				(.defaultBlockState ^net.minecraft.world.level.block.Block
+					net.minecraft.world.level.block.Blocks/AIR)
+				3))))
 
 (defn world-break-block
 	[^Level level pos drop?]
@@ -80,12 +88,29 @@
 	[^Level level pos]
 	(.canSeeSky level pos))
 
+(defn- registry-name-path
+	"Strip the namespace from a block id: \"academy:imag_phase\" → \"imag_phase\"."
+	[block-id]
+	(let [s (str block-id)
+				colon (.indexOf s ":")]
+		(if (neg? colon) s (subs s (inc colon)))))
+
 (defn- block-id-candidates
+	"Candidate snapshot keys for a block id. The block snapshot is keyed by DSL
+	id (\"imag-phase\"), but callers may pass the Minecraft registry id
+	(\"academy:imag_phase\", as returned by raytraces) — reverse-resolve that
+	back to the DSL id so both id spaces place correctly."
 	[block-id]
 	(let [dsl-id (str block-id)
-			registry-name (registry-metadata/get-block-registry-name dsl-id)]
+			registry-name (registry-metadata/get-block-registry-name dsl-id)
+			path (registry-name-path block-id)
+			reverse-dsl-id (some (fn [id]
+								   (when (= path (registry-metadata/get-block-registry-name id))
+									 id))
+								 (registry-metadata/get-all-block-ids))]
 		(distinct (cond-> [dsl-id]
-						registry-name (conj registry-name)))))
+						registry-name (conj registry-name)
+						reverse-dsl-id (conj reverse-dsl-id)))))
 
 (defn- lookup-registered-block
 	[block-id]
@@ -102,7 +127,7 @@
 				(.setBlock level pos (.defaultBlockState blk) (int flags))
 				true))
 			(catch Exception e
-				(log/error "Failed to place block by id" block-id ":" (.getMessage e))
+				(log/stacktrace (str "Failed to place block by id" block-id ":" ) e)
 			false)))
 
 (defn be-get-level

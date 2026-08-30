@@ -15,9 +15,9 @@
   (let [saved (atom nil)]
     (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
                   platform-be/get-custom-state (fn [_] initial-state)
-                  machine-runtime/commit-from-tile!
-                  (fn [_ _ new-state & _]
-                    (reset! saved new-state))]
+                  machine-runtime/commit-transform!
+                  (fn [_ _ transform & _]
+                    (reset! saved (transform (interferer-logic/interferer-default-state))))]
       (f saved))))
 
 (deftest handle-set-whitelist-normalizes-and-marks-changed-test

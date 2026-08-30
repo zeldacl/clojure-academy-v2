@@ -76,4 +76,4 @@
     (doseq [sound-id all-sound-ids]
 			(sdsl/register-sound! (sdsl/create-sound-spec sound-id {})))
 
-		(log/info "Sound content initialized"))))
+		(log/debug "Sound content initialized"))))

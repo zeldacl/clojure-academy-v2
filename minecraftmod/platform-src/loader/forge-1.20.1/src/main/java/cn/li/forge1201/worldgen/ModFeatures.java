@@ -1,6 +1,6 @@
 package cn.li.forge1201.worldgen;
 
-import cn.li.forge1201.MyMod1201;
+import cn.li.forge1201.AcademyCraft1201;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc1201.worldgen.ConfigurablePoolFeature;
 
@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 public class ModFeatures {
 
     public static final DeferredRegister<Feature<?>> FEATURES =
-        DeferredRegister.create(Registries.FEATURE, MyMod1201.MODID);
+        DeferredRegister.create(Registries.FEATURE, AcademyCraft1201.MODID);
 
     /**
      * Configurable pool feature. Resolves the registered fill block at

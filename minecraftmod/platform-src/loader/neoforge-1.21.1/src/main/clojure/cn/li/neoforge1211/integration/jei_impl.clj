@@ -7,10 +7,10 @@
 (defn create-jei-plugin
   "No-op: JEI is unavailable on this target."
   []
-  (log/info "JEI plugin stub: no JEI capability on neoforge-1.21.1")
+  (log/debug "JEI plugin stub: no JEI capability on neoforge-1.21.1")
   nil)
 
 (defn init-jei!
   "No-op: JEI is unavailable on this target."
   []
-  (log/info "JEI integration stubbed (no JEI dependency on neoforge-1.21.1)"))
+  (log/debug "JEI integration stubbed (no JEI dependency on neoforge-1.21.1)"))

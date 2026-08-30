@@ -62,7 +62,12 @@ public final class RenderInterop {
     }
 
     public static void addColoredVertex(VertexConsumer vc, float x, float y, float z, float r, float g, float b, float a) {
-        vc.addVertex(x, y, z).setColor(r, g, b, a);
+        vc.addVertex(x, y, z)
+                .setColor(r, g, b, a)
+                // RenderType.lines() is POSITION_COLOR_NORMAL; writing the
+                // normal is required by endLastVertex() and a no-op for
+                // formats without a normal element.
+                .setNormal(0.0F, 1.0F, 0.0F);
     }
 
     public static void addColoredVertex(Object vc, double x, double y, double z, int r, int g, int b, int a) {

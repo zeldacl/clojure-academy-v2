@@ -136,7 +136,7 @@
       (Files/write (.toPath (File. root "README.txt"))
                    (.getBytes ^String readme-text StandardCharsets/UTF_8)
                    ^"[Ljava.nio.file.OpenOption;" (into-array java.nio.file.OpenOption []))
-      (log/info "External media folder:" (.getAbsolutePath src))
+      (log/debug "External media folder:" (.getAbsolutePath src))
       src)
     (catch Throwable e
       (log/warn e "Could not prepare the external media folders")

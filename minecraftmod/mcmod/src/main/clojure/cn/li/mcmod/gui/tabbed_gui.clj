@@ -79,7 +79,7 @@
                     :tab-index tab-index
                     :owner owner}))
       (catch Exception e
-        (log/warn "Skip set-tab sync: send failed"
+        (log/debug "Skip set-tab sync: send failed"
                   {:container-id container-id
                    :tab-index tab-index
                    :owner owner
@@ -126,10 +126,10 @@
       (fn [container _payload _player]
         (when (tabbed-container? container)
           (reset! (:tab-index container) (int (or (:tab-index payload) 0)))
-          (log/info "Set tab-index to" @(:tab-index container) "for player"
+          (log/debug "Set tab-index to" @(:tab-index container) "for player"
                     (entity/player-get-name player)))))
     (catch Exception e
-      (log/warn "set-tab rejected:" (ex-message e) {:payload payload})))
+      (log/debug "set-tab rejected:" (ex-message e) {:payload payload})))
   {})
 
 (defn register-set-tab-handler!
@@ -137,7 +137,7 @@
   []
   (net-server/register-handler set-tab-msg-id handle-set-tab
                                {:owner-spec :server :payload-routing :sync-routing})
-  (log/info "Registered set-tab network handler"))
+  (log/debug "Registered set-tab network handler"))
 
 (defn send-set-tab!
   "Client: send tab index and required container-id to server."

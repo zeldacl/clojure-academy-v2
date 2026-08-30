@@ -29,7 +29,8 @@ public final class MonospaceAwareGlyphProvider implements GlyphProvider {
         if (original == null) return null;
         return new MSDFAwareGlyph(original,
                 MsdfFontManager.isMonospace(),
-                MsdfFontManager.monospaceAdvance());
+                MsdfFontManager.monospaceAdvance(),
+                face);
     }
 
     @Override

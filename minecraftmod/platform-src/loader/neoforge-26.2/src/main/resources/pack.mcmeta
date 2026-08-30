@@ -3,7 +3,7 @@
     "description": {
       "text": "${mod_id} resources"
     },
-    "pack_format": 107,
-    "supported_formats": [107]
+    "min_format": [107, 1],
+    "max_format": 107
   }
 }

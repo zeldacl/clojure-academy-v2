@@ -28,7 +28,7 @@
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
-            [cn.li.mc1201.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
             [cn.li.forge1201.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
@@ -50,7 +50,7 @@
   (:import [cn.li.mc1201.client ClientHelper]
            [cn.li.forge1201.shim ForgeClientHelper]
            [cn.li.mc1201.client GuiGraphicsHelper]
-           [cn.li.mcver McAccess]
+           [cn.li.mcver McAccess McClientAccess]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -207,13 +207,13 @@
                           (case effect-key
                             :mcmod/get-entity-position
                             (try
-                              (McAccess/clientEntitySnapshot
+                              (McClientAccess/clientEntitySnapshot
                                 (java.util.UUID/fromString (:entity-uuid payload)))
                               (catch Exception _ nil))
 
                             :mcmod/set-client-entity-motion
                             (try
-                              (McAccess/setClientEntityMotion
+                              (McClientAccess/setClientEntityMotion
                                 (java.util.UUID/fromString (:entity-uuid payload))
                                 (double (:vx payload)) (double (:vy payload)) (double (:vz payload)))
                               (catch Exception _ false))

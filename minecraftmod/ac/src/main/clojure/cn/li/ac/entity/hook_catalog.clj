@@ -46,5 +46,5 @@
   (hook-resolver/register-resolver! :effect effect-impl-key)
   (hook-resolver/register-resolver! :ray ray-impl-key)
   (hook-resolver/register-resolver! :marker marker-impl-key)
-  (log/info "Installed AC scripted entity hook resolvers")
+  (log/debug "Installed AC scripted entity hook resolvers")
   nil)

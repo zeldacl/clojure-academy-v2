@@ -6,12 +6,13 @@
    OBJ models use NeoForge's built-in neoforge:obj geometry loader (no custom
    ModelEvent baking). GUI-vs-hand switching uses minecraft:select +
    minecraft:display_context in the item definition (replaces ObjComposite)."
-  (:require [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
+  (:require [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
+            [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
             [cn.li.platform.neutral.config :as modid]
             [clojure.string :as str])
   (:import [com.google.gson JsonArray JsonElement JsonNull JsonObject JsonPrimitive]
            [java.util.concurrent CompletableFuture]
-           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$Target]
+           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [cn.li.mcver ResourceLocations]))
 
 (defn- json-element
@@ -96,31 +97,18 @@
                     (subs name 0 (- (count name) 3))))))
         models))
 
-(defn- flat-item-model
-  "Inner item-model tree for GUI / non-3D contexts (range_dispatch or plain)."
-  [{:keys [model-name json]}]
-  (let [overrides (:overrides json)]
-    (if (seq overrides)
-      {:type "minecraft:range_dispatch"
-       :property (str modid/mod-id ":energy")
-       :fallback (model-ref model-name)
-       :entries (->> overrides
-                     (map (fn [{:keys [predicate model]}]
-                            {:threshold (double (or (get predicate (str modid/mod-id ":energy")) 0.0))
-                             :model {:type "minecraft:model" :model (str model)}}))
-                     (sort-by :threshold)
-                     vec)}
-      (model-ref model-name))))
-
 (defn- item-definition
   "Item definition for a registry item.
 
-   When a `_3d` OBJ companion exists, wrap with display_context select:
-   GUI flat (energy tiers if any), all other contexts use the OBJ model.
-   Matches former ObjCompositeBakedModel behavior without runtime baking."
-  [spec obj-3d-bases]
+   Overrides become nested range_dispatch trees keyed on their predicate
+   property (energy tiers: academy:energy; matter unit: minecraft:damage →
+   academy:frame animation chain). When a `_3d` OBJ companion exists, wrap
+   with display_context select: GUI flat, all other contexts use the OBJ
+   model. Matches former ObjCompositeBakedModel behavior without runtime
+   baking."
+  [spec obj-3d-bases specs-by-name]
   (let [name (str (:model-name spec))
-        flat (flat-item-model spec)]
+        flat (item-model-core/item-model-tree specs-by-name name)]
     (if (contains? obj-3d-bases name)
       {:model
        {:type "minecraft:select"
@@ -152,6 +140,28 @@
   [^CachedOutput output path value]
   (DataProvider/saveStable output (json-element value) path))
 
+(defn- block-item-definitions
+  "items/*.json definitions for block items.
+
+  The blockstate provider writes models/item/*.json for block items but not
+  the 1.21.4+ client-item definition; without it ModelManager reports
+  \"Missing item model\" and renders the missing-mesh. Block items render
+  their own item model file, so the definition is a plain model reference."
+  [^CachedOutput output ^PackOutput$PathProvider item-paths models]
+  (keep (fn [{:keys [path-key id]}]
+          (when (and (= :item-model path-key) (string? id))
+            (let [block-item-name (second (str/split id #":"))]
+              (when (and block-item-name
+                         (not (contains? (into #{}
+                                               (map (fn [s] (str (:model-name s))))
+                                               models)
+                                         block-item-name)))
+                (save-json! output
+                            (.json item-paths
+                                   (ResourceLocations/of (str modid/mod-id) block-item-name))
+                            {:model (model-ref block-item-name)})))))
+        (blockstate-core/blockstate-write-entries)))
+
 (defn create
   "Create a DataProvider that writes models/item and items definitions."
   [^PackOutput pack-output]
@@ -162,6 +172,7 @@
       (run [_ output]
         (let [{:keys [models all-item-count energy-tier-count obj-3d-count simple-count bucket-count]}
               (item-model-core/gather-model-specs)
+              specs-by-name (into {} (map (fn [s] [(str (:model-name s)) s])) models)
               auxiliary (auxiliary-model-names models)
               obj-bases (obj-3d-basenames models)
               futures
@@ -177,8 +188,9 @@
                           (save-json! output
                                       (.json item-paths
                                              (ResourceLocations/of (str modid/mod-id) (str model-name)))
-                                      (item-definition spec obj-bases))))
-                      models))]
+                                      (item-definition spec obj-bases specs-by-name))))
+                      models)
+                (block-item-definitions output item-paths models))]
           (println (str "[item-model-provider] summary: items=" all-item-count
                         ", energy-tier=" energy-tier-count
                         ", obj-3d=" obj-3d-count

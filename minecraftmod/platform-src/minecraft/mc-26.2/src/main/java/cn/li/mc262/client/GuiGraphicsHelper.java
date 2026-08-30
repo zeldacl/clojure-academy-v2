@@ -2,16 +2,22 @@ package cn.li.mc262.client;
 
 import cn.li.mc262.client.render.GuiPerspectiveWarp;
 import cn.li.mc262.client.render.PerspectiveQuadRenderState;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2f;
+import org.joml.Matrix3x2fc;
 
 /** Thin GuiGraphicsExtractor helpers for 26.2. */
 public final class GuiGraphicsHelper {
@@ -103,42 +109,58 @@ public final class GuiGraphicsHelper {
                              int x, int y, int w, int h,
                              int u, int v, int regionW, int regionH,
                              int texW, int texH,
-                             int borderL, int borderT, int borderR, int borderB) {
+                             int borderL, int borderT, int borderR, int borderB,
+                             int color) {
         if (!(graphics instanceof GuiGraphicsExtractor gge)) {
             return;
         }
-        int left = Math.min(Math.max(0, borderL), Math.min(w, regionW));
-        int top = Math.min(Math.max(0, borderT), Math.min(h, regionH));
-        int right = Math.min(Math.max(0, borderR), Math.min(w - left, regionW - left));
-        int bottom = Math.min(Math.max(0, borderB), Math.min(h - top, regionH - top));
+        // The caller's region/tex sizes were the destination size (100×177)
+        // rather than the texture's (48×48), so every slice UV fraction was
+        // wrong: the border slices sampled only the outer ~2px of the 48px
+        // texture (the soft alpha gradient stretched blocky by NEAREST — the
+        // "mosaic" panel) and the center sampled an off-center band. The
+        // GpuTexture's real dimensions are authoritative for both the source
+        // region and the UV divisor.
+        int realTexW = texW;
+        int realTexH = texH;
+        AbstractTexture abstractTex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        GpuTexture gpuTex = abstractTex != null ? abstractTex.getTexture() : null;
+        if (gpuTex != null && gpuTex.getWidth(0) > 0 && gpuTex.getHeight(0) > 0) {
+            realTexW = gpuTex.getWidth(0);
+            realTexH = gpuTex.getHeight(0);
+        }
+        int left = Math.min(Math.max(0, borderL), Math.min(w, realTexW));
+        int top = Math.min(Math.max(0, borderT), Math.min(h, realTexH));
+        int right = Math.min(Math.max(0, borderR), Math.min(w - left, realTexW - left));
+        int bottom = Math.min(Math.max(0, borderB), Math.min(h - top, realTexH - top));
         int centerW = Math.max(0, w - left - right);
         int centerH = Math.max(0, h - top - bottom);
-        int sourceCenterW = Math.max(0, regionW - left - right);
-        int sourceCenterH = Math.max(0, regionH - top - bottom);
+        int sourceCenterW = Math.max(0, realTexW - left - right);
+        int sourceCenterH = Math.max(0, realTexH - top - bottom);
 
-        blitSlice(gge, texture, x, y, left, top, u, v, left, top, texW, texH);
+        blitSlice(gge, texture, x, y, left, top, u, v, left, top, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left, y, centerW, top,
-                u + left, v, sourceCenterW, top, texW, texH);
+                u + left, v, sourceCenterW, top, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left + centerW, y, right, top,
-                u + regionW - right, v, right, top, texW, texH);
+                u + realTexW - right, v, right, top, realTexW, realTexH, color);
         blitSlice(gge, texture, x, y + top, left, centerH,
-                u, v + top, left, sourceCenterH, texW, texH);
+                u, v + top, left, sourceCenterH, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left, y + top, centerW, centerH,
-                u + left, v + top, sourceCenterW, sourceCenterH, texW, texH);
+                u + left, v + top, sourceCenterW, sourceCenterH, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left + centerW, y + top, right, centerH,
-                u + regionW - right, v + top, right, sourceCenterH, texW, texH);
+                u + realTexW - right, v + top, right, sourceCenterH, realTexW, realTexH, color);
         blitSlice(gge, texture, x, y + top + centerH, left, bottom,
-                u, v + regionH - bottom, left, bottom, texW, texH);
+                u, v + realTexH - bottom, left, bottom, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left, y + top + centerH, centerW, bottom,
-                u + left, v + regionH - bottom, sourceCenterW, bottom, texW, texH);
+                u + left, v + realTexH - bottom, sourceCenterW, bottom, realTexW, realTexH, color);
         blitSlice(gge, texture, x + left + centerW, y + top + centerH, right, bottom,
-                u + regionW - right, v + regionH - bottom, right, bottom, texW, texH);
+                u + realTexW - right, v + realTexH - bottom, right, bottom, realTexW, realTexH, color);
     }
 
     private static void blitSlice(GuiGraphicsExtractor graphics, Identifier texture,
                                   int x, int y, int width, int height,
                                   int u, int v, int sourceWidth, int sourceHeight,
-                                  int textureWidth, int textureHeight) {
+                                  int textureWidth, int textureHeight, int color) {
         if (width <= 0 || height <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {
             return;
         }
@@ -146,12 +168,12 @@ public final class GuiGraphicsHelper {
                 x, y, x + width, y + height,
                 (float) u / textureWidth, (float) (u + sourceWidth) / textureWidth,
                 (float) v / textureHeight, (float) (v + sourceHeight) / textureHeight,
-                -1)) {
+                color)) {
             return;
         }
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture,
                 x, y, (float) u, (float) v,
-                width, height, sourceWidth, sourceHeight, textureWidth, textureHeight);
+                width, height, sourceWidth, sourceHeight, textureWidth, textureHeight, color);
     }
 
     public static void blitTexturedQuad(Object graphics, Identifier texture,
@@ -168,7 +190,14 @@ public final class GuiGraphicsHelper {
                 x, y, x + w, y + h, u0, u1, v0, v1, -1)) {
             return;
         }
-        gge.blit(texture, x, y, w, h, u0, v0, u1, v1);
+        // blit's signature is (x0, y0, x1, y1, u0, u1, v0, v1) — the END
+        // coordinates and the UVs in order. Passing (w, h) here put the width
+        // and height in the x1/y1 slots (an inverted rect) and shuffled the UVs
+        // into a degenerate span (u1 got v0), which sampled the texture's
+        // bottom-left texel — transparent for line.png — so the quad was
+        // discarded (the nine-slice decorative lines and any cropped sprite
+        // region rendered nothing).
+        gge.blit(texture, x, y, x + w, y + h, u0, u1, v0, v1);
     }
 
     /** Compatibility overload matching older float-free call sites. */
@@ -243,6 +272,115 @@ public final class GuiGraphicsHelper {
                 x0, y0, x1 - x0, y1 - y0, u0, v0, u1, v1);
     }
 
+    @FunctionalInterface
+    public interface TwoTextureBlitFunction {
+        boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
+                       int x0, int y0, int x1, int y1,
+                       float u0, float u1, float v0, float v1, int argb);
+    }
+
+    @FunctionalInterface
+    public interface GuiElementSubmitFunction {
+        boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
+                       Matrix3x2f pose, int x0, int y0, int x1, int y1,
+                       float u0, float u1, float v0, float v1, int color);
+    }
+
+    private static volatile GuiElementSubmitFunction guiElementSubmitter;
+
+    /**
+     * Install the loader's submission path for custom GUI elements (NeoForge's
+     * {@code GuiGraphicsExtractor.submitGuiElementRenderState}). Used by
+     * {@link #blitRotated} for diagonal connection lines, which the
+     * axis-aligned extractor blits cannot express. The loader builds the
+     * BlitRenderState so it can attach the current scissor — a null scissor
+     * would sort the element first (SCISSOR_COMPARATOR nullsFirst) and let
+     * later-drawn backgrounds cover it.
+     */
+    public static void installGuiElementSubmitter(GuiElementSubmitFunction function) {
+        guiElementSubmitter = function;
+    }
+
+    /**
+     * Submit a rotated textured quad — the diagonal connection lines, matching
+     * 1.20.1/1.21.1's p1→p2 axis quad with ±normal offsets sampling the
+     * {@code tex-line} gradient texture (the extractor's blits are
+     * axis-aligned, so a unit rectangle is transformed by a rotate/scale pose
+     * instead). Returns false when the loader has no submitter, letting the
+     * caller fall back to axis-aligned fills.
+     */
+    public static boolean blitRotated(Object graphics, Identifier texture, int argb,
+                                      double x1, double y1, double x2, double y2,
+                                      double thickness) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge)) {
+            return false;
+        }
+        GuiElementSubmitFunction submitter = guiElementSubmitter;
+        if (submitter == null) {
+            return false;
+        }
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        double len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.5) {
+            return false;
+        }
+        double angle = Math.atan2(dy, dx);
+        // Unit rectangle → [0,len]×[0,thick] anchored at p1 and rotated onto
+        // p1→p2: u=0 at p1, u=1 at p2, v centered across the thickness — the
+        // same mapping 1.20.1/1.21.1 use for the tex-line gradient quad. (The
+        // earlier translate(-0.5F, -0.5F) centered the quad on p1, so it
+        // spanned ±len/2 around the parent: half the line stuck out behind
+        // the node and the child end was never reached, and with the node
+        // icons drawn on top the skill-tree connections read as missing
+        // entirely.) Then compose with the extractor's current pose
+        // (draw-tape's left/top translate + ancestor pushes) so the quad
+        // lands in screen space like every other element's abs coordinates.
+        Matrix3x2f lineTransform = new Matrix3x2f()
+                .translate((float) x1, (float) y1)
+                .rotate((float) angle)
+                .scale((float) len, (float) thickness)
+                .translate(0.0F, -0.5F);
+        Matrix3x2f pose = new Matrix3x2f(gge.pose()).mul(lineTransform);
+        AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        // Dedicated line pipeline: created last, so its sort key puts the line
+        // after every background/blit pipeline in the sorted GUI mesh (a line
+        // through vanilla GUI_TEXTURED could sort before the background that
+        // covers it and vanish).
+        //
+        // The unit rect [0,1]² must be UV-mapped 0..1 along both axes (u0..u1,
+        // v0..v1) so the tex-line gradient spans the full quad — u=0 at p1,
+        // u=1 at p2, v across the thickness. A collapsed span (u0==u1) samples
+        // a single texel; line.png's bottom row is transparent, so the
+        // fragment shader's alpha cutoff would discard the whole quad.
+        //
+        // Sample with a LINEAR clamp sampler rather than the texture's default:
+        // AbstractTexture's default is NEAREST minification, and the 16×16
+        // tex-line is minified along the thickness (v) axis, which renders the
+        // diagonal as hard pixel steps instead of 1.20.1/1.21.1's smooth bar.
+        return submitter.submit(gge, cn.li.mc262.client.render.GuiRenderPipelines.lineTextured(),
+                TextureSetup.singleTexture(tex.getTextureView(),
+                        RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR)),
+                pose, 0, 0, 1, 1,
+                0.0F, 1.0F, 0.0F, 1.0F, argb);
+    }
+
+    private static volatile TwoTextureBlitFunction twoTextureBlitter;
+
+    /**
+     * Install the loader's submission path for two-sampler GUI draws.
+     *
+     * <p>The skill/cpbar shaders sample a mask texture from Sampler1, but the
+     * vanilla extractor only blits single textures (Sampler0), so a draw with
+     * those pipelines fails the "Missing sampler Sampler1" check at execute
+     * time. The loader (NeoForge) patches {@code GuiGraphicsExtractor} with
+     * {@code submitGuiElementRenderState} and submits a BlitRenderState that
+     * carries the double TextureSetup.</p>
+     */
+    public static void installTwoTextureBlitter(TwoTextureBlitFunction function) {
+        twoTextureBlitter = function;
+    }
+
     /**
      * Submit a textured quad through a custom extraction-safe GUI pipeline.
      *
@@ -261,15 +399,18 @@ public final class GuiGraphicsHelper {
             return;
         }
         AbstractTexture first = Minecraft.getInstance().getTextureManager().getTexture(texture0);
-        TextureSetup textures;
-        if (texture1 == null) {
-            textures = TextureSetup.singleTexture(first.getTextureView(), first.getSampler());
-        } else {
+        if (texture1 != null) {
             AbstractTexture second = Minecraft.getInstance().getTextureManager().getTexture(texture1);
-            textures = TextureSetup.doubleTexture(
+            TextureSetup textures = TextureSetup.doubleTexture(
                     first.getTextureView(), first.getSampler(),
                     second.getTextureView(), second.getSampler());
+            TwoTextureBlitFunction blitter = twoTextureBlitter;
+            if (blitter != null) {
+                blitter.submit(gge, pipeline, textures, x0, y0, x1, y1, u0, u1, v0, v1, argb);
+            }
+            return;
         }
+        TextureSetup textures = TextureSetup.singleTexture(first.getTextureView(), first.getSampler());
         if (submitWarped(gge, pipeline, textures, x0, y0, x1, y1, u0, u1, v0, v1, argb)) {
             return;
         }

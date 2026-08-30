@@ -24,7 +24,7 @@
   nil)
 
 (defn register-gui! [gui-spec]
-  (log/info "Registering GUI:" (:id gui-spec))
+  (log/debug "Registering GUI:" (:id gui-spec))
   (update-gui-registry! (fn [reg]
            (let [id (:id gui-spec)
                  gui-id (:gui-id gui-spec)

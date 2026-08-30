@@ -23,4 +23,4 @@
                      :color 0x33CCFF
                      :tick-interval 40
                      :damage-per-tick 0.0})
-    (log/info "Effect content initialized"))))
+    (log/debug "Effect content initialized"))))

@@ -22,7 +22,7 @@
 (defn- find-nearby-nodes [level block-pos]
 	(try (vec (wireless-api/get-nodes-in-range level block-pos))
 			 (catch Exception e
-				 (log/error "Cat Engine node search failed:" (ex-message e))
+				 (log/stacktrace "Cat Engine node search failed" e)
 				 [])))
 
 (defn get-linked-node ^IWirelessNode [be]

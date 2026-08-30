@@ -18,14 +18,14 @@
   (try
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
-        (log/info "World loaded, dispatching to lifecycle handlers")
+        (log/debug "World loaded, dispatching to lifecycle handlers")
         (register-level-for-state-change-hook! level)
         (let [from-storage (wl-saved/load-world-lifecycle-saved-data level)
               from-cache (world-save-cache/consume-saved-data! level)
               saved (or from-storage from-cache)]
           (world-lifecycle/dispatch-world-load level saved))))
     (catch Throwable t
-      (log/error "Error handling world load event:" (.getMessage t))
+      (log/stacktrace "Error handling world load event:" t)
       (.printStackTrace t))))
 
 (defn handle-world-save
@@ -37,7 +37,7 @@
           (wl-saved/save-world-lifecycle-saved-data! level saved)
           (world-save-cache/remember-saved-data! level saved))))
     (catch Throwable t
-      (log/error "Error handling world save event:" (.getMessage t))
+      (log/stacktrace "Error handling world save event:" t)
       (.printStackTrace t))))
 
 (defn handle-world-unload
@@ -45,12 +45,12 @@
   (try
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
-        (log/info "World unloading, dispatching to lifecycle handlers")
+        (log/debug "World unloading, dispatching to lifecycle handlers")
         (unregister-level-for-state-change-hook! level)
         (world-save-cache/clear-world-saved-data! level)
         (world-lifecycle/dispatch-world-unload level)))
     (catch Throwable t
-      (log/error "Error handling world unload event:" (.getMessage t))
+      (log/stacktrace "Error handling world unload event:" t)
       (.printStackTrace t))))
 
 (defn handle-world-tick
@@ -62,7 +62,7 @@
                  (not (.isClientSide level)))
         (world-lifecycle/dispatch-world-tick level)))
     (catch Throwable t
-      (log/error "Error handling world tick event:" (.getMessage t))
+      (log/debug "Error handling world tick event:" (.getMessage t))
       (.printStackTrace t))))
 
 ;; Per-world-key → Forge SavedData mapping. Populated on world load, cleared
@@ -113,4 +113,4 @@
       (when-let [fw-atom (fw/fw-atom)]
         (when-let [sd (get-in @fw-atom (conj saved-data-path world-key))]
           (.setDirty ^cn.li.mc1201.integration.saveddata.WorldLifecycleSavedData sd)))))
-  (log/info "[forge] on-world-state-changed → SavedData.setDirty() hook registered"))
+  (log/debug "[forge] on-world-state-changed → SavedData.setDirty() hook registered"))

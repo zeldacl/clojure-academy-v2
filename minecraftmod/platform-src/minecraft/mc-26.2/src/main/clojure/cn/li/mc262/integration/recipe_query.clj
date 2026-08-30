@@ -58,7 +58,7 @@
   [^Recipe recipe ^Level level]
   (cond
     (instance? ContentRecipe recipe)
-    (.copy (.getOutput ^ContentRecipe recipe))
+    (.create (.getOutput ^ContentRecipe recipe))
 
     :else
     (try

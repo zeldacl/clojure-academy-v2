@@ -15,8 +15,8 @@
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
             [cn.li.mcmod.runtime.install :as install])
   (:import [cn.li.mc1201.runtime BlockRegistry RuntimeAccess]
-           [net.minecraft.core BlockPos]
-           [net.minecraft.nbt CompoundTag ListTag]
+           [net.minecraft.core BlockPos Direction]
+           [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server.level ServerPlayer]
@@ -26,7 +26,7 @@
            [net.minecraft.world.inventory AbstractContainerMenu]
            [net.minecraft.world.item Item ItemStack]
            [net.minecraft.world.level Level]
-           [net.minecraft.world.level.block Block Blocks]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
            [net.minecraft.world.level.block.state.properties BooleanProperty EnumProperty IntegerProperty Property]
            [net.minecraft.world.level.block.entity BlockEntity]
@@ -44,16 +44,7 @@
   {:world-get-tile-entity (fn [^Level level p] (.getBlockEntity level p))
    :world-get-block-state (fn [^Level level p] (.getBlockState level p))
    :world-set-block (fn [^Level level p s flags] (.setBlock level p s (int flags)))
-   :world-remove-block (fn [^Level level p]
-                                       (let [^BlockState bs (.getBlockState level p)
-                                             fluid-empty? (.isEmpty (.getFluidState bs))
-                                             result (if fluid-empty?
-                                                      (.destroyBlock level p false)
-                                                      (let [^Block air-block Blocks/AIR]
-                                                        (.setBlock level p (.defaultBlockState air-block) 3)))]
-                                         (log/info "[remove-block]" p "block=" (.getBlock bs)
-                                                   "fluid-empty=" fluid-empty? "result=" result)
-                                         result))
+   :world-remove-block (fn [^Level level p] (.destroyBlock level p false))
    :world-break-block (fn [^Level level p drop?] (.destroyBlock level p (boolean drop?)))
    :world-place-block-by-id (fn [^Level level block-id p flags]
                               (world-block-ops/world-place-block-by-id adapter level block-id p flags))
@@ -85,7 +76,7 @@
                                     (catch Throwable t
                                       (log/warn "Failed to send player feedback" player-uuid (ex-message t))
                                       false)))})
-      (log/info "mc1201 player feedback installed"))))
+      (log/debug "mc1201 player feedback installed"))))
 
 (defn install-block-state-protocol!
   [_adapter]
@@ -93,6 +84,7 @@
     (fn []
       (let [current (world/current-ops)
             bs-ops {:block-state-is-air               (fn [^BlockState this] (.isAir this))
+                    :block-state-is-replaceable?      (fn [^BlockState this] (.canBeReplaced this))
                     :block-state-get-block            (fn [^BlockState this] (.getBlock this))
                     :block-state-get-state-definition (fn [^BlockState this] (.getStateDefinition (.getBlock this)))
                     :block-state-get-property         (fn [_this ^StateDefinition state-def prop-name]
@@ -101,9 +93,6 @@
                     ;; rejects Long (its possible-values set holds Integer), so
                     ;; cast by property kind before setting.
                     :block-state-set-property         (fn [^BlockState this ^Property prop value]
-                                                        (when (instance? java.util.Optional value)
-                                                          (log/warn "[block-state] Optional value for property" (.getName prop)
-                                                                    "value=" (str value)))
                                                         (.setValue this prop
                                                                    (cond
                                                                      (instance? IntegerProperty prop) (int value)
@@ -117,7 +106,7 @@
                                                                          v))
                                                                      :else value)))}]
         (world/install-block-state-ops! bs-ops "mc1201 block-state"))
-      (log/info "mc1201 block-state ops initialized"))))
+      (log/debug "mc1201 block-state ops initialized"))))
 
 (defn- install-structured-data! []
   (install/framework-once! ::structured-data-installed
@@ -126,12 +115,21 @@
         {:sd-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
          :sd-get-int       (fn [^CompoundTag this key] (.getInt this (str key)))
          :sd-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
+         :sd-set-string-list! (fn [^CompoundTag this key strings]
+                              (let [lst (ListTag.)]
+                                (doseq [s strings] (.add lst (StringTag/valueOf (str s))))
+                                (.put this (str key) lst))
+                              this)
+         :sd-get-string-list  (fn [^CompoundTag this key]
+                              (let [lst (.getList this (str key) 8)]
+                                (vec (for [i (range (.size lst))] (.getString lst i)))))
          :sd-get-string    (fn [^CompoundTag this key] (.getString this (str key)))
          :sd-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
          :sd-get-boolean   (fn [^CompoundTag this key] (.getBoolean this (str key)))
          :sd-set-double!   (fn [^CompoundTag this key value] (.putDouble this (str key) (double value)) this)
          :sd-get-double    (fn [^CompoundTag this key] (.getDouble this (str key)))
          :sd-set-entry!    (fn [^CompoundTag this key entry] (.put this (str key) entry) this)
+         :sd-remove-entry! (fn [^CompoundTag this key] (.remove this (str key)))
          :sd-get-entry     (fn [^CompoundTag this key] (.get this (str key)))
          :sd-get-structured (fn [^CompoundTag this key] (.getCompound this (str key)))
          :sd-get-list      (fn [^CompoundTag this key] (.getList this (str key) 10))
@@ -179,6 +177,12 @@
         :item-ensure-custom-data   (fn [^ItemStack this] (.getOrCreateTag this))
         :item-get-max-damage       (fn [^ItemStack this] (.getMaxDamage this))
         :item-set-damage!          (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
+        :item-set-hover-name!     (fn [^ItemStack this name-key]
+                                    ;; name-key is a translation key, not
+                                    ;; literal text — keeps variants localized.
+                                    (.setHoverName this (Component/translatable (str name-key))))
+        :item-copy-stack          (fn [^ItemStack this] (.copy this))
+        :item-set-count!          (fn [^ItemStack this n] (.setCount this (int n)))
         :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))
         :item-get-item             (fn [^ItemStack this] (.getItem this))
         :item-get-custom-data      (fn [^ItemStack this] (.getTag this))
@@ -215,7 +219,7 @@
                                              stack)))
                                        (catch Throwable _ nil)))}
        "mc1201")
-      (log/info "mc1201 shared item ops initialized"))))
+      (log/debug "mc1201 shared item ops initialized"))))
 
 (defn- install-world! [adapter]
   (install/framework-once! ::world-installed
@@ -245,6 +249,9 @@
                          :player-spectator?      (fn [^Player this] (.isSpectator this))
                          :player-get-name        (fn [^Player this] (let [^Component nc (.getName this)] (.getString nc)))
                          :player-get-uuid        (fn [^Entity this] (.getUUID this))
+                         :player-get-horizontal-facing (fn [^Player this]
+                                                          (let [^Direction d (.getDirection this)]
+                                                            (.getSerializedName d)))
                          :player-get-main-hand-item-count (fn [^Player this]
                                                             (let [^ItemStack stack (.getMainHandItem this)]
                                                               (if (.isEmpty stack) 0 (int (.getCount stack)))))
@@ -317,7 +324,7 @@
                          :inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))
                          :menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))}]
         (entity/install-entity-ops! player-impl "mc1201")
-        (log/info "mc1201 shared entity protocols initialized")))))
+        (log/debug "mc1201 shared entity protocols initialized")))))
 
 (defn- install-resource-location-factory! []
   (install/framework-once! ::resource-installed
@@ -327,26 +334,26 @@
                                              (if namespace
                                                (ResourceLocation. (str namespace) (str path))
                                                (ResourceLocation. (str path))))})
-      (log/info "mc1201 resource factory installed"))))
+      (log/debug "mc1201 resource factory installed"))))
 
 (defn install-resource-factory!
   []
   (install-resource-location-factory!)
-  (log/info "mc1201 shared resource factory initialized"))
+  (log/debug "mc1201 shared resource factory initialized"))
 
 (defn install-be-fns!
   [fns-map]
   (install/framework-once! ::be-fns-installed
     (fn []
       (be/install-be-ops! fns-map "mc1201")
-      (log/info "mc1201 shared block-entity function hooks initialized"))))
+      (log/debug "mc1201 shared block-entity function hooks initialized"))))
 
 (defn install-world-fns!
   [fns-map]
   (install/framework-once! ::world-fns-installed
     (fn []
       (world/install-world-ops! fns-map "mc1201")
-      (log/info "mc1201 shared world function hooks initialized"))))
+      (log/debug "mc1201 shared world function hooks initialized"))))
 
 (defn install-platform-core!
   [adapter]
@@ -357,7 +364,7 @@
   (install-entity-protocols! adapter)
   (install-player-feedback!)
   (install-resource-location-factory!)
-  (log/info "mc1201 shared installer initialized"))
+  (log/debug "mc1201 shared installer initialized"))
 
 (defn install-platform-services!
   [adapter world-fns-map be-fns-map]
@@ -372,4 +379,4 @@
     (install-world-fns! world-fns-map))
   (when be-fns-map
     (install-be-fns! be-fns-map))
-  (log/info "mc1201 platform services initialized"))
+  (log/debug "mc1201 platform services initialized"))

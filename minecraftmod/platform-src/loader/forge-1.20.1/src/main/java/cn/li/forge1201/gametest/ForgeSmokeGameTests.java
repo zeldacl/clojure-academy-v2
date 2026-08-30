@@ -12,7 +12,7 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import java.util.List;
 import java.util.Map;
 
-import static cn.li.forge1201.MyMod1201.MODID;
+import static cn.li.forge1201.AcademyCraft1201.MODID;
 
 /**
  * Neutral Forge smoke tests for platform bootstrap and descriptor registration.

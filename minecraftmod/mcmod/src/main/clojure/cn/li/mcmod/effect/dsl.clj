@@ -29,7 +29,7 @@
 		(throw (ex-info "Effect :id must be string" {:effect-spec effect-spec})))
 	(when-not (string? (:registry-name effect-spec))
 		(throw (ex-info "Effect :registry-name must be string" {:effect-spec effect-spec})))
-	(log/info "Registering effect:" (:id effect-spec) "->" (:registry-name effect-spec))
+	(log/debug "Registering effect:" (:id effect-spec) "->" (:registry-name effect-spec))
 	(when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :effects (:id effect-spec)] effect-spec))
 	effect-spec)
 

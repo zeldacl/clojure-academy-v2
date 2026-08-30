@@ -75,12 +75,12 @@
                :with-owner! #(@client-owner-wrapper %)})))))))
 
 (defn register-screen-handler-types! []
-  (log/info "Registering GUI screen handler types for Fabric 1.20.1")
+  (log/debug "Registering GUI screen handler types for Fabric 1.20.1")
   (doseq [gui-id (gui/get-all-gui-ids)]
     (let [handler-type (create-extended-screen-handler-type gui-id)
           registry-name (gui/get-registry-name gui-id)]
       (assoc-gui-handler-type! gui-id handler-type)
-      (log/info "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
+      (log/debug "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
   (log/info "Registered" (count (gui-handler-types-snapshot)) "screen handler types"))
 
 (defn open-gui-for-player [player gui-id tile-entity]
@@ -104,12 +104,12 @@
      :invalidate-menu-registry! clear-gui-handler-types!}))
 
 (defn register-gui-handler! []
-  (log/info "Registering GUI handler for Fabric 1.20.1")
+  (log/debug "Registering GUI handler for Fabric 1.20.1")
   (install-registry-contract!)
   (register-screen-handler-types!)
-  (log/info "Fabric 1.20.1 GUI handler registered"))
+  (log/debug "Fabric 1.20.1 GUI handler registered"))
 
 (defn init! []
-  (log/info "Initializing Fabric 1.20.1 GUI system")
+  (log/debug "Initializing Fabric 1.20.1 GUI system")
   (register-gui-handler!)
-  (log/info "Fabric 1.20.1 GUI system initialized"))
+  (log/debug "Fabric 1.20.1 GUI system initialized"))

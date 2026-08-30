@@ -19,7 +19,7 @@
       (require-lock/safe-require ns-sym)
       ns-sym
       (catch Exception e
-        (log/error "Failed to load client namespace" ns-sym e)
+        (log/stacktrace (str "Failed to load client namespace " ns-sym) e)
         nil))))
 
 (defn resolve-client-fn
@@ -30,5 +30,5 @@
       (when-let [v (find-var var-sym)]
         (when (bound? v) @v))
       (catch Exception e
-        (log/error "Failed to resolve client function" var-sym e)
+        (log/stacktrace (str "Failed to resolve client function " var-sym) e)
         nil))))

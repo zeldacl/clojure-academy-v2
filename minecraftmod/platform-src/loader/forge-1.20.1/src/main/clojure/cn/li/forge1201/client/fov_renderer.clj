@@ -21,8 +21,7 @@
         (when (pos? offset)
           (.setFOV evt (float (+ (.getFOV evt) offset))))))
     (catch Exception e
-      (log/error "FOV offset failed" e)
-      (log/stacktrace "FOV offset failed" e))))
+      (log/debug "FOV offset failed:" (ex-message e)))))
 
 (defn init! []
   (install/process-once! ::fov-listener-registered
@@ -30,4 +29,4 @@
                    EventPriority/NORMAL false ViewportEvent$ComputeFov
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-compute-fov evt)))))
-  (log/info "FOV renderer initialized"))
+  (log/debug "FOV renderer initialized"))

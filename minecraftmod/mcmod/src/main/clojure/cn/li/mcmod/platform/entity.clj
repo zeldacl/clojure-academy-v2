@@ -6,6 +6,7 @@
 (def entity-ops-keys
   #{:entity-distance-to-sqr :entity-get-x :entity-get-y :entity-get-z
     :player-get-level :player-creative? :player-spectator? :player-get-name :player-get-uuid
+    :player-get-horizontal-facing
     :player-get-main-hand-item-id :player-get-main-hand-item-count
     :player-get-main-hand-item-stack :player-main-hand-placeable-block?
     :player-place-main-hand-block-at-hit! :player-consume-main-hand-item!
@@ -44,6 +45,14 @@
 (defn player-spectator?              [p]       (call :player-spectator? p))
 (defn player-get-name                [p]       (call :player-get-name p))
 (defn player-get-uuid                [p]       (call :player-get-uuid p))
+(defn player-get-horizontal-facing   [p]       (call :player-get-horizontal-facing p))
+
+(defn opposite-horizontal-facing
+  "Opposite of a horizontal facing name (\"north\" ↔ \"south\", \"east\" ↔
+  \"west\"). Upstream machines set their FACING to the opposite of the placer's
+  horizontal facing (onBlockPlacedBy), so the front faces the player."
+  [facing]
+  (get {"north" "south" "south" "north" "east" "west" "west" "east"} facing facing))
 (defn player-get-main-hand-item-id   [p]       (call :player-get-main-hand-item-id p))
 (defn player-get-main-hand-item-count [p]      (call :player-get-main-hand-item-count p))
 (defn player-get-main-hand-item-stack [p]      (call :player-get-main-hand-item-stack p))

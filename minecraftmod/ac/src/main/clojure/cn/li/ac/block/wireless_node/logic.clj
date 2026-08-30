@@ -211,7 +211,7 @@
           max-cap (if network (network-state/get-capacity network level) 0)]
       (assoc state :enabled connected? :capacity conn-load :max-capacity max-cap))
     (catch Exception e
-      (log/stacktrace (str "[wireless-node] tick-check-network failed at " block-pos) e)
+      (log/debug "[wireless-node] tick-check-network failed at" block-pos (ex-message e))
       (assoc state :enabled false :capacity 0 :max-capacity 0))))
 
 (defn- sync-blockstate-if-changed!
@@ -231,12 +231,12 @@
   [state level pos _block-state be]
   (let [ticker (machine-runtime/advance-tick! state)
         state1 (assoc state :max-energy (node-max-energy state))
-        state2 (try (tick-charge-in state1) (catch Exception e (log/stacktrace "[wireless-node] tick-charge-in failed" e) state1))
-        state3 (try (tick-charge-out state2) (catch Exception e (log/stacktrace "[wireless-node] tick-charge-out failed" e) state2))]
+        state2 (try (tick-charge-in state1) (catch Exception e (log/debug "[wireless-node] tick-charge-in failed:" (ex-message e)) state1))
+        state3 (try (tick-charge-out state2) (catch Exception e (log/debug "[wireless-node] tick-charge-out failed:" (ex-message e)) state2))]
     (if (zero? (mod ticker (node-config/sync-interval)))
       (try
         (tick-check-network state3 level pos be)
-        (catch Exception e (log/stacktrace "[wireless-node] tick-check-network outer safety net" e) state3))
+        (catch Exception e (log/debug "[wireless-node] tick-check-network outer safety net:" (ex-message e)) state3))
       state3)))
 
 (def node-scripted-tick-fn
@@ -262,7 +262,7 @@
 (defn handle-node-place
   [node-type]
   (fn [player world pos _block-id]
-    (log/info "Placing Wireless Node (" (name node-type) ")")
+    (log/debug "Placing Wireless Node (" (name node-type) ")")
     (let [player-name (player-name player)
           player-uuid (uuid/player-uuid player)
           node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
@@ -276,7 +276,7 @@
         (wireless-api/register-node-spatial! world node-vb)
         (catch Exception e
           (log/stacktrace (str "[wireless-node] register-node-spatial! failed at " pos) e)))
-      (log/info "Node placed by" player-name "at" pos))))
+      (log/debug "Node placed by" player-name "at" pos))))
 
 (defn handle-node-break
   [_node-type]

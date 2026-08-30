@@ -4,7 +4,7 @@
   (:import [cn.li.fabricbase FabricIntegration]))
 
 (defn init! []
-  (log/info "Fabric optional integrations"
+  (log/debug "Fabric optional integrations"
             {:energy (FabricIntegration/isModLoaded "team_reborn_energy")
              :jei (FabricIntegration/isModLoaded "jei")})
   nil)

@@ -47,7 +47,7 @@
                                (float pitch)
                                false))))))
     (catch Exception e
-      (log/error "Error playing sound effect" e))))
+      (log/stacktrace "Error playing sound effect" e))))
 
 (defn tick-sounds!
   []
@@ -56,7 +56,7 @@
       (doseq [sound-cmd (power-runtime/client-poll-sound-effects owner)]
         (play-sound-effect sound-cmd)))
     (catch Exception e
-      (log/error "Error in sound tick" e))))
+      (log/debug "Error in sound tick:" (ex-message e)))))
 
 (defn- get-sound-manager []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -117,4 +117,4 @@
 
 (defn init!
   []
-  (log/info "Shared sound effect bridge initialized"))
+  (log/debug "Shared sound effect bridge initialized"))

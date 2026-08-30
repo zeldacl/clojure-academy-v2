@@ -88,11 +88,20 @@
              (:x direction) (:y direction) (:z direction)
              (double distance) (str owner))]
     (if (:hit-type hit)
-      {:x (double (:hit-x hit))
-       :y (+ (double (:hit-y hit))
-             (if (= "entity" (:hit-type hit))
-               (* 0.6 (double (or (:eye-height hit) 0.0))) 0.0))
-       :z (double (:hit-z hit))}
+      (let [hit-y (double (:hit-y hit))
+            ;; Keep the owner-raycast destination inside a low target's box.
+            ;; The bridge normalizes hit types to keywords; treating it as a
+            ;; string skipped this correction and made low-target rays skim over
+            ;; feet-level hits.
+            raised-y (+ hit-y
+                        (if (= :entity (:hit-type hit))
+                          (* 0.6 (double (or (:eye-height hit) 0.0)))
+                          0.0))
+            box-top (+ (double (or (:y hit) hit-y))
+                       (* 0.9 (double (or (:height hit) 0.0))))]
+        {:x (double (:hit-x hit))
+         :y (max hit-y (min raised-y box-top))
+         :z (double (:hit-z hit))})
       (v+ (body-pos owner) (v* direction distance)))))
 
 (defn- point [value]
@@ -127,11 +136,14 @@
           hit (if exclude-owner?
                 (raycast/raycast-combined-excluding world-id ox oy oz
                  (:x direction) (:y direction) (:z direction)
-                 (max 0.1 distance) (str owner))
+                 ;; Owner-raycast beams settle on a target surface; extend
+                 ;; half a block so the final ray crosses that target.
+                 (max 0.1 (+ distance (if destination-selector 0.5 0.0))) (str owner))
                 (raycast/raycast-combined-all world-id ox oy oz
                  (:x direction) (:y direction) (:z direction)
-                 (max 0.1 distance)))
-          target (when (= "entity" (:hit-type hit))
+                 (max 0.1 (+ distance (if destination-selector 0.5 0.0)))))
+          ;; raycast adapters normalize hit-type to a keyword.
+          target (when (= :entity (:hit-type hit))
                    (or (:uuid hit) (:entity-id hit)))]
       (when (and target (entity-damage/available?))
         (entity-damage/apply-direct-damage!

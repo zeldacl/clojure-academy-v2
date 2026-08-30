@@ -15,7 +15,6 @@
             [cn.li.ac.ability.client.input-processor :as processor]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
-            [cn.li.ac.config.gameplay :as gameplay-config]
             [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-transmitter]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -201,6 +200,11 @@
    :gui-keys {:skill-tree false
               :preset-editor false}})
 
+(def ^:private previous-screen-open
+  "Client-global edge latch for the Screen-open window (single local player —
+  no per-owner concern, like v-toggle-state in glfw-polling-core)."
+  (atom false))
+
 ;; Client keybind runtime — Framework [:service :client-keybinds]
 
 (definterface IClientKeybindRuntime
@@ -310,6 +314,7 @@
   []
   (.clear (.keyStates (client-keybind-runtime)))
   (.clear (.presetSwitchStates (client-keybind-runtime)))
+  (reset! previous-screen-open false)
   nil)
 
 (def ^:private movement-keys
@@ -348,40 +353,89 @@
     (boolean (some true? skill-keys))))
 
 (defn on-skill-key-event
-  "Handle skill key state change. Uses delegate system with pre-checks."
-  [key-idx is-down]
-  (when-let [player-uuid (get-client-player-uuid)]
-    (let [owner        (current-client-owner player-uuid)
-          key-state    (key-state-snapshot owner)
-          player-state (get-client-player-state player-uuid)
-          delegate     (get-delegate-for-key key-idx)
-          event        (sm/compute-skill-key-event key-state player-state key-idx is-down delegate)]
-      (processor/execute-skill-key-event! event player-uuid)
-      (when (not= (boolean (get-in key-state [:skill-keys key-idx])) (boolean is-down))
-        (swap-key-state! owner sm/next-skill-key-state key-idx is-down)))))
+  "Handle skill key state change. Uses delegate system with pre-checks.
+
+  Physical key state is tracked every tick, Screen open or not, so a press
+  that happens while a Screen is open is absorbed when the Screen closes —
+  clicking a pause-menu button (which closes the menu on mouse-down while the
+  button is still held) never re-activates a skill. Mirrors upstream
+  ClientRuntime, which polls KeyManager.getKeyDown unconditionally and gates
+  only event dispatch on ClientUtils.isPlayerInGame().
+
+  screen-open? — a Screen is open: press/tick/release dispatch is suppressed,
+  but the physical state is still recorded (no false rising edge later).
+  just-opened?  — first tick of the suppressed window: a held delegate is
+  aborted once, matching upstream `state.state && shouldAbort → onKeyAbort`.
+  just-closed?  — first tick after the window: a key that is physically down
+  is absorbed. The mouse press that clicks a menu button and the menu close
+  both happen in the same frame's GLFW event poll, BEFORE this tick samples —
+  the press was under the Screen but never got a suppressed tick, so without
+  this the closing frame would emit a false :press."
+  ([key-idx is-down]
+   (on-skill-key-event key-idx is-down false false false))
+  ([key-idx is-down screen-open? just-opened?]
+   (on-skill-key-event key-idx is-down screen-open? just-opened? false))
+  ([key-idx is-down screen-open? just-opened? just-closed?]
+   (when-let [player-uuid (get-client-player-uuid)]
+     (let [owner        (current-client-owner player-uuid)
+           key-state    (key-state-snapshot owner)
+           player-state (get-client-player-state player-uuid)
+           was-down     (boolean (get-in key-state [:skill-keys key-idx] false))
+           delegate     (get-delegate-for-key key-idx)
+           event        (sm/compute-skill-key-event key-state player-state key-idx is-down delegate)]
+       (cond
+         ;; Screen opened while this skill key was held: abort the held
+         ;; context once; the rest of the hold is absorbed by the
+         ;; physical-state tracking below, so it cannot restart on close.
+         (and just-opened? was-down delegate)
+         (processor/execute-skill-key-event!
+           {:transition :abort :delegate delegate} player-uuid)
+
+         ;; Screen just closed with the key still physically down: the press
+         ;; happened under the Screen (same-frame button click) — absorb it.
+         (and just-closed? is-down)
+         nil
+
+         (not screen-open?)
+         (processor/execute-skill-key-event! event player-uuid))
+       (when (not= was-down (boolean is-down))
+         (swap-key-state! owner sm/next-skill-key-state key-idx is-down))))))
 
 
 (defn on-gui-key-event
-  "Handle GUI key state change. Opens screens or toggles mode on key press."
-  [gui-type is-down]
-  (when-let [player-uuid (get-client-player-uuid)]
-    (let [owner     (current-client-owner player-uuid)
-          key-state (key-state-snapshot owner)
-          event     (sm/compute-gui-key-event key-state gui-type is-down)]
-      (processor/execute-gui-key-event! event player-uuid)
-      (when (not= (boolean (get-in key-state [:gui-keys gui-type])) (boolean is-down))
-        (swap-key-state! owner sm/next-gui-key-state gui-type is-down)))))
+  "Handle GUI key state change. Opens screens or toggles mode on key press.
+  Presses while a Screen is open are suppressed but still tracked, so a key
+  held across a Screen close never looks like a fresh press (and a key that
+  is down on the first tick after a Screen closes is absorbed — see
+  on-skill-key-event)."
+  ([gui-type is-down]
+   (on-gui-key-event gui-type is-down false false))
+  ([gui-type is-down screen-open? just-closed?]
+   (when-let [player-uuid (get-client-player-uuid)]
+     (let [owner     (current-client-owner player-uuid)
+           key-state (key-state-snapshot owner)
+           event     (sm/compute-gui-key-event key-state gui-type is-down)]
+       (when (and (not screen-open?) (not just-closed?))
+         (processor/execute-gui-key-event! event player-uuid))
+       (when (not= (boolean (get-in key-state [:gui-keys gui-type])) (boolean is-down))
+         (swap-key-state! owner sm/next-gui-key-state gui-type is-down))))))
 
 (defn on-movement-key-event
-  "Handle movement key state transitions and forward them to runtime bridge."
-  [movement-key is-down]
-  (when-let [player-uuid (get-client-player-uuid)]
-    (let [owner     (current-client-owner player-uuid)
-          key-state (key-state-snapshot owner)
-          event     (sm/compute-movement-key-event key-state movement-key is-down)]
-      (processor/execute-movement-key-event! event player-uuid)
-      (when (not= (boolean (get-in key-state [:movement-keys movement-key])) (boolean is-down))
-        (swap-key-state! owner sm/next-movement-key-state movement-key is-down)))))
+  "Handle movement key state transitions and forward them to runtime bridge.
+  Transitions while a Screen is open are suppressed but still tracked (see
+  on-skill-key-event); keys down on the first tick after a Screen closes are
+  absorbed too."
+  ([movement-key is-down]
+   (on-movement-key-event movement-key is-down false false))
+  ([movement-key is-down screen-open? just-closed?]
+   (when-let [player-uuid (get-client-player-uuid)]
+     (let [owner     (current-client-owner player-uuid)
+           key-state (key-state-snapshot owner)
+           event     (sm/compute-movement-key-event key-state movement-key is-down)]
+       (when (and (not screen-open?) (not just-closed?))
+         (processor/execute-movement-key-event! event player-uuid))
+       (when (not= (boolean (get-in key-state [:movement-keys movement-key])) (boolean is-down))
+         (swap-key-state! owner sm/next-movement-key-state movement-key is-down))))))
 
 (defn trigger-mode-switch!
   "V key short-press handler. Delegates to the active activate handler.
@@ -397,7 +451,7 @@
    (when-let [player-uuid (or player-uuid (get-client-player-uuid))]
      ;; hasCategory check matching original: aData.hasCategory()
      (if-not (has-category? player-uuid)
-       (log/info "[V-TRACE][AC][CLIENT][NO-CATEGORY]"
+       (log/debug "[V-TRACE][AC][CLIENT][NO-CATEGORY]"
                  {:uuid (str player-uuid)
                   :session-id (current-client-session-id)
                   :state-keys (some-> (get-client-player-state player-uuid) keys vec)})
@@ -408,7 +462,7 @@
       (let [will-abort? (boolean (has-active-delegates? player-uuid))]
          (if-let [handler (get-active-handler player-uuid)]
            (do
-             (log/info "[V-TRACE][AC][CLIENT][HANDLER]"
+             (log/debug "[V-TRACE][AC][CLIENT][HANDLER]"
                        {:handler-id (:id handler) :uuid (str player-uuid)})
              ((:on-key-down-fn handler) player-uuid)
              ;; After handler runs, update client overlay state for
@@ -422,7 +476,7 @@
            ;; Fallback: no handler matched → build and execute toggle command
            (let [state   (get-client-player-state player-uuid)
                  current (boolean (get-in state [:resource-data :activated]))]
-             (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
+             (log/debug "[V-TRACE][AC][CLIENT][TOGGLE]"
                        {:uuid (str player-uuid) :current current :next (not current)})
              (processor/execute-input-command! (current-client-owner player-uuid)
                                                (cmd-builder/toggle-activated-command current))
@@ -437,11 +491,10 @@
   [87 65 83 68])
 
 (defn- flashing-active?
-  "Movement ownership is derived from the generic slot visual state; no
-   legacy context or skill callback is consulted."
+  "Derive movement ownership from the final runtime's slot projection rather
+   than from the retired per-skill context registry."
   [player-uuid]
-  (boolean (some #(and (= :active (runtime-hooks/client-slot-visual-state
-                                   player-uuid %))
+  (boolean (some #(and (= :active (runtime-hooks/client-slot-visual-state player-uuid %))
                        (= :flashing (get-skill-id-for-slot-public player-uuid %)))
                  (range 4))))
 
@@ -458,12 +511,16 @@
   ([player-uuid]
    (cond
      (nil? player-uuid) []
-    (freq-transmitter/interaction-active? player-uuid) [-100 -99]
+     (freq-transmitter/interaction-active? player-uuid) [-100 -99]
      (activated? player-uuid)
      (into (into []
                  (keep (fn [idx]
                          (when (get-delegate-for-key idx)
-                           (gameplay-config/input-key
+                           ;; Live KeyMapping binding in AC convention (mouse
+                           ;; buttons -100+value) — the config value is only
+                           ;; the initial seed and goes stale on rebind.
+                           (client-bridge/call-adapter
+                             :keybind-get-key-code
                              (keyword (str "ability-key-" idx)))))
                        (range 4)))
            (when (flashing-active? player-uuid)
@@ -482,44 +539,74 @@
   ([player-uuid]
    (vanilla-input/suppress-vanilla-inputs! (vanilla-override-key-codes player-uuid))))
 
+(defn- screen-window-edges
+  "Screen-open window edge flags for this tick, from the previous tick's state.
+
+  Returns [just-opened? just-closed?]:
+  - just-opened? — first tick a Screen is open: held skill delegates are
+    aborted (upstream `state.state && shouldAbort → onKeyAbort`).
+  - just-closed?  — first tick after a Screen closed: keys physically down are
+    absorbed. A menu button closes the Screen on mouse-down inside the same
+    frame's GLFW event poll, so the press never got a suppressed tick; without
+    the just-closed absorb the closing frame would emit a false :press."
+  [screen-open?]
+  (let [prev @previous-screen-open
+        screen-open? (boolean screen-open?)]
+    (reset! previous-screen-open screen-open?)
+    [(and screen-open? (not prev))
+     (and (not screen-open?) prev)]))
+
 (defn tick-keys!
-  "Main tick function called by forge layer. key-state-fn returns boolean for each key."
-  [key-state-fn]
-  ;; Frequency Transmitter's pass-on stage owns the mouse buttons just like
-  ;; upstream ControlOverrider; ordinary ability-slot input is suppressed.
-  (let [player-uuid (get-client-player-uuid)]
-    ;; Suppress vanilla attack/use first so handleKeybinds on the *next* frame
-    ;; does not keep swinging while a skill owns LMB/RMB (upstream ControlOverrider).
-    (sync-vanilla-input-overrides! player-uuid)
-    (if player-uuid
-      (if (freq-transmitter/interaction-active? player-uuid)
-        (freq-transmitter/tick-interaction!
-          player-uuid
-          (key-state-fn [:raw (gameplay-config/input-key :ability-key-1)]))
-        (doseq [idx (range 4)]
-          (on-skill-key-event
-            idx
-            (key-state-fn [:raw (gameplay-config/input-key
-                                  (keyword (str "ability-key-" idx)))]))))
-      (doseq [idx (range 4)]
-        (on-skill-key-event
-          idx
-          (key-state-fn [:raw (gameplay-config/input-key
-                                (keyword (str "ability-key-" idx)))])))))
+  "Main tick function called by forge layer. key-state-fn returns boolean for
+  each key.
 
-  ;; Poll movement keys (W/A/S/D)
-  (doseq [movement-key movement-keys]
-    (on-movement-key-event movement-key (key-state-fn [:movement movement-key])))
+  screen-open? — a Screen (pause menu, chat, inventory…) is open. The raw
+  physical state is still polled and tracked every tick, but gameplay events
+  are suppressed: upstream gates every dispatch on ClientUtils.isPlayerInGame()
+  while KeyManager keeps tracking the physical key state, so a press that
+  happened under the Screen is absorbed when it closes — clicking 'Back to
+  Game' with LMB bound to a skill must not fire that skill."
+  ([key-state-fn]
+   (tick-keys! key-state-fn false))
+  ([key-state-fn screen-open?]
+   ;; Frequency Transmitter's pass-on stage owns the mouse buttons just like
+   ;; upstream ControlOverrider; ordinary ability-slot input is suppressed.
+   (let [[just-opened? just-closed?] (screen-window-edges screen-open?)
+         player-uuid (get-client-player-uuid)]
+     ;; Suppress vanilla attack/use first so handleKeybinds on the *next* frame
+     ;; does not keep swinging while a skill owns LMB/RMB (upstream ControlOverrider).
+     (sync-vanilla-input-overrides! player-uuid)
+     (if player-uuid
+       (if (freq-transmitter/interaction-active? player-uuid)
+         (freq-transmitter/tick-interaction!
+           player-uuid
+           (key-state-fn [:slot 1]))
+         (doseq [idx (range 4)]
+           (on-skill-key-event
+             idx
+             (key-state-fn [:slot idx])
+             screen-open?
+             just-opened?
+             just-closed?)))
+       (doseq [idx (range 4)]
+         (on-skill-key-event
+           idx
+           (key-state-fn [:slot idx])
+           screen-open?
+           just-opened?
+           just-closed?)))
 
-  ;; Poll GUI keys. :primary = N, :secondary = M (see screen-glfw-keys in the
-  ;; platform key-state-fn). Upstream AcademyCraft: KEY_EDIT_PRESET = N
-  ;; (ClientHandler.java) — preset-editor must be on :primary/N to match.
-  ;; skill-tree has no upstream key at all (upstream only reaches it via the
-  ;; terminal app); it lives on :secondary/M as a rewrite-only convenience
-  ;; that doesn't collide with any upstream binding.
-  (on-gui-key-event :preset-editor
-                    (key-state-fn [:raw (gameplay-config/input-key :edit-preset-key)]))
-  (on-gui-key-event :skill-tree (key-state-fn [:screen :secondary])))
+     ;; Poll movement keys (W/A/S/D)
+     (doseq [movement-key movement-keys]
+       (on-movement-key-event movement-key (key-state-fn [:movement movement-key]) screen-open? just-closed?))
+
+     ;; Poll GUI keys. :primary = N (edit-preset) — see screen-glfw-keys in the
+     ;; platform key-state-fn; the CURRENT binding (Settings app / config)
+     ;; resolves through the bound-key resolver. Upstream AcademyCraft:
+     ;; KEY_EDIT_PRESET = N (ClientHandler.java) — preset-editor must be on
+     ;; :primary/N to match. The skill-tree viewer is debug-only and has NO key
+     ;; binding (upstream reaches it only via the terminal app).
+     (on-gui-key-event :preset-editor (key-state-fn [:screen :primary]) screen-open? just-closed?))))
 
 (defn reset-all-keys!
   "Reset all key states. Called on disconnect or dimension change."
@@ -551,7 +638,7 @@
                                                     PRESET-INDICATOR-DURATION-MS))
        (processor/execute-input-command! owner switch-cmd)
        (update-default-group! player-uuid)
-       (log/info "[PRESET-SWITCH]" {:preset (:preset-idx switch-cmd)})))))
+       (log/debug "[PRESET-SWITCH]" {:preset (:preset-idx switch-cmd)})))))
 
 (defn get-preset-switch-state
   "Get current preset switch state for HUD rendering."
@@ -590,5 +677,5 @@
     :handles-fn      (fn [uuid] (boolean (has-active-delegates? uuid)))
     :on-key-down-fn  (fn [uuid]
                        (runtime-hooks/client-abort-all!)
-                       (log/info "[V-TRACE] Aborted all contexts for" uuid))
+                       (log/debug "[V-TRACE] Aborted all contexts for" uuid))
     :hint-fn         (fn [_uuid] "ac.activate.hint.abort")}))

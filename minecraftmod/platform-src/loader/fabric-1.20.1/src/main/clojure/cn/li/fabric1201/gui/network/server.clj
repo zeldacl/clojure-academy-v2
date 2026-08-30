@@ -61,5 +61,5 @@
                        (receive [_ server player _handler buf _sender]
                          (on-server-play-receive server player _handler buf _sender)))]
         (ServerPlayNetworking/registerGlobalReceiver shared/c2s-channel receiver)
-        (log/info "Fabric GUI network server transport initialized"))))
+        (log/debug "Fabric GUI network server transport initialized"))))
   nil)

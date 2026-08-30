@@ -34,10 +34,14 @@
 (def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part" "windgen_main" "windgen_main_part"})
 (def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part" "wind_gen_base" "wind_gen_base_part" "windgen_base" "windgen_base_part"})
 (def ^:private wind-pillar-ids #{"wind-gen-pillar" "wind_gen_pillar" "windgen_pillar"})
-(def ^:private wind-main-controller-ids #{"wind-gen-main" "wind_gen_main"})
-(def ^:private wind-main-part-ids #{"wind-gen-main-part" "wind_gen_main_part"})
-(def ^:private wind-base-controller-ids #{"wind-gen-base" "wind_gen_base"})
-(def ^:private wind-base-part-ids #{"wind-gen-base-part" "wind_gen_base_part"})
+;; controller/part sets must include the upstream-aligned registry names
+;; (windgen_main/windgen_base) — the other id sets gained them, these two were
+;; missed, so main-controller-pos-at/base-controller-pos-at resolved nil and
+;; valid-pillar-support? rejected every pillar placement.
+(def ^:private wind-main-controller-ids #{"wind-gen-main" "wind_gen_main" "windgen_main"})
+(def ^:private wind-main-part-ids #{"wind-gen-main-part" "wind_gen_main_part" "windgen_main_part"})
+(def ^:private wind-base-controller-ids #{"wind-gen-base" "wind_gen_base" "windgen_base"})
+(def ^:private wind-base-part-ids #{"wind-gen-base-part" "wind_gen_base_part" "windgen_base_part"})
 
 (defn- id-path
   [x]
@@ -328,7 +332,7 @@
       (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
             below-be (world/get-tile-entity world below-pos)
             below-id (when below-be (platform-be/get-block-id below-be))]
-        (log/info "wind-gen pillar place rejected:"
+        (log/debug "wind-gen pillar place rejected:"
                   {:pos [(pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)]
                    :below-pos [(pos/pos-x below-pos) (pos/pos-y below-pos) (pos/pos-z below-pos)]
                    :below-id below-id
@@ -346,7 +350,7 @@
           below-be (world/get-tile-entity world below-pos)
           below-id (when below-be (platform-be/get-block-id below-be))]
       (when-not (wind-pillar-id? below-id)
-        (log/info "wind-gen-main place rejected: no pillar directly below"
+        (log/debug "wind-gen-main place rejected: no pillar directly below"
                   {:pos [(pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)]
                    :below-pos [(pos/pos-x below-pos) (pos/pos-y below-pos) (pos/pos-z below-pos)]
                    :below-id below-id
@@ -380,10 +384,10 @@
                          nil))]
         node
         (do
-          (log/info "[wind-gen get-linked-node] connection found but node tile not resolved for gen at" pos-str)
+          (log/debug "[wind-gen get-linked-node] connection found but node tile not resolved for gen at" pos-str)
           nil))
       (do
-        (log/info "[wind-gen get-linked-node] no connection found for generator at" pos-str)
+        (log/debug "[wind-gen get-linked-node] no connection found for generator at" pos-str)
         nil))))
 
 ;; ============================================================================

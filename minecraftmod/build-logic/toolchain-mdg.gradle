@@ -23,23 +23,49 @@ if (!neoForgeVer) {
 // exact versions aligned with the shared runtime classpath and pin each one
 // so the published mod is self-contained and reproducible.
 //
-// MDG reads the source manifest while creating Jar-in-Jar metadata. The
-// published malli artifact has no manifest, so normalize all four runtime
-// jars into task outputs with a minimal manifest before handing them to MDG.
-def preparedJarJarLibraries = clojureRuntimeLibraries.collect { dependencyNotation ->
-    def coordinates = dependencyNotation.toString().split(":", 3)
+// MDG reads the source manifest while creating Jar-in-Jar metadata, so
+// normalize each packaged jar into task outputs with a minimal manifest
+// before handing them to MDG.
+//
+// The clojure entry is the `slim` classifier variant, which is not on the
+// runtime classpath, so resolve the packaged set from a dedicated
+// non-transitive configuration instead of runtimeClasspath; each entry is a
+// leaf jar selected by exact file name below.
+def packagedRuntimeConfig = configurations.create("packagedRuntime") {
+    canBeConsumed = false
+    canBeResolved = true
+}
+dependencies {
+    packagedRuntimeLibraries.each { dependencyNotation ->
+        // Non-transitive: the clojure/spec POMs would otherwise drag their
+        // own (older) spec.alpha/core.specs.alpha pins alongside the direct
+        // entries; keep the packaged set exactly the declared three jars.
+        packagedRuntime(dependencyNotation) {
+            transitive = false
+        }
+    }
+}
+
+def preparedJarJarLibraries = packagedRuntimeLibraries.collect { dependencyNotation ->
+    def coordinates = dependencyNotation.toString().split(":")
     def group = coordinates[0]
     def name = coordinates[1]
     def dependencyVersion = coordinates[2]
+    def classifier = coordinates.length > 3 ? coordinates[3] : null
     tasks.register("prepare${name.replaceAll(/[^A-Za-z0-9]/, '')}JarJar", Jar) {
         archiveBaseName.set(name)
         archiveVersion.set(dependencyVersion)
+        if (classifier != null) {
+            archiveClassifier.set(classifier)
+        }
         // Keep inputs outside MDG's own generated/jarJar output directory;
         // the jarJar task clears that directory before writing metadata.
         destinationDirectory.set(layout.buildDirectory.dir("tmp/jarJarInputs"))
         from {
-            def expectedName = "${name}-${dependencyVersion}.jar"
-            def source = configurations.runtimeClasspath.files.find { it.name == expectedName }
+            def expectedName = classifier != null
+                ? "${name}-${dependencyVersion}-${classifier}.jar"
+                : "${name}-${dependencyVersion}.jar"
+            def source = packagedRuntimeConfig.files.find { it.name == expectedName }
             if (source == null) {
                 throw new GradleException("Missing resolved Clojure runtime library ${dependencyNotation}")
             }

@@ -127,5 +127,5 @@
                      TickEvent$PlayerTickEvent
                      (reify java.util.function.Consumer
                        (accept [_ evt] (on-player-tick evt))))
-       (log/info "Tutorial item event listeners registered")))
+       (log/debug "Tutorial item event listeners registered")))
   nil)

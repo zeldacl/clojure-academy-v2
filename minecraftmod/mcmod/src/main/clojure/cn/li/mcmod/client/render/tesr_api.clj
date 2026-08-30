@@ -43,7 +43,7 @@
   Example:
     (register-tile-renderer! TileMatrix my-renderer-obj)"
   [tile-class renderer-fn]
-  (log/info "Registering TileEntity renderer for" tile-class)
+  (log/debug "Registering TileEntity renderer for" tile-class)
   (install/install-root! #'renderer-registry (assoc renderer-registry tile-class renderer-fn))
   nil)
 
@@ -55,7 +55,7 @@
   Used when the BE is ScriptedBlockEntity; platform BER gets block-id and calls
   render-scripted-tile-entity(block-id, be, x, y, z)."
   [block-id renderer-obj]
-  (log/info "Registering scripted TileEntity renderer for" block-id)
+  (log/debug "Registering scripted TileEntity renderer for" block-id)
   (install/install-root! #'scripted-renderer-registry (assoc scripted-renderer-registry block-id renderer-obj))
   nil)
 
@@ -70,7 +70,7 @@
     (try
       ((:render-tile renderer) tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
-        (log/error "Error rendering scripted tile entity" block-id(ex-message e))
+        (log/debug "Error rendering scripted tile entity" block-id (ex-message e))
         (log/stacktrace "Error rendering scripted tile entity" e)))))
 
 (defn- get-block-id [tile-entity]
@@ -107,5 +107,5 @@
     (try
       ((:render-tile renderer) tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
-        (log/error "Error rendering tile entity:"(ex-message e))
+        (log/debug "Error rendering tile entity:" (ex-message e))
         (log/stacktrace "Error rendering tile entity" e)))))

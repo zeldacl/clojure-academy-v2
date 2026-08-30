@@ -20,5 +20,5 @@
                     (allowDamage [_ entity damage-source amount]
                       (core/allow-attack? entity damage-source amount))))
 
-       (log/info "Fabric damage interception installed")))
+       (log/debug "Fabric damage interception installed")))
   nil)

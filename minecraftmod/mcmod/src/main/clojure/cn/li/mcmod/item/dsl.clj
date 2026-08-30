@@ -91,7 +91,7 @@
 ;; Register item in registry
 (defn register-item! [item-spec]
   (validate-item-spec item-spec)
-  (log/info "Registering item:" (:id item-spec))
+  (log/debug "Registering item:" (:id item-spec))
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :items (:id item-spec)] item-spec))
   item-spec)
 

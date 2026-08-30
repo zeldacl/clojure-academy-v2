@@ -37,37 +37,23 @@
   
   Returns: reactive screen data map or nil on error"
   [gui-type container-or-handler player-inventory _title]
-  (log/info "[SCREEN-FACTORY-CORE] Creating" (name gui-type) "screen (platform-agnostic factory)")
-  (log/info "[SCREEN-FACTORY-CORE] gui-type=" gui-type "container=" (type container-or-handler))
-  
   (try
-    (log/info "[SCREEN-FACTORY-CORE] Getting GUI config for gui-type:" gui-type)
     (let [cfg (gui-registry/get-gui-by-type gui-type)
           _ (when-not cfg
               (throw (ex-info "Unknown gui-type" {:gui-type gui-type})))
       gui-id (gui-registry/get-gui-id-for-type gui-type)
-        _ (log/info "[SCREEN-FACTORY-CORE] gui-id=" gui-id "cfg found=" (not (nil? cfg)))
       screen-fn (or (when gui-id (gui-registry/get-screen-fn gui-id))
               (get-in cfg [:lifecycle :screen-fn]))
         _ (when-not screen-fn
           (throw (ex-info "GUI has no screen factory function"
                   {:gui-type gui-type :gui-id gui-id})))
-        _ (log/info "[SCREEN-FACTORY-CORE] screen-fn resolved=" (if screen-fn "YES" "NO"))
-        _ (log/info "[SCREEN-FACTORY-CORE] Resolving clj-container from menu runtime state...")
         clj-container (resolve-clj-container gui-type gui-id container-or-handler)
-        _ (log/info "[SCREEN-FACTORY-CORE] Got clj-container=" (type clj-container))
         player (entity/inventory-get-player player-inventory)
-        _ (log/info "[SCREEN-FACTORY-CORE] Got player=" (str player))
-        _ (log/info "[SCREEN-FACTORY-CORE] Calling screen-fn...")
         screen-data (screen-fn clj-container container-or-handler player)]
-      
-      (log/info "[SCREEN-FACTORY-CORE] Screen function returned:" (type screen-data))
-      (log/info "[SCREEN-FACTORY-CORE] " (name gui-type) " screen created successfully")
       screen-data)
-    
+
     (catch Throwable e
-      (log/error "[SCREEN-FACTORY-CORE] Failed to create " (name gui-type) " screen:" (ex-message e))
-      (log/stacktrace "[SCREEN-FACTORY-CORE] Exception:" e)
+      (log/stacktrace (str "[SCREEN-FACTORY-CORE] Failed to create " (name gui-type) " screen") e)
       nil)))
 
 

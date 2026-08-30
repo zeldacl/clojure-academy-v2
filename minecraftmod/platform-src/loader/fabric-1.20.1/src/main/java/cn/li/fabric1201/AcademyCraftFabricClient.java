@@ -9,7 +9,7 @@ import net.fabricmc.api.ClientModInitializer;
 /**
  * Fabric client entry point - bridges to Clojure client initialization.
  */
-public class MyModFabricClient implements ClientModInitializer {
+public class AcademyCraftFabricClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         FabricClientRenderSetup.registerClientHooks();

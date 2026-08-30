@@ -45,7 +45,6 @@
                   (float rot-z))
             (.setCanceled evt true))))
       (catch Exception e
-        (log/error "Transformed hand render failed" e)
         (log/stacktrace "Transformed hand render failed" e)))))
 
 (defn init! []
@@ -59,4 +58,4 @@
                    EventPriority/NORMAL false RenderHandEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-render-hand evt)))))
-  (log/info "Hand effect renderer initialized"))
+  (log/debug "Hand effect renderer initialized"))

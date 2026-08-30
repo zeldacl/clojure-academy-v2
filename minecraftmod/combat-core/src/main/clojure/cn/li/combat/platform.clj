@@ -371,8 +371,11 @@
         c (Math/cos angle) s (Math/sin angle)
         sx (if (pos? horizontal) (/ dx horizontal) 0.0)
         sz (if (pos? horizontal) (/ dz horizontal) 1.0)
-        spread-x (+ (* sx c) (* sz s))
-        spread-z (- (* sz c) (* sx s))
+        ;; Vec3d.rotateYaw uses positive yaw: x' = x*cos - z*sin,
+        ;; z' = x*sin + z*cos.  The old signs mirrored the propagated
+        ;; lateral cells, changing both the plowed swath and its energy use.
+        spread-x (- (* sx c) (* sz s))
+        spread-z (+ (* sx s) (* sz c))
         entries (or (:entries spread) [[0.0 1.0]])
         transforms (or block-transforms {})
         costs (or energy-cost {})

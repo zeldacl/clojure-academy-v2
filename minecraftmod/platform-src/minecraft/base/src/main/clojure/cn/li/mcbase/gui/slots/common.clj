@@ -213,6 +213,6 @@
   [container expected-count]
   (let [actual-count (.size (.getItems ^AbstractContainerMenu container))]
     (if (= actual-count expected-count)
-      (do (log/info "Slot validation passed:" actual-count "slots") true)
+      (do (log/debug "Slot validation passed:" actual-count "slots") true)
       (do (log/error "Slot validation failed: expected" expected-count
                      "but got" actual-count) false))))

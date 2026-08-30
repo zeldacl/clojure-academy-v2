@@ -151,7 +151,7 @@
                      (try
                        (render-at-origin tile-entity pose-stack buffer-source packed-light packed-overlay)
                        (catch Exception e
-                         (log/error "Error in cat-engine renderer:" (ex-message e)))))}))
+                         (log/debug "Error in cat-engine renderer:" (ex-message e)))))}))
 
 (defn init!
   []

@@ -69,7 +69,7 @@
           (log/error (str "Invalid Imag Fusor recipe: " recipe))
           false)))
     (catch Exception e
-      (log/error "Failed to add Imag Fusor recipe:" (ex-message e))
+      (log/stacktrace "Failed to add Imag Fusor recipe" e)
       false)))
 
 (defn remove-fusor-recipe!
@@ -92,7 +92,7 @@
           (log/info (str "Removed " removed " Imag Fusor recipe(s) for " output-item)))
         removed))
     (catch Exception e
-      (log/error "Failed to remove Imag Fusor recipe:" (ex-message e))
+      (log/stacktrace "Failed to remove Imag Fusor recipe" e)
       0)))
 
 ;; Metal Former recipe management
@@ -126,7 +126,7 @@
           (log/error (str "Invalid Metal Former recipe: " recipe))
           false)))
     (catch Exception e
-      (log/error "Failed to add Metal Former recipe:" (ex-message e))
+      (log/stacktrace "Failed to add Metal Former recipe" e)
       false)))
 
 (defn remove-former-recipe!
@@ -153,7 +153,7 @@
                         (when mode (str " (mode: " mode ")")))))
         removed))
     (catch Exception e
-      (log/error "Failed to remove Metal Former recipe:" (ex-message e))
+      (log/stacktrace "Failed to remove Metal Former recipe" e)
       0)))
 
 ;; Recipe query functions

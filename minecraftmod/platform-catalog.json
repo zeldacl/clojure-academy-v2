@@ -45,9 +45,9 @@
       "shadowPluginId": "com.gradleup.shadow",
       "shadowVersion": "9.6.1"
     },
-    "fabric262-loom-1.17-gradle-9.5": {
-      "gradleVersion": "9.5.1",
-      "wrapper": "platform-builds/gradle-9.5/gradlew",
+    "fabric262-loom-1.17-gradle-9.7.1": {
+      "gradleVersion": "9.7.1",
+      "wrapper": "platform-builds/gradle-9.7.1/gradlew",
       "gradleJvmVersion": 25,
       "toolchain": "loom",
       "loomVersion": "1.17.18",
@@ -597,7 +597,7 @@
       "id": "fabric-26.2",
       "loader": "fabric",
       "minecraftVersion": "26.2",
-      "buildProfile": "fabric262-loom-1.17-gradle-9.5",
+      "buildProfile": "fabric262-loom-1.17-gradle-9.7.1",
       "gradleJvmVersion": 25,
       "compileJavaVersion": 25,
       "runtimeJavaVersion": 25,

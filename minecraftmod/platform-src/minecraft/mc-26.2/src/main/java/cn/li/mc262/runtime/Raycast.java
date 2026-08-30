@@ -43,7 +43,7 @@ public final class Raycast {
         Vec3 start = new Vec3(startX, startY, startZ);
         Vec3 end = new Vec3(startX + dirX * maxDistance, startY + dirY * maxDistance, startZ + dirZ * maxDistance);
         ClipContext clipContext = new ClipContext(
-                start, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE,
+                start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
                 net.minecraft.world.phys.shapes.CollisionContext.empty());
         BlockHitResult result = level.clip(clipContext);
 
@@ -229,7 +229,7 @@ public final class Raycast {
                 e -> e.isPickable() || e instanceof LivingEntity);
 
         for (Entity entity : entities) {
-            Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
+            Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
 
             if (optionalHit.isEmpty()) {
                 continue;
@@ -364,7 +364,7 @@ public final class Raycast {
                     && excludedEntityUuid.equalsIgnoreCase(entity.getUUID().toString())) {
                 continue;
             }
-            Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
+            Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
             if (optionalHit.isEmpty()) {
                 continue;
             }

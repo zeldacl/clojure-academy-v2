@@ -45,7 +45,7 @@
                        (.getAllKeys handlers)))]
       (when (seq m) m))
     (catch Throwable t
-      (log/error "Failed to load world lifecycle SavedData:" (.getMessage t))
+      (log/stacktrace "Failed to load world lifecycle SavedData:" t)
       nil)))
 
 (defn save-world-lifecycle-saved-data!
@@ -60,6 +60,6 @@
           (.put handlers (id->key id) ^CompoundTag payload)))
       (.setHandlers sd handlers))
     (catch Throwable t
-      (log/error "Failed to save world lifecycle SavedData:" (.getMessage t))))
+      (log/stacktrace "Failed to save world lifecycle SavedData:" t)))
   nil)
 

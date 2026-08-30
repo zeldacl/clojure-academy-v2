@@ -13,4 +13,4 @@
   ;; :developer domain handlers already registered by developer block.
   ;; Imag Fusor GUI uses (wireless-tab/create-wireless-panel {:role :receiver})
   ;; which sends :developer messages → handled by developer's registered handlers.
-  (log/info "Imaginary Fusor network handlers registered (reuses :developer domain)"))
+  (log/debug "Imaginary Fusor network handlers registered (reuses :developer domain)"))

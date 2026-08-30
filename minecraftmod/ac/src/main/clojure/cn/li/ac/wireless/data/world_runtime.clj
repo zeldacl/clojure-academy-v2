@@ -113,6 +113,6 @@
   "Print statistics to log."
   [world-data]
   (let [stats (get-statistics world-data)]
-    (log/info "=== Wireless System Statistics ===")
-    (log/info (format "Networks: %d" (:networks stats)))
-    (log/info (format "Connections: %d" (:connections stats)))))
+    (log/debug "=== Wireless System Statistics ===")
+    (log/debug (format "Networks: %d" (:networks stats)))
+    (log/debug (format "Connections: %d" (:connections stats)))))

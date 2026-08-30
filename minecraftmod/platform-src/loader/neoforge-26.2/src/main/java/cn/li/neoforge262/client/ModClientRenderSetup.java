@@ -1,5 +1,6 @@
 package cn.li.neoforge262.client;
 
+import cn.li.mc262.client.GuiGraphicsHelper;
 import cn.li.mc262.client.particle.MdParticle;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc262.client.render.GuiRenderPipelines;
@@ -8,12 +9,19 @@ import cn.li.mc262.client.render.PlasmaRenderTypes;
 import cn.li.mc262.client.render.ReactivePreviewPipRenderer;
 import cn.li.mc262.client.render.ReactivePreviewRenderState;
 import cn.li.mc262.client.render.item.EnergyItemPropertyFunction;
+import cn.li.mc262.client.render.item.FrameItemPropertyFunction;
+import cn.li.mc262.client.render.item.MatterKindItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
+import net.minecraft.client.gui.navigation.ScreenRectangle;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import org.joml.Matrix3x2f;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import cn.li.neoforge262.client.render.ForgeClientRenderRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import net.minecraft.client.renderer.block.FluidModel;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.bus.api.IEventBus;
@@ -37,6 +45,8 @@ import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
  * {@code minecraft:display_context} (see item-model-provider datagen).
  */
 public final class ModClientRenderSetup {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModClientRenderSetup.class);
+
 
     private ModClientRenderSetup() {
     }
@@ -45,6 +55,7 @@ public final class ModClientRenderSetup {
         if (modBus == null) {
             return;
         }
+        installGuiExtractionHooks();
         modBus.addListener(ModClientRenderSetup::onRegisterMenuScreens);
         modBus.addListener(ModClientRenderSetup::onRegisterRenderers);
         modBus.addListener(ModClientRenderSetup::onRegisterFluidModels);
@@ -56,8 +67,8 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterParticleProviders(RegisterParticleProvidersEvent event) {
         // Meltdowner md particles (md_particle / md_particle_luck sprites from
-        // the mod's particles.json atlas) — upstream MdParticleFactory. The
-        // particles.json entries must exist for the sprite-set registration
+        // the mod's particles/<id>.json atlas definitions) — upstream MdParticleFactory. The
+        // definition entries must exist for the sprite-set registration
         // (the event javadoc enforces it).
         registerMdParticleProvider(event, "md_particle");
         registerMdParticleProvider(event, "md_particle_luck");
@@ -70,7 +81,7 @@ public final class ModClientRenderSetup {
         if (type instanceof SimpleParticleType simple) {
             event.registerSpriteSet(simple, MdParticle.Provider::new);
         } else {
-            throw new IllegalStateException("md particle type not registered: academy:" + id);
+            LOGGER.error("md particle type not registered: academy:{}", id);
         }
     }
 
@@ -101,6 +112,10 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterRangeProperties(RegisterRangeSelectItemModelPropertyEvent event) {
         event.register(ResourceLocations.of("academy", "energy"), EnergyItemPropertyFunction.CODEC);
+        // Matter-unit variant + frame animation (upstream ItemMatterUnit:
+        // per-damage models + `frame` override for the flowing-liquid).
+        event.register(ResourceLocations.of("academy", "matter_kind"), MatterKindItemPropertyFunction.CODEC);
+        event.register(ResourceLocations.of("academy", "frame"), FrameItemPropertyFunction.CODEC);
     }
 
     private static void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {
@@ -109,10 +124,52 @@ public final class ModClientRenderSetup {
         GuiRenderPipelines.all().forEach(event::registerPipeline);
     }
 
+    /**
+     * Wire the NeoForge GUI-extraction patches the shared mc-26.2 module
+     * cannot reference (they must compile against the vanilla jar for Fabric).
+     */
+    private static void installGuiExtractionHooks() {
+        // Two-sampler GUI pipelines (skill_progbar / cpbar_overload) sample a
+        // mask from Sampler1; the vanilla extractor blits single textures, so
+        // submit a BlitRenderState carrying the double TextureSetup through
+        // NeoForge's submitGuiElementRenderState.
+        GuiGraphicsHelper.installTwoTextureBlitter((graphics, pipeline, textures,
+                x0, y0, x1, y1, u0, u1, v0, v1, argb) -> {
+            ScreenRectangle scissor = graphics.peekScissorStack();
+            graphics.submitGuiElementRenderState(new BlitRenderState(
+                    pipeline, textures, new Matrix3x2f(graphics.pose()),
+                    x0, y0, x1, y1, u0, u1, v0, v1, argb, scissor));
+            return true;
+        });
+        // Rotated GUI elements (diagonal connection lines): submit a
+        // BlitRenderState through the same patched API, attaching the current
+        // scissor (null would sort the element first and let backgrounds cover
+        // it).
+        GuiGraphicsHelper.installGuiElementSubmitter((graphics, pipeline, textures,
+                pose, x0, y0, x1, y1, u0, u1, v0, v1, color) -> {
+            graphics.submitGuiElementRenderState(new BlitRenderState(
+                    pipeline, textures, pose, x0, y0, x1, y1,
+                    u0, u1, v0, v1, color, graphics.peekScissorStack()));
+            return true;
+        });
+    }
+
     private static void onRegisterPictureInPictureRenderers(
             RegisterPictureInPictureRenderersEvent event) {
         event.register(ReactivePreviewRenderState.class, ReactivePreviewPipRenderer::new);
-        ReactivePreviewRenderState.markRendererRegistered();
+        // The submission API (submitPictureInPictureRenderState / peekScissorStack)
+        // is a NeoForge patch on GuiGraphicsExtractor, so it is installed here
+        // instead of in the shared mc-26.2 module (which must compile against
+        // the vanilla jar for Fabric).
+        ReactivePreviewRenderState.installSubmitter((graphics, itemRenderState,
+                blockRenderState, x0, y0, x1, y1, modelScale, yawDegrees, yOffset) -> {
+            ScreenRectangle scissorArea = graphics.peekScissorStack();
+            ScreenRectangle bounds = new ScreenRectangle(x0, y0, x1 - x0, y1 - y0);
+            graphics.submitPictureInPictureRenderState(new ReactivePreviewRenderState(
+                    itemRenderState, blockRenderState, x0, y0, x1, y1,
+                    modelScale, yawDegrees, yOffset, scissorArea, bounds));
+            return true;
+        });
     }
 
 }

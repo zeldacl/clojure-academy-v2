@@ -8,31 +8,6 @@
            [net.neoforged.bus.api Event]
            [cn.li.neoforgebase.bridge EventInterop]))
 
-(defn deny-right-click-use!
-  [evt]
-  (when (instance? PlayerInteractEvent$RightClickBlock evt)
-    (let [^PlayerInteractEvent$RightClickBlock right-click-evt evt]
-      (.setUseItem right-click-evt TriState/FALSE)
-      (.setUseBlock right-click-evt TriState/FALSE)))
-  evt)
-
-(defn deny-item-use!
-  [evt]
-  (when (instance? PlayerInteractEvent$RightClickBlock evt)
-    (.setUseItem ^PlayerInteractEvent$RightClickBlock evt TriState/FALSE))
-  evt)
-
-(defn deny-block-use!
-  [evt]
-  (when (instance? PlayerInteractEvent$RightClickBlock evt)
-    (.setUseBlock ^PlayerInteractEvent$RightClickBlock evt TriState/FALSE))
-  evt)
-
-(defn cancel-player-interact-fail!
-  [^PlayerInteractEvent evt]
-  (EventInterop/cancelPlayerInteract evt InteractionResult/FAIL)
-  evt)
-
 (defn cancel-player-interact-consume!
   [^PlayerInteractEvent evt]
   (EventInterop/cancelPlayerInteract evt InteractionResult/CONSUME)

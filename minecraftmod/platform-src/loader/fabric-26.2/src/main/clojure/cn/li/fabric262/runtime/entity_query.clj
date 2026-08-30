@@ -18,5 +18,5 @@
        (pentity/install-entity-type-id-fn!
          (core/create-entity-type-id-fn get-server)
          "Fabric entity query")
-       (log/info "Fabric entity query installed")))
+       (log/debug "Fabric entity query installed")))
   nil)

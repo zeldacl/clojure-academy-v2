@@ -19,6 +19,11 @@
   "Maximum energy storage."
   6000.0)
 
+(def default-bandwidth
+  "Per-tick cap on charging energy items from the buffer.
+   TilePhaseGen -> TileGeneratorBase(..., IFConstants.LATENCY_MK1 = 50)."
+  50.0)
+
 ;; Internal tank parity:
 ;; TANK_SIZE = 8000, PER_UNIT = 1000
 (def default-tank-size

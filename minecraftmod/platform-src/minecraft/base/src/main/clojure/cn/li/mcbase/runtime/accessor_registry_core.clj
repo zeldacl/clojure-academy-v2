@@ -65,7 +65,7 @@
   (validate-accessor-key key)
   (validate-accessor-fn accessor-fn)
   (validate-accessor-doc doc)
-  (log/info "Registering accessor"
+  (log/debug "Registering accessor"
             {:domain domain :key key :doc (subs doc 0 (min 60 (count doc)))})
   (update-accessor-registry!
     domain

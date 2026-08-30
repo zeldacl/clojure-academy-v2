@@ -2,8 +2,11 @@
   "Fabric client keyboard input initialization.
 
    Purpose: Bootstrap AC keybindings and install polling.
-   Fabric has no native keyboard events, so we rely entirely on GLFW polling
-   for both :alternative and :original scheme inputs."
+   Fabric has no KeyMapping event dispatch, so AC input relies on GLFW
+   polling for both :alternative and :original scheme inputs — but the
+   :alternative KeyMappings ARE registered via fabric KeyBindingHelper (they
+   show in vanilla Options > Controls and feed the Settings app rebind rows),
+   and the polling resolves the CURRENT binding so rebinds take effect."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.neutral.hooks :as power-runtime]
@@ -31,8 +34,8 @@
       (java.util.UUID/randomUUID))))
 
 ;; ===== Key State Function for keybinds/tick-keys! =====
-;; slot/movement/screen key maps + glfw-key-state-fn/no-key-down-fn now live
-;; in cn.li.mcbase.glfw-polling-core, shared with Forge's runtime_bridge.clj —
+;; slot/movement/screen key maps + glfw-key-state-fn now live in
+;; cn.li.mcbase.glfw-polling-core, shared with Forge's runtime_bridge.clj —
 ;; a key remap only needs to change one place.
 
 (defn- get-player-uuid-str
@@ -59,10 +62,14 @@
                                          {:suppress-triggers? screen-open?})
           ;; Poll per-frame held keys (skill slots + movement + GUI) via keybinds
           ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
+          ;; Raw physical state is polled EVERY tick (Screen open or not) and
+          ;; screen-open? gates event dispatch — upstream KeyManager keeps
+          ;; tracking physical key state while a GUI is open and ClientRuntime
+          ;; gates dispatch on ClientUtils.isPlayerInGame(), so the click that
+          ;; closes a Screen is absorbed instead of re-firing a bound skill.
           (client-session/with-current-client-session
             #(power-runtime/client-tick-keys!
-               (if screen-open? glfw-polling/no-key-down-fn glfw-polling/glfw-key-state-fn)
-               get-player-uuid-str)))))
+               glfw-polling/glfw-key-state-fn get-player-uuid-str screen-open?)))))
     (catch Exception e
       (log/warn e "Error polling Fabric keyboard inputs"))))
 
@@ -105,7 +112,7 @@
                (client-session/with-current-client-session
                  #(power-runtime/client-on-slot-wheel! player-uuid 0 yoffset)))))
 
-         (log/info "Fabric keyboard handler installed")))
+         (log/debug "Fabric keyboard handler installed")))
 
     (catch Exception e
-      (log/error e "Failed to install Fabric keyboard handler"))))
+      (log/stacktrace "Failed to install Fabric keyboard handler" e))))

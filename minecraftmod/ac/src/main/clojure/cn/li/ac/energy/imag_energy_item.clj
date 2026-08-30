@@ -61,4 +61,4 @@
 ;; ============================================================================
 
 (defn init-imag-energy-item! []
-  (log/info "ImagEnergyItem protocol initialized"))
+  (log/debug "ImagEnergyItem protocol initialized"))

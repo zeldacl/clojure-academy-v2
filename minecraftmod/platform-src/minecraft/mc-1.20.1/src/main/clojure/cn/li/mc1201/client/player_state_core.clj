@@ -36,6 +36,33 @@
         (let [^Vec3 p (.getPosition camera)]
           {:x (.x p) :y (.y p) :z (.z p)})))))
 
+(defn camera-raycast-visible?
+  "True when no solid block sits between `from` and `to`: a COLLIDER raycast
+  with fluid pass-through (ClipContext$Fluid/NONE), so looking through a pool
+  never self-occludes its own cells. A hit at or beyond the target counts as
+  visible; a miss (no solid in the way) also returns true. Returns nil when
+  not in-game — callers treat nil as \"skip the check\". Used by the
+  imag-phase per-cell visibility check (方案二)."
+  [from-x from-y from-z to-x to-y to-z]
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (when-let [level (.level mc)]
+      (let [^Vec3 from (Vec3. (double from-x) (double from-y) (double from-z))
+            ^Vec3 to   (Vec3. (double to-x) (double to-y) (double to-z))
+            ^BlockHitResult hit (.clip level
+                                       (ClipContext. from to
+                                                     ClipContext$Block/COLLIDER
+                                                     ClipContext$Fluid/NONE
+                                                     nil))
+            ^Vec3 point (.getLocation hit)
+            dx (- (.x point) (double from-x))
+            dy (- (.y point) (double from-y))
+            dz (- (.z point) (double from-z))
+            tdx (- (double to-x) (double from-x))
+            tdy (- (double to-y) (double from-y))
+            tdz (- (double to-z) (double from-z))]
+        (>= (+ (* dx dx) (* dy dy) (* dz dz))
+            (+ (* tdx tdx) (* tdy tdy) (* tdz tdz)))))))
+
 (defn local-player-eye-pos
   "Returns {:x :y :z} for the local player eye position (y offset +1.62), or nil."
   []

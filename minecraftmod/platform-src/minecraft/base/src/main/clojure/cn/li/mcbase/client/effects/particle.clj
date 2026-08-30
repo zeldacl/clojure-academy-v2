@@ -64,7 +64,7 @@
                             (* dy speed)
                             (* dz speed)))))))
     (catch Exception e
-      (log/error "Error spawning particle effect" e))))
+      (log/stacktrace "Error spawning particle effect" e))))
 
 (defn tick-particles!
   []
@@ -73,8 +73,8 @@
       (doseq [particle-cmd (power-runtime/client-poll-particle-effects owner)]
         (spawn-particle-effect! particle-cmd)))
     (catch Exception e
-      (log/error "Error in particle tick" e))))
+      (log/debug "Error in particle tick:" (ex-message e)))))
 
 (defn init!
   []
-  (log/info "Shared particle effect bridge initialized"))
+  (log/debug "Shared particle effect bridge initialized"))

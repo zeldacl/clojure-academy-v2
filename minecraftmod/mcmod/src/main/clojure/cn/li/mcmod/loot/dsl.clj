@@ -30,7 +30,7 @@
     (throw (ex-info "Loot injection :target-table must be string" {:spec spec})))
   (when-not (string? (:item-id spec))
     (throw (ex-info "Loot injection :item-id must be string" {:spec spec})))
-  (log/info "Registering loot injection:" (:id spec) "table:" (:target-table spec) "item:" (:item-id spec))
+  (log/debug "Registering loot injection:" (:id spec) "table:" (:target-table spec) "item:" (:item-id spec))
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:registry :loot (:id spec)] spec))
   spec)
 

@@ -113,7 +113,7 @@
                          {}
                          entries)]
     (config-reg/set-config-values! domain values)
-    (log/info "Loaded Forge config domain" domain "from" file-name)))
+    (log/debug "Loaded Forge config domain" domain "from" file-name)))
 
 (defn- handle-config-event!
   [^ModConfigEvent event]
@@ -133,7 +133,7 @@
           (let [{:keys [file-name spec] :as domain-info} (build-domain-spec domain descriptors)]
             (.registerConfig (ModLoadingContext/get) ModConfig$Type/COMMON spec file-name)
             (assoc-registered-config! file-name domain-info)
-            (log/info "Registered Forge config file" file-name "for domain" domain)))))
+            (log/debug "Registered Forge config file" file-name "for domain" domain)))))
     (ConfigEventBridge/addConfigListeners mod-bus
                                           (reify Consumer
                                             (accept [_ event]

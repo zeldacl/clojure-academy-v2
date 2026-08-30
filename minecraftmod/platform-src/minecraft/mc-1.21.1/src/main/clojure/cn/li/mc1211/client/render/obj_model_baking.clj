@@ -51,13 +51,23 @@
   [mod-id model-path]
   (ModelResourceLocation. (ResourceLocations/of (str mod-id) (str model-path)) "inventory"))
 
+(defn- standalone-mrl
+  "Standalone-variant MRL. NeoForge 1.21+ ModelEvent.RegisterAdditional
+  rejects non-standalone variants for side-loaded models, and bakes the
+  registered models under this key — lookups must use the same MRL."
+  [mod-id model-path]
+  (ModelResourceLocation. (ResourceLocations/of (str mod-id) (str model-path)) "standalone"))
+
 (defn additional-obj-inventory-model-locations
-  "ModelResourceLocations for each item's `_3d` inventory variant.
-  Loaders register these on their model-bus RegisterAdditional event."
+  "ModelResourceLocations for each item's `_3d` standalone model.
+  Loaders register these on their model-bus RegisterAdditional event:
+  NeoForge 1.21 RegisterAdditional only accepts standalone-variant MRLs and
+  resolves the model from models/<path>.json, so the path carries the
+  item/ folder."
   []
   (let [mod-id (str modid/mod-id)]
     (mapv (fn [item-id]
-            (inventory-mrl mod-id (str (item-id->basename item-id) "_3d")))
+            (standalone-mrl mod-id (str "item/" (item-id->basename item-id) "_3d")))
           (obj-3d-item-ids))))
 
 (defn- world-quad-count
@@ -79,7 +89,7 @@
     (doseq [item-id (obj-3d-item-ids)]
       (let [basename (item-id->basename item-id)
             base-mrl (inventory-mrl mod-id basename)
-            world-mrl (inventory-mrl mod-id (str basename "_3d"))
+            world-mrl (standalone-mrl mod-id (str "item/" basename "_3d"))
             ^BakedModel flat-base (.get models base-mrl)
             ^BakedModel world-model (.get models world-mrl)]
         (if (and flat-base world-model)
@@ -87,7 +97,7 @@
             (.put models base-mrl
                   (ObjCompositeBakedModel. flat-base world-model
                                            (overrides-fn flat-base world-model)))
-            (log/info "[obj-model-baking] composite installed for" item-id
+            (log/debug "[obj-model-baking] composite installed for" item-id
                       "- mesh quads:" (world-quad-count world-model)))
           (log/warn "[obj-model-baking] no composite for" item-id
                     "- it will render as a flat icon everywhere."

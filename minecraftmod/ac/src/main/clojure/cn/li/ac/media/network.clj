@@ -25,7 +25,7 @@
     {:success true
      :medias (mapv media->wire (acquire/installed-medias player))}
     (catch Throwable e
-      (log/error "Error in media get-state handler:" (ex-message e))
+      (log/stacktrace "Error in media get-state handler" e)
       {:success false :error (ex-message e)})))
 
 (defn register-handlers!
@@ -33,4 +33,4 @@
   ;; Media player state is player-scoped, not an open container GUI session.
   (net-server/register-handler media-get-state-msg handle-get-state
                                {:owner-spec :server :payload-routing :none})
-  (log/info "Media player network handlers registered"))
+  (log/debug "Media player network handlers registered"))

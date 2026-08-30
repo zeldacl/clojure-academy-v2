@@ -32,5 +32,5 @@
 			{:forge-energy-conversion-rate (fn [] (double (config/rf-conversion-ratio)))
 			 :ic2-energy-conversion-rate (fn [] (double (config/eu-conversion-ratio)))})
 		(install-integration-descriptors!)
-		(log/info "AC energy integration hooks installed")))
+		(log/debug "AC energy integration hooks installed")))
 	nil)

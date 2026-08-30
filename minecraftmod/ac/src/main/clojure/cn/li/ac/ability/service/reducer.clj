@@ -148,37 +148,53 @@
 
 (defn- cmd-add-skill-exp
   "Add exp to a skill and accumulate level progress.
-  
+
   Command fields:
     :player-uuid  UUID-string
     :skill-id     keyword
     :amount       float
-    :source       keyword (optional, for audit events)"
+    :source       keyword (optional, for audit events)
+
+  Upstream AbilityData.addSkillExp:
+  - learnSkill(skill) — exp gained by using a skill auto-learns it, so the
+    port must not lose exp on an unlearned skill (fire the learn event too,
+    mirroring cmd-learn-skill)
+  - events carry the PRE-clamp amount and fire even when the skill is already
+    mastered (exp clamp at 1.0 must not silence level progress / events)"
   [player-state {:keys [player-uuid skill-id amount source]}]
   (let [ability-data (:ability-data player-state)
         skill-spec (skill-registry/get-skill skill-id)
         exp-incr-speed (or (:exp-incr-speed skill-spec) 1.0)
         global-rate (cfg/prog-incr-rate)
-        
-        {:keys [data exp-delta]} (learning/add-skill-exp
-                                   ability-data skill-id amount
-                                   exp-incr-speed global-rate)]
-    
-    (if (zero? exp-delta)
+        was-learned? (adata/is-learned? ability-data skill-id)
+        ability-data* (adata/learn-skill ability-data skill-id)
+
+        {:keys [data exp-scaled]} (learning/add-skill-exp
+                                    ability-data* skill-id amount
+                                    exp-incr-speed global-rate)]
+
+    (if (<= (double (or exp-scaled 0.0)) 0.0)
       (ok player-state)
-      
-      (let [events [{:event/type evt/EVT-SKILL-EXP-ADDED
-                     :event/side :server
-                     :player-uuid player-uuid
-                     :skill-id skill-id
-                     :amount exp-delta
-                     :source source}
-                    {:event/type evt/EVT-SKILL-EXP-CHANGED
-                     :event/side :server
-                     :player-uuid player-uuid
-                     :skill-id skill-id
-                     :new-exp (adata/get-skill-exp data skill-id)}]]
-        (ok (assoc player-state :ability-data data) events [])))))
+
+      (let [events (cond-> [{:event/type evt/EVT-SKILL-EXP-ADDED
+                             :event/side :server
+                             :player-uuid player-uuid
+                             :skill-id skill-id
+                             :amount exp-scaled
+                             :source source}
+                            {:event/type evt/EVT-SKILL-EXP-CHANGED
+                             :event/side :server
+                             :player-uuid player-uuid
+                             :skill-id skill-id
+                             :new-exp (adata/get-skill-exp data skill-id)}]
+                     (not was-learned?)
+                     (conj (evt/make-skill-learn-event player-uuid skill-id)))
+            effects (when-not was-learned?
+                      [{:effect/type :network-send
+                        :player-uuid player-uuid
+                        :channel :ability/skill-learned
+                        :payload {:player-uuid player-uuid :skill-id skill-id}}])]
+        (ok (assoc player-state :ability-data data) events effects)))))
 
 ;; ============================================================================
 ;; Sub-Reducer: consume-resource

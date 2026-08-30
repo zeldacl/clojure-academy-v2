@@ -1,6 +1,6 @@
 package cn.li.neoforge262.worldgen;
 
-import cn.li.neoforge262.MyMod262;
+import cn.li.neoforge262.AcademyCraft262;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc262.worldgen.ConfigurablePoolFeature;
 
@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 public class ModFeatures {
 
     public static final DeferredRegister<Feature<?>> FEATURES =
-        DeferredRegister.create(Registries.FEATURE, MyMod262.MODID);
+        DeferredRegister.create(Registries.FEATURE, AcademyCraft262.MODID);
 
     /**
      * Configurable pool feature. Resolves the registered fill block at

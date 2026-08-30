@@ -95,7 +95,7 @@
   (when call-super-removed?
     (let [^CMenuBridge s this]
       (.callSuperRemoved s player)))
-  (log/info log-message (str player)))
+  (log/debug log-message (str player)))
 
 (defn- broadcast-menu-changes!
   [this clj-container]
@@ -148,7 +148,7 @@
                 moved))))
         ItemStack/EMPTY))
     (catch Exception e
-      (log/error error-prefix (.getMessage e))
+      (log/stacktrace error-prefix e)
       ItemStack/EMPTY)))
 
 (defn- finalize-menu-registration!

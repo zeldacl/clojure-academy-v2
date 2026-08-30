@@ -31,6 +31,8 @@
 (defn camera-position [] (player-state/camera-position))
 (defn local-player-look-end [distance] (player-state/local-player-look-end distance))
 (defn local-player-block-aim [distance] (player-state/local-player-block-aim distance))
+(defn camera-raycast-visible? [from-x from-y from-z to-x to-y to-z]
+  (player-state/camera-raycast-visible? from-x from-y from-z to-x to-y to-z))
 
 (defn clear-client-activated-overlay! []
   (if-let [owner (client-session/current-local-player-owner)]
@@ -66,8 +68,9 @@
   (client-session/with-current-client-session #(power-runtime/client-abort-all!)))
 
 ;; ===== Key State Function for keybinds/tick-keys! =====
-;; slot/movement/screen key maps + glfw-key-state-fn/no-key-down-fn now live
-;; in cn.li.mcbase.glfw-polling-core, shared with Fabric's keyboard_init.clj —;; a key remap only needs to change one place.
+;; slot/movement/screen key maps + glfw-key-state-fn now live in
+;; cn.li.mcbase.glfw-polling-core, shared with Fabric's keyboard_init.clj —
+;; a key remap only needs to change one place.
 
 (defn- screen-open? []
   (some? (.screen (Minecraft/getInstance))))
@@ -88,11 +91,14 @@
   (msdf-tick/client-tick!)
   ;; Per-frame key polling for skill slot keys (Z/X/C/V held) + movement keys + GUI keys
   ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
-  ;; While any Screen is open, raw GLFW polling must read all keys as released —  ;; vanilla KeyMappings are suppressed by the screen, and so must we be.
+  ;; Raw physical state is polled EVERY tick (Screen open or not) and
+  ;; screen-open? gates event dispatch — upstream KeyManager keeps tracking
+  ;; physical key state while a GUI is open and ClientRuntime gates dispatch
+  ;; on ClientUtils.isPlayerInGame(), so the click that closes a Screen is
+  ;; absorbed instead of re-firing a bound skill.
   (client-session/with-current-client-session
     #(power-runtime/client-tick-keys!
-       (if (screen-open?) glfw-polling/no-key-down-fn glfw-polling/glfw-key-state-fn)
-       get-player-uuid-str))
+       glfw-polling/glfw-key-state-fn get-player-uuid-str (screen-open?)))
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^ClientTickEvent$Post evt]
@@ -120,4 +126,4 @@
                    EventPriority/NORMAL false InputEvent$MouseScrollingEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-mouse-scroll evt)))))
-  (log/info "Client runtime bridge initialized"))
+  (log/debug "Client runtime bridge initialized"))

@@ -18,10 +18,10 @@
       (reify net.minecraft.client.gui.screens.MenuScreens$ScreenConstructor
         (create [_ menu player-inventory title]
           (screen-creator menu player-inventory title)))))
-  (log/info "Registered screen factory for GUI ID" gui-id))
+  (log/debug "Registered screen factory for GUI ID" gui-id))
 
 (defn register-screens! []
-  (log/info "Registering GUI screens for Fabric 1.20.1")
+  (log/debug "Registering GUI screens for Fabric 1.20.1")
   (try
     (screen-registry/register-platform-screens!
       (target/current-target-key!)
@@ -29,10 +29,10 @@
        :register-menu-screen! register-one-screen!})
     (log/info "Screen factories registered successfully (Fabric)")
     (catch Exception e
-      (log/error "Failed to register screen factories:" (.getMessage e))
+      (log/stacktrace "Failed to register screen factories:" e)
       (.printStackTrace e))))
 
 (defn init-client! []
-  (log/info "Initializing Fabric 1.20.1 client GUI system")
+  (log/debug "Initializing Fabric 1.20.1 client GUI system")
   (register-screens!)
-  (log/info "Fabric 1.20.1 client GUI system initialized"))
+  (log/debug "Fabric 1.20.1 client GUI system initialized"))

@@ -46,7 +46,7 @@
 	([context message-key args error?]
 	 (if-let [send-feedback-fn (:send-feedback-fn (context-metadata context))]
 		 (send-feedback-fn message-key true (vec args) error?)
-		 (log/info "Command feedback" {:message message-key
+		 (log/debug "Command feedback" {:message message-key
 																		:args (vec args)
 																		:error? (boolean error?)}))))
 
@@ -368,7 +368,7 @@
     (command-actions/register-action-executors!
 			(zipmap ability-command-action-types
 							(repeat execute-ability-command-action!)))
-		(log/info "AC command actions installed" {:actions ability-command-action-types})))
+		(log/debug "AC command actions installed" {:actions ability-command-action-types})))
 	nil)
 
 

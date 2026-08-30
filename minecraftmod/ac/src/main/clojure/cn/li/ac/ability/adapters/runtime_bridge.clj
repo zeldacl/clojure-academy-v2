@@ -101,4 +101,4 @@
              (client-ui/runtime-client-ui-hooks)
              (client-effects/runtime-client-effect-hooks)
              debug-overlay-hooks))
-    (log/info "AC ability runtime hooks installed")))))
+    (log/debug "AC ability runtime hooks installed")))))

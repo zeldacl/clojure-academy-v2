@@ -37,6 +37,20 @@
                  attacker-uuid :mag-manip :block-body-hit
                  {:world-id world-id :target-id target-uuid})))))
 
+
+(defn- world-whitelisted-for-destroy?
+  "Honor the legacy configuration's dimension exemptions while keeping the
+   decision at the shared block-effect boundary used by the final runtime."
+  [world-id]
+  (when (seq world-id)
+    (let [entries (set (ability-config/whitelisted-destroying-worlds))
+          numeric-id (case world-id
+                       "minecraft:overworld" "0"
+                       "minecraft:the_nether" "-1"
+                       "minecraft:the_end" "1"
+                       nil)]
+      (boolean (or (contains? entries world-id)
+                   (and numeric-id (contains? entries numeric-id)))))))
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
@@ -74,7 +88,10 @@
   (damage-effects/install-scripted-block-body-hit-handler!
     :block-body-impact
     apply-block-body-impact!)
-  (block-effects/install-destroy-gate! ability-config/destroy-blocks-enabled?)
+  (block-effects/install-destroy-gate!
+    (fn [world-id]
+      (or (ability-config/destroy-blocks-enabled?)
+          (world-whitelisted-for-destroy? world-id))))
   (tutorial-events/register-platform-handlers!)
   (ability-runtime/install-runtime-hooks!
     (ability-runtime-container/create-ability-runtime-container))

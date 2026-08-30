@@ -29,6 +29,7 @@
                           mount {:type :pointer :event-type :down
                                  :x mouse-x :y mouse-y :button button})
                         false)
+                      (fn [_] nil)
                       (fn [_]
                         (presentation/unmount! mount)
                         (when on-close (on-close))))

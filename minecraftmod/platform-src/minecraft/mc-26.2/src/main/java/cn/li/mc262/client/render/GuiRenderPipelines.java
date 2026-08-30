@@ -45,25 +45,22 @@ public final class GuiRenderPipelines {
     private static final Identifier MASK_VERTEX =
             Identifier.parse("academy:core/gui_mask_depth_26");
 
-    private static final RenderPipeline SKILL_PROGBAR = texturedPipeline(
-            "skill_progbar", GUI_VERTEX,
-            Identifier.parse("academy:core/skill_progbar_26"),
-            true, null, TRANSLUCENT);
+    // Creation order == GUI sort-key order (RenderPipeline.nextPipelineSortKey):
+    // the 26.2 GUI mesh sorts every element by (scissor, pipeline sort key,
+    // texture setup), so the skill tree's depth-stamp-then-test chain only
+    // survives if the depth stamps sort BEFORE the icons and lines: masks
+    // (ALPHA_DISCARD) < icons (MONO / DEPTH_EQUAL_TEXTURED) < lines
+    // (DEPTH_NOTEQUAL_COLOR). The sort is stable, so same-key runs keep tape
+    // order and vanilla blits (smaller keys) still paint before the stamps.
+    private static final RenderPipeline ALPHA_DISCARD = texturedPipeline(
+            "alpha_discard", MASK_VERTEX,
+            Identifier.parse("academy:core/alpha_discard_26"),
+            false, new DepthStencilState(CompareOp.ALWAYS_PASS, true), DEPTH_ONLY);
 
     private static final RenderPipeline MONO = texturedPipeline(
             "mono", PLATE_VERTEX,
             Identifier.parse("academy:core/mono_26"),
             false, new DepthStencilState(CompareOp.EQUAL, false), TRANSLUCENT);
-
-    private static final RenderPipeline CPBAR_OVERLOAD = texturedPipeline(
-            "cpbar_overload", GUI_VERTEX,
-            Identifier.parse("academy:core/cpbar_overload_26"),
-            true, null, TRANSLUCENT);
-
-    private static final RenderPipeline ALPHA_DISCARD = texturedPipeline(
-            "alpha_discard", MASK_VERTEX,
-            Identifier.parse("academy:core/alpha_discard_26"),
-            false, new DepthStencilState(CompareOp.ALWAYS_PASS, true), DEPTH_ONLY);
 
     private static final RenderPipeline DEPTH_EQUAL_TEXTURED = texturedPipeline(
             "depth_equal_textured", PLATE_VERTEX,
@@ -83,13 +80,33 @@ public final class GuiRenderPipelines {
             .withCull(false)
             .build();
 
+    private static final RenderPipeline SKILL_PROGBAR = texturedPipeline(
+            "skill_progbar", GUI_VERTEX,
+            Identifier.parse("academy:core/skill_progbar_26"),
+            true, null, TRANSLUCENT);
+
+    private static final RenderPipeline CPBAR_OVERLOAD = texturedPipeline(
+            "cpbar_overload", GUI_VERTEX,
+            Identifier.parse("academy:core/cpbar_overload_26"),
+            true, null, TRANSLUCENT);
+
+    // Dedicated line pipeline: created last so its sort key is larger than the
+    // vanilla blit pipelines (backgrounds, plates) — the GUI mesh sorts by
+    // pipeline sort key, and a line drawn through vanilla GUI_TEXTURED could
+    // sort before the background that covers it.
+    private static final RenderPipeline LINE_TEXTURED = texturedPipeline(
+            "line_textured", GUI_VERTEX,
+            Identifier.parse("academy:core/gui_textured_26"),
+            false, null, TRANSLUCENT);
+
     private static final List<RenderPipeline> ALL = List.of(
-            SKILL_PROGBAR,
-            MONO,
-            CPBAR_OVERLOAD,
             ALPHA_DISCARD,
+            MONO,
             DEPTH_EQUAL_TEXTURED,
-            DEPTH_NOTEQUAL_COLOR);
+            DEPTH_NOTEQUAL_COLOR,
+            SKILL_PROGBAR,
+            CPBAR_OVERLOAD,
+            LINE_TEXTURED);
 
     private GuiRenderPipelines() {
     }
@@ -146,5 +163,9 @@ public final class GuiRenderPipelines {
 
     public static RenderPipeline depthNotEqualColor() {
         return DEPTH_NOTEQUAL_COLOR;
+    }
+
+    public static RenderPipeline lineTextured() {
+        return LINE_TEXTURED;
     }
 }

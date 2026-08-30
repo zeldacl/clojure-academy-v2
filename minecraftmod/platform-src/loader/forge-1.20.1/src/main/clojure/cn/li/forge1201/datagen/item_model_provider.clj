@@ -69,10 +69,13 @@
         ^ItemModelBuilder builder (.withExistingParent provider (str model-name) parent-rl)]
     (doseq [[layer texture-id] (:textures json)]
       (.texture builder (name layer) ^ResourceLocation (rl/parse-resource-location texture-id modid/mod-id)))
-    ;; Forge model pipeline reverses the override array at load time,
-    ;; so write overrides in reverse order (half first, then full) so that
-    ;; after reversal the highest threshold (1.0) is checked first.
-    (doseq [{:keys [predicate model]} (reverse (:overrides json))]
+    ;; Write overrides in core order (ASCENDING thresholds). Vanilla 1.20.1
+    ;; ItemOverrides bakes the JSON list in reverse and resolve() then walks
+    ;; the array forward picking the first value >= threshold — ascending
+    ;; JSON is what makes the highest threshold win. (Older providers
+    ;; reversed here, producing descending JSON: the first threshold always
+    ;; matched, freezing damage-frame animations on their first frame.)
+    (doseq [{:keys [predicate model]} (:overrides json)]
       (let [override-builder (.override builder)
             model-file (ModelFile$ExistingModelFile. (rl/parse-resource-location model modid/mod-id) exfile-helper)]
         (doseq [[predicate-id value] predicate]
@@ -161,7 +164,8 @@
     pack-output modid/mod-id exfile-helper
     (fn [^DelegatingItemModelProvider this-provider]
       (let [{:keys [all-item-count energy-tier-count obj-3d-count simple-count bucket-count models]}
-            (item-model-core/gather-model-specs)]
+            (item-model-core/gather-model-specs)
+            models (item-model-core/flatten-nested-override-chains models)]
         ;; Standard models: item/generated, energy-tier, fluid buckets
         ;; OBJ 3D models: forge:obj loader
         (doseq [model-spec models]

@@ -41,5 +41,5 @@
             (let [^ServerPlayer player player
                   ^MinecraftServer server (.getServer ^ServerLevel (.level player))]
              (.execute server (fn [] (handle-request! bytes player))))))
-       (log/info "Fabric 26.2 typed GUI network server transport initialized")))
+       (log/debug "Fabric 26.2 typed GUI network server transport initialized")))
   nil)

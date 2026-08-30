@@ -6,7 +6,8 @@
            [cn.li.neoforge1211.client.render.item ObjCompositeOverrides]))
 
 (defn register-additional-obj-models!
-  "ModelEvent.RegisterAdditional → register `_3d` inventory variants."
+  "ModelEvent.RegisterAdditional → register `_3d` standalone models.
+  21.1 RegisterAdditional only accepts standalone-variant MRLs."
   [^ModelEvent$RegisterAdditional event]
   (doseq [^ModelResourceLocation mrl (baking/additional-obj-inventory-model-locations)]
     (.register event mrl)))

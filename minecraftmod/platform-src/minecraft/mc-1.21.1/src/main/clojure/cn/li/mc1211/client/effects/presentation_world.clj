@@ -7,6 +7,7 @@
            [cn.li.mc1211.client.render ModRenderTypes]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
+           [cn.li.mcver McClientAccess]
            [cn.li.mc1211.runtime Raycast]
            [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries Registries]
@@ -179,31 +180,38 @@
 (defn hand-center-pos
   "Local player's hand position, plus the view context effect code needs to
   recognise its own player's effects (`:player-uuid`) and which of the
-  original's two ViewOptimize offsets applies (`:first-person?`)."
+  original's two ViewOptimize offsets applies (`:first-person?`).
+
+  `:player-*` is the player's PARTIAL-TICK interpolated pose — the position
+  the character model is drawn at this frame. Anchoring body-level effects
+  (storm-wing tornadoes etc.) to the raw tick position makes them step ahead
+  of the rendered character while moving: the upstream StormWingEffect is a
+  world entity whose renderer interpolates between the same two player tick
+  positions, so it always tracks the model."
   [^LocalPlayer player]
   (let [^Vec3 look (.getLookAngle player)
         yaw-rad (Math/toRadians (double (.getYRot player)))
         right-x (Math/cos yaw-rad)
         right-z (Math/sin yaw-rad)
-        base-x (.getX player)
-        base-y (.getEyeY player)
-        base-z (.getZ player)]
+        [base-x base-y base-z eye-y yaw-deg pitch-deg body-yaw-deg]
+        (McClientAccess/playerRenderPosition
+         player (McClientAccess/clientPartialTick (Minecraft/getInstance)))]
     {:player-uuid (str (.getUUID player))
      :first-person? (local-camera-first-person?)
-     :player-x base-x
-     :player-y (.getY player)
-     :player-z base-z
-     :player-eye-y base-y
+     :player-x (double base-x)
+     :player-y (double base-y)
+     :player-z (double base-z)
+     :player-eye-y (double eye-y)
      :player-width (.getBbWidth player)
      :player-height (.getBbHeight player)
-     :player-yaw-rad yaw-rad
+     :player-yaw-rad (Math/toRadians (double yaw-deg))
      ;; Body yaw (the original's renderYawOffset): effects anchored to the
      ;; torso must not swing when only the head turns.
-     :player-body-yaw-rad (Math/toRadians (double (.-yBodyRot player)))
-     :player-pitch-rad (Math/toRadians (double (.getXRot player)))
-     :x (+ base-x (* (.-x look) 0.35) (* right-x 0.22))
-     :y (+ base-y -0.22 (* (.-y look) 0.06))
-     :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
+     :player-body-yaw-rad (Math/toRadians (double body-yaw-deg))
+     :player-pitch-rad (Math/toRadians (double pitch-deg))
+     :x (+ (double base-x) (* (.-x look) 0.35) (* right-x 0.22))
+     :y (+ (double eye-y) -0.22 (* (.-y look) 0.06))
+     :z (+ (double base-z) (* (.-z look) 0.35) (* right-z 0.22))}))
 
 (declare make-nearby-block-query-fn)
 

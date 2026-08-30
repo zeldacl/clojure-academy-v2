@@ -83,7 +83,7 @@
       ;; Return success
       1)
     (catch Exception e
-      (log/error "Command execution failed:" (ex-message e))
+      (log/stacktrace "Command execution failed:" e)
       0)))
 
 ;; ============================================================================

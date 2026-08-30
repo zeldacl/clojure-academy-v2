@@ -16,5 +16,5 @@
 			 :get-model-cube-texture-config ac-blockstate/get-model-cube-texture-config
 			 :get-model-texture-config ac-blockstate/get-model-texture-config
 			 :get-item-model-id ac-blockstate/get-item-model-id})
-		(log/info "AC blockstate hooks installed")))
+		(log/debug "AC blockstate hooks installed")))
 	nil)

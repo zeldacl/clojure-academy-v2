@@ -1,7 +1,5 @@
 package cn.li.mc262.bridge;
 
-import com.mojang.blaze3d.platform.Window;
-import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -48,18 +46,6 @@ public final class McAccess {
 
     public static int serverTickCount(MinecraftServer server) {
         return cn.li.mcver.McAccess.serverTickCount(server);
-    }
-
-    public static long windowHandle(Window window) {
-        return cn.li.mcver.McAccess.windowHandle(window);
-    }
-
-    public static double clientPartialTick(Minecraft mc) {
-        return cn.li.mcver.McAccess.clientPartialTick(mc);
-    }
-
-    public static void closeScreen(Minecraft mc) {
-        cn.li.mcver.McAccess.closeScreen(mc);
     }
 
     public static boolean hasCommandPermission(CommandSourceStack source, int level) {

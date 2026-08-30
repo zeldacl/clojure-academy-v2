@@ -100,5 +100,5 @@
                     (onServerStopped [_ server]
                       (clear-current-server!)
                       (server-context-spi/notify-server-unavailable! server))))
-       (log/info "Fabric runtime server context installed")))
+       (log/debug "Fabric runtime server context installed")))
   nil)

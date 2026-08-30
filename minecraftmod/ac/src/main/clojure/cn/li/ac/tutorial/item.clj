@@ -56,4 +56,4 @@
          :properties {:tooltip ["教程物品"]
                       :model-texture "tutorial"}
          :on-right-click tutorial-on-right-click}))
-    (log/info "Tutorial item (MisakaCloud Terminal) registered"))))
+    (log/debug "Tutorial item (MisakaCloud Terminal) registered"))))

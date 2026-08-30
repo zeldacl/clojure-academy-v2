@@ -7,14 +7,16 @@
   (:require [clojure.string :as str]))
 
 (def developer-specs
-  "Developer device specifications.
+  "Developer device specifications (upstream DeveloperType).
   :energy    - total energy capacity
   :tps       - ticks per stim (higher = slower)
   :cps       - energy consumed per stim
-  :bandwidth - learning bandwidth multiplier (reserved for non-wireless logic)"
-  {:portable {:energy 10000.0 :tps 25 :cps 750.0 :bandwidth 0.3}
-   :normal   {:energy 50000.0 :tps 20 :cps 700.0 :bandwidth 0.7}
-   :advanced {:energy 200000.0 :tps 15 :cps 600.0 :bandwidth 1.0}})
+  :sync-rate - upstream DeveloperType.syncRate (0.3/0.7/1.0), shown on the
+               developer panel's sync-rate bar; it is a display constant, the
+               actual progress rate comes from stim/tps like upstream"
+  {:portable {:energy 10000.0 :tps 25 :cps 750.0 :sync-rate 0.3}
+   :normal   {:energy 50000.0 :tps 20 :cps 700.0 :sync-rate 0.7}
+   :advanced {:energy 200000.0 :tps 15 :cps 600.0 :sync-rate 1.0}})
 
 (def developer-order
   "Developer tier order from weakest to strongest."

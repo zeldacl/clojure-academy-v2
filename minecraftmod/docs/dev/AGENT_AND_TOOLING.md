@@ -67,3 +67,22 @@ Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target
 - `verifyRepositoryHygiene`
 - `verifyVersionSeamParity`
 - `verifyNeutralClojureNoMinecraftApis` (and related catalog/entrypoint checks as configured)
+
+## Logging conventions (mandatory)
+
+All Clojure logging goes through `cn.li.mcmod.util.log` (`log/info|warn|error|debug|stacktrace`; single SLF4J logger named by mod id). The production jar ships with the loader's default log config (INFO visible), so every `info|warn|error` call site is production-visible and pays eager string construction — level choice is a performance decision, not a style preference.
+
+| Level | Allowed for |
+|---|---|
+| `info` | One-time init/registration per subsystem, world save/load, admin command outcomes, player-visible state changes (node/network created/destroyed, terminal install) — max ~1 line per action |
+| `debug` | Everything per-action/per-keypress/per-frame/per-tick: GUI open steps, packet send/receive, sync traces, validation sweeps, expected-failure catches (raycast miss, node at capacity, out of range, no handler registered), hot-path failure catches. The `debug` macro is lazy — zero cost when disabled |
+| `warn` | Recoverable-but-notable conditions: config fallbacks, schema migration, integration failures (JEI/CraftTweaker), timeout, missing resources. Failure-only catches in hot paths belong at `debug`, not `warn` |
+| `error` / `stacktrace` | Real failures. Prefer `(log/stacktrace "context" e)` over `(log/error "msg:" (ex-message e))` — never log an exception without its stack; never log the same exception twice (no error+stacktrace pairs) |
+
+Rules:
+
+- **No step-by-step traces at `info`**: a function that logs "called → doing → success" at info is a bug; keep at most one outcome line.
+- **No `[X-TRACE]` labels at `info`** — trace labels imply debug.
+- **Per-frame/per-tick failure catches log at `debug`** (a broken renderer/ability must not flood the log 20x/s); use the rate-limited pattern in `mcmod/.../client/content_actions.clj` if a condition must stay visible.
+- **Never `(log/error "msg:" (ex-message e))`** — use `log/stacktrace`. When a failure is an expected game outcome (capacity, range, no-target), log at `debug` or don't log.
+- The logger has no `trace` level; diagnostics go to `debug`.

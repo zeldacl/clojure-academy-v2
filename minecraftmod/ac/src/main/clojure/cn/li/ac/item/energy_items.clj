@@ -79,4 +79,4 @@
                                                     :thirdperson_lefthand {:rotation [180 0 0] :scale [0.2 0.2 0.2]}
                                                     :ground {:scale [-0.15 -0.15 0.15] :translation [0 1.6 0]}}}}
          :on-right-click open-portable-developer!}))
-    (log/info "Energy items initialized: energy_unit, developer_portable"))))
+    (log/debug "Energy items initialized: energy_unit, developer_portable"))))

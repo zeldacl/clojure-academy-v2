@@ -112,7 +112,7 @@
   [(fn []
      (content-registration/register-core-content! (build-registration-context)))
    (fn []
-     (log/info "Registering Forge creative tab...")
+     (log/debug "Registering Forge creative tab...")
      (creative-tab/register-creative-tab! (creative-tabs-register) (current-mod-id)))
    (fn []
      (gui-registry-impl/register-menu-types!))])
@@ -151,7 +151,7 @@
 
 (defn- register-all-content!
   [registration-steps]
-  (log/info "[LIFECYCLE] Phase 4: Content registration" {:registrations (count registration-steps)})
+  (log/debug "[LIFECYCLE] Phase 4: Content registration" {:registrations (count registration-steps)})
   (doseq [register-step registration-steps]
     (register-step))
   (log/info "[LIFECYCLE] Phase 4: Content registration complete"))
@@ -172,10 +172,10 @@
    :gui-menu-register (gui-registry-impl/menu-register)})
 
 ;; Runtime bootstrap entrypoint for Java @Mod bridge.
-;; MyMod262 injects the mod event bus + ModContainer (no FMLJavaModLoadingContext).
+;; AcademyCraft262 injects the mod event bus + ModContainer (no FMLJavaModLoadingContext).
 (defn start-neoforge-mod!
   [mod-bus mod-container]
-  (log/info "[BOOTSTRAP_TRACE] start-neoforge-mod! enter"
+  (log/debug "[BOOTSTRAP_TRACE] start-neoforge-mod! enter"
             {:compile-context (aot/compile-context)
              :mod-bus (some? mod-bus)
              :mod-container (some? mod-container)})
@@ -183,21 +183,21 @@
     (alter-var-root #'fw/framework (constantly fw-inst)))
   (lifecycle-init/init-lifecycle-with-error-handling!
    {:init-platform! (fn []
-                      (log/info "[LIFECYCLE] Phase 1: Platform initialization")
+                      (log/debug "[LIFECYCLE] Phase 1: Platform initialization")
                       (platform-bootstrap/start!)
                       (init/init-from-java)
                       (log/info "[LIFECYCLE] Phase 1: Platform initialization complete"))
     :activate-runtime-content! (fn []
-                                 (log/info "[LIFECYCLE] Phase 2: Runtime content activation")
+                                 (log/debug "[LIFECYCLE] Phase 2: Runtime content activation")
                                  ((platform-bootstrap/runtime-content-activation-callback!))
                                  (log/info "[LIFECYCLE] Phase 2: Runtime content activation complete"))
     :init-resource-definitions! (fn []
-                                  (log/info "[LIFECYCLE] Phase 3: Resource definition initialization")
+                                  (log/debug "[LIFECYCLE] Phase 3: Resource definition initialization")
                                   (blockstate-props/init-all-properties!)
                                   (log/info "[LIFECYCLE] Phase 3: Resource definition initialization complete"))
     :register-content! #(register-all-content! (registration-steps))
     :setup-mod-bus! (fn []
-                      (log/info "[LIFECYCLE] Phase 5: Mod bus setup")
+                      (log/debug "[LIFECYCLE] Phase 5: Mod bus setup")
                       (setup-mod-bus/run-registration-phases! mod-bus mod-container (mod-bus-opts))
                       (log/info "[LIFECYCLE] Phase 5: Mod bus setup complete"))}
    false))

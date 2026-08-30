@@ -42,4 +42,4 @@
                        (.getNewDamage evt)
                        #(.setNewDamage evt (float %)))))))
 
-  (log/info "NeoForge damage interception installed"))
+  (log/debug "NeoForge damage interception installed"))

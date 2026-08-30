@@ -99,7 +99,7 @@
           (try
             (let [tile (tile-from-payload payload player)
                   world (net-helpers/get-world player)]
-              (log/info "[handle-list-nodes]" log-label "tile=" (some? tile))
+              (log/debug "[handle-list-nodes]" log-label "tile=" (some? tile))
               (if tile
                 (let [linked-node (get-linked-node tile)]
                   (link-helpers/list-nodes-success-response
@@ -107,7 +107,6 @@
                     (nodes-in-range world (pos/block-pos tile))))
                 (link-helpers/list-nodes-empty-response)))
             (catch Exception e
-              (log/error "[handle-list-nodes]" (ex-message e))
               (log/stacktrace "[handle-list-nodes]" e)
               {:success false :error (ex-message e)})))
         handle-connect
@@ -127,7 +126,7 @@
                                                                 :pos-z (:node-z node-pos)})]
                     (let [result (link! device node pass need-auth?)
                           {:keys [linked avail]} (build-link-response get-linked-node device world)]
-                      (log/info "[handle-connect] link result:" (pr-str result))
+                      (log/debug "[handle-connect] link result:" (pr-str result))
                       (assoc result :messages (feedback/result->messages message-domain result)
                                      :linked linked :avail avail))
                     {:success false :linked linked :avail avail
@@ -135,7 +134,6 @@
                   {:success false :linked linked :avail avail
                    :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
             (catch Exception e
-              (log/error "[handle-connect]" (ex-message e))
               (log/stacktrace "[handle-connect]" e)
               {:success false :error (ex-message e)
                :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))
@@ -154,7 +152,6 @@
                 {:success false :linked linked :avail avail
                  :messages (feedback/result->messages message-domain {:success false :reason :aborted})}))
             (catch Exception e
-              (log/error "[handle-disconnect]" (ex-message e))
               (log/stacktrace "[handle-disconnect]" e)
               {:success false :error (ex-message e)
                :messages (feedback/result->messages message-domain {:success false :reason :aborted})})))]
