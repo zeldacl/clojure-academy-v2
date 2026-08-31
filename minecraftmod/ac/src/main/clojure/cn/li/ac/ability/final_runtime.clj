@@ -39,7 +39,7 @@
                              :ability-state-provider ability-state-provider
                              :commit-ability-state! commit-ability-state!})
      :catalog (atom nil)
-     :scheduled (atom [])}))
+     :scheduled (atom (sorted-map))}))
 
 (defn create-from-capabilities
   "Build the final host from mcmod's neutral capability snapshot.
@@ -102,6 +102,20 @@
              :steps [node]}
    :instructions 1})
 
+(defn- enqueue-scheduled! [runtime ability-id frame entries]
+  (let [entries (mapv #(-> %
+                            (assoc :ability-id ability-id
+                                   :frame frame
+                                   :program (scheduled-program (:node %)))
+                            (dissoc :node))
+                     entries)]
+    (swap! (:scheduled runtime)
+           (fn [buckets]
+             (reduce (fn [result entry]
+                       (update result (long (:tick entry)) (fnil conj []) entry))
+                     buckets
+                     entries)))))
+
 (defn dispatch!
   "Execute one final graph intent. Unknown abilities are rejected."
   [runtime ability-id frame]
@@ -115,13 +129,7 @@
                             :owner (:owner frame))]
           (when (and (:finish-ability? result) (ifn? (:remove-ability-state! runtime)))
             ((:remove-ability-state! runtime) (:owner frame)))
-          (swap! (:scheduled runtime)
-                 into (map #(-> %
-                                (assoc :ability-id ability-id
-                                       :frame frame
-                                       :program (scheduled-program (:node %)))
-                                (dissoc :node))
-                           (:scheduled result)))
+          (enqueue-scheduled! runtime ability-id frame (:scheduled result))
           result)))))
 
 (defn tick!
@@ -129,15 +137,17 @@
    already-compiled one-step programs, preserving the same host/state
    transaction boundary as an immediate dispatch."
   [runtime tick]
-  (let [[due later]
-        (reduce (fn [[due later] scheduled]
-                  (if (<= (long (:tick scheduled)) (long tick))
-                    [(conj! due scheduled) later]
-                    [due (conj! later scheduled)]))
-                [(transient []) (transient [])]
-                @(:scheduled runtime))
-        due (persistent! due)
-        later (persistent! later)]
+  (let [buckets @(:scheduled runtime)
+        due-buckets (subseq buckets <= (long tick))
+        due (persistent!
+             (reduce (fn [out [_ entries]]
+                       (reduce conj! out entries))
+                     (transient [])
+                     due-buckets))
+        later (reduce (fn [remaining [deadline _]]
+                        (dissoc remaining deadline))
+                      buckets
+                      due-buckets)]
     (reset! (:scheduled runtime) later)
     (let [execute (get-in runtime [:apis :execute])]
       {:status :accepted
@@ -151,8 +161,14 @@
    boundary for disconnect/death/dimension-change/gui-close."
   [runtime owner]
   (swap! (:scheduled runtime)
-         (fn [scheduled]
-           (vec (remove #(= owner (get-in % [:frame :owner])) scheduled))))
+         (fn [buckets]
+           (reduce-kv (fn [remaining deadline entries]
+                        (let [kept (vec (remove #(= owner (get-in % [:frame :owner])) entries))]
+                          (if (seq kept)
+                            (assoc remaining deadline kept)
+                            (dissoc remaining deadline))))
+                      (empty buckets)
+                      buckets)))
   {:status :aborted :owner owner})
 
 (defonce ^:private production-runtime* (atom nil))
