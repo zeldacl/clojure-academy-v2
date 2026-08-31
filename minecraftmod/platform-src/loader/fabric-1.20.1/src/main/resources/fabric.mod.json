@@ -22,6 +22,9 @@
     ],
     "fabric-datagen": [
       "cn.li.fabric1201.datagen.DataGeneratorSetup"
+    ],
+    "jei_mod_plugin": [
+      "cn.li.fabric1201.integration.JEIPluginWrapper"
     ]
   },
   "mixins": [

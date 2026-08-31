@@ -97,6 +97,18 @@ dependencies {
     } else if (target.loader == "fabric") {
         add("modImplementation", target.dependencies.fabricLoader)
         add("modImplementation", target.dependencies.fabricApi)
+        // JEI's Fabric entrypoint is optional at runtime, but its typed plugin
+        // seam must be on the compile classpath for every Fabric target that
+        // advertises the integration capability.
+        if (target.dependencies.jeiCommonApi) {
+            add("modCompileOnlyApi", target.dependencies.jeiCommonApi)
+        }
+        if (target.dependencies.jeiFabricApi) {
+            add("modCompileOnlyApi", target.dependencies.jeiFabricApi)
+        }
+        if (target.dependencies.jeiFabricRuntime) {
+            add("modRuntimeOnly", target.dependencies.jeiFabricRuntime)
+        }
         compileOnly "com.google.code.findbugs:jsr305:3.0.2"
     } else {
         throw new GradleException("Unsupported loader '${target.loader}' for target '${target.id}'")
