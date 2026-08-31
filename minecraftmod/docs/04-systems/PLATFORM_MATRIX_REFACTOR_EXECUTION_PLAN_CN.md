@@ -121,6 +121,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 随后又清理了两个热路径残留：AC 的 VFX/反射回调在生产 runtime 首次创建时冻结，`mcmod` 输入会话直接调用 `fixed-channel/decode-intent`；server bridge 也改为 bootstrap 固化根回调表，发送路径不再读取 Framework atom。`mcmod:checkClojure :mcmod:test`（20 tasks）和六目标 `verifyCurrentPlatforms`（99 tasks）在该改动后均通过；对应提交为 `93868faa9`、`173f37b56`、`4864e6a4c`。
 
+在上述提交之后重新执行六目标发布任务：Forge 1.20.1 `check + jar` 61 tasks，Fabric 1.20.1/1.21.1 与 NeoForge 1.21.1 `check + remapJar` 各 63 tasks，NeoForge 26.2 `check + jar` 64 tasks，Fabric 26.2 `check + jar` 60 tasks，全部成功。对这些最新 Jar 的 ZIP 实物扫描均为 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；其中 26.2 两个 source-first 目标实际 `platform AOT=0`，其余 Loom 目标仅打包允许闭包内的 AOT。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
