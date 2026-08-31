@@ -64,6 +64,12 @@
       (is (= :accepted (:status result)))
       (is (= :tick-fired (get-in result [:results 0 :outcome])))
       (is (empty? @(:scheduled rt))))))
+(deftest final-runtime-tick-no-due-work-fast-path-test
+  (let [scheduled (atom (sorted-map 10 [{:tick 10}]))
+        rt {:scheduled scheduled}]
+    (is (= {:status :accepted :tick 0 :results []}
+           (runtime/tick! rt 0)))
+    (is (= {10 [{:tick 10}]} @scheduled))))
 (deftest final-runtime-dispatch-enqueues-precompiled-scheduled-bucket-test
   (let [rt {:catalog (atom {:status :ready})
             :apis {:registration (fn [_] {:compiled :entry})

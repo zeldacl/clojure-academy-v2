@@ -138,23 +138,27 @@
    transaction boundary as an immediate dispatch."
   [runtime tick]
   (let [buckets @(:scheduled runtime)
-        due-buckets (subseq buckets <= (long tick))
-        due (persistent!
-             (reduce (fn [out [_ entries]]
-                       (reduce conj! out entries))
-                     (transient [])
-                     due-buckets))
-        later (reduce (fn [remaining [deadline _]]
-                        (dissoc remaining deadline))
-                      buckets
-                      due-buckets)]
-    (reset! (:scheduled runtime) later)
-    (let [execute (get-in runtime [:apis :execute])]
-      {:status :accepted
-       :tick tick
-       :results (mapv (fn [{:keys [program frame]}]
-                        (execute (:engine runtime) program (assoc frame :tick tick)))
-                      due)})))
+        due-buckets (subseq buckets <= (long tick))]
+    ;; The overwhelmingly common tick has no scheduled work.  Avoid building
+    ;; transient/persistent collections and writing the atom in that case.
+    (if-not (seq due-buckets)
+      {:status :accepted :tick tick :results []}
+      (let [due (persistent!
+                 (reduce (fn [out [_ entries]]
+                           (reduce conj! out entries))
+                         (transient [])
+                         due-buckets))
+            later (reduce (fn [remaining [deadline _]]
+                            (dissoc remaining deadline))
+                          buckets
+                          due-buckets)]
+        (reset! (:scheduled runtime) later)
+        (let [execute (get-in runtime [:apis :execute])]
+          {:status :accepted
+           :tick tick
+           :results (mapv (fn [{:keys [program frame]}]
+                            (execute (:engine runtime) program (assoc frame :tick tick)))
+                          due)})))))
 
 (defn abort-owner!
   "Cancel scheduled final work for one owner.  This is the shared lifecycle
