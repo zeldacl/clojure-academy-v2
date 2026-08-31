@@ -7,6 +7,7 @@
             [cn.li.platform.neutral.integration-runtime :as energy-hooks]
             [cn.li.mcmod.capability.registry :as capability-registry])
   (:import [cn.li.mcmod.energy IEnergyCapable]
+           [java.util WeakHashMap]
            [java.lang.reflect InvocationHandler Proxy]))
 
 
@@ -15,7 +16,7 @@
 (def ^:private ic2-state (atom :unknown))
 (def ^:private ic2-interfaces (atom nil))
 
-(def ^:private proxy-cache (java.util.WeakHashMap.))
+(def ^WeakHashMap ^:private proxy-cache (WeakHashMap.))
 (def ^:private proxy-cache-lock (Object.))
 
 (declare create-ic2-energy-sink create-ic2-energy-source)
