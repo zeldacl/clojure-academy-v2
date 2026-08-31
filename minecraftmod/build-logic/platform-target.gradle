@@ -284,7 +284,7 @@ if (target.loader != "none") {
     def runtimeClassOutput = { Project runtimeProject ->
         def outputDirs = [runtimeProject.layout.buildDirectory.dir("classes/java/main")]
         if (runtimeProject.tasks.findByName("compileClojure") != null &&
-            (rootProject.ext.fullAotEnabled || !(runtimeProject.path in rootProject.ext.neutralSourceFirstProjects))) {
+            (runtimeProject.path in rootProject.ext.aotRequiredProjects)) {
             outputDirs << runtimeProject.layout.buildDirectory.dir("clojure/main")
         }
         files(outputDirs)
@@ -326,7 +326,7 @@ if (target.loader != "none") {
         def result = [runtimeProject.tasks.named("compileJava")]
         def compileClojure = runtimeProject.tasks.findByName("compileClojure")
         if (compileClojure != null &&
-            (rootProject.ext.fullAotEnabled || !(runtimeProject.path in rootProject.ext.neutralSourceFirstProjects))) {
+            (runtimeProject.path in rootProject.ext.aotRequiredProjects)) {
             result << compileClojure
         }
         result
@@ -414,7 +414,7 @@ if (target.loader != "none") {
         dependsOn tasks.named("compileClojure")
         inputs.files(neutralClojureSourceRoots)
         inputs.dir(clojureAotDir)
-        inputs.property("fullAot", rootProject.ext.fullAotEnabled)
+        inputs.property("platformRemapAot", rootProject.ext.platformRemapAotEnabled)
         outputs.dir(neutralClojureResourceDir)
         outputs.files(neutralAotBasesManifest, neutralSourceBasesManifest, neutralAotClassesManifest)
         doLast {
@@ -456,14 +456,12 @@ if (target.loader != "none") {
             def sourceBases = sourceEntries.keySet().collect { String rel ->
                 rel.replaceFirst(/\.(clj|cljc)$/, "")
             }.toSorted()
-            if (!rootProject.ext.fullAotEnabled) {
-                sourceEntries.each { String rel, File sourceFile ->
-                    def base = rel.replaceFirst(/\.(clj|cljc)$/, "")
-                    if (!aotBases.contains(base)) {
-                        def destination = new File(outputDir, rel)
-                        destination.parentFile.mkdirs()
-                        destination.bytes = sourceFile.bytes
-                    }
+            sourceEntries.each { String rel, File sourceFile ->
+                def base = rel.replaceFirst(/\.(clj|cljc)$/, "")
+                if (!aotBases.contains(base)) {
+                    def destination = new File(outputDir, rel)
+                    destination.parentFile.mkdirs()
+                    destination.bytes = sourceFile.bytes
                 }
             }
             def reportDir = neutralClojureReportDir.get().asFile
@@ -471,8 +469,8 @@ if (target.loader != "none") {
             neutralAotBasesManifest.get().asFile.text = aotBases.join(System.lineSeparator()) + System.lineSeparator()
             neutralSourceBasesManifest.get().asFile.text = sourceBases.join(System.lineSeparator()) + System.lineSeparator()
             neutralAotClassesManifest.get().asFile.text = aotClasses.join(System.lineSeparator()) + System.lineSeparator()
-            logger.lifecycle("[neutral-clojure] AOT namespaces={}, source resources={}, fullAot={}",
-                aotBases.size(), sourceEntries.size() - (rootProject.ext.fullAotEnabled ? sourceEntries.size() : (sourceEntries.keySet().count { rel -> aotBases.contains(rel.replaceFirst(/\.(clj|cljc)$/, "")) })), rootProject.ext.fullAotEnabled)
+            logger.lifecycle("[neutral-clojure] AOT namespaces={}, source resources={}, platformRemapAot={}",
+                aotBases.size(), sourceEntries.keySet().count { rel -> !aotBases.contains(rel.replaceFirst(/\.(clj|cljc)$/, "")) }, rootProject.ext.platformRemapAotEnabled)
         }
     }
     // Clojurephant's compileClojure task consumes SourceSet resources. Feeding
@@ -506,11 +504,8 @@ if (target.loader != "none") {
             if (!copiedBases.intersect(overlap).isEmpty()) {
                 throw new GradleException("Neutral Clojure namespace is both AOT and source-backed in the generated Jar inputs: ${copiedBases.intersect(overlap).sort()}")
             }
-            if (!rootProject.ext.fullAotEnabled && copiedBases != sourceBases - aotBases) {
+            if (copiedBases != sourceBases - aotBases) {
                 throw new GradleException("Neutral Clojure source manifest does not match copied resources: expected=${(sourceBases - aotBases).sort()}, actual=${copiedBases.sort()}")
-            }
-            if (rootProject.ext.fullAotEnabled && !copiedBases.isEmpty()) {
-                throw new GradleException("Full-AOT mode unexpectedly copied neutral Clojure sources: ${copiedBases.sort()}")
             }
         }
     }
@@ -561,7 +556,15 @@ if (target.loader != "none") {
     }
     // Platform AOT is exhaustive. Derive its deterministic namespace set from
     // selected Clojure source roots instead of maintaining a second list.
-    def platformAotNamespaces = { collectClojureNamespaces(platformAotSourceRoots) }
+    // Loom-remapped targets require platform namespaces as AOT classes so the
+    // remapper can rewrite owner/method references. Named targets keep the
+    // same namespaces source-backed; compiling them here would create a
+    // second runtime representation and waste CPU/heap during build.
+    def platformAotNamespaces = {
+        rootProject.ext.platformRemapAotEnabled
+            ? collectClojureNamespaces(platformAotSourceRoots)
+            : new TreeSet<String>()
+    }
     def platformRuntimeAotNamespaces = { platformAotNamespaces() }
     def deleteAotNamespaceClasses = { File outputRoot, Collection<String> namespaces ->
         namespaces.each { namespaceName ->
@@ -654,22 +657,12 @@ if (target.loader != "none") {
             // resolving requires; otherwise it can load a stale __init class
             // whose sibling function classes were already replaced.
             deleteAotNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile, platformRuntimeAotNamespaces())
-            if (!rootProject.ext.fullAotEnabled) {
-                deleteNeutralSourceNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile)
-                // `platformClojureSourceClasspath` deliberately supplies the
-                // neutral mcmod/ac source roots.  A previous full-AOT or dev
-                // compile can leave their generated Clojure classes in the
-                // sibling Java output directory, which precedes those roots
-                // on the compiler classpath and masks changed source.  These
-                // are not target packaging inputs: the selected target emits
-                // its actual transitive closure below, then packages every
-                // emitted class while excluding its matching source file.
-                // Clear only that stale sibling representation before require
-                // resolution; never prune the newly emitted target closure.
-                ([mcmodProject] + runtimeProjects + contentProjects).unique { it.path }.each { Project neutralProject ->
-                    deleteNeutralSourceNamespaceClasses(
-                        neutralProject.layout.buildDirectory.dir("classes/java/main").get().asFile)
-                }
+            deleteNeutralSourceNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile)
+            // Neutral sibling outputs are source-first. Clear stale classes
+            // before compile so an earlier target cannot mask source loading.
+            ([mcmodProject] + runtimeProjects + contentProjects).unique { it.path }.each { Project neutralProject ->
+                deleteNeutralSourceNamespaceClasses(
+                    neutralProject.layout.buildDirectory.dir("classes/java/main").get().asFile)
             }
             def staleManifest = neutralAotClassesManifest.get().asFile
             if (staleManifest.isFile()) {
@@ -808,9 +801,11 @@ if (target.loader != "none") {
                     }
                 }
             }
-            def missingEntrypoints = runtimeEntrypointNamespaces.collect { namespaceName ->
-                new File(clojureAotDir.get().asFile, namespaceName.replace(".", "/").replace("-", "_") + "__init.class")
-            }.findAll { !it.isFile() }
+            def missingEntrypoints = rootProject.ext.platformRemapAotEnabled
+                ? runtimeEntrypointNamespaces.collect { namespaceName ->
+                    new File(clojureAotDir.get().asFile, namespaceName.replace(".", "/").replace("-", "_") + "__init.class")
+                }.findAll { !it.isFile() }
+                : []
             if (!missingEntrypoints.isEmpty()) {
                 throw new GradleException("Clojurephant AOT did not write required platform entrypoint classes: ${missingEntrypoints}")
             }
@@ -819,7 +814,7 @@ if (target.loader != "none") {
 
     def verifyPlatformAotCoverage = tasks.register("verifyPlatformAotCoverage") {
         group = "verification"
-        description = "Verify every selected platform Clojure namespace is emitted as class-only AOT output."
+        description = "Verify platform Clojure namespace representation for the selected remap policy."
         dependsOn copyClojureClassesToJavaOutput, stageNeutralClojureRuntimeResources
         doLast {
             def aotRoot = clojureAotDir.get().asFile
@@ -843,7 +838,8 @@ if (target.loader != "none") {
                     "Platform AOT/class-only coverage failed for ${target.id}: " +
                     "missing=${missing.sort()}, sourceLeaks=${sourceLeaks.sort()}")
             }
-            logger.lifecycle("[verifyPlatformAotCoverage] ok ({} platform namespaces)", platformRuntimeAotNamespaces().size())
+            logger.lifecycle("[verifyPlatformAotCoverage] ok ({} platform AOT namespaces; remap={})",
+                platformRuntimeAotNamespaces().size(), rootProject.ext.platformRemapAotEnabled)
         }
     }
 
@@ -901,9 +897,7 @@ if (target.loader != "none") {
 
     def configurePackagedRuntimeProject = { Project contentProject, String label ->
         def javaClasses = contentProject.layout.buildDirectory.dir("classes/java/main")
-        def neutralAotStripTask = rootProject.ext.fullAotEnabled
-            ? contentProject.tasks.findByName("stripAotLvt")
-            : null
+        def neutralAotStripTask = null
         def clojureClasses = contentProject.layout.buildDirectory.dir(
             neutralAotStripTask != null ? "clojure/main-stripped" : "clojure/main")
         def resources = contentProject.layout.buildDirectory.dir("resources/main")
@@ -912,7 +906,7 @@ if (target.loader != "none") {
             packagingDeps << neutralAotStripTask
         }
         def runtimeClassDependencies = runtimeClassTasks(contentProject)
-        def includeStandaloneAotClasses = rootProject.ext.fullAotEnabled || !(contentProject.path in rootProject.ext.neutralSourceFirstProjects)
+        def includeStandaloneAotClasses = contentProject.path in rootProject.ext.aotRequiredProjects
 
         tasks.named("jar", Jar).configure {
             dependsOn packagingDeps

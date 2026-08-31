@@ -10,7 +10,7 @@ layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${proje
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
     checkTask.dependsOn ":mcmod:classes", ":node-core:classes"
-    // node-core is source-first (no compileClojure output outside -PfullAot);
+    // node-core is source-first; any target AOT is derived from the platform closure.
     // its .clj sources land only in its own resources/main dir, which the
     // standard project(":node-core") compileClasspath resolution does not
     // surface here (Java's compile-classpath convention excludes a
@@ -36,17 +36,13 @@ tasks.named("compileTestClojure").configure {
 }
 
 tasks.named("processResources").configure {
-    if (rootProject.ext.fullAotEnabled) {
-        exclude "**/*.clj", "**/*.cljc"
-    } else {
-        from(sourceSets.main.clojure.srcDirs) {
-            include "**/*.clj", "**/*.cljc"
-        }
+    from(sourceSets.main.clojure.srcDirs) {
+        include "**/*.clj", "**/*.cljc"
     }
 }
 
 tasks.named("compileClojure").configure { task ->
-    onlyIf { rootProject.ext.fullAotEnabled }
+    onlyIf { false }
     dependsOn ":mcmod:compileClojure", ":node-core:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
@@ -57,7 +53,7 @@ tasks.named("compileClojure").configure { task ->
 }
 
 def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
-    onlyIf { !rootProject.ext.fullAotEnabled }
+    onlyIf { true }
     doLast { delete(layout.buildDirectory.dir("clojure/main").get().asFile) }
 }
 tasks.named("classes").configure { dependsOn clearNeutralAotOutput }

@@ -40,22 +40,19 @@ ext {
         coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.6.122-alpha8"
     ]
 
-    // Neutral runtime projects (:ac, :mcmod, :vfx-core and :combat-core) are source-first by default.
-    // Pass -PfullAot or -PfullAot=true to restore the historical full-AOT build.
-    def fullAotRaw = findProperty("fullAot")
-    def fullAotText = fullAotRaw == null ? "false" : fullAotRaw.toString().trim()
-    if (fullAotText.isEmpty()) {
-        fullAotText = "true"
-    }
-    if (!fullAotText.equalsIgnoreCase("true") && !fullAotText.equalsIgnoreCase("false")) {
-        throw new GradleException("-PfullAot must be true or false (or pass -PfullAot for true), got '${fullAotRaw}'")
-    }
-    fullAotEnabled = fullAotText.equalsIgnoreCase("true")
-    // Neutral Clojure projects remain source-first in normal platform builds.
-    // Only platform namespaces that touch Minecraft/Loader APIs are required
-    // to be AOT/remapped.  The explicit fullAot switch remains available for
-    // the historical diagnostic build mode.
-    neutralSourceFirstProjects = [":ac", ":mcmod", ":node-core", ":vfx-core", ":combat-core", ":ability-runtime"]
+    // Runtime representation is selected by the target profile, never by a
+    // User configuration cannot override this policy. Only targets whose Loom output is
+    // remapped require platform namespaces to be AOT roots.  Neutral projects
+    // remain source-first; a platform compile may still pull them into its
+    // transitive AOT closure, which is filtered namespace-by-namespace later.
+    def aotCatalog = new JsonSlurper().parse(rootProject.file("platform-catalog.json"))
+    def aotTargetId = (findProperty("platformTarget") ?: aotCatalog.defaultTarget).toString()
+    def aotTarget = aotCatalog.targets[aotTargetId]
+    def aotProfile = aotTarget == null ? null : aotCatalog.buildProfiles[aotTarget.buildProfile.toString()]
+    platformRemapAotEnabled = aotProfile?.obfuscationMode?.toString() == "remapped"
+    neutralSourceFirstProjects = [":ac", ":mcmod", ":node-core", ":vfx-core", ":combat-core",
+                                  ":ability-runtime", ":presentation-core"]
+    aotRequiredProjects = platformRemapAotEnabled ? [":platform"] : []
 }
 
 allprojects {
@@ -126,7 +123,7 @@ subprojects {
             clojure {
                 builds {
                     main {
-                        if (rootProject.ext.fullAotEnabled || !(project.path in rootProject.ext.neutralSourceFirstProjects)) {
+                        if (project.path in rootProject.ext.aotRequiredProjects) {
                             aotAll()
                         } else {
                             // Empty AOT set keeps the plugin available for source
@@ -141,7 +138,7 @@ subprojects {
 
             tasks.named("compileClojure").configure { task ->
                 doLast {
-                    if (!rootProject.ext.fullAotEnabled && project.path in rootProject.ext.neutralSourceFirstProjects) {
+                    if (!(project.path in rootProject.ext.aotRequiredProjects)) {
                         return
                     }
                     def sourceRoots = sourceSets.main.clojure.srcDirs.findAll { it.isDirectory() }
@@ -159,7 +156,7 @@ subprojects {
                         }
                     }.findAll { namespaceAndClass -> !namespaceAndClass[1].isFile() }
                     if (!missingAotClasses.isEmpty()) {
-                        throw new GradleException("Full AOT output is incomplete for ${project.path}: " +
+                        throw new GradleException("Required remapped Clojure output is incomplete for ${project.path}: " +
                             missingAotClasses.collect { it[0] }.sort())
                     }
                 }
@@ -956,31 +953,18 @@ tasks.register("verifyVfxDependencyDirection") {
 
 tasks.register("verifyVfxAotBoundary") {
     group = "verification"
-    description = "Verify source-first VFX packaging and the platform AOT exclusion boundary."
+    description = "Verify source-first VFX packaging and target-derived AOT closure filtering."
     dependsOn ":platform:prepareNeutralClojureRuntimeSources"
     doLast {
         def violations = []
         def vfxBuild = file("vfx-core/build.gradle").text
-        if (!(vfxBuild =~ /onlyIf\s*\{\s*rootProject\.ext\.fullAotEnabled\s*\}/)) {
-            violations << "vfx-core compileClojure must remain disabled unless -PfullAot=true"
-        }
-        if (!rootProject.ext.fullAotEnabled) {
-            def neutralVfxSource = file("build/neutral/ac/neutral-runtime-sources/cn/li/vfx/final_client.clj")
-            if (!neutralVfxSource.file) {
-                violations << "default neutral runtime must publish vfx-core source-first final_client.clj"
-            }
-            fileTree(file("build")) { include "**/*__init.class" }.files.each { File classFile ->
-                def normalized = classFile.absolutePath.replace('\\', '/')
-                if (!normalized.contains('/clojure/test/') &&
-                    (normalized.contains('/cn/li/vfx/') || normalized.contains('/cn/li/ac/vfx/'))) {
-                    violations << "default AOT output contains VFX namespace: ${classFile}"
-                }
-            }
+        if (!(vfxBuild.contains("compileClojure") && vfxBuild.contains("onlyIf { false }"))) {
+            violations << "vfx-core compileClojure must remain disabled for source-first neutral runtime"
         }
         if (!violations.isEmpty()) {
             throw new GradleException("VFX AOT boundary violations:\n" + violations.unique().join("\n"))
         }
-        logger.lifecycle("[verifyVfxAotBoundary] ok (fullAot={})", rootProject.ext.fullAotEnabled)
+        logger.lifecycle("[verifyVfxAotBoundary] ok (source-first neutral VFX)")
     }
 }
 
@@ -1351,56 +1335,38 @@ tasks.register("verifyAcNoWorldCapabilities") {
     }
 }
 
-tasks.register("verifyNeutralSourceAotXor") {
+tasks.register("verifyClojureRuntimeRepresentation") {
     group = "verification"
-    description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
-    dependsOn ":platform:prepareNeutralClojureRuntimeSources"
+    description = "Ensure target-derived AOT closures and source runtime namespaces are mutually exclusive."
+    dependsOn ":platform:verifyNeutralClojurePackaging", ":platform:verifyPlatformAotCoverage"
     doLast {
-        def violations = []
-        rootProject.ext.neutralSourceFirstProjects.each { projectPath ->
-            def p = project(projectPath)
-            def sourceNamespaces = [] as Set
-            p.sourceSets.main.clojure.srcDirs.findAll { it.directory }.each { File root ->
-                fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.files.each { File f ->
-                    def rel = root.toPath().relativize(f.toPath()).toString().replace('\\','/')
-                    sourceNamespaces << rel.replaceAll(/\.cljc?$/, '').replace('/','.')
-                        .replace('_','-')
-                }
-            }
-            def classRoots = [
-                p.layout.buildDirectory.dir("clojure/main").get().asFile,
-                p.layout.buildDirectory.dir("classes/java/main").get().asFile
-            ]
-            def aotNamespaces = [] as Set
-            classRoots.findAll { it.directory }.each { File root ->
-                fileTree(root) { include "**/*__init.class" }.files.each { File f ->
-                    def rel = root.toPath().relativize(f.toPath()).toString().replace('\\','/')
-                    aotNamespaces << rel.replaceFirst(/__init\.class$/, '').replace('/','.')
-                        .replace('_','-')
-                }
-            }
-            def overlap = sourceNamespaces.intersect(aotNamespaces)
-            if (!rootProject.ext.fullAotEnabled && !overlap.isEmpty()) {
-                violations << "${projectPath}: neutral namespaces present as both source and AOT: ${overlap.sort()}"
-            }
-            if (rootProject.ext.fullAotEnabled) {
-                def missing = sourceNamespaces.findAll { !(it in aotNamespaces) }
-                if (!missing.isEmpty()) violations << "${projectPath}: fullAot missing classes: ${missing.sort()}"
+        def catalog = new groovy.json.JsonSlurper().parse(file("platform-catalog.json"))
+        def selectedTarget = (findProperty("platformTarget") ?: catalog.defaultTarget).toString()
+        def runtimeRoot = file("platform/build/targets/${selectedTarget}/platform")
+        def resourcesRoot = new File(runtimeRoot, "resources/main")
+        def classesRoots = [new File(runtimeRoot, "classes/java/main"), new File(runtimeRoot, "clojure/main")]
+        def sourceBases = [] as Set
+        if (resourcesRoot.isDirectory()) {
+            fileTree(resourcesRoot) {
+                include "**/*.clj"
+                include "**/*.cljc"
+            }.files.each { File source ->
+                sourceBases << resourcesRoot.toPath().relativize(source.toPath()).toString()
+                    .replace("\\", "/").replaceFirst(/\.(clj|cljc)$/, "")
             }
         }
-        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
-        logger.lifecycle("[verifyNeutralSourceAotXor] ok")
-    }
-}
-
-// In diagnostic full-AOT mode the verifier must build the neutral class
-// outputs first; otherwise it would report every source namespace as missing
-// merely because callers invoked the gate in isolation.
-if (rootProject.ext.fullAotEnabled) {
-    tasks.named("verifyNeutralSourceAotXor").configure {
-        dependsOn rootProject.ext.neutralSourceFirstProjects.collect { projectPath ->
-            project(projectPath).tasks.named("classes")
+        def classBases = [] as Set
+        classesRoots.findAll { it.isDirectory() }.each { File classesRoot ->
+            fileTree(classesRoot) { include "**/*__init.class" }.files.each { File clazz ->
+                classBases << classesRoot.toPath().relativize(clazz.toPath()).toString()
+                    .replace("\\", "/").replaceFirst(/__init\.class$/, "")
+            }
         }
+        def overlap = sourceBases.intersect(classBases).sort()
+        if (!overlap.isEmpty()) {
+            throw new GradleException("Clojure runtime representation overlap in ${selectedTarget}: ${overlap}")
+        }
+        logger.lifecycle("[verifyClojureRuntimeRepresentation] ok (target AOT closure XOR source runtime)")
     }
 }
 
@@ -2009,7 +1975,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxJavaBoundary",
               "verifyVfxAotBoundary",
-              "verifyNeutralSourceAotXor",
+              "verifyClojureRuntimeRepresentation",
               "verifyPresentationLoaderHooks",
               "verifyPresentationAtomicSwitch",
               "verifyNeutralProviderClosure",
