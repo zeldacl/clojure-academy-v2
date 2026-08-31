@@ -67,7 +67,9 @@
       (doseq [meta (categories)
               :let [^ItemStack stack (jei-core/parse-item-id (:block-id meta))]]
         (when stack
-          (.addRecipeCatalyst registration stack (into-array RecipeType [(recipe-type meta)]))))
+          (let [^"[Lmezz.jei.api.recipe.RecipeType;" catalysts
+                (into-array RecipeType [(recipe-type meta)])]
+            (.addRecipeCatalyst registration stack catalysts))))
       nil)))
 
 (defn init-jei! []

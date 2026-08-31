@@ -557,6 +557,12 @@ if (target.loader != "none") {
         group = "build"
         description = "Stage source-backed platform Clojure namespaces for named targets."
         onlyIf { !rootProject.ext.platformRemapAotEnabled }
+        // The cleanup in doFirst is correctness-critical even when Gradle sees
+        // the copied resources as up-to-date: a previous remapped/AOT target
+        // may have left namespace classes in the target-local classes tree.
+        // Always execute the small source sweep so source-first never resolves
+        // a stale __init/synthetic class before the .clj resource.
+        outputs.upToDateWhen { false }
         dependsOn tasks.named("processResources")
         from(platformAotSourceRoots) {
             include "**/*.clj"
