@@ -9,14 +9,22 @@
 
 (def default-history-limit 100)
 
+(defn- value-id [value]
+  (cond
+    (keyword? value) (if-let [ns (namespace value)]
+                       (str ns "/" (name value))
+                       (name value))
+    :else (str value)))
+
 (defn- key-id [value]
-  (let [value (str value)]
+  (let [value (value-id value)]
     (when (string/blank? value)
       (throw (ex-info "UI key is blank" {:value value})))
     value))
 
 (defn- slot-id [value]
-  (if (string/blank? (str value)) "" (str value)))
+  (let [value (value-id value)]
+    (if (string/blank? value) "" value)))
 
 (defn- normalize-node [node]
   (let [children (mapv normalize-node (or (:children node) []))
@@ -28,7 +36,7 @@
         (assoc :key (key-id (:key node))
                :children children
                :slots slots)
-        (update :blueprint #(when % (str %))))))
+        (update :blueprint #(when % (value-id %))))))
 
 (defn- child-entries [node]
   (concat
@@ -59,7 +67,7 @@
 (defn- normalize-blueprints [blueprints]
   (into {}
         (map (fn [[id descriptor]]
-               (let [id (str id)]
+               (let [id (value-id id)]
                  [id (-> descriptor
                           (assoc :id id)
                           (update :template #(when % (normalize-node %)))
@@ -224,7 +232,7 @@
       (let [parent-key (key-id (:target-key command))
             slot (slot-id (:slot command))
             key (key-id (:key command))
-            blueprint (str (:blueprint command))
+            blueprint (value-id (:blueprint command))
             index (int (or (:index command) -1))]
         (when (find-node composition key)
           (throw (ex-info "UI key already exists" {:key key})))
@@ -261,7 +269,7 @@
       :replace
       (let [target-key (key-id (:target-key command))
             target (find-node composition target-key)
-            blueprint (str (:blueprint command))]
+            blueprint (value-id (:blueprint command))]
         (when-not target (throw (ex-info "replace target not found" {:key target-key})))
         (when-not (boundary-allows? composition target-key :replace "")
           (throw (ex-info "replace rejected by component boundary" {:key target-key})))

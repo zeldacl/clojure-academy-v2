@@ -61,3 +61,26 @@
                                           :artifact {:semantics {}}
                                           :base-view base-view})]
       (is (= "tree" (-> (runtime/composition runtime mount2) :root :children first :key))))))
+
+(deftest pui4-artifact-mount-builds-editable-base-view
+  (let [rt (runtime/create-runtime)
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/pui4
+                  :nodes {:key :root :type :column :children
+                          [{:key :tree :type :scroll
+                            :props {:items [:state :items] :selected [:state :selected]}}]}
+                  :blueprint-catalog
+                  {1 {:blueprint-id 1 :primitive :scroll :edit-policy :replace-only
+                      :props-schema {:items :binding :selected :binding} :slot-schema {}}
+                   2 {:blueprint-id 2 :primitive :scroll :edit-policy :replace-only
+                      :props-schema {:items :binding :selected :binding} :slot-schema {}}}
+                  :boundaries {"tree" {:blueprint-id 1 :edit-policy :replace-only
+                                        :props-schema {:items :binding :selected :binding}
+                                        :slot-schema {}}}}
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :artifact artifact})
+        command (UiEditCommand$Replace. "tree" "2"
+                                        (java.util.Map/of)
+                                        (java.util.Map/of))
+        edit-result (runtime/apply-edit! rt mount command)]
+    (is (= "APPLIED" (.name (.status edit-result))))
+    (is (= "2" (-> (runtime/composition rt mount) :root :children first :blueprint)))))

@@ -58,6 +58,36 @@
                                (assoc result mount instance)))
                            {} mounts))))))))
 
+(defn- artifact-id [value]
+  (if (keyword? value)
+    (if-let [ns (namespace value)] (str ns "/" (name value)) (name value))
+    (str value)))
+
+(defn- artifact-node->base-node [node]
+  (-> node
+      (assoc :blueprint (artifact-id (or (:blueprint-id node) (:type node))))
+      (update :children #(mapv artifact-node->base-node (or % [])))
+      (update :slots (fn [slots]
+                       (into {}
+                             (map (fn [[slot entries]]
+                                    [slot (mapv artifact-node->base-node entries)]))
+                             (or slots {}))))))
+
+(defn- artifact->base-view [artifact]
+  (when (= :pui4 (:magic artifact))
+    {:root (artifact-node->base-node (:nodes artifact))
+     :blueprints (into {}
+                       (map (fn [[id descriptor]]
+                              [(str id)
+                               (assoc descriptor
+                                      :id (str id)
+                                      :template {:key "blueprint-template"
+                                                 :blueprint (artifact-id (:primitive descriptor))
+                                                 :type (:primitive descriptor)
+                                                 :children []})]))
+                       (or (:blueprint-catalog artifact) {}))
+     :boundaries (or (:boundaries artifact) {})}))
+
 (defn mount!
   [^UiRuntime runtime {:keys [host view-id artifact base-view blueprints boundaries state reduce run-effect! close! paint-fn]
                      :or {state {}
@@ -67,7 +97,7 @@
   (let [id (:next-id (runtime-state runtime))
         handle (MountHandle. (long id))
         artifact (or artifact (artifact/load-view view-id))
-        base-view (or base-view (:base-view artifact))
+        base-view (or base-view (:base-view artifact) (artifact->base-view artifact))
         base-view (when base-view
                     (merge base-view
                            (when blueprints {:blueprints blueprints})
