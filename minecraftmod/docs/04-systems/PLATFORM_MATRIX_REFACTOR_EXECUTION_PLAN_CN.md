@@ -117,6 +117,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 在最新代码提交上又逐目标重跑了最终编译：Forge 1.20.1 `check + jar`（61 tasks）、Fabric 1.20.1 `check + remapJar`（63）、Fabric 1.21.1 `check + remapJar`（63）、NeoForge 1.21.1 `check + remapJar`（63）、NeoForge 26.2（Gradle 9.2）`check + jar`（64）和 Fabric 26.2（Gradle 9.7.1）`check + jar`（60）均成功。随后对六个最新 Jar 做等价 ZIP 实物扫描：每个目标 `metadata=1`、`manifest=1`、`jeiWrapper=1`、`embeddedJei=0`、`embeddedIc2=0`、`classSourceOverlap=0`；这组结果覆盖本轮重编译后的实际 artifact，而非旧缓存。
 
+在同一提交上重新执行六目标 `runPlatformClojureTests`：Forge 1.20.1 为 110 tests/262 assertions，Fabric 1.20.1、Fabric 1.21.1、Fabric 26.2 各为 11/32，NeoForge 1.21.1 为 103/240，NeoForge 26.2 为 106/249；全部 0 failures/0 errors。IC2 不兼容 fixture 的一次性 warning 属于预期隔离测试输出，不代表运行时失败。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
