@@ -14,17 +14,18 @@
            [mezz.jei.api.recipe IFocusGroup RecipeIngredientRole RecipeType]
            [mezz.jei.api.helpers IGuiHelper]
            [net.minecraft.resources ResourceLocation]
+           [cn.li.mcver ResourceLocations]
            [net.minecraft.network.chat Component]
            [net.minecraft.world.item ItemStack]
            [java.util ArrayList]))
 
 (defn- recipe-type ^RecipeType [category]
-  (let [^ResourceLocation id (ResourceLocation. ^String (:id category))]
+  (let [^ResourceLocation id (ResourceLocations/parse ^String (:id category))]
     (RecipeType/create (.getNamespace id) (.getPath id) java.util.Map)))
 
 (defn- category [^IGuiHelper helper category-meta]
   (let [bg (:background category-meta)
-        ^ResourceLocation texture (ResourceLocation. ^String (:texture bg))
+        ^ResourceLocation texture (ResourceLocations/parse ^String (:texture bg))
         drawable (.createDrawable helper texture (int (:u bg)) (int (:v bg))
                                    (int (:width bg)) (int (:height bg)))
         icon (when-let [id (:block-id category-meta)] (jei-core/parse-item-id id))]
@@ -49,20 +50,20 @@
 
 (defn create-jei-plugin []
   (reify IModPlugin
-    (getPluginUid [_] (ResourceLocation. ^String modid/mod-id "content_plugin"))
-    (registerCategories [_ ^IRecipeCategoryRegistration registration]
+    (getPluginUid [_] (ResourceLocations/parse (str modid/mod-id ":content_plugin")))
+    (^void registerCategories [_ ^IRecipeCategoryRegistration registration]
       (let [^IGuiHelper helper (.getGuiHelper (.getJeiHelpers registration))]
         (doseq [meta (categories)]
           (.addRecipeCategories registration (into-array IRecipeCategory [(category helper meta)]))))
       nil)
-    (registerRecipes [_ ^IRecipeRegistration registration]
+    (^void registerRecipes [_ ^IRecipeRegistration registration]
       (doseq [meta (categories)
               :let [recipes (mapv integration-hooks/jei-format-recipe
                                    (integration-hooks/jei-get-recipes meta))]]
         (when (seq recipes)
           (.addRecipes registration (recipe-type meta) (ArrayList. ^java.util.Collection recipes))))
       nil)
-    (registerRecipeCatalysts [_ ^IRecipeCatalystRegistration registration]
+    (^void registerRecipeCatalysts [_ ^IRecipeCatalystRegistration registration]
       (doseq [meta (categories)
               :let [^ItemStack stack (jei-core/parse-item-id (:block-id meta))]]
         (when stack

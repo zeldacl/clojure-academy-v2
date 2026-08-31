@@ -36,12 +36,12 @@
 (defn create-jei-plugin []
   (reify IModPlugin
     (getPluginUid [_] (ResourceLocations/parse (str modid/mod-id ":content_plugin")))
-    (registerCategories [_ ^IRecipeCategoryRegistration r]
+    (^void registerCategories [_ ^IRecipeCategoryRegistration r]
       (let [h (.getGuiHelper (.getJeiHelpers r))]
         (doseq [m (jei-core/get-all-categories)] (.addRecipeCategories r (into-array IRecipeCategory [(category h m)])))))
-    (registerRecipes [_ ^IRecipeRegistration r]
+    (^void registerRecipes [_ ^IRecipeRegistration r]
       (doseq [m (jei-core/get-all-categories) :let [xs (mapv hooks/jei-format-recipe (hooks/jei-get-recipes m))]]
         (when (seq xs) (.addRecipes r (recipe-type m) (ArrayList. ^java.util.Collection xs)))))
-    (registerRecipeCatalysts [_ ^IRecipeCatalystRegistration r]
+    (^void registerRecipeCatalysts [_ ^IRecipeCatalystRegistration r]
       (doseq [m (jei-core/get-all-categories) :let [^ItemStack s (jei-core/parse-item-id (:block-id m))]]
         (when s (.addRecipeCatalyst r s (into-array RecipeType [(recipe-type m)])))))))
