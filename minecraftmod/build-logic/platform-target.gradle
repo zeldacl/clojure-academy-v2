@@ -437,7 +437,14 @@ if (target.loader != "none") {
                     }
                 }
             }
-            def aotBases = new TreeSet<String>()
+            // Clojure may emit neutral AOT classes as a compiler side effect
+            // while compiling a platform namespace.  Those detected classes
+            // are useful for stale-output cleanup, but they are not
+            // automatically a runtime representation: named/source-first
+            // targets deliberately do not copy any AOT classes.  Keep a
+            // separate set for the representation that is actually allowed
+            // into this target so source-first never loses its .clj files.
+            def detectedAotBases = new TreeSet<String>()
             def aotClasses = new TreeSet<String>()
             def platformAotClassRoot = clojureAotDir.get().asFile
             def staleAotClassRoots = [platformAotClassRoot] +
@@ -448,11 +455,14 @@ if (target.loader != "none") {
                         def rel = aotDir.toPath().relativize(classFile.toPath()).toString().replace("\\", "/")
                         aotClasses << rel
                         if (aotDir == platformAotClassRoot && rel.endsWith("__init.class")) {
-                            aotBases << rel.substring(0, rel.length() - "__init.class".length())
+                            detectedAotBases << rel.substring(0, rel.length() - "__init.class".length())
                         }
                     }
                 }
             }
+            def aotBases = rootProject.ext.platformRemapAotEnabled
+                ? detectedAotBases
+                : new TreeSet<String>()
             def sourceBases = sourceEntries.keySet().collect { String rel ->
                 rel.replaceFirst(/\.(clj|cljc)$/, "")
             }.toSorted()
@@ -469,8 +479,8 @@ if (target.loader != "none") {
             neutralAotBasesManifest.get().asFile.text = aotBases.join(System.lineSeparator()) + System.lineSeparator()
             neutralSourceBasesManifest.get().asFile.text = sourceBases.join(System.lineSeparator()) + System.lineSeparator()
             neutralAotClassesManifest.get().asFile.text = aotClasses.join(System.lineSeparator()) + System.lineSeparator()
-            logger.lifecycle("[neutral-clojure] AOT namespaces={}, source resources={}, platformRemapAot={}",
-                aotBases.size(), sourceEntries.keySet().count { rel -> !aotBases.contains(rel.replaceFirst(/\.(clj|cljc)$/, "")) }, rootProject.ext.platformRemapAotEnabled)
+            logger.lifecycle("[neutral-clojure] detected AOT namespaces={}, packaged AOT namespaces={}, source resources={}, platformRemapAot={}",
+                detectedAotBases.size(), aotBases.size(), sourceEntries.keySet().count { rel -> !aotBases.contains(rel.replaceFirst(/\.(clj|cljc)$/, "")) }, rootProject.ext.platformRemapAotEnabled)
         }
     }
     // Clojurephant's compileClojure task consumes SourceSet resources. Feeding
