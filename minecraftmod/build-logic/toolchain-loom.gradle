@@ -14,21 +14,29 @@
 // packagedRuntimeLibraries, stripClassLocalVariableTables.
 
 if (target.loader == "forge" || target.loader == "neoforge") {
-    def forgeModClassRoots = [
-        layout.buildDirectory.dir("classes/java/main"),
-        layout.buildDirectory.dir("clojure/main"),
-        layout.buildDirectory.dir("resources/main")
-    ]
     // Loom writes MOD_CLASSES from the full source-set graph (including stale
     // platform/build and IDE out/production paths). Force the target-local
     // roots at execution time so an unexpanded/stale mods.toml cannot win.
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }
         .configureEach { task ->
             task.doFirst {
-                def roots = forgeModClassRoots
+                // runClient/runServer default to source-first; datagen stays AOT
+                // because :platform:jar depends on runData.
+                def useAotClasspath = project.ext.platformAotForRun ||
+                    task.name in ["runData", "runDatagen", "runGametestServer"]
+                def rootDirs = [
+                    layout.buildDirectory.dir("classes/java/main"),
+                    layout.buildDirectory.dir("resources/main")
+                ]
+                if (useAotClasspath) {
+                    rootDirs.add(1, layout.buildDirectory.dir("clojure/main"))
+                }
+                def roots = rootDirs
                     .collect { it.get().asFile }
                     .findAll { it.directory }
                     .collect { "main%%${it.absolutePath}" }
+                // Source-first runClient publishes .clj into resources/main above;
+                // do not append extra roots (Loom overwrites non-source-set paths).
                 if (roots.isEmpty()) {
                     throw new GradleException("Forge/NeoForge MOD_CLASSES is empty for target '${targetId}'; run processResources/classes first")
                 }

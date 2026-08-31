@@ -227,6 +227,20 @@ if (target.loader != "none") {
     processResources {
         dependsOn tasks.named("generatePlatformTargetMetadata")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        // prepareDevClojureRuntime publishes source-first .clj into this output for
+        // runClient. Strip them before refreshing so a later :platform:jar cannot
+        // ship platform sources that packaging expects to keep AOT-only.
+        doFirst {
+            def outDir = (metaClass.hasProperty(delegate, "destinationDirectory") && destinationDirectory != null)
+                ? destinationDirectory.get().asFile
+                : destinationDir
+            if (outDir != null && outDir.isDirectory()) {
+                fileTree(outDir) {
+                    include "**/*.clj"
+                    include "**/*.cljc"
+                }.files.each { File stale -> stale.delete() }
+            }
+        }
         def replaceProperties = [
             mod_id: rootProject.findProperty("mod_id"),
             mod_name: rootProject.findProperty("mod_name"),
@@ -553,9 +567,8 @@ if (target.loader != "none") {
             manifest.text = staged.join(System.lineSeparator()) + System.lineSeparator()
         }
     }
-    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
-        dependsOn stageNeutralClojureRuntimeResources
-    }
+    // Packaging/check still stage filtered neutral sources after platform AOT.
+    // Dev run tasks use prepareDevClojureRuntime (source-first) instead — see below.
     tasks.matching { it.name == "checkClojure" }.configureEach {
         dependsOn stageNeutralClojureRuntimeResources
     }
@@ -643,10 +656,20 @@ if (target.loader != "none") {
         } else if (task.metaClass.hasProperty(task, "destinationDir")) {
             task.destinationDir = clojureAotDir.get().asFile
         }
-        // Clojure can emit synthetic closure classes whose names are coupled
-        // to compiler state. Rebuild this task-owned output as one unit so a
-        // later run cannot observe a partial AOT class graph.
-        outputs.upToDateWhen { false }
+        // Incremental cache: ~300 platform namespaces take ~7min to AOT. Skip
+        // when sources/classpath fingerprint is unchanged. When out-of-date,
+        // doFirst still deletes clojureAotDir and rebuilds the whole output as
+        // one unit (synthetic closure class names are coupled to compiler
+        // state — never leave a partial AOT graph). Do not use
+        // outputs.upToDateWhen { false }: that forced a full AOT on every
+        // runClient and dominated the 9-minute launch path.
+        inputs.files(platformAotSourceRoots).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.files(neutralClojureSourceRoots).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.property("fullAot", rootProject.ext.fullAotEnabled)
+        inputs.property("platformTarget", target.id)
+        if (findProperty("forcePlatformAot")?.toString()?.equalsIgnoreCase("true")) {
+            outputs.upToDateWhen { false }
+        }
         doFirst {
             // compileClojure also sees classes/java/main for platform Java
             // interop. That directory receives copied AOT classes after each
@@ -853,22 +876,138 @@ if (target.loader != "none") {
     tasks.matching { it.name == "checkClojure" }.configureEach {
         dependsOn copyClojureClassesToJavaOutput
     }
-    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
-        dependsOn copyClojureClassesToJavaOutput
+
+    // Dev game launches load Clojure from source. Platform AOT exists for Loom
+    // remap of the release jar (and for runData/datagen, which jar depends on).
+    // -PplatformAotForRun=true forces AOT before runClient/runServer as well.
+    def platformAotForRun = findProperty("platformAotForRun")?.toString()?.equalsIgnoreCase("true")
+    def sourceFirstRunTaskNames = ["runClient", "runServer"]
+    def aotRunTaskNames = ["runData", "runDatagen", "runGametestServer"]
+    // Stage into one generated root under the platform build tree. Forge's mod
+    // classloader (MOD_CLASSES) reliably sees that tree; scattering many
+    // sibling project source dirs on MOD_CLASSES missed mcmod/ac and broke require.
+    def platformDevClojureSourceRoots = (platformAotSourceRoots + neutralClojureSourceRoots)
+        .findAll { File root -> root != null && root.directory }
+        .unique()
+    def devClojureSourcesDir = layout.buildDirectory.dir("generated/dev-clojure-sources")
+    def stageDevClojureSources = tasks.register("stageDevClojureSources", Sync) {
+        group = "build"
+        description = "Stage platform+neutral .clj into one root for source-first runClient/runServer."
+        from(platformDevClojureSourceRoots) {
+            include "**/*.clj"
+            include "**/*.cljc"
+        }
+        into devClojureSourcesDir
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    def prepareDevClojureRuntime = tasks.register("prepareDevClojureRuntime") {
+        group = "build"
+        description = "Clear stale platform AOT and publish Clojure sources into resources/main for runClient/runServer."
+        dependsOn tasks.named("processResources"), stageDevClojureSources
+        // Cheap cleanup must re-run after any packaging AOT left classes behind.
+        outputs.upToDateWhen { false }
+        doLast {
+            def classesRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
+            def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
+            delete clojureAotDir
+            // Drop platform AOT classes that would mask .clj on the run classpath.
+            deleteAotNamespaceClasses(classesRoot, platformRuntimeAotNamespaces())
+            // Drop AOT leftovers only for source-first neutral modules. Keep
+            // presentation-core (and any other aotAll runtime module) classes
+            // that copy*RuntimeClasses mirrored into the platform output.
+            if (!rootProject.ext.fullAotEnabled) {
+                def sourceFirstRoots = ([mcmodProject] + runtimeProjects + contentProjects)
+                    .findAll { Project p -> p.path in rootProject.ext.neutralSourceFirstProjects }
+                    .collectMany { Project p ->
+                        def roots = p.hasProperty("neutralRuntimeSourceRoots")
+                            ? p.neutralRuntimeSourceRoots
+                            : [p.file("src/main/clojure")]
+                        roots as List
+                    }
+                sourceFirstRoots.each { File sourceRoot ->
+                    if (!sourceRoot.isDirectory()) {
+                        return
+                    }
+                    fileTree(sourceRoot) {
+                        include "**/*.clj"
+                        include "**/*.cljc"
+                    }.files.each { File sourceFile ->
+                        def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
+                        def classPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
+                        def classBaseName = classPath.substring(classPath.lastIndexOf("/") + 1)
+                        def packageDir = classPath.contains("/")
+                            ? new File(classesRoot, classPath.substring(0, classPath.lastIndexOf("/")))
+                            : classesRoot
+                        if (packageDir.isDirectory()) {
+                            packageDir.listFiles(new FilenameFilter() {
+                                boolean accept(File dir, String fileName) {
+                                    fileName == "${classBaseName}__init.class" ||
+                                        fileName == "${classBaseName}.class" ||
+                                        (fileName.startsWith("${classBaseName}\$") && fileName.endsWith(".class"))
+                                }
+                            })?.each { File staleClass -> staleClass.delete() }
+                        }
+                    }
+                }
+            }
+            def staged = devClojureSourcesDir.get().asFile
+            def stagedCount = staged.directory
+                ? fileTree(staged) { include "**/*.clj"; include "**/*.cljc" }.files.size()
+                : 0
+            if (stagedCount == 0) {
+                throw new GradleException("stageDevClojureSources produced no .clj/.cljc under ${staged}")
+            }
+            // Loom/Forge MOD_CLASSES is derived from the main source set outputs
+            // (classes + resources). Extra env roots are overwritten; publish
+            // every source-first namespace into resources/main so require can see
+            // namespaces that packaging previously kept as AOT-only (e.g. mcmod.aot).
+            resourcesRoot.mkdirs()
+            project.copy {
+                from(staged) {
+                    include "**/*.clj"
+                    include "**/*.cljc"
+                }
+                into resourcesRoot
+                duplicatesStrategy = DuplicatesStrategy.INCLUDE
+            }
+            def mcmodAot = new File(resourcesRoot, "cn/li/mcmod/aot.clj")
+            if (!mcmodAot.isFile()) {
+                throw new GradleException("Missing ${mcmodAot} after publishing staged sources into resources/main")
+            }
+            logger.lifecycle("[prepareDevClojureRuntime] published {} clojure sources into resources/main for Forge MOD_CLASSES; use -PplatformAotForRun=true to AOT before launch", stagedCount)
+        }
     }
 
-    // Loom's default run classpath is sourceSets.main.runtimeClasspath, whose
-    // output is built by the aggregate `classes` task. That unnecessarily
-    // pulls checkClojure and, through Loom's lifecycle wiring, publication
-    // work into every runClient/runData invocation. Runtime tasks only need
-    // the target output prepared above plus resolved runtime dependencies.
-    def platformRuntimeLaunchClasspath = files(
+    if (platformAotForRun) {
+        tasks.matching { it.name in sourceFirstRunTaskNames }.configureEach {
+            dependsOn copyClojureClassesToJavaOutput
+            dependsOn stageNeutralClojureRuntimeResources
+        }
+    } else {
+        tasks.matching { it.name in sourceFirstRunTaskNames }.configureEach {
+            dependsOn prepareDevClojureRuntime
+        }
+    }
+    // Datagen / gametest stay on the AOT path: :platform:jar depends on runData
+    // and must not observe prepareDev clearing AOT outputs mid-graph.
+    tasks.matching { it.name in aotRunTaskNames }.configureEach {
+        dependsOn copyClojureClassesToJavaOutput
+        dependsOn stageNeutralClojureRuntimeResources
+    }
+
+    // Source-first runClient/runServer publish .clj into resources/main (Forge
+    // MOD_CLASSES already includes that source-set output).
+    def platformAotLaunchClasspath = files(
         layout.buildDirectory.dir("classes/java/main"),
         layout.buildDirectory.dir("resources/main"),
         configurations.runtimeClasspath
     )
-    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
-        setClasspath(platformRuntimeLaunchClasspath)
+    def platformSourceLaunchClasspath = platformAotLaunchClasspath
+    tasks.matching { it.name in sourceFirstRunTaskNames }.configureEach {
+        setClasspath(platformAotForRun ? platformAotLaunchClasspath : platformSourceLaunchClasspath)
+    }
+    tasks.matching { it.name in aotRunTaskNames }.configureEach {
+        setClasspath(platformAotLaunchClasspath)
     }
 
     tasks.named("compileTestClojure").configure {
@@ -912,6 +1051,22 @@ if (target.loader != "none") {
             packagingDeps << neutralAotStripTask
         }
         def runtimeClassDependencies = runtimeClassTasks(contentProject)
+        // Dev/run path: compile outputs only. `classes` pulls checkClojure via
+        // Clojurephant checkAll() and must stay on jar/shadowJar packagingDeps.
+        def runtimePrepDeps = runtimeClassDependencies.clone() as List
+        def contentRuntimeClasses = contentProject.tasks.findByName("runtimeClasses")
+        if (contentRuntimeClasses != null) {
+            runtimePrepDeps << contentRuntimeClasses
+        } else {
+            runtimePrepDeps << contentProject.tasks.named("processResources")
+            def clearNeutral = contentProject.tasks.findByName("clearNeutralAotOutput")
+            if (clearNeutral != null) {
+                runtimePrepDeps << clearNeutral
+            }
+        }
+        if (neutralAotStripTask != null) {
+            runtimePrepDeps << neutralAotStripTask
+        }
         def includeStandaloneAotClasses = rootProject.ext.fullAotEnabled || !(contentProject.path in rootProject.ext.neutralSourceFirstProjects)
 
         tasks.named("jar", Jar).configure {
@@ -968,11 +1123,7 @@ if (target.loader != "none") {
         }
 
         def copyTask = tasks.register("copy${label}RuntimeClassesToPlatformOutput", Copy) {
-            dependsOn packagingDeps
-            dependsOn runtimeClassDependencies
-            if (neutralAotStripTask != null) {
-                dependsOn neutralAotStripTask
-            }
+            dependsOn runtimePrepDeps
             group = "build"
             description = "Mirror ${label} runtime classes into the selected platform target output."
             mustRunAfter tasks.named("compileJava")
@@ -1172,7 +1323,9 @@ if (target.loader != "none") {
         stripClassLocalVariableTables: stripClassLocalVariableTables,
         obfuscationMode: profile?.obfuscationMode,
         runtimeLibraryPackaging: target.artifact?.runtimeLibraryPackaging,
-        artifact: target.artifact
+        artifact: target.artifact,
+        platformAotForRun: platformAotForRun,
+        platformDevClojureSourcesDir: devClojureSourcesDir
     ].each { name, value -> ext[name] = value }
 
     if (platformToolchain == "mdg") {

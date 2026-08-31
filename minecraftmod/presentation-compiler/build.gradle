@@ -4,7 +4,7 @@ tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach
     dependsOn ":presentation-core:classes"
 }
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
-    dependsOn ":presentation-core:classes"
+    dependsOn ":presentation-core:runtimeClasses"
 }
 
 java {

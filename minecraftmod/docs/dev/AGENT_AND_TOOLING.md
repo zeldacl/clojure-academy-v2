@@ -27,7 +27,8 @@ Version-seam rules: [MC_VERSION_SEAM.md](MC_VERSION_SEAM.md). Loader hook capabi
 
 - Architecture gate: `cmd /c .\gradlew.bat verifyCurrentPlatforms`
 - Install clj-kondo binary: `cmd /c .\gradlew.bat downloadCljKondo`
-- Clojure lint gate (must run **per target** so that target's source roots are scanned): `.\scripts\target-gradle.ps1 <target-id> lintClojureNative`
+- Dev client launch: `.\scripts\target-gradle.ps1 <target-id> :platform:runClient` — **source-first** (skips platform AOT; AOT is for Loom remap of release jars). Datagen/`jar` still AOT. Override with `-PplatformAotForRun=true` if needed.
+- Clojure lint gate (must run **per target** so that target's source roots are scanned): `.\scripts\target-gradle.ps1 <target-id> lintClojureNative`. Also attached to `:platform:jar` / `check` / `remapJar` / `shadowJar` — **not** to `runClient`.
 - Neutral-layer API gate: `cmd /c .\gradlew.bat verifyNeutralClojureNoMinecraftApis` (blocks `net.minecraft.*` / Forge / Fabric / NeoForge refs in `ac`/`mcmod`; clj-kondo hook also errors on `:import` there). Note: `:import` is **not** a Clojure reflection warning — Reflection Guard only catches untyped interop.
 - `verifyUiXmlIds` (**dead, do not rely on it**): scans `guis/**/*.xml`, which no longer exists anywhere under `ac/src` — the XML GUI system it audited was replaced by the Presentation Runtime (`.ui.edn` templates compiled by `presentation-compiler`, see [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md)). It still runs and always reports 0 files, which is not the same as passing a real check.
 - LVT strip (packaging): always on (`stripAotLvt` / `stripPlatformOutputLvt` / `stripShadowJarLvt`) for Loom 1.13 tiny-remapper. AOT also sets `-Dclojure.compile.elide-meta=[:doc]` (keeps `:file`/`:line`). MDG targets do not remap; LVT strip still runs for packaging hygiene where configured.

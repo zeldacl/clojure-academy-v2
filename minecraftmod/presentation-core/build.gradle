@@ -7,7 +7,7 @@ tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach
     dependsOn ":mcmod:classes"
 }
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
-    dependsOn ":mcmod:classes"
+    dependsOn ":mcmod:runtimeClasses"
 }
 
 java {

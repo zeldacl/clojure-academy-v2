@@ -16,6 +16,15 @@ Datagen output goes under `platform/build/targets/<target-id>/platform/generated
 
 `ac` and `mcmod` are neutral runtime projects. They do not directly reference Minecraft, Forge, NeoForge, or Fabric APIs, so their main Clojure sources are not independently AOT-compiled by default. This keeps the neutral projects reusable across loader/version targets while allowing the selected platform code to AOT whatever it actually requires transitively.
 
+### Dev run vs packaging
+
+Platform AOT exists so Loom can remap/obfuscate release jars. Gradle `runClient` / `runServer` use **named/mapped** Minecraft and do **not** need that remap step, so by default they:
+
+- skip `:platform:compileClojure`
+- put platform + neutral `.clj` roots on the launch classpath (`prepareDevClojureRuntime` clears stale AOT classes that would mask sources)
+
+`runData` / `runDatagen` stay on the AOT path because `:platform:jar` depends on datagen and must not clear AOT mid-graph. Override `runClient`/`runServer` with `-PplatformAotForRun=true` to force AOT before launch. Packaging (`:platform:jar` / `remapJar`) always runs full platform AOT.
+
 The switch is controlled by the root Gradle property:
 
 ```powershell

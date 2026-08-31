@@ -168,6 +168,10 @@ tasks.named('jar').configure {
 
 configurations {
     cloverageRuntime
+    presentationViewLibs {
+        canBeConsumed = false
+        canBeResolved = true
+    }
 }
 
 def clojureVersions = rootProject.ext.clojureVersions
@@ -178,10 +182,14 @@ dependencies {
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
     implementation project(':ability-runtime')
-    // presentation-compiler is build-only; it is resolved through the
-    // presentationCompiler configuration below and is never packaged.
+    // presentation-compiler is build-only; compilePresentationViews uses output
+    // dirs + presentationViewLibs (never packaged into the runtime jar).
     testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
     cloverageRuntime "cloverage:cloverage:${clojureVersions.cloverage}"
+    // External jars only — do not add project() deps here (that would pull jar/checkClojure).
+    presentationViewLibs "org.clojure:clojure:${clojureVersions.clojure}"
+    presentationViewLibs "org.clojure:spec.alpha:${clojureVersions.specAlpha}"
+    presentationViewLibs "org.clojure:core.specs.alpha:${clojureVersions.coreSpecsAlpha}"
 }
 
 // The platform target consumes AC as its selected content project.  Shared
@@ -193,26 +201,36 @@ ext.neutralRuntimeSourceRoots = sourceSets.main.clojure.srcDirs
 // compiler sees only presentation-core and pure component/source roots; it
 // never depends on :ac:classes, so this task cannot form a dependency cycle.
 def generatedPresentationResources = layout.buildDirectory.dir('generated/resources/presentation')
-configurations {
-    presentationCompiler {
-        canBeConsumed = false
-        canBeResolved = true
-    }
-}
-dependencies {
-    presentationCompiler project(':presentation-compiler')
-}
 def presentationCodeSources = fileTree(dir: 'src/presentation/clojure')
 def compilePresentationViews = tasks.register('compilePresentationViews', JavaExec) {
     group = 'build'
     description = 'Compile declarative Presentation UI sources into runtime artifacts.'
-    dependsOn ':presentation-compiler:classes'
-    // The code-built root is optional on a clean clone (empty directories
-    // are not represented by Git). A FileTree contributes no classpath entry
-    // when the root is absent, while preserving future helper namespaces.
-    classpath = configurations.presentationCompiler +
-        files('src/presentation/resources', 'src/main/resources') +
-        presentationCodeSources
+    // Lean compile outputs only — do not depend on aggregate `classes` (checkClojure)
+    // or resolve project(':presentation-compiler') (that pulls jar packaging).
+    dependsOn ':presentation-compiler:runtimeClasses',
+              ':presentation-core:runtimeClasses',
+              ':mcmod:runtimeClasses',
+              ':api:compileJava'
+    def pc = project(':presentation-compiler')
+    def pcore = project(':presentation-core')
+    def mcmod = project(':mcmod')
+    def api = project(':api')
+    classpath = files(
+        pc.layout.buildDirectory.dir('classes/java/main'),
+        pc.layout.buildDirectory.dir('clojure/main'),
+        pc.layout.buildDirectory.dir('resources/main'),
+        pc.sourceSets.main.clojure.srcDirs,
+        pcore.layout.buildDirectory.dir('classes/java/main'),
+        pcore.layout.buildDirectory.dir('clojure/main'),
+        pcore.layout.buildDirectory.dir('resources/main'),
+        pcore.sourceSets.main.clojure.srcDirs,
+        mcmod.layout.buildDirectory.dir('classes/java/main'),
+        mcmod.layout.buildDirectory.dir('resources/main'),
+        mcmod.file('src/main/clojure'),
+        api.layout.buildDirectory.dir('classes/java/main'),
+        'src/presentation/resources',
+        'src/main/resources'
+    ) + presentationCodeSources + configurations.presentationViewLibs
     mainClass = 'clojure.main'
     args '-m', 'cn.li.presentation.compiler.main',
          '--source', file('src/presentation/resources').absolutePath,

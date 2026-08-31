@@ -98,16 +98,29 @@ gradle.projectsEvaluated {
     def vfx = findProject(":vfx-core")
     def combat = findProject(":combat-core")
     if (ac != null && compiler != null && core != null) {
-        ["compileJava", "checkClojure", "compileClojure", "compileTestClojure"].each { taskName ->
+        // Compile/run path: depend on runtimeClasses (compile outputs only).
+        // Do not use aggregate `classes` — Clojurephant wires that to checkClojure,
+        // which belongs on packaging/check gates, not every runClient compile edge.
+        ["compileJava", "compileClojure", "compileTestClojure"].each { taskName ->
             def task = ac.tasks.findByName(taskName)
             if (task != null) {
-                task.dependsOn compiler.tasks.named("compileClojure"), core.tasks.named("compileClojure")
+                task.dependsOn compiler.tasks.named("runtimeClasses"), core.tasks.named("runtimeClasses")
                 if (vfx != null) {
-                    task.dependsOn vfx.tasks.named("classes")
+                    task.dependsOn vfx.tasks.named("runtimeClasses")
                 }
                 if (combat != null) {
-                    task.dependsOn combat.tasks.named("classes")
+                    task.dependsOn combat.tasks.named("runtimeClasses")
                 }
+            }
+        }
+        def acCheck = ac.tasks.findByName("checkClojure")
+        if (acCheck != null) {
+            acCheck.dependsOn compiler.tasks.named("classes"), core.tasks.named("classes")
+            if (vfx != null) {
+                acCheck.dependsOn vfx.tasks.named("classes")
+            }
+            if (combat != null) {
+                acCheck.dependsOn combat.tasks.named("classes")
             }
         }
     }
@@ -193,6 +206,46 @@ subprojects {
             }
             ensureClojureForkJvmArg(task, "-Dfile.encoding=UTF-8")
             ensureClojureForkJvmArg(task, "-XX:+UseG1GC")
+        }
+        // Lean compile outputs for runClient/dev: compileJava + processResources +
+        // compileClojure (+ clearNeutralAotOutput). Explicitly omits checkClojure
+        // (Clojurephant attaches that to the aggregate `classes` lifecycle).
+        tasks.register("runtimeClasses") {
+            group = "build"
+            description = "Compile outputs needed to run without checkClojure packaging gates."
+            dependsOn tasks.named("compileJava"), tasks.named("processResources")
+            def compileClj = tasks.findByName("compileClojure")
+            if (compileClj != null) {
+                dependsOn compileClj
+            }
+            def clearNeutral = tasks.findByName("clearNeutralAotOutput")
+            if (clearNeutral != null) {
+                dependsOn clearNeutral
+            }
+            // Stamp output so the aggregator itself can be UP-TO-DATE. dependsOn
+            // still schedules compile work when those tasks are out of date.
+            def stamp = layout.buildDirectory.file("tmp/runtimeClasses.stamp")
+            outputs.file(stamp)
+            doLast {
+                def file = stamp.get().asFile
+                file.parentFile.mkdirs()
+                file.text = "ok${System.lineSeparator()}"
+            }
+        }
+        // clearNeutralAotOutput is a no-op when the AOT dirs are already absent;
+        // without onlyIf it re-ran on every runClient for every source-first module.
+        tasks.matching { it.name == "clearNeutralAotOutput" }.configureEach { task ->
+            def clojureMain = layout.buildDirectory.dir("clojure/main")
+            def clojureStripped = layout.buildDirectory.dir("clojure/main-stripped")
+            task.onlyIf {
+                if (rootProject.ext.fullAotEnabled) {
+                    return false
+                }
+                def main = clojureMain.get().asFile
+                def stripped = clojureStripped.get().asFile
+                (main.directory && main.listFiles()?.length) ||
+                    (stripped.directory && stripped.listFiles()?.length)
+            }
         }
     }
 
@@ -2118,7 +2171,7 @@ tasks.register("verifySingleApiBoundary") {
 }
 
 // ============================================================================
-// clj-kondo native static lint ??packaging gate via compileClojure
+// clj-kondo native static lint — packaging/check gate (not runClient/compile)
 // ============================================================================
 
 def cljKondoVersion = "2025.10.15"
@@ -2388,9 +2441,11 @@ tasks.named("lintClojureNative").configure {
 }
 
 gradle.projectsEvaluated {
+    // Lint is a packaging/verification gate. Attaching it to compileClojure
+    // previously forced clj-kondo + related verifies onto every runClient.
     subprojects { sp ->
         sp.plugins.withId("dev.clojurephant.clojure") {
-            sp.tasks.matching { it.name == "compileClojure" }.configureEach {
+            sp.tasks.matching { it.name in ["jar", "check", "remapJar", "shadowJar"] }.configureEach {
                 dependsOn rootProject.tasks.named("lintClojureNative")
             }
         }
