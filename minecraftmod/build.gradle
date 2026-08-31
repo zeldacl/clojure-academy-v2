@@ -2416,6 +2416,7 @@ tasks.register("verifyCoreNoReflectionOrBoxing") {
 tasks.register("verifyCorePerformance") {
     group = "verification"
     description = "Validate static hot-path budgets before running platform benchmarks."
+    dependsOn ":tools:benchmarks:jmhClasses"
     doLast {
         def budgets = [ir: 4096, dispatch: 8192, entities: 256, blocks: 4096,
                        sessions: 4096, vfxInstances: 8192, vfxSignals: 32768]

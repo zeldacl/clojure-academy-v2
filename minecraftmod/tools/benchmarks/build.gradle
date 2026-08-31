@@ -1,0 +1,42 @@
+plugins {
+    id "java"
+}
+
+description = "Isolated JMH benchmarks for neutral runtime hot paths; never packaged into a platform Jar."
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.withType(JavaCompile).configureEach { options.release = 17 }
+
+sourceSets {
+    jmh {
+        java.srcDir("src/jmh/java")
+        resources.srcDir("src/jmh/resources")
+    }
+}
+
+configurations {
+    jmhImplementation.extendsFrom(implementation)
+    jmhRuntimeOnly.extendsFrom(runtimeOnly)
+}
+
+dependencies {
+    jmhImplementation "org.openjdk.jmh:jmh-core:1.37"
+    jmhAnnotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:1.37"
+    jmhImplementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
+    jmhImplementation project(":ac")
+}
+
+tasks.register("jmh", JavaExec) {
+    group = "verification"
+    description = "Run isolated neutral-runtime JMH benchmarks; output is never part of the mod Jar."
+    dependsOn tasks.named("jmhClasses")
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = "org.openjdk.jmh.Main"
+    args = ["cn.li.tools.benchmark.FinalRuntimeTickBenchmark", "-wi", "3", "-i", "5", "-f", "1"]
+}
+
+tasks.named("check").configure {
+    dependsOn tasks.named("jmhClasses")
+}
