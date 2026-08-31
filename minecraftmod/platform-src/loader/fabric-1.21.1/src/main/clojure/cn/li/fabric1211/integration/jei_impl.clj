@@ -43,4 +43,7 @@
         (when (seq xs) (.addRecipes r (recipe-type m) (ArrayList. ^java.util.Collection xs)))))
     (^void registerRecipeCatalysts [_ ^IRecipeCatalystRegistration r]
       (doseq [m (jei-core/get-all-categories) :let [^ItemStack s (jei-core/parse-item-id (:block-id m))]]
-        (when s (.addRecipeCatalyst r s (into-array RecipeType [(recipe-type m)])))))))
+        (when s
+          (let [^"[Lmezz.jei.api.recipe.RecipeType;" catalysts
+                (into-array RecipeType [(recipe-type m)])]
+            (.addRecipeCatalyst r s catalysts)))))))
