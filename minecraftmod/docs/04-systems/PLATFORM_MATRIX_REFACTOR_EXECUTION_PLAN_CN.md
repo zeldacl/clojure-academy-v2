@@ -115,6 +115,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 发布 Jar 直接审计（2026-09-01）已补齐：六个最新 `platform/libs/AcademyCraft-2.0.0-alpha2-*` 产物均包含各自 loader 元数据、平台入口、`JEIPluginWrapper` 和 datagen hash manifest；`mezz/jei` 与第三方 `ic2/` 类均为 0。Forge 1.20.1 旧 `alpha3` Jar 曾残留 `cn/li/forge1201/integration/ic2_energy`，经重新执行 `:platform:jar :platform:remapJar` 后新的 `alpha2` 发布 Jar 已为 `legacyIC2=0`，只保留 shared IC2 适配。26.2 两个 named/source-first 产物只含 `cn/li/platform/optional/ic2_energy.clj`，四个 Loom remapped 产物只含该 namespace 的 AOT class；没有任何目标出现 class/source 共存。该门禁已在 Forge 1.20.1、Fabric 26.2（Loom named）和 NeoForge 26.2（ModDevGradle）实际执行通过。旧 Jar 文件仍可能留在本地 `build/targets` 缓存中，但不属于发布输入，发布脚本必须只取本轮任务生成且时间戳最新的单一 artifact。
 
+在最新代码提交上又逐目标重跑了最终编译：Forge 1.20.1 `check + jar`（61 tasks）、Fabric 1.20.1 `check + remapJar`（63）、Fabric 1.21.1 `check + remapJar`（63）、NeoForge 1.21.1 `check + remapJar`（63）、NeoForge 26.2（Gradle 9.2）`check + jar`（64）和 Fabric 26.2（Gradle 9.7.1）`check + jar`（60）均成功。随后对六个最新 Jar 做等价 ZIP 实物扫描：每个目标 `metadata=1`、`manifest=1`、`jeiWrapper=1`、`embeddedJei=0`、`embeddedIc2=0`、`classSourceOverlap=0`；这组结果覆盖本轮重编译后的实际 artifact，而非旧缓存。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
