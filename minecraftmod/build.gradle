@@ -1847,6 +1847,21 @@ tasks.register("verifyPresentationArtifacts") {
                 throw new GradleException("Compiled manifest is missing " + viewId + " from " + source)
             }
         }
+        // High-level component names are compile-time syntax only.  A runtime
+        // artifact must contain primitive nodes and numeric/catalog metadata;
+        // reject both component tags and their legacy spelling in generated
+        // files so a future compiler change cannot silently reintroduce the
+        // forbidden runtime dependency on TreeView/ListView.
+        def artifactFiles = fileTree(generatedRoot).matching { include "**/*.uic.edn" }.files
+        def forbiddenArtifactTokens = [~/(?i)tree-view/, ~/(?i)list-view/, ~/:component\b/]
+        def artifactResidues = artifactFiles.collectMany { artifact ->
+            def text = artifact.getText("UTF-8")
+            forbiddenArtifactTokens.findAll { token -> token.matcher(text).find() }
+                    .collect { token -> artifact.toString() + " contains " + token }
+        }
+        if (!artifactResidues.isEmpty()) {
+            throw new GradleException("High-level UI names leaked into runtime artifacts: " + artifactResidues)
+        }
         def legacyRoots = [
             file("ac/src/main/resources/assets/academy/presentation"),
             file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/core.clj"),
