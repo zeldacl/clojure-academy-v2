@@ -97,7 +97,7 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 每个目标还必须运行 neutral/combat/vfx/mcmod headless tests、JEI absent/present fixture、IC2 absent/present/incompatible fixture、Jar overlap scan 和代表性 JFR。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
 
-当前执行证据：Forge 1.20.1 `verifyCurrentPlatforms` 全门通过；NeoForge 1.21.1 AOT coverage + runtime representation XOR 通过；Fabric 1.20.1/1.21.1 `compileJava` 通过；mcmod 49 namespaces、194 tests、577 assertions 为 0 failures/0 errors。NeoForge 26.2 已用 `platform-builds/gradle-9.2/gradlew.bat` 完成 `:platform:check :platform:jar`；Fabric 26.2 已用 `platform-builds/gradle-9.7.1/gradlew.bat` 完成 `:platform:check :platform:jar`，并完成 runDatagen（516 个文件）。26.2 的命名映射目标采用 source-first：平台 `.clj` 必须由 `stagePlatformClojureSources` 打入资源；不得依赖旧 AOT 输出残留。构建日志中的 OSHI/JEI 可选 mixin 警告属于运行环境或第三方可选项，不得作为源码反射豁免。
+当前执行证据：`cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace`、`verifyCorePerformance` 和根 `gradlew.bat test` 均通过；node-core 与 AC 测试已迁移到当前显式 environment/内容入口，删除了依赖已移除 UI、external-provider 和全局 node registry 的测试残留。Forge 1.20.1 `:platform:compileJava :platform:checkClojure` 通过；NeoForge 1.21.1 AOT coverage + runtime representation XOR 通过；Fabric 1.20.1/1.21.1 `compileJava` 通过；mcmod 49 namespaces、194 tests、577 assertions 为 0 failures/0 errors。NeoForge 26.2 已用 `platform-builds/gradle-9.2/gradlew.bat` 完成 `:platform:check :platform:jar`；Fabric 26.2 已用 `platform-builds/gradle-9.7.1/gradlew.bat` 完成 `:platform:check :platform:jar`，并完成 runDatagen（516 个文件）。26.2 的命名映射目标采用 source-first：平台 `.clj` 必须由 `stagePlatformClojureSources` 打入资源；不得依赖旧 AOT 输出残留。当前静态性能门 `verifyCorePerformance` 已通过；仍需在可运行的目标实例上补采代表性 JFR/JMH CPU、分配率和 live-set 数据，作为发布前性能证据。构建日志中的 OSHI/JEI 可选 mixin 警告属于运行环境或第三方可选项，不得作为源码反射豁免。
 
 ## 明确排除的矛盾方案
 
