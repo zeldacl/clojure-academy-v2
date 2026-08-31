@@ -123,6 +123,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 在上述提交之后重新执行六目标发布任务：Forge 1.20.1 `check + jar` 61 tasks，Fabric 1.20.1/1.21.1 与 NeoForge 1.21.1 `check + remapJar` 各 63 tasks，NeoForge 26.2 `check + jar` 64 tasks，Fabric 26.2 `check + jar` 60 tasks，全部成功。对这些最新 Jar 的 ZIP 实物扫描均为 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；其中 26.2 两个 source-first 目标实际 `platform AOT=0`，其余 Loom 目标仅打包允许闭包内的 AOT。
 
+在当前提交上再次执行根工程回归与专项门禁：`cmd /c gradlew.bat test verifyCorePerformance verifyOptionalIntegrations verifyNoCompatibilityResidues verifyNoDuplicateCapabilities verifyNoLegacyArchitecture --stacktrace` 于 2026-09-01 成功（84 actionable tasks，0 failures）。输出再次确认 neutral 无 Minecraft API、JEI typed adapter/IC2 反射隔离、核心性能预算、兼容残留、重复能力和旧架构门禁全部通过；该结果不替代尚未完成的真实游戏 JFR。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
