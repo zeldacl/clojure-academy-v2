@@ -802,6 +802,49 @@
                      {:attacker-uuid owner})]
         {:status (if (not= false applied) :applied :failed)}))))
 
+(defn charged-area-damage!
+  "Apply bounded radial damage with deterministic charge ratio and falloff."
+  [{:keys [owner world-id center radius damage damage-type projection
+           current-ticks minimum-ticks maximum-ticks ratio-min ratio-max
+           ratio-slot limit]
+    entity-filter :filter}]
+  (let [center (point center)
+        radius (double (max 0.0 (min 64.0 (or radius 0.0))))
+        minimum (double (or minimum-ticks 0.0))
+        maximum (double (or maximum-ticks minimum))
+        current (double (or current-ticks minimum))
+        span (max 1.0 (- maximum minimum))
+        ratio (max (double (or ratio-min 0.0))
+                   (min (double (or ratio-max 1.0))
+                        (/ (- current minimum) span)))
+        base-damage (double (or damage 0.0))
+        entities (if (and owner world-id center (pos? radius))
+                   (entity-select! {:owner owner :world-id world-id
+                                    :shape {:type :sphere :center center :radius radius}
+                                    :filter entity-filter :projection projection
+                                    :limit (max 0 (min 256 (long (or limit 256))))}
+                                   nil)
+                   [])
+        results (mapv (fn [entity]
+                        (let [position (point (:position entity))
+                              distance (if (and center position)
+                                         (Math/sqrt
+                                          (reduce + (map (fn [a b]
+                                                           (let [d (- (double a) (double b))]
+                                                             (* d d)))
+                                                         center position)))
+                                         radius)
+                              falloff (max 0.0 (min 1.0 (- 1.0 (/ distance (max radius 1.0)))))
+                              amount (* base-damage ratio falloff)
+                              result (when (pos? amount)
+                                       (damage! {:owner owner :world-id world-id
+                                                 :target (:id entity) :amount amount
+                                                 :damage-type damage-type}))]
+                          {:entity (:id entity) :amount amount :result result}))
+                      entities)
+        applied (filter #(= :applied (get-in % [:result :status])) results)]
+    {:status (if (seq applied) :applied :failed)
+     :ratio ratio :ratio-slot ratio-slot :hits results}))
 (defn break!
   [{:keys [owner world-id position expected-block-id drop? fortune-level
            tool-tier-capped?]}]
@@ -1578,6 +1621,7 @@
 
 (defn action-handlers []
   {:entity/damage damage!
+   :combat/charged-area-damage charged-area-damage!
    :entity/status entity-status!
 
    :entity/impulse entity-impulse!
