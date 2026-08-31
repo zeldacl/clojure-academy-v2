@@ -7,14 +7,52 @@
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
+
+(defn- component-ids [value]
+  (cond
+    (map? value) (into (if-let [component (:component value)] #{component} #{})
+                       (mapcat component-ids (vals value)))
+    (sequential? value) (into #{} (mapcat component-ids value))
+    :else #{}))
+
+(defn- test-node-kind [component]
+  (case (namespace component)
+    "flow" :flow
+    "finalize" :flow
+    "graph" :source
+    "feedback" :feedback
+    "domain" :feedback
+    "policy" :policy
+    "cost" :policy
+    "cooldown" :policy
+    "progression" :policy
+    "score" :policy
+    "target" :query
+    "owner" :query
+    "query" :query
+    "energy" :query
+    "terrain" :query
+    "ability" :source
+    "state" :source
+    "data" :source
+    "effect" :vfx
+    "vfx" :vfx
+    :action))
+
+(defn- compile-program [program]
+  (let [environment {:descriptors
+                     (into {} (map (fn [component]
+                                    [component {:id component :node-kind (test-node-kind component)}])
+                                  (component-ids program)))}]
+    (compiler/compile-program environment program)))
 (deftest compiler-lowers-query-after-mutation-to-barrier-test
-  (is (map? (compiler/compile-program
+  (is (map? (compile-program
              {:component :flow/sequence
               :steps [{:component :combat/damage :args {:amount 1}}
                       {:component :target/raycast :bind :hit}]}))))
 (deftest compiler-rejects-unsupported-reference-scope-test
   (let [error (try
-                (compiler/compile-program
+                (compile-program
                  {:component :data/bind
                   :to :target-position
                   :value {:ref [:item :position]}})
@@ -27,14 +65,14 @@
   (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                        :state-provider (fn [_] {})
                                        :commit-state! (fn [_])})
-        result (engine/execute! runtime (compiler/compile-program
+        result (engine/execute! runtime (compile-program
                                  {:component :flow/finish :outcome :anti-afk :next-phase :release})
                                 {:owner :alice :world "world:test" :ability-id :skill/a
                                  :tick 1 :seed 9 :input {}})]
     (is (= :accepted (:status result)))
     (is (= :release (:next-phase result)))))
 (deftest engine-preflight-before-state-commit-test
-  (let [commits (atom []) host (host/create {:queries {} :actions {:combat/damage (fn [_ _ _] true)}}) engine (engine/create-engine {:host host :state-provider (fn [_] {:resources {:mana 3}}) :commit-state! #(swap! commits conj %)}) compiled (compiler/compile-program {:component :flow/sequence :steps [{:component :resource/try-spend :resource :mana :amount 1 :bind :ok} {:component :combat/damage :args {:amount 2}}]}) result (engine/execute! engine compiled {:owner :alice :world "w" :tick 1 :seed 9 :input {}})]
+  (let [commits (atom []) host (host/create {:queries {} :actions {:combat/damage (fn [_ _ _] true)}}) engine (engine/create-engine {:host host :state-provider (fn [_] {:resources {:mana 3}}) :commit-state! #(swap! commits conj %)}) compiled (compile-program {:component :flow/sequence :steps [{:component :resource/try-spend :resource :mana :amount 1 :bind :ok} {:component :combat/damage :args {:amount 2}}]}) result (engine/execute! engine compiled {:owner :alice :world "w" :tick 1 :seed 9 :input {}})]
     (is (= :accepted (:status result)))
     (is (= 1 (count @commits)))
     (is (= 2.0 (get-in result [:txn 0 :state :resources :mana])))))
@@ -46,9 +84,9 @@
                 {:host (host/create {:queries {} :actions {}})
                  :state-provider (fn [_] {:resources {:mana 5}})
                  :commit-state! (fn [_])
-                 :session-provider (fn [_] @sessions)
-                 :commit-session! (fn [_ patches] (swap! commits conj patches))})
-        program (compiler/compile-program
+                 :ability-state-provider (fn [_] @sessions)
+                 :commit-ability-state! (fn [_ patches] (swap! commits conj patches))})
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :state/read :key :charge :bind {:value :charge}}
                           {:component :data/bind :to :next
@@ -70,7 +108,7 @@
   (let [engine (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                       :state-provider (fn [_] {})
                                       :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :effect/vfx :effect-id :audio-one-shot
                            :operation :spawn :instance-key [:same]
@@ -95,7 +133,7 @@
                 {:host (host/create {:queries {} :actions {}})
                  :state-provider (fn [_] {:cooldowns {}})
                  :commit-state! #(reset! commits %)})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :cooldown/start :name :main :cooldown {:ticks 12}})
         result (engine/execute! engine program
                                 {:owner :alice :ability-id :skill/a
@@ -115,7 +153,7 @@
                          :actions {}})
                  :state-provider (fn [_] {})
                  :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :target/raycast
                   :origin [0.0 0.0 0.0]
                   :direction [0.0 0.0 1.0]
@@ -142,7 +180,7 @@
                  :state-provider (fn [_] {})
                  :commit-state! (fn [_])})
         result (engine/execute! engine
-                                (compiler/compile-program
+                                (compile-program
                                  {:component :terrain/propagate
                                   :origin [0.0 64.0 0.0]
                                   :direction [0.0 0.0 1.0]
@@ -159,7 +197,7 @@
                                       :state-provider (fn [_] {})
                                       :commit-state! (fn [_])})
         result (engine/execute! engine
-                                (compiler/compile-program
+                                (compile-program
                                  {:component :flow/foreach :items [10 20]
                                   :as :item :index-as :i
                                   :body {:component :graph/output
@@ -176,14 +214,14 @@
         engine (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                       :state-provider (fn [_] {})
                                       :commit-state! (fn [_])
-                                      :session-provider (fn [_] {:state {}})
-                                      :commit-session! (fn [_ patches] (reset! commits patches))})
+                                      :ability-state-provider (fn [_] {:state {}})
+                                      :commit-ability-state! (fn [_ patches] (reset! commits patches))})
         once (fn [key]
                {:component :flow/once :key key :scope :owner
                 :strategy :last-key :storage-path [:visited]
                 :on-first {:component :graph/output :value key}})
         result (engine/execute! engine
-                                (compiler/compile-program
+                                (compile-program
                                  {:component :flow/sequence
                                   :steps [(once :projectile/a)
                                           (once :projectile/a)
@@ -210,7 +248,7 @@
                  :state-provider (fn [_] {})
                  :commit-state! (fn [_])})
         result (engine/execute! engine
-                                (compiler/compile-program
+                                (compile-program
                                  {:component :entity/mark
                                   :target "mob" :mark-type :test
                                   :duration-ticks 5})
@@ -234,7 +272,7 @@
                                           {:status :applied :entity-id "spawned-1"})))}})
                   :state-provider (fn [_] {})
                   :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :entity/spawn
                            :entity-type "academy:test"
@@ -256,7 +294,7 @@
                 {:host (host/create {:queries {} :actions {}})
                  :state-provider (fn [_] {})
                  :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :domain/event
                   :event-type :achievement/trigger
                   :payload {:id "academy.test"}})
@@ -280,7 +318,7 @@
                                                :combat/charged-area-damage handler}})
                  :state-provider (fn [_] {})
                  :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :combat/status :target "mob"
                            :status-id :glowing :duration-ticks 5}
@@ -333,7 +371,7 @@
   (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                        :state-provider (fn [_] {:resources {:cp 1.0 :overload 1.0}})
                                        :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :cost/spend
                            :budget {:resources {:cp 4.0 :overload 2.0}}
@@ -356,24 +394,24 @@
   (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                        :state-provider (fn [_] {:resources {:cp 0.0}})
                                        :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :cost/spend
                   :budget {:resources {:cp 1.0}}
                   :on-insufficient {:component :flow/finish
                                     :outcome :insufficient
-                                    :finish-session? true}})
+                                    :finish-ability? true}})
         result (engine/execute! runtime program
                                 {:owner :alice :world "world:test" :ability-id :skill/a
                                  :tick 1 :seed 9 :input {}})]
     (is (= :accepted (:status result)))
     (is (= :insufficient (:outcome result)))
-    (is (true? (:finish-session? result)))))
+    (is (true? (:finish-ability? result)))))
 
 (deftest ability-caster-binds-neutral-capability-aliases-test
   (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                        :state-provider (fn [_] {})
                                        :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :ability/caster
                            :bind {:eye :eye :aim :aim :body :body :id :owner-id
@@ -419,7 +457,7 @@
                                                   true)}})
                   :state-provider (fn [_] {})
                   :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/sequence
                   :steps [{:component :flow/finish :outcome :blocked}
                           {:component :entity/damage :target "mob" :amount 99}]})
@@ -440,7 +478,7 @@
                                                   true)}})
                   :state-provider (fn [_] {})
                   :commit-state! (fn [_])})
-        program (compiler/compile-program
+        program (compile-program
                  {:component :flow/foreach :items [0 1] :as :item
                   :body {:component :flow/sequence
                          :steps [{:component :flow/branch

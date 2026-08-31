@@ -10,12 +10,29 @@
   (or (requiring-resolve symbol)
       (throw (ex-info "final runtime dependency is unavailable" {:symbol symbol}))))
 
+(def ^:private runtime-api-symbols
+  {:create-engine 'cn.li.combat.final-engine/create-engine
+   :initialize-catalog 'cn.li.ac.ability.final-catalog-service/initialize!
+   :catalog-status 'cn.li.ac.ability.final-catalog-service/catalog-status
+   :resolve-damage 'cn.li.combat.final-damage/resolve-event
+   :registration 'cn.li.ac.ability.final-catalog-service/registration
+   :execute 'cn.li.combat.final-engine/execute!
+   :compile-program 'cn.li.combat.final-compiler/compile-program})
+
+(defn- resolve-runtime-apis []
+  (reduce-kv (fn [apis key symbol]
+               (assoc apis key (resolve-var symbol)))
+             {}
+             runtime-api-symbols))
+
 (defn create-runtime [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
   (when-not (map? host) (throw (ex-info "final runtime requires neutral host" {})))
   (when-not (ifn? state-provider) (throw (ex-info "final runtime requires state-provider" {})))
   (when-not (ifn? commit-state!) (throw (ex-info "final runtime requires commit-state!" {})))
-  (let [create-engine (resolve-var 'cn.li.combat.final-engine/create-engine)]
+  (let [apis (resolve-runtime-apis)
+        create-engine (:create-engine apis)]
     {:options options
+     :apis apis
      :remove-ability-state! remove-ability-state!
      :engine (create-engine {:host host
                              :state-provider state-provider
@@ -54,26 +71,30 @@
                       :remove-ability-state! remove-ability-state!})))
 
 (defn initialize! [runtime]
-  (let [initialize-catalog (resolve-var 'cn.li.ac.ability.final-catalog-service/initialize!)]
-    (reset! (:catalog runtime) (initialize-catalog))
+  (let [initialize-catalog (get-in runtime [:apis :initialize-catalog])
+        assembled (initialize-catalog)]
+    (reset! (:catalog runtime)
+            (assoc assembled
+                   :damage-policies
+                   (vec (mapcat (fn [[ability-id source]]
+                                  (map #(assoc % :ability-id ability-id)
+                                       (:damage-policies source)))
+                                (get-in assembled [:combat :sources])))))
     runtime))
 
 (defn catalog-status [runtime]
-  (let [status (resolve-var 'cn.li.ac.ability.final-catalog-service/catalog-status)]
+  (let [status (get-in runtime [:apis :catalog-status])]
     (if @(:catalog runtime) (status) {:status :cold})))
 
 (defn resolve-damage!
   "Resolve a neutral damage event through the final damage policy engine."
   [runtime raw-event]
-  (let [resolve-event (resolve-var 'cn.li.combat.final-damage/resolve-event)
-        policies (vec (mapcat (fn [[ability-id source]]
-                                (map #(assoc % :ability-id ability-id)
-                                      (:damage-policies source)))
-                              (get-in @(:catalog runtime) [:combat :sources])))]
+  (let [resolve-event (get-in runtime [:apis :resolve-damage])
+        policies (:damage-policies @(:catalog runtime))]
     (assoc (resolve-event policies raw-event) :status :accepted)))
 
 (defn- registration [runtime ability-id]
-  ((resolve-var 'cn.li.ac.ability.final-catalog-service/registration) ability-id))
+  ((get-in runtime [:apis :registration]) ability-id))
 
 (defn dispatch!
   "Execute one final graph intent. Unknown abilities are rejected."
@@ -83,7 +104,7 @@
     (let [entry (registration runtime ability-id)]
       (if (nil? entry)
         {:status :rejected :reason :unknown-ability :ability-id ability-id}
-        (let [execute (resolve-var 'cn.li.combat.final-engine/execute!)
+        (let [execute (get-in runtime [:apis :execute])
               result (assoc (execute (:engine runtime) (:compiled entry) frame)
                             :owner (:owner frame))]
           (when (and (:finish-ability? result) (ifn? (:remove-ability-state! runtime)))
@@ -105,13 +126,14 @@
         (swap! due conj scheduled)
         (swap! later conj scheduled)))
     (reset! (:scheduled runtime) @later)
-    (let [compile (resolve-var 'cn.li.combat.final-compiler/compile-program)
-          execute (resolve-var 'cn.li.combat.final-engine/execute!)]
+    (let [compile (get-in runtime [:apis :compile-program])
+          execute (get-in runtime [:apis :execute])
+          environment (:node-environment @(:catalog runtime))]
       {:status :accepted
        :tick tick
        :results (mapv (fn [{:keys [node frame]}]
                         (execute (:engine runtime)
-                                 (compile {:component :flow/sequence :steps [node]})
+                                 (compile environment {:component :flow/sequence :steps [node]})
                                  (assoc frame :tick tick)))
                       @due)})))
 
