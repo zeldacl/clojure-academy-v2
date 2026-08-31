@@ -118,6 +118,13 @@
 (def ^:private client-poll-particle-effects-fn (fn [_] []))
 (def ^:private client-poll-sound-effects-fn (fn [_] []))
 
+(def ^:private server-tick-start-fn noop)
+(def ^:private player-tick-fn noop)
+(def ^:private server-tick-end-fn noop)
+(def ^:private hot-server-hook-vars
+  {:on-server-tick-start! #'server-tick-start-fn
+   :on-player-tick! #'player-tick-fn
+   :on-server-tick-end! #'server-tick-end-fn})
 (def ^:private hot-client-hook-vars
   {:client-tick-start! #'client-tick-start-fn
    :client-tick-keys! #'client-tick-keys-fn
@@ -137,7 +144,7 @@
    })
 
 (defn- publish-hot-client-hooks! [hooks]
-  (doseq [[hook target-var] hot-client-hook-vars]
+  (doseq [[hook target-var] (concat hot-client-hook-vars hot-server-hook-vars)]
     (when (contains? hooks hook)
       (alter-var-root target-var (constantly (get hooks hook)))))
   nil)
@@ -505,15 +512,15 @@
 
 (defn on-server-tick-start!
   [tick-id]
-  ((:on-server-tick-start! (hooks-core-state-snapshot)) tick-id))
+  (server-tick-start-fn tick-id))
 
 (defn on-player-tick!
   [player-uuid]
-  ((:on-player-tick! (hooks-core-state-snapshot)) player-uuid))
+  (player-tick-fn player-uuid))
 
 (defn on-server-tick-end!
   [tick-id]
-  ((:on-server-tick-end! (hooks-core-state-snapshot)) tick-id))
+  (server-tick-end-fn tick-id))
 
 (defn init-damage-handlers!
   []
