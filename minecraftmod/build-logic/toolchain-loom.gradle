@@ -85,6 +85,15 @@ dependencies {
             // Arch Loom reuses the forgeRuntimeLibrary configuration name for NeoForge.
             add("forgeRuntimeLibrary", dependencyNotation)
         }
+        if (target.dependencies.jeiCommonApi) {
+            add("modCompileOnlyApi", target.dependencies.jeiCommonApi)
+        }
+        if (target.dependencies.jeiNeoForgeApi) {
+            add("modCompileOnlyApi", target.dependencies.jeiNeoForgeApi)
+        }
+        if (target.dependencies.jeiNeoForgeRuntime) {
+            add("modRuntimeOnly", target.dependencies.jeiNeoForgeRuntime)
+        }
     } else if (target.loader == "fabric") {
         add("modImplementation", target.dependencies.fabricLoader)
         add("modImplementation", target.dependencies.fabricApi)

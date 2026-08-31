@@ -4,30 +4,16 @@
   SANCTIONED REFLECTION ISLAND: optional third-party ic2.api.* types are not
   Minecraft/Forge symbols and are allowlisted by verifyNoPlatformReflection."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.platform.neutral.integration-runtime :as energy-hooks])
+            [cn.li.platform.neutral.integration-runtime :as energy-hooks]
+            [cn.li.mcmod.capability.registry :as capability-registry])
   (:import [cn.li.mcmod.energy IEnergyCapable]
            [java.lang.reflect InvocationHandler Proxy]))
 
 
-(def ^:private resolved-vars
-  "Per-symbol requiring-resolve memoization cache. requiring-resolve is
-   idempotent, so a lock-free CAS race just recomputes the same value at
-   worst — no locking needed, unlike the prior ^:dynamic var + Object lock."
-  (atom {}))
-
-(defn- resolve-var
-  [var-sym]
-  (or (get @resolved-vars var-sym)
-      (let [v (requiring-resolve var-sym)]
-        (swap! resolved-vars assoc var-sym v)
-        v)))
-
-(defn- cap-call
-  [var-sym & args]
-  (apply (resolve-var var-sym) args))
-
 (def ^:private ic2-source-class-name "ic2.api.energy.tile.IEnergySource")
 (def ^:private ic2-sink-class-name "ic2.api.energy.tile.IEnergySink")
+(def ^:private ic2-state (atom :unknown))
+(def ^:private ic2-interfaces (atom nil))
 
 (defn- context-class-loader
   []
@@ -80,14 +66,22 @@
 
 ;; IC2 detection
 
-(defn ic2-available?
-  "Check if IC2 mod is available at runtime.
-
-  Uses requiring-resolve to safely check for IC2 classes without
-  causing ClassNotFoundException if IC2 is not present."
-  []
-  (and (class-present? ic2-source-class-name)
-       (class-present? ic2-sink-class-name)))
+(defn ic2-available? []
+  (case @ic2-state
+    :present true
+    :absent false
+    :incompatible false
+    (let [state (try
+                  (let [source (or (first @ic2-interfaces) (resolve-class ic2-source-class-name))
+                        sink (or (second @ic2-interfaces) (resolve-class ic2-sink-class-name))]
+                    (reset! ic2-interfaces [source sink])
+                    :present)
+                  (catch ClassNotFoundException _ :absent)
+                  (catch LinkageError e
+                    (log/warn "Optional IC2 API could not be linked:" (ex-message e))
+                    :incompatible))]
+      (reset! ic2-state state)
+      (= state :present))))
 
 ;; IC2 conversion rates
 
@@ -139,7 +133,7 @@
   [^IEnergyCapable energy-capable tier]
   (try
     (let [^IEnergyCapable ec energy-capable
-          iface (resolve-class ic2-sink-class-name)]
+          iface (or (second @ic2-interfaces) (resolve-class ic2-sink-class-name))]
       (create-interface-proxy
         iface
         {"getDemandedEnergy" (fn [_]
@@ -174,7 +168,7 @@
   [^IEnergyCapable energy-capable tier]
   (try
     (let [^IEnergyCapable ec energy-capable
-          iface (resolve-class ic2-source-class-name)]
+          iface (or (first @ic2-interfaces) (resolve-class ic2-source-class-name))]
       (create-interface-proxy
         iface
         {"getOfferedEnergy" (fn [_]
@@ -208,9 +202,9 @@
   (try
     ;; Get the content energy capability first. Descriptor-specific binding is
     ;; handled by the content module before this optional integration is used.
-    (when-let [content-energy-cap (cap-call 'cn.li.mcmod.capability.registry/get-capability be :content-energy nil)]
-      (when (cap-call 'cn.li.mcmod.capability.registry/is-present? content-energy-cap)
-        (let [content-energy (cap-call 'cn.li.mcmod.capability.registry/or-else content-energy-cap nil)
+    (when-let [content-energy-cap (capability-registry/get-capability be :content-energy nil)]
+      (when (capability-registry/is-present? content-energy-cap)
+        (let [content-energy (capability-registry/or-else content-energy-cap nil)
               tier 2] ;; Default to tier 2 (Medium Voltage, 128 EU/t)
           (when content-energy
             ;; Create appropriate IC2 interface based on mode

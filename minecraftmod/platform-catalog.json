@@ -489,7 +489,8 @@
         "registry",
         "network",
         "gui",
-        "capability"
+        "capability",
+        "jei"
       ],
       "capabilityOwners": {
         "loader-entrypoint": ["neoforge-1.21.1"],
@@ -499,11 +500,15 @@
         "registry": ["neoforge-1.21.1"],
         "network": ["neoforge-1.21.1"],
         "gui": ["neoforge-1.21.1"],
-        "capability": ["neoforge-1.21.1"]
+        "capability": ["neoforge-1.21.1"],
+        "jei": ["neoforge-1.21.1"]
       },
       "dependencies": {
         "minecraft": "com.mojang:minecraft:1.21.1",
-        "loader": "net.neoforged:neoforge:21.1.248"
+        "loader": "net.neoforged:neoforge:21.1.248",
+        "jeiCommonApi": "mezz.jei:jei-1.21.1-common-api:19.39.0.368",
+        "jeiNeoForgeApi": "mezz.jei:jei-1.21.1-neoforge-api:19.39.0.368",
+        "jeiNeoForgeRuntime": "mezz.jei:jei-1.21.1-neoforge:19.39.0.368"
       },
       "datagenParityGroup": "mc-1211",
       "entrypoint": {

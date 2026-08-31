@@ -1370,6 +1370,46 @@ tasks.register("verifyClojureRuntimeRepresentation") {
     }
 }
 
+tasks.register("verifyOptionalIntegrations") {
+    group = "verification"
+    description = "Verify JEI is a real typed adapter and IC2 reflection stays inside the optional third-party boundary."
+    doLast {
+        def catalog = new groovy.json.JsonSlurper().parse(file("platform-catalog.json"))
+        def neo1211 = catalog.targets["neoforge-1.21.1"]
+        def neoCaps = (neo1211.capabilities ?: []) as List
+        if (!("jei" in neoCaps) || !(neo1211.capabilityOwners?.jei ?: []).contains("neoforge-1.21.1")) {
+            throw new GradleException("neoforge-1.21.1 must declare exactly one JEI capability owner")
+        }
+        def neoWrapper = file("platform-src/loader/neoforge-1.21.1/src/main/java/cn/li/neoforge1211/integration/JEIPluginWrapper.java")
+        def neoImpl = file("platform-src/loader/neoforge-1.21.1/src/main/clojure/cn/li/neoforge1211/integration/jei_impl.clj")
+        if (!neoWrapper.text.contains("@JeiPlugin") || neoWrapper.text.contains("placeholder") || neoImpl.text.contains("stub")) {
+            throw new GradleException("NeoForge 1.21.1 JEI adapter must be a real typed implementation")
+        }
+        def ic2Files = [
+            file("platform-src/loader/forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/ic2_energy.clj"),
+            file("platform-src/loader/neoforge-shared/src/main/clojure/cn/li/neoforgebase/integration/ic2_energy.clj")
+        ]
+        def allowlistedReflection = ~/java\.lang\.reflect|Class\/forName|Proxy\/newProxyInstance/
+        def forbiddenOutsideIsland = []
+        [file("ac/src/main"), file("mcmod/src/main"), file("api/src/main")].findAll { it.directory }.each { root ->
+            fileTree(root) { include "**/*.clj"; include "**/*.java" }.files.each { source ->
+                if (!ic2Files.contains(source) && (source.text =~ allowlistedReflection).find()) {
+                    forbiddenOutsideIsland << source
+                }
+            }
+        }
+        if (!forbiddenOutsideIsland.isEmpty()) {
+            throw new GradleException("Reflection is only permitted in the IC2 third-party adapter: ${forbiddenOutsideIsland}")
+        }
+        ic2Files.each { source ->
+            if (source.text.contains("requiring-resolve") || source.text.contains("cap-call")) {
+                throw new GradleException("IC2 adapter must use direct capability callbacks: ${source}")
+            }
+        }
+        logger.lifecycle("[verifyOptionalIntegrations] JEI typed adapters and IC2 reflection island verified")
+    }
+}
+
 tasks.register("verifyPresentationLoaderHooks") {
     group = "verification"
     description = "Ensure each loader render callback enters the neutral Presentation host seam."
