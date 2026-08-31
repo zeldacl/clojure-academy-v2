@@ -7,15 +7,16 @@
            [mezz.jei.api.registration IRecipeCategoryRegistration IRecipeRegistration IRecipeCatalystRegistration]
            [mezz.jei.api.recipe.category IRecipeCategory]
            [mezz.jei.api.gui.builder IRecipeLayoutBuilder]
-           [mezz.jei.api.recipe IFocusGroup RecipeIngredientRole RecipeType]
+           [mezz.jei.api.recipe IFocusGroup RecipeIngredientRole]
+           [mezz.jei.api.recipe.types IRecipeType]
            [mezz.jei.api.helpers IGuiHelper]
            [net.minecraft.resources Identifier]
            [net.minecraft.network.chat Component]
            [net.minecraft.world.item ItemStack]
            [java.util ArrayList]))
-(defn- recipe-type ^RecipeType [m]
+(defn- recipe-type ^IRecipeType [m]
   (let [^Identifier id (ResourceLocations/parse ^String (:id m))]
-    (RecipeType/create (.getNamespace id) (.getPath id) java.util.Map)))
+    (IRecipeType/create (.getNamespace id) (.getPath id) java.util.Map)))
 (defn- category [^IGuiHelper helper m]
   (let [bg (:background m)
         ^Identifier texture (ResourceLocations/parse ^String (:texture bg))
@@ -43,5 +44,8 @@
       (doseq [m (jei-core/get-all-categories) :let [xs (mapv hooks/jei-format-recipe (hooks/jei-get-recipes m))]]
         (when (seq xs) (.addRecipes r (recipe-type m) (ArrayList. ^java.util.Collection xs)))))
     (^void registerRecipeCatalysts [_ ^IRecipeCatalystRegistration r]
-      (doseq [m (jei-core/get-all-categories) :let [^ItemStack s (jei-core/parse-item-id (:block-id m))]]
-        (when s (.addRecipeCatalyst r s (into-array RecipeType [(recipe-type m)])))))))
+      (doseq [m (jei-core/get-all-categories) :let [^ItemStack s (jei-core/parse-item-id (:block-id m))]
+              :when s]
+        (let [^"[Lmezz.jei.api.recipe.types.IRecipeType;" types
+              (into-array IRecipeType [(recipe-type m)])]
+          (.addRecipeCatalyst r s types))))))

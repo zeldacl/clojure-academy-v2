@@ -548,12 +548,32 @@ if (target.loader != "none") {
             manifest.text = staged.join(System.lineSeparator()) + System.lineSeparator()
         }
     }
+    // Named (non-Loom-remapped) targets execute platform namespaces from the
+    // jar at runtime. They are intentionally not AOT-compiled, so stage the
+    // platform source files as ordinary resources. Remapped targets keep the
+    // exhaustive AOT representation and must not package a second source
+    // representation of the same namespace.
+    def stagePlatformClojureSources = tasks.register("stagePlatformClojureSources", Copy) {
+        group = "build"
+        description = "Stage source-backed platform Clojure namespaces for named targets."
+        onlyIf { !rootProject.ext.platformRemapAotEnabled }
+        dependsOn tasks.named("processResources")
+        from(platformAotSourceRoots) {
+            include "**/*.clj"
+            include "**/*.cljc"
+        }
+        into layout.buildDirectory.dir("resources/main")
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
         dependsOn stageNeutralClojureRuntimeResources
+        dependsOn stagePlatformClojureSources
     }
     tasks.matching { it.name == "checkClojure" }.configureEach {
         dependsOn stageNeutralClojureRuntimeResources
+        dependsOn stagePlatformClojureSources
     }
+    tasks.named("jar").configure { dependsOn stagePlatformClojureSources }
     // Platform AOT is exhaustive. Derive its deterministic namespace set from
     // selected Clojure source roots instead of maintaining a second list.
     // Loom-remapped targets require platform namespaces as AOT classes so the

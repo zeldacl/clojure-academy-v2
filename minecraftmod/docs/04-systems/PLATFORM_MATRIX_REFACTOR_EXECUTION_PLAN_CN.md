@@ -71,6 +71,7 @@
 ### Loom 反射清理
 
 - Loom 平台代码不得保留跨版本反射兼容层；`DistAccess` 已按 NeoForge 1.21.1/26.2 拆成直接 API，Forge/NeoForge 的 DSL entity kind 也已改为显式 `EntityFactory` 分发表。
+- 最终清理清单必须逐项归零：`mc-1.20.1`/`mc-1.21.1` 的 `ScriptedRenderAccess`（改为实体接口/版本化 typed accessor）、两版 `ClientHelper.registerMenuScreen`（改由 loader 注册事件完成）、`mc-26.2` `WorldEntity` 的 LargeFireball 字段访问（增加版本 Java bridge 或公开受控 setter），以及 NeoForge 26.2 `ForgeBootstrapHelper` 的 entity constructor（使用显式 `EntityFactory`）。这些不是第三方接入，不能留在 allowlist。
 
 提交点：`integration: keep typed JEI and cached optional IC2 adapters`、`integration: complete Fabric JEI entrypoints`、`integration: cover NeoForge 26.2 JEI`（均已完成；验证门覆盖六目标声明、入口和实现文件）。
 
@@ -90,13 +91,13 @@ cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=forge-1.20.1"
 cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=fabric-1.20.1" --stacktrace
 cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=fabric-1.21.1" --stacktrace
 cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=neoforge-1.21.1" --stacktrace
-cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=neoforge-26.2" --stacktrace
-cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" --stacktrace
+cmd /c platform-builds\gradle-9.2\gradlew.bat :platform:check :platform:jar "-PplatformTarget=neoforge-26.2" --stacktrace
+cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" --stacktrace
 ```
 
 每个目标还必须运行 neutral/combat/vfx/mcmod headless tests、JEI absent/present fixture、IC2 absent/present/incompatible fixture、Jar overlap scan 和代表性 JFR。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
 
-当前执行证据：Forge 1.20.1 `verifyCurrentPlatforms` 全门通过；NeoForge 1.21.1 AOT coverage + runtime representation XOR 通过；Fabric 1.20.1/1.21.1 `compileJava` 通过；mcmod 49 namespaces、194 tests、577 assertions 为 0 failures/0 errors。NeoForge 26.2 需 Gradle 9.2+（当前 wrapper 8.8 触发 MDG/Shadow `AdhocComponentWithVariants` API 错误），Fabric 26.2 需 Gradle 9.5+（当前 wrapper 无法解析 Loom 1.17 plugin API）；升级为按 profile 选择 Gradle wrapper 后再执行上述两目标。
+当前执行证据：Forge 1.20.1 `verifyCurrentPlatforms` 全门通过；NeoForge 1.21.1 AOT coverage + runtime representation XOR 通过；Fabric 1.20.1/1.21.1 `compileJava` 通过；mcmod 49 namespaces、194 tests、577 assertions 为 0 failures/0 errors。NeoForge 26.2 已用 `platform-builds/gradle-9.2/gradlew.bat` 完成 `:platform:check :platform:jar`；Fabric 26.2 已用 `platform-builds/gradle-9.7.1/gradlew.bat` 完成 `:platform:check :platform:jar`，并完成 runDatagen（516 个文件）。26.2 的命名映射目标采用 source-first：平台 `.clj` 必须由 `stagePlatformClojureSources` 打入资源；不得依赖旧 AOT 输出残留。构建日志中的 OSHI/JEI 可选 mixin 警告属于运行环境或第三方可选项，不得作为源码反射豁免。
 
 ## 明确排除的矛盾方案
 
