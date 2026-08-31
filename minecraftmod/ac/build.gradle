@@ -292,6 +292,9 @@ tasks.register('runAcClojureTestsFast', JavaExec) {
     if (System.getProperty('ac.test.only') != null) {
         systemProperty 'ac.test.only', System.getProperty('ac.test.only')
     }
+    if (System.getProperty('ac.test.jfr') != null) {
+        jvmArgs "-XX:StartFlightRecording=filename=${System.getProperty('ac.test.jfr')},settings=profile"
+    }
     args '-m', 'cn.li.ac.test-runner'
 }
 
