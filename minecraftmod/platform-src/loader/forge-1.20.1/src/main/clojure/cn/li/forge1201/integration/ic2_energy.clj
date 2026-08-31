@@ -15,6 +15,33 @@
 (def ^:private ic2-state (atom :unknown))
 (def ^:private ic2-interfaces (atom nil))
 
+(def ^:private proxy-cache (java.util.WeakHashMap.))
+(def ^:private proxy-cache-lock (Object.))
+
+(declare create-ic2-energy-sink create-ic2-energy-source)
+
+(defn clear-proxy-cache!
+  "Drop cached IC2 adapters on world unload or capability invalidation."
+  []
+  (locking proxy-cache-lock (.clear proxy-cache))
+  nil)
+
+(defn- cached-proxy
+  [be side mode energy-capable tier]
+  (locking proxy-cache-lock
+    (let [by-mode (or (.get proxy-cache be) {})
+          side-key (if (nil? side) ::any-side side)
+          by-side (get by-mode mode {})]
+      (if-let [proxy (get by-side side-key)]
+        proxy
+        (let [proxy (case mode
+                      "import" (create-ic2-energy-sink energy-capable tier)
+                      "export" (create-ic2-energy-source energy-capable tier)
+                      nil)]
+          (when proxy
+            (.put proxy-cache be (assoc by-mode mode (assoc by-side side-key proxy))))
+          proxy)))))
+
 (defn- context-class-loader
   []
   (or (.getContextClassLoader (Thread/currentThread))
@@ -198,20 +225,15 @@
 
   Returns:
     IC2 energy interface (IEnergySink or IEnergySource) or nil"
-  [be _side mode]
+  [be side mode]
   (try
     ;; Get the content energy capability first. Descriptor-specific binding is
     ;; handled by the content module before this optional integration is used.
-    (when-let [content-energy-cap (capability-registry/get-capability be :content-energy nil)]
+    (when-let [content-energy-cap (capability-registry/get-capability be :content-energy side)]
       (when (capability-registry/is-present? content-energy-cap)
         (let [content-energy (capability-registry/or-else content-energy-cap nil)
               tier 2] ;; Default to tier 2 (Medium Voltage, 128 EU/t)
-          (when content-energy
-            ;; Create appropriate IC2 interface based on mode
-            (case mode
-              "import" (create-ic2-energy-sink content-energy tier)
-              "export" (create-ic2-energy-source content-energy tier)
-              nil)))))
+          (when content-energy (cached-proxy be side mode content-energy tier)))))
     (catch Exception e
       (log/stacktrace "Error creating IC2 capability:" e)
       nil)))
