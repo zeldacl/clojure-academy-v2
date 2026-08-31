@@ -1,6 +1,6 @@
 param(
-  [ValidateSet('forge','fabric')]
-  [string]$Loader = 'forge',
+  [ValidateSet('forge-1.20.1','fabric-1.20.1','fabric-1.21.1','neoforge-1.21.1','neoforge-26.2','fabric-26.2')]
+  [string]$PlatformTarget = 'forge-1.20.1',
 
   [Parameter(Mandatory = $true)]
   [string]$Scenario,
@@ -15,17 +15,20 @@ $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$outDir = Join-Path $root "build\reports\script-render-perf\$Loader\$Scenario\$Mode"
+$outDir = Join-Path $root "build\reports\script-render-perf\$PlatformTarget\$Scenario\$Mode"
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 
 $jfrFile = Join-Path $outDir "capture-$timestamp.jfr"
 $logFile = Join-Path $outDir "run-$timestamp.log"
 
-$platformTarget = "$Loader-1.20.1"
 $task = ':platform:runClient'
 $checkTask = ':platform:checkClojure'
+$targetGradle = Join-Path $root 'scripts\target-gradle.ps1'
+if (!(Test-Path -LiteralPath $targetGradle -PathType Leaf)) {
+  throw "Target launcher script is missing: $targetGradle"
+}
 
-$gradleArgs = @($task, "`"-PplatformTarget=$platformTarget`"", '--no-daemon', '--console=plain')
+$gradleArgs = @($PlatformTarget, $task, '--no-daemon', '--console=plain')
 if ($SkipCheckClojure.IsPresent) {
   $gradleArgs += @('-x', $checkTask)
 }
@@ -36,7 +39,7 @@ $jfrArgs = @(
 )
 
 Write-Host "[perf] root      : $root"
-Write-Host "[perf] loader    : $Loader"
+Write-Host "[perf] target    : $PlatformTarget"
 Write-Host "[perf] scenario  : $Scenario"
 Write-Host "[perf] mode      : $Mode"
 Write-Host "[perf] jfr       : $jfrFile"
@@ -44,7 +47,10 @@ Write-Host "[perf] log       : $logFile"
 
 Push-Location $root
 try {
-  $cmd = @('cmd','/c','gradlew.bat') + $gradleArgs + @('-Dorg.gradle.jvmargs=' + ($jfrArgs -join ' '))
+  # target-gradle.ps1 resolves the catalog-selected wrapper and Java toolchain;
+  # this keeps the capture command identical across all six targets.
+  $cmd = @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $targetGradle) +
+    $gradleArgs + @('-Dorg.gradle.jvmargs=' + ($jfrArgs -join ' '))
   "[perf] command: $($cmd -join ' ')" | Out-File -FilePath $logFile -Encoding utf8 -Append
 
   $proc = Start-Process -FilePath $cmd[0] -ArgumentList $cmd[1..($cmd.Length-1)] -PassThru -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $logFile
