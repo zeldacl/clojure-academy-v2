@@ -8,7 +8,7 @@
                          :thumb? true}}   ;; when true, paint offsets this node
 
    Hit targets typically omit :thumb?; the moving thumb sets :thumb? true."
-  )
+  (:require [cn.li.presentation.core.tree :as tree]))
 
 (defn spec
   "Return the :scrollbar map from node style, or nil."
@@ -22,7 +22,7 @@
   (when (some? node)
     (if (= key (:key node))
       node
-      (some #(find-node % key) (:children node)))))
+      (some #(find-node % key) (tree/ordered-children node)))))
 
 (defn- dimension [value fallback]
   (cond
@@ -45,7 +45,7 @@
   [scroll-node env]
   (when scroll-node
     (let [items (collection-items env scroll-node)
-          template (or (first (:children scroll-node)) {:layout {}})
+          template (or (first (tree/ordered-children scroll-node)) {:layout {}})
           view-h (dimension (get-in scroll-node [:layout :height]) 0.0)
           extent (dimension (get-in template [:layout :height])
                             (/ view-h (max 1 (count items))))]

@@ -187,27 +187,45 @@
                                       (subvec current (inc index)))))))]
     [root @removed]))
 
+(defn- schema-map [schema value]
+  "Select schema fields while accepting the keyword/string forms used by
+   EDN sources and the Java UiEditCommand ABI respectively."
+  (let [value (or value {})]
+    (into {}
+          (keep (fn [schema-key]
+                  (let [entry (or (find value schema-key)
+                                  (when (keyword? schema-key)
+                                    (find value (name schema-key)))
+                                  (when (string? schema-key)
+                                    (find value (keyword schema-key))))]
+                    (when entry [schema-key (val entry)])))
+          (keys (or schema {}))))))
+
 (defn- instantiate [composition blueprint key props slots]
   (let [descriptor (get (:blueprints composition) blueprint)]
     (when-not descriptor
       (throw (ex-info "unknown UI blueprint" {:blueprint blueprint})))
-    (let [template (or (:template descriptor) {})]
+    (let [template (or (:template descriptor) {})
+          props (schema-map (:props-schema descriptor) props)
+          slots (schema-map (:slot-schema descriptor) slots)]
       (-> template
           (assoc :key key :blueprint blueprint)
           (update :props #(merge (or % {}) (or props {})))
+          ;; Runtime edit commands carry declarative props.  Lower them to
+          ;; the same primitive binding surface used by compiled nodes.
+          (update :bind #(merge (select-keys (or props {})
+                                             (keys (or (:props-schema descriptor) {})))
+                                 (or % {})))
           (update :slots #(merge (or % {}) (or slots {})))
           normalize-node))))
 
 (defn- compatible-map [schema old supplied]
-  (let [allowed (set (keys (or schema {})))]
-    (merge (select-keys (or old {}) allowed)
-           (select-keys (or supplied {}) allowed))))
+  (merge (schema-map schema old)
+         (schema-map schema supplied)))
 
 (defn- compatible-slots [schema old supplied]
-  (let [allowed (set (keys (or schema {})))
-        old (if (seq allowed) (select-keys (or old {}) allowed) {})
-        supplied (if (seq allowed) (select-keys (or supplied {}) allowed) {})]
-    (merge old supplied)))
+  (merge (schema-map schema old)
+         (schema-map schema supplied)))
 
 (defn- replace-node [composition target-key blueprint props slots]
   (let [old (find-node composition target-key)

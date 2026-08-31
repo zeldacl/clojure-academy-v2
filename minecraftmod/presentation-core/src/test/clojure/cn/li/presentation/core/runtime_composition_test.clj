@@ -36,7 +36,7 @@
   (let [[runtime mount] (mounted-runtime)
         replace (UiEditCommand$Replace.
                  "tree" "list-view"
-                 (java.util.Map/of "items" [1 2])
+                 (java.util.Map/of "items" [3 4])
                  (java.util.Map/of))
         insert (UiEditCommand$Insert.
                 "toolbar" "" -1 "button" "new-button"
@@ -45,6 +45,7 @@
     (is (= "tree" (-> (runtime/composition runtime mount) :root :children first :key)))
     (is (= "APPLIED" (.name (.status (runtime/apply-edit! runtime mount replace)))))
     (is (= "list-view" (-> (runtime/composition runtime mount) :root :children first :blueprint)))
+    (is (= [3 4] (-> (runtime/composition runtime mount) :root :children first :bind :items)))
     (is (= "APPLIED" (.name (.status (runtime/apply-edit! runtime mount insert)))))
     (is (= "new-button"
            (-> (runtime/composition runtime mount) :root :children second :children second :key)))
@@ -99,5 +100,7 @@
         edit-result (runtime/apply-edit! rt mount command)]
     (is (= "APPLIED" (.name (.status edit-result))))
     (is (= "2" (-> (runtime/composition rt mount) :root :children first :blueprint)))
+    (is (= [:state :items]
+           (-> (runtime/composition rt mount) :root :children first :bind :items)))
     (runtime/extract-stage! rt :screen {})
     (is (= "2" (-> @painted :root :children first :blueprint)))))

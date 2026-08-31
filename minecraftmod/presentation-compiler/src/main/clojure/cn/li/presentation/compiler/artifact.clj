@@ -78,24 +78,41 @@
 
 (declare expand-components)
 
+(defn- lower-component-props [source descriptor]
+  ;; Component props are compile-time sugar for the primitive binding surface.
+  ;; Explicit :bind entries remain authoritative.
+  (let [props (or (:props source) {})
+        bind (or (:bind source) {})
+        prop-keys (keys (:props-schema descriptor))]
+    (-> source
+        (dissoc :component :type :props)
+        (assoc :bind (merge (select-keys props prop-keys) bind)))))
+
 (defn- expand-components [source]
   (let [component (normalize-component-type (or (:component source) (:type source)))
         descriptor (get component-catalog component)]
     (if descriptor
-      (let [props (or (:props source) {})
-            expanded (-> source
-                         (dissoc :component :type :props)
-                         (merge props)
+      (let [expanded (-> (lower-component-props source descriptor)
                          (assoc :type (:primitive descriptor)
                                 :blueprint-id (:blueprint-id descriptor))
-                         (update :semantics #(merge {:role :list} (or % {}))))]
-        (update expanded :children #(mapv expand-components (or % []))))
+                         (update :semantics #(merge {:role :list} (or % {})))
+                         (update :children #(mapv expand-components (or % [])))
+                         (update :slots #(into {}
+                                              (map (fn [[slot entries]]
+                                                     [slot (mapv expand-components (or entries []))]))
+                                              (or % {}))))]
+        expanded)
       (do
         (when-not (contains? primitive-types (keyword (str (:type source))))
           ;; Leave unknown values for normalize-node so it produces the same
           ;; source-path diagnostic as ordinary primitive validation.
           source)
-        (update source :children #(mapv expand-components (or % [])))))))
+        (-> source
+            (update :children #(mapv expand-components (or % [])))
+            (update :slots #(into {}
+                                  (map (fn [[slot entries]]
+                                         [slot (mapv expand-components (or entries []))]))
+                                  (or % {}))))))))
 
 (defn- normalize-node [source path index bindings actions]
   (when-not (map? source) (fail path "node must be a map"))
@@ -124,7 +141,12 @@
                              [event id])))
         semantics (normalize-semantics (:semantics source) (str path ".semantics"))
         children (or (:children source) [])
-        _ (when-not (sequential? children) (fail (str path ".children") "must be sequential"))]
+        _ (when-not (sequential? children) (fail (str path ".children") "must be sequential"))
+        slots (or (:slots source) {})
+        _ (when-not (map? slots) (fail (str path ".slots") "must be a map"))
+        _ (doseq [[slot entries] slots]
+            (when-not (sequential? entries)
+              (fail (str path ".slots." slot) "must be sequential"))) ]
     (cond-> {:id (vec (conj path index))
      :key key
      :type type
@@ -136,7 +158,12 @@
      :action-ids action-ids
      :semantics semantics
      :children (mapv #(normalize-node % (conj path index) %2 bindings actions)
-                     children (range))}
+                     children (range))
+     :slots (into (sorted-map)
+                  (map (fn [[slot entries]]
+                         [slot (mapv #(normalize-node % (conj path index :slot slot) %2 bindings actions)
+                                     entries (range))])
+                  slots))}
       (:blueprint-id source) (assoc :blueprint-id (int (:blueprint-id source))))))
 
 (defn- compile-nodes [root]
@@ -163,7 +190,9 @@
                                 [[(:key node)
                                   (select-keys descriptor [:blueprint-id :edit-policy
                                                             :props-schema :slot-schema])]]))
-                            (mapcat walk (:children node))))]
+                            (mapcat walk (:children node))
+                            (mapcat (fn [[_ entries]] (mapcat walk entries))
+                                    (:slots node))))]
                   (into {} (walk node)))}))
 (defn- validate-source! [source path]
   (when-not (map? source)

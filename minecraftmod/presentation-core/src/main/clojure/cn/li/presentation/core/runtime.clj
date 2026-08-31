@@ -7,6 +7,7 @@
   (:require [cn.li.presentation.core.artifact :as artifact]
             [cn.li.presentation.core.composition :as composition]
             [cn.li.presentation.core.scrollbar :as scrollbar]
+            [cn.li.presentation.core.tree :as tree]
             [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]
            [cn.li.mcmod.runtime UiEditCommand UiEditResult
@@ -381,7 +382,7 @@
     (if (sequential? items) (vec items) [])))
 
 (defn- collection-item-rects [rect node items env]
-  (let [template (or (first (:children node)) {:type :text :layout {}})
+  (let [template (or (first (tree/ordered-children node)) {:type :text :layout {}})
         direction (if (= :grid (:type node)) :row :column)
         layout (:layout template)
         count* (max 1 (count items))
@@ -406,7 +407,7 @@
      (when (visible-value? visible)
        (or (when (and (= :scroll type) (point-in-rect? rect px py))
              (let [items (collection-items env node)
-                   templates (vec (:children node))
+                   templates (tree/ordered-children node)
                    item-rects (collection-item-rects rect node items env)]
                (some (fn [[item item-rect]]
                        (some #(hit-scroll % item-rect (assoc env :item item) px py)
@@ -414,7 +415,7 @@
                      (map vector items item-rects))))
            (when (#{:grid :repeater} type)
              (let [items (collection-items env node)
-                   templates (vec (:children node))
+                   templates (tree/ordered-children node)
                    item-rects (collection-item-rects rect node items env)]
                (some (fn [[item item-rect]]
                        (some #(hit-scroll % item-rect (assoc env :item item) px py)
@@ -423,11 +424,11 @@
            (when (and (= :scroll type) (point-in-rect? rect px py))
              {:key (:key node) :rect rect
               :max-offset (let [items (collection-items env node)
-                                template (or (first (:children node)) {:layout {}})
+                                template (or (first (tree/ordered-children node)) {:layout {}})
                                 extent (layout-dimension (get-in template [:layout :height])
                                                          (/ (:height rect) (max 1 (count items))))]
                             (float (max 0.0 (- (* extent (count items)) (:height rect)))) )})
-           (let [children (:children node)
+           (let [children (tree/ordered-children node)
                  direction (or (get-in node [:layout :direction])
                                (when (= :row type) :row)
                                (when (= :column type) :column))
@@ -453,7 +454,7 @@
      (when (visible-value? visible)
        (or (when (and (= :scroll type) (point-in-rect? rect px py))
              (let [items (collection-items env node)
-                   templates (vec (:children node))
+                   templates (tree/ordered-children node)
                    item-rects (collection-item-rects rect node items env)]
                (some (fn [[index item item-rect]]
                        (some (fn [template]
@@ -464,7 +465,7 @@
                      (map vector (range) items item-rects))))
            (when (#{:grid :repeater} type)
              (let [items (collection-items env node)
-                   templates (vec (:children node))
+                   templates (tree/ordered-children node)
                    item-rects (collection-item-rects rect node items env)]
                (some (fn [[index item item-rect]]
                        (some (fn [template]
@@ -473,7 +474,7 @@
                                           px py))
                              templates))
                      (map vector (range) items item-rects))))
-           (let [children (:children node)
+           (let [children (tree/ordered-children node)
                  direction (or (get-in node [:layout :direction])
                                (when (= :row type) :row)
                                (when (= :column type) :column))
@@ -491,7 +492,8 @@
                           (assoc :item (:item env) :index (:index env)))}))))))
 (defn- hit-collection [node rect env px py]
   (let [items (collection-items env node)
-        templates (if (seq (:children node)) (:children node) [{:type :text :layout {}}])
+        templates (let [children (tree/ordered-children node)]
+                    (if (seq children) children [{:type :text :layout {}}]))
         item-rects (collection-item-rects rect node items env)]
     (some (fn [[index item item-rect]]
             (some (fn [template]
@@ -512,7 +514,7 @@
            (hit-collection node rect env px py))
          (when (#{:grid :repeater} type)
            (hit-collection node rect env px py))
-         (let [children (:children node)
+         (let [children (tree/ordered-children node)
                direction (or (get-in node [:layout :direction])
                              (when (= :row type) :row)
                              (when (= :column type) :column))

@@ -44,6 +44,8 @@
            (get-in compiled [:boundaries :tree])))
     (is (= :scroll (get-in node [:children 0 :type])))
     (is (= 2 (get-in node [:children 0 :blueprint-id])))
+    (is (= [:state :items] (get-in node [:bind :items])))
+    (is (= [:state :selected] (get-in node [:bind :selected])))
     (is (not (contains? (get-in node [:children 0]) :component)))
     (is (not (contains? node :component)))
     (is (nil? (get-in compiled [:blueprint-catalog 1 :name])))))
@@ -56,6 +58,22 @@
                           :view/id :academy/test/bad
                           :root {:type :legacy-template}}
                          "bad.ui.edn"))))
+
+(deftest expands-components-inside-slots
+  (let [compiled (artifact/compile-source
+                   {:ui/schema 1
+                    :view/id :academy/test/slot
+                    :root {:type :column
+                           :slots {:content [{:component :list-view
+                                              :key :slot-list
+                                              :props {:items [:state :items]}}]}}}
+                   "slot.ui.edn")
+        node (:nodes compiled)
+        child (get-in node [:slots :content 0])]
+    (is (= :scroll (:type child)))
+    (is (= 2 (:blueprint-id child)))
+    (is (= [:state :items] (:items (:bind child))))
+    (is (not (contains? child :component)))))
 
 (deftest rejects-missing-source-schema
   (is (thrown-with-msg? clojure.lang.ExceptionInfo

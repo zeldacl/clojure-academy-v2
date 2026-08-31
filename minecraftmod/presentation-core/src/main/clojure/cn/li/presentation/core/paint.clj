@@ -4,7 +4,8 @@
    Collection nodes expand from immutable state and leaf nodes emit only
    neutral Ui* commands. This namespace has no Minecraft/backend dependency."
   (:require [clojure.string]
-            [cn.li.presentation.core.scrollbar :as scrollbar])
+            [cn.li.presentation.core.scrollbar :as scrollbar]
+            [cn.li.presentation.core.tree :as tree])
   (:import [cn.li.mcmod.runtime RenderCommand$UiImage RenderCommand$UiImageBatch
             RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText RenderCommand$UiItemPreview RenderCommand$UiModelPreview RenderCommand$PushClip RenderCommand$PopClip RenderCommand$Transform RenderCommand$Mask
             UiResourceRef UiResourceRef$Kind]))
@@ -293,14 +294,14 @@
     (if (sequential? items) (vec items) [])))
 
 (defn- item-template [node]
-  (or (first (:children node))
+  (or (first (tree/ordered-children node))
       {:type :text :key (keyword (str (name (or (:key node) :item)) "/item"))
        :bind {:text [:state :item]}}))
 
 (declare paint-node)
 
 (defn- collection-item-rects [node rect env items]
-  (let [template (or (first (:children node)) {:type :text :layout {}})
+  (let [template (or (first (tree/ordered-children node)) {:type :text :layout {}})
         direction (if (= :grid (:type node)) :row :column)
         layout (:layout template)
         count* (max 1 (count items))
@@ -315,8 +316,9 @@
 
 (defn- paint-collection [node rect env]
   (let [items (collection-values env node)
+        children (tree/ordered-children node)
         templates (if (= :repeater (:type node))
-                    (if (seq (:children node)) (:children node) [(item-template node)])
+                    (if (seq children) children [(item-template node)])
                     [(item-template node)])
         item-rects (collection-item-rects node rect env items)]
     (vec
@@ -332,7 +334,7 @@
         rect (scrollbar/apply-thumb-rect node rect env)]
     (if (not (visible-value? visible))
       []
-      (let [children (:children node)
+      (let [children (tree/ordered-children node)
             direction (or (get-in node [:layout :direction])
                           (when (= :row type) :row)
                           (when (= :column type) :column))]

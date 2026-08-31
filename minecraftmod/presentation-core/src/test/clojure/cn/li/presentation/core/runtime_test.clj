@@ -417,3 +417,16 @@
     (is (= 9 (count batches)))
     (is (some #(str/includes? % "glow_lu") paths))
     (is (some #(str/includes? % "line.png") paths))))
+
+(deftest paint-includes-named-slot-children
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/slots
+                  :nodes {:type :column :layout {:width 100 :height 40}
+                          :children [{:type :text :key :main
+                                      :bind {:text [:state :main]}}]
+                          :slots {:footer [{:type :text :key :footer
+                                            :bind {:text [:state :footer]}}]}}}
+        commands (paint/paint-view artifact {:main "main" :footer "footer"}
+                                   {:viewport-width 100 :viewport-height 40})
+        texts (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiText %) commands)]
+    (is (= 2 (count texts)))
+    (is (= ["main" "footer"] (mapv #(.text ^cn.li.mcmod.runtime.RenderCommand$UiText %) texts)))))
