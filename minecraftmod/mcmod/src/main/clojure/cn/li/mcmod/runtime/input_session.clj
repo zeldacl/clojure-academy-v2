@@ -3,12 +3,13 @@
 
    The session owns only transport invariants: monotonic sequence numbers,
    bounded rate, and lifecycle aborts. It does not know skills, entities, or
-   Minecraft classes; AC supplies the neutral intent callback.")
+   Minecraft classes; AC supplies the neutral intent callback."
+  (:require [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]))
 (def ^:const max-inputs-per-window 40)
 (def ^:const window-ticks 20)
 
 (defn- decode-intent [packet]
-  ((requiring-resolve 'cn.li.mcmod.runtime.fixed-channel/decode-intent) packet))
+  (fixed-channel/decode-intent packet))
 
 (defn create-session
   [{:keys [owner send! on-intent! on-abort!]
