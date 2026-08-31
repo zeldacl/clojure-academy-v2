@@ -1,22 +1,41 @@
 (ns cn.li.platform.neutral.vfx
   "Opaque platform seam for the Minecraft-free VFX Frame ABI.
 
-   This namespace deliberately knows only the client bridge and ABI map shape;
+   This namespace deliberately knows only the cached host ABI map shape;
    it never requires the runtime implementation or AC namespaces.  Version
    backends provide Minecraft anchor snapshots and consume the returned
   `:stages`/`:payload` values.")
 
 (defonce ^:private frame-sequence* (atom 0))
 (defonce ^:private resource-manager-token* (atom nil))
-(defonce ^:private call-adapter*
-  (delay (requiring-resolve
-          'cn.li.platform.neutral.client-runtime/call-adapter)))
 
-(defn- call-adapter [key & args]
-  (apply @call-adapter* key args))
+;; The VFX host is installed once by the client bootstrap. Keep the concrete
+;; IFn in a Var instead of consulting the Framework/client bridge for every
+;; frame or tick; this is the hot-path boundary for the Minecraft-free ABI.
+(def ^:private host-api nil)
+(def ^:private required-host-operations
+  [:required-anchors :tick! :sample-frame! :frame-stage :latest-frame-stage
+   :release-frame! :clear-world! :resource-snapshot :reload-resources!
+   :active? :fov-offset :drain-camera-pitch-deltas!])
 
-(defn- host []
-  (call-adapter :vfx-host-api))
+(defn install-host!
+  "Install the concrete VFX host API during client bootstrap.
+
+   The immutable ABI map is retained as a direct Var root after installation;
+   no Framework/client bridge lookup or map reconstruction occurs in a
+   tick/render path. A second install is allowed for development reloads."
+  [api]
+  (when (or (not (map? api))
+            (some #(not (ifn? (get api %))) required-host-operations))
+    (throw (ex-info "VFX host API contract mismatch" {:value api})))
+  (alter-var-root #'host-api (constantly api))
+  nil)
+
+(defn reset-host-for-test! []
+  (alter-var-root #'host-api (constantly nil))
+  nil)
+
+(defn- host [] host-api)
 
 (defn installed? [] (boolean (host)))
 

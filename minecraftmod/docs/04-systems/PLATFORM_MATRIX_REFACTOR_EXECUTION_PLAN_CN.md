@@ -125,6 +125,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 在当前提交上再次执行根工程回归与专项门禁：`cmd /c gradlew.bat test verifyCorePerformance verifyOptionalIntegrations verifyNoCompatibilityResidues verifyNoDuplicateCapabilities verifyNoLegacyArchitecture --stacktrace` 于 2026-09-01 成功（84 actionable tasks，0 failures）。输出再次确认 neutral 无 Minecraft API、JEI typed adapter/IC2 反射隔离、核心性能预算、兼容残留、重复能力和旧架构门禁全部通过；该结果不替代尚未完成的真实游戏 JFR。
 
+热路径复审又发现 neutral VFX 旧 seam 在每次访问时仍经 `Framework → client-bridge map → apply`，并重建 host API map；现已删除该旁路，改为 AC 客户端 bootstrap 一次安装并缓存不可变 host API map，tick/render 仅做直接 Var/函数调用。新增 `vfx` 回归测试验证安装后不再调用 `client-runtime/call-adapter`；同步更新 `verifyVfxDirectHostBoundary`，禁止恢复 bridge 路径。修复后 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace` 通过（99 tasks），根 `cmd /c gradlew.bat test verifyCorePerformance --stacktrace` 通过（80 tasks）。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。

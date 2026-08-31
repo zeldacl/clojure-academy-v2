@@ -1209,8 +1209,12 @@ tasks.register("verifyVfxDirectHostBoundary") {
     doLast {
         def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj").text
         def host = file("ac/src/main/clojure/cn/li/ac/client/vfx_host.clj")
-        if (!host.exists() || !host.text.contains(":vfx-host-api")) {
-            throw new GradleException("AC VFX Core host seam is missing")
+        if (!host.exists() || !host.text.contains("cn.li.platform.neutral.vfx/install-host!") ||
+                !host.text.contains("vfx/vfx-host-api")) {
+            throw new GradleException("AC VFX Core direct cached host seam is missing")
+        }
+        if (host.text.contains("merge-client-bridge!") || host.text.contains("client-bridge")) {
+            throw new GradleException("AC VFX Core host still routes through the client bridge")
         }
         if (presentation =~ /:vfx-host-api/) {
             throw new GradleException("Presentation bridge still exports VFX host API")
