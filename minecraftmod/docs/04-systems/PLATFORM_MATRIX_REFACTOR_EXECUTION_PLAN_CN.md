@@ -113,6 +113,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 平台测试明细：Forge 1.20.1 为 110 tests/262 assertions，NeoForge 1.21.1 为 103/240，NeoForge 26.2 为 106/249，Fabric 1.20.1、Fabric 1.21.1、Fabric 26.2 各为 11/32；六目标均为 0 failures/0 errors，且 IC2 缺失、有效接口、不兼容接口三态隔离均已执行。后续发现 final compiler 曾只保存原始 graph，导致运行时丢失子节点 kind；现已回写完整编译子树并将 final runtime 的 API Var 在启动期缓存，combat 35 tests/92 assertions、AC final-runtime 7/17、EDN catalog 42/130 均通过，dispatch/tick 不再执行 `requiring-resolve`。新增到期 scheduled node 回归测试，确认 tick 使用缓存 API、显式 node environment 并实际执行结果；tick 队列采用 transient 缓冲区合并一次提交，避免每个 tick 的多次 atom swap。进一步将 `flow/after` 子节点在 dispatch 调度边界封装为唯一的预编译一步程序，tick 仅筛选到期项并执行，调度记录不再重复保存原始 `:node`；随后将调度容器改为 deadline 有序 bucket，避免每次 tick 扫描所有未到期任务，并新增 dispatch 入桶回归测试。
 
+发布 Jar 直接审计（2026-09-01）已补齐：六个最新 `platform/libs/AcademyCraft-2.0.0-alpha2-*` 产物均包含各自 loader 元数据、平台入口、`JEIPluginWrapper` 和 datagen hash manifest；`mezz/jei` 与第三方 `ic2/` 类均为 0。Forge 1.20.1 旧 `alpha3` Jar 曾残留 `cn/li/forge1201/integration/ic2_energy`，经重新执行 `:platform:jar :platform:remapJar` 后新的 `alpha2` 发布 Jar 已为 `legacyIC2=0`，只保留 shared IC2 适配。26.2 两个 named/source-first 产物只含 `cn/li/platform/optional/ic2_energy.clj`，四个 Loom remapped 产物只含该 namespace 的 AOT class；没有任何目标出现 class/source 共存。旧 Jar 文件仍可能留在本地 `build/targets` 缓存中，但不属于发布输入，发布脚本必须只取本轮任务生成且时间戳最新的单一 artifact。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
