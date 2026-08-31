@@ -7,7 +7,7 @@
   (environment/build
    {:descriptors
     [{:id :test/leaf :revision 1 :layer :primitive
-      :inputs {:amount {:type :float} :label {:type :string :default "x"}}
+      :inputs {:amount {:type :double} :label {:type :string :default "x"}}
       :impl (fn [_ _] {})}
      {:id :test/wrapper :revision 1 :layer :primitive
       :children {:child {:kind :single}}
