@@ -97,10 +97,22 @@
         command (UiEditCommand$Replace. "tree" "2"
                                         (java.util.Map/of)
                                         (java.util.Map/of))
-        edit-result (runtime/apply-edit! rt mount command)]
+        edit-result (runtime/apply-edit! rt mount command)
+        button-command (UiEditCommand$Insert.
+                        "root" "" -1 "button" "runtime-button"
+                        (java.util.Map/of "text" "New" "action" "runtime/click")
+                        (java.util.Map/of))
+        button-result (runtime/apply-edit! rt mount button-command)]
     (is (= "APPLIED" (.name (.status edit-result))))
     (is (= "2" (-> (runtime/composition rt mount) :root :children first :blueprint)))
     (is (= [:state :items]
            (-> (runtime/composition rt mount) :root :children first :bind :items)))
+    (is (= "APPLIED" (.name (.status button-result))))
+    (is (= :button
+           (-> (runtime/composition rt mount) :root :children second :type)))
+    (is (= "New"
+           (-> (runtime/composition rt mount) :root :children second :bind :text)))
+    (is (= :runtime/click
+           (-> (runtime/composition rt mount) :root :children second :on :activate)))
     (runtime/extract-stage! rt :screen {})
     (is (= "2" (-> @painted :root :children first :blueprint)))))
