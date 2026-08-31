@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
+import net.minecraft.client.renderer.block.BlockModelResolver;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
@@ -138,7 +139,7 @@ public record ReactivePreviewRenderState(
         }
 
         BlockModelRenderState blockRenderState = new BlockModelRenderState();
-        mc.getBlockModelResolver().update(
+        new BlockModelResolver(mc.getModelManager()).update(
                 blockRenderState, blockState, BlockDisplayContext.create());
 
         return fn.submit(
