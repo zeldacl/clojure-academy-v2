@@ -6,6 +6,7 @@ param(
   [string]$Scenario,
 
   [Parameter(Mandatory = $true)]
+  [ValidateSet("low","medium","stress")]
   [string]$Mode,
 
   [switch]$SkipCheckClojure
