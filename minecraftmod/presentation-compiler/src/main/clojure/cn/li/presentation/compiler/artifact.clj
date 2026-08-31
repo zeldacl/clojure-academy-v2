@@ -11,8 +11,9 @@
            [java.nio.charset StandardCharsets]
            [java.nio.file Files Path]))
 
-(def artifact-magic :pui3)
-(def artifact-schema 3)
+(def artifact-magic :pui4)
+(def artifact-schema 4)
+(def ui-source-schema 1)
 
 (def primitive-types
   #{:absolute :row :column :grid :stack :clip :scroll :portal :repeater :conditional :switch :transform :mask
@@ -21,6 +22,16 @@
 
 (def semantic-roles
   #{:generic :heading :button :textbox :dialog :list :list-item :image :slot :progress :scrollbar})
+
+;; Compile-time catalog only.  Names in this map are never serialized; the
+;; artifact carries the stable numeric blueprint id and primitive expansion.
+(def component-catalog
+  {:tree-view {:blueprint-id 1 :primitive :scroll :edit-policy :replace-only
+               :props-schema {:items :binding :selected :binding}
+               :slot-schema {}}
+   :list-view {:blueprint-id 2 :primitive :scroll :edit-policy :replace-only
+               :props-schema {:items :binding :selected :binding}
+               :slot-schema {}}})
 
 (defn- canonicalize [value]
   (cond
@@ -60,7 +71,31 @@
         (fail (str path ".role") (str "unsupported role " role)))))
   (or semantics {}))
 
-(declare compile-node)
+(defn- normalize-component-type [value]
+  (when value
+    (let [keyword-value (if (keyword? value) value (keyword (str value)))]
+      (keyword (name keyword-value)))))
+
+(declare expand-components)
+
+(defn- expand-components [source]
+  (let [component (normalize-component-type (or (:component source) (:type source)))
+        descriptor (get component-catalog component)]
+    (if descriptor
+      (let [props (or (:props source) {})
+            expanded (-> source
+                         (dissoc :component :type :props)
+                         (merge props)
+                         (assoc :type (:primitive descriptor)
+                                :blueprint-id (:blueprint-id descriptor))
+                         (update :semantics #(merge {:role :list} (or % {}))))]
+        (update expanded :children #(mapv expand-components (or % []))))
+      (do
+        (when-not (contains? primitive-types (keyword (str (:type source))))
+          ;; Leave unknown values for normalize-node so it produces the same
+          ;; source-path diagnostic as ordinary primitive validation.
+          source)
+        (update source :children #(mapv expand-components (or % [])))))))
 
 (defn- normalize-node [source path index bindings actions]
   (when-not (map? source) (fail path "node must be a map"))
@@ -90,7 +125,7 @@
         semantics (normalize-semantics (:semantics source) (str path ".semantics"))
         children (or (:children source) [])
         _ (when-not (sequential? children) (fail (str path ".children") "must be sequential"))]
-    {:id (vec (conj path index))
+    (cond-> {:id (vec (conj path index))
      :key key
      :type type
      :layout (or (:layout source) {})
@@ -101,12 +136,13 @@
      :action-ids action-ids
      :semantics semantics
      :children (mapv #(normalize-node % (conj path index) %2 bindings actions)
-                     children (range))}))
+                     children (range))}
+      (:blueprint-id source) (assoc :blueprint-id (int (:blueprint-id source))))))
 
 (defn- compile-nodes [root]
   (let [bindings (atom {})
         actions (atom {})
-        node (normalize-node root [] 0 bindings actions)
+        node (normalize-node (expand-components root) [] 0 bindings actions)
         ordered-bindings (->> @bindings
                               (sort-by val)
                               (map (fn [[path id]] {:id id :path path}))
@@ -117,7 +153,18 @@
                              vec)]
     {:nodes node
      :bindings ordered-bindings
-     :actions ordered-actions}))
+     :actions ordered-actions
+     :boundaries (letfn [(walk [node]
+                           (concat
+                            (when-let [id (:blueprint-id node)]
+                              (let [descriptor (some (fn [[_ value]]
+                                                       (when (= id (:blueprint-id value)) value))
+                                                     component-catalog)]
+                                [[(:key node)
+                                  (select-keys descriptor [:blueprint-id :edit-policy
+                                                            :props-schema :slot-schema])]]))
+                            (mapcat walk (:children node))))]
+                  (into {} (walk node)))}))
 (defn- validate-source! [source path]
   (when-not (map? source)
     (fail path "source must be a map"))
@@ -125,15 +172,26 @@
     (fail path "requires :view/id"))
   (when-not (or (:root source) (:nodes source))
     (fail path "requires :root"))
+  (when-let [schema (:ui/schema source)]
+    (when-not (= ui-source-schema schema)
+      (fail (str path ".ui/schema") (str "unsupported source schema " schema))))
   source)
 
 (defn compile-source [source path]
   (validate-source! source path)
   (let [view-id (or (:view/id source) (:view-id source))
-        compiled (compile-nodes (or (:root source) (:nodes source)))]
+        compiled (compile-nodes (or (:root source) (:nodes source)))
+        blueprints (into {}
+                         (map (fn [[_ descriptor]]
+                                [(:blueprint-id descriptor)
+                                 (select-keys descriptor [:blueprint-id :primitive
+                                                           :edit-policy :props-schema
+                                                           :slot-schema])]))
+                         component-catalog)]
     (canonicalize
      {:magic artifact-magic
       :schema artifact-schema
+      :ui/schema ui-source-schema
       :view-id view-id
       :source-hash (source-hash source)
       :host (or (:host source) {})
@@ -141,9 +199,11 @@
       :nodes (:nodes compiled)
       :bindings (:bindings compiled)
       :actions (:actions compiled)
+      :blueprint-catalog blueprints
+      :boundaries (:boundaries compiled)
       :resources (or (:resources source) [])
       :semantics (or (:semantics source) {})
-       :editor {:artifact-version 3
+       :editor {:artifact-version 4
                 :source-path path
                 :root-id [:view view-id]}
       :capabilities (or (:capabilities source)
@@ -188,7 +248,7 @@
                               :source-hash (:source-hash artifact)
                               :schema artifact-schema
                               :host (:host artifact)}]))
-        manifest {:magic :pui3-catalog
+        manifest {:magic :pui4-catalog
                   :schema artifact-schema
                   :content-id content-id
                   :content-ids [content-id]

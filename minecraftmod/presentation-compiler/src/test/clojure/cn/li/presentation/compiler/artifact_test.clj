@@ -13,12 +13,32 @@
                                        :on {:activate :example/save}
                                        :semantics {:role :button}}]}}
                    "example.ui.edn")]
-    (is (= :pui3 (:magic compiled)))
-    (is (= 3 (:schema compiled)))
+    (is (= :pui4 (:magic compiled)))
+    (is (= 4 (:schema compiled)))
     (is (= [{:id 0 :path [:state :title]}] (:bindings compiled)))
     (is (= [{:id 0 :name :example/save}] (:actions compiled)))
     (is (= :column (get-in compiled [:nodes :type])))
     (is (= 2 (count (get-in compiled [:nodes :children]))))))
+
+(deftest expands-high-level-components-before-primitive-validation
+  (let [compiled (artifact/compile-source
+                   {:ui/schema 1
+                    :view/id :academy/test/tree
+                    :root {:type :tree-view
+                           :key :tree
+                           :props {:items [:state :items]
+                                   :selected [:state :selected]}}}
+                   "tree.ui.edn")
+        node (:nodes compiled)]
+    (is (= :pui4 (:magic compiled)))
+    (is (= :scroll (:type node)))
+    (is (= 1 (:blueprint-id node)))
+    (is (= {:blueprint-id 1 :edit-policy :replace-only
+            :props-schema {:items :binding :selected :binding}
+            :slot-schema {}}
+           (get-in compiled [:boundaries :tree])))
+    (is (not (contains? node :component)))
+    (is (nil? (get-in compiled [:blueprint-catalog 1 :name])))))
 
 (deftest rejects-unsupported-primitive
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
