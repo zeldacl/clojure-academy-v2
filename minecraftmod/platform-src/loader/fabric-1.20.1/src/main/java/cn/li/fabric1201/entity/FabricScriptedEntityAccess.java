@@ -98,17 +98,17 @@ public final class FabricScriptedEntityAccess {
 
             @Override
             public boolean registerScriptedEffectHookClass(String hookId, String className) {
-                return ScriptedEffectHooks.registerByClassName(hookId, className);
+                return ScriptedEffectHooks.registerByKey(hookId, className);
             }
 
             @Override
             public boolean registerScriptedRayHookClass(String hookId, String className) {
-                return ScriptedRayHooks.registerByClassName(hookId, className);
+                return ScriptedRayHooks.registerByKey(hookId, className);
             }
 
             @Override
             public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-                return ScriptedMarkerHooks.registerByClassName(hookId, className);
+                return ScriptedMarkerHooks.registerByKey(hookId, className);
             }
         });
     }

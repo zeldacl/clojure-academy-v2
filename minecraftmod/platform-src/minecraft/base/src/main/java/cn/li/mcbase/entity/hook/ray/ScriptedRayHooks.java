@@ -1,10 +1,10 @@
 package cn.li.mcbase.entity.hook.ray;
 
 import cn.li.mcbase.entity.hook.AbstractHookRegistry;
+import java.util.function.Supplier;
 
 public final class ScriptedRayHooks {
     private static final Class<?> REGISTRY_CLASS = ScriptedRayHooks.class;
-    private static final Class<? extends ScriptedRayHook> HOOK_INTERFACE = ScriptedRayHook.class;
 
     public static void register(String hookId, ScriptedRayHook hook) {
         AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
@@ -18,7 +18,11 @@ public final class ScriptedRayHooks {
         return hook != null ? hook : NOOP;
     }
 
-    public static boolean registerByClassName(String hookId, String className) {
-        return AbstractHookRegistry.registerByClassName(REGISTRY_CLASS, HOOK_INTERFACE, hookId, className);
+    public static void registerFactory(String implementationKey, Supplier<? extends ScriptedRayHook> factory) {
+        AbstractHookRegistry.registerFactory(REGISTRY_CLASS, implementationKey, factory);
+    }
+
+    public static boolean registerByKey(String hookId, String implementationKey) {
+        return AbstractHookRegistry.registerByKey(REGISTRY_CLASS, hookId, implementationKey);
     }
 }

@@ -2,25 +2,21 @@ package cn.li.mcbase.entity.hook;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Generic hook registry for entity-specific hooks.
- * Provides common registration, resolution, and reflection-based loading patterns.
- *
- * Subclasses must implement:
- * - {@link #getHookInterface()} to provide the hook interface class for type checking
- * - {@link #createNoop()} to provide a noop implementation when no hook is registered
- *
- * @param <T> The hook interface type (e.g., ClientEntityHook<ScriptedEffectEntity>)
+ * Hook factories are registered during bootstrap; tick/render paths only do a
+ * direct concurrent-map lookup and never load classes or allocate adapters.
  */
 public final class AbstractHookRegistry {
     private static final Map<Class<?>, Map<String, ?>> REGISTRIES = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<String, Supplier<?>>> FACTORIES = new ConcurrentHashMap<>();
+
     private AbstractHookRegistry() {
     }
-    /**
-     * Register a hook implementation by hook ID.
-     * Null checks on parameters ensure safe no-op behavior.
-     */
+
+    /** Register a hook implementation by hook ID. */
     public static <T> void register(Class<?> registryClass, String hookId, T hook) {
         if (hookId == null || hookId.isEmpty() || hook == null) {
             return;
@@ -29,10 +25,8 @@ public final class AbstractHookRegistry {
         Map<String, T> hooks = (Map<String, T>) (Object) getRegistryMap(registryClass);
         hooks.put(hookId, hook);
     }
-    /**
-     * Resolve a hook by hook ID.
-     * Returns the registered hook or null if not found.
-     */
+
+    /** Resolve a hook by hook ID. */
     public static <T> T resolve(Class<?> registryClass, String hookId) {
         if (hookId == null || hookId.isEmpty()) {
             return null;
@@ -41,34 +35,44 @@ public final class AbstractHookRegistry {
         Map<String, T> hooks = (Map<String, T>) (Object) getRegistryMap(registryClass);
         return hooks.get(hookId);
     }
-    /**
-     * Register a hook by loading its class via reflection.
-     * Performs type checking to ensure the class implements the hook interface.
-     * Returns true if successfully registered, false otherwise.
-     */
-    public static <T> boolean registerByClassName(Class<?> registryClass, Class<? extends T> hookInterface, String hookId, String className) {
-        if (hookId == null || hookId.isEmpty() || className == null || className.isEmpty()) {
+
+    /** Register a startup-only factory under a stable implementation key. */
+    public static <T> void registerFactory(Class<?> registryClass, String implementationKey,
+                                           Supplier<? extends T> factory) {
+        if (implementationKey == null || implementationKey.isEmpty() || factory == null) {
+            return;
+        }
+        getFactoryMap(registryClass).put(implementationKey, factory);
+    }
+
+    /** Instantiate a pre-registered factory during bootstrap, without reflection. */
+    public static <T> boolean registerByKey(Class<?> registryClass, String hookId,
+                                            String implementationKey) {
+        if (hookId == null || hookId.isEmpty() || implementationKey == null || implementationKey.isEmpty()) {
+            return false;
+        }
+        Supplier<?> factory = getFactoryMap(registryClass).get(implementationKey);
+        if (factory == null) {
             return false;
         }
         try {
-            Class<?> rawClass = Class.forName(className);
-            if (!hookInterface.isAssignableFrom(rawClass)) {
+            @SuppressWarnings("unchecked")
+            T hook = (T) factory.get();
+            if (hook == null) {
                 return false;
             }
-            @SuppressWarnings("unchecked")
-            Class<? extends T> hookClass = (Class<? extends T>) rawClass;
-            T hook = hookClass.getDeclaredConstructor().newInstance();
             register(registryClass, hookId, hook);
             return true;
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
             return false;
         }
     }
-    /**
-     * Get the registry map for this class instance.
-     * Each subclass gets its own registry to avoid cross-contamination.
-     */
+
     private static Map<String, ?> getRegistryMap(Class<?> registryClass) {
         return REGISTRIES.computeIfAbsent(registryClass, clz -> new ConcurrentHashMap<>());
+    }
+
+    private static Map<String, Supplier<?>> getFactoryMap(Class<?> registryClass) {
+        return FACTORIES.computeIfAbsent(registryClass, clz -> new ConcurrentHashMap<>());
     }
 }

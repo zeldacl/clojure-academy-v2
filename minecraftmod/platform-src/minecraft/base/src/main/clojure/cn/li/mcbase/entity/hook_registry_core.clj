@@ -6,10 +6,19 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]
             [cn.li.platform.loader-hook-support :as hook-support])
-  (:import [cn.li.mcbase.entity ScriptedEntitySpecAccess]))
+  )
 
 (defonce ^:private hook-class-prefix-atom
   (atom nil))
+
+(defonce ^:private hook-factory-by-class-atom
+  (atom {}))
+
+(defn install-hook-factories!
+  "Install direct constructor factories before scripted-hook registration."
+  [factories]
+  (swap! hook-factory-by-class-atom merge factories)
+  factories)
 
 (defn install-hook-class-prefix!
   "Install version package prefix, e.g. \"cn.li.mc1201\"."
@@ -83,16 +92,35 @@
                    [hook-id (first classes)]))))))
 
 (defn register-hook-classes!
-  "Register one scripted-hook kind's Java hook classes exactly once per
-   process (registerScripted*HookClass is a Java-side static registry, not
-   Framework-scoped — must not redo on Framework reinjection)."
-  [{:keys [install-key entries register-fn success-label]}]
+  "Register one scripted-hook kind using startup-only direct constructor factories."
+  [{:keys [install-key entries register-kind success-label]}]
   (install/process-once! [::scripted-hook install-key]
     #(doseq [[hook-id class-name] entries]
-       (if (register-fn hook-id class-name)
-         (log/debug success-label {:hook-id hook-id :class class-name})
-         (log/error (str "Failed to register " (str/lower-case success-label))
-                    {:hook-id hook-id :class class-name}))))
+       (let [factory (get @hook-factory-by-class-atom class-name)
+             registered? (when factory
+                           (case register-kind
+                             :effect (do
+                                       (cn.li.mcbase.entity.hook.effect.ScriptedEffectHooks/registerFactory
+                                        class-name (reify java.util.function.Supplier
+                                                     (get [_] (factory))))
+                                       (cn.li.mcbase.entity.hook.effect.ScriptedEffectHooks/registerByKey
+                                        hook-id class-name))
+                             :ray (do
+                                    (cn.li.mcbase.entity.hook.ray.ScriptedRayHooks/registerFactory
+                                     class-name (reify java.util.function.Supplier
+                                                  (get [_] (factory))))
+                                    (cn.li.mcbase.entity.hook.ray.ScriptedRayHooks/registerByKey
+                                     hook-id class-name))
+                             :marker (do
+                                       (cn.li.mcbase.entity.hook.marker.ScriptedMarkerHooks/registerFactory
+                                        class-name (reify java.util.function.Supplier
+                                                     (get [_] (factory))))
+                                       (cn.li.mcbase.entity.hook.marker.ScriptedMarkerHooks/registerByKey
+                                        hook-id class-name))))]
+         (if registered?
+           (log/debug success-label {:hook-id hook-id :class class-name})
+           (log/error (str "Failed to register " (str/lower-case success-label))
+                      {:hook-id hook-id :class class-name})))))
   nil)
 
 (def scripted-hook-specs
@@ -109,7 +137,7 @@
                                     :owner-orbit "entity.hook.effect.OwnerOrbitEffectHook"}
             :conflict-mode :by-hook-id
             :install-key :effect
-            :register-fn ScriptedEntitySpecAccess/registerScriptedEffectHookClass
+            :register-kind :effect
             :success-label "Registered scripted effect hook"}
    :ray {:entity-kind :scripted-ray
          :property-key :ray
@@ -119,7 +147,7 @@
                                 :noop "cn.li.mcbase.entity.hook.ray.NoopRayHook"}
          :conflict-mode :by-hook-id
          :install-key :ray
-         :register-fn ScriptedEntitySpecAccess/registerScriptedRayHookClass
+         :register-kind :ray
          :success-label "Registered scripted ray hook"}
    :marker {:entity-kind :scripted-marker
             :property-key :marker
@@ -129,7 +157,7 @@
                                    :noop "cn.li.mcbase.entity.hook.marker.NoopMarkerHook"}
             :conflict-mode :allow-duplicates
             :install-key :marker
-            :register-fn ScriptedEntitySpecAccess/registerScriptedMarkerHookClass
+            :register-kind :marker
             :success-label "Registered scripted marker hook"}})
 
 (defn- resolve-scripted-hook-class
@@ -170,13 +198,13 @@
 (defn register-scripted-hook-kind!
   "Register one scripted entity hook kind by spec key (:effect, :ray, :marker)."
   [hook-kind]
-  (let [{:keys [install-key register-fn success-label] :as spec}
+  (let [{:keys [install-key register-kind success-label] :as spec}
         (or (get scripted-hook-specs hook-kind)
             (throw (ex-info "Unknown scripted hook kind" {:hook-kind hook-kind})))]
     (register-hook-classes!
      {:install-key install-key
       :entries (registration-entries spec (collect-scripted-hook-entries hook-kind))
-      :register-fn register-fn
+      :register-kind register-kind
       :success-label success-label})))
 
 (defn register-all-scripted-hooks!

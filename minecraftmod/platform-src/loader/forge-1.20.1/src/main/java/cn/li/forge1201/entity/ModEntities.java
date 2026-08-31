@@ -76,17 +76,17 @@ public final class ModEntities {
 
             @Override
             public boolean registerScriptedEffectHookClass(String hookId, String className) {
-                return ScriptedEffectHooks.registerByClassName(hookId, className);
+                return ScriptedEffectHooks.registerByKey(hookId, className);
             }
 
             @Override
             public boolean registerScriptedRayHookClass(String hookId, String className) {
-                return ScriptedRayHooks.registerByClassName(hookId, className);
+                return ScriptedRayHooks.registerByKey(hookId, className);
             }
 
             @Override
             public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-                return ScriptedMarkerHooks.registerByClassName(hookId, className);
+                return ScriptedMarkerHooks.registerByKey(hookId, className);
             }
         });
     }
@@ -355,15 +355,15 @@ public final class ModEntities {
     }
 
     public static boolean registerScriptedEffectHookClass(String hookId, String className) {
-        return ScriptedEffectHooks.registerByClassName(hookId, className);
+        return ScriptedEffectHooks.registerByKey(hookId, className);
     }
 
     public static boolean registerScriptedRayHookClass(String hookId, String className) {
-        return ScriptedRayHooks.registerByClassName(hookId, className);
+        return ScriptedRayHooks.registerByKey(hookId, className);
     }
 
     public static boolean registerScriptedMarkerHookClass(String hookId, String className) {
-        return ScriptedMarkerHooks.registerByClassName(hookId, className);
+        return ScriptedMarkerHooks.registerByKey(hookId, className);
     }
 
     public static void register(IEventBus modBus) {

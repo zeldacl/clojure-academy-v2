@@ -123,19 +123,6 @@
 	[fluid-supplier ^String registry-id]
 	(ForgeBootstrapHelper/createFluidBucket fluid-supplier registry-id))
 
-(defn create-entity-type
-	[^String full-id ^Class entity-class ^String category width height
-	 client-tracking-range update-interval fire-immune?]
-	(ForgeBootstrapHelper/createEntityType
-		full-id
-		entity-class
-		category
-		(float width)
-		(float height)
-		(int client-tracking-range)
-		(int update-interval)
-		(boolean fire-immune?)))
-
 (defn create-entity-type-by-kind
 	[^String full-id ^String entity-kind ^String category width height
 	 client-tracking-range update-interval fire-immune?]

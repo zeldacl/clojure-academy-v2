@@ -1,10 +1,10 @@
 package cn.li.mcbase.entity.hook.marker;
 
 import cn.li.mcbase.entity.hook.AbstractHookRegistry;
+import java.util.function.Supplier;
 
 public final class ScriptedMarkerHooks {
     private static final Class<?> REGISTRY_CLASS = ScriptedMarkerHooks.class;
-    private static final Class<? extends ScriptedMarkerHook> HOOK_INTERFACE = ScriptedMarkerHook.class;
 
     public static void register(String hookId, ScriptedMarkerHook hook) {
         AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
@@ -18,7 +18,11 @@ public final class ScriptedMarkerHooks {
         return hook != null ? hook : NOOP;
     }
 
-    public static boolean registerByClassName(String hookId, String className) {
-        return AbstractHookRegistry.registerByClassName(REGISTRY_CLASS, HOOK_INTERFACE, hookId, className);
+    public static void registerFactory(String implementationKey, Supplier<? extends ScriptedMarkerHook> factory) {
+        AbstractHookRegistry.registerFactory(REGISTRY_CLASS, implementationKey, factory);
+    }
+
+    public static boolean registerByKey(String hookId, String implementationKey) {
+        return AbstractHookRegistry.registerByKey(REGISTRY_CLASS, hookId, implementationKey);
     }
 }

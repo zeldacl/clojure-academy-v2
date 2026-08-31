@@ -564,6 +564,33 @@ if (target.loader != "none") {
         }
         into layout.buildDirectory.dir("resources/main")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        doFirst {
+            // Source-first targets must not leave stale AOT classes beside the
+            // .clj resources: the JVM may load the old __init class first.
+            if (!rootProject.ext.platformRemapAotEnabled) {
+                def classesRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
+                platformAotSourceRoots.each { File sourceRoot ->
+                    if (sourceRoot.isDirectory()) {
+                        fileTree(sourceRoot) {
+                            include "**/*.clj"
+                            include "**/*.cljc"
+                        }.files.each { File sourceFile ->
+                            def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
+                            def nsPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
+                            def packagePath = nsPath.contains("/") ? nsPath.substring(0, nsPath.lastIndexOf("/")) : ""
+                            def packageDir = new File(classesRoot, packagePath)
+                            def classBaseName = nsPath.substring(nsPath.lastIndexOf("/") + 1)
+                            if (packageDir.isDirectory()) {
+                                packageDir.listFiles()?.findAll { File f ->
+                                    f.name == "${classBaseName}__init.class" || f.name == "${classBaseName}.class" ||
+                                        (f.name.startsWith("${classBaseName}\$") && f.name.endsWith(".class"))
+                                }?.each { File stale -> stale.delete() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
         dependsOn stageNeutralClojureRuntimeResources
