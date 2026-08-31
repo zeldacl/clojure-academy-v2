@@ -17,7 +17,7 @@
 (defn install-hook-factories!
   "Install direct constructor factories before scripted-hook registration."
   [factories]
-  (swap! hook-factory-by-class-atom merge factories)
+  (swap! hook-factory-by-class-atom merge (apply merge (vals factories)))
   factories)
 
 (defn install-hook-class-prefix!
@@ -101,20 +101,17 @@
                            (case register-kind
                              :effect (do
                                        (cn.li.mcbase.entity.hook.effect.ScriptedEffectHooks/registerFactory
-                                        class-name (reify java.util.function.Supplier
-                                                     (get [_] (factory))))
+                                        class-name factory)
                                        (cn.li.mcbase.entity.hook.effect.ScriptedEffectHooks/registerByKey
                                         hook-id class-name))
                              :ray (do
                                     (cn.li.mcbase.entity.hook.ray.ScriptedRayHooks/registerFactory
-                                     class-name (reify java.util.function.Supplier
-                                                  (get [_] (factory))))
+                                     class-name factory)
                                     (cn.li.mcbase.entity.hook.ray.ScriptedRayHooks/registerByKey
                                      hook-id class-name))
                              :marker (do
                                        (cn.li.mcbase.entity.hook.marker.ScriptedMarkerHooks/registerFactory
-                                        class-name (reify java.util.function.Supplier
-                                                     (get [_] (factory))))
+                                        class-name factory)
                                        (cn.li.mcbase.entity.hook.marker.ScriptedMarkerHooks/registerByKey
                                         hook-id class-name))))]
          (if registered?
