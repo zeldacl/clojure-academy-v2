@@ -63,7 +63,7 @@
 
 ### IC2
 
-- IC2 不作为 Loom/性能反射禁令的例外扩散范围；例外仅限 `ic2_energy` 文件中的第三方 API 检测和 proxy 创建。
+- IC2 是第三方可选接入，不属于 Minecraft/loader/Academy 的 Loom 混淆或热路径反射禁令范围；允许且仅允许在 `ic2_energy` 文件中为第三方 API 检测和 proxy 创建使用反射。该反射不得进入 tick、回调、渲染或网络热路径。
 - `Class/forName`、`Proxy` 只允许出现在该文件；检测状态（absent/present/incompatible）和接口 Class 必须缓存一次，缺失/不兼容只记录一次并禁用。
 - 能力查询使用直接 `cn.li.mcmod.capability.registry` 回调；禁止 `requiring-resolve`。proxy 按 block entity/side/mode 缓存，世界卸载时清理。
 - IC2 API 不嵌入主 Jar；无 IC2 时零错误，有 IC2 时自动启用 EU 转换与 sink/source。
