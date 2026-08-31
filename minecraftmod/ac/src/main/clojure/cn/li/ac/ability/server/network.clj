@@ -32,7 +32,7 @@
             [cn.li.mcmod.util.log               :as log]))
 
 (defn- wire-payload? [value]
-  (instance? (Class/forName "[B") value))
+  (bytes? value))
 
 (defn- decode-combat-payload [payload]
   (when (wire-payload? (:wire payload))
