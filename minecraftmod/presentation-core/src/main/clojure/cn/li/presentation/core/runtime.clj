@@ -549,18 +549,24 @@
                          (contains? env :item)
                          (assoc :item (:item env) :index (:index env)))}
              :else nil)))))))
+(defn- effective-artifact [instance]
+  (if-let [current (:composition instance)]
+    (assoc (:artifact instance) :nodes (:root current))
+    (:artifact instance)))
+
 (defn- routed-event [instance event]
   (if (:action event)
     event
-    (let [focus (:focus instance)]
+    (let [focus (:focus instance)
+          artifact (effective-artifact instance)]
       (case (:type event)
         :pointer (let [point (event-point event (:geometry instance))
                        event (assoc event :x (:x point) :y (:y point))
-                       root-rect (content-rect (:artifact instance) (:geometry instance))
+                       root-rect (content-rect artifact (:geometry instance))
                        hit (when (#{:down :drag} (:event-type event))
-                             (hit-action (:nodes (:artifact instance)) root-rect
+                             (hit-action (:nodes artifact) root-rect
                                         {:state (:view-state instance)
-                                         :nodes (:nodes (:artifact instance))
+                                         :nodes (:nodes artifact)
                                          :scroll-offsets (:scroll-offsets instance)}
                                         (:x event) (:y event)))
                        ;; Keep scrollbar dragging alive even if the pointer leaves the track.
@@ -570,7 +576,7 @@
                                        sb (:sb cap)
                                        target (:target cap)
                                        env {:state (:view-state instance)
-                                            :nodes (:nodes (:artifact instance))
+                                            :nodes (:nodes artifact)
                                             :scroll-offsets (:scroll-offsets instance)}
                                        scroll-node (scrollbar/find-node (:nodes env) target)
                                        max-off (float (or (:max-off cap)
@@ -593,16 +599,16 @@
                                               :drag? true}}))
                                hit)
                        hover (when (= :move (:event-type event))
-                               (hit-hover (:nodes (:artifact instance)) root-rect
+                               (hit-hover (:nodes artifact) root-rect
                                           {:state (:view-state instance)
-                                           :nodes (:nodes (:artifact instance))
+                                           :nodes (:nodes artifact)
                                            :scroll-offsets (:scroll-offsets instance)}
                                           (:x event) (:y event)))
                        drag-target (when (and (= :drag (:event-type event))
                                               (not (get-in hit [:payload :scrollbar?])))
-                                    (hit-scroll (:nodes (:artifact instance)) root-rect
+                                    (hit-scroll (:nodes artifact) root-rect
                                                {:state (:view-state instance)
-                                                :nodes (:nodes (:artifact instance))
+                                                :nodes (:nodes artifact)
                                                 :scroll-offsets (:scroll-offsets instance)}
                                                (:x event) (:y event)))
                        drag-key (:key drag-target)
@@ -644,9 +650,9 @@
                                                    (get-in instance [:scroll-offsets target])
                                                    0.0))
                            max-off (float (or (scrollbar/max-offset
-                                                (scrollbar/find-node (:nodes (:artifact instance)) target)
+                                                (scrollbar/find-node (:nodes artifact) target)
                                                 {:state (:view-state instance)
-                                                 :nodes (:nodes (:artifact instance))})
+                                                 :nodes (:nodes artifact)})
                                               0.0))]
                        (assoc hit :pointer-capture {:scrollbar? true
                                                     :sb sb
@@ -678,16 +684,16 @@
         :character {:action (or (get-in focus [:on :change]) :input/character)
                     :payload event}
         :scroll (let [point (event-point event (:geometry instance))
-                       root-rect (content-rect (:artifact instance) (:geometry instance))
+                       root-rect (content-rect artifact (:geometry instance))
                        env {:state (:view-state instance)
-                            :nodes (:nodes (:artifact instance))
+                            :nodes (:nodes artifact)
                             :scroll-offsets (:scroll-offsets instance)}
-                       target (hit-scroll (:nodes (:artifact instance))
+                       target (hit-scroll (:nodes artifact)
                                           root-rect env
                                           (:x point) (:y point))
                        ;; Wheel over the scrollbar track should scroll the linked content.
                        bar (when-not target
-                             (let [h (hit-action (:nodes (:artifact instance)) root-rect env
+                             (let [h (hit-action (:nodes artifact) root-rect env
                                                  (:x point) (:y point))]
                                (when (get-in h [:payload :scrollbar?]) h)))
                        key (or (:key target) (get-in bar [:payload :target]))

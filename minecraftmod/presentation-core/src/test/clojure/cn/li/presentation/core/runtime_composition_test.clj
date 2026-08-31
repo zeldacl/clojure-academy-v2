@@ -64,6 +64,7 @@
 
 (deftest pui4-artifact-mount-builds-editable-base-view
   (let [rt (runtime/create-runtime)
+        painted (atom nil)
         artifact {:magic :pui4 :schema 4 :view-id :academy/test/pui4
                   :nodes {:key :root :type :column :children
                           [{:key :tree :type :scroll
@@ -77,10 +78,15 @@
                                         :props-schema {:items :binding :selected :binding}
                                         :slot-schema {}}}}
         mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact})
+                                  :artifact artifact
+                                  :paint-fn (fn [_ state _]
+                                              (reset! painted (:presentation/composition state))
+                                              [])})
         command (UiEditCommand$Replace. "tree" "2"
                                         (java.util.Map/of)
                                         (java.util.Map/of))
         edit-result (runtime/apply-edit! rt mount command)]
     (is (= "APPLIED" (.name (.status edit-result))))
-    (is (= "2" (-> (runtime/composition rt mount) :root :children first :blueprint)))))
+    (is (= "2" (-> (runtime/composition rt mount) :root :children first :blueprint)))
+    (runtime/extract-stage! rt :screen {})
+    (is (= "2" (-> @painted :root :children first :blueprint)))))
