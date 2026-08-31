@@ -20,7 +20,8 @@ New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 
 $jfrFile = Join-Path $outDir "capture-$timestamp.jfr"
 $summaryFile = Join-Path $outDir "summary-$timestamp.txt"
-$logFile = Join-Path $outDir "run-$timestamp.log"
+$stdoutLogFile = Join-Path $outDir "run-$timestamp.stdout.log"
+$stderrLogFile = Join-Path $outDir "run-$timestamp.stderr.log"
 
 $task = ':platform:runClient'
 $checkTask = ':platform:checkClojure'
@@ -48,7 +49,8 @@ Write-Host "[perf] scenario  : $Scenario"
 Write-Host "[perf] mode      : $Mode"
 Write-Host "[perf] game-jfr  : $jfrFile"
 Write-Host "[perf] summary   : $summaryFile"
-Write-Host "[perf] log       : $logFile"
+Write-Host "[perf] stdout    : $stdoutLogFile"
+Write-Host "[perf] stderr    : $stderrLogFile"
 
 Push-Location $root
 try {
@@ -56,9 +58,11 @@ try {
   # this keeps the capture command identical across all six targets.
   $cmd = @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $targetGradle) +
     $gradleArgs
-  "[perf] command: $($cmd -join ' ')" | Out-File -FilePath $logFile -Encoding utf8 -Append
+  "[perf] command: $($cmd -join ' ')" | Out-File -FilePath $stdoutLogFile -Encoding utf8 -Append
 
-  $proc = Start-Process -FilePath $cmd[0] -ArgumentList $cmd[1..($cmd.Length-1)] -PassThru -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $logFile
+  # Keep stdout/stderr in separate files; Start-Process opens both handles
+  # before the child starts and Windows can reject one shared destination.
+  $proc = Start-Process -FilePath $cmd[0] -ArgumentList $cmd[1..($cmd.Length-1)] -PassThru -NoNewWindow -RedirectStandardOutput $stdoutLogFile -RedirectStandardError $stderrLogFile
 
   Write-Host "[perf] client started (pid=$($proc.Id))."
   Write-Host "[perf] Do the in-game perf route manually (low/medium/stress for this mode), then close client normally to flush JFR."
@@ -78,7 +82,7 @@ try {
       Write-Host "[perf] JFR summary saved: $summaryFile"
     }
   } else {
-    Write-Warning "[perf] JFR file not found. Check log: $logFile"
+    Write-Warning "[perf] JFR file not found. Check logs: $stdoutLogFile / $stderrLogFile"
   }
 }
 finally {
