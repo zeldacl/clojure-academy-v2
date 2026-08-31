@@ -219,13 +219,14 @@
   (let [instance (instance! runtime mount)
         current (:composition instance)]
     (if-not current
-      (UiEditResult/rejected "mount has no editable BaseView" {})
+      (UiEditResult/rejected 0 "mount has no editable BaseView" {})
       (let [result (composition/apply-edit! current (edit-command->map command))]
         (if (= :applied (:status result))
           (do
             (mark-composition! runtime mount (:composition result))
             (UiEditResult/applied (long (:revision result))))
-          (UiEditResult/rejected (or (:message result) "UI edit rejected")
+          (UiEditResult/rejected (long (:revision result))
+                                 (or (:message result) "UI edit rejected")
                                  (or (:details result) {})))))))
 
 (defn undo-edit! [^UiRuntime runtime mount]
@@ -236,9 +237,10 @@
         :applied (do (mark-composition! runtime mount (:composition result))
                      (UiEditResult/applied (long (:revision result))))
         :noop (UiEditResult/noop (long (:revision result)))
-        (UiEditResult/rejected (or (:message result) "UI undo rejected")
+        (UiEditResult/rejected (long (:revision result))
+                               (or (:message result) "UI undo rejected")
                                (or (:details result) {}))))
-    (UiEditResult/rejected "mount has no editable BaseView" {})))
+    (UiEditResult/rejected 0 "mount has no editable BaseView" {})))
 
 (defn redo-edit! [^UiRuntime runtime mount]
   (owner-thread! runtime)
@@ -248,9 +250,10 @@
         :applied (do (mark-composition! runtime mount (:composition result))
                      (UiEditResult/applied (long (:revision result))))
         :noop (UiEditResult/noop (long (:revision result)))
-        (UiEditResult/rejected (or (:message result) "UI redo rejected")
+        (UiEditResult/rejected (long (:revision result))
+                               (or (:message result) "UI redo rejected")
                                (or (:details result) {}))))
-    (UiEditResult/rejected "mount has no editable BaseView" {})))
+    (UiEditResult/rejected 0 "mount has no editable BaseView" {})))
 
 (defn reset-edits! [^UiRuntime runtime mount]
   (owner-thread! runtime)
@@ -258,7 +261,7 @@
     (let [next (composition/reset-composition! current)]
       (mark-composition! runtime mount next)
       (UiEditResult/applied 0))
-    (UiEditResult/rejected "mount has no editable BaseView" {})))
+    (UiEditResult/rejected 0 "mount has no editable BaseView" {})))
 
 (defn update-host! [^UiRuntime runtime mount ^HostGeometry geometry]
   (owner-thread! runtime)

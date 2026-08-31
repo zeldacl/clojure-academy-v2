@@ -4,7 +4,8 @@
 
 (deftest compiles-normalized-bindings-actions-and-semantics
   (let [compiled (artifact/compile-source
-                   {:view/id :academy/test/example
+                   {:ui/schema 1
+                    :view/id :academy/test/example
                     :root {:type :column
                            :children [{:type :text
                                        :bind {:text [:state :title]}
@@ -44,13 +45,23 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"unsupported primitive"
                         (artifact/compile-source
-                         {:view/id :academy/test/bad
+                         {:ui/schema 1
+                          :view/id :academy/test/bad
                           :root {:type :legacy-template}}
                          "bad.ui.edn"))))
 
+(deftest rejects-missing-source-schema
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"required source schema 1"
+                        (artifact/compile-source
+                         {:view/id :academy/test/missing-schema
+                          :root {:type :rect}}
+                         "missing-schema.ui.edn"))))
+
 (deftest accepts-glow-line-primitive
   (let [compiled (artifact/compile-source
-                   {:view/id :academy/test/glow
+                   {:ui/schema 1
+                    :view/id :academy/test/glow
                     :root {:type :glow-line
                            :bind {:x0 [:state :gx0] :x1 [:state :gx1]
                                   :line-y [:state :gy]}
@@ -60,11 +71,11 @@
     (is (= 3 (count (:bindings compiled))))))
 (deftest canonicalization-is-deterministic
   (let [a (artifact/compile-source
-           {:root {:type :rect :style {:z 1 :a 2}}
+           {:ui/schema 1 :root {:type :rect :style {:z 1 :a 2}}
             :view/id :academy/test/hash}
            "a.ui.edn")
         b (artifact/compile-source
-           {:view/id :academy/test/hash
+           {:ui/schema 1 :view/id :academy/test/hash
             :root {:style {:a 2 :z 1} :type :rect}}
            "a.ui.edn")]
     (is (= (:source-hash a) (:source-hash b)))

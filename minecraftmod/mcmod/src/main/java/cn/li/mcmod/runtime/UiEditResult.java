@@ -22,7 +22,8 @@ public record UiEditResult(Status status, long compositionRevision,
         return new UiEditResult(Status.NOOP, revision, "", Map.of());
     }
 
-    public static UiEditResult rejected(String message, Map<String, Object> details) {
-        return new UiEditResult(Status.REJECTED, 0L, message, details);
+    public static UiEditResult rejected(long revision, String message,
+                                        Map<String, Object> details) {
+        return new UiEditResult(Status.REJECTED, revision, message, details);
     }
 }

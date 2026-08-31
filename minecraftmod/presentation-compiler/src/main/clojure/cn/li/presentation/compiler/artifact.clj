@@ -172,9 +172,12 @@
     (fail path "requires :view/id"))
   (when-not (or (:root source) (:nodes source))
     (fail path "requires :root"))
-  (when-let [schema (:ui/schema source)]
+  (let [schema (:ui/schema source)]
     (when-not (= ui-source-schema schema)
-      (fail (str path ".ui/schema") (str "unsupported source schema " schema))))
+      (fail (str path ".ui/schema")
+            (if (nil? schema)
+              (str "required source schema " ui-source-schema)
+              (str "unsupported source schema " schema)))))
   source)
 
 (defn compile-source [source path]

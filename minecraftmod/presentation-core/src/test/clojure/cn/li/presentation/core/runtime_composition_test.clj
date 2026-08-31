@@ -62,6 +62,17 @@
                                           :base-view base-view})]
       (is (= "tree" (-> (runtime/composition runtime mount2) :root :children first :key))))))
 
+(deftest rejected-edit-preserves-current-revision
+  (let [[runtime mount] (mounted-runtime)
+        replace (UiEditCommand$Replace. "tree" "list-view"
+                                        (java.util.Map/of)
+                                        (java.util.Map/of))
+        rejected (UiEditCommand$Remove. "missing")]
+    (is (= "APPLIED" (.name (.status (runtime/apply-edit! runtime mount replace)))))
+    (let [result (runtime/apply-edit! runtime mount rejected)]
+      (is (= "REJECTED" (.name (.status result))))
+      (is (= 1 (.compositionRevision result))))))
+
 (deftest pui4-artifact-mount-builds-editable-base-view
   (let [rt (runtime/create-runtime)
         painted (atom nil)
