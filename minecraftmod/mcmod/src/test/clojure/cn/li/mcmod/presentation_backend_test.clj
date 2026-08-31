@@ -16,7 +16,15 @@
   (is (true? (get-in (backend/create :mc-26-2) [:capabilities :instancing?]))))
 
 (deftest neutral-render-command-vocabulary-is-sealed
-  (is (= 17 (alength (.getPermittedSubclasses RenderCommand)))))
+  (let [permitted (->> (.getPermittedSubclasses RenderCommand)
+                       (map #(.getSimpleName ^Class %))
+                       set)]
+    (is (= #{"UiQuadBatch" "UiImageBatch" "UiText" "UiItemPreview"
+             "UiModelPreview" "PushClip" "PopClip" "Transform" "Mask"
+             "Layer" "Mesh" "Billboard" "ParticleBatch" "Ribbon" "Beam"
+             "CameraContribution" "PostProcess" "AudioContribution"
+             "OrderBarrier" "Batch"}
+           permitted))))
 
 (deftest stage-keyword-maps-to-every-loader-facing-render-stage
   (is (= RenderStage/HUD (backend/stage->render-stage :hud)))
