@@ -30,6 +30,8 @@
             [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
+            [cn.li.mcmod.runtime.install :as install]
+            [cn.li.combat.platform :as combat-platform]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
@@ -53,8 +55,34 @@
 ;; Entries contain only neutral ids/ticks; no entity object or cross-player atom
 ;; is retained, so one player's mark cannot affect another world or target.
 (defonce ^:private combat-marks* (atom {}))
+(def ^:private find-nearby-player-uuids-fn nil)
+(def ^:private damage-fn nil)
 (declare owner-state resolve-slot finalize-result! initialize-final-runtime!
          dispatch-domain-event! mark-rate-for)
+
+(defn- no-nearby-player-uuids
+  [_source-player-uuid _radius]
+  [])
+
+(defn- install-runtime-adapters!
+  "Freeze neutral runtime callbacks once after platform bootstrap.
+
+   These callbacks sit on VFX and reflected-damage paths.  Resolve their
+   concrete implementations at startup so neither path performs namespace
+   lookup, Var discovery, or SPI map discovery on every signal/hit."
+  []
+  (let [nearby-fn (try
+                    ;; Keep the platform namespace out of the neutral compile
+                    ;; dependency graph; resolve it exactly once at bootstrap.
+                    (requiring-resolve
+                     (symbol (str "cn.li." "mcbase.runtime.spi.network-transport/find-nearby-player-uuids")))
+                    (catch Throwable _ nil))]
+    (install/install-root! #'find-nearby-player-uuids-fn
+                           (if (ifn? nearby-fn)
+                             nearby-fn
+                             no-nearby-player-uuids))
+    (install/install-root! #'damage-fn combat-platform/damage!))
+  nil)
 
 (defn- generate-activation-seed
   "Produce a fresh per-activation RNG seed. Never deterministic across
@@ -279,7 +307,8 @@
    handlers. This is the only runtime used after the final dispatch cutover."
   []
   (or @final-runtime*
-      (let [runtime (final-runtime/install-production!
+      (let [_ (install-runtime-adapters!)
+            runtime (final-runtime/install-production!
                      {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
                       :commit-state! commit-final-state!
                       :ability-state-provider (fn [owner]
@@ -894,15 +923,11 @@
         radius (double (or (:radius audience) 32.0))]
     (case kind
       :nearby (let [nearby (try
-                             (when-let [f (requiring-resolve
-                                           'cn.li.mcbase.runtime.spi.network-transport/find-nearby-player-uuids)]
-                               (vec (f (str owner) radius)))
+                             (vec (find-nearby-player-uuids-fn (str owner) radius))
                              (catch Throwable _ []))]
                 (vec (distinct (cons (str owner) nearby))))
       :all (let [nearby (try
-                          (when-let [f (requiring-resolve
-                                        'cn.li.mcbase.runtime.spi.network-transport/find-nearby-player-uuids)]
-                            (vec (f (str owner) Double/MAX_VALUE)))
+                          (vec (find-nearby-player-uuids-fn (str owner) Double/MAX_VALUE))
                           (catch Throwable _ []))]
              (vec (distinct (cons (str owner) nearby))))
       [(str owner)])))
@@ -1019,8 +1044,7 @@
 
 (defn- apply-reflections-once!
   [result]
-  (let [damage-fn (requiring-resolve 'cn.li.combat.platform/damage!)]
-    (boolean
+  (boolean
      (some (fn [reflection]
              (let [event (:event reflection)
                    claim [(:world-id event) (:source event) (:target event)
@@ -1044,7 +1068,7 @@
                                              :owner (:source event)
                                              :reflected? true})))
                    (catch Throwable _ false)))))
-           (:reflections result)))))
+           (:reflections result))))
 (defn- final-damage-request
   [player-id attacker-id original-damage damage-source precheck?]
   (let [runtime (final-runtime/production-runtime)
