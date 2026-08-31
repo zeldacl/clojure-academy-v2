@@ -5,9 +5,13 @@
    Minecraft. It owns mount state, host geometry, input routing, reducer
    commits, and effect ordering; rendering is supplied by later renderer code."
   (:require [cn.li.presentation.core.artifact :as artifact]
+            [cn.li.presentation.core.composition :as composition]
             [cn.li.presentation.core.scrollbar :as scrollbar]
             [clojure.string :as string])
-  (:import [cn.li.presentation.core HostGeometry MountHandle]))
+  (:import [cn.li.presentation.core HostGeometry MountHandle]
+           [cn.li.mcmod.runtime UiEditCommand UiEditResult
+            UiEditCommand$Insert UiEditCommand$Replace
+            UiEditCommand$Remove UiEditCommand$Move]))
 
 (defrecord UiRuntime [state owner-thread])
 
@@ -55,7 +59,7 @@
                            {} mounts))))))))
 
 (defn mount!
-  [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close! paint-fn]
+  [^UiRuntime runtime {:keys [host view-id artifact base-view blueprints boundaries state reduce run-effect! close! paint-fn]
                      :or {state {}
                           reduce (fn [state _action _payload]
                                    {:state state :effects [] :event-result :pass})}}]
@@ -63,6 +67,12 @@
   (let [id (:next-id (runtime-state runtime))
         handle (MountHandle. (long id))
         artifact (or artifact (artifact/load-view view-id))
+        base-view (or base-view (:base-view artifact))
+        base-view (when base-view
+                    (merge base-view
+                           (when blueprints {:blueprints blueprints})
+                           (when boundaries {:boundaries boundaries})))
+        composition (when base-view (composition/base-composition base-view))
         instance {:handle handle
                   :host host
                   :view-id view-id
@@ -72,6 +82,7 @@
                   :run-effect! (or run-effect! (fn [_] nil))
                   :close! (or close! (fn [_] nil))
                   :paint-fn (or paint-fn (fn [_ _ _] []))
+                  :composition composition
                   :geometry (HostGeometry/identity 0 0)
                   :dirty #{:structure :layout :paint :semantics}
                   :commands []
@@ -106,6 +117,102 @@
 (defn update-view! [^UiRuntime runtime mount f & args]
   (let [current (:view-state (instance! runtime mount))]
     (present! runtime mount (apply f current args))))
+
+(defn- java-map [value]
+  (if (nil? value) {} (into {} value)))
+
+(defn- edit-command->map [command]
+  (cond
+    (instance? UiEditCommand$Insert command)
+    {:op :insert
+     :target-key (.targetKey ^UiEditCommand$Insert command)
+     :slot (.slot ^UiEditCommand$Insert command)
+     :index (.index ^UiEditCommand$Insert command)
+     :blueprint (.blueprint ^UiEditCommand$Insert command)
+     :key (.key ^UiEditCommand$Insert command)
+     :props (java-map (.props ^UiEditCommand$Insert command))
+     :slots (java-map (.slots ^UiEditCommand$Insert command))}
+
+    (instance? UiEditCommand$Replace command)
+    {:op :replace
+     :target-key (.targetKey ^UiEditCommand$Replace command)
+     :blueprint (.blueprint ^UiEditCommand$Replace command)
+     :props (java-map (.props ^UiEditCommand$Replace command))
+     :slots (java-map (.slots ^UiEditCommand$Replace command))}
+
+    (instance? UiEditCommand$Remove command)
+    {:op :remove :target-key (.targetKey ^UiEditCommand$Remove command)}
+
+    (instance? UiEditCommand$Move command)
+    {:op :move
+     :target-key (.targetKey ^UiEditCommand$Move command)
+     :parent-key (.parentKey ^UiEditCommand$Move command)
+     :slot (.slot ^UiEditCommand$Move command)
+     :index (.index ^UiEditCommand$Move command)}
+
+    :else
+    (throw (ex-info "unknown UiEditCommand implementation" {:value (type command)}))))
+
+(defn composition [^UiRuntime runtime mount]
+  (when-let [value (:composition (instance! runtime mount))]
+    (composition/composition-view value)))
+
+(defn- mark-composition! [^UiRuntime runtime mount next-composition]
+  (vswap! (:state runtime)
+          (fn [snapshot]
+            (-> snapshot
+                (assoc-in [:mounts mount :composition] next-composition)
+                (update-in [:mounts mount :dirty]
+                           into #{:structure :layout :paint :semantics}))))
+  (composition/composition-view next-composition))
+
+(defn apply-edit!
+  "Apply one neutral UiEditCommand to the mount's ephemeral Composition." 
+  [^UiRuntime runtime mount command]
+  (owner-thread! runtime)
+  (let [instance (instance! runtime mount)
+        current (:composition instance)]
+    (if-not current
+      (UiEditResult/rejected "mount has no editable BaseView" {})
+      (let [result (composition/apply-edit! current (edit-command->map command))]
+        (if (= :applied (:status result))
+          (do
+            (mark-composition! runtime mount (:composition result))
+            (UiEditResult/applied (long (:revision result))))
+          (UiEditResult/rejected (or (:message result) "UI edit rejected")
+                                 (or (:details result) {})))))))
+
+(defn undo-edit! [^UiRuntime runtime mount]
+  (owner-thread! runtime)
+  (if-let [current (:composition (instance! runtime mount))]
+    (let [result (composition/undo! current)]
+      (case (:status result)
+        :applied (do (mark-composition! runtime mount (:composition result))
+                     (UiEditResult/applied (long (:revision result))))
+        :noop (UiEditResult/noop (long (:revision result)))
+        (UiEditResult/rejected (or (:message result) "UI undo rejected")
+                               (or (:details result) {}))))
+    (UiEditResult/rejected "mount has no editable BaseView" {})))
+
+(defn redo-edit! [^UiRuntime runtime mount]
+  (owner-thread! runtime)
+  (if-let [current (:composition (instance! runtime mount))]
+    (let [result (composition/redo! current)]
+      (case (:status result)
+        :applied (do (mark-composition! runtime mount (:composition result))
+                     (UiEditResult/applied (long (:revision result))))
+        :noop (UiEditResult/noop (long (:revision result)))
+        (UiEditResult/rejected (or (:message result) "UI redo rejected")
+                               (or (:details result) {}))))
+    (UiEditResult/rejected "mount has no editable BaseView" {})))
+
+(defn reset-edits! [^UiRuntime runtime mount]
+  (owner-thread! runtime)
+  (if-let [current (:composition (instance! runtime mount))]
+    (let [next (composition/reset-composition! current)]
+      (mark-composition! runtime mount next)
+      (UiEditResult/applied 0))
+    (UiEditResult/rejected "mount has no editable BaseView" {})))
 
 (defn update-host! [^UiRuntime runtime mount ^HostGeometry geometry]
   (owner-thread! runtime)
@@ -647,9 +754,13 @@
                            commands (if repaint?
                                       (vec ((:paint-fn instance)
                                             (:artifact instance)
-                                            (assoc (:view-state instance)
-                                                   :presentation/scroll-offsets
-                                                   (:scroll-offsets instance))
+                                            (cond-> (assoc (:view-state instance)
+                                                           :presentation/scroll-offsets
+                                                           (:scroll-offsets instance))
+                                              (:composition instance)
+                                              (assoc :presentation/composition
+                                                     (composition/composition-view
+                                                      (:composition instance))))
                                             (:geometry instance)))
                                       (:commands instance))
                            dirty (if repaint?
@@ -684,4 +795,3 @@
   (owner-thread! runtime)
   (vswap! (:state runtime) update :resource-epoch inc)
   (:resource-epoch (runtime-state runtime)))
-

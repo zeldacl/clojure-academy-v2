@@ -391,7 +391,7 @@
         result))
     {:status :noop :composition composition :revision (:composition-revision composition)}))
 
-(defn reset!
+(defn reset-composition!
   "Discard all session edits and recreate the active projection from BaseView." 
   [composition]
   (base-composition (:base-view composition)

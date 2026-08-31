@@ -48,7 +48,7 @@
         undone (composition/undo! after-insert)
         redone (composition/redo! (:composition undone))
         removed (composition/apply-edit! (:composition redone) {:op :remove :target-key "new-button"})
-        reset (composition/reset! (:composition removed))]
+        reset (composition/reset-composition! (:composition removed))]
     (is (= :applied (:status inserted)))
     (is (= :applied (:status undone)))
     (is (= :applied (:status redone)))
