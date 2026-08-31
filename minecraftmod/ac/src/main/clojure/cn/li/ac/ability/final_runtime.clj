@@ -119,13 +119,16 @@
    are compiled as a one-step final program, preserving the same host/state
    transaction boundary as an immediate dispatch."
   [runtime tick]
-  (let [due (atom [])
-        later (atom [])]
-    (doseq [scheduled @(:scheduled runtime)]
-      (if (<= (long (:tick scheduled)) (long tick))
-        (swap! due conj scheduled)
-        (swap! later conj scheduled)))
-    (reset! (:scheduled runtime) @later)
+  (let [[due later]
+        (reduce (fn [[due later] scheduled]
+                  (if (<= (long (:tick scheduled)) (long tick))
+                    [(conj! due scheduled) later]
+                    [due (conj! later scheduled)]))
+                [(transient []) (transient [])]
+                @(:scheduled runtime))
+        due (persistent! due)
+        later (persistent! later)]
+    (reset! (:scheduled runtime) later)
     (let [compile (get-in runtime [:apis :compile-program])
           execute (get-in runtime [:apis :execute])
           environment (:node-environment @(:catalog runtime))]
@@ -135,7 +138,7 @@
                         (execute (:engine runtime)
                                  (compile environment {:component :flow/sequence :steps [node]})
                                  (assoc frame :tick tick)))
-                      @due)})))
+                      due)})))
 
 (defn abort-owner!
   "Cancel scheduled final work for one owner.  This is the shared lifecycle
