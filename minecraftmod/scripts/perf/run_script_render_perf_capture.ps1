@@ -19,6 +19,7 @@ $outDir = Join-Path $root "build\reports\script-render-perf\$PlatformTarget\$Sce
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 
 $jfrFile = Join-Path $outDir "capture-$timestamp.jfr"
+$summaryFile = Join-Path $outDir "summary-$timestamp.txt"
 $logFile = Join-Path $outDir "run-$timestamp.log"
 
 $task = ':platform:runClient'
@@ -46,6 +47,7 @@ Write-Host "[perf] target    : $PlatformTarget"
 Write-Host "[perf] scenario  : $Scenario"
 Write-Host "[perf] mode      : $Mode"
 Write-Host "[perf] game-jfr  : $jfrFile"
+Write-Host "[perf] summary   : $summaryFile"
 Write-Host "[perf] log       : $logFile"
 
 Push-Location $root
@@ -67,6 +69,14 @@ try {
 
   if (Test-Path $jfrFile) {
     Write-Host "[perf] JFR captured: $jfrFile"
+    $summaryOutput = & jfr summary $jfrFile 2>&1
+    $summaryOutput | Out-File -FilePath $summaryFile -Encoding utf8
+    $summaryOutput
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "[perf] jfr summary failed; inspect $jfrFile directly"
+    } else {
+      Write-Host "[perf] JFR summary saved: $summaryFile"
+    }
   } else {
     Write-Warning "[perf] JFR file not found. Check log: $logFile"
   }
