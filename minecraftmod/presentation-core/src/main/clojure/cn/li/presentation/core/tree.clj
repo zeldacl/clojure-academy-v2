@@ -8,6 +8,10 @@
 (defn ordered-children
   "Return ordinary children followed by named-slot entries in stable order."
   [node]
-  (into (vec (or (:children node) []))
-        (mapcat second
-                (sort-by (comp str first) (or (:slots node) {})))))
+  (let [children (or (:children node) [])
+        slots (or (:slots node) {})]
+    (if (seq slots)
+      (into (if (vector? children) children (vec children))
+            (mapcat second
+                    (sort-by (comp str first) slots)))
+      (if (vector? children) children (vec children)))))

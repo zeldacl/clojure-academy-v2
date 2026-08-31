@@ -146,7 +146,13 @@
         _ (when-not (map? slots) (fail (str path ".slots") "must be a map"))
         _ (doseq [[slot entries] slots]
             (when-not (sequential? entries)
-              (fail (str path ".slots." slot) "must be sequential"))) ]
+              (fail (str path ".slots." slot) "must be sequential")))
+        slot-nodes (when (seq slots)
+                     (into (sorted-map)
+                           (map (fn [[slot entries]]
+                                  [slot (mapv #(normalize-node % (conj path index :slot slot) %2 bindings actions)
+                                              entries (range))])
+                            slots)))]
     (cond-> {:id (vec (conj path index))
      :key key
      :type type
@@ -158,12 +164,8 @@
      :action-ids action-ids
      :semantics semantics
      :children (mapv #(normalize-node % (conj path index) %2 bindings actions)
-                     children (range))
-     :slots (into (sorted-map)
-                  (map (fn [[slot entries]]
-                         [slot (mapv #(normalize-node % (conj path index :slot slot) %2 bindings actions)
-                                     entries (range))])
-                  slots))}
+                     children (range))}
+      (seq slot-nodes) (assoc :slots slot-nodes)
       (:blueprint-id source) (assoc :blueprint-id (int (:blueprint-id source))))))
 
 (defn- compile-nodes [root]
