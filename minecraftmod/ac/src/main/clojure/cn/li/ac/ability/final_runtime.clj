@@ -16,8 +16,7 @@
    :catalog-status 'cn.li.ac.ability.final-catalog-service/catalog-status
    :resolve-damage 'cn.li.combat.final-damage/resolve-event
    :registration 'cn.li.ac.ability.final-catalog-service/registration
-   :execute 'cn.li.combat.final-engine/execute!
-   :compile-program 'cn.li.combat.final-compiler/compile-program})
+   :execute 'cn.li.combat.final-engine/execute!})
 
 (defn- resolve-runtime-apis []
   (reduce-kv (fn [apis key symbol]
@@ -96,6 +95,13 @@
 (defn- registration [runtime ability-id]
   ((get-in runtime [:apis :registration]) ability-id))
 
+(defn- scheduled-program [node]
+  {:schema-version 1
+   :program {:component :flow/sequence
+             :kind :flow
+             :steps [node]}
+   :instructions 1})
+
 (defn dispatch!
   "Execute one final graph intent. Unknown abilities are rejected."
   [runtime ability-id frame]
@@ -110,13 +116,17 @@
           (when (and (:finish-ability? result) (ifn? (:remove-ability-state! runtime)))
             ((:remove-ability-state! runtime) (:owner frame)))
           (swap! (:scheduled runtime)
-                 into (map #(assoc % :ability-id ability-id :frame frame)
+                 into (map #(-> %
+                                (assoc :ability-id ability-id
+                                       :frame frame
+                                       :program (scheduled-program (:node %)))
+                                (dissoc :node))
                            (:scheduled result)))
           result)))))
 
 (defn tick!
   "Run scheduled final nodes whose target tick has arrived.  Scheduled nodes
-   are compiled as a one-step final program, preserving the same host/state
+   already-compiled one-step programs, preserving the same host/state
    transaction boundary as an immediate dispatch."
   [runtime tick]
   (let [[due later]
@@ -129,15 +139,11 @@
         due (persistent! due)
         later (persistent! later)]
     (reset! (:scheduled runtime) later)
-    (let [compile (get-in runtime [:apis :compile-program])
-          execute (get-in runtime [:apis :execute])
-          environment (:node-environment @(:catalog runtime))]
+    (let [execute (get-in runtime [:apis :execute])]
       {:status :accepted
        :tick tick
-       :results (mapv (fn [{:keys [node frame]}]
-                        (execute (:engine runtime)
-                                 (compile environment {:component :flow/sequence :steps [node]})
-                                 (assoc frame :tick tick)))
+       :results (mapv (fn [{:keys [program frame]}]
+                        (execute (:engine runtime) program (assoc frame :tick tick)))
                       due)})))
 
 (defn abort-owner!

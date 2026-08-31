@@ -45,7 +45,7 @@
                                          {:owner "alice" :world "w" :tick 0
                                           :seed 1 :input {:phase :start}})))))))
 
-(deftest final-runtime-tick-compiles-and-executes-due-node-test
+(deftest final-runtime-tick-executes-precompiled-due-node-test
   (let [rt (runtime/create-runtime
             {:host (host/create {:queries {} :actions {}})
              :state-provider (fn [_] {})
@@ -53,7 +53,11 @@
     (runtime/initialize! rt)
     (reset! (:scheduled rt)
             [{:tick 0
-              :node {:component :flow/finish :outcome :tick-fired}
+              :program {:schema-version 1
+                       :program {:component :flow/sequence
+                                 :kind :flow
+                                 :steps [{:component :flow/finish :outcome :tick-fired}]}
+                       :instructions 1}
               :frame {:owner "alice" :world "w" :ability-id :skill/a
                       :tick 0 :seed 1 :input {}}}])
     (let [result (runtime/tick! rt 0)]
