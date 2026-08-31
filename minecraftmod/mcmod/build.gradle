@@ -71,7 +71,7 @@ tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' 
     })
 }
 
-// Source-first by default; full-AOT mode uses classes as the only runtime representation.
+// Neutral runtime source is always packaged; only the selected Loom platform closure is AOT compiled.
 tasks.named('processResources').configure {
     if (false) {
         exclude '**/*.clj', '**/*.cljc'
