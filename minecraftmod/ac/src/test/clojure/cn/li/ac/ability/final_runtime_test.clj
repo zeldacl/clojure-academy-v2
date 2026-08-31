@@ -45,6 +45,21 @@
                                          {:owner "alice" :world "w" :tick 0
                                           :seed 1 :input {:phase :start}})))))))
 
+(deftest final-runtime-tick-compiles-and-executes-due-node-test
+  (let [rt (runtime/create-runtime
+            {:host (host/create {:queries {} :actions {}})
+             :state-provider (fn [_] {})
+             :commit-state! (fn [_] nil)})]
+    (runtime/initialize! rt)
+    (reset! (:scheduled rt)
+            [{:tick 0
+              :node {:component :flow/finish :outcome :tick-fired}
+              :frame {:owner "alice" :world "w" :ability-id :skill/a
+                      :tick 0 :seed 1 :input {}}}])
+    (let [result (runtime/tick! rt 0)]
+      (is (= :accepted (:status result)))
+      (is (= :tick-fired (get-in result [:results 0 :outcome])))
+      (is (empty? @(:scheduled rt))))))
 (deftest final-runtime-frame-world-prefers-activation-context-test
   (let [resolve-world (var-get (ns-resolve 'cn.li.ac.ability.final-runtime 'frame-world-id))]
     (is (= "world:nether" (resolve-world {:context {:world-id "world:nether"}})))
