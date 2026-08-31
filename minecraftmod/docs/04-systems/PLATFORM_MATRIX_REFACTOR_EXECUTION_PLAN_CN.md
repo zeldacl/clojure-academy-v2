@@ -47,8 +47,8 @@
 ## 阶段 3：热路径回调、tick、render
 
 1. 将回调集合固定为预分配数组/不可变快照：`ServerTickCallbacks`、`ClientRuntimeCallbacks`、`PresentationClientRuntime`、`WorldStageQueue`、`AudienceSender`、`InteractionOutcome`。
-2. 注册只发生在 bootstrap；tick/render/网络回调禁止 `resolve`、map 构造、`vec`/`seq`、匿名 reify 或临时闭包。dispatch 采用索引/数组遍历，异常策略为一次记录后禁用坏回调；延迟任务按 deadline 有序 bucket 取出，tick 不扫描全部未到期任务。输入会话 `receive!` 直接链接 `fixed-channel/decode-intent`，每包路径不再调用 `requiring-resolve`；server bridge 在 bootstrap 固化不可变回调表，VFX/服务端转发不再每次读取 Framework atom。
-3. combat audience 直接遍历原生玩家/AABB 发送，不生成 UUID 集合；VFX world-stage queue 使用 session-owned 可复用缓冲区，tick 末清空。AC 的 VFX nearby/all 查询和反射伤害回调在首次生产 runtime 创建时冻结为具体函数；平台网络 SPI 只在 bootstrap 阶段解析一次，信号/伤害热路径不再执行命名空间解析或 Var 查找。
+2. 注册只发生在 bootstrap；tick/render/网络回调的获取阶段禁止 `resolve`、Framework atom/map 查找、匿名 reify 或临时闭包。dispatch 采用索引/数组遍历，异常策略为一次记录后禁用坏回调；延迟任务按 deadline 有序 bucket 取出，tick 不扫描全部未到期任务。输入会话 `receive!` 直接链接 `fixed-channel/decode-intent`，每包路径不再调用 `requiring-resolve`；server bridge 在 bootstrap 固化不可变回调表，VFX/服务端转发不再每次读取 Framework atom。事件 fan-out 的 recipient/payload 组装限定在事件边界、受预算约束，并由 JFR 验证其分配率。
+3. combat audience 直接遍历原生玩家/AABB 发送，不在每 tick 路径生成 UUID 集合；VFX world-stage queue 使用 session-owned 可复用缓冲区，tick 末清空。AC 的 VFX nearby/all 查询和反射伤害回调在首次生产 runtime 创建时冻结为具体函数；平台网络 SPI 只在 bootstrap 阶段解析一次，信号/伤害热路径不再执行命名空间解析或 Var 查找。
 4. 交互统一返回 `pass/handled/open-gui`；禁止把任意 truthy 值当作 consumed。
 5. 用 JMH（仅 benchmark source set）和代表性 JFR 验收：CPU p95 不得比基线增加 5%，稳态 allocation rate 与 live-set 增加不超过 5%，tick 99p 不得产生不可界定的短命对象。当前已提供可选的无头调度器采样：`cmd /c gradlew.bat :ac:runAcClojureTestsFast "-Dac.test.only=cn.li.ac.ability.final-runtime-perf-test" "-Dac.test.jfr=build/reports/jfr/final-runtime-scheduler-<date>.jfr" --stacktrace`；该基准只验证 deadline bucket 的调度开销，不替代真实游戏实例 JFR/JMH。现已补建 `tools:benchmarks` 隔离 JMH source set/任务与 `FinalRuntimeTickBenchmark`；JMH 依赖、生成 class 和结果不得进入任一运行时 Jar。
 
