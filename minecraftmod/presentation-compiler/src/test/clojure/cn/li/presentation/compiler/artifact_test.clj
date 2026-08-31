@@ -28,7 +28,11 @@
                     :root {:type :tree-view
                            :key :tree
                            :props {:items [:state :items]
-                                   :selected [:state :selected]}}}
+                                   :selected [:state :selected]}
+                           :children [{:type :list-view
+                                       :key :nested-list
+                                       :props {:items [:state :items]
+                                               :selected [:state :selected]}}]}}
                    "tree.ui.edn")
         node (:nodes compiled)]
     (is (= :pui4 (:magic compiled)))
@@ -38,6 +42,9 @@
             :props-schema {:items :binding :selected :binding}
             :slot-schema {}}
            (get-in compiled [:boundaries :tree])))
+    (is (= :scroll (get-in node [:children 0 :type])))
+    (is (= 2 (get-in node [:children 0 :blueprint-id])))
+    (is (not (contains? (get-in node [:children 0]) :component)))
     (is (not (contains? node :component)))
     (is (nil? (get-in compiled [:blueprint-catalog 1 :name])))))
 
