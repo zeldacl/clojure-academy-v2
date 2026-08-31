@@ -2,7 +2,7 @@
   "IC2 Energy integration - exposes AC energy converters as IC2 EU providers/consumers.
 
   SANCTIONED REFLECTION ISLAND: optional third-party ic2.api.* types are not
-  Minecraft/loader symbols and are allowlisted by verifyNoPlatformReflection."
+  Minecraft/loader symbols and are allowlisted by verifyOptionalIntegrations."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.integration-runtime :as energy-hooks]
             [cn.li.mcmod.capability.registry :as capability-registry])
