@@ -1402,11 +1402,24 @@ tasks.register("verifyOptionalIntegrations") {
             file("platform-src/loader/forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/ic2_energy.clj"),
             file("platform-src/loader/neoforge-shared/src/main/clojure/cn/li/neoforgebase/integration/ic2_energy.clj")
         ]
-        def allowlistedReflection = ~/java\.lang\.reflect|Class\/forName|Proxy\/newProxyInstance/
+        def allowlistedReflection = ~/java\.lang\.reflect|Class\/forName|Proxy\/newProxyInstance|Method\.invoke|setAccessible|clojure\.lang\.Reflector|getDeclaredConstructor/
         def forbiddenOutsideIsland = []
-        [file("ac/src/main"), file("mcmod/src/main"), file("api/src/main")].findAll { it.directory }.each { root ->
+        def applicationMainRoots = [file("ac/src/main"), file("mcmod/src/main"), file("api/src/main")]
+        def platformMainRoot = file("platform-src")
+        applicationMainRoots.findAll { it.directory }.each { root ->
             fileTree(root) { include "**/*.clj"; include "**/*.java" }.files.each { source ->
                 if (!ic2Files.contains(source) && (source.text =~ allowlistedReflection).find()) {
+                    forbiddenOutsideIsland << source
+                }
+            }
+        }
+        if (platformMainRoot.directory) {
+            fileTree(platformMainRoot) {
+                include "**/src/main/**/*.clj"
+                include "**/src/main/**/*.cljc"
+                include "**/src/main/**/*.java"
+            }.files.each { source ->
+                if (!ic2Files*.canonicalFile.contains(source.canonicalFile) && (source.text =~ allowlistedReflection).find()) {
                     forbiddenOutsideIsland << source
                 }
             }
