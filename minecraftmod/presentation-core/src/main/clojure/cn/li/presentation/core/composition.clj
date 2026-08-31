@@ -5,44 +5,10 @@
    session projection over that BaseView; no edit mutates the source view or
    survives unmount/reset.  Nodes are already primitive-safe at this layer,
    while blueprint descriptors only provide catalog metadata and templates."
-  (:require [clojure.string :as string]))
+  (:require [clojure.string :as string]
+            [cn.li.presentation.core.primitive :as primitive]))
 
 (def default-history-limit 100)
-
-;; Primitive blueprints are the runtime's one stable construction vocabulary.
-;; They are deliberately kept out of serialized Artifacts: the compiler emits
-;; only the nodes and component blueprints required by a view, while an edit
-;; session may still instantiate a primitive such as a Button into a declared
-;; container.
-(def ^:private primitive-container-types
-  #{"absolute" "row" "column" "grid" "stack" "clip" "scroll"
-    "portal" "repeater" "conditional" "switch" "transform" "mask"})
-
-(def ^:private primitive-types
-  #{"absolute" "row" "column" "grid" "stack" "clip" "scroll" "portal"
-    "repeater" "conditional" "switch" "transform" "mask" "rect" "image"
-    "nine-slice" "text" "line" "gradient" "progress" "radial-progress"
-    "glow-line" "button" "text-input" "item-preview" "model-preview"
-    "slot-anchor" "composite"})
-
-(def ^:private primitive-blueprints
-  (into {}
-        (map (fn [type]
-               [type {:id type
-                      :edit-policy (if (contains? primitive-container-types type)
-                                     :children
-                                     :sealed)
-                      :props-schema (case type
-                                      "button" {:action :action-id :text :binding}
-                                      "text-input" {:text :binding}
-                                      "progress" {:value :binding}
-                                      {})
-                      :slot-schema {}
-                      :template {:key "primitive-template"
-                                 :blueprint type
-                                 :type (keyword type)
-                                 :children []}}])
-             primitive-types)))
 
 (defn- value-id [value]
   (cond
@@ -117,7 +83,7 @@
    ([base-view {:keys [history-limit] :or {history-limit default-history-limit}}]
    (let [root (normalize-node (:root base-view))
          blueprints (normalize-blueprints
-                     (merge primitive-blueprints (or (:blueprints base-view) {})))
+                     (merge primitive/blueprints (or (:blueprints base-view) {})))
          boundaries (into {}
                           (map (fn [[key descriptor]]
                                  [(key-id key) descriptor]))

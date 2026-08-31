@@ -5,7 +5,8 @@
    produced here and never loads presentation-compiler."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [cn.li.presentation.core.primitive :as primitive])
   (:import [java.io File]
            [java.math BigInteger]
            [java.nio.charset StandardCharsets]
@@ -15,10 +16,7 @@
 (def artifact-schema 4)
 (def ui-source-schema 1)
 
-(def primitive-types
-  #{:absolute :row :column :grid :stack :clip :scroll :portal :repeater :conditional :switch :transform :mask
-    :rect :image :nine-slice :text :line :gradient :progress :radial-progress :glow-line
-    :button :text-input :item-preview :model-preview :slot-anchor :composite})
+(def primitive-types (set (map keyword primitive/types)))
 
 (def semantic-roles
   #{:generic :heading :button :textbox :dialog :list :list-item :image :slot :progress :scrollbar})
