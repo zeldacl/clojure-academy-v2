@@ -34,7 +34,11 @@ tasks.register("jmh", JavaExec) {
     dependsOn tasks.named("jmhClasses")
     classpath = sourceSets.jmh.runtimeClasspath
     mainClass = "org.openjdk.jmh.Main"
-    args = ["cn.li.tools.benchmark.FinalRuntimeTickBenchmark", "-wi", "3", "-i", "5", "-f", "1"]
+    def report = layout.buildDirectory.file("reports/jmh/results.json")
+    outputs.file(report)
+    outputs.upToDateWhen { false }
+    doFirst { report.get().asFile.parentFile.mkdirs() }
+    args = ["cn.li.tools.benchmark.FinalRuntimeTickBenchmark", "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
 }
 
 tasks.named("check").configure {
