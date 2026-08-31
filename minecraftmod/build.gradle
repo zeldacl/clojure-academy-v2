@@ -2016,6 +2016,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyVfxJavaBoundary",
               "verifyVfxAotBoundary",
               "verifyClojureRuntimeRepresentation",
+              "verifyOptionalIntegrations",
               "verifyPresentationLoaderHooks",
               "verifyPresentationAtomicSwitch",
               "verifyNeutralProviderClosure",
