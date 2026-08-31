@@ -58,7 +58,7 @@
 
 - Forge 1.20.1、Fabric 三目标和 NeoForge 1.21.1/26.2 都使用真实 typed JEI adapter；不得保留 Neo stub。
 - API 使用 `compileOnly`，开发运行时使用对应 `runtimeOnly`；主 Jar 仍为一个，不能把 JEI API/实现打包进去。
-- JEI 缺失时主 mod 必须正常启动；存在时由 loader discovery 自动注册分类、配方、catalyst、GUI handler 和 subtype。
+- JEI 缺失时主 mod 必须正常启动；存在时由 loader discovery 自动注册分类、配方和 catalyst。Forge/NeoForge 额外注册 GUI handler/subtype；Fabric API 不提供等价的容器 GUI handler，不能伪造跨平台实现。
 - JEI 适配器只调用 neutral recipe provider，不得在 render/tick 热路径解析命名空间。
 
 ### IC2
@@ -68,7 +68,7 @@
 - 能力查询使用直接 `cn.li.mcmod.capability.registry` 回调；禁止 `requiring-resolve`。proxy 按 block entity/side/mode 缓存，世界卸载时清理。
 - IC2 API 不嵌入主 Jar；无 IC2 时零错误，有 IC2 时自动启用 EU 转换与 sink/source。
 
-提交点：`integration: keep typed JEI and cached optional IC2 adapters`（已完成；NeoForge 26.2 JEI adapter 仍需按本阶段补齐并验证 API 版本）。
+提交点：`integration: keep typed JEI and cached optional IC2 adapters`、`integration: complete Fabric JEI entrypoints`、`integration: cover NeoForge 26.2 JEI`（均已完成；验证门覆盖六目标声明、入口和实现文件）。
 
 ## 阶段 5：反射、AOT 和 Loom 边界
 
