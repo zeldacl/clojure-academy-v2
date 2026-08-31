@@ -1375,15 +1375,28 @@ tasks.register("verifyOptionalIntegrations") {
     description = "Verify JEI is a real typed adapter and IC2 reflection stays inside the optional third-party boundary."
     doLast {
         def catalog = new groovy.json.JsonSlurper().parse(file("platform-catalog.json"))
-        def neo1211 = catalog.targets["neoforge-1.21.1"]
-        def neoCaps = (neo1211.capabilities ?: []) as List
-        if (!("jei" in neoCaps) || !(neo1211.capabilityOwners?.jei ?: []).contains("neoforge-1.21.1")) {
-            throw new GradleException("neoforge-1.21.1 must declare exactly one JEI capability owner")
-        }
-        def neoWrapper = file("platform-src/loader/neoforge-1.21.1/src/main/java/cn/li/neoforge1211/integration/JEIPluginWrapper.java")
-        def neoImpl = file("platform-src/loader/neoforge-1.21.1/src/main/clojure/cn/li/neoforge1211/integration/jei_impl.clj")
-        if (!neoWrapper.text.contains("@JeiPlugin") || neoWrapper.text.contains("placeholder") || neoImpl.text.contains("stub")) {
-            throw new GradleException("NeoForge 1.21.1 JEI adapter must be a real typed implementation")
+        def jeiTargets = [
+            [id: "forge-1.20.1", loader: "forge", wrapper: "platform-src/loader/forge-1.20.1/src/main/java/cn/li/forge1201/integration/JEIPluginWrapper.java", impl: "platform-src/loader/forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/jei_impl.clj"],
+            [id: "fabric-1.20.1", loader: "fabric", wrapper: "platform-src/loader/fabric-1.20.1/src/main/java/cn/li/fabric1201/integration/JEIPluginWrapper.java", impl: "platform-src/loader/fabric-1.20.1/src/main/clojure/cn/li/fabric1201/integration/jei_impl.clj"],
+            [id: "fabric-1.21.1", loader: "fabric", wrapper: "platform-src/loader/fabric-1.21.1/src/main/java/cn/li/fabric1211/integration/JEIPluginWrapper.java", impl: "platform-src/loader/fabric-1.21.1/src/main/clojure/cn/li/fabric1211/integration/jei_impl.clj"],
+            [id: "neoforge-1.21.1", loader: "neoforge", wrapper: "platform-src/loader/neoforge-1.21.1/src/main/java/cn/li/neoforge1211/integration/JEIPluginWrapper.java", impl: "platform-src/loader/neoforge-1.21.1/src/main/clojure/cn/li/neoforge1211/integration/jei_impl.clj"],
+            [id: "neoforge-26.2", loader: "neoforge", wrapper: "platform-src/loader/neoforge-26.2/src/main/java/cn/li/neoforge262/integration/JEIPluginWrapper.java", impl: "platform-src/loader/neoforge-26.2/src/main/clojure/cn/li/neoforge262/integration/jei_impl.clj"],
+            [id: "fabric-26.2", loader: "fabric", wrapper: "platform-src/loader/fabric-26.2/src/main/java/cn/li/fabric262/integration/JEIPluginWrapper.java", impl: "platform-src/loader/fabric-26.2/src/main/clojure/cn/li/fabric262/integration/jei_impl.clj"]
+        ]
+        jeiTargets.each { spec ->
+            def target = catalog.targets[spec.id]
+            def caps = (target.capabilities ?: []) as List
+            if (!("jei" in caps) || !(target.capabilityOwners?.jei ?: []).contains(spec.id)) {
+                throw new GradleException("${spec.id} must declare exactly one JEI capability owner")
+            }
+            def wrapper = file(spec.wrapper)
+            def impl = file(spec.impl)
+            if (!wrapper.isFile() || !impl.isFile() || wrapper.text.contains("placeholder") || impl.text.contains("stub")) {
+                throw new GradleException("${spec.id} JEI adapter must be a real typed implementation")
+            }
+            if (spec.loader == "fabric" && !file("platform-src/loader/${spec.id}/src/main/resources/fabric.mod.json").text.contains("jei_mod_plugin")) {
+                throw new GradleException("${spec.id} must expose the JEI Fabric entrypoint")
+            }
         }
         def ic2Files = [
             file("platform-src/loader/forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/ic2_energy.clj"),

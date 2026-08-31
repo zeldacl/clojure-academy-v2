@@ -572,7 +572,8 @@
         "registry",
         "network",
         "gui",
-        "capability"
+        "capability",
+        "jei"
       ],
       "capabilityOwners": {
         "loader-entrypoint": ["neoforge-26.2"],
@@ -582,10 +583,14 @@
         "registry": ["neoforge-26.2"],
         "network": ["neoforge-26.2"],
         "gui": ["neoforge-26.2"],
-        "capability": ["neoforge-26.2"]
+        "capability": ["neoforge-26.2"],
+        "jei": ["neoforge-26.2"]
       },
       "dependencies": {
-      "neoForgeVersion": "26.2.0.25-beta"
+        "neoForgeVersion": "26.2.0.25-beta",
+        "jeiCommonApi": "mezz.jei:jei-26.2-common-api:30.11.0.66",
+        "jeiNeoForgeApi": "mezz.jei:jei-26.2-neoforge-api:30.11.0.66",
+        "jeiNeoForgeRuntime": "mezz.jei:jei-26.2-neoforge:30.11.0.66"
       },
       "datagenParityGroup": "mc-262",
       "entrypoint": {
