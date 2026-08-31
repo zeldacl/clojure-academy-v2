@@ -119,6 +119,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 在同一提交上重新执行六目标 `runPlatformClojureTests`：Forge 1.20.1 为 110 tests/262 assertions，Fabric 1.20.1、Fabric 1.21.1、Fabric 26.2 各为 11/32，NeoForge 1.21.1 为 103/240，NeoForge 26.2 为 106/249；全部 0 failures/0 errors。IC2 不兼容 fixture 的一次性 warning 属于预期隔离测试输出，不代表运行时失败。
 
+随后又清理了两个热路径残留：AC 的 VFX/反射回调在生产 runtime 首次创建时冻结，`mcmod` 输入会话直接调用 `fixed-channel/decode-intent`；server bridge 也改为 bootstrap 固化根回调表，发送路径不再读取 Framework atom。`mcmod:checkClojure :mcmod:test`（20 tasks）和六目标 `verifyCurrentPlatforms`（99 tasks）在该改动后均通过；对应提交为 `93868faa9`、`173f37b56`、`4864e6a4c`。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
