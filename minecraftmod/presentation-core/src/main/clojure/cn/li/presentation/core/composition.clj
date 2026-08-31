@@ -79,14 +79,14 @@
   "Create an ephemeral composition session from immutable normalized BaseView data.
    The returned value is safe to retain as the only source for a mount." 
   ([base-view] (base-composition base-view {}))
-  ([base-view {:keys [history-limit] :or {history-limit default-history-limit}}]
+   ([base-view {:keys [history-limit] :or {history-limit default-history-limit}}]
    (let [root (normalize-node (:root base-view))
          blueprints (normalize-blueprints (:blueprints base-view))
          boundaries (into {}
                           (map (fn [[key descriptor]]
                                  [(key-id key) descriptor]))
-                          (or (:boundaries base-view) {}))]
-     (indexes root)
+                          (or (:boundaries base-view) {}))
+         index (indexes root)]
      {:base-view (assoc base-view
                         :root root
                         :blueprints blueprints
@@ -94,6 +94,7 @@
       :root root
       :blueprints blueprints
       :boundaries boundaries
+      :index index
       :history []
       :redo []
       :history-limit (max 0 (int history-limit))
@@ -106,7 +107,8 @@
    :composition-revision (:composition-revision composition)})
 
 (defn- node-index [composition]
-  (indexes (:root composition)))
+  (or (:index composition)
+      (indexes (:root composition))))
 
 (defn- descriptor [composition key node]
   (or (get (:boundaries composition) key)
@@ -339,6 +341,7 @@
 (defn- record-edit [composition command result]
   (let [revision (inc (:composition-revision composition))
         next (assoc (:composition result)
+                    :index (indexes (:root (:composition result)))
                     :composition-revision revision
                     :redo [])
         entry {:command command :inverse (:inverse result)}
@@ -375,6 +378,7 @@
       (let [result (apply-internal composition (:inverse entry))
             history (pop (:history composition))
             next (assoc (:composition result)
+                        :index (indexes (:root (:composition result)))
                         :history history
                         :redo (conj (:redo composition) entry)
                         :composition-revision (inc (:composition-revision composition)))]
