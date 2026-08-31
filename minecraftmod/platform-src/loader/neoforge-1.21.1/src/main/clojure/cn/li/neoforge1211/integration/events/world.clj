@@ -3,7 +3,7 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.event-runtime :as world-lifecycle]
             [cn.li.platform.neutral.event-runtime :as world-save-cache]
-            [cn.li.neoforgebase.integration.ic2-energy :as ic2-energy]
+            [cn.li.platform.optional.ic2-energy :as ic2-energy]
             [cn.li.platform.neutral.event-runtime :as world-state-notify]
             [cn.li.platform.neutral.event-runtime :as wok]
             [cn.li.mcmod.framework :as fw]

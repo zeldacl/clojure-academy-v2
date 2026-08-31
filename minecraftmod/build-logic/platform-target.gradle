@@ -732,6 +732,11 @@ if (target.loader != "none") {
     }
 
     def copyClojureClassesToJavaOutput = tasks.register("copyClojureClassesToJavaOutput", Copy) {
+        // Named/source-first targets must never copy a stale AOT directory
+        // back into classes/java/main. Their platform namespaces are loaded
+        // from staged .clj resources; only remapped Loom targets need the
+        // exhaustive platform AOT class graph.
+        onlyIf { rootProject.ext.platformRemapAotEnabled }
         from clojureAotDir
         into layout.buildDirectory.dir("classes/java/main")
         dependsOn tasks.named("compileClojure")

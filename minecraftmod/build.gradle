@@ -1399,8 +1399,7 @@ tasks.register("verifyOptionalIntegrations") {
             }
         }
         def ic2Files = [
-            file("platform-src/loader/forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/ic2_energy.clj"),
-            file("platform-src/loader/neoforge-shared/src/main/clojure/cn/li/neoforgebase/integration/ic2_energy.clj")
+            file("platform-src/platform/shared/src/main/clojure/cn/li/platform/optional/ic2_energy.clj")
         ]
         def allowlistedReflection = ~/java\.lang\.reflect|Class\/forName|Proxy\/newProxyInstance|Method\.invoke|setAccessible|clojure\.lang\.Reflector|getDeclaredConstructor/
         def forbiddenOutsideIsland = []

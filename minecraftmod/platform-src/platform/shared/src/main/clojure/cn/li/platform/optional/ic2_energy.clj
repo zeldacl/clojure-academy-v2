@@ -1,8 +1,8 @@
-(ns cn.li.forge1201.integration.ic2-energy
+(ns cn.li.platform.optional.ic2-energy
   "IC2 Energy integration - exposes AC energy converters as IC2 EU providers/consumers.
 
   SANCTIONED REFLECTION ISLAND: optional third-party ic2.api.* types are not
-  Minecraft/Forge symbols and are allowlisted by verifyNoPlatformReflection."
+  Minecraft/loader symbols and are allowlisted by verifyNoPlatformReflection."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.integration-runtime :as energy-hooks]
             [cn.li.mcmod.capability.registry :as capability-registry])
@@ -51,16 +51,6 @@
 (defn- resolve-class
   [class-name]
   (Class/forName class-name false (context-class-loader)))
-
-(defn- class-present?
-  [class-name]
-  (try
-    (some? (resolve-class class-name))
-    (catch ClassNotFoundException _
-      false)
-    (catch LinkageError e
-      (log/warn "Optional IC2 class could not be linked:" class-name (ex-message e))
-      false)))
 
 (defn- primitive-default
   [^Class return-type]

@@ -7,7 +7,7 @@
             [cn.li.forge1201.registry.content-registration :as content-registration]
             [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
             [cn.li.forge1201.integration.forge-energy :as forge-energy]
-            [cn.li.forge1201.integration.ic2-energy :as ic2-energy]
+            [cn.li.platform.optional.ic2-energy :as ic2-energy]
             [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
             [cn.li.forge1201.integration.tutorial-events :as tutorial-events]
             [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
