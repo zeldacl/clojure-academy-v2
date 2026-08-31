@@ -70,7 +70,7 @@
 
 ### Loom 反射清理
 
-- Loom 平台代码不得保留跨版本反射兼容层；`DistAccess` 已按 NeoForge 1.21.1/26.2 拆成直接 API。Forge/NeoForge 的 DSL 实体 kind→构造器仍需在后续提交改为显式 `EntityFactory` 表，不能继续使用 `Constructor.newInstance`。
+- Loom 平台代码不得保留跨版本反射兼容层；`DistAccess` 已按 NeoForge 1.21.1/26.2 拆成直接 API，Forge/NeoForge 的 DSL entity kind 也已改为显式 `EntityFactory` 分发表。
 
 提交点：`integration: keep typed JEI and cached optional IC2 adapters`、`integration: complete Fabric JEI entrypoints`、`integration: cover NeoForge 26.2 JEI`（均已完成；验证门覆盖六目标声明、入口和实现文件）。
 
