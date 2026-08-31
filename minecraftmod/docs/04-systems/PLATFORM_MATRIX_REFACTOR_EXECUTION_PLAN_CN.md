@@ -86,15 +86,17 @@
 
 ```text
 cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace
-cmd /c gradlew.bat :platform:check :platform:jar -PplatformTarget=forge-1.20.1 --stacktrace
-cmd /c gradlew.bat :platform:check :platform:remapJar -PplatformTarget=fabric-1.20.1 --stacktrace
-cmd /c gradlew.bat :platform:check :platform:remapJar -PplatformTarget=fabric-1.21.1 --stacktrace
-cmd /c gradlew.bat :platform:check :platform:remapJar -PplatformTarget=neoforge-1.21.1 --stacktrace
-cmd /c gradlew.bat :platform:check :platform:jar -PplatformTarget=neoforge-26.2 --stacktrace
-cmd /c gradlew.bat :platform:check :platform:jar -PplatformTarget=fabric-26.2 --stacktrace
+cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=forge-1.20.1" --stacktrace
+cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=fabric-1.20.1" --stacktrace
+cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=fabric-1.21.1" --stacktrace
+cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=neoforge-1.21.1" --stacktrace
+cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=neoforge-26.2" --stacktrace
+cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" --stacktrace
 ```
 
 每个目标还必须运行 neutral/combat/vfx/mcmod headless tests、JEI absent/present fixture、IC2 absent/present/incompatible fixture、Jar overlap scan 和代表性 JFR。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
+
+当前执行证据：Forge 1.20.1 `verifyCurrentPlatforms` 全门通过；NeoForge 1.21.1 AOT coverage + runtime representation XOR 通过；Fabric 1.20.1/1.21.1 `compileJava` 通过；mcmod 49 namespaces、194 tests、577 assertions 为 0 failures/0 errors。NeoForge 26.2 需 Gradle 9.2+（当前 wrapper 8.8 触发 MDG/Shadow `AdhocComponentWithVariants` API 错误），Fabric 26.2 需 Gradle 9.5+（当前 wrapper 无法解析 Loom 1.17 plugin API）；升级为按 profile 选择 Gradle wrapper 后再执行上述两目标。
 
 ## 明确排除的矛盾方案
 
