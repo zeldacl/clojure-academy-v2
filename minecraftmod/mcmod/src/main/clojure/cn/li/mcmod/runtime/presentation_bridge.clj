@@ -82,11 +82,11 @@
 (defn reset-edits! [mount-id]
   ((require-host-op :reset-edits!) mount-id))
 
-(defn begin-frame! [mount-id frame-context]
-  ((require-host-op :begin-frame!) mount-id frame-context))
+(defn begin-frame! [stage frame-context]
+  ((require-host-op :begin-frame!) stage frame-context))
 
-(defn extract-stage! [mount-id]
-  ((require-host-op :extract-stage!) mount-id))
+(defn extract-stage! [stage frame-context]
+  ((require-host-op :extract-stage!) stage frame-context))
 
 (defn unmount! [mount-id]
   ((require-host-op :unmount!) mount-id))

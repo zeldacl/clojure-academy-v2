@@ -13,6 +13,7 @@
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.presentation.core.host :as presentation-host]
+            [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderStage RenderCommand$Batch RenderCommand$AudioContribution RenderCommand$CameraContribution RenderCommand$PostProcess]
            [cn.li.mcmod.runtime.vfx VfxFrame VfxRenderStage VfxOutputKind]))
@@ -116,6 +117,24 @@
     (FramePacket. (.frameId packet) passes)))
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
+
+(defn- install-presentation-boundary!
+  "Install the opaque Runtime API behind mcmod's version-neutral bridge.
+   Minecraft/loader code can call the bridge; it never reaches Presentation
+   implementation maps directly." 
+  []
+  (let [api (core-host-api)]
+    (presentation-bridge/install-host!
+     {:mount! (:mount! api)
+      :sync! (:sync! api)
+      :dispatch-input! (:dispatch-input! api)
+      :apply-edit! (:apply-edit! api)
+      :undo-edit! (:undo-edit! api)
+      :redo-edit! (:redo-edit! api)
+      :reset-edits! (:reset-edits! api)
+      :begin-frame! (:begin-frame! api)
+      :extract-stage! (:extract-stage! api)
+      :unmount! (:unmount! api)})))
 
 (def ^:private stage->render-stage
   {:world-before-translucent RenderStage/WORLD_BEFORE_TRANSLUCENT
@@ -234,10 +253,10 @@
 (defn install-bridge!
   "Install the Presentation Runtime bridge into the neutral client boundary."
   []
+  (install-presentation-boundary!)
   (bridge/merge-client-bridge!
     {:presentation-host-api presentation-host-api})
   (log/info "Presentation Runtime bridge installed"))
-
 
 
 
