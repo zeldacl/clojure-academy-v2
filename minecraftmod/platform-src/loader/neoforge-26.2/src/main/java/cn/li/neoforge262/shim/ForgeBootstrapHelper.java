@@ -1,12 +1,17 @@
 package cn.li.neoforge262.shim;
 
 import cn.li.neoforge262.block.entity.ScriptedBlockEntity;
+import cn.li.mc262.entity.ScriptedProjectileEntity;
+import cn.li.mc262.entity.ScriptedEffectEntity;
+import cn.li.mc262.entity.ScriptedRayEntity;
+import cn.li.mc262.entity.ScriptedMarkerEntity;
+import cn.li.mc262.entity.ScriptedBlockBodyEntity;
+import cn.li.mc262.entity.ScriptedMobEntity;
 import cn.li.mcbase.block.ScriptedLiquidBlock;
 import cn.li.mc262.block.SharedBootstrapBlockHelper;
 import cn.li.mc262.block.SharedDynamicStateBlock;
 import cn.li.mc262.block.SharedScriptedBlock;
 import cn.li.mc262.block.ScriptedRenderShapes;
-import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mc262.runtime.BlockRegistry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -34,7 +39,6 @@ import net.neoforged.neoforge.fluids.FluidType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
-import java.lang.reflect.Constructor;
 import java.util.function.Function;
 import java.util.List;
 import java.util.function.Supplier;
@@ -255,29 +259,14 @@ public final class ForgeBootstrapHelper {
         );
     }
 
-    @SuppressWarnings("unchecked")
-    public static EntityType<?> createEntityType(String fullId,
-                                                 Class<?> entityClass,
+    private static EntityType<?> createEntityType(String fullId,
+                                                 EntityType.EntityFactory<Entity> factory,
                                                  String category,
                                                  float width,
                                                  float height,
                                                  int clientTrackingRange,
                                                  int updateInterval,
                                                  boolean fireImmune) {
-        Class<? extends Entity> typedClass = (Class<? extends Entity>) entityClass;
-        Constructor<? extends Entity> ctor;
-        try {
-            ctor = typedClass.getConstructor(EntityType.class, net.minecraft.world.level.Level.class);
-        } catch (NoSuchMethodException e) {
-            throw new IllegalStateException("Entity class must have constructor (EntityType, Level): " + typedClass.getName(), e);
-        }
-        EntityType.EntityFactory<Entity> factory = (type, level) -> {
-            try {
-                return ctor.newInstance(type, level);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to instantiate entity: " + typedClass.getName(), e);
-            }
-        };
         MobCategory mobCategory = switch (String.valueOf(category)) {
             case "monster" -> MobCategory.MONSTER;
             case "creature" -> MobCategory.CREATURE;
@@ -297,6 +286,7 @@ public final class ForgeBootstrapHelper {
         return builder.build(ResourceKey.create(Registries.ENTITY_TYPE, Identifier.parse(fullId)));
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public static EntityType<?> createEntityTypeByKind(String fullId,
                                                        String entityKind,
                                                        String category,
@@ -305,13 +295,18 @@ public final class ForgeBootstrapHelper {
                                                        int clientTrackingRange,
                                                        int updateInterval,
                                                        boolean fireImmune) {
-        Class<?> entityClass = ScriptedEntitySpecAccess.resolveEntityClassByKind(entityKind);
-        if (entityClass == null) {
-            throw new IllegalStateException("Unknown entity kind: " + entityKind);
-        }
+        EntityType.EntityFactory<Entity> factory = switch (String.valueOf(entityKind)) {
+            case "scripted-projectile" -> (type, level) -> new ScriptedProjectileEntity((EntityType) type, level);
+            case "scripted-effect" -> (type, level) -> new ScriptedEffectEntity((EntityType) type, level);
+            case "scripted-ray" -> (type, level) -> new ScriptedRayEntity((EntityType) type, level);
+            case "scripted-marker" -> (type, level) -> new ScriptedMarkerEntity((EntityType) type, level);
+            case "scripted-block-body" -> (type, level) -> new ScriptedBlockBodyEntity((EntityType) type, level);
+            case "scripted-mob" -> (type, level) -> new ScriptedMobEntity((EntityType) type, level);
+            default -> throw new IllegalStateException("Unknown entity kind: " + entityKind);
+        };
         return createEntityType(
             fullId,
-            entityClass,
+            factory,
             category,
             width,
             height,
