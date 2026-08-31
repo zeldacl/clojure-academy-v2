@@ -1,4 +1,4 @@
-{:view/id :academy.app/skill-tree
+{:ui/schema 1 :view/id :academy.app/skill-tree
  :host {:kind :screen :design-width 420 :design-height 260 :scale-policy :fit}
  :state-schema {:title :string :category :string :level :string :items :vector
                 :selected :number :selected-skill :string :detail :map

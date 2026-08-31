@@ -1,4 +1,4 @@
-{:view/id :academy.app/location-teleport
+{:ui/schema 1 :view/id :academy.app/location-teleport
  :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
  :state-schema {:title :string :status :string :exp :number :current-label :string
                 :locations :vector :visible-locations :vector :input :string

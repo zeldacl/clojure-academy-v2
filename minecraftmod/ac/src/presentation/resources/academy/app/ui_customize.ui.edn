@@ -1,4 +1,4 @@
-{:view/id :academy.app/ui-customize
+{:ui/schema 1 :view/id :academy.app/ui-customize
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :items :vector :selected :number :edit-x :string :edit-y :string :status :string}
  :root {:type :column :key :customize/root :layout {:x 16 :y 16 :width 288 :height 208}

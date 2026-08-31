@@ -1,4 +1,4 @@
-{:view/id :academy.app/machine-container
+{:ui/schema 1 :view/id :academy.app/machine-container
  :host {:kind :container :design-width 176 :design-height 200 :scale-policy :fit}
  :state-schema {:slots :vector :machine-state :string :energy-ratio :number :progress-ratio :number
                 :info-area :map :network-visible :boolean :network-state :string
