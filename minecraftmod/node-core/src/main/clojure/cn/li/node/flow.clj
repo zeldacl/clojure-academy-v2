@@ -88,20 +88,20 @@
 
 (def builtin-descriptors
   "Immutable descriptor values for the shared structural primitives."
-  [{:id :flow/sequence :revision 1
+  [{:id :flow/sequence :revision 1 :layer :primitive
     :doc "Run each step in order; a step that finishes the program short-circuits the rest."
     :category :flow
     :children {:steps {:kind :seq :flow :sequential}}
     :effects #{:mutate}
     :impl run-sequence}
-   {:id :flow/branch :revision 1
+   {:id :flow/branch :revision 1 :layer :primitive
     :doc "Run :then when :when is true, otherwise :else."
     :category :flow
     :inputs {:when {:type :boolean}}
     :children {:then {:kind :single :flow :branch} :else {:kind :single :flow :branch}}
     :effects #{:mutate}
     :impl run-branch}
-   {:id :flow/foreach :revision 1
+   {:id :flow/foreach :revision 1 :layer :primitive
     :doc "Run :body once per item in :items (up to :limit), binding :as (and optionally :index-as) inside the body's own closed scope."
     :category :flow
     :inputs {:items {:type [:list-of :any]}
@@ -112,14 +112,14 @@
     :effects #{:mutate}
     :binds-locals #{:as :index-as}
     :impl run-foreach}
-   {:id :data/bind :revision 1
+   {:id :data/bind :revision 1 :layer :primitive
     :doc "Bind :value to local name :to."
     :category :flow
     :inputs {:to {:type :keyword} :value {:type :any}}
     :effects #{:mutate}
     :binds-locals #{:to}
     :impl run-bind}
-   {:id :flow/finish :revision 1
+   {:id :flow/finish :revision 1 :layer :primitive
     :doc "Mark the program finished with :outcome; nothing after it runs."
     :category :flow
     :inputs {:outcome {:type :keyword} :finish-ability? {:type :boolean :default false}}

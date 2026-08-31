@@ -1,14 +1,6 @@
 (ns cn.li.node.flow-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.node.descriptor :as registry]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.node.flow :as flow]))
-
-(use-fixtures :each
-  (fn [f]
-    (registry/reset-for-test!)
-    (flow/install!)
-    (f)
-    (registry/reset-for-test!)))
 
 (defn- dispatch-noop [_node ctx] ctx)
 
