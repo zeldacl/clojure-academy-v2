@@ -28,21 +28,24 @@ if (!(Test-Path -LiteralPath $targetGradle -PathType Leaf)) {
   throw "Target launcher script is missing: $targetGradle"
 }
 
-$gradleArgs = @($PlatformTarget, $task, '--no-daemon', '--console=plain')
+# The build logic attaches this property to the forked game JavaExec JVM,
+# rather than to the Gradle daemon, so the recording contains game samples.
+$gradleArgs = @(
+  $PlatformTarget,
+  $task,
+  '--no-daemon',
+  '--console=plain',
+  "-PperfJfrFile=$jfrFile"
+)
 if ($SkipCheckClojure.IsPresent) {
   $gradleArgs += @('-x', $checkTask)
 }
-
-$jfrArgs = @(
-  '-XX:StartFlightRecording=name=ScriptRenderPerf,settings=profile,dumponexit=true,filename=' + $jfrFile,
-  '-XX:FlightRecorderOptions=stackdepth=256'
-)
 
 Write-Host "[perf] root      : $root"
 Write-Host "[perf] target    : $PlatformTarget"
 Write-Host "[perf] scenario  : $Scenario"
 Write-Host "[perf] mode      : $Mode"
-Write-Host "[perf] jfr       : $jfrFile"
+Write-Host "[perf] game-jfr  : $jfrFile"
 Write-Host "[perf] log       : $logFile"
 
 Push-Location $root
@@ -50,7 +53,7 @@ try {
   # target-gradle.ps1 resolves the catalog-selected wrapper and Java toolchain;
   # this keeps the capture command identical across all six targets.
   $cmd = @('powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $targetGradle) +
-    $gradleArgs + @('-Dorg.gradle.jvmargs=' + ($jfrArgs -join ' '))
+    $gradleArgs
   "[perf] command: $($cmd -join ' ')" | Out-File -FilePath $logFile -Encoding utf8 -Append
 
   $proc = Start-Process -FilePath $cmd[0] -ArgumentList $cmd[1..($cmd.Length-1)] -PassThru -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $logFile

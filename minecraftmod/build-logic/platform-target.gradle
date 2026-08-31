@@ -962,6 +962,20 @@ if (target.loader != "none") {
         dependsOn copyClojureClassesToJavaOutput
     }
 
+    // Optional flight-recorder capture belongs on the forked game JVM, not
+    // on the Gradle daemon.  The performance script supplies this property
+    // only for an explicit runClient/runServer invocation.
+    def perfJfrFile = rootProject.findProperty("perfJfrFile")
+    if (perfJfrFile != null && !perfJfrFile.toString().trim().isEmpty()) {
+        def perfJfrPath = rootProject.file(perfJfrFile.toString()).absolutePath
+        tasks.matching { it.name in ["runClient", "runServer"] }.configureEach { task ->
+            task.jvmArgs(
+                "-XX:StartFlightRecording=name=AcademyPerf,settings=profile,dumponexit=true,filename=${perfJfrPath}",
+                "-XX:FlightRecorderOptions=stackdepth=256"
+            )
+        }
+    }
+
     // Loom's default run classpath is sourceSets.main.runtimeClasspath, whose
     // output is built by the aggregate `classes` task. That unnecessarily
     // pulls checkClojure and, through Loom's lifecycle wiring, publication
