@@ -10,7 +10,7 @@
     :interaction/resolve :energy/target :saved-location
     :kernel/terrain-wave-plan})
 (def ^:private action-capabilities
-  #{:inventory/consume :entity/damage :entity/impulse :entity/teleport
+  #{:inventory/consume :entity/damage :combat/charged-area-damage :entity/impulse :entity/teleport
     :entity/trigger-behavior :entity/mark :energy/charge
     :entity/reset-fall-damage :motion/flight
     :owner/can-fly
