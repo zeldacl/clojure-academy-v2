@@ -263,9 +263,9 @@
 
 ;; ── BlockState reduce step (top-level to prevent runtime class-gen explosion) ──
 ;; Extracted from build-block-state-updater so AOT compiles it to a single static
-;; class.  Using partial at the call site passes the captured context explicitly,
-;; avoiding the inner fn capturing outer closure vars which would force runtime JIT
-;; class generation on every tick.
+;; class.  The caller uses an explicit loop rather than `partial`: this avoids
+;; allocating a captured IFn on every tick and keeps the source-first runtime
+;; free of lazy closure classes.
 
 (defn- step-block-state-property
   "Apply a single BlockState property update.  All context is passed explicitly
@@ -310,10 +310,12 @@
           (let [state-def (platform-world/block-state-get-state-definition blk-state)
                 _ (when-not state-def
                     (log/warn "[blockstate-updater] state-def is nil for block at" pos))
-                new-bs (reduce
-                        (partial step-block-state-property state blk-state state-def pos)
-                        blk-state
-                        bs-specs)]
+                new-bs (loop [bs blk-state
+                              specs bs-specs]
+                         (if-let [spec (first specs)]
+                           (recur (step-block-state-property state blk-state state-def pos bs spec)
+                                  (next specs))
+                           bs))]
             (when (not= new-bs blk-state)
               (platform-world/set-block! level pos new-bs 3)))
           (log/warn "[blockstate-updater] world-get-block-state* returned nil for" pos))
