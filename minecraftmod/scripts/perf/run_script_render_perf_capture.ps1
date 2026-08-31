@@ -72,18 +72,22 @@ try {
   $proc.WaitForExit()
   Write-Host "[perf] client exited with code: $($proc.ExitCode)"
 
+  if ($proc.ExitCode -ne 0) {
+    throw "Game process failed with exit code $($proc.ExitCode); inspect logs: $stdoutLogFile / $stderrLogFile"
+  }
+
   if (Test-Path $jfrFile) {
     Write-Host "[perf] JFR captured: $jfrFile"
     $summaryOutput = & jfr summary $jfrFile 2>&1
     $summaryOutput | Out-File -FilePath $summaryFile -Encoding utf8
     $summaryOutput
     if ($LASTEXITCODE -ne 0) {
-      Write-Warning "[perf] jfr summary failed; inspect $jfrFile directly"
+      throw "jfr summary failed; inspect $jfrFile"
     } else {
       Write-Host "[perf] JFR summary saved: $summaryFile"
     }
   } else {
-    Write-Warning "[perf] JFR file not found. Check logs: $stdoutLogFile / $stderrLogFile"
+    throw "JFR file not found. Check logs: $stdoutLogFile / $stderrLogFile"
   }
 }
 finally {
