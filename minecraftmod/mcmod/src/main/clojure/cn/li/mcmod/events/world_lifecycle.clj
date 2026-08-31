@@ -156,9 +156,12 @@
     (persistent! result)))
 
 (defn dispatch-world-tick [world]
-  (let [^Iterator it (.iterator (.tickHandlers (current-runtime)))]
-    (while (.hasNext it)
-      (try
-        ((.entryFn ^LifecycleEntry (.next it)) world)
-        (catch Throwable t (report-handler-error! :tick t)))))
+  (let [^ArrayList handlers (.tickHandlers (current-runtime))
+        size (.size handlers)]
+    (loop [idx 0]
+      (when (< idx size)
+        (try
+          ((.entryFn ^LifecycleEntry (.get handlers idx)) world)
+          (catch Throwable t (report-handler-error! :tick t)))
+        (recur (inc idx)))))
   nil)
