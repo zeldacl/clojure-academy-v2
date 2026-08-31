@@ -71,7 +71,7 @@
 ### Loom 反射清理
 
 - Loom 平台代码不得保留跨版本反射兼容层；`DistAccess` 已按 NeoForge 1.21.1/26.2 拆成直接 API，Forge/NeoForge 的 DSL entity kind 也已改为显式 `EntityFactory` 分发表。
-- 最终清理清单必须逐项归零：`mc-1.20.1`/`mc-1.21.1` 的 `ScriptedRenderAccess`（改为实体接口/版本化 typed accessor）、两版 `ClientHelper.registerMenuScreen`（改由 loader 注册事件完成）、`mc-26.2` `WorldEntity` 的 LargeFireball 字段访问（增加版本 Java bridge 或公开受控 setter），以及 NeoForge 26.2 `ForgeBootstrapHelper` 的 entity constructor（使用显式 `EntityFactory`）。这些不是第三方接入，不能留在 allowlist。
+- 最终清理清单必须逐项归零：`mc-26.2` `WorldEntity` 的 LargeFireball 字段访问（增加版本 Java bridge 或公开受控 setter）、`base` `AbstractHookRegistry.registerByClassName` 的动态类名加载（改为构建期生成/静态 typed supplier 表），以及任何新发现的同类动态加载。`ScriptedRenderAccess`（1.20.1/1.21.1）、`ClientHelper.registerMenuScreen` 和 NeoForge 26.2 entity constructor 已改为直接调用。上述剩余项不是第三方接入，不能留在 allowlist。
 
 提交点：`integration: keep typed JEI and cached optional IC2 adapters`、`integration: complete Fabric JEI entrypoints`、`integration: cover NeoForge 26.2 JEI`（均已完成；验证门覆盖六目标声明、入口和实现文件）。
 
