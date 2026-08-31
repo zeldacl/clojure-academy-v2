@@ -128,7 +128,7 @@
   (let [choice-tag (cond (nil? choice) 0 (integer? choice) 1 (string? choice) 2 :else -1)
         _ (when (= -1 choice-tag) (throw (ex-info "invalid input choice" {:intent intent})))
         ^ByteBuffer buffer (doto (ByteBuffer/allocate 64) (.order ByteOrder/BIG_ENDIAN) (.put (byte protocol-version)) (.put (byte (:input-edge packet-types))) (.putInt (int seq)) (.put (byte control-id)) (.put (byte ({:press 1 :release 2 :abort 3} edge))) (.put (byte choice-tag)) (.putInt (int (or client-tick 0))))]
-    (case choice-tag 1 (.putInt buffer (int choice)) 2 (put-string! buffer choice 128) nil)
+    (case (int choice-tag) 1 (.putInt buffer (int choice)) 2 (put-string! buffer choice 128) nil)
     (let [length (.position buffer) result (byte-array length)] (.flip buffer) (.get buffer result) result)))
 (defn decode-intent [^bytes packet]
   (let [^ByteBuffer buffer (doto (ByteBuffer/wrap packet) (.order ByteOrder/BIG_ENDIAN))
