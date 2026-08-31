@@ -63,19 +63,35 @@
     (if-let [ns (namespace value)] (str ns "/" (name value)) (name value))
     (str value)))
 
-(defn- artifact-node->base-node [node]
-  (-> node
-      (assoc :blueprint (artifact-id (or (:blueprint-id node) (:type node))))
-      (update :children #(mapv artifact-node->base-node (or % [])))
-      (update :slots (fn [slots]
-                       (into {}
-                             (map (fn [[slot entries]]
-                                    [slot (mapv artifact-node->base-node entries)]))
-                             (or slots {}))))))
+(defn- artifact-node->base-node [node path seen]
+  (let [raw-key (or (:key node)
+                    (str "node/" (string/join "/" (map str path))))
+        base-key (artifact-id raw-key)
+        key (if (contains? @seen base-key)
+              (str base-key "@" (string/join "." (map str path)))
+              base-key)
+        _ (swap! seen conj base-key)
+        children (mapv (fn [[index child]]
+                         (artifact-node->base-node child (conj path :child index) seen))
+                       (map-indexed vector (or (:children node) [])))
+        slots (into {}
+                    (map (fn [[slot entries]]
+                           [slot (mapv (fn [[index child]]
+                                         (artifact-node->base-node
+                                          child (conj path :slot slot index) seen))
+                                       (map-indexed vector entries))]))
+                    (or (:slots node) {}))]
+    (cond-> (assoc node :key key
+                   :blueprint (artifact-id (or (:blueprint-id node) (:type node)))
+                   :children children
+                   :slots slots)
+      (get-in node [:style :scrollbar :for])
+      (update-in [:style :scrollbar :for]
+                 #(artifact-id %)))))
 
 (defn- artifact->base-view [artifact]
   (when (= :pui4 (:magic artifact))
-    {:root (artifact-node->base-node (:nodes artifact))
+    {:root (artifact-node->base-node (:nodes artifact) [:root] (atom #{}))
      :blueprints (into {}
                        (map (fn [[id descriptor]]
                               [(str id)

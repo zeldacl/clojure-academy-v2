@@ -6,7 +6,7 @@
   (:import [cn.li.presentation.core HostGeometry]))
 
 (def sample-artifact
-  {:magic :pui3 :schema 3 :view-id :academy/test/runtime
+  {:magic :pui4 :schema 4 :view-id :academy/test/runtime
    :semantics {:role :generic :label "test"}})
 
 (deftest runtime-commits-state-before-effects
@@ -36,7 +36,7 @@
     (is (thrown? IllegalStateException (runtime/unmount-all! rt)))))
 (deftest runtime-extracts-new-ui-render-ir
   (let [rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/paint
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/paint
                   :nodes {:id :root :type :rect :layout {}
                           :style {:rgba (unchecked-int 0xFF00FF00)}}}
         mount (runtime/mount!
@@ -52,7 +52,7 @@
     (is (= 1 (count (.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))))
     (runtime/unmount! rt mount)))
 (deftest painter-uses-button-binding-label
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/button
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/button
                   :nodes {:id :root :type :button :layout {:width 80 :height 20}
                           :bind {:text [:state :button]}
                           :semantics {:role :button}}}
@@ -62,7 +62,7 @@
     (is (instance? cn.li.mcmod.runtime.RenderCommand$UiText label-command))
     (is (= "Save" (.text ^cn.li.mcmod.runtime.RenderCommand$UiText label-command)))))
 (deftest painter-expands-collection-and-input-nodes
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/collection
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/collection
                   :nodes {:id :root :type :column :layout {}
                           :children [{:type :scroll :bind {:items [:state :lines]}}
                                      {:type :text-input :bind {:text [:state :query]}}]}}
@@ -76,7 +76,7 @@
     (is (= ["One" "Two" "search"] texts))))
 
 (deftest painter-accepts-boolean-progress-values
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/progress
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/progress
                   :nodes {:id :root :type :progress :layout {:width 20 :height 4}
                           :bind {:value [:state :loading?]}}}
         commands (paint/paint-view artifact {:loading? true}
@@ -86,7 +86,7 @@
 (deftest runtime-routes-pointer-to-button-action
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/input
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/input
                   :nodes {:id :root :type :row :layout {}
                           :children [{:type :button :key :left :layout {:height 20}
                                       :on {:activate :demo/left}}
@@ -101,11 +101,11 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                   :x 75 :y 10 :button 0})))
-    (is (= [:demo/right {:target :right :button-id 1}] @seen))))
+    (is (= [:demo/right {:target "right" :button-id 1}] @seen))))
 (deftest runtime-routes-repeater-button-with-item-context
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/repeater-input
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/repeater-input
                   :nodes {:id :root :type :scroll :layout {:width 100 :height 40}
                           :bind {:items [:state :items]}
                           :children [{:type :button :key :row/action
@@ -121,13 +121,13 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                   :x 10 :y 30 :button 0})))
-    (is (= [:demo/item {:target :row/action
+    (is (= [:demo/item {:target "row/action"
                         :item {:label "Two"}
                         :index 1}] @seen))))
 (deftest runtime-routes-text-input
   (let [seen (atom [])
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/text-input
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/text-input
                   :nodes {:id :root :type :text-input :layout {:width 100 :height 20}
                           :bind {:text [:state :query]}
                           :on {:change :edit/change :submit :edit/submit}
@@ -148,7 +148,7 @@
 (deftest runtime-reuses-paint-for-clean-frame
   (let [paints (atom 0)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/cache
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/cache
                   :nodes {:type :rect :layout {}}}
         mount (runtime/mount! rt {:host {:stage :screen}
                                   :artifact artifact
@@ -165,7 +165,7 @@
 (deftest runtime-routes-hover-enter-and-leave
   (let [seen (atom [])
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/hover
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/hover
                   :nodes {:type :row :layout {:width 100 :height 20}
                           :children [{:type :button :key :tag
                                       :layout {:width 50 :height 20}
@@ -186,7 +186,7 @@
     (is (= false (get-in @seen [1 1 :hover?])))))
 (deftest runtime-routes-scroll-and-paints-clipped-offsets
   (let [seen (atom nil)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/scroll
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/scroll
                   :nodes {:type :scroll :key :list :layout {:width 100 :height 20}
                           :bind {:items [:state :items]}
                           :children [{:type :text :layout {:height 10}
@@ -209,14 +209,14 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})))
     (is (= :input/scroll (first @seen)))
-    (is (= :list (get-in @seen [1 :target])))
+    (is (= "list" (get-in @seen [1 :target])))
     (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))
     (runtime/dispatch! rt mount {:type :pointer :event-type :drag :x 5 :y 10 :drag-y -5.0})
     (is (= true (get-in @seen [1 :drag?])))
     (is (= 17.0 (double (get-in @seen [1 :scroll-offset]))))))
 (deftest runtime-applies-frame-host-geometry
   (let [rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/fill
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/fill
                   :nodes {:type :rect :layout {:width :fill :height :fill}}}
         mount (runtime/mount! rt {:host {:stage :hud}
                                   :artifact artifact
@@ -230,7 +230,7 @@
 (deftest runtime-routes-progress-input
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/progress-input
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/progress-input
                   :nodes {:type :progress :key :seek :layout {:width 100 :height 10}
                           :on {:change :media/seek}}}
         mount (runtime/mount! rt {:host {:stage :screen}
@@ -251,7 +251,7 @@
 (deftest runtime-ignores-hidden-and-clipped-interaction-nodes
   (let [seen (atom [])
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/visibility
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/visibility
                   :nodes {:type :column :layout {:width 100 :height 60}
                           :children [{:type :button :key :hidden :layout {:height 20}
                                       :bind {:visible [:state :hidden?]}
@@ -273,7 +273,7 @@
     (is (not-any? #(#{:demo/hidden :demo/hidden-hover :demo/item :demo/item-hover} (first %)) @seen))))
 (deftest runtime-treats-blank-visibility-as-hidden
   (let [rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/blank-visibility
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/blank-visibility
                   :nodes {:type :button :key :hint :layout {:width 80 :height 20}
                           :bind {:visible [:state :hint] :text [:state :hint]}
                           :on {:activate :demo/hint}}}
@@ -289,7 +289,7 @@
 
 
 (deftest painter-packs-row-children-by-declared-width
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/pack-row
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/pack-row
                   :host {:kind :screen :design-width 100 :design-height 20 :scale-policy :fit}
                   :nodes {:type :row :layout {:width 100 :height 20}
                           :children [{:type :rect :key :a :layout {:width 20 :height 20}
@@ -312,7 +312,7 @@
     (is (= 30.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 2)))))))
 
 (deftest painter-centers-design-box-with-fit-policy
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/fit
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/fit
                   :host {:kind :screen :design-width 40 :design-height 20 :scale-policy :fit}
                   :nodes {:type :rect :layout {:width 40 :height 20}
                           :style {:rgba (unchecked-int 0xFFFFFFFF)}}}
@@ -325,7 +325,7 @@
     (is (= 20.0 (float (.height ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))))
 
 (deftest painter-applies-absolute-child-offsets
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/absolute
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/absolute
                   :nodes {:type :absolute :layout {:width 100 :height 80}
                           :children [{:type :rect :layout {:x 10 :y 15 :width 20 :height 12}
                                       :style {:rgba (unchecked-int 0xFFFFFFFF)}}]}}
@@ -340,7 +340,7 @@
 (deftest runtime-hits-packed-row-and-centered-design
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/hit-fit
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/hit-fit
                   :host {:kind :screen :design-width 100 :design-height 20 :scale-policy :fit}
                   :nodes {:type :row :layout {:width 100 :height 20}
                           :children [{:type :button :key :left :layout {:width 40 :height 20}
@@ -361,7 +361,7 @@
 
 (deftest runtime-scrollbar-tracks-content-offset
   (let [seen (atom nil)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/scrollbar
+        artifact {:magic :pui4 :schema 4 :view-id :academy/test/scrollbar
                   :nodes {:type :absolute :layout {:width 120 :height 40}
                           :children [{:type :scroll :key :content
                                       :layout {:x 0 :y 0 :width 100 :height 20}
@@ -394,13 +394,13 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 120 40 1.0))
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 115 :y 20 :button 0})
     (is (= :input/scroll (first @seen)))
-    (is (= :content (get-in @seen [1 :target])))
+    (is (= "content" (get-in @seen [1 :target])))
     (is (= 20.0 (double (get-in @seen [1 :scroll-offset]))))
     (is (= 1 (count imgs)))
     (is (= 10.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiImage (first imgs)))))))
 
 (deftest paint-glow-line-emits-textured-segments
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/glow
+  (let [artifact {:magic :pui4 :schema 4 :view-id :academy/test/glow
                   :nodes {:type :glow-line :layout {:x 100 :y 50 :width 0 :height 0}
                           :bind {:x0 [:state :x0] :x1 [:state :x1]
                                  :line-y [:state :line-y]
@@ -417,4 +417,3 @@
     (is (= 9 (count batches)))
     (is (some #(str/includes? % "glow_lu") paths))
     (is (some #(str/includes? % "line.png") paths))))
-
