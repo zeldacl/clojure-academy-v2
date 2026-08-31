@@ -492,6 +492,11 @@ if (target.loader != "none") {
         group = "verification"
         description = "Verify neutral Clojure source/class namespace exclusivity."
         dependsOn prepareNeutralClojureRuntimeSources
+        // Also run the target-output cleanup when this verifier is invoked
+        // directly (or before checkClojure).  A named target can skip
+        // compileClojure, so relying on check/run task ordering would leave
+        // stale classes from a previous remapped build in place.
+        dependsOn "stagePlatformClojureSources"
         doLast {
             def readManifest = { provider ->
                 def file = provider.get().asFile
@@ -516,6 +521,29 @@ if (target.loader != "none") {
             }
             if (copiedBases != sourceBases - aotBases) {
                 throw new GradleException("Neutral Clojure source manifest does not match copied resources: expected=${(sourceBases - aotBases).sort()}, actual=${copiedBases.sort()}")
+            }
+            // Validate the actual target output too.  The generated resource
+            // directory alone cannot detect a stale __init.class left by a
+            // previous remapped build; that class would win class loading over
+            // the source-first resource and violate the representation XOR.
+            def targetClassesRoots = [layout.buildDirectory.dir("classes/java/main").get().asFile]
+            // clojureAotDir is a packaging input only for remapped targets;
+            // named/source-first builds may still contain compiler scratch
+            // classes there, which are intentionally never placed on the
+            // runtime class path.
+            if (rootProject.ext.platformRemapAotEnabled) {
+                targetClassesRoots << clojureAotDir.get().asFile
+            }
+            def classBases = [] as Set
+            targetClassesRoots.findAll { it.isDirectory() }.each { File classesRoot ->
+                fileTree(classesRoot) { include "**/*__init.class" }.files.each { File clazz ->
+                    classBases << classesRoot.toPath().relativize(clazz.toPath()).toString()
+                        .replace("\\", "/").replaceFirst(/__init\.class$/, "")
+                }
+            }
+            def overlapWithSources = copiedBases.intersect(classBases)
+            if (!overlapWithSources.isEmpty()) {
+                throw new GradleException("Neutral Clojure namespace has both source and AOT class in target output: ${overlapWithSources.sort()}")
             }
         }
     }
@@ -556,6 +584,36 @@ if (target.loader != "none") {
             def manifest = neutralStagedResourcesManifest.get().asFile
             manifest.parentFile.mkdirs()
             manifest.text = staged.join(System.lineSeparator()) + System.lineSeparator()
+        }
+    }
+    def deleteNeutralSourceNamespaceClasses = { File outputRoot ->
+        if (!outputRoot.isDirectory()) {
+            return
+        }
+        neutralClojureSourceRoots.each { File sourceRoot ->
+            if (!sourceRoot.isDirectory()) {
+                return
+            }
+            fileTree(sourceRoot) {
+                include "**/*.clj"
+                include "**/*.cljc"
+            }.files.each { File sourceFile ->
+                def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
+                def classPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
+                def slash = classPath.lastIndexOf("/")
+                def packagePath = slash >= 0 ? classPath.substring(0, slash) : ""
+                def classBaseName = slash >= 0 ? classPath.substring(slash + 1) : classPath
+                def packageDir = packagePath ? new File(outputRoot, packagePath) : outputRoot
+                if (packageDir.isDirectory()) {
+                    packageDir.listFiles(new FilenameFilter() {
+                        boolean accept(File dir, String fileName) {
+                            fileName == "${classBaseName}__init.class" ||
+                                fileName == "${classBaseName}.class" ||
+                                (fileName.startsWith("${classBaseName}\$") && fileName.endsWith(".class"))
+                        }
+                    })?.each { File staleClass -> staleClass.delete() }
+                }
+            }
         }
     }
     // Named (non-Loom-remapped) targets execute platform namespaces from the
@@ -605,6 +663,12 @@ if (target.loader != "none") {
                         }
                     }
                 }
+                // Source-first targets may skip compileClojure entirely, so
+                // the compile task's stale-neutral cleanup hook is not enough
+                // when a target directory was previously used by a remapped
+                // build.  Remove neutral namespace entrypoint classes here as
+                // part of the unconditional source staging sweep.
+                deleteNeutralSourceNamespaceClasses.call(classesRoot)
             }
         }
     }
@@ -646,36 +710,6 @@ if (target.loader != "none") {
                     }
                 })?.each { File staleClass ->
                     staleClass.delete()
-                }
-            }
-        }
-    }
-    def deleteNeutralSourceNamespaceClasses = { File outputRoot ->
-        if (!outputRoot.isDirectory()) {
-            return
-        }
-        neutralClojureSourceRoots.each { File sourceRoot ->
-            if (!sourceRoot.isDirectory()) {
-                return
-            }
-            fileTree(sourceRoot) {
-                include "**/*.clj"
-                include "**/*.cljc"
-            }.files.each { File sourceFile ->
-                def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
-                def classPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
-                def slash = classPath.lastIndexOf("/")
-                def packagePath = slash >= 0 ? classPath.substring(0, slash) : ""
-                def classBaseName = slash >= 0 ? classPath.substring(slash + 1) : classPath
-                def packageDir = packagePath ? new File(outputRoot, packagePath) : outputRoot
-                if (packageDir.isDirectory()) {
-                    packageDir.listFiles(new FilenameFilter() {
-                        boolean accept(File dir, String fileName) {
-                            fileName == "${classBaseName}__init.class" ||
-                                fileName == "${classBaseName}.class" ||
-                                (fileName.startsWith("${classBaseName}\$") && fileName.endsWith(".class"))
-                        }
-                    })?.each { File staleClass -> staleClass.delete() }
                 }
             }
         }
