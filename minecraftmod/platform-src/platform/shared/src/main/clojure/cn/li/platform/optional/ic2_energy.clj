@@ -15,6 +15,16 @@
 (def ^:private ic2-sink-class-name "ic2.api.energy.tile.IEnergySink")
 (def ^:private ic2-state (atom :unknown))
 (def ^:private ic2-interfaces (atom nil))
+(def ^:private required-ic2-methods
+  {"source" #{"getOfferedEnergy" "drawEnergy" "getSourceTier" "emitsEnergyTo"}
+   "sink" #{"getDemandedEnergy" "getSinkTier" "injectEnergy" "acceptsEnergyFrom"}})
+
+(defn- compatible-interface?
+  [^Class iface kind]
+  (and (.isInterface iface)
+       (let [method-names (into #{} (map #(.getName ^java.lang.reflect.Method %) (.getMethods iface)))]
+         (every? method-names (get required-ic2-methods kind)))))
+
 
 (def ^WeakHashMap ^:private proxy-cache (WeakHashMap.))
 (def ^:private proxy-cache-lock (Object.))
@@ -92,8 +102,14 @@
     (let [state (try
                   (let [source (or (first @ic2-interfaces) (resolve-class ic2-source-class-name))
                         sink (or (second @ic2-interfaces) (resolve-class ic2-sink-class-name))]
-                    (reset! ic2-interfaces [source sink])
-                    :present)
+                    (if (and (compatible-interface? source "source")
+                             (compatible-interface? sink "sink"))
+                      (do
+                        (reset! ic2-interfaces [source sink])
+                        :present)
+                      (do
+                        (log/warn "Optional IC2 API has incompatible interface shapes")
+                        :incompatible)))
                   (catch ClassNotFoundException _ :absent)
                   (catch LinkageError e
                     (log/warn "Optional IC2 API could not be linked:" (ex-message e))
