@@ -50,7 +50,7 @@
 2. 注册只发生在 bootstrap；tick/render/网络回调禁止 `resolve`、map 构造、`vec`/`seq`、匿名 reify 或临时闭包。dispatch 采用索引/数组遍历，异常策略为一次记录后禁用坏回调；延迟任务按 deadline 有序 bucket 取出，tick 不扫描全部未到期任务。
 3. combat audience 直接遍历原生玩家/AABB 发送，不生成 UUID 集合；VFX world-stage queue 使用 session-owned 可复用缓冲区，tick 末清空。
 4. 交互统一返回 `pass/handled/open-gui`；禁止把任意 truthy 值当作 consumed。
-5. 用 JMH（仅 benchmark source set）和代表性 JFR 验收：CPU p95 不得比基线增加 5%，稳态 allocation rate 与 live-set 增加不超过 5%，tick 99p 不得产生不可界定的短命对象。当前已提供可选的无头调度器采样：`cmd /c gradlew.bat :ac:runAcClojureTestsFast "-Dac.test.only=cn.li.ac.ability.final-runtime-perf-test" "-Dac.test.jfr=build/reports/jfr/final-runtime-scheduler-<date>.jfr" --stacktrace`；该基准只验证 deadline bucket 的调度开销，不替代真实游戏实例 JFR/JMH。
+5. 用 JMH（仅 benchmark source set）和代表性 JFR 验收：CPU p95 不得比基线增加 5%，稳态 allocation rate 与 live-set 增加不超过 5%，tick 99p 不得产生不可界定的短命对象。当前已提供可选的无头调度器采样：`cmd /c gradlew.bat :ac:runAcClojureTestsFast "-Dac.test.only=cn.li.ac.ability.final-runtime-perf-test" "-Dac.test.jfr=build/reports/jfr/final-runtime-scheduler-<date>.jfr" --stacktrace`；该基准只验证 deadline bucket 的调度开销，不替代真实游戏实例 JFR/JMH。当前仓库尚无 `org.openjdk.jmh` benchmark source set；Phase 6 必须补建隔离的 JMH source set/任务与基线报告，禁止把 JMH 依赖或 benchmark class 带入任一运行时 Jar。
 
 ## 阶段 4：JEI 与 IC2 可选集成
 
@@ -99,7 +99,7 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 共享门禁可直接执行：`cmd /c gradlew.bat :node-core:runNodeCoreClojureTests :combat-core:runCombatClojureTests :vfx-core:runVfxClojureTests :mcmod:runMcmodClojureTests :ac:runAcEdnCoverageTests --stacktrace`；平台门禁使用 `scripts\\target-gradle.ps1 <target-id> :platform:runPlatformClojureTests`，其中 `<target-id>` 必须依次为六个 catalog id，不能省略目标参数。
 
-真实客户端 JFR 场景使用统一脚本：`powershell -File scripts\\perf\\run_script_render_perf_capture.ps1 -PlatformTarget <target-id> -Scenario <scenario> -Mode <low|medium|stress>`。脚本通过 `target-gradle.ps1` 解析 catalog 对应的 wrapper/JDK，输出按 target 隔离到 `build/reports/script-render-perf/<target-id>/`；`-PperfJfrFile` 由构建层注入 `runClient/runServer` forked game JVM（不是 Gradle daemon），关闭客户端后才会写入 JFR，并自动生成同目录 `summary-<timestamp>.txt`。该步骤仍需要人工在游戏内执行代表性低/中/压力场景，不得用无头基准替代。
+真实客户端 JFR 场景使用统一脚本：`powershell -File scripts\\perf\\run_script_render_perf_capture.ps1 -PlatformTarget <target-id> -Scenario <scenario> -Mode <low|medium|stress>`。脚本通过 `target-gradle.ps1` 解析 catalog 对应的 wrapper/JDK，输出按 target 隔离到 `build/reports/script-render-perf/<target-id>/`；`-PperfJfrFile` 由构建层注入 `runClient/runServer` forked game JVM（不是 Gradle daemon），关闭客户端后才会写入 JFR，并自动生成同目录 `summary-<timestamp>.txt`。该步骤仍需要人工在游戏内执行代表性低/中/压力场景，不得用无头基准替代；JMH 则由独立 benchmark 任务运行，不通过该脚本代替。
 
 六目标发布任务已逐个执行并通过：Forge 1.20.1 `check + jar`、Fabric 1.20.1/1.21.1 `check + remapJar`、NeoForge 1.21.1 `check + remapJar`、NeoForge 26.2（Gradle 9.2）和 Fabric 26.2（Gradle 9.7.1）`check + jar`。其中 NeoForge 26.2 与 Fabric 26.2 在本轮重新执行了完整 datagen；Forge/Fabric 1.20.x/1.21.x 的 datagen 资源已由此前本机 Loom 资产缓存验证结果复用。为支持无 datagen 外部启动环境下的显式发布检查，`processResources` 已排除只由 `jar` 直接加入的 `META-INF/academy-datagen-hashes.json`，消除了 Gradle 8/9 的隐式任务依赖错误；不改变最终 Jar 内容。
 
