@@ -95,7 +95,7 @@ cmd /c platform-builds\gradle-9.2\gradlew.bat :platform:check :platform:jar "-Pp
 cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" --stacktrace
 ```
 
-共享 neutral/combat/vfx/mcmod headless tests 只运行一次，平台专属 `:platform:runPlatformClojureTests` 按六目标逐个运行；Jar overlap 由每个目标的 `:platform:verifyNeutralClojurePackaging`/`verifyClojureRuntimeRepresentation` 执行，代表性 JFR 在共享模块和可运行目标实例分别采集。共享 IC2 隔离测试由 `:platform:runPlatformClojureTests` 执行，使用临时编译类和隔离 classloader 覆盖 IC2 缺失、接口存在、接口形状不兼容，并验证状态缓存；第三方 fixture 不进入主 Jar。JEI 仍由六目标 typed adapter/入口门禁覆盖。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
+共享 neutral/combat/vfx/mcmod headless tests 只运行一次，平台专属 `:platform:runPlatformClojureTests` 按六目标逐个运行；Jar overlap 由每个目标的 `:platform:verifyNeutralClojurePackaging`/`verifyClojureRuntimeRepresentation` 执行，发布 Jar 还必须在 `jar/remapJar` 后运行 `:platform:verifyPackagedOptionalIntegrations`，检查 JEI/IC2 外置、typed JEI 入口、loader 元数据、datagen manifest 和 class/source XOR。代表性 JFR 在共享模块和可运行目标实例分别采集。共享 IC2 隔离测试由 `:platform:runPlatformClojureTests` 执行，使用临时编译类和隔离 classloader 覆盖 IC2 缺失、接口存在、接口形状不兼容，并验证状态缓存；第三方 fixture 不进入主 Jar。JEI 仍由六目标 typed adapter/入口门禁覆盖。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
 
 共享门禁可直接执行：`cmd /c gradlew.bat :node-core:runNodeCoreClojureTests :combat-core:runCombatClojureTests :vfx-core:runVfxClojureTests :mcmod:runMcmodClojureTests :ac:runAcEdnCoverageTests --stacktrace`；平台门禁使用 `scripts\\target-gradle.ps1 <target-id> :platform:runPlatformClojureTests`，其中 `<target-id>` 必须依次为六个 catalog id，不能省略目标参数。
 

@@ -952,6 +952,59 @@ if (target.loader != "none") {
         }
     }
 
+    def packagedJarTaskName = rootProject.ext.platformRemapAotEnabled ? "remapJar" : "jar"
+    tasks.register("verifyPackagedOptionalIntegrations") {
+        group = "verification"
+        description = "Verify the selected runtime Jar keeps JEI/IC2 optional and Clojure representations exclusive."
+        dependsOn tasks.named(packagedJarTaskName)
+        doLast {
+            def archiveTask = tasks.named(packagedJarTaskName).get()
+            def archive = archiveTask.archiveFile.get().asFile
+            if (!archive.isFile()) {
+                throw new GradleException("packaged Jar is missing for ${target.id}: ${archive}")
+            }
+            def expectedMetadata = target.id.startsWith("fabric")
+                ? "fabric.mod.json"
+                : (target.id.startsWith("forge-") ? "META-INF/mods.toml" : "META-INF/neoforge.mods.toml")
+            def sourceBases = [] as Set
+            def aotBases = [] as Set
+            def violations = []
+            new java.util.zip.ZipFile(archive).withCloseable { zip ->
+                zip.entries().each { entry ->
+                    def name = entry.name
+                    if (name.startsWith("mezz/jei/")) {
+                        violations << "embedded JEI class/resource: ${name}"
+                    }
+                    if (name.startsWith("ic2/")) {
+                        violations << "embedded IC2 class/resource: ${name}"
+                    }
+                    if (name.endsWith(".clj") || name.endsWith(".cljc")) {
+                        sourceBases << name.replaceFirst(/\.(clj|cljc)$/, "")
+                    }
+                    if (name.endsWith("__init.class")) {
+                        aotBases << name.replaceFirst(/__init\.class$/, "")
+                    }
+                }
+                [expectedMetadata, "META-INF/academy-datagen-hashes.json"].each { required ->
+                    if (zip.getEntry(required) == null) {
+                        violations << "missing required packaged resource: ${required}"
+                    }
+                }
+                if (zip.entries().findAll { it.name.endsWith("integration/JEIPluginWrapper.class") }.size() != 1) {
+                    violations << "expected exactly one typed JEIPluginWrapper entry"
+                }
+            }
+            def overlap = sourceBases.intersect(aotBases).sort()
+            if (!overlap.isEmpty()) {
+                violations << "Clojure class/source overlap: ${overlap}"
+            }
+            if (!violations.isEmpty()) {
+                throw new GradleException("packaged integration boundary failed for ${target.id} (${archive}):\n" + violations.join("\n"))
+            }
+            logger.lifecycle("[verifyPackagedOptionalIntegrations] ok ({}, archive={})", target.id, archive)
+        }
+    }
+
     tasks.named("classes").configure {
         dependsOn copyClojureClassesToJavaOutput
     }
