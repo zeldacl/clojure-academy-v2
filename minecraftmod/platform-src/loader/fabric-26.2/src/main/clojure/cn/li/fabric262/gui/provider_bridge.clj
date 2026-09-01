@@ -5,7 +5,7 @@
   (:require [cn.li.mcbase.gui.provider.dispatcher :as provider-dispatcher]
             [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.mcbase.gui.provider.common :as provider-common]
-            [cn.li.mc262.gui.registry.common :as registry-common]
+            [cn.li.mcbase.gui.registry.common :as registry-common]
             [cn.li.platform.target :as target]
             [cn.li.platform.neutral.gui-runtime :as gui-handler]
             [cn.li.platform.neutral.gui-runtime :as gui])

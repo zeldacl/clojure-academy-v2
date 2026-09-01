@@ -7,7 +7,7 @@
   (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.forge1201.datagen.provider-factory :as provider-factory]
             [cn.li.mcbase.datagen.provider-registration :as provider-registration]
-            [cn.li.mc1201.datagen.setup-common :as setup-common]
+            [cn.li.mcbase.datagen.setup-common :as setup-common]
             [cn.li.platform.target :as target])
   (:import [net.minecraftforge.data.event GatherDataEvent]))
 

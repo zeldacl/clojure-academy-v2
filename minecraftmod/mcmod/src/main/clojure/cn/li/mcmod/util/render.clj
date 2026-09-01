@@ -1,43 +1,45 @@
 (ns cn.li.mcmod.util.render
-  "Rendering utilities - OpenGL and texture helpers.
+  "Rendering utilities - texture helpers.
 
-  State stored in Framework [:service :render-runtime]."
+   The texture binder is installed during client bootstrap and published as a
+   direct function root so bind-texture has no Framework/map lookup on the
+   render path."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private render-path [:service :render-runtime])
+(def ^:private texture-binder-fn nil)
+(def ^:private texture-binder-warned? (atom false))
 
 (defn- default-state []
   {:texture-binder nil :texture-binder-warned false})
 
-(def ^:private render-path [:service :render-runtime])
-
-(defn- render-state-snapshot []
-  (if-let [fw-atom (fw/fw-atom)]
-    (get-in @fw-atom render-path (default-state))
-    (default-state)))
-
-(defn- update-render-state! [f & args]
+(defn- update-render-state! [k v]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in render-path
-           (fn [current] (apply f (or current (default-state)) args))))
+           (fn [current] (assoc (or current (default-state)) k v))))
   nil)
 
 (defn reset-render-runtime-state-for-test!
   []
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom assoc-in render-path (default-state)))
+  (alter-var-root #'texture-binder-fn (constantly nil))
+  (reset! texture-binder-warned? false)
   nil)
 
 (defn register-texture-binder! [binder-fn]
-  (update-render-state! assoc :texture-binder binder-fn))
+  (update-render-state! :texture-binder binder-fn)
+  (alter-var-root #'texture-binder-fn (constantly binder-fn))
+  (reset! texture-binder-warned? false)
+  nil)
 
 (defn get-render-time []
   (/ (double (System/currentTimeMillis)) 1000.0))
 
 (defn bind-texture
   [texture]
-  (if-let [binder (:texture-binder (render-state-snapshot))]
+  (if-let [binder texture-binder-fn]
     (binder texture)
-    (let [warned? (:texture-binder-warned (render-state-snapshot))]
-      (when-not warned?
-        (update-render-state! assoc :texture-binder-warned true)
-        (log/warn "Texture binder not registered; skipping bind" texture)))))
+    (when (compare-and-set! texture-binder-warned? false true)
+      (log/warn "Texture binder not registered; skipping bind" texture))))

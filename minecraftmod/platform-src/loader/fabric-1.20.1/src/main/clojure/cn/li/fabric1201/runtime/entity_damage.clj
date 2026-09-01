@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.runtime.entity-damage
   "Fabric implementation of IEntityDamage protocol."
   (:require [cn.li.fabric1201.adapter.server-context :as server-context]
-            [cn.li.mc1201.runtime.adapter.entity-damage :as entity-damage])
+            [cn.li.mcbase.runtime.adapter.entity-damage :as entity-damage])
   (:import [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.level Level]
            [net.minecraft.world.phys AABB]))

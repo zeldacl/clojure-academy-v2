@@ -1,7 +1,8 @@
 (ns cn.li.mc262.presentation.container
   "Minecraft 26.2 Presentation Container boundary."
   (:require [cn.li.mcbase.gui.screen.impl :as screen-impl]
-            [cn.li.platform.neutral.presentation :as presentation])
+            [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.mc262.presentation.preview :as preview])
   (:import [cn.li.mc262.shim DelegatingCGuiContainerScreen]
            [net.minecraft.client.gui GuiGraphicsExtractor]
            [net.minecraft.network.chat Component]))
@@ -23,7 +24,8 @@
                             (int mouse-x) (int mouse-y) (float partial-tick))
           (presentation/submit-current-frame!
             :screen (float partial-tick) (.-width ^DelegatingCGuiContainerScreen s)
-            (.-height ^DelegatingCGuiContainerScreen s) graphics)))
+            (.-height ^DelegatingCGuiContainerScreen s)
+            (merge {:graphics graphics} (preview/backend-context)))))
       (.withMouseClicked (fn [s x y button]
                            (if (consumed? (input! mount {:type :pointer :event-type :down :x x :y y :button button})) true
                                (.callSuperMouseClicked ^DelegatingCGuiContainerScreen s x y button))))

@@ -30,8 +30,7 @@ import org.joml.Vector2f;
  * {@code GuiGraphicsExtractor.submitPictureInPictureRenderState} and
  * {@code peekScissorStack}, which the NeoForge loader installs via
  * {@link #installSubmitter}; loaders without those APIs (Fabric) never
- * install one and {@link #submit} falls back to false, leaving the caller's
- * compatibility path active.</p>
+ * install one, so preview submission is explicitly reported as unsupported.</p>
  */
 public record ReactivePreviewRenderState(
         TrackingItemStackRenderState itemRenderState,
@@ -75,7 +74,7 @@ public record ReactivePreviewRenderState(
 
     /**
      * Extract and submit a PIP state. Returns false when the loader did not
-     * install a submitter, allowing the caller to use its compatibility path.
+     * install a submitter, so this loader reports preview submission as unsupported.
      */
     public static boolean submit(
             GuiGraphicsExtractor graphics,

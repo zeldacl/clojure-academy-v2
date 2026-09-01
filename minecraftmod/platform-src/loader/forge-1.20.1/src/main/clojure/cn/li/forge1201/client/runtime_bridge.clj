@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.runtime-bridge
   "CLIENT-ONLY Forge adapter for runtime hooks."
-  (:require [cn.li.mc1201.client.effects.particle :as particle]
+  (:require [cn.li.mcbase.client.effects.particle :as particle]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.client.session-cleanup :as session-cleanup]
             [cn.li.mcbase.client.session :as client-session]

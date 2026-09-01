@@ -10,7 +10,7 @@
     [cn.li.forge1201.integration.side :as side]
     [cn.li.forge1201.registry.state :as registry-state]
     [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
-    [cn.li.mc1201.block.blockstate-properties :as blockstate-props]
+    [cn.li.mcbase.block.blockstate-properties :as blockstate-props]
     [cn.li.mcmod.aot :as aot]
     [cn.li.platform.neutral.config :as modid]
     [cn.li.mcmod.runtime.deferred :as deferred]

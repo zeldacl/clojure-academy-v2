@@ -1,6 +1,6 @@
 (ns cn.li.neoforge262.client.runtime-bridge
   "CLIENT-ONLY Forge adapter for runtime hooks."
-  (:require [cn.li.mc262.client.effects.particle :as particle]
+  (:require [cn.li.mcbase.client.effects.particle :as particle]
             [cn.li.mc262.client.font.msdf-tick :as msdf-tick]
 
             [cn.li.mc262.client.effects.sound :as sound]

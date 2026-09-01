@@ -7,7 +7,7 @@
 					[cn.li.platform.registry.metadata :as registry-metadata]
 					[cn.li.mcmod.util.log :as log]
 					[cn.li.neoforgebase.registry.state :as registry-state])
-	(:import [cn.li.mc262.bridge McAccess] [net.minecraft.core BlockPos]
+	(:import [cn.li.mcver McAccess] [net.minecraft.core BlockPos]
 				 [net.minecraft.world.level Level]
 				 [net.minecraft.world.level.block Block]
 				 [cn.li.neoforge262.block.entity ScriptedBlockEntity]))

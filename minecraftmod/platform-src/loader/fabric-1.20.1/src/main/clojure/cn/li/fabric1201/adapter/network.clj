@@ -6,7 +6,7 @@
   (:require [cn.li.mcmod.hooks.core :as hooks]
             [cn.li.fabric1201.gui.network.server :as gui-network]
             [cn.li.fabric1201.adapter.server-context :as _server-context]
-            [cn.li.mc1201.runtime.network-core :as network-core]))
+            [cn.li.mcbase.runtime.network-core :as network-core]))
 
 (def send-sync-to-client!
   network-core/send-sync-to-client!)

@@ -8,7 +8,7 @@
             [cn.li.platform.neutral.event-runtime :as wok]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mc262.integration.saveddata.world-lifecycle :as wl-saved])
-	  (:import [cn.li.mc262.bridge McAccess] [net.minecraft.server.level ServerLevel]
+	  (:import [cn.li.mcver McAccess] [net.minecraft.server.level ServerLevel]
            [net.neoforged.neoforge.event.level LevelEvent$Load LevelEvent$Unload LevelEvent$Save]
            [net.neoforged.neoforge.event.tick LevelTickEvent$Post]))
 

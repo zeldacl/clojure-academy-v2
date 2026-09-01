@@ -4,7 +4,7 @@
   26.2: BlockEvent$BreakEvent relocated to BreakBlockEvent."
   (:require [cn.li.mcbase.integration.event-support :as event-support]
             [cn.li.platform.neutral.event-runtime :as dispatcher]
-            [cn.li.mc262.integration.event-handlers :as event-handlers]
+            [cn.li.mcbase.integration.event-handlers :as event-handlers]
             [cn.li.neoforge262.integration.events.event-apply :as event-apply]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.event.level BlockEvent$EntityPlaceEvent]

@@ -7,7 +7,7 @@
   (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.neoforge1211.datagen.provider-factory :as provider-factory]
             [cn.li.mcbase.datagen.provider-registration :as provider-registration]
-            [cn.li.mc1211.datagen.setup-common :as setup-common]
+            [cn.li.mcbase.datagen.setup-common :as setup-common]
             [cn.li.platform.target :as target])
   (:import [net.neoforged.neoforge.data.event GatherDataEvent]))
 

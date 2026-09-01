@@ -1,7 +1,7 @@
 (ns cn.li.fabric262.client.init
   "Fabric 26.2 client-side initialization and registration"
-  (:require [cn.li.mc262.client.i18n :as i18n]
-            [cn.li.mc262.client.render.pose :as pose-impl]
+  (:require [cn.li.mcbase.client.i18n :as i18n]
+            [cn.li.mcbase.client.render.pose :as pose-impl]
             [cn.li.mc262.client.render.buffer :as buffer-impl]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc262.integration.recipe-query :as recipe-query]
@@ -17,7 +17,6 @@
             [cn.li.fabric262.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric262.client.presentation-world-renderer :as presentation-world-renderer]
             [cn.li.fabric262.client.keyboard-init :as kb-init]
-            [cn.li.fabric262.client.obj-model-registration :as obj-models]
             [cn.li.mc262.client.font.msdf-setup :as msdf-setup]
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mc262.presentation.screen :as presentation-screen]
@@ -25,8 +24,8 @@
             [cn.li.mc262.gui.cgui.font :as cgui-font]
             [cn.li.mc262.client.effects.sound :as sound]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
-            [cn.li.mc262.key-scheme-provider-core :as key-scheme-core]
-            [cn.li.mc262.vanilla-input-control-core :as vanilla-control]
+            [cn.li.mcbase.key-scheme-provider-core :as key-scheme-core]
+            [cn.li.mcbase.vanilla-input-control-core :as vanilla-control]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
             [cn.li.platform.bootstrap :as platform-bootstrap]
@@ -250,7 +249,6 @@
   (FabricClientRenderSetup/registerEntityRenderers)
   (register-scripted-block-entity-renderers!)
   (register-fluid-client!)
-  (obj-models/register!)
   (presentation-hud-renderer/init!)
   (hand-effect-renderer/init!)
   (presentation-world-renderer/init!)

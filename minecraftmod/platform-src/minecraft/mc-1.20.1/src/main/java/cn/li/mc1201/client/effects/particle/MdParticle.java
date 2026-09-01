@@ -1,4 +1,4 @@
-package cn.li.mc1201.client.effects.particle;
+package cn.li.mcbase.client.effects.particle;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.Particle;

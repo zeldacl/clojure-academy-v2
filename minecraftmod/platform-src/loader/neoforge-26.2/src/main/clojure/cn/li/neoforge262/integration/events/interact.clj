@@ -9,7 +9,7 @@
   (:require [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.platform.neutral.event-runtime :as interaction-result]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc262.integration.event-handlers :as event-handlers]
+            [cn.li.mcbase.integration.event-handlers :as event-handlers]
             [cn.li.neoforge262.integration.events.event-apply :as event-apply]
             [cn.li.neoforgebase.integration.events.gui-open-port :as gui-open-port]
             [cn.li.neoforge262.runtime.owner :as runtime-owner])

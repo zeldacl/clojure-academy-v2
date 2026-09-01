@@ -147,6 +147,11 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 2. 三个 Fabric 目标中的独立 `assets/academy/lang/en_us.json` 已全部删除。`verifyDatagenOwnsLanguageFiles` 已加入根验证；每个 datagen manifest 还必须包含六种语言输出（`en_us`、`zh_cn`、`zh_tw`、`ja_jp`、`ko_kr`、`ru_ru`），确保翻译唯一来源是 datagen。
 3. 平台资源已建立显式 allowlist：保留无法由 datagen 取代的 loader 元数据/混入配置、版本专属 `pack.mcmeta` 以及 26.2 专属 shader；共用 `academy-loader-hook-support.properties` 已移至 `mcmod` 资源，未引用的 base/NeoForge marker 已删除。`verifyPlatformResourceOwnership` 防止未来把普通资源重新放回平台层。模型、纹理、声音、配方、标签和翻译继续由共用资源/datagen 管理。
 4. 热路径验收仍以静态边界、无头回归和编译为准；本轮不启动实机，不修改 EULA。26.2 若根 Gradle 8 wrapper 与插件发生 API 不兼容，必须使用目录指定的 Gradle 9.2/9.7.1 wrapper，并把该工具链差异记录为构建环境事实，不能通过兼容旧实现绕过。
+5. `ac/build.gradle` 与 `mcmod/build.gradle` 曾出现零字节文件，导致中性项目插件、`classes`/`compileClojure`/`processResources` 任务以及所有平台运行时依赖链被配置阶段截断。现已恢复为有效脚本，并新增 `verifyNeutralBuildScripts`：文件缺失、为空或缺少 Java/Clojure/资源任务标记时立即失败，避免再次形成静默阻断。
+6. Fabric 26.2 的空 OBJ 注册 seam 和未被 mixin 配置引用的空 OBJ mixin 已删除；该目标的生成 vanilla item model 是唯一实现。26.2 GUI 透视 seam 已改为由 NeoForge 显式安装 render-state 提交回调：没有活动透视时保持普通路径，活动透视时只创建必要的网格 state，不使用反射、通用代理或每帧 map 查找。
+7. 复审发现 26.2 Presentation screen/container 曾遗漏 `draw-ui-model-preview!` backend context，导致 `:item-3d`/`:block-3d` 在该目标静默跳过；现已补上唯一 typed PIP 适配（`ReactivePreviewRenderState`），Fabric 仍按能力缺失返回 unsupported，不保留第二套渲染实现。
+8. 删除 `ac/ability/service/combat_sessions.clj` 中未被任何调用点引用的批量 `tick!` 旧实现；当前 combat tick 只由 `combat_runtime`/final runtime 驱动，避免每 tick 重建整个 sessions map。
+9. 复审发现 `mcmod` 的 pose 与 texture-binder seam 在渲染调用中仍通过 Framework/map 间接读取；现已在 bootstrap 安装时缓存固定 arity IFn，渲染调用只走直接 Var。`verifyClientRenderBridgeBoundary` 只检查实际热路径区域，避免把初始化期状态写入误判为热路径查找；同时移除 texture-binder 初始化辅助函数中的 `apply`，降低动态分配与门禁歧义。
 
 执行顺序：先完成 seam 契约化候选清单与逐方法差异表 → 每次只提升一个经证明无版本依赖的实现 → 六目标 `compileJava/check/jar`（按各自 wrapper）→ datagen manifest/资源 allowlist/XOR/JEI/IC2 门禁 → 最后再考虑实机性能验收。任何阶段不得引入反射、旧逻辑兼容层或 class 与 `.clj` 共存。
 
@@ -155,6 +160,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 seam 文件不是“只能原样复制”的禁区；正确顺序是先在各目标内做无语义改变的整理，再按 API 差异拆出可证明共用的部分。每个候选必须提交方法级差异表，标明返回类型、空值/异常语义、线程模型、分配行为和实际调用频率；只有所有差异都能落在版本适配边界内，才允许移动到 `minecraft-base`、`minecraft-classic` 或 `minecraft-modern`。不能用 `Object`、反射、通用代理、运行时 lambda/接口对象来“抹平”类型差异，否则会增加 Loom 风险和热路径开销。
 
 当前复审还删除了已经没有调用者的迁移别名：各版本 `BlockRegistry`、`ItemRegistry`、`ItemInventory`、`DamageSourceAccess`、`BlockEntityRegistry` 转发类，26.2 的 `bridge/McAccess`、`bridge/NbtAccess`、旧 `RenderInterop`，Fabric 1.20.1 的 optional-integrations facade，以及 Fabric 26.2 的空 OBJ 兼容标记。调用点已直接指向唯一 owner；26.2 installer/runtime-ops 的导入也已改为 `mcbase`/`mcver`。第三方 IC2 的隔离反射边界和 JEI typed adapter 不属于这些迁移别名，继续保留。
+
+本轮又删除了三个 MC 版本目录中 114 个明确标记为 `Thin re-export` 的 Clojure seam 外壳，并把仍存的调用点直接改到 `minecraft-base` owner；版本目录不再承担同一实现的命名空间转发。`verifyNoThinForwarders` 现在会扫描 `mc-*/src/main/clojure`，任何新的 thin re-export 都会使门禁失败。
 
 本次 seam 清理不改变 tick/render 的调用形态：共享 seam 仍是静态 Java 方法，版本特有 API 仍在目标编译期绑定；不引入每次调用的 map 查找、反射、临时集合或包装对象。删除空壳/转发类反而减少类加载、链接和 AOT/Loom 扫描成本。执行删除后必须重新跑六目标 `compileJava`，并跑 `verifyNoThinForwarders`、`verifyNoCompatibilityResidues`、`verifyVersionSeamParity`；任何目标出现缺失 owner 或 class/source 重叠都立即停止提升并回退该单个候选。
 
@@ -166,3 +173,14 @@ seam 文件不是“只能原样复制”的禁区；正确顺序是先在各目
 - 不用反射替代静态平台 adapter；第三方适配器的反射例外只限其自身隔离层，不能扩散到 Minecraft/loader/Academy 代码或热路径。
 - 不把 JEI/IC2 当作第二个主 Jar；它们始终是可选运行时能力。
 - 不因中间阶段不能编译而回滚到旧逻辑；只在最终目标验收节点要求完整编译通过。
+
+## 当前源码基线上的可执行收敛计划（2026-09-01）
+
+以下步骤是唯一执行路径；历史段落只作审计背景，验收以当前源码和命令输出为准。
+
+1. **阻断与配置预检**：运行 `verifyNeutralBuildScripts`，确认 `ac/build.gradle`、`mcmod/build.gradle` 存在、非零字节、非空白，并含 `java-library`、Clojure 插件、`compileJava`、`compileClojure`、`processResources`。随后运行 `verifyBuildProfiles`、`verifyTargetBuildEntrypoints`，每个目标只能选择一个 profile；禁止 source/AOT 双轨和 `.class`/`.clj` 同名共存。
+2. **所有权与 seam 收敛**：先生成逐方法差异表（签名、空值/异常、线程模型、分配和调用频率），再按“版本无关契约 → 唯一 shared owner → typed 版本 adapter”顺序移动。删除无调用者的旧 tick、thin re-export、迁移别名；禁止用 `Object`、反射、通用代理或运行时 lambda 消除 API 差异。每次只处理一个候选，立即运行 `verifyNoThinForwarders`、`verifyNoCompatibilityResidues`、`verifyVersionSeamParity`。
+3. **运行时效率边界**：tick、事件转发、渲染调用只使用 bootstrap 安装的固定 arity Java/Clojure IFn 或静态 Java 方法；不得在热路径读取 Framework atom/map、`requiring-resolve`、`apply`、反射或创建临时集合/代理。初始化期可以写 Framework 状态，但必须与调用期直接 Var/typed callback 分离。用 `verifyCorePerformance`、`verifyClientRenderBridgeBoundary`、`verifyPresentationDirectHostBoundary`、`verifyVfxDirectHostBoundary` 做静态验收；本轮不跑实机 JFR/JMH。
+4. **资源和可选接入**：模型、纹理、声音、配方、标签、翻译全部由共用资源/datagen 生成；不提交独立 `en_us.json`。平台层只保留 loader metadata、mixin/入口声明、版本专属 `pack.mcmeta`/shader 等 allowlist 项。JEI 保持六目标 typed adapter；IC2 仅在隔离第三方边界允许反射，禁止扩散到 Minecraft/loader/Academy 主路径。运行 `verifyDatagenOwnsLanguageFiles`、`verifyPlatformResourceOwnership`、`verifyOptionalIntegrations`。
+5. **六目标无头编译验收**：依次执行 `:platform:classes`，目标为 Forge 1.20.1、Fabric 1.20.1、Fabric 1.21.1、NeoForge 1.21.1、NeoForge 26.2、Fabric 26.2；26.2 必须使用目录指定的 Gradle 9.2/9.7.1 wrapper。随后执行根 `verifyCurrentPlatforms`（包含 neutral build script、AOT XOR、资源、JEI/IC2、架构门禁）。中间阶段允许失败，但不得以旧实现补洞；最终六目标必须全部通过。
+6. **发布前验收**：在六目标 classes 通过后，按各目标 wrapper 执行 `check` 与 `jar`/`remapJar`，扫描最终 Jar：loader metadata/manifest 各一份、JEI wrapper 恰一份、不得嵌入 JEI/IC2、不得出现 class/source 重叠。任何单个 seam 候选失败只回退该候选，不恢复整套旧架构。

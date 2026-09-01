@@ -3,7 +3,7 @@
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.runtime.raycast-normalize :as rn])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [cn.li.mc1211.bridge RenderInterop]
+           [cn.li.mcver RenderInterop]
            [cn.li.mc1211.client.render ModRenderTypes]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
@@ -370,8 +370,8 @@
   (let [v (Vector3f. (float x) (float y) (float z))]
     (.transformPosition mat v)
     (RenderInterop/addColoredVertex vc (.-x v) (.-y v) (.-z v)
-                                    (channel->float r) (channel->float g)
-                                    (channel->float b) (channel->float a))))
+                                    (float (channel->float r)) (float (channel->float g))
+                                    (float (channel->float b)) (float (channel->float a)))))
 
 (defn- emit-line!
   [^VertexConsumer vc mat {:keys [^V3 p1 ^V3 p2 color]}]

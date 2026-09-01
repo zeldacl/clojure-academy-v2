@@ -66,15 +66,8 @@
     (swap! sessions* update-in [owner :latches] into latches))
   nil)
 
-(defn tick! [tick]
-  (mapv (fn [[owner entry]]
-          [owner (assoc entry :server-tick (long tick))])
-        (swap! sessions*
-               (fn [sessions]
-                 (into {}
-                       (map (fn [[owner entry]]
-                              [owner (assoc entry :tick (long tick))]))
-                       sessions)))))
+
+
 
 (defn snapshot [] @sessions*)
 

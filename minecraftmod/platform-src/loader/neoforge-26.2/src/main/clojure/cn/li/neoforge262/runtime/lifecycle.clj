@@ -1,10 +1,10 @@
 (ns cn.li.neoforge262.runtime.lifecycle
   "Forge player lifecycle hooks for runtime system."
-  (:require [cn.li.mc262.runtime.nbt-core :as runtime-nbt]
-            [cn.li.mc262.runtime.lifecycle-core :as lifecycle-core]
+  (:require [cn.li.mcbase.runtime.nbt-core :as runtime-nbt]
+            [cn.li.mcbase.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mcbase.runtime.sync-core :as runtime-sync]
             [cn.li.mc262.runtime.world-effects-core :as world-effects]
-            [cn.li.mc262.runtime.network-core :as network-core]
+            [cn.li.mcbase.runtime.network-core :as network-core]
             [cn.li.mcbase.runtime.spi.network-transport :as transport-spi]
             [cn.li.neoforge262.runtime.adapters.registry :as runtime-adapters-registry]
             [cn.li.mcbase.runtime.adapter-registry :as adapter-registry]
@@ -15,7 +15,7 @@
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc262.bridge McAccess]
+  (:import [cn.li.mcver McAccess]
            [net.neoforged.neoforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent
                                    PlayerEvent$Clone

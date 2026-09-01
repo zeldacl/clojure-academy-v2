@@ -252,8 +252,17 @@ tasks.register("verifyNoThinForwarders") {
             exclude "**/build/**"
             exclude "**/.gradle/**"
         }.files
+        def versionThinSeams = fileTree(rootProject.projectDir) {
+            include "platform-src/minecraft/mc-*/src/main/clojure/**/*.clj"
+            exclude "**/build/**"
+            exclude "**/.gradle/**"
+        }.findAll { f ->
+            def text = f.getText("UTF-8")
+            text.contains("Thin re-export") || text.contains("re-export of")
+        }
+        offenders.addAll(versionThinSeams)
         if (!offenders.isEmpty()) {
-            throw new GradleException("Thin/legacy platform bootstrap residues remain: " + offenders)
+            throw new GradleException("Thin/legacy platform bootstrap or version seam residues remain: " + offenders)
         }
     }
 }
@@ -267,7 +276,9 @@ tasks.register("verifyNoCompatibilityResidues") {
             ~/backward compatible/,
             ~/install-[A-Za-z0-9_-]+-only!/,
             ~/install-platform-foundation\+hooks!/,
-            ~/install-foundation!/
+            ~/install-foundation!/,
+            ~/No-op compatibility hook/,
+            ~/Compatibility overload matching older/
         ]
         def hits = []
         fileTree(rootProject.projectDir) {
@@ -741,6 +752,31 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
     }
 }
 
+tasks.register("verifyNeutralBuildScripts") {
+    group = "verification"
+    description = "Require the neutral ac/mcmod Gradle build scripts and their language tasks to remain present."
+    doLast {
+        def problems = []
+        ["ac/build.gradle", "mcmod/build.gradle"].each { String path ->
+            def buildFile = file(path)
+            if (!buildFile.isFile() || buildFile.length() == 0L || !buildFile.getText("UTF-8").trim()) {
+                problems << "${path}: missing or empty build script"
+                return
+            }
+            def text = buildFile.getText("UTF-8")
+            ["java-library", "dev.clojurephant.clojure", "compileJava", "compileClojure", "processResources"].each { marker ->
+                if (!text.contains(marker)) {
+                    problems << "${path}: required marker '${marker}' is missing"
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new GradleException("verifyNeutralBuildScripts failed:\n" + problems.join("\n"))
+        }
+        logger.lifecycle("[verifyNeutralBuildScripts] ok (ac/mcmod scripts present and language tasks declared)")
+    }
+}
+
 tasks.register("verifyPresentationJavaPurity") {
     group = "verification"
     description = "Ensure Presentation Java contracts stay free of Minecraft APIs; allow explicit neutral VFX ABI and particle-kernel Java classes."
@@ -809,7 +845,7 @@ tasks.register("verifyPresentationDependencyDirection") {
             def path = rootDir.toPath().relativize(buildFile.toPath()).toString().replace('\\', '/')
             def mentionsCore = buildFile.text =~ /project\([\"']:?presentation-core[\"']\)/
             if (mentionsCore && path != "build.gradle" && !(path in ["ac/build.gradle", "ability-runtime/build.gradle", "presentation-core/build.gradle",
-                                           "presentation-compiler/build.gradle"])) {
+                                           "presentation-compiler/build.gradle", "tools/benchmarks/build.gradle"])) {
                 violations << "${buildFile}: forbidden direct dependency on presentation-core (platform/base must use mcmod contract)"
             }
         }
@@ -1405,6 +1441,10 @@ tasks.register("verifyClientRenderBridgeBoundary") {
                 file("ac/src/main/clojure/cn/li/ac/ability/client/hud.clj"),
                 file("ac/src/main/clojure/cn/li/ac/ability/client/keybinds.clj")
         ]
+        def hotSeams = [
+                file("mcmod/src/main/clojure/cn/li/mcmod/client/render/pose.clj"),
+                file("mcmod/src/main/clojure/cn/li/mcmod/util/render.clj")
+        ]
         [":local-player-pos", ":camera-position", ":camera-raycast-visible?",
          ":settings-key-name", ":keybind-get-key-code"].each { key ->
             if (!bridge.contains(key)) {
@@ -1417,6 +1457,24 @@ tasks.register("verifyClientRenderBridgeBoundary") {
             }
             if (source.text =~ /call-adapter\s+:(local-player-pos|camera-position|camera-raycast-visible\?|settings-key-name|keybind-get-key-code)/) {
                 throw new GradleException("renderer still performs dynamic bridge lookup: ${source}")
+            }
+        }
+        def hotRegionStarts = [
+                "pose.clj": "(defn pose-ops-available?",
+                "render.clj": "(defn bind-texture"
+        ]
+        hotSeams.each { source ->
+            if (!source.exists()) {
+                throw new GradleException("expected cached render seam is missing: ${source}")
+            }
+            def text = source.text
+            def start = text.indexOf(hotRegionStarts[source.name])
+            if (start < 0) {
+                throw new GradleException("cached render seam hot region is missing: ${source}")
+            }
+            def hotRegion = text.substring(start)
+            if (hotRegion =~ /get-in\s+@|fw\/fw-atom|\(apply\s+/) {
+                throw new GradleException("render seam still performs Framework/map/app hot-path lookup: ${source}")
             }
         }
         logger.lifecycle("[verifyClientRenderBridgeBoundary] ok")
@@ -2129,6 +2187,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoTargetHardcoding",
               "verifyBuildProfiles",
               "verifyTargetBuildEntrypoints",
+              "verifyNeutralBuildScripts",
               "verifySingleApiBoundary",
               "verifyRepositoryHygiene",
               "verifyNeutralClojureNoMinecraftApis",

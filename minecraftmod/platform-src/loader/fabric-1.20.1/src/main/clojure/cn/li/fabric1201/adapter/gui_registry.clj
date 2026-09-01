@@ -5,7 +5,7 @@
             [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
-            [cn.li.mc1201.gui.registry.common :as registry-common]
+            [cn.li.mcbase.gui.registry.common :as registry-common]
             [cn.li.mcbase.gui.registry.open :as open-core]
             [cn.li.platform.target :as target]
             [cn.li.platform.neutral.config :as modid]

@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.client.init
   "Fabric 1.20.1 client-side initialization and registration"
-  (:require [cn.li.mc1201.client.i18n :as i18n]
-            [cn.li.mc1201.client.render.pose :as pose-impl]
+  (:require [cn.li.mcbase.client.i18n :as i18n]
+            [cn.li.mcbase.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc1201.client.energy-item-model-properties :as energy-item-model-properties]
@@ -26,8 +26,8 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
-            [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
-            [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
+            [cn.li.mcbase.key-scheme-provider-core :as key-scheme-core]
+            [cn.li.mcbase.vanilla-input-control-core :as vanilla-control]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
             [cn.li.platform.bootstrap :as platform-bootstrap]

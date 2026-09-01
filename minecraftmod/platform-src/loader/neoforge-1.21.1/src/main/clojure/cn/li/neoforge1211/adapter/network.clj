@@ -7,7 +7,7 @@
 
   Here we provide helper send-fns for context manager and sync service."
   (:require [cn.li.mcmod.hooks.core :as hooks]
-            [cn.li.mc1211.runtime.network-core :as network-core]
+            [cn.li.mcbase.runtime.network-core :as network-core]
             [cn.li.mcbase.runtime.network-payload :as network-payload]
             [cn.li.neoforgebase.adapter.server-context :as _server-context])
   (:import [cn.li.neoforge1211.network ClojureNetwork]

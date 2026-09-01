@@ -6,7 +6,7 @@
             [cn.li.platform.neutral.hooks :as runtime-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc262.bridge McAccess] [cn.li.neoforge262.network ClojureNetwork]
+  (:import [cn.li.mcver McAccess] [cn.li.neoforge262.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
 

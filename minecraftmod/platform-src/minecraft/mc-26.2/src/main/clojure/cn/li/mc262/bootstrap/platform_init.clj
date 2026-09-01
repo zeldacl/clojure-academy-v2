@@ -3,7 +3,7 @@
   (:require [cn.li.mcbase.bootstrap.platform-init :as shared]
             [cn.li.mc262.gui.menu-bridge-install :as menu-bridge-install]
             [cn.li.mc262.bootstrap.installer-core :as core]
-            [cn.li.mc262.runtime.accessor-registry :as accessor-registry]))
+            [cn.li.mcbase.runtime.accessor-registry :as accessor-registry]))
 
 (shared/install-platform-init-hooks!
   {:install-platform-core! core/install-platform-core!

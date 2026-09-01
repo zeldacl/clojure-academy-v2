@@ -4,8 +4,8 @@
   Outputs use ItemStackTemplate (like vanilla 26.2 recipes): its codec uses
   plain Item.CODEC and never requires the item holder to have components
   bound, so datagen and the runtime datapack reload both serialize it."
-  (:require [cn.li.mc262.datagen.metadata-resolver :as metadata-resolver]
-            [cn.li.mc262.datagen.resource-location :as rl]
+  (:require [cn.li.mcbase.datagen.metadata-resolver :as metadata-resolver]
+            [cn.li.mcbase.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
             [cn.li.platform.neutral.config :as modid])
   (:import [cn.li.mc262.recipe ContentRecipe ItemStackTemplateFactory]

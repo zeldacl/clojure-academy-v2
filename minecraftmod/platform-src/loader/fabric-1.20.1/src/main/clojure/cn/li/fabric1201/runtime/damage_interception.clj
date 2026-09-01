@@ -3,7 +3,7 @@
 
   Fabric registers attack cancellation here. Its mixin registration delegates
   mutable damage rewriting to the common Minecraft runtime."
-  (:require [cn.li.mc1201.runtime.damage-interception-core :as core]
+  (:require [cn.li.mcbase.runtime.damage-interception-core :as core]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.entity.event.v1 ServerLivingEntityEvents$AllowDamage]))
