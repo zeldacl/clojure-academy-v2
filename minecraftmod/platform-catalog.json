@@ -68,6 +68,14 @@
       "kind": "minecraft-shared",
       "source": "platform-src/minecraft/base/src/main"
     },
+    "minecraft-classic": {
+      "kind": "minecraft-shared",
+      "source": "platform-src/minecraft/classic/src/main"
+    },
+    "minecraft-modern": {
+      "kind": "minecraft-shared",
+      "source": "platform-src/minecraft/modern/src/main"
+    },
     "minecraft-1.20.1": {
       "kind": "minecraft",
       "minecraftVersion": "1.20.1",
@@ -213,6 +221,7 @@
       "sourceComponents": [
         "platform-shared",
         "minecraft-base",
+        "minecraft-classic",
         "minecraft-1.20.1",
         "forge-1.20.1"
       ],
@@ -296,6 +305,7 @@
       "sourceComponents": [
         "platform-shared",
         "minecraft-base",
+        "minecraft-classic",
         "minecraft-1.20.1",
         "fabric-shared",
         "fabric-1.20.1"
@@ -384,7 +394,9 @@
       "sourceComponents": [
         "platform-shared",
         "minecraft-base",
+        "minecraft-classic",
         "minecraft-1.21.1",
+        "minecraft-modern",
         "fabric-shared",
         "fabric-1.21.1"
       ],
@@ -472,7 +484,9 @@
       "sourceComponents": [
         "platform-shared",
         "minecraft-base",
+        "minecraft-classic",
         "minecraft-1.21.1",
+        "minecraft-modern",
         "neoforge-shared",
         "neoforge-1.21.1"
       ],
@@ -556,6 +570,7 @@
         "platform-shared",
         "minecraft-base",
         "minecraft-26.2",
+        "minecraft-modern",
         "neoforge-shared",
         "neoforge-26.2"
       ],
@@ -639,6 +654,7 @@
         "platform-shared",
         "minecraft-base",
         "minecraft-26.2",
+        "minecraft-modern",
         "fabric-shared",
         "fabric-26.2"
       ],

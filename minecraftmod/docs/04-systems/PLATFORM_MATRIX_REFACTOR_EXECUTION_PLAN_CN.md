@@ -143,7 +143,7 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 本轮重新扫描三平台、三版本源码及资源目录，不引用历史完成记录作为事实依据。结论与可执行动作如下：
 
-1. seam 不能按文件名或单次相似度批量提升。逐文件 SHA-256 与版本 API 依赖核验显示，`AdvancementJson`、`DynamicTextureAccess`、`Ingredients`、`ItemUseResults`、`McAccess`、`NbtAccess`、`RegistryLookups`、`RegistryValues`、`TeleportAccess`、`TextureSizeAccess`、`WorldOps` 在版本间存在真实差异，继续留在各版本 seam；`RegistryDispatch` 三版本字节完全一致，已提升至 `minecraft-base` 并删除三份副本。后续若要进一步减少 seam，必须先抽取版本无关契约/值对象，再让各版本适配器实现该契约，逐目标编译后才允许提升；禁止恢复双轨实现。
+1. seam 不能按文件名或单次相似度批量提升。逐文件 SHA-256 与版本 API 依赖核验显示，`RegistryDispatch` 三版本字节完全一致，已提升至 `minecraft-base`；另外 11 个 1.20.1/1.21.1 完全一致的 seam 已提升至仅供这两个版本使用的 `minecraft-classic`，`ItemStackEnchants` 的 1.21.1/26.2 共用实现已提升至 `minecraft-modern`。26.2 仍保留其 API 分叉适配。`verifyVersionSeamParity` 现在按每个目标合并 shared+version seam surface，确保每个目标最终只有一套实现。后续若要进一步减少 seam，必须先抽取版本无关契约/值对象，再让各版本适配器实现该契约，逐目标编译后才允许提升；禁止恢复双轨实现。
 2. 三个 Fabric 目标中的独立 `assets/academy/lang/en_us.json` 已全部删除。`verifyDatagenOwnsLanguageFiles` 已加入根验证；每个 datagen manifest 还必须包含六种语言输出（`en_us`、`zh_cn`、`zh_tw`、`ja_jp`、`ko_kr`、`ru_ru`），确保翻译唯一来源是 datagen。
 3. 平台资源已建立显式 allowlist：保留无法由 datagen 取代的 loader 元数据/混入配置、版本专属 `pack.mcmeta` 以及 26.2 专属 shader；共用 `academy-loader-hook-support.properties` 已移至 `mcmod` 资源，未引用的 base/NeoForge marker 已删除。`verifyPlatformResourceOwnership` 防止未来把普通资源重新放回平台层。模型、纹理、声音、配方、标签和翻译继续由共用资源/datagen 管理。
 4. 热路径验收仍以静态边界、无头回归和编译为准；本轮不启动实机，不修改 EULA。26.2 若根 Gradle 8 wrapper 与插件发生 API 不兼容，必须使用目录指定的 Gradle 9.2/9.7.1 wrapper，并把该工具链差异记录为构建环境事实，不能通过兼容旧实现绕过。

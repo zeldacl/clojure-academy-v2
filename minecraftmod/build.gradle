@@ -1873,11 +1873,8 @@ tasks.register("verifyVersionSeamParity") {
             }
         }
 
-        def seamSets = [:]
-        components.each { componentId, component ->
-            if (component.kind?.toString() != "minecraft" || !component.source) {
-                return
-            }
+        def collectSeamNames = { component ->
+            if (!component?.source) return [] as Set
             def root = file(component.source.toString())
             def seamRoot = new File(root, "java/cn/li/mcver")
             def names = new TreeSet()
@@ -1896,14 +1893,32 @@ tasks.register("verifyVersionSeamParity") {
                     names << rel.replaceAll(/\.clj$/, "").replace("/", ".").replace("_", "-")
                 }
             }
-            seamSets[componentId.toString()] = names
+            names
+        }
+
+        // Compare the effective seam surface delivered to each target.  A
+        // family shared component (for example minecraft-classic for 1.20.1
+        // and 1.21.1) is part of that target's surface; it must not be treated
+        // as a second version implementation.
+        def seamSets = [:]
+        catalog.targets.each { targetId, target ->
+            if (target.loader?.toString() == "none") return
+            def names = new TreeSet()
+            (target.sourceComponents ?: []).each { componentId ->
+                def component = components[componentId.toString()]
+                def kind = component?.kind?.toString()
+                if (kind == "minecraft" || kind == "minecraft-shared") {
+                    names.addAll(collectSeamNames(component))
+                }
+            }
+            seamSets[targetId.toString()] = names
         }
 
         def reference = seamSets.find { k, v -> !v.isEmpty() }
         if (reference != null) {
-            seamSets.each { componentId, names ->
+            seamSets.each { targetId, names ->
                 if (names != reference.value) {
-                    problems << "version seam mismatch for ${componentId}: expected ${reference.value}, found ${names}"
+                    problems << "version seam mismatch for ${targetId}: expected ${reference.value}, found ${names}"
                 }
             }
         }
@@ -1911,7 +1926,7 @@ tasks.register("verifyVersionSeamParity") {
         if (!problems.isEmpty()) {
             throw new GradleException("verifyVersionSeamParity failed:\n" + problems.take(40).join("\n"))
         }
-        logger.lifecycle("[verifyVersionSeamParity] ok ({} version components)", seamSets.size())
+        logger.lifecycle("[verifyVersionSeamParity] ok ({} target seam surfaces)", seamSets.size())
     }
 }
 
@@ -1922,7 +1937,7 @@ tasks.register("verifyMinecraftComponentNeutrality") {
         def catalog = rootProject.ext.platformCatalog()
         def problems = []
         (catalog.components ?: [:]).each { componentId, component ->
-            if (component.kind?.toString() != "minecraft" || !component.source) {
+            if (!(component.kind?.toString() in ["minecraft", "minecraft-shared"]) || !component.source) {
                 return
             }
             def root = file(component.source.toString())
