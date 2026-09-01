@@ -127,6 +127,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 热路径复审又发现 neutral VFX 旧 seam 在每次访问时仍经 `Framework → client-bridge map → apply`，并重建 host API map；现已删除该旁路，改为 AC 客户端 bootstrap 一次安装并缓存不可变 host API map，tick/render 仅做直接 Var/函数调用。新增 `vfx` 回归测试验证安装后不再调用 `client-runtime/call-adapter`；同步更新 `verifyVfxDirectHostBoundary`，禁止恢复 bridge 路径。修复后 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace` 通过（99 tasks），根 `cmd /c gradlew.bat test verifyCorePerformance --stacktrace` 通过（80 tasks）。
 
+该热路径修复提交后又逐目标重跑发布任务：Forge 1.20.1 `check + jar`（61 tasks）、Fabric 1.20.1/1.21.1 `check + remapJar`（各 63）、NeoForge 1.21.1 `check + remapJar`（63）、NeoForge 26.2 `check + jar`（64）和 Fabric 26.2 `check + jar`（60）全部成功；六个新 Jar 的 ZIP 实物扫描再次得到 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`，其中两个 26.2 目标 `platform AOT=0`。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
