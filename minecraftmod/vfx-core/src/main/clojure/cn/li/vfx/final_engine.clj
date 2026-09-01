@@ -6,7 +6,7 @@
    returned render batches are consumed by a client renderer later."
   (:require [cn.li.vfx.effect-schema :as schema]
             [cn.li.vfx.replication :as replication]
-            [cn.li.vfx.expr :as expr]))
+            [cn.li.node.expr :as expr]))
 
 (def ^:private expression-ops
   {:vfx/ring-point
