@@ -2,7 +2,7 @@ package cn.li.neoforge1211.block.entity;
 
 import cn.li.mcbase.block.IScriptedBlock;
 import cn.li.mc1211.block.entity.AbstractScriptedBlockEntity;
-import cn.li.mc1211.block.entity.BlockEntityRegistry;
+import cn.li.mcbase.block.entity.BlockEntityRegistry;
 import cn.li.mcbase.block.logic.ITileContainerLogic;
 import cn.li.neoforge1211.capability.ForgeCapabilityHandler;
 import net.minecraft.core.BlockPos;

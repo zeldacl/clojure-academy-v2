@@ -7,7 +7,7 @@ import cn.li.mc1211.block.SharedDynamicStateBlock;
 import cn.li.mc1211.block.SharedScriptedBlock;
 import cn.li.mc1211.block.ScriptedRenderShapes;
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
-import cn.li.mc1211.runtime.BlockRegistry;
+import cn.li.mcbase.runtime.BlockRegistry;
 import cn.li.mc1211.entity.ScriptedProjectileEntity;
 import cn.li.mc1211.entity.ScriptedEffectEntity;
 import cn.li.mc1211.entity.ScriptedRayEntity;

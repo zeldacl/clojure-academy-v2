@@ -12,7 +12,7 @@ import cn.li.mc262.block.SharedBootstrapBlockHelper;
 import cn.li.mc262.block.SharedDynamicStateBlock;
 import cn.li.mc262.block.SharedScriptedBlock;
 import cn.li.mc262.block.ScriptedRenderShapes;
-import cn.li.mc262.runtime.BlockRegistry;
+import cn.li.mcbase.runtime.BlockRegistry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;

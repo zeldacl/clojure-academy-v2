@@ -150,6 +150,14 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 执行顺序：先完成 seam 契约化候选清单与逐方法差异表 → 每次只提升一个经证明无版本依赖的实现 → 六目标 `compileJava/check/jar`（按各自 wrapper）→ datagen manifest/资源 allowlist/XOR/JEI/IC2 门禁 → 最后再考虑实机性能验收。任何阶段不得引入反射、旧逻辑兼容层或 class 与 `.clj` 共存。
 
+### seam 可继续重构，但必须先规范再提升
+
+seam 文件不是“只能原样复制”的禁区；正确顺序是先在各目标内做无语义改变的整理，再按 API 差异拆出可证明共用的部分。每个候选必须提交方法级差异表，标明返回类型、空值/异常语义、线程模型、分配行为和实际调用频率；只有所有差异都能落在版本适配边界内，才允许移动到 `minecraft-base`、`minecraft-classic` 或 `minecraft-modern`。不能用 `Object`、反射、通用代理、运行时 lambda/接口对象来“抹平”类型差异，否则会增加 Loom 风险和热路径开销。
+
+当前复审还删除了已经没有调用者的迁移别名：各版本 `BlockRegistry`、`ItemRegistry`、`ItemInventory`、`DamageSourceAccess`、`BlockEntityRegistry` 转发类，26.2 的 `bridge/McAccess`、`bridge/NbtAccess`、旧 `RenderInterop`，Fabric 1.20.1 的 optional-integrations facade，以及 Fabric 26.2 的空 OBJ 兼容标记。调用点已直接指向唯一 owner；26.2 installer/runtime-ops 的导入也已改为 `mcbase`/`mcver`。第三方 IC2 的隔离反射边界和 JEI typed adapter 不属于这些迁移别名，继续保留。
+
+本次 seam 清理不改变 tick/render 的调用形态：共享 seam 仍是静态 Java 方法，版本特有 API 仍在目标编译期绑定；不引入每次调用的 map 查找、反射、临时集合或包装对象。删除空壳/转发类反而减少类加载、链接和 AOT/Loom 扫描成本。执行删除后必须重新跑六目标 `compileJava`，并跑 `verifyNoThinForwarders`、`verifyNoCompatibilityResidues`、`verifyVersionSeamParity`；任何目标出现缺失 owner 或 class/source 重叠都立即停止提升并回退该单个候选。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。

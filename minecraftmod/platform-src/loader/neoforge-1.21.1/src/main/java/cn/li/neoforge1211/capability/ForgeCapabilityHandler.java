@@ -3,7 +3,7 @@ package cn.li.neoforge1211.capability;
 import cn.li.neoforgebase.capability.ForgeCapabilityQuery;
 import cn.li.mcbase.block.capability.ScriptedCapabilityResolver;
 import cn.li.mc1211.block.entity.AbstractScriptedBlockEntity;
-import cn.li.mc1211.block.entity.BlockEntityRegistry;
+import cn.li.mcbase.block.entity.BlockEntityRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;

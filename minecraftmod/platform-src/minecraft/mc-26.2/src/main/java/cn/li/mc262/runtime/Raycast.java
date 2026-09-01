@@ -1,6 +1,6 @@
 package cn.li.mc262.runtime;
 
-import cn.li.mc262.bridge.McAccess;
+import cn.li.mcver.McAccess;
 
 import java.util.Collection;
 import java.util.HashSet;

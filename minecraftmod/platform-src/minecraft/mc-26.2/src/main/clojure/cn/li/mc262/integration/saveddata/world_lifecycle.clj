@@ -1,6 +1,6 @@
 (ns cn.li.mc262.integration.saveddata.world-lifecycle
   (:require [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc262.bridge NbtAccess]
+  (:import [cn.li.mcver NbtAccess]
            [cn.li.mc262.integration.saveddata WorldLifecycleSavedData]
            [net.minecraft.nbt CompoundTag]
            [net.minecraft.server.level ServerLevel]

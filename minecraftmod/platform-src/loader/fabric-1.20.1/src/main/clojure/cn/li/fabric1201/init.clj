@@ -3,7 +3,7 @@
   (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
             [cn.li.platform.bootstrap :as platform-bootstrap]
-            [cn.li.fabric1201.integration.optional-integrations :as optional-integrations]
+            [cn.li.fabricbase.optional-integrations :as optional-integrations]
             [cn.li.fabric1201.integration.achievement-bridge :as achievement-bridge])
   (:import [cn.li.fabric1201.recipe ModRecipeTypes]
            [cn.li.mc1201.trigger ModTriggers]))

@@ -1,8 +1,8 @@
 (ns cn.li.mc262.platform.runtime-ops
   "Install versioned RuntimeAccess helpers into shared runtime-ops."
   (:require [cn.li.mcbase.platform.runtime-ops :as shared])
-  (:import [cn.li.mc262.runtime BlockRegistry ItemInventory
-            ItemRegistry ParticleEntity RuntimeAccess]))
+  (:import [cn.li.mcbase.runtime BlockRegistry ItemInventory ItemRegistry]
+           [cn.li.mc262.runtime ParticleEntity RuntimeAccess]))
 
 (shared/install-runtime-ops!
   {:playerRaytraceBlock (fn [& args] (apply RuntimeAccess/playerRaytraceBlock args))
