@@ -119,12 +119,12 @@ public final class LayoutKernel {
         boolean hasDir = t.has(node, NodeFlags.HAS_DIRECTION);
         int dir = hasDir ? t.direction[node] : Direction.NONE;
 
-        float boundW = Bindings.fixedOverride(t, ctx.resolver(), node, item, true);
-        float boundH = Bindings.fixedOverride(t, ctx.resolver(), node, item, false);
-        int wMode = boundW >= 0f ? SizeMode.FIXED : t.widthMode[node];
-        int hMode = boundH >= 0f ? SizeMode.FIXED : t.heightMode[node];
-        float wVal = boundW >= 0f ? boundW : t.widthValue[node];
-        float hVal = boundH >= 0f ? boundH : t.heightValue[node];
+        Float boundW = Bindings.numberOverride(ctx.resolver(), node, BindAttr.WIDTH, item);
+        Float boundH = Bindings.numberOverride(ctx.resolver(), node, BindAttr.HEIGHT, item);
+        int wMode = boundW != null ? SizeMode.FIXED : t.widthMode[node];
+        int hMode = boundH != null ? SizeMode.FIXED : t.heightMode[node];
+        float wVal = boundW != null ? boundW : t.widthValue[node];
+        float hVal = boundH != null ? boundH : t.heightValue[node];
 
         float measuredW;
         float measuredH;
@@ -442,8 +442,11 @@ public final class LayoutKernel {
         int end = a.subtreeEnd[inst];
         for (int c = firstChild(a, inst); c >= 0; c = nextSibling(a, c, end)) {
             int cNode = a.nodeOf[c];
-            float childX = cx + t.declaredX[cNode];
-            float childY = cy + t.declaredY[cNode];
+            Object item = a.itemOf[c];
+            Float boundX = Bindings.numberOverride(ctx.resolver(), cNode, BindAttr.X, item);
+            Float boundY = Bindings.numberOverride(ctx.resolver(), cNode, BindAttr.Y, item);
+            float childX = cx + (boundX != null ? boundX : t.declaredX[cNode]);
+            float childY = cy + (boundY != null ? boundY : t.declaredY[cNode]);
             float childW = a.measW(c);
             float childH = a.measH(c);
             arrange(t, a, ctx, c, childX, childY, childW, childH, clipIdx);

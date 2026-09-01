@@ -29,11 +29,17 @@ final class Bindings {
         return t.fontSize[node];
     }
 
-    /** A bound WIDTH/HEIGHT override is always a fixed px value. -1 = unbound. */
-    static float fixedOverride(NodeTable t, BindResolver resolver, int node, Object item, boolean width) {
-        if (resolver == null) return -1f;
-        Object v = resolver.attribute(node, width ? BindAttr.WIDTH : BindAttr.HEIGHT, item);
-        return v instanceof Number num ? num.floatValue() : -1f;
+    /**
+     * A bound WIDTH/HEIGHT/X/Y override is always a fixed px value. Returns
+     * null when unbound -- X/Y legitimately take negative values (e.g. a
+     * scroll-shifted or off-screen-animated node), so unlike most of this
+     * class's other helpers a sentinel primitive can't distinguish "unbound"
+     * from "bound to a negative number."
+     */
+    static Float numberOverride(BindResolver resolver, int node, int attrSlot, Object item) {
+        if (resolver == null) return null;
+        Object v = resolver.attribute(node, attrSlot, item);
+        return v instanceof Number num ? num.floatValue() : null;
     }
 
     static int rgba(NodeTable t, BindResolver resolver, int node, Object item) {

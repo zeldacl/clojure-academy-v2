@@ -308,6 +308,29 @@ class LayoutKernelTest {
     }
 
     @Test
+    void boundYOverridesTheStaticDeclaredOffset() {
+        NodeTableBuilder b = new NodeTableBuilder();
+        int root = b.root();
+        int c = b.child(root, n -> {
+            n.declaredX = 10f;
+            n.declaredY = 10f;
+            n.widthMode = SizeMode.FIXED;
+            n.widthValue = 5f;
+            n.heightMode = SizeMode.FIXED;
+            n.heightValue = 5f;
+        });
+        NodeTable t = b.build();
+        LayoutArena a = new LayoutArena(8);
+        LayoutKernel.expand(t, a, null);
+        BindResolver resolver = (node, attr, item) -> node == c && attr == BindAttr.Y ? -3.5 : null;
+        LayoutContext ctx = new LayoutContext(resolver, null, null);
+        LayoutKernel.measure(t, a, ctx, 0, 100, 100, LayoutKernel.EXACTLY, LayoutKernel.EXACTLY);
+        LayoutKernel.arrange(t, a, ctx, 0, 0, 0, 100, 100, -1);
+        // x stays at the static declared 10; y comes from the (negative) bound override.
+        assertRect(a, c, 10, -3.5f, 5, 5);
+    }
+
+    @Test
     void stackChildrenOverlayAtTheSamePositionByDefault() {
         NodeTableBuilder b = new NodeTableBuilder();
         int root = b.root();
