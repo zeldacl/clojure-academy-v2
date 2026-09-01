@@ -50,7 +50,7 @@
 2. 注册只发生在 bootstrap；tick/render/网络回调的获取阶段禁止 `resolve`、Framework atom/map 查找、匿名 reify 或临时闭包。dispatch 采用索引/数组遍历，异常策略为一次记录后禁用坏回调；延迟任务按 deadline 有序 bucket 取出，tick 不扫描全部未到期任务。输入会话 `receive!` 直接链接 `fixed-channel/decode-intent`，每包路径不再调用 `requiring-resolve`；server bridge 在 bootstrap 固化不可变回调表，VFX/服务端转发不再每次读取 Framework atom。事件 fan-out 的 recipient/payload 组装限定在事件边界、受预算约束，并由 JFR 验证其分配率。
 3. combat audience 直接遍历原生玩家/AABB 发送，不在每 tick 路径生成 UUID 集合；VFX world-stage queue 使用 session-owned 可复用缓冲区，tick 末清空。AC 的 VFX nearby/all 查询和反射伤害回调在首次生产 runtime 创建时冻结为具体函数；平台网络 SPI 只在 bootstrap 阶段解析一次，信号/伤害热路径不再执行命名空间解析或 Var 查找。AC imag-phase/cat-engine 的 viewer/camera/raycast 回调、HUD 按键显示名和 vanilla override 的 key-code 回调同样在客户端 bridge 安装时冻结为直接 IFn；渲染/tick 代码只读取本地 Var，不再调用 `call-adapter` 或 Framework map。
 4. 交互统一返回 `pass/handled/open-gui`；禁止把任意 truthy 值当作 consumed。
-5. 用 JMH（仅 benchmark source set）和代表性 JFR 验收：CPU p95 不得比基线增加 5%，稳态 allocation rate 与 live-set 增加不超过 5%，tick 99p 不得产生不可界定的短命对象。当前已提供可选的无头调度器采样：`cmd /c gradlew.bat :ac:runAcClojureTestsFast "-Dac.test.only=cn.li.ac.ability.final-runtime-perf-test" "-Dac.test.jfr=build/reports/jfr/final-runtime-scheduler-<date>.jfr" --stacktrace`；该基准只验证 deadline bucket 的调度开销，不替代真实游戏实例 JFR/JMH。现已补建 `tools:benchmarks` 隔离 JMH source set/任务与 `FinalRuntimeTickBenchmark`；JMH 依赖、生成 class 和结果不得进入任一运行时 Jar。
+5. 用 JMH（仅 benchmark source set）和代表性 JFR 验收：CPU p95 不得比基线增加 5%，稳态 allocation rate 与 live-set 增加不超过 5%，tick 99p 不得产生不可界定的短命对象。当前已提供可选的无头调度器采样：`cmd /c gradlew.bat :ac:runAcClojureTestsFast "-Dac.test.only=cn.li.ac.ability.final-runtime-perf-test" "-Dac.test.jfr=build/reports/jfr/final-runtime-scheduler-<date>.jfr" --stacktrace`；该基准只验证 deadline bucket 的调度开销，不替代真实游戏实例 JFR/JMH。现已补建 `tools:benchmarks` 隔离 JMH source set/任务与 `FinalRuntimeTickBenchmark`；JMH 依赖、生成 class 和结果不得进入任一运行时 Jar。真实游戏 JFR/JMH 本轮按用户要求延期，不作为本轮代码交付阻塞；恢复该验收时仍须执行低/中/压力场景并满足上述阈值。
 
 ## 阶段 4：JEI 与 IC2 可选集成
 
@@ -99,7 +99,7 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 共享门禁可直接执行：`cmd /c gradlew.bat :node-core:runNodeCoreClojureTests :combat-core:runCombatClojureTests :vfx-core:runVfxClojureTests :mcmod:runMcmodClojureTests :ac:runAcEdnCoverageTests --stacktrace`；平台门禁使用 `scripts\\target-gradle.ps1 <target-id> :platform:runPlatformClojureTests`，其中 `<target-id>` 必须依次为六个 catalog id，不能省略目标参数。
 
-真实客户端 JFR 场景使用统一脚本：`powershell -File scripts\\perf\\run_script_render_perf_capture.ps1 -PlatformTarget <target-id> -Scenario <scenario> -Mode <low|medium|stress>`。脚本通过 `target-gradle.ps1` 解析 catalog 对应的 wrapper/JDK，输出按 target 隔离到 `build/reports/script-render-perf/<target-id>/`；`-PperfJfrFile` 由构建层注入 `runClient/runServer` forked game JVM（不是 Gradle daemon），关闭客户端后才会写入 JFR，并自动生成同目录 `summary-<timestamp>.txt`；标准输出和错误分别写入 `run-<timestamp>.stdout.log`、`run-<timestamp>.stderr.log`，避免 Windows 双重重定向句柄冲突；游戏进程非零退出、JFR 缺失或摘要失败均使脚本失败，不得带警告继续签核。该步骤仍需要人工在游戏内执行代表性低/中/压力场景，不得用无头基准替代；JMH 则由独立 benchmark 任务运行，不通过该脚本代替。
+真实客户端 JFR 场景使用统一脚本：`powershell -File scripts\\perf\\run_script_render_perf_capture.ps1 -PlatformTarget <target-id> -Scenario <scenario> -Mode <low|medium|stress>`。脚本通过 `target-gradle.ps1` 解析 catalog 对应的 wrapper/JDK，输出按 target 隔离到 `build/reports/script-render-perf/<target-id>/`；`-PperfJfrFile` 由构建层注入 `runClient/runServer` forked game JVM（不是 Gradle daemon），关闭客户端后才会写入 JFR，并自动生成同目录 `summary-<timestamp>.txt`；标准输出和错误分别写入 `run-<timestamp>.stdout.log`、`run-<timestamp>.stderr.log`，避免 Windows 双重重定向句柄冲突；游戏进程非零退出、JFR 缺失或摘要失败均使脚本失败，不得带警告继续签核。该步骤需要人工在游戏内执行代表性低/中/压力场景；本轮按用户要求不执行实机测试，未来恢复时不得用无头基准替代；JMH 则由独立 benchmark 任务运行，不通过该脚本代替。
 
 六目标发布任务已逐个执行并通过：Forge 1.20.1 `check + jar`、Fabric 1.20.1/1.21.1 `check + remapJar`、NeoForge 1.21.1 `check + remapJar`、NeoForge 26.2（Gradle 9.2）和 Fabric 26.2（Gradle 9.7.1）`check + jar`（26.2 目标按 `-x test` 排除 Gradle 9.x 的空测试发现校验）。其中 NeoForge 26.2 与 Fabric 26.2 在本轮重新执行了完整 datagen；Forge/Fabric 1.20.x/1.21.x 的 datagen 资源已由此前本机 Loom 资产缓存验证结果复用。为支持无 datagen 外部启动环境下的显式发布检查，`processResources` 已排除只由 `jar` 直接加入的 `META-INF/academy-datagen-hashes.json`，消除了 Gradle 8/9 的隐式任务依赖错误；不改变最终 Jar 内容。
 
@@ -135,7 +135,9 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 在上述修复后逐目标重跑发布构建：Forge 1.20.1（91 tasks）、Fabric 1.20.1/1.21.1（各 91）、NeoForge 1.21.1（91）、NeoForge 26.2（74，按 Gradle 9.2 工具链排除无发现测试任务）和 Fabric 26.2（70）均完成 datagen、check 与最终 Jar。六个 Jar 实物扫描均为 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；26.2 两个 source-first 目标均 `platform AOT=0`。NeoForge 26.2 的 `:tools:target-launcher:test`/空测试发现错误属于 Gradle 9.2 配置行为，已通过 `-x test` 排除，平台 Clojure check、编译、datagen、Jar 和 XOR 门禁仍完整执行。
 
-在当前提交 `0d80e7c14` 上再次执行根工程回归与全部架构门禁：`cmd /c gradlew.bat test verifyCorePerformance verifyOptionalIntegrations verifyNoCompatibilityResidues verifyNoDuplicateCapabilities verifyNoLegacyArchitecture verifyCurrentPlatforms --stacktrace` 成功（126 actionable tasks，0 failures）。同时重新扫描六个目标的最新 `platform/libs/AcademyCraft-*.jar`，六个目标均满足 `metadata=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；该扫描使用归一化完整相对路径，避免仅按 basename 造成误报。当前剩余唯一发布前外部步骤仍是用户接受 EULA 后采集代表性游戏内 JFR。
+在当前提交 `0d80e7c14` 上再次执行根工程回归与全部架构门禁：`cmd /c gradlew.bat test verifyCorePerformance verifyOptionalIntegrations verifyNoCompatibilityResidues verifyNoDuplicateCapabilities verifyNoLegacyArchitecture verifyCurrentPlatforms --stacktrace` 成功（126 actionable tasks，0 failures）。同时重新扫描六个目标的最新 `platform/libs/AcademyCraft-*.jar`，六个目标均满足 `metadata=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；该扫描使用归一化完整相对路径，避免仅按 basename 造成误报。本轮按用户要求不执行实机性能测试，真实游戏 JFR/JMH 作为后续可选验收，不阻塞当前代码交付。
+
+范围修订优先于前述历史记录：本轮交付不要求真实游戏 JFR/JMH；文档中“仍需补采”仅描述未来恢复性能验收时的标准，不构成本轮阻塞或失败条件。不得为完成该项自动修改 EULA，也不得以实机测试替代已有的无头调度器与 JMH 验证。
 
 ## 明确排除的矛盾方案
 
