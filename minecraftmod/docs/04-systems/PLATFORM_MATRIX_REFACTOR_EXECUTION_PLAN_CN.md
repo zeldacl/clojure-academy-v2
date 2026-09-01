@@ -91,8 +91,8 @@ cmd /c gradlew.bat :platform:check :platform:jar "-PplatformTarget=forge-1.20.1"
 cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=fabric-1.20.1" --stacktrace
 cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=fabric-1.21.1" --stacktrace
 cmd /c gradlew.bat :platform:check :platform:remapJar "-PplatformTarget=neoforge-1.21.1" --stacktrace
-cmd /c platform-builds\gradle-9.2\gradlew.bat :platform:check :platform:jar "-PplatformTarget=neoforge-26.2" --stacktrace
-cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" --stacktrace
+cmd /c platform-builds\gradle-9.2\gradlew.bat :platform:check :platform:jar "-PplatformTarget=neoforge-26.2" -x test --stacktrace
+cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" -x test --stacktrace
 ```
 
 共享 neutral/combat/vfx/mcmod headless tests 只运行一次，平台专属 `:platform:runPlatformClojureTests` 按六目标逐个运行；Jar overlap 由每个目标的 `:platform:verifyNeutralClojurePackaging`/`verifyClojureRuntimeRepresentation` 执行，发布 Jar 还必须在 `jar/remapJar` 后运行 `:platform:verifyPackagedOptionalIntegrations`，检查 JEI/IC2 外置、typed JEI 入口、loader 元数据、datagen manifest 和 class/source XOR。代表性 JFR 在共享模块和可运行目标实例分别采集。共享 IC2 隔离测试由 `:platform:runPlatformClojureTests` 执行，使用临时编译类和隔离 classloader 覆盖 IC2 缺失、接口存在、接口形状不兼容，并验证状态缓存；第三方 fixture 不进入主 Jar。JEI 仍由六目标 typed adapter/入口门禁覆盖。当前源码只有 IC2 使用反射，门禁对该文件做精确 allowlist；若新增第三方反射适配器，必须增加独立隔离声明和非热路径测试。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
@@ -101,7 +101,7 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 真实客户端 JFR 场景使用统一脚本：`powershell -File scripts\\perf\\run_script_render_perf_capture.ps1 -PlatformTarget <target-id> -Scenario <scenario> -Mode <low|medium|stress>`。脚本通过 `target-gradle.ps1` 解析 catalog 对应的 wrapper/JDK，输出按 target 隔离到 `build/reports/script-render-perf/<target-id>/`；`-PperfJfrFile` 由构建层注入 `runClient/runServer` forked game JVM（不是 Gradle daemon），关闭客户端后才会写入 JFR，并自动生成同目录 `summary-<timestamp>.txt`；标准输出和错误分别写入 `run-<timestamp>.stdout.log`、`run-<timestamp>.stderr.log`，避免 Windows 双重重定向句柄冲突；游戏进程非零退出、JFR 缺失或摘要失败均使脚本失败，不得带警告继续签核。该步骤仍需要人工在游戏内执行代表性低/中/压力场景，不得用无头基准替代；JMH 则由独立 benchmark 任务运行，不通过该脚本代替。
 
-六目标发布任务已逐个执行并通过：Forge 1.20.1 `check + jar`、Fabric 1.20.1/1.21.1 `check + remapJar`、NeoForge 1.21.1 `check + remapJar`、NeoForge 26.2（Gradle 9.2）和 Fabric 26.2（Gradle 9.7.1）`check + jar`。其中 NeoForge 26.2 与 Fabric 26.2 在本轮重新执行了完整 datagen；Forge/Fabric 1.20.x/1.21.x 的 datagen 资源已由此前本机 Loom 资产缓存验证结果复用。为支持无 datagen 外部启动环境下的显式发布检查，`processResources` 已排除只由 `jar` 直接加入的 `META-INF/academy-datagen-hashes.json`，消除了 Gradle 8/9 的隐式任务依赖错误；不改变最终 Jar 内容。
+六目标发布任务已逐个执行并通过：Forge 1.20.1 `check + jar`、Fabric 1.20.1/1.21.1 `check + remapJar`、NeoForge 1.21.1 `check + remapJar`、NeoForge 26.2（Gradle 9.2）和 Fabric 26.2（Gradle 9.7.1）`check + jar`（26.2 目标按 `-x test` 排除 Gradle 9.x 的空测试发现校验）。其中 NeoForge 26.2 与 Fabric 26.2 在本轮重新执行了完整 datagen；Forge/Fabric 1.20.x/1.21.x 的 datagen 资源已由此前本机 Loom 资产缓存验证结果复用。为支持无 datagen 外部启动环境下的显式发布检查，`processResources` 已排除只由 `jar` 直接加入的 `META-INF/academy-datagen-hashes.json`，消除了 Gradle 8/9 的隐式任务依赖错误；不改变最终 Jar 内容。
 
 修复后的最新回归证据为：`cmd /c gradlew.bat test verifyCorePerformance --stacktrace` 通过（80 tasks），`cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace` 通过（99 tasks）；两者均覆盖当前构建层和共享运行时改动。三种工具链（Loom 8.8、ModDevGradle 9.2、Fabric named 9.7.1）的 `runClient --dry-run -PperfJfrFile=...` 均通过。
 
@@ -115,7 +115,7 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 发布 Jar 直接审计（2026-09-01）已补齐：六个最新 `platform/libs/AcademyCraft-2.0.0-alpha2-*` 产物均包含各自 loader 元数据、平台入口、`JEIPluginWrapper` 和 datagen hash manifest；`mezz/jei` 与第三方 `ic2/` 类均为 0。Forge 1.20.1 旧 `alpha3` Jar 曾残留 `cn/li/forge1201/integration/ic2_energy`，经重新执行 `:platform:jar :platform:remapJar` 后新的 `alpha2` 发布 Jar 已为 `legacyIC2=0`，只保留 shared IC2 适配。26.2 两个 named/source-first 产物只含 `cn/li/platform/optional/ic2_energy.clj`，四个 Loom remapped 产物只含该 namespace 的 AOT class；没有任何目标出现 class/source 共存。该门禁已在 Forge 1.20.1、Fabric 26.2（Loom named）和 NeoForge 26.2（ModDevGradle）实际执行通过。旧 Jar 文件仍可能留在本地 `build/targets` 缓存中，但不属于发布输入，发布脚本必须只取本轮任务生成且时间戳最新的单一 artifact。
 
-在最新代码提交上又逐目标重跑了最终编译：Forge 1.20.1 `check + jar`（61 tasks）、Fabric 1.20.1 `check + remapJar`（63）、Fabric 1.21.1 `check + remapJar`（63）、NeoForge 1.21.1 `check + remapJar`（63）、NeoForge 26.2（Gradle 9.2）`check + jar`（64）和 Fabric 26.2（Gradle 9.7.1）`check + jar`（60）均成功。随后对六个最新 Jar 做等价 ZIP 实物扫描：每个目标 `metadata=1`、`manifest=1`、`jeiWrapper=1`、`embeddedJei=0`、`embeddedIc2=0`、`classSourceOverlap=0`；这组结果覆盖本轮重编译后的实际 artifact，而非旧缓存。
+在最新代码提交上又逐目标重跑了最终编译：Forge 1.20.1 `check + remapJar`（91 tasks）、Fabric 1.20.1/1.21.1 `check + remapJar`（各 91）、NeoForge 1.21.1 `check + remapJar`（91）、NeoForge 26.2（Gradle 9.2）`check + jar`（74，`-x test`）和 Fabric 26.2（Gradle 9.7.1）`check + jar`（70，`-x test`）均成功。随后对六个最新 Jar 做等价 ZIP 实物扫描：每个目标 `metadata=1`、`manifest=1`、`jeiWrapper=1`、`embeddedJei=0`、`embeddedIc2=0`、`classSourceOverlap=0`；这组结果覆盖本轮重编译后的实际 artifact，而非旧缓存。
 
 在同一提交上重新执行六目标 `runPlatformClojureTests`：Forge 1.20.1 为 110 tests/262 assertions，Fabric 1.20.1、Fabric 1.21.1、Fabric 26.2 各为 11/32，NeoForge 1.21.1 为 103/240，NeoForge 26.2 为 106/249；全部 0 failures/0 errors。IC2 不兼容 fixture 的一次性 warning 属于预期隔离测试输出，不代表运行时失败。
 
