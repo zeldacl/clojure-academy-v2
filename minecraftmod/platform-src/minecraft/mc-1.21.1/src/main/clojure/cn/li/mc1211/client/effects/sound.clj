@@ -57,8 +57,7 @@
     (catch Exception e
       (log/debug "Error in sound tick:" (ex-message e)))))
 
-;; -- SoundManager helpers (no :import — uses reflection to avoid
-;;    compile-time class loading that triggers registry bootstrap) --
+;; -- SoundManager helpers (direct typed calls) --
 
 (defn- get-sound-manager []
   (when-let [^Minecraft mc (Minecraft/getInstance)]

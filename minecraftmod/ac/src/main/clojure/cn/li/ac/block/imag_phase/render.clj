@@ -179,9 +179,10 @@
 
 (def ^:private min-visible-alpha 0.1)
 
-;; The TESR runs once per pool block per frame and `call-adapter` costs a
-;; Framework deref plus a map lookup, so the viewer position is read at most
-;; once per frame-length window and shared by every block in the pool. Held in
+;; The TESR runs once per pool block per frame, so the viewer position is read
+;; at most once per frame-length window and shared by every block in the pool.
+;; The loader callback is installed directly into the client bridge at
+;; bootstrap; the cache here only limits native position reads. Held in
 ;; the shared render cache (same governance as cat-engine's rotor cache) rather
 ;; than a namespace-local atom.
 (def ^:private viewer-pos-refresh-ms 16)
@@ -199,7 +200,7 @@
                               viewer-pos-cache-key viewer-pos-initial)]
     (if (< (- now at-ms) viewer-pos-refresh-ms)
       pos
-      (let [fresh (bridge/call-adapter :local-player-pos)]
+      (let [fresh (bridge/local-player-pos)]
         (machine-render-runtime/put-render-cache!
           viewer-pos-cache-key {:at-ms now :pos fresh})
         fresh))))
@@ -240,7 +241,7 @@
                               camera-pos-cache-key camera-pos-initial)]
     (if (< (- now at-ms) camera-pos-refresh-ms)
       pos
-      (let [fresh (bridge/call-adapter :camera-position)]
+      (let [fresh (bridge/camera-position)]
         (machine-render-runtime/put-render-cache!
           camera-pos-cache-key {:at-ms now :pos fresh})
         fresh))))
@@ -257,7 +258,7 @@
           cx (+ 0.5 (double (pos/pos-x p)))
           cy (+ 0.5 (double (pos/pos-y p)))
           cz (+ 0.5 (double (pos/pos-z p)))
-          visible (bridge/call-adapter :camera-raycast-visible?
+          visible (bridge/camera-raycast-visible?
                                        (:x camera) (:y camera) (:z camera)
                                        cx cy cz)]
       (if (nil? visible) true visible))

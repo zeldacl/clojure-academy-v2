@@ -48,7 +48,7 @@
 
 1. 将回调集合固定为预分配数组/不可变快照：`ServerTickCallbacks`、`ClientRuntimeCallbacks`、`PresentationClientRuntime`、`WorldStageQueue`、`AudienceSender`、`InteractionOutcome`。
 2. 注册只发生在 bootstrap；tick/render/网络回调的获取阶段禁止 `resolve`、Framework atom/map 查找、匿名 reify 或临时闭包。dispatch 采用索引/数组遍历，异常策略为一次记录后禁用坏回调；延迟任务按 deadline 有序 bucket 取出，tick 不扫描全部未到期任务。输入会话 `receive!` 直接链接 `fixed-channel/decode-intent`，每包路径不再调用 `requiring-resolve`；server bridge 在 bootstrap 固化不可变回调表，VFX/服务端转发不再每次读取 Framework atom。事件 fan-out 的 recipient/payload 组装限定在事件边界、受预算约束，并由 JFR 验证其分配率。
-3. combat audience 直接遍历原生玩家/AABB 发送，不在每 tick 路径生成 UUID 集合；VFX world-stage queue 使用 session-owned 可复用缓冲区，tick 末清空。AC 的 VFX nearby/all 查询和反射伤害回调在首次生产 runtime 创建时冻结为具体函数；平台网络 SPI 只在 bootstrap 阶段解析一次，信号/伤害热路径不再执行命名空间解析或 Var 查找。
+3. combat audience 直接遍历原生玩家/AABB 发送，不在每 tick 路径生成 UUID 集合；VFX world-stage queue 使用 session-owned 可复用缓冲区，tick 末清空。AC 的 VFX nearby/all 查询和反射伤害回调在首次生产 runtime 创建时冻结为具体函数；平台网络 SPI 只在 bootstrap 阶段解析一次，信号/伤害热路径不再执行命名空间解析或 Var 查找。AC imag-phase/cat-engine 的 viewer/camera/raycast 回调同样在客户端 bridge 安装时冻结为直接 IFn；渲染器只读取本地 Var，不再调用 `call-adapter` 或 Framework map。
 4. 交互统一返回 `pass/handled/open-gui`；禁止把任意 truthy 值当作 consumed。
 5. 用 JMH（仅 benchmark source set）和代表性 JFR 验收：CPU p95 不得比基线增加 5%，稳态 allocation rate 与 live-set 增加不超过 5%，tick 99p 不得产生不可界定的短命对象。当前已提供可选的无头调度器采样：`cmd /c gradlew.bat :ac:runAcClojureTestsFast "-Dac.test.only=cn.li.ac.ability.final-runtime-perf-test" "-Dac.test.jfr=build/reports/jfr/final-runtime-scheduler-<date>.jfr" --stacktrace`；该基准只验证 deadline bucket 的调度开销，不替代真实游戏实例 JFR/JMH。现已补建 `tools:benchmarks` 隔离 JMH source set/任务与 `FinalRuntimeTickBenchmark`；JMH 依赖、生成 class 和结果不得进入任一运行时 Jar。
 
@@ -63,7 +63,7 @@
 
 ### IC2
 
-- IC2 是第三方可选接入，不属于 Minecraft/loader/Academy 的 Loom 混淆或热路径反射禁令范围；允许且仅允许在 `ic2_energy` 文件中为第三方 API 检测和 proxy 创建使用反射。该反射不得进入 tick、回调、渲染或网络热路径。
+- IC2 是第三方可选接入，不属于 Minecraft/loader/Academy 的 Loom 混淆或热路径反射禁令范围；第三方适配器在确有需要时可以使用反射，但必须隔离在接入层、缓存结果且不得把反射调用带入 tick、回调、渲染或网络热路径。当前 IC2 的反射只保留在 `ic2_energy` 文件中；JEI 选择 typed adapter，不依赖反射。
 - `Class/forName`、`Proxy` 只允许出现在该文件；检测状态（absent/present/incompatible）和接口 Class 必须缓存一次，缺失/不兼容只记录一次并禁用。
 - 能力查询使用直接 `cn.li.mcmod.capability.registry` 回调；禁止 `requiring-resolve`。proxy 按 block entity/side/mode 缓存，世界卸载时清理。
 - IC2 API 不嵌入主 Jar；无 IC2 时零错误，有 IC2 时自动启用 EU 转换与 sink/source。
@@ -78,7 +78,7 @@
 ## 阶段 5：反射、AOT 和 Loom 边界
 
 1. Loom 混淆模块的 Minecraft/loader/Academy 访问必须是静态 Java/Clojure interop；禁止 `Reflector`、`setAccessible`、任意 `Class/forName` 和动态方法名。
-2. 第三方可选集成（当前 IC2，未来同类集成）单独列 allowlist；allowlist 必须按文件和固定类名精确匹配，不能放宽为整个 loader 包。
+2. 第三方可选集成（当前 IC2，未来同类集成）不受 Minecraft/loader/Academy 的 Loom 反射禁令约束；若适配器确需反射，必须单独列出文件和固定类名 allowlist、缓存检测结果，并保持接入层隔离，不能放宽为整个 loader 包或进入热路径。
 3. AOT 后运行 `verifyNoGeneratedClojureTypes`、Loom remap、Jar overlap scan；确认不存在 AOT class 与 source 并存或 AOT class 与同名 Clojure source 被不同 classloader 加载。
 
 ## 阶段 6：六目标最终验收
@@ -95,7 +95,7 @@ cmd /c platform-builds\gradle-9.2\gradlew.bat :platform:check :platform:jar "-Pp
 cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-PplatformTarget=fabric-26.2" --stacktrace
 ```
 
-共享 neutral/combat/vfx/mcmod headless tests 只运行一次，平台专属 `:platform:runPlatformClojureTests` 按六目标逐个运行；Jar overlap 由每个目标的 `:platform:verifyNeutralClojurePackaging`/`verifyClojureRuntimeRepresentation` 执行，发布 Jar 还必须在 `jar/remapJar` 后运行 `:platform:verifyPackagedOptionalIntegrations`，检查 JEI/IC2 外置、typed JEI 入口、loader 元数据、datagen manifest 和 class/source XOR。代表性 JFR 在共享模块和可运行目标实例分别采集。共享 IC2 隔离测试由 `:platform:runPlatformClojureTests` 执行，使用临时编译类和隔离 classloader 覆盖 IC2 缺失、接口存在、接口形状不兼容，并验证状态缓存；第三方 fixture 不进入主 Jar。JEI 仍由六目标 typed adapter/入口门禁覆盖。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
+共享 neutral/combat/vfx/mcmod headless tests 只运行一次，平台专属 `:platform:runPlatformClojureTests` 按六目标逐个运行；Jar overlap 由每个目标的 `:platform:verifyNeutralClojurePackaging`/`verifyClojureRuntimeRepresentation` 执行，发布 Jar 还必须在 `jar/remapJar` 后运行 `:platform:verifyPackagedOptionalIntegrations`，检查 JEI/IC2 外置、typed JEI 入口、loader 元数据、datagen manifest 和 class/source XOR。代表性 JFR 在共享模块和可运行目标实例分别采集。共享 IC2 隔离测试由 `:platform:runPlatformClojureTests` 执行，使用临时编译类和隔离 classloader 覆盖 IC2 缺失、接口存在、接口形状不兼容，并验证状态缓存；第三方 fixture 不进入主 Jar。JEI 仍由六目标 typed adapter/入口门禁覆盖。当前源码只有 IC2 使用反射，门禁对该文件做精确 allowlist；若新增第三方反射适配器，必须增加独立隔离声明和非热路径测试。任何失败只允许归类为源码回归、测试支撑缺失或外部工具链阻塞；不能通过恢复旧实现、反射或双轨逻辑规避。
 
 共享门禁可直接执行：`cmd /c gradlew.bat :node-core:runNodeCoreClojureTests :combat-core:runCombatClojureTests :vfx-core:runVfxClojureTests :mcmod:runMcmodClojureTests :ac:runAcEdnCoverageTests --stacktrace`；平台门禁使用 `scripts\\target-gradle.ps1 <target-id> :platform:runPlatformClojureTests`，其中 `<target-id>` 必须依次为六个 catalog id，不能省略目标参数。
 
@@ -134,6 +134,6 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
-- 不用反射替代静态平台 adapter；IC2 的第三方反射岛不代表 Minecraft/loader 代码可以反射。
+- 不用反射替代静态平台 adapter；第三方适配器的反射例外只限其自身隔离层，不能扩散到 Minecraft/loader/Academy 代码或热路径。
 - 不把 JEI/IC2 当作第二个主 Jar；它们始终是可选运行时能力。
 - 不因中间阶段不能编译而回滚到旧逻辑；只在最终目标验收节点要求完整编译通过。

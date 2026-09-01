@@ -1394,6 +1394,32 @@ tasks.register("verifyPresentationDirectHostBoundary") {
     }
 }
 
+tasks.register("verifyClientRenderBridgeBoundary") {
+    group = "verification"
+    description = "Ensure AC block renderers use bootstrap-cached bridge callbacks."
+    doLast {
+        def bridge = file("mcmod/src/main/clojure/cn/li/mcmod/client/platform_bridge.clj").text
+        def renderFiles = [
+                file("ac/src/main/clojure/cn/li/ac/block/imag_phase/render.clj"),
+                file("ac/src/main/clojure/cn/li/ac/block/cat_engine/render.clj")
+        ]
+        [":local-player-pos", ":camera-position", ":camera-raycast-visible?"].each { key ->
+            if (!bridge.contains(key)) {
+                throw new GradleException("client bridge is missing cached render operation ${key}")
+            }
+        }
+        renderFiles.each { source ->
+            if (!source.exists()) {
+                throw new GradleException("expected AC renderer is missing: ${source}")
+            }
+            if (source.text =~ /call-adapter\s+:local-player-pos|call-adapter\s+:camera-position|call-adapter\s+:camera-raycast-visible\?/) {
+                throw new GradleException("renderer still performs dynamic bridge lookup: ${source}")
+            }
+        }
+        logger.lifecycle("[verifyClientRenderBridgeBoundary] ok")
+    }
+}
+
 tasks.register("verifyOptionalIntegrations") {
     group = "verification"
     description = "Verify JEI is a real typed adapter and IC2 reflection stays inside the optional third-party boundary."
@@ -2061,6 +2087,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyAbilityVfxRegistryCoverage",
               "verifyVfxSingleTickPath",
               "verifyVfxDirectHostBoundary",
+              "verifyClientRenderBridgeBoundary",
               "verifyPresentationDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxJavaBoundary",
