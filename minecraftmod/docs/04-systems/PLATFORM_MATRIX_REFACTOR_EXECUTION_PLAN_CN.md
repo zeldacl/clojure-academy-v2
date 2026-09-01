@@ -131,6 +131,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 随后复审 Presentation 渲染/输入入口又发现同类遗漏：neutral Presentation 原先在每帧通过 lifecycle host map 获取 AC API。现已改为 AC 客户端 bootstrap 安装并缓存单一不可变 host API map，渲染、输入和资源回调只走直接 Var；新增 `verifyPresentationDirectHostBoundary` 与渲染路径回归测试，防止恢复动态/lifecycle 查找。修复后 `verifyCurrentPlatforms`（103 tasks）和根 `test verifyCorePerformance`（80 tasks）均通过，六目标发布任务及 Jar XOR/JEI/IC2 实物扫描再次全部通过；对应代码提交为 `b97d35a12`。
 
+最后一轮热路径扫描又发现 AC HUD 按键显示名与 vanilla override 的 key-code 读取仍经 `client-bridge/call-adapter`；现已把 `local-player-pos`、`camera-position`、`camera-raycast-visible?`、`settings-key-name`、`keybind-get-key-code` 纳入 mcmod 客户端 bridge 的安装期直接函数表，imag-phase/cat-engine/HUD/keybinds 只读取本地 Var。新增 `verifyClientRenderBridgeBoundary` 覆盖四个调用方；`checkClojure/test`、`verifyCurrentPlatforms`（101 actionable tasks）和 `verifyCorePerformance` 均通过，对应提交为 `843bc7a16`、`c74f36df5`。该修复不改变 Fabric 缺省 nil 回退，也未引入 AOT class/source 共存。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
