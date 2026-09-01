@@ -13,7 +13,7 @@ package cn.li.presentation.core.engine;
  * A single top-to-bottom recursive walk (topmost = last-painted = last
  * child wins) replaces the pre-rewrite runtime's three independent full-
  * tree traversals (hit-action/hit-hover/hit-scroll), each of which
- * re-derived layout via its own copy of child-rects. Because it reads the
+ * re-derived layout via its own duplicate rect computation. Because it reads the
  * committed arena, it structurally cannot disagree with what was painted.
  *
  * Allocation is proportional to the depth and branching of the actual hit

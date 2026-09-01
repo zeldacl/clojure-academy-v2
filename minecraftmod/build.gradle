@@ -2130,6 +2130,49 @@ tasks.register("verifyPresentationArtifacts") {
     }
 }
 
+tasks.register("verifyPresentationGoldenArtifacts") {
+    group = "verification"
+    description = "Diff every freshly-compiled .uic.edn against its checked-in golden copy under " +
+        "docs/06-gui/presentation/golden/. The compiler is a pure function of its .ui.edn source " +
+        "(canonicalized, deterministically ordered), so any diff here means either an unintentional " +
+        "compiler regression or a deliberate .ui.edn change whose golden fixture needs updating alongside it."
+    dependsOn ":ac:compilePresentationViews"
+    doLast {
+        def goldenRoot = file("docs/06-gui/presentation/golden/assets")
+        def generatedRoot = file("build/neutral/ac/generated/resources/presentation/assets")
+        if (!goldenRoot.isDirectory()) {
+            throw new GradleException("Golden artifact directory missing: " + goldenRoot)
+        }
+        def goldenFiles = fileTree(goldenRoot) { include "**/*.uic.edn" }.files
+        def violations = []
+        goldenFiles.each { File golden ->
+            def relative = goldenRoot.toPath().relativize(golden.toPath())
+            def generated = generatedRoot.toPath().resolve(relative).toFile()
+            if (!generated.isFile()) {
+                violations << "missing (view removed or renamed?): " + relative
+            } else if (golden.getText("UTF-8") != generated.getText("UTF-8")) {
+                violations << "content differs: " + relative
+            }
+        }
+        def generatedFiles = fileTree(generatedRoot) { include "**/*.uic.edn" }.files
+        def goldenRelatives = goldenFiles.collect { goldenRoot.toPath().relativize(it.toPath()).toString() } as Set
+        generatedFiles.each { File generated ->
+            def relative = generatedRoot.toPath().relativize(generated.toPath()).toString()
+            if (!goldenRelatives.contains(relative)) {
+                violations << "new view has no golden fixture yet: " + relative
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                "Compiled artifacts diverged from docs/06-gui/presentation/golden/ - " +
+                "if this is an intentional .ui.edn change, copy build/neutral/ac/generated/resources/" +
+                "presentation/assets over docs/06-gui/presentation/golden/assets and commit both:\n" +
+                violations.join("\n"))
+        }
+        logger.lifecycle("[verifyPresentationGoldenArtifacts] ok (" + goldenFiles.size() + " golden fixtures)")
+    }
+}
+
 tasks.register("verifyPresentationMigrationInventory") {
     group = "verification"
     description = "Verify the main-branch UI contract includes code-built, native and declarative surfaces."
@@ -2186,6 +2229,59 @@ tasks.register("verifyPresentationSurfaceCoverage") {
     }
 }
 
+tasks.register("verifyPresentationNoRetainedPackets") {
+    group = "verification"
+    description = "presentation_backend.clj's submissions counter must stay a diagnostics-only AtomicLong, never " +
+        "a growing collection (that was the Phase 0 leak: an ever-growing vector of retained FramePackets that " +
+        "nothing ever drained)."
+    doLast {
+        def source = file("mcmod/src/main/clojure/cn/li/mcmod/runtime/presentation_backend.clj")
+        def violations = []
+        if (source.exists()) {
+            def text = source.getText("UTF-8")
+            if (text =~ /\(conj\s+[^)]*submi/ || text =~ /swap!\s+[^)\n]*submi[^)\n]*conj/) {
+                violations << "${source}: submissions must stay a counter, not an accumulated collection"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationNoRetainedPackets] ok")
+    }
+}
+
+tasks.register("verifyPresentationBackendDispatch") {
+    group = "verification"
+    description = "Each version backend must dispatch UI draw commands by UiDrawList/UiOp run, never by " +
+        "instanceof on a RenderCommand UI variant (those variants no longer exist - UI moved to the neutral " +
+        "UiDrawList/UiOp opcode ABI), and must install a UiTextMetrics implementation so layout measures real " +
+        "text instead of the headless test fallback."
+    doLast {
+        def backends = [
+            file("platform-src/minecraft/mc-1.20.1/src/main/clojure/cn/li/mc1201/presentation/backend.clj"),
+            file("platform-src/minecraft/mc-1.21.1/src/main/clojure/cn/li/mc1211/presentation/backend.clj"),
+            file("platform-src/minecraft/mc-26.2/src/main/clojure/cn/li/mc262/presentation/backend.clj"),
+        ]
+        def violations = []
+        backends.each { File source ->
+            if (!source.exists()) {
+                violations << "${source}: missing version backend"
+                return
+            }
+            def text = source.getText("UTF-8")
+            if (text =~ /RenderCommand.Ui/) {
+                violations << "${source}: must not dispatch on a RenderCommand UI variant"
+            }
+            if (!(text =~ /UiDrawList/)) {
+                violations << "${source}: must dispatch UI draw commands via UiDrawList"
+            }
+            if (!(text =~ /install-text-metrics!/)) {
+                violations << "${source}: must install a UiTextMetrics implementation (see cgui-font/text-metrics)"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationBackendDispatch] ok (${backends.size()} backends)")
+    }
+}
+
 tasks.register("verifyPresentationRuntimeZeroResidues") {
     group = "verification"
     description = "Verify zero runtime compiler/legacy-template dependencies and no UI source reads at runtime."
@@ -2204,7 +2300,7 @@ tasks.register("verifyPresentationRuntimeZeroResidues") {
         def uiProductionText = uiProductionRoots.findAll { it.directory }.collectMany { root ->
             fileTree(root) { include "**/*.clj", "**/*.java", "**/*.edn" }.files
         }.collect { it.getText("UTF-8") }.join("\n")
-        def oldApi = uiProductionText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree)/
+        def oldApi = uiProductionText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree|child-rects)/
         if (oldApi.find()) {
             throw new GradleException("legacy Presentation ViewModel/API reference remains")
         }
@@ -2244,6 +2340,9 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationDependencyDirection",
               "verifyPresentationSurfaceCoverage",
               "verifyPresentationRuntimeZeroResidues",
+              "verifyPresentationNoRetainedPackets",
+              "verifyPresentationBackendDispatch",
+              "verifyPresentationGoldenArtifacts",
               "verifyNodeCoreDependencyDirection",
               "verifyNodeCoreLanguageKernel",
               "verifyNodeLayerDiscipline",
