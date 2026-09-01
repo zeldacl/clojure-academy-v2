@@ -133,6 +133,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 最后一轮热路径扫描又发现 AC HUD 按键显示名与 vanilla override 的 key-code 读取仍经 `client-bridge/call-adapter`；现已把 `local-player-pos`、`camera-position`、`camera-raycast-visible?`、`settings-key-name`、`keybind-get-key-code` 纳入 mcmod 客户端 bridge 的安装期直接函数表，imag-phase/cat-engine/HUD/keybinds 只读取本地 Var。新增 `verifyClientRenderBridgeBoundary` 覆盖四个调用方；`checkClojure/test`、`verifyCurrentPlatforms`（101 actionable tasks）和 `verifyCorePerformance` 均通过，对应提交为 `843bc7a16`、`c74f36df5`。该修复不改变 Fabric 缺省 nil 回退，也未引入 AOT class/source 共存。
 
+在上述修复后逐目标重跑发布构建：Forge 1.20.1（91 tasks）、Fabric 1.20.1/1.21.1（各 91）、NeoForge 1.21.1（91）、NeoForge 26.2（74，按 Gradle 9.2 工具链排除无发现测试任务）和 Fabric 26.2（70）均完成 datagen、check 与最终 Jar。六个 Jar 实物扫描均为 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；26.2 两个 source-first 目标均 `platform AOT=0`。NeoForge 26.2 的 `:tools:target-launcher:test`/空测试发现错误属于 Gradle 9.2 配置行为，已通过 `-x test` 排除，平台 Clojure check、编译、datagen、Jar 和 XOR 门禁仍完整执行。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
