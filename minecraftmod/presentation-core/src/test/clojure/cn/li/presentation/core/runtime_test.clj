@@ -52,6 +52,56 @@
     (is (= UiOp/RECT (aget (.op dl) 0)))
     (is (= (unchecked-int 0xFF00FF00) (aget (.rgba dl) 0)))))
 
+(deftest clean-frame-reuses-the-same-draw-list-object
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/memo
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :bind {:rgba [:state :color]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/memo
+                                  :artifact artifact :state {:color (unchecked-int 0xFF00FF00)}})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        dl2 (extracted-commands rt mount :screen 100 100)]
+    (is (identical? dl1 dl2))))
+
+(deftest changed-binding-invalidates-the-cached-draw-list
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/memo-change
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :bind {:rgba [:state :color]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/memo-change
+                                  :artifact artifact :state {:color (unchecked-int 0xFF00FF00)}})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        ;; CmdBuf hands out its live backing arrays uncopied (by design, see
+        ;; its docstring) on the promise that a UiDrawList is fully consumed
+        ;; before the next frame's paint overwrites them -- so read dl1's
+        ;; values out to plain locals now, before triggering dl2.
+        dl1-rgba (aget (.rgba dl1) 0)
+        dl1-identity dl1]
+    (runtime/update-view! rt mount (fn [state] (assoc state :color (unchecked-int 0xFFFF0000))))
+    (let [dl2 (extracted-commands rt mount :screen 100 100)]
+      (is (not (identical? dl1-identity dl2)))
+      (is (= (unchecked-int 0xFF00FF00) dl1-rgba))
+      (is (= (unchecked-int 0xFFFF0000) (aget (.rgba dl2) 0))))))
+
+(deftest resize-invalidates-the-cached-draw-list-even-with-unchanged-state
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/memo-resize
+                           {:key :root :op UiOp/RECT :width [:fill 1.0] :height [:fill 1.0]})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/memo-resize
+                                  :artifact artifact :state {}})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        ;; Read dl1's geometry now -- see changed-binding-invalidates-... for
+        ;; why this must happen before the next extraction call.
+        dl1-identity dl1
+        dl1-w (double (aget (.geom dl1) 2))
+        dl1-h (double (aget (.geom dl1) 3))
+        dl2 (extracted-commands rt mount :screen 200 200)]
+    (is (not (identical? dl1-identity dl2)))
+    (is (= 100.0 dl1-w))
+    (is (= 100.0 dl1-h))
+    (is (= 200.0 (double (aget (.geom dl2) 2))))
+    (is (= 200.0 (double (aget (.geom dl2) 3))))))
+
 (deftest bound-text-resolves-through-item-label-coercion
   (let [rt (runtime/create-runtime)
         artifact (ta/build :academy/test/button

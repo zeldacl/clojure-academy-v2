@@ -9,20 +9,22 @@
    place Clojure-shaped state (get-in paths, item-label coercion, color
    packing) meets the engine's plain-Object contract.
 
-   Geometry is always fully recomputed on ensure-layout! (no memoization-
-   gated skip yet -- see docs/06-gui/PRESENTATION_V3.md; this matches the
-   pre-rewrite runtime's actual behavior, which also repainted every frame
-   due to the dirty-flag bug this rewrite replaces, so it is not a
-   regression). Wiring MemoKernel-driven subtree reuse is tracked as a
-   direct, self-contained follow-up on top of this correct baseline."
+   extract-stage! is whole-tree memoized: MemoState.refreshRevs runs every
+   frame (O(#bindings)), and if the root's MemoKernel stamp and the layout
+   rect are both unchanged since the last extraction, measure/arrange/paint
+   are skipped entirely and the previous frame's UiDrawList is returned as
+   the same object. A per-subtree (rather than whole-view) skip granularity
+   remains a possible follow-up; today one changed binding anywhere in a
+   view repaints that whole view, not just the affected subtree."
   (:require [cn.li.presentation.core.artifact :as artifact]
             [cn.li.presentation.core.nodetable :as nodetable]
+            [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]
            [cn.li.presentation.core.engine
             NodeTable LayoutArena LayoutContext LayoutKernel PaintKernel HitKernel HitKernel$Hit
-            CmdBuf BindResolver NodeFlags CompositeSpec]
-           [cn.li.mcmod.runtime.ui UiOp]))
+            CmdBuf BindResolver NodeFlags CompositeSpec MemoState MemoKernel]
+           [cn.li.mcmod.runtime.ui UiOp UiTextMetrics]))
 
 (defrecord UiRuntime [state owner-thread])
 
@@ -197,6 +199,10 @@
                   :geometry (HostGeometry/identity 0 0)
                   :arena (LayoutArena. 64)
                   :cmdbuf (CmdBuf. 64)
+                  :memo (MemoState. (max 1 (long (:binding-count artifact 0))) 1)
+                  :last-stamp nil
+                  :last-rect nil
+                  :last-metrics-epoch -1
                   :root-instance -1
                   :commands nil
                   :focus nil
@@ -274,7 +280,7 @@
         ^LayoutArena arena (:arena instance)
         resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
         offsets (scroll-offset-array (:key-index instance) (:scroll-offsets instance) (.-n table))
-        ctx (LayoutContext. resolver nil offsets)
+        ctx (LayoutContext. resolver (presentation-bridge/current-text-metrics) offsets)
         rect (content-rect (:artifact instance) (:geometry instance))
         root (LayoutKernel/expand table arena resolver)]
     (when (>= root 0)
@@ -480,6 +486,18 @@
 
 ;; ============================== extract ==============================
 
+(defn- resolve-bindings
+  "Flat Object[] of every :state-scoped binding's current value, indexed by
+   the compiler-assigned binding id -- the one array MemoState.refreshRevs
+   needs to tell which of a view's ~handful of bindings actually changed
+   this frame, in O(#bindings) rather than O(#nodes)."
+  ^objects [artifact state]
+  (let [bindings (:bindings artifact)
+        out (object-array (max 1 (long (:binding-count artifact 0))))]
+    (doseq [{:keys [id path]} bindings]
+      (aset out (int id) (get-in state (subvec path 1))))
+    out))
+
 (defn extract-stage!
   [^UiRuntime runtime stage frame-context]
   (owner-thread! runtime)
@@ -490,19 +508,38 @@
     {:stage stage
      :frame-context frame-context
      :mounts (mapv (fn [instance]
-                     (let [root (ensure-layout! instance)
-                           ^CmdBuf cmdbuf (:cmdbuf instance)
-                           resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
-                           ctx (LayoutContext. resolver nil nil)]
-                       (.reset cmdbuf)
-                       (when (>= root 0)
-                         (PaintKernel/paint (:table instance) (:arena instance) ctx cmdbuf root))
-                       (let [commands (.finish cmdbuf 0 (.-clipRects ^LayoutArena (:arena instance)) (.-resources ^NodeTable (:table instance)))]
+                     (let [^MemoState memo (:memo instance)
+                           ^NodeTable table (:table instance)
+                           ^LayoutArena arena (:arena instance)
+                           ^UiTextMetrics metrics (presentation-bridge/current-text-metrics)
+                           metrics-epoch (when metrics (.epoch metrics))
+                           rect (content-rect (:artifact instance) (:geometry instance))
+                           scroll-rev (long (hash (:scroll-offsets instance)))]
+                       (.refreshRevs memo (resolve-bindings (:artifact instance) (:view-state instance)))
+                       (when (not= rect (:last-rect instance)) (.invalidateGeometry memo))
+                       (when (and metrics-epoch (not= metrics-epoch (:last-metrics-epoch instance)))
+                         (.invalidateMetrics memo))
+                       (let [stamp (when (pos? (.-n table)) (MemoKernel/subtreeStamp memo table 0 scroll-rev))
+                             reusable? (and stamp (= stamp (:last-stamp instance)) (:commands instance))
+                             [root commands]
+                             (if reusable?
+                               [(:root-instance instance) (:commands instance)]
+                               (let [root (ensure-layout! instance)
+                                     ^CmdBuf cmdbuf (:cmdbuf instance)
+                                     resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+                                     ctx (LayoutContext. resolver nil nil)]
+                                 (.reset cmdbuf)
+                                 (when (>= root 0)
+                                   (PaintKernel/paint table arena ctx cmdbuf root))
+                                 [root (.finish cmdbuf 0 (.-clipRects arena) (.-resources table))]))]
                          (vswap! (:state runtime)
                                  (fn [snapshot]
                                    (-> snapshot
                                        (assoc-in [:mounts (:handle instance) :root-instance] root)
-                                       (assoc-in [:mounts (:handle instance) :commands] commands))))
+                                       (assoc-in [:mounts (:handle instance) :commands] commands)
+                                       (assoc-in [:mounts (:handle instance) :last-stamp] stamp)
+                                       (assoc-in [:mounts (:handle instance) :last-rect] rect)
+                                       (assoc-in [:mounts (:handle instance) :last-metrics-epoch] metrics-epoch))))
                          (assoc (select-keys instance [:handle :view-id :geometry])
                                 :commands commands))))
                    instances)}))

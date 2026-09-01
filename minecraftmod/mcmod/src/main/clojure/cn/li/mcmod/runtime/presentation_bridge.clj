@@ -74,3 +74,20 @@
 
 (defn unmount! [mount-id]
   ((require-host-op :unmount!) mount-id))
+
+;; The active UiTextMetrics implementation lives on the platform side (each
+;; MC version bakes its own MSDF/vanilla font measurement); this is the
+;; neutral mailbox presentation-core reads it from, mirroring the host-map
+;; pattern above but for a single ABI value instead of a function map.
+(defonce ^:private text-metrics* (atom nil))
+
+(defn install-text-metrics! [metrics]
+  (reset! text-metrics* metrics)
+  metrics)
+
+(defn current-text-metrics []
+  @text-metrics*)
+
+(defn clear-text-metrics-for-test! []
+  (reset! text-metrics* nil)
+  nil)

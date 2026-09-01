@@ -13,6 +13,7 @@
    IMAGE/TEXT/NINE/ITEM/MODEL - PROGRESS/GRADIENT/COMPOSITE are already
    decomposed into those by PaintKernel before this code ever sees them."
   (:require [cn.li.mcmod.runtime.presentation-backend :as neutral]
+            [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [cn.li.mc1201.gui.cgui.font :as cgui-font])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$AudioContribution RenderCommand$Beam RenderCommand$Billboard
@@ -208,4 +209,5 @@
   frame)
 
 (defn create []
+  (presentation-bridge/install-text-metrics! (cgui-font/text-metrics))
   (neutral/install-renderer! (neutral/create profile) render!))

@@ -15,6 +15,7 @@
    its color directly rather than through a RenderSystem/setShaderColor
    global, so there is no shader-color state to restore between runs."
   (:require [cn.li.mcmod.runtime.presentation-backend :as neutral]
+            [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [cn.li.mc262.gui.cgui.font :as cgui-font])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$AudioContribution RenderCommand$Beam RenderCommand$Billboard
@@ -196,4 +197,5 @@
   frame)
 
 (defn create []
+  (presentation-bridge/install-text-metrics! (cgui-font/text-metrics))
   (neutral/install-renderer! (neutral/create profile) render!))

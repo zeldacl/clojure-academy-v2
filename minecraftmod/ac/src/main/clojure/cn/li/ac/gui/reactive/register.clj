@@ -50,14 +50,28 @@
           vm
           @terminal*))))
 
+(defonce ^:private vfx-sample-cache* (atom {:frame-id nil :vfx nil}))
+
 (defn- sampled-vfx-frame!
   "Client-side VFX sampling stays here (it is stateful, version-frame-
    dependent sampling of live effect state, not a pure fold) - only the
    fold into RenderCommand/RenderPass (ability-compose/merge-vfx-into-frame)
    moved to ability-runtime, since that is the only module allowed to
-   depend on both vfx-core and presentation-core."
+   depend on both vfx-core and presentation-core.
+
+   :frame-with-context! is the seam every stage submission goes through
+   (world, first-person, HUD, screen, ...), and the neutral seam coalesces
+   same-real-frame submissions onto one frame-id (see
+   cn.li.platform.neutral.presentation/current-frame-id!) -- without this
+   cache, a real frame with N eligible render stages would re-run VFX
+   sampling (a full live-instance walk) N times instead of once."
   ^VfxFrame [frame-id partial-tick]
-  (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick}))
+  (let [cache @vfx-sample-cache*]
+    (if (= frame-id (:frame-id cache))
+      (:vfx cache)
+      (let [vfx (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick})]
+        (reset! vfx-sample-cache* {:frame-id frame-id :vfx vfx})
+        vfx))))
 
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
