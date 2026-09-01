@@ -15,8 +15,8 @@
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderStage RenderCommand$Batch RenderCommand$AudioContribution RenderCommand$CameraContribution RenderCommand$PostProcess]
-           [cn.li.mcmod.runtime.vfx VfxFrame VfxRenderStage VfxOutputKind]))
+  (:import [cn.li.mcmod.runtime FramePacket RenderStage]
+           [cn.li.mcmod.runtime.vfx VfxFrame]))
 
 (defonce ^:private presentation-runtime* (atom nil))
 
@@ -50,71 +50,15 @@
           vm
           @terminal*))))
 
-(def ^:private vfx-stage->render-stage
-  {VfxRenderStage/WORLD_TRANSLUCENT RenderStage/WORLD_BEFORE_TRANSLUCENT
-   VfxRenderStage/WORLD_ADDITIVE RenderStage/WORLD_GLOW
-   VfxRenderStage/WORLD_AFTER_TRANSLUCENT RenderStage/WORLD_AFTER_TRANSLUCENT
-   VfxRenderStage/FIRST_PERSON RenderStage/FIRST_PERSON
-   VfxRenderStage/SCREEN RenderStage/SCREEN})
+(defn- sampled-vfx-frame!
+  "Client-side VFX sampling stays here (it is stateful, version-frame-
+   dependent sampling of live effect state, not a pure fold) - only the
+   fold into RenderCommand/RenderPass (ability-compose/merge-vfx-into-frame)
+   moved to ability-runtime, since that is the only module allowed to
+   depend on both vfx-core and presentation-core."
+  ^VfxFrame [frame-id partial-tick]
+  (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick}))
 
-(defn- vfx-command [^cn.li.mcmod.runtime.vfx.VfxBatch batch]
-  (RenderCommand$Batch. (or (get vfx-stage->render-stage (.stage batch)) RenderStage/WORLD_AFTER_TRANSLUCENT)
-                         (str (.primitiveId batch)) (str (.materialId batch)) "vfx"
-                         0 (long (.instanceCount batch)) "stable" (.payload batch)))
-
-(defn- vfx-output-command [^cn.li.mcmod.runtime.vfx.VfxOutput output]
-  (case (.kind output)
-    VfxOutputKind/AUDIO (RenderCommand$AudioContribution. (or (.resourceId output) "") (.amount output) 1.0)
-    VfxOutputKind/CAMERA (RenderCommand$CameraContribution. (.amount output) 0.0 0.0 0.0)
-    VfxOutputKind/SCREEN (RenderCommand$PostProcess. (.value output) (.amount output))
-    nil))
-
-(def ^:private vfx-output->render-stage
-  {VfxOutputKind/AUDIO RenderStage/AUDIO
-   VfxOutputKind/CAMERA RenderStage/CAMERA
-   VfxOutputKind/SCREEN RenderStage/POST_PROCESS})
-
-(def ^:private render-stage-order
-  [RenderStage/WORLD_AFTER_SKY
-   RenderStage/WORLD_BEFORE_TRANSLUCENT
-   RenderStage/WORLD_AFTER_TRANSLUCENT
-   RenderStage/WORLD_ALWAYS_ON_TOP
-   RenderStage/WORLD_GLOW
-   RenderStage/FIRST_PERSON
-   RenderStage/CAMERA
-   RenderStage/HUD_UNDERLAY
-   RenderStage/HUD
-   RenderStage/HUD_OVERLAY
-   RenderStage/SCREEN
-   RenderStage/POST_PROCESS
-   RenderStage/AUDIO])
-
-(defn- merge-vfx-passes
-  [_vfx-context frame-id partial-tick ^FramePacket packet]
-  (let [^VfxFrame vfx (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick})
-        vfx-pairs (concat
-                   (map (fn [^cn.li.mcmod.runtime.vfx.VfxBatch batch]
-                          [(get vfx-stage->render-stage (.stage batch)) (vfx-command batch)])
-                        (.batches vfx))
-                   (keep (fn [^cn.li.mcmod.runtime.vfx.VfxOutput output]
-                           (when-let [stage (get vfx-output->render-stage (.kind output))]
-                             [stage (vfx-output-command output)]))
-                         (.outputs vfx)))
-        existing (mapcat (fn [^RenderPass pass]
-                           (map (fn [command] [(.stage pass) command]) (.commands pass)))
-                         (.passes packet))
-        commands-by-stage (reduce (fn [acc [stage command]]
-                                    (if stage
-                                      (update acc stage (fnil conj []) command)
-                                      acc))
-                                  {}
-                                  (concat existing vfx-pairs))
-        passes (->> render-stage-order
-                    (keep (fn [stage]
-                            (when-let [commands (seq (get commands-by-stage stage))]
-                              (RenderPass. stage commands))))
-                    vec)]
-    (FramePacket. (.frameId packet) passes)))
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
 
@@ -163,30 +107,26 @@
       (tutorial-app/screen-tick!))
     nil))
 
+(defn- ui-by-stage-array [^RenderStage wanted-stage draw-list]
+  (let [arr (make-array cn.li.mcmod.runtime.ui.UiDrawList (alength (RenderStage/values)))]
+    (when draw-list (aset arr (.ordinal wanted-stage) draw-list))
+    arr))
+
 (defn- frame-packet
+  "UI-only FramePacket for one stage's mounts, merged into a single
+   UiDrawList (the zero-copy fast path when 0 or 1 mount is active, which
+   is the overwhelmingly common case — Minecraft shows one Screen and one
+   HUD at a time) and placed at that stage's slot in uiByStage."
   [frame-id stage frame-context]
   ;; Extract via the core Runtime API — presentation-host-api is the outer
   ;; AC wrapper and must not be consulted here (no :extract-stage!, and it
   ;; would rebuild the wrapper map every frame).
   (let [api (core-host-api)
         extracted ((:extract-stage! api) stage frame-context)
-        contributors (mapv (fn [[index mount]]
-                             (ability-compose/contributor
-                              (keyword (format "mount-%08d" index))
-                              (fn [_] (:commands mount))))
-                           (map-indexed vector (:mounts extracted)))
-        composed (ability-compose/compose-frame
-                  {:player-id :client
-                   :max-render-commands-per-frame 8192}
-                  contributors
-                  {:frame-seq frame-id
-                   :stage stage
-                   :frame-context frame-context})
-        commands (:commands composed)]
-    (FramePacket. (long frame-id)
-                  [(RenderPass. (or (get stage->render-stage stage)
-                                    RenderStage/SCREEN)
-                                commands)])))
+        draw-lists (keep :commands (:mounts extracted))
+        merged (ability-compose/merge-draw-lists frame-id draw-lists)
+        wanted (or (get stage->render-stage stage) RenderStage/SCREEN)]
+    (FramePacket. (long frame-id) (ui-by-stage-array wanted merged) [])))
 
 (defn presentation-host-api
   "Single AC host contract. All view mounts and frame extraction use Runtime;
@@ -209,12 +149,12 @@
                 (refresh-stage-state! :screen width height)
                 ;; Raw FramePacket — dispatch-runtime-stage! wraps {:stage :frame}.
                 (frame-packet frame-id :screen {:width width :height height}))
-      :frame-with-context! (fn [stage frame-id delta-seconds width height vfx-context]
+      :frame-with-context! (fn [stage frame-id delta-seconds width height _vfx-context]
                              (refresh-stage-state! stage width height)
-                             (let [frame (frame-packet frame-id stage
-                                                       {:width width :height height})
-                                   packet (merge-vfx-passes vfx-context frame-id
-                                                            delta-seconds frame)]
+                             (let [ui-packet (frame-packet frame-id stage
+                                                           {:width width :height height})
+                                   vfx (sampled-vfx-frame! frame-id delta-seconds)
+                                   packet (ability-compose/merge-vfx-into-frame ui-packet vfx)]
                                ;; Same envelope as dispatch-runtime-stage!: the
                                ;; neutral seam submits (:stage result)/(:frame result).
                                (when packet

@@ -1310,8 +1310,8 @@ tasks.register("verifyAbilityCompositionBoundary") {
             violations << "AC catalog must use compose-catalog"
         }
         if (!presentation.text.contains("cn.li.ability.compose") ||
-            !presentation.text.contains("compose-frame")) {
-            violations << "AC Presentation extraction must use ability-runtime compose-frame"
+            !presentation.text.contains("merge-vfx-into-frame")) {
+            violations << "AC Presentation extraction must use ability-runtime merge-vfx-into-frame"
         }
         if (acBuild =~ /implementation\s+project\(['\"]:(?:node-core|combat-core|vfx-core|presentation-core)['\"]\)/) {
             violations << "AC must consume core modules through ability-runtime, not direct Gradle edges"

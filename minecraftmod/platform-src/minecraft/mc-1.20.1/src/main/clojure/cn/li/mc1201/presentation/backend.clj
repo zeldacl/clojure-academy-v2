@@ -3,19 +3,24 @@
 
    The backend deliberately consumes the neutral mcmod frame envelope. Mapping
    to BufferSource/GuiGraphics belongs in the version-owned render callback;
-   no UI or effect policy is allowed here."
+   no UI or effect policy is allowed here.
+
+   UI draw commands arrive pre-sorted and run-batched as a UiDrawList (see
+   PaintKernel/CmdBuf in presentation-core): every command in one run shares
+   an (op, resource, clip), so a ResourceLocation is resolved and the
+   scissor is set at most once per run rather than once per command. The
+   only two draw opcodes that ever actually reach a run here are RECT/
+   IMAGE/TEXT/NINE/ITEM/MODEL - PROGRESS/GRADIENT/COMPOSITE are already
+   decomposed into those by PaintKernel before this code ever sees them."
   (:require [cn.li.mcmod.runtime.presentation-backend :as neutral]
             [cn.li.mc1201.gui.cgui.font :as cgui-font])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
             RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
-            RenderCommand$UiImage RenderCommand$UiImageBatch RenderCommand$UiItemPreview
-            RenderCommand$UiModelPreview
-            RenderCommand$UiQuad RenderCommand$UiQuadBatch RenderCommand$UiText
-            RenderCommand$Transform RenderCommand$Mask RenderCommand$AudioContribution
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
-            RenderCommand$ParticleBatch RenderCommand$PopClip RenderCommand$PostProcess
-            RenderCommand$PushClip RenderCommand$Ribbon RenderPass
+            RenderCommand$ParticleBatch RenderCommand$PostProcess
+            RenderCommand$Ribbon RenderPass
             UiResourceRef]
+           [cn.li.mcmod.runtime.ui UiDrawList UiOp]
            [cn.li.mc1201.client GuiGraphicsHelper]
            [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraft.client Minecraft]
@@ -43,73 +48,100 @@
         b (float (/ (bit-and rgba 0xff) 255.0))]
     [r g b a]))
 
-(defn- draw-ui-images!
-  "Default texture blit for UiImageBatch. Hosts may override via
-   :draw-ui-image-batch! in the backend context."
-  [^GuiGraphics graphics ^UiResourceRef resource images]
-  (when (and graphics resource)
-    (let [rl (ResourceLocation. (.namespace resource) (.path resource))]
-      ;; Flush pending fill/text batches before ImmediateDraw so order is preserved.
-      (.flush graphics)
-      (doseq [^RenderCommand$UiImage img images]
-        (let [[r g b a] (rgba-components (long (.rgba img)))
-              x (.x img) y (.y img)
-              x2 (+ x (.width img)) y2 (+ y (.height img))]
-          (RenderSystem/setShaderColor r g b a)
-          (GuiGraphicsHelper/blitTexturedQuad graphics rl
-                                              (float x) (float y) (float x2) (float y2)
-                                              0.0 0.0 1.0 0.0 1.0)
-          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
+;; ============================== UI run drawing ==============================
+
+(defn- draw-rect-run! [^GuiGraphics gg ^UiDrawList dl start end]
+  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl)]
+    (loop [i (int start)]
+      (when (< i (int end))
+        (let [g (* i 4)]
+          (.fill gg (int (aget geom g)) (int (aget geom (unchecked-inc-int g)))
+                 (int (+ (aget geom g) (aget geom (+ g 2))))
+                 (int (+ (aget geom (unchecked-inc-int g)) (aget geom (+ g 3))))
+                 (aget rgba i)))
+        (recur (unchecked-inc-int i))))))
+
+(defn- draw-image-run! [^GuiGraphics gg ^UiDrawList dl start end ^ResourceLocation rl]
+  ;; Flush pending fill/text batches once per run (not once per image, as
+  ;; the pre-rewrite paint.clj always emitted exactly one image per batch
+  ;; and so paid this cost per image) so order is preserved before ImmediateDraw.
+  (.flush gg)
+  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl)]
+    (loop [i (int start)]
+      (when (< i (int end))
+        (let [g (* i 4)
+              x (aget geom g) y (aget geom (unchecked-inc-int g))
+              x2 (+ x (aget geom (+ g 2))) y2 (+ y (aget geom (+ g 3)))
+              [r gc b a] (rgba-components (long (aget rgba i)))]
+          (RenderSystem/setShaderColor r gc b a)
+          (GuiGraphicsHelper/blitTexturedQuad gg rl x y x2 y2 0.0 0.0 1.0 0.0 1.0)
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
+        (recur (unchecked-inc-int i))))))
+
+(defn- draw-text-run! [^GuiGraphics gg ^UiDrawList dl start end]
+  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl) ^floats scalar (.scalar dl) ^objects aux (.aux dl)]
+    (loop [i (int start)]
+      (when (< i (int end))
+        (let [g (* i 4)]
+          (cgui-font/draw-text! gg nil (str (aget aux i))
+                                (aget geom g) (aget geom (unchecked-inc-int g))
+                                (aget scalar i) (aget rgba i) :left true))
+        (recur (unchecked-inc-int i))))))
+
+(defn- draw-item-run! [^GuiGraphics gg context stage ^UiDrawList dl start end]
+  (let [^floats geom (.geom dl) ^objects aux (.aux dl)]
+    (loop [i (int start)]
+      (when (< i (int end))
+        (let [g (* i 4)]
+          (callback! context :draw-ui-item-preview!
+                     [gg stage (aget aux i) (aget geom g) (aget geom (unchecked-inc-int g)) 1.0]))
+        (recur (unchecked-inc-int i))))))
+
+(defn- draw-model-run! [^GuiGraphics gg context stage ^UiDrawList dl start end]
+  (let [^floats geom (.geom dl) ^objects aux (.aux dl)]
+    (loop [i (int start)]
+      (when (< i (int end))
+        (let [g (* i 4)]
+          (callback! context :draw-ui-model-preview!
+                     [gg stage (aget aux i) (aget geom g) (aget geom (unchecked-inc-int g))
+                      (aget geom (+ g 2)) (aget geom (+ g 3))]))
+        (recur (unchecked-inc-int i))))))
+
+(defn- resource-location ^ResourceLocation [^UiResourceRef ref]
+  (ResourceLocation. (.namespace ref) (.path ref)))
+
+(defn- draw-ui-draw-list! [^GuiGraphics gg context stage ^UiDrawList dl]
+  (let [^ints run-op (.runOp dl) ^ints run-res (.runRes dl) ^ints run-clip (.runClip dl)
+        ^ints run-start (.runStart dl) ^ints run-end (.runEnd dl)
+        ^floats clip-rects (.clipRects dl)
+        ^objects resources (.resources dl)
+        n (.runCount dl)]
+    (loop [r (int 0) cur-clip (int -2)]
+      (when (< r n)
+        (let [clip (aget run-clip r)]
+          (when (not= clip cur-clip)
+            (if (neg? clip)
+              (.disableScissor gg)
+              (let [b (* clip 4)]
+                (.enableScissor gg (int (aget clip-rects b)) (int (aget clip-rects (unchecked-inc-int b)))
+                                (int (+ (aget clip-rects b) (aget clip-rects (+ b 2))))
+                                (int (+ (aget clip-rects (unchecked-inc-int b)) (aget clip-rects (+ b 3))))))))
+          (let [s (aget run-start r) e (aget run-end r) op (aget run-op r)]
+            (cond
+              (= op UiOp/RECT) (draw-rect-run! gg dl s e)
+              (or (= op UiOp/IMAGE) (= op UiOp/NINE))
+              (draw-image-run! gg dl s e (resource-location (aget resources (aget run-res r))))
+              (= op UiOp/TEXT) (draw-text-run! gg dl s e)
+              (= op UiOp/ITEM) (draw-item-run! gg context stage dl s e)
+              (= op UiOp/MODEL) (draw-model-run! gg context stage dl s e)
+              :else nil))
+          (recur (unchecked-inc-int r) clip))))
+    (.disableScissor gg)))
+
+;; ============================== world/VFX commands ==============================
 
 (defn- draw-command! [^GuiGraphics graphics stage context ^RenderCommand command]
   (condp instance? command
-    RenderCommand$UiQuadBatch
-    (let [^RenderCommand$UiQuadBatch batch command]
-      (doseq [^RenderCommand$UiQuad quad (.quads batch)]
-        (.fill graphics (int (.x quad)) (int (.y quad))
-                       (int (+ (.x quad) (.width quad)))
-                       (int (+ (.y quad) (.height quad)))
-                       (.rgba quad))))
-
-    RenderCommand$UiImageBatch
-    (let [^RenderCommand$UiImageBatch c command]
-      (if (and (map? context) (fn? (:draw-ui-image-batch! context)))
-        (callback! context :draw-ui-image-batch!
-                   [graphics stage (.resource c) (.images c)])
-        (draw-ui-images! graphics (.resource c) (.images c))))
-
-    RenderCommand$UiText
-    (let [^RenderCommand$UiText c command]
-      (if (and (map? context) (fn? (:draw-ui-text! context)))
-        (callback! context :draw-ui-text!
-                   [graphics stage (.fontId c) (.text c) (.x c) (.y c) (.rgba c) (.fontSize c)])
-        (cgui-font/draw-text! graphics nil (.text c)
-                              (.x c) (.y c) (.fontSize c) (.rgba c) :left true)))
-
-    RenderCommand$UiItemPreview
-    (let [^RenderCommand$UiItemPreview c command]
-      (callback! context :draw-ui-item-preview!
-                 [graphics stage (.itemId c) (.x c) (.y c) (.scale c)]))
-
-    RenderCommand$UiModelPreview
-    (let [^RenderCommand$UiModelPreview c command]
-      (callback! context :draw-ui-model-preview!
-                 [graphics stage (.modelId c) (.x c) (.y c) (.width c) (.height c)]))
-    RenderCommand$PushClip
-    (let [^RenderCommand$PushClip c command]
-      (.enableScissor graphics (int (.x c)) (int (.y c))
-                               (int (+ (.x c) (.width c))) (int (+ (.y c) (.height c)))))
-
-    RenderCommand$PopClip (.disableScissor graphics)
-
-    RenderCommand$Transform
-    (let [^RenderCommand$Transform c command]
-      (callback! context :apply-transform! [graphics stage (.transformId c) (.payload c)]))
-
-    RenderCommand$Mask
-    (let [^RenderCommand$Mask c command]
-      (callback! context :apply-mask! [graphics stage (.maskId c) (.payload c)]))
-
     RenderCommand$AudioContribution
     (let [^RenderCommand$AudioContribution c command]
       (callback! context :play-audio! [stage (.soundId c) (.volume c) (.pitch c)]))
@@ -161,14 +193,17 @@
 
 (defn render! [graphics stage ^FramePacket frame]
   (let [context (if (map? graphics) graphics {})
-        graphics (if (map? graphics) (:graphics graphics) graphics)]
-    (let [wanted (neutral/stage->render-stage stage)]
-      (doseq [^RenderPass pass (.passes frame)
-              :when (= wanted (.stage pass))
-              ^RenderCommand command (.commands pass)]
-        (when (or (instance? GuiGraphics graphics)
-                  (and (map? context) (some fn? (vals context))))
-          (draw-command! graphics stage context command)))))
+        ^GuiGraphics gg (if (map? graphics) (:graphics graphics) graphics)
+        wanted (neutral/stage->render-stage stage)
+        ^UiDrawList dl (.uiFor frame wanted)]
+    (when (and dl (pos? (.count dl)) (instance? GuiGraphics gg))
+      (draw-ui-draw-list! gg context stage dl))
+    (doseq [^RenderPass pass (.passes frame)
+            :when (= wanted (.stage pass))
+            ^RenderCommand command (.commands pass)]
+      (when (or (instance? GuiGraphics gg)
+                (and (map? context) (some fn? (vals context))))
+        (draw-command! gg stage context command))))
   frame)
 
 (defn create []
