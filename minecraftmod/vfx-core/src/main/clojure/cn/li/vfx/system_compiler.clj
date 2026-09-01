@@ -16,7 +16,9 @@
    used to carry its own copy of exactly that fork; every type tag real VFX
    effect EDN actually declares (:any :bool :color :entity-ref :float :int
    :node :resource-id :seed :string :vec3) resolves through it."
-  (:require [cn.li.node.types :as types]))
+  (:require [cn.li.node.types :as types]
+            [cn.li.node.composite :as composite]
+            [clojure.walk :as walk]))
 
 (defn- normalize-vfx-type
   [type]
@@ -34,6 +36,43 @@
               (sequential? value) (into #{} (mapcat walk value))
               :else #{}))]
     (walk graph)))
+
+(defn- expand-timeline-children
+  "cn.li.node.composite's generic expander only recurses into a
+   descriptor's declared :children/:node-typed :inputs; :vfx/timeline's own
+   :children is an :any-typed opaque vector of {:at t :node n} wrapper
+   maps (see validate-vfx-graph!'s docstring below -- the same shape has
+   always needed special-case walking, both here and in the VFX compiler
+   this replaces), so a composite referenced only from inside a wrapper's
+   :node field is invisible to the generic schema-driven traversal.
+   Pre-expand those wrapped subgraphs, using the same expander, before the
+   top-level pass runs -- by the time the generic pass reaches an
+   already-expanded timeline node there is no composite reference left
+   inside it to miss."
+  [node-environment value composites]
+  (walk/postwalk
+   (fn [form]
+     (if (and (map? form) (= :vfx/timeline (:component form)) (vector? (:children form)))
+       (update form :children
+               (fn [items]
+                 (mapv (fn [item]
+                         (if (map? (:node item))
+                           (update item :node #(composite/expand-with-environment-and-composites node-environment % composites))
+                           item))
+                       items)))
+       form))
+   value))
+
+(defn expand-graph
+  "Expand a VFX control graph's composite references. The single VFX entry
+   point into cn.li.node.composite's real expander -- callers never call
+   that directly, so :vfx/timeline's wrapper-shape quirk above stays a
+   vfx-core concern instead of leaking into every caller."
+  [node-environment graph composites]
+  (composite/expand-with-environment-and-composites
+   node-environment
+   (expand-timeline-children node-environment graph composites)
+   composites))
 
 (defn validate-vfx-graph!
   "Validate every executable VFX component after composite expansion.

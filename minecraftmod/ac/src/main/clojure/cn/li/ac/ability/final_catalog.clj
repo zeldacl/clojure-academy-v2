@@ -8,7 +8,7 @@
   the combat catalog can depend on a stable VFX ABI first."
   (:require [cn.li.ability.compose :as ability-compose]
             [cn.li.node.composite :as composite]
-            [cn.li.vfx.compiler :as vfx-compiler]
+            [cn.li.vfx.vocabulary :as vfx-vocabulary]
             [cn.li.vfx.system-compiler :as vfx-system-compiler]
             [cn.li.combat.vocabulary :as vocabulary]))
 (def ^:const schema-version 1)
@@ -179,12 +179,7 @@
       :content-hash (content-hash {:sources sources :registrations registrations})
       :composites composites}))
 
-(defn- expand-vfx-graph
-  "Expand VFX composites with the standalone VFX compiler."
-  [graph composites]
-  (vfx-compiler/expand-graph graph composites))
-
-(defn- load-vfx [vfx-manifest composites]
+(defn- load-vfx [vfx-manifest node-environment composites]
   (let [manifest (validate-manifest (read-resource vfx-manifest) :vfx)
         effects (mapv (fn [{:keys [id resource kind]}]
                         (when-not (= :vfx/system kind)
@@ -194,7 +189,7 @@
                           (when-not (= id (:id effect))
                             (throw (ex-info "vfx source id mismatch"
                                             {:manifest-id id :source-id (:id effect)})))
-                           (let [expanded (expand-vfx-graph (:control-graph effect) composites)]
+                           (let [expanded (vfx-system-compiler/expand-graph node-environment (:control-graph effect) composites)]
                              (vfx-system-compiler/validate-vfx-graph! expanded id)
                              (vfx-system-compiler/compile-system (assoc effect :control-graph expanded)))))
                       (:documents manifest))
@@ -218,7 +213,8 @@
           vfx-composites "cn/li/vfx/composites/manifest.edn"}}]
    (let [combat-composite-docs (load-composite-docs combat-composites)
          vfx-composite-docs (load-composite-docs vfx-composites)
-         vfx (load-vfx vfx-manifest vfx-composite-docs)
+         vfx-node-environment (vfx-vocabulary/environment vfx-composite-docs)
+         vfx (load-vfx vfx-manifest vfx-node-environment vfx-composite-docs)
          node-environment (vocabulary/environment combat-composite-docs)
          combat (load-combat combat-manifest node-environment combat-composite-docs)]
      (let [bundle (ability-compose/compose-catalog :ac node-environment combat vfx)]
