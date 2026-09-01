@@ -6,8 +6,11 @@
    Combat programs remain source graphs until their nodes have been lowered to
   the final compiler vocabulary; VFX descriptors are validated immediately so
   the combat catalog can depend on a stable VFX ABI first."
-  (:require [cn.li.ability.compose :as ability-compose]
+  (:require [clojure.java.io :as io]
+            [cn.li.ability.compose :as ability-compose]
             [cn.li.node.composite :as composite]
+            [cn.li.node.composite-loader :as composite-loader]
+            [cn.li.node.digest :as digest]
             [cn.li.vfx.vocabulary :as vfx-vocabulary]
             [cn.li.vfx.system-compiler :as vfx-system-compiler]
             [cn.li.combat.vocabulary :as vocabulary]))
@@ -16,49 +19,30 @@
 (def ^:const expected-combat-registrations 50)
 (def ^:const expected-vfx-effects 36)
 
-(def scalar-types #{:bool :int :float :string :resource-id :tick :duration
-                    :angle :ratio :seed})
-(def geometry-types #{:vec2 :vec3 :unit-vec3 :block-pos :quat :transform
-                      :aabb :color})
-(def reference-types #{:world-ref :entity-ref :living-entity-ref :player-ref
-                       :projectile-ref :block-ref :item-stack-ref
-                       :energy-target-ref})
-(def record-types #{:caster-snapshot :hit-result :destination :block-placement
-                    :entity-snapshot :item-snapshot :query-shape :entity-filter
-                    :terrain-plan :beam-result :projectile-candidate
-                    :resource-budget :resource-cost :cooldown :progression
-                    :feedback :damage-event :damage-contribution
-                    :damage-resolution :vfx-audience :vfx-anchor :vfx-signal
-                    :vfx-material :render-batch :particle-layout})
-(defn- final-type? [type]
-  (or (= type :any) (= type :unit)
-      (contains? (into #{} (concat scalar-types geometry-types reference-types
-                                   record-types)) type)
-      (and (vector? type) (= 2 (count type))
-           (contains? #{:option :list :set :range :curve :enum :handle :record}
-                      (first type)))))
-
-(defn- normalize-type [type]
-  (when-not (final-type? type)
-    (throw (ex-info "non-canonical final type" {:type type})))
-  type)
-
-(defn- canonical [value]
-  (cond
-    (map? value) (into (sorted-map-by (fn [left right]
-                                       (compare (pr-str left) (pr-str right))))
-                           (map (fn [[k v]] [k (canonical v)])) value)
-    (set? value) (vec (sort-by pr-str (map canonical value)))
-    (sequential? value) (mapv canonical value)
-    :else value))
-
-(defn content-hash [value]
-  (format "%x" (hash (pr-str (canonical value)))))
+(defn content-hash
+  "Deterministic, cross-process content identity -- see cn.li.node.digest.
+   Previously this file's own copy fed the same kind of catalog value into
+   clojure.core/hash, a JVM-LOCAL hash meaningless across two processes
+   (two players' clients, or a client and a server) even though it was used
+   for exactly that purpose."
+  [value]
+  (digest/content-hash value))
 
 (defn read-resource
-  "Read one classpath EDN resource through mcmod's safe data boundary."
+  "Read one classpath EDN resource.
+
+   Uses clojure.java.io/resource (works under every loader's classloader,
+   unlike ClassLoader/getSystemResource, which under Forge/Fabric's module
+   classloaders is not necessarily the mod's own classloader) but
+   deliberately keeps the permissive read-string parser rather than
+   cn.li.mcmod.runtime.safe-edn's stricter reader: safe-edn rejects any map
+   with a non-keyword key, and real content already ships that shape (e.g.
+   ac/combat/abilities/groundshock.edn's :energy-cost and :block-transforms
+   are keyed by block-id strings like \"minecraft:stone\" -- a pre-existing,
+   already-documented content defect, not something this relocation should
+   silently start rejecting)."
   [resource]
-  (let [url (ClassLoader/getSystemResource resource)]
+  (let [url (io/resource resource)]
     (when-not url
       (throw (ex-info "AC catalog resource not found" {:resource resource})))
     (binding [*read-eval* false]
@@ -68,22 +52,6 @@
   (when-not (keyword? value)
     (throw (ex-info (str label " must be a keyword") (assoc data :value value))))
   value)
-
-(defn compile-input-schema
-  "Compile an explicit typed input map; no arbitrary map merging is allowed."
-  [inputs]
-  (when-not (map? inputs)
-    (throw (ex-info "typed input schema must be a map" {:inputs inputs})))
-  (into (sorted-map)
-        (map (fn [[name spec]]
-               (require-keyword "input name" name {})
-               (let [spec (if (keyword? spec) {:type spec} spec)
-                     type (normalize-type (:type spec))]
-                 (when-not (final-type? type)
-                   (throw (ex-info "input has unknown final type"
-                                   {:input name :type (:type spec)})))
-                 [name (assoc spec :type type)])))
-        inputs))
 
 (defn- validate-bindings [bindings]
   (when-not (map? bindings)
@@ -127,21 +95,15 @@
       (throw (ex-info "AC manifest contains duplicate ids" {:kind kind}))))
   manifest)
 
-(defn- load-composite-docs [manifest-resource]
-  (let [manifest (validate-manifest (read-resource manifest-resource) :composite)]
-    (into {}
-          (map (fn [{:keys [id resource kind]}]
-                 (when-not (= :composite kind)
-                   (throw (ex-info "composite manifest contains non-composite" {:id id :kind kind})))
-                 (let [document (read-resource resource)]
-                   (when-not (= id (:id document))
-                     (throw (ex-info "composite source id mismatch"
-                                     {:manifest-id id :source-id (:id document)})))
-                   (when-not (= :composite (:layer document))
-                     (throw (ex-info "composite must declare :composite layer"
-                                     {:id id :layer (:layer document)})))
-                   [id document])))
-          (:documents manifest))))
+(defn- load-composite-docs
+  "Load a composite manifest's documents through cn.li.node.composite-loader
+   -- the generic manifest+document loader combat-core and vfx-core's own
+   composites now route through too (see P1.2/P2.1 refactor commits) --
+   instead of this file's own former copy of the same
+   schema-version/duplicate-id/id-match/:composite-layer checks."
+  [manifest-resource]
+  (:documents (composite-loader/load-documents
+               {:manifest-resource manifest-resource :document-loader read-resource})))
 
 (defn- load-combat [combat-manifest node-environment composites]
   (let [manifest (validate-manifest (read-resource combat-manifest) :combat)
