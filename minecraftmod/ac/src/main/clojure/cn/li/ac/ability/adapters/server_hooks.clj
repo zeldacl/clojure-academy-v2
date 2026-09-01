@@ -11,7 +11,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.messages :as ability-messages]
-            [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
+            [cn.li.combat.damage-math :as damage-math]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ability.combat :as ability-combat]
@@ -458,11 +458,11 @@
 
    :compute-aoe-damage
    (fn [origin-pos target-pos radius damage falloff?]
-     (entity-damage-runtime/compute-aoe-damage origin-pos target-pos radius damage falloff?))
+     (damage-math/compute-aoe-damage origin-pos target-pos radius damage falloff?))
 
    :select-reflection-target
    (fn [current-entity-uuid current-pos candidates max-radius]
-     (entity-damage-runtime/select-next-reflection-target current-entity-uuid current-pos candidates max-radius))
+     (damage-math/select-next-reflection-target current-entity-uuid current-pos candidates max-radius))
 
    :reflection-search-radius
    (fn []
@@ -470,6 +470,6 @@
 
    :compute-reflected-damage
    (fn [current-damage]
-     (entity-damage-runtime/compute-reflected-damage current-damage))})
+     (damage-math/compute-reflected-damage current-damage (ability-config/reflected-damage-multiplier)))})
 
 

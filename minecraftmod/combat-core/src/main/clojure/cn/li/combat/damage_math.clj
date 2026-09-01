@@ -1,8 +1,12 @@
-(ns cn.li.ac.ability.server.damage.entity
-  "Pure AC-side rules for entity damage effects.
+(ns cn.li.combat.damage-math
+  "AOE falloff and reflection-chain target selection.
 
-  Keeps falloff and reflection-chain selection out of forge adapters."
-  (:require [cn.li.ac.ability.config :as cfg]))
+   Relocated from ac/ability/server/damage/entity.clj, which had this as
+   combat math sitting in a content module -- nothing here is AC-specific.
+   compute-reflected-damage previously read ac.ability.config/
+   reflected-damage-multiplier internally; it now takes the multiplier as a
+   parameter, and the caller (ac's server_hooks.clj) supplies AC's
+   configured value explicitly.")
 
 (defn- distance-3d
   [{x1 :x y1 :y z1 :z} {x2 :x y2 :y z2 :z}]
@@ -45,5 +49,5 @@
        :entity-uuid))
 
 (defn compute-reflected-damage
-  [current-damage]
-  (* current-damage (cfg/reflected-damage-multiplier)))
+  [current-damage multiplier]
+  (* current-damage multiplier))
