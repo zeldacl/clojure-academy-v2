@@ -84,6 +84,8 @@ public final class PaintKernel {
                 out.emit(UiOp.MODEL, x, y, w, h, rgba, -1, clip, 0f, value);
             }
 
+            case UiOp.COMPOSITE -> emitComposite(resolver, node, item, x, y, clip, out);
+
             default -> {
             }
         }
@@ -91,4 +93,33 @@ public final class PaintKernel {
 
     /** Unthemed progress-track background; real color tokens land with the .ui.edn declarative rewrite. */
     private static final int TRACK_RGBA = 0x55202020;
+
+    /**
+     * x/y/w/h in a CompositeSpec are offsets within the composite node's
+     * own arranged rect (matching the pre-rewrite :composite primitive's
+     * local-coordinate authoring convention) - baseX/baseY are that rect's
+     * arranged position.
+     */
+    private static void emitComposite(BindResolver resolver, int node, Object item,
+                                       float baseX, float baseY, int clip, CmdBuf out) {
+        if (resolver == null) return;
+        Object specObj = resolver.attribute(node, BindAttr.COMPOSITE, item);
+        if (!(specObj instanceof CompositeSpec spec)) return;
+        float ix = baseX + spec.x();
+        float iy = baseY + spec.y();
+        switch (spec.kind()) {
+            case CompositeSpec.QUAD ->
+                    out.emit(UiOp.RECT, ix, iy, spec.w(), spec.h(), spec.rgba(), -1, clip, 0f, null);
+            case CompositeSpec.IMAGE ->
+                    out.emit(UiOp.IMAGE, ix, iy, spec.w(), spec.h(), spec.rgba(), spec.resIndex(), clip, 0f, null);
+            case CompositeSpec.TEXT ->
+                    out.emit(UiOp.TEXT, ix, iy, spec.w(), spec.h(), spec.rgba(), -1, clip, spec.fontSize(), spec.text());
+            case CompositeSpec.CONDITION ->
+                    out.emit(UiOp.IMAGE, ix, iy, Math.min(14f, spec.w()), Math.min(14f, spec.h()), spec.rgba(), spec.resIndex(), clip, 0f, null);
+            case CompositeSpec.MODEL ->
+                    out.emit(UiOp.MODEL, ix, iy, spec.w(), spec.h(), spec.rgba(), -1, clip, 0f, spec.text());
+            default -> {
+            }
+        }
+    }
 }

@@ -13,4 +13,6 @@ public interface BindAttr {
     int HEIGHT = 8;
     int FONT_SIZE = 9;
     int RESOURCE = 10;
+    /** Resolves to a {@link CompositeSpec} for a UiOp.COMPOSITE node. */
+    int COMPOSITE = 11;
 }

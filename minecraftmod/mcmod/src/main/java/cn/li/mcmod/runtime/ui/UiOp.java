@@ -16,6 +16,17 @@ public interface UiOp {
     int ITEM = 5;
     int MODEL = 6;
     int GRADIENT = 7;
+    /**
+     * Polymorphic per-item leaf: the collection item itself names its own
+     * kind (quad/image/text/condition/model) and drawing params, resolved
+     * at paint time via BindResolver into a CompositeSpec. A real, load-
+     * bearing pattern beyond just the combat HUD (developer's condition
+     * grid, skill-tree's graph/tag items, tutorial's preview/tag items all
+     * need heterogeneous per-item content the static primitive set can't
+     * express statically) - kept as a genuine opcode rather than deleted.
+     */
+    int COMPOSITE = 8;
 
-    int COUNT = 8;
+    int COUNT = 9;
 }
+
