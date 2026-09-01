@@ -1,0 +1,19 @@
+{:schema-version 1
+ :documents
+ [{:kind :composite :id :combat/area-damage :resource "cn/li/combat/composites/area_damage.edn"}
+  {:kind :composite :id :motion/radial-impulse :resource "cn/li/combat/composites/radial_impulse_motion.edn"}
+  {:kind :composite :id :combat/teleport-group :resource "cn/li/combat/composites/teleport_group.edn"}
+  {:kind :composite :id :terrain/break-area :resource "cn/li/combat/composites/break_area.edn"}
+  {:kind :composite :id :combat/release-with-cost :resource "cn/li/combat/composites/release_with_cost.edn"}
+  {:kind :composite :id :fx/lightning-strike :resource "cn/li/combat/composites/lightning_strike.edn"}
+  {:kind :composite :id :terrain/apply-break-budget :resource "cn/li/combat/composites/apply_break_budget.edn"}
+  {:kind :composite :id :target/raycast-destination :resource "cn/li/combat/composites/target_raycast_destination.edn"}
+  {:kind :composite :id :combat/impact-strike :resource "cn/li/combat/composites/impact_strike.edn"}
+  {:kind :composite :id :target/hold-destination :resource "cn/li/combat/composites/target_hold_destination.edn"}
+  {:kind :composite :id :target/directional-destination :resource "cn/li/combat/composites/target_directional_destination.edn"}
+  {:kind :composite :id :target/penetration-destination :resource "cn/li/combat/composites/target_penetration_destination.edn"}
+  {:kind :composite :id :combat/beam-strike :resource "cn/li/combat/composites/beam_strike.edn"}
+  {:kind :composite :id :combat/charged-area-damage :resource "cn/li/combat/composites/charged_area_damage.edn"}
+  {:kind :composite :id :combat/projectile-reflection-scan :resource "cn/li/combat/composites/projectile_reflection_scan.edn"}
+  {:kind :composite :id :terrain/random-break :resource "cn/li/combat/composites/random_break.edn"}
+  {:kind :composite :id :terrain/wave-plan :resource "cn/li/combat/composites/wave_plan.edn"}]}

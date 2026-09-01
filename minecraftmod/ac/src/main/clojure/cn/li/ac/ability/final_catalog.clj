@@ -9,7 +9,7 @@
   (:require [cn.li.ability.compose :as ability-compose]
             [cn.li.node.composite :as composite]
             [cn.li.vfx.compiler :as vfx-compiler]
-            [cn.li.ac.ability.final-vocabulary :as vocabulary]))
+            [cn.li.combat.vocabulary :as vocabulary]))
 (def ^:const schema-version 1)
 (def ^:const expected-combat-sources 39)
 (def ^:const expected-combat-registrations 50)
@@ -320,8 +320,8 @@
   ([{:keys [combat-manifest vfx-manifest combat-composites vfx-composites]
      :or {combat-manifest "ac/combat/manifest.edn"
           vfx-manifest "ac/vfx/manifest.edn"
-          combat-composites "ac/combat/composites.edn"
-          vfx-composites "ac/vfx/composites.edn"}}]
+          combat-composites "cn/li/combat/composites/manifest.edn"
+          vfx-composites "cn/li/vfx/composites/manifest.edn"}}]
    (let [combat-composite-docs (load-composite-docs combat-composites)
          vfx-composite-docs (load-composite-docs vfx-composites)
          vfx (load-vfx vfx-manifest vfx-composite-docs)

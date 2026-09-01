@@ -18,7 +18,7 @@
             [cn.li.ac.ability.final-catalog :as final-catalog]
             [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.final-vocabulary :as final-vocabulary]
+            [cn.li.combat.vocabulary :as combat-vocabulary]
             [cn.li.node.descriptor :as node-descriptors]
             [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.ac.ability.registry.skill :as skill-registry]))
@@ -383,7 +383,7 @@
 
 (deftest final-vocabulary-descriptor-abi-test
   (let [descriptors (filter #(= :final (:category %))
-(final-vocabulary/descriptor-specs))]
+                            (combat-vocabulary/descriptor-specs))]
     (is (pos? (count descriptors)))
     (is (every? #(every? (fn [k] (contains? % k))
                          [:id :revision :layer :category :doc :inputs :outputs :children])
