@@ -1235,6 +1235,16 @@ if (target.loader != "none") {
                     }
                 }
             }
+            if (target.datagenParityGroup) {
+                def requiredLanguageFiles = ["en_us", "zh_cn", "zh_tw", "ja_jp", "ko_kr", "ru_ru"].collect {
+                    "assets/${modId}/lang/${it}.json"
+                }
+                def missingLanguageFiles = requiredLanguageFiles.findAll { !hashes.containsKey(it) }
+                if (!missingLanguageFiles.isEmpty()) {
+                    throw new GradleException(
+                        "Datagen output for ${target.id} is missing generated language files: ${missingLanguageFiles}")
+                }
+            }
             manifestFile.parentFile.mkdirs()
             manifestFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
                 target: target.id,

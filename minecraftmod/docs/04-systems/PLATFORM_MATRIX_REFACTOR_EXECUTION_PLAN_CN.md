@@ -139,6 +139,17 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 范围修订优先于前述历史记录：本轮交付不要求真实游戏 JFR/JMH；文档中“仍需补采”仅描述未来恢复性能验收时的标准，不构成本轮阻塞或失败条件。不得为完成该项自动修改 EULA，也不得以实机测试替代已有的无头调度器与 JMH 验证。
 
+## 2026-09-01 直接源码复审补充（以当前代码为准）
+
+本轮重新扫描三平台、三版本源码及资源目录，不引用历史完成记录作为事实依据。结论与可执行动作如下：
+
+1. seam 不能按文件名或单次相似度批量提升。逐文件 SHA-256 与版本 API 依赖核验显示，`AdvancementJson`、`DynamicTextureAccess`、`Ingredients`、`ItemUseResults`、`McAccess`、`NbtAccess`、`RegistryLookups`、`RegistryValues`、`TeleportAccess`、`TextureSizeAccess`、`WorldOps` 在版本间存在真实差异，继续留在各版本 seam；`RegistryDispatch` 三版本字节完全一致，已提升至 `minecraft-base` 并删除三份副本。后续若要进一步减少 seam，必须先抽取版本无关契约/值对象，再让各版本适配器实现该契约，逐目标编译后才允许提升；禁止恢复双轨实现。
+2. 三个 Fabric 目标中的独立 `assets/academy/lang/en_us.json` 已全部删除。`verifyDatagenOwnsLanguageFiles` 已加入根验证；每个 datagen manifest 还必须包含六种语言输出（`en_us`、`zh_cn`、`zh_tw`、`ja_jp`、`ko_kr`、`ru_ru`），确保翻译唯一来源是 datagen。
+3. 平台资源已建立显式 allowlist：保留无法由 datagen 取代的 loader 元数据/混入配置、版本专属 `pack.mcmeta` 以及 26.2 专属 shader；共用 `academy-loader-hook-support.properties` 已移至 `mcmod` 资源，未引用的 base/NeoForge marker 已删除。`verifyPlatformResourceOwnership` 防止未来把普通资源重新放回平台层。模型、纹理、声音、配方、标签和翻译继续由共用资源/datagen 管理。
+4. 热路径验收仍以静态边界、无头回归和编译为准；本轮不启动实机，不修改 EULA。26.2 若根 Gradle 8 wrapper 与插件发生 API 不兼容，必须使用目录指定的 Gradle 9.2/9.7.1 wrapper，并把该工具链差异记录为构建环境事实，不能通过兼容旧实现绕过。
+
+执行顺序：先完成 seam 契约化候选清单与逐方法差异表 → 每次只提升一个经证明无版本依赖的实现 → 六目标 `compileJava/check/jar`（按各自 wrapper）→ datagen manifest/资源 allowlist/XOR/JEI/IC2 门禁 → 最后再考虑实机性能验收。任何阶段不得引入反射、旧逻辑兼容层或 class 与 `.clj` 共存。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
