@@ -129,6 +129,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 该热路径修复提交后又逐目标重跑发布任务：Forge 1.20.1 `check + jar`（61 tasks）、Fabric 1.20.1/1.21.1 `check + remapJar`（各 63）、NeoForge 1.21.1 `check + remapJar`（63）、NeoForge 26.2 `check + jar`（64）和 Fabric 26.2 `check + jar`（60）全部成功；六个新 Jar 的 ZIP 实物扫描再次得到 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`，其中两个 26.2 目标 `platform AOT=0`。
 
+随后复审 Presentation 渲染/输入入口又发现同类遗漏：neutral Presentation 原先在每帧通过 lifecycle host map 获取 AC API。现已改为 AC 客户端 bootstrap 安装并缓存单一不可变 host API map，渲染、输入和资源回调只走直接 Var；新增 `verifyPresentationDirectHostBoundary` 与渲染路径回归测试，防止恢复动态/lifecycle 查找。修复后 `verifyCurrentPlatforms`（103 tasks）和根 `test verifyCorePerformance`（80 tasks）均通过，六目标发布任务及 Jar XOR/JEI/IC2 实物扫描再次全部通过；对应代码提交为 `b97d35a12`。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
