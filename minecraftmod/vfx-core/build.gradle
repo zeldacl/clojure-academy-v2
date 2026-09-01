@@ -34,6 +34,10 @@ tasks.named("compileTestClojure").configure {
 // see the matching comment in combat-core/build.gradle for why the whole
 // directory (not just dep_check.clj) is added.
 sourceSets.test.clojure.srcDir rootProject.file('node-core/src/test/clojure')
+// node-core's own test_runner.clj (pulled in by the srcDir addition above)
+// requires this; without it, compileTestClojure fails to resolve it even
+// though cn.li.vfx.test-runner never calls it.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
 
 tasks.named("processResources").configure {
     from(sourceSets.main.clojure.srcDirs) {

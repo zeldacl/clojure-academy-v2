@@ -47,6 +47,14 @@ tasks.register("runNodeCoreClojureTests", JavaExec) {
     args "-m", "cn.li.node.test-runner"
 }
 
+// cn.li.test-support.pure-auto-test-runner has no mcmod dependency (unlike
+// cn.li.test-support.auto-test-runner, ac/mcmod's Framework-fixture-wrapped
+// equivalent) -- node-core must never depend on mcmod, even in test scope.
+// Lives in its own directory precisely so this addition cannot also pull in
+// the mcmod- and Minecraft-coupled files that sit alongside the impure
+// runner elsewhere under platform-src/test-support.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
+
 dependencies {
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"

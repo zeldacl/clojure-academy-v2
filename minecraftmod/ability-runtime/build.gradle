@@ -27,6 +27,38 @@ tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" 
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
 }
 
+// compileTestClojure hits the same node-core/combat-core/vfx-core
+// resources-not-on-compileClasspath gap as checkClojure above (they are
+// source-first; their .clj sources land only in their own resources/main
+// dir, which the standard project(":x") compileClasspath resolution does
+// not surface). presentation-core is not source-first, so its normally
+// compiled classes are already reachable through the ordinary
+// api project(":presentation-core") dependency below and need no special
+// wiring here.
+tasks.named("compileTestClojure").configure {
+    dependsOn ":node-core:classes", ":combat-core:classes", ":vfx-core:classes"
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/combat-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/combat-core/clojure/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/clojure/main")))
+}
+
+// ability-runtime legitimately depends on mcmod (api project(":mcmod")
+// below), so unlike node-core/presentation-core/presentation-compiler it
+// uses the full Framework-fixture-wrapped auto-test-runner rather than the
+// pure variant -- P4.7's registry/tenancy tests are expected to touch
+// process-level state that fixture exists to isolate between namespaces.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
+// test-support's runtime-facades installs the neutral provider facades
+// (cn.li.platform.neutral.*, self-contained namespaces with no requires of
+// their own), so they have to be on the test source path with it. Without
+// this, compileTestClojure fails to resolve them -- see the matching
+// comment in ac/build.gradle, where this exact gap was found and fixed
+// first.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/platform/shared/src/main/clojure')
+
 tasks.named("processResources").configure {
     from(sourceSets.main.clojure.srcDirs) {
         include "**/*.clj", "**/*.cljc"
@@ -53,6 +85,15 @@ def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
 }
 tasks.named("classes").configure { dependsOn clearNeutralAotOutput }
 tasks.named("jar").configure { dependsOn clearNeutralAotOutput }
+
+tasks.register("runAbilityClojureTests", JavaExec) {
+    group = "verification"
+    description = "Run clojure.test suites for ability-runtime via cn.li.ability.test-runner."
+    dependsOn "compileTestClojure", "classes"
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    args "-m", "cn.li.ability.test-runner"
+}
 
 // Runtime source/class roots are consumed by the platform target through the
 // selected content project (AC today, BC/CC content packs later).  The

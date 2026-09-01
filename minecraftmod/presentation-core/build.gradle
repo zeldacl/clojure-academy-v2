@@ -36,6 +36,11 @@ tasks.register("runCoreClojureTests", JavaExec) {
     args "-m", "cn.li.presentation.core.test-runner"
 }
 
+// cn.li.test-support.pure-auto-test-runner has no mcmod.framework dependency
+// (unlike ac/mcmod's Framework-fixture-wrapped equivalent) -- presentation-
+// core's tests have no global registry state that fixture exists to isolate.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
+
 // Core behavior remains Minecraft-free. The only shared compile contract is
 // mcmod's version-neutral domain/data bridge; no loader dependency is allowed.
 // api (not implementation): the frame ABI (RenderCommand/RenderStage/
