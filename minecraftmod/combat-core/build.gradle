@@ -35,6 +35,16 @@ tasks.named("compileTestClojure").configure {
     classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
+// cn.li.node.dep-check is node-core's shared dependency-direction checker,
+// reused here instead of a second copy of the same reader/violation logic.
+// Adding node-core's whole test dir (not just dep_check.clj) mirrors the
+// existing platform-src/test-support srcDir pattern used by ac/mcmod: each
+// consumer independently compiles the shared source into its own build
+// output, so node-core's own *_test.clj files get compiled here too but are
+// never required by cn.li.combat.test-runner, which only names combat-core's
+// own test namespaces.
+sourceSets.test.clojure.srcDir rootProject.file('node-core/src/test/clojure')
+
 tasks.named("processResources").configure {
     from(sourceSets.main.clojure.srcDirs) {
         include "**/*.clj", "**/*.cljc"

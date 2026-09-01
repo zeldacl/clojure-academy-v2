@@ -18,9 +18,22 @@ tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" 
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
 }
 
-// See the matching comment in combat-core/build.gradle.
+// node-core is source-first; its .clj sources land only in its own
+// resources/main dir, which the standard project(":node-core")
+// compileClasspath resolution does not surface here. Same fix
+// combat-core/build.gradle applies, for the same underlying reason -- this
+// block was previously an empty stub pointing at that comment without
+// actually doing what it described.
 tasks.named("compileTestClojure").configure {
+    dependsOn ":node-core:classes"
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
+
+// cn.li.node.dep-check is node-core's shared dependency-direction checker;
+// see the matching comment in combat-core/build.gradle for why the whole
+// directory (not just dep_check.clj) is added.
+sourceSets.test.clojure.srcDir rootProject.file('node-core/src/test/clojure')
 
 tasks.named("processResources").configure {
     from(sourceSets.main.clojure.srcDirs) {
