@@ -153,6 +153,30 @@ class HitKernelTest {
     }
 
     @Test
+    void enclosingScrollAtFindsTheScrollContainerWithNoInteractiveChildUnderThePoint() {
+        NodeTableBuilder b = new NodeTableBuilder();
+        int root = b.root();
+        b.node(root).flags |= NodeFlags.IS_SCROLL;
+        b.node(root).widthMode = SizeMode.FIXED;
+        b.node(root).widthValue = 50f;
+        b.node(root).heightMode = SizeMode.FIXED;
+        b.node(root).heightValue = 50f;
+        b.child(root, n -> {
+            // plain, non-interactive label -- no HIT_TESTABLE/FOCUSABLE flag
+            n.widthMode = SizeMode.FILL;
+            n.heightMode = SizeMode.FIXED;
+            n.heightValue = 20f;
+        });
+        NodeTable t = b.build();
+        LayoutArena a = new LayoutArena(8);
+        LayoutKernel.expand(t, a, null);
+        LayoutKernel.measure(t, a, NO_BIND, 0, 50, 50, LayoutKernel.AT_MOST, LayoutKernel.AT_MOST);
+        LayoutKernel.arrange(t, a, NO_BIND, 0, 0, 0, 50, 50, -1);
+        assertEquals(root, HitKernel.enclosingScrollAt(t, a, null, 0, 5, 5));
+        assertEquals(-1, HitKernel.enclosingScrollAt(t, a, null, 0, 90, 90));
+    }
+
+    @Test
     void itemAndItemIndexAreCarriedFromTheEnclosingCollection() {
         NodeTableBuilder b = new NodeTableBuilder();
         int root = b.root();

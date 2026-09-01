@@ -44,6 +44,31 @@ public final class HitKernel {
         return hit(t, a, resolver, root, px, py, -1);
     }
 
+    /**
+     * The innermost IS_SCROLL container whose clip and own rect contain the
+     * point, or -1. Unlike {@link #topmostAt}, this does not require a
+     * HIT_TESTABLE/FOCUSABLE node at the point — mouse wheel and drag-scroll
+     * need to know which scroll container the pointer is over even when it
+     * isn't hovering an interactive child of that container.
+     */
+    public static int enclosingScrollAt(NodeTable t, LayoutArena a, BindResolver resolver, int root, float px, float py) {
+        return scrollWalk(t, a, resolver, root, px, py, -1);
+    }
+
+    private static int scrollWalk(NodeTable t, LayoutArena a, BindResolver resolver, int inst, float px, float py, int scrollAncestor) {
+        if (!LayoutKernel.visible(t, a, resolver, inst)) return scrollAncestor;
+        int clip = a.clipOf[inst];
+        if (clip >= 0 && !inRegion(a.clipRects, clip, px, py)) return scrollAncestor;
+        int node = a.nodeOf[inst];
+        int myScroll = (t.has(node, NodeFlags.IS_SCROLL) && inRect(a, inst, px, py)) ? inst : scrollAncestor;
+        int end = a.subtreeEnd[inst];
+        int result = myScroll;
+        for (int c = LayoutKernel.firstChild(a, inst); c >= 0; c = LayoutKernel.nextSibling(a, c, end)) {
+            result = scrollWalk(t, a, resolver, c, px, py, myScroll);
+        }
+        return result;
+    }
+
     private static Hit hit(NodeTable t, LayoutArena a, BindResolver resolver, int inst, float px, float py, int scrollAncestor) {
         if (!LayoutKernel.visible(t, a, resolver, inst)) return null;
 
