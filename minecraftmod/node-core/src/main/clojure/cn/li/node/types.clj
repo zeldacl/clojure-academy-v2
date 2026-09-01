@@ -58,3 +58,23 @@
    meaningfully judge a literal shape."
   [value]
   (and (map? value) (or (vector? (:ref value)) (keyword? (:expr value)))))
+
+(def ^:private type-aliases
+  "cn.li.node.schema (deleted; it had zero real callers anywhere in the repo
+   -- only its own now-deleted test) authored a second, incompatible scalar
+   vocabulary (:bool/:int/:float/...) alongside this namespace's real one
+   (:boolean/:long/:double/...); AC's final_vocabulary.clj forked schema's
+   names, not this lattice's. This table is NOT wired into known-type?/
+   conforms? -- conforms? already accepts an unrecognized type via its
+   :else true fallback, so nothing here needs it to keep working. It exists
+   so a future migration of an :any-typed field to a real type can pick the
+   ONE canonical name instead of reintroducing the old vocabulary."
+  {:float :double, :int :long, :bool :boolean, :tick :long, :duration :long
+   :angle :double, :ratio :double, :seed :long, :resource-id :keyword})
+
+(defn canonical-type
+  "The one lattice name for `t`, translating cn.li.node.schema's retired
+   vocabulary if `t` was spelled that way. Idempotent: canonical-type on an
+   already-canonical type is a no-op."
+  [t]
+  (get type-aliases t t))
