@@ -1374,6 +1374,26 @@ tasks.register("verifyClojureRuntimeRepresentation") {
     }
 }
 
+tasks.register("verifyPresentationDirectHostBoundary") {
+    group = "verification"
+    description = "Ensure Presentation render/input paths use the bootstrap-cached host API."
+    doLast {
+        def neutral = file("platform-src/platform/shared/src/main/clojure/cn/li/platform/neutral/presentation.clj")
+        def ac = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
+        if (!neutral.exists() || !neutral.text.contains("def ^:private presentation-api")) {
+            throw new GradleException("Presentation direct host cache is missing")
+        }
+        if (neutral.text.contains("client-runtime/call-adapter") || neutral.text.contains("lifecycle/host-api")) {
+            throw new GradleException("Presentation hot path still performs dynamic/lifecycle host lookup")
+        }
+        if (!ac.exists() || !ac.text.contains("cn.li.platform.neutral.presentation/install-host!") ||
+                !ac.text.contains(":presentation-host-api (constantly api)")) {
+            throw new GradleException("AC Presentation bootstrap does not install one cached host map")
+        }
+        logger.lifecycle("[verifyPresentationDirectHostBoundary] ok")
+    }
+}
+
 tasks.register("verifyOptionalIntegrations") {
     group = "verification"
     description = "Verify JEI is a real typed adapter and IC2 reflection stays inside the optional third-party boundary."
@@ -2041,6 +2061,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyAbilityVfxRegistryCoverage",
               "verifyVfxSingleTickPath",
               "verifyVfxDirectHostBoundary",
+              "verifyPresentationDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxJavaBoundary",
               "verifyVfxAotBoundary",

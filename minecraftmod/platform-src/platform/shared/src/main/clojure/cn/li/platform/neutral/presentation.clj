@@ -2,16 +2,19 @@
   "Loader-facing Presentation Runtime seam.
 
    This namespace owns no UI, layout, rendering, or game logic. It only
-   connects the client bridge's opaque AC host API to minecraft/base's lifecycle
+   connects the bootstrap-cached opaque AC host API to minecraft/base's lifecycle
    registry and returns opaque frame packets to version-owned callbacks."
-  (:require [cn.li.mcbase.presentation.host-lifecycle :as lifecycle]
-            [cn.li.platform.neutral.client-runtime :as client-runtime]))
+  (:require [cn.li.mcbase.presentation.host-lifecycle :as lifecycle]))
 
 (def ^:private host-id :presentation)
 (def ^:private host-kind :unified)
 (defonce ^:private frame-sequence* (atom 0))
 (defonce ^:private last-frame-nanos* (atom 0))
-(defonce ^:private backend* (atom nil))
+
+;; Installed once by AC's client bootstrap. Render/tick paths read these direct
+;; Var roots rather than walking the Framework or lifecycle host maps.
+(def ^:private presentation-api nil)
+(def ^:private backend-api nil)
 
 ;; HUD, Screen and (once wired) world/VFX submissions each call
 ;; dispatch-current-frame!/submit-current-frame! independently within the
@@ -40,16 +43,33 @@
       @frame-sequence*
       (swap! frame-sequence* inc))))
 
-(defn ensure-registered!
-  "Register AC's host API once the content bridge has been installed.
+(defn install-host!
+  "Install the immutable AC Presentation host API during client bootstrap.
 
-   Returns the shared lifecycle even when content is not present, allowing
-   loaders to keep a stable callback path during title-screen/world changes."
+   The lifecycle registry keeps the same map for cleanup/introspection, while
+   render and input paths use the direct Var root below."
+  [api]
+  (when-not (map? api)
+    (throw (ex-info "presentation host API must be a map" {:value api})))
+  (alter-var-root #'presentation-api (constantly api))
+  (lifecycle/register-runtime! (lifecycle/shared) host-id host-kind api)
+  api)
+
+(defn reset-host-for-test! []
+  (alter-var-root #'presentation-api (constantly nil))
+  nil)
+
+(defn- host-api [] presentation-api)
+
+(defn ensure-registered!
+  "Ensure the direct host is visible to lifecycle cleanup/introspection.
+
+   This function is called during client setup; frame extraction never calls
+   it, so lifecycle host-map access cannot occur on a render hot path."
   []
   (let [registry (lifecycle/shared)]
-    (when-not (lifecycle/host-api registry host-id)
-      (when-let [api (client-runtime/call-adapter :presentation-host-api)]
-        (lifecycle/register-runtime! registry host-id host-kind api)))
+    (when presentation-api
+      (lifecycle/register-runtime! registry host-id host-kind presentation-api))
     registry))
 
 (defn frame!
@@ -58,12 +78,12 @@
    The return value is opaque to platform neutral code. Version backends may
    submit it only through their own mapped adapter."
   [frame-id delta-seconds width height]
-  (let [registry (ensure-registered!)]
-    (lifecycle/frame! registry host-id frame-id delta-seconds width height)))
+  (when-let [frame! (:frame! (host-api))]
+    (frame! frame-id delta-seconds width height)))
 
 (defn ensure-combat-hud!
   [player-uuid width height]
-  (when-let [mount! (:mount-combat-hud! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [mount! (:mount-combat-hud! (host-api))]
     (mount! player-uuid width height)))
 
 (defn mount-terminal!
@@ -72,18 +92,18 @@
    The returned value is an opaque mount token; terminal state, text input and
    modal semantics remain owned by AC/Presentation Runtime."
   [owner dispatch-action!]
-  (when-let [mount! (:mount-terminal! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [mount! (:mount-terminal! (host-api))]
     (mount! owner dispatch-action!)))
 
 (defn mount-container!
   "Mount a Menu/Slot presentation without exposing the server menu model."
   [menu-bridge snapshot-fn dispatch-action!]
-  (when-let [mount! (:mount-container! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [mount! (:mount-container! (host-api))]
     (mount! menu-bridge snapshot-fn dispatch-action!)))
 
 (defn unmount! [mount]
   "Dispose one opaque mount token from a Screen/host lifecycle callback."
-  (when-let [unmount! (:unmount! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [unmount! (:unmount! (host-api))]
     (unmount! mount))
   nil)
 
@@ -93,8 +113,7 @@
    Version Screen boundaries never construct Presentation Core event classes;
    they only provide {:type ...} data and Minecraft-native coordinates."
   [mount event]
-  (when-let [dispatch! (:dispatch-input! (lifecycle/host-api
-                                            (ensure-registered!) host-id))]
+  (when-let [dispatch! (:dispatch-input! (host-api))]
     (dispatch! mount event)))
 
 (defn- as-stage-result
@@ -111,14 +130,15 @@
 
 (defn dispatch-stage-with-context!
   [stage frame-id delta-seconds width height context]
-  (let [registry (ensure-registered!)
-        api (lifecycle/host-api registry host-id)]
+  (when-let [api (host-api)]
     (as-stage-result
      stage
      (if-let [frame-with-context! (:frame-with-context! api)]
        (frame-with-context! stage frame-id delta-seconds width height context)
-       (lifecycle/dispatch-runtime-stage!
-         registry host-id stage frame-id delta-seconds width height)))))
+       (when-let [frame! (:frame! api)]
+         {:host-id host-id
+          :stage stage
+          :frame (frame! frame-id delta-seconds width height)})))))
 
 (defn dispatch-stage!
   [stage frame-id delta-seconds width height]
@@ -131,7 +151,7 @@
     ;; Backend submission is intentionally an opaque callback.  The neutral
     ;; seam never inspects FramePacket or imports presentation-core; a mapped
     ;; mc-* backend decides how to consume the packet for its Minecraft API.
-    (when-let [submit! (:submit! @backend*)]
+    (when-let [submit! (:submit! backend-api)]
       (when result
         (submit! (:stage result) (:frame result))))
     result))
@@ -150,7 +170,7 @@
                           render-context)
         result (dispatch-stage-with-context! stage (current-frame-id!)
                                               delta-seconds width height frame-context)]
-    (when-let [submit! (:submit! @backend*)]
+    (when-let [submit! (:submit! backend-api)]
       (when result
         (submit! (:stage result) (:frame result) backend-context)))
     result))
@@ -163,44 +183,45 @@
   [backend]
   (when-not (fn? (:submit! backend))
     (throw (ex-info "presentation backend must expose :submit!" {})))
-  (reset! backend* backend)
+  (alter-var-root #'backend-api (constantly backend))
   backend)
 
-(defn backend [] @backend*)
+(defn backend [] backend-api)
 
 (defn reload-resources! [generation]
-  (lifecycle/reload-resources! (lifecycle/shared) generation))
+  (when-let [reload! (:reload-resources! (host-api))]
+    (reload! generation))
+  generation)
 
 (defn shutdown! []
-  (let [registry (lifecycle/shared)]
-    (when-let [unmount-all! (:unmount-all! (lifecycle/host-api registry host-id))]
-      (unmount-all!))
-    nil))
+  (when-let [unmount-all! (:unmount-all! (host-api))]
+    (unmount-all!))
+  nil)
 
 ;; Presentation Runtime opaque API. These functions intentionally traffic
 ;; only in maps and opaque mount tokens; platform code does not import core
 ;; classes or the build-time compiler.
 (defn mount-view! [spec]
-  (when-let [mount! (:mount-view! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [mount! (:mount-view! (host-api))]
     (mount! spec)))
 
 (defn present-view! [mount state]
-  (when-let [present! (:present-view! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [present! (:present-view! (host-api))]
     (present! mount state)))
 
 (defn update-host! [mount geometry]
-  (when-let [update! (:update-host! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [update! (:update-host! (host-api))]
     (update! mount geometry)))
 
 (defn extract-stage! [stage frame-context]
-  (when-let [extract! (:extract-stage! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [extract! (:extract-stage! (host-api))]
     (extract! stage frame-context)))
 
 (defn semantics! [mount]
-  (when-let [semantics (:semantics! (lifecycle/host-api (ensure-registered!) host-id))]
+  (when-let [semantics (:semantics! (host-api))]
     (semantics mount)))
 
 (defn invalidate-render-resources! []
   (when-let [invalidate! (:invalidate-render-resources!
-                          (lifecycle/host-api (ensure-registered!) host-id))]
+                          (host-api))]
     (invalidate!)))

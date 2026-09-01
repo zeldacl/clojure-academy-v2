@@ -251,11 +251,17 @@
                       ((:unmount-all! core-api)))})))
 
 (defn install-bridge!
-  "Install the Presentation Runtime bridge into the neutral client boundary."
+  "Install the Presentation Runtime host at the client bootstrap boundary."
   []
   (install-presentation-boundary!)
-  (bridge/merge-client-bridge!
-    {:presentation-host-api presentation-host-api})
+  (let [api (presentation-host-api)]
+    ;; Keep one immutable map for both the AC UI adapter and neutral render
+    ;; seam. The neutral seam caches the same map; no per-frame reconstruction.
+    (bridge/merge-client-bridge!
+      {:presentation-host-api (constantly api)})
+    ((requiring-resolve
+       'cn.li.platform.neutral.presentation/install-host!)
+     api))
   (log/info "Presentation Runtime bridge installed"))
 
 
