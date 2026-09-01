@@ -341,6 +341,56 @@ class LayoutKernelTest {
         assertRect(a, c2, 0, 0, 50, 30);
     }
 
+    // ── wrap ──
+
+    @Test
+    void wrapBreaksToANewLineWhenMainAxisExceedsAvailable() {
+        NodeTableBuilder b = new NodeTableBuilder();
+        int root = b.root();
+        b.node(root).direction = Direction.ROW;
+        b.node(root).flags = NodeFlags.WRAP;
+        int c0 = b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 40f; n.heightMode = SizeMode.FIXED; n.heightValue = 20f; });
+        int c1 = b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 40f; n.heightMode = SizeMode.FIXED; n.heightValue = 20f; });
+        int c2 = b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 40f; n.heightMode = SizeMode.FIXED; n.heightValue = 20f; });
+        LayoutArena a = layout(b.build(), 100, 100);
+        assertRect(a, c0, 0, 0, 40, 20);
+        assertRect(a, c1, 40, 0, 40, 20);
+        assertRect(a, c2, 0, 20, 40, 20);
+    }
+
+    @Test
+    void wrapContainerAutoCrossSizeSumsLineHeightsPlusGap() {
+        NodeTableBuilder b = new NodeTableBuilder();
+        int root = b.root();
+        b.node(root).direction = Direction.ROW;
+        b.node(root).flags = NodeFlags.WRAP;
+        b.node(root).gap = 5f;
+        b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 40f; n.heightMode = SizeMode.FIXED; n.heightValue = 20f; });
+        b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 40f; n.heightMode = SizeMode.FIXED; n.heightValue = 30f; });
+        b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 40f; n.heightMode = SizeMode.FIXED; n.heightValue = 20f; });
+        NodeTable t = b.build();
+        LayoutArena a = new LayoutArena(8);
+        LayoutKernel.expand(t, a, NO_BIND.resolver());
+        // AUTO height on the root itself, measured under AT_MOST so the auto
+        // path (sum of line heights) is exercised rather than EXACTLY's
+        // "just fill whatever was given" shortcut.
+        LayoutKernel.measure(t, a, NO_BIND, 0, 100, 100, LayoutKernel.EXACTLY, LayoutKernel.AT_MOST);
+        assertEquals(30f + 5f + 20f, a.measH(0), EPS);
+    }
+
+    @Test
+    void wrapWithASingleLineBehavesLikeNonWrapRow() {
+        NodeTableBuilder b = new NodeTableBuilder();
+        int root = b.root();
+        b.node(root).direction = Direction.ROW;
+        b.node(root).flags = NodeFlags.WRAP;
+        int c0 = b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 20f; n.heightMode = SizeMode.FIXED; n.heightValue = 10f; });
+        int c1 = b.child(root, n -> { n.widthMode = SizeMode.FIXED; n.widthValue = 20f; n.heightMode = SizeMode.FIXED; n.heightValue = 10f; });
+        LayoutArena a = layout(b.build(), 100, 100);
+        assertRect(a, c0, 0, 0, 20, 10);
+        assertRect(a, c1, 20, 0, 20, 10);
+    }
+
     // ── nesting ──
 
     @Test

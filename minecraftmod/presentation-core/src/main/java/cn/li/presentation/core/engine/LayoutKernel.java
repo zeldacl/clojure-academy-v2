@@ -24,9 +24,12 @@ import java.util.List;
  *
  * Deferred in this pass (first correctness cut favors the row/column/
  * stack/absolute primitives that cover the overwhelming majority of real
- * .ui.edn content): {@code :grid} track layout, {@code :wrap} line
- * breaking, and anchor-based absolute placement. All three are additive —
- * nothing here needs to change shape to add them later.
+ * .ui.edn content): {@code :grid} track layout and anchor-based absolute
+ * placement (plain x/y absolute placement, used by every real .ui.edn that
+ * needs it today, is implemented in measureFree/arrangeFree). Both are
+ * additive — nothing here needs to change shape to add them later.
+ * {@code :wrap} line breaking (see measureWrapped/arrangeWrapped) is
+ * implemented but not currently exercised by any real .ui.edn source.
  */
 public final class LayoutKernel {
     public static final int EXACTLY = 0;
@@ -238,6 +241,11 @@ public final class LayoutKernel {
         float gap = t.gap[node];
         int end = a.subtreeEnd[inst];
 
+        if (t.has(node, NodeFlags.WRAP)) {
+            return measureWrapped(t, a, ctx, inst, node, end, contentAvailW, contentAvailH,
+                    mainAvail, gap, row, availW, availH, modeW, modeH, wMode, wVal, hMode, hVal);
+        }
+
         int k = 0;
         float fixedMain = 0f;
         float maxCross = 0f;
@@ -281,6 +289,58 @@ public final class LayoutKernel {
         float measuredCross = resolveOwnAxis(row ? hMode : wMode, row ? hVal : wVal,
                 row ? modeH : modeW, row ? availH : availW, maxCross + padCross);
 
+        return row ? new float[]{measuredMain, measuredCross} : new float[]{measuredCross, measuredMain};
+    }
+
+    /**
+     * Greedy line-breaking measure: each child is measured against the
+     * full content box (not the shrinking remainder used by non-wrap flow,
+     * since a child that doesn't fit the current line just starts a new
+     * one instead of being squeezed). Weighted children are treated as
+     * fixed-size under wrap - flex-wrap + weight distribution is a real
+     * combination but adds a second dimension of complexity for a
+     * currently-unused one (see NodeFlags.WRAP call sites).
+     *
+     * The own main-axis size when auto is the available box, matching
+     * CSS flex-wrap (a wrapping row doesn't shrink-to-fit; only the
+     * cross axis grows to fit the wrapped lines).
+     */
+    private static float[] measureWrapped(NodeTable t, LayoutArena a, LayoutContext ctx, int inst, int node,
+                                           int end, float contentAvailW, float contentAvailH,
+                                           float mainAvail, float gap, boolean row,
+                                           float availW, float availH, int modeW, int modeH,
+                                           int wMode, float wVal, int hMode, float hVal) {
+        float lineMain = 0f;
+        float lineCross = 0f;
+        float totalCross = 0f;
+        boolean lineHasChild = false;
+        boolean anyLineClosed = false;
+
+        for (int c = firstChild(a, inst); c >= 0; c = nextSibling(a, c, end)) {
+            measure(t, a, ctx, c, contentAvailW, contentAvailH, AT_MOST, AT_MOST);
+            float childMain = outerMain(t, a, c, row);
+            float childCross = outerCross(t, a, c, row);
+            if (lineHasChild && lineMain + gap + childMain > mainAvail) {
+                totalCross += lineCross + (anyLineClosed ? gap : 0f);
+                anyLineClosed = true;
+                lineMain = childMain;
+                lineCross = childCross;
+            } else {
+                lineMain += (lineHasChild ? gap : 0f) + childMain;
+                lineCross = Math.max(lineCross, childCross);
+                lineHasChild = true;
+            }
+        }
+        if (lineHasChild) {
+            totalCross += lineCross + (anyLineClosed ? gap : 0f);
+        }
+
+        float padMain = row ? t.padL(node) + t.padR(node) : t.padT(node) + t.padB(node);
+        float padCross = row ? t.padT(node) + t.padB(node) : t.padL(node) + t.padR(node);
+        float measuredMain = resolveOwnAxis(row ? wMode : hMode, row ? wVal : hVal,
+                row ? modeW : modeH, row ? availW : availH, mainAvail + padMain);
+        float measuredCross = resolveOwnAxis(row ? hMode : wMode, row ? hVal : wVal,
+                row ? modeH : modeW, row ? availH : availW, totalCross + padCross);
         return row ? new float[]{measuredMain, measuredCross} : new float[]{measuredCross, measuredMain};
     }
 
@@ -357,6 +417,11 @@ public final class LayoutKernel {
         int node = a.nodeOf[inst];
         float gap = t.gap[node];
         int end = a.subtreeEnd[inst];
+
+        if (t.has(node, NodeFlags.WRAP)) {
+            arrangeWrapped(t, a, ctx, inst, node, end, cx, cy, cw, ch, row, clipIdx, gap);
+            return;
+        }
 
         int k = 0;
         float sumMain = 0f;
@@ -435,6 +500,117 @@ public final class LayoutKernel {
 
             cursor += mainSize + marginMainEnd;
         }
+    }
+
+    /**
+     * Re-derives the same greedy line partition measureWrapped used (children's
+     * measured sizes are already fixed by the time arrange runs, so the
+     * partition is deterministic without persisting break points) and
+     * positions one line at a time via placeLine, advancing the cross-axis
+     * cursor by each closed line's own cross size. Scrolling a wrapped
+     * container is not handled (no current .ui.edn combines :wrap with
+     * :scroll); see arrangeLinear's non-wrap branch for that offset.
+     */
+    private static void arrangeWrapped(NodeTable t, LayoutArena a, LayoutContext ctx, int inst, int node,
+                                        int end, float cx, float cy, float cw, float ch, boolean row,
+                                        int clipIdx, float gap) {
+        float mainAvail = row ? cw : ch;
+        int lineStart = firstChild(a, inst);
+        float lineMain = 0f;
+        boolean lineHasChild = false;
+        float crossCursor = 0f;
+
+        int c = lineStart;
+        while (c >= 0) {
+            float childMain = outerMain(t, a, c, row);
+            int next = nextSibling(a, c, end);
+            if (lineHasChild && lineMain + gap + childMain > mainAvail) {
+                float lineCross = placeLine(t, a, ctx, node, lineStart, c, end, cx, cy, cw, ch, row, clipIdx, crossCursor, gap);
+                crossCursor += lineCross + gap;
+                lineStart = c;
+                lineMain = childMain;
+            } else {
+                lineMain += (lineHasChild ? gap : 0f) + childMain;
+                lineHasChild = true;
+            }
+            c = next;
+        }
+        if (lineHasChild) {
+            placeLine(t, a, ctx, node, lineStart, end, end, cx, cy, cw, ch, row, clipIdx, crossCursor, gap);
+        }
+    }
+
+    /** Positions the children in [lineStart, lineEndExclusive) as one wrapped line; returns the line's own cross size. */
+    private static float placeLine(NodeTable t, LayoutArena a, LayoutContext ctx, int node,
+                                    int lineStart, int lineEndExclusive, int end,
+                                    float cx, float cy, float cw, float ch, boolean row, int clipIdx,
+                                    float crossOffset, float gap) {
+        float mainAvail = row ? cw : ch;
+
+        int k = 0;
+        float sumMain = 0f;
+        float lineCross = 0f;
+        for (int c = lineStart; c >= 0 && c < lineEndExclusive; c = nextSibling(a, c, end)) {
+            k++;
+            sumMain += outerMain(t, a, c, row);
+            lineCross = Math.max(lineCross, outerCross(t, a, c, row));
+        }
+        float usedMain = sumMain + gap * Math.max(0, k - 1);
+
+        float cursor;
+        float extraGap = 0f;
+        switch (t.justify[node]) {
+            case Justify.CENTER -> cursor = (mainAvail - usedMain) / 2f;
+            case Justify.END -> cursor = mainAvail - usedMain;
+            case Justify.SPACE_BETWEEN -> {
+                cursor = 0f;
+                extraGap = k > 1 ? (mainAvail - usedMain) / (k - 1) : 0f;
+            }
+            case Justify.SPACE_AROUND -> {
+                extraGap = k > 0 ? (mainAvail - usedMain) / k : 0f;
+                cursor = extraGap / 2f;
+            }
+            default -> cursor = 0f;
+        }
+
+        boolean first = true;
+        for (int c = lineStart; c >= 0 && c < lineEndExclusive; c = nextSibling(a, c, end)) {
+            int cNode = a.nodeOf[c];
+            if (!first) cursor += gap + extraGap;
+            first = false;
+
+            float mainSize = row ? a.measW(c) : a.measH(c);
+            float marginMainStart = row ? t.marginL(cNode) : t.marginT(cNode);
+            float marginMainEnd = row ? t.marginR(cNode) : t.marginB(cNode);
+            float marginCrossStart = row ? t.marginT(cNode) : t.marginL(cNode);
+            float marginCrossEnd = row ? t.marginB(cNode) : t.marginR(cNode);
+            float crossSize = row ? a.measH(c) : a.measW(c);
+
+            cursor += marginMainStart;
+
+            int align = t.alignSelf[cNode] != Align.INHERIT ? t.alignSelf[cNode] : t.alignItems[node];
+            float crossPos;
+            float finalCross = crossSize;
+            switch (align) {
+                case Align.CENTER -> crossPos = crossOffset + (lineCross - crossSize) / 2f;
+                case Align.END -> crossPos = crossOffset + lineCross - crossSize - marginCrossEnd;
+                case Align.STRETCH -> {
+                    crossPos = crossOffset + marginCrossStart;
+                    finalCross = Math.max(0f, lineCross - marginCrossStart - marginCrossEnd);
+                }
+                default -> crossPos = crossOffset + marginCrossStart;
+            }
+
+            float childX = row ? cx + cursor : cx + crossPos;
+            float childY = row ? cy + crossPos : cy + cursor;
+            float childW = row ? mainSize : finalCross;
+            float childH = row ? finalCross : mainSize;
+
+            arrange(t, a, ctx, c, childX, childY, childW, childH, clipIdx);
+
+            cursor += mainSize + marginMainEnd;
+        }
+        return lineCross;
     }
 
     private static void arrangeFree(NodeTable t, LayoutArena a, LayoutContext ctx, int inst,
