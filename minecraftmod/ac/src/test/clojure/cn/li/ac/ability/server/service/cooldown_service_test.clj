@@ -32,7 +32,7 @@
   ;; All declarations receive one context map; this is the only runtime shape.
   (is (= 60 (svc/resolve-ticks {:cooldown-ticks (fn [{:keys [exp]}] (* 120 (- 1.0 exp)))} ctx)))
   (testing "fractional ticks round rather than truncate"
-    (is (= 61 (svc/resolve-ticks {:cooldown-ticks (fn [_] 60.6)} ctx))))))
+    (is (= 61 (svc/resolve-ticks {:cooldown-ticks (fn [_] 60.6)} ctx)))))
 (deftest hud-estimate-resolves-to-the-applied-duration-test
   ;; build-skill-slot-shape carries the declaration, patch-skill-slot-cooldown
   ;; resolves it — both through the same rule the apply paths use, so an idle
