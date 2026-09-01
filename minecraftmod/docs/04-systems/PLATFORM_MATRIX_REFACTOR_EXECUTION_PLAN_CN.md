@@ -135,6 +135,8 @@ cmd /c platform-builds\gradle-9.7.1\gradlew.bat :platform:check :platform:jar "-
 
 在上述修复后逐目标重跑发布构建：Forge 1.20.1（91 tasks）、Fabric 1.20.1/1.21.1（各 91）、NeoForge 1.21.1（91）、NeoForge 26.2（74，按 Gradle 9.2 工具链排除无发现测试任务）和 Fabric 26.2（70）均完成 datagen、check 与最终 Jar。六个 Jar 实物扫描均为 `meta=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；26.2 两个 source-first 目标均 `platform AOT=0`。NeoForge 26.2 的 `:tools:target-launcher:test`/空测试发现错误属于 Gradle 9.2 配置行为，已通过 `-x test` 排除，平台 Clojure check、编译、datagen、Jar 和 XOR 门禁仍完整执行。
 
+在当前提交 `0d80e7c14` 上再次执行根工程回归与全部架构门禁：`cmd /c gradlew.bat test verifyCorePerformance verifyOptionalIntegrations verifyNoCompatibilityResidues verifyNoDuplicateCapabilities verifyNoLegacyArchitecture verifyCurrentPlatforms --stacktrace` 成功（126 actionable tasks，0 failures）。同时重新扫描六个目标的最新 `platform/libs/AcademyCraft-*.jar`，六个目标均满足 `metadata=1|manifest=1|jeiWrapper=1|embeddedJei=0|embeddedIc2=0|classSourceOverlap=0`；该扫描使用归一化完整相对路径，避免仅按 basename 造成误报。当前剩余唯一发布前外部步骤仍是用户接受 EULA 后采集代表性游戏内 JFR。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。
