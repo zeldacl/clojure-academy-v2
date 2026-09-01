@@ -102,6 +102,49 @@
     (is (= 200.0 (double (aget (.geom dl2) 2))))
     (is (= 200.0 (double (aget (.geom dl2) 3))))))
 
+(deftest a-no-op-dispatch-does-not-invalidate-a-clean-paint
+  ;; dispatch! and extract-stage! share the same layout-freshness stamp
+  ;; (ensure-layout-current!) but must NOT share paint freshness the same
+  ;; way -- a pointer move that changes nothing must leave the next
+  ;; extract-stage! free to keep reusing the already-painted UiDrawList.
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/dispatch-paint-share
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :bind {:rgba [:state :color]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:color (unchecked-int 0xFF00FF00)}})
+        dl1 (extracted-commands rt mount :screen 100 100)]
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 5.0 :y 5.0})
+    (let [dl2 (-> (runtime/extract-stage! rt :screen {:width 100 :height 100}) :mounts first :commands)]
+      (is (identical? dl1 dl2)))))
+
+(deftest dispatch-triggered-state-change-invalidates-the-next-extract
+  ;; The hazard this guards against: dispatch! updates the layout stamp
+  ;; (it needed a current arena for hit-testing) but the reducer's state
+  ;; change happens AFTER that hit-test, via present!, which never touches
+  ;; the layout/paint stamps at all. The next extract-stage! must still
+  ;; detect the binding change and repaint -- not be fooled by dispatch!
+  ;; having already "seen" a matching stamp for the pre-toggle state.
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/dispatch-invalidate
+                           {:key :root :flags #{:hit-testable} :width [:fixed 20.0] :height [:fixed 10.0]
+                            :on {:activate :demo/toggle}
+                            :children [{:op UiOp/RECT :width [:fill 1.0] :height [:fill 1.0]
+                                       :bind {:rgba [:state :color]}}]})
+        mount (runtime/mount!
+               rt {:host {:stage :screen} :artifact artifact
+                   :state {:color (unchecked-int 0xFF00FF00)}
+                   :reduce (fn [state action _payload]
+                             (if (= action :demo/toggle)
+                               {:state (assoc state :color (unchecked-int 0xFFFF0000)) :event-result :consume}
+                               {:state state :event-result :pass}))})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        dl1-rgba (aget (.rgba dl1) 0)]
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5.0 :y 5.0 :button 0})
+    (let [dl2 (-> (runtime/extract-stage! rt :screen {:width 100 :height 100}) :mounts first :commands)]
+      (is (= (unchecked-int 0xFF00FF00) dl1-rgba))
+      (is (= (unchecked-int 0xFFFF0000) (aget (.rgba dl2) 0))))))
+
 (deftest bound-text-resolves-through-item-label-coercion
   (let [rt (runtime/create-runtime)
         artifact (ta/build :academy/test/button

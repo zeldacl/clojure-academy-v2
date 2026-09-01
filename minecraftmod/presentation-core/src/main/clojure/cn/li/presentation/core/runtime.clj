@@ -43,31 +43,48 @@
 
 (defn- runtime-state [^UiRuntime runtime] @(:state runtime))
 
+(defn- stage-geometry-stale?
+  "Cheap pre-check (int compares against the existing HostGeometry's own
+   fields, no new HostGeometry constructed) so the O(#mounts) map rebuild
+   below only runs when a real-frame width/height change actually happened,
+   not on every single extract-stage! call regardless of memoization -- this
+   was the dominant remaining allocation source in a 'clean frame', found by
+   PresentationRuntimeBenchmark measuring real B/op instead of just identity."
+  [mounts stage width height]
+  (boolean
+   (some (fn [[_ instance]]
+           (and (= stage (get-in instance [:host :stage]))
+                (let [^HostGeometry g (:geometry instance)]
+                  (or (not= (.viewportWidth g) width) (not= (.viewportHeight g) height)))))
+         mounts)))
+
 (defn- update-stage-geometry! [^UiRuntime runtime stage frame-context]
   (let [width (:width frame-context)
         height (:height frame-context)]
     (when (and (map? frame-context) (number? width) (number? height)
                (pos? width) (pos? height))
-      (vswap! (:state runtime)
-              (fn [snapshot]
-                (update snapshot :mounts
-                        (fn [mounts]
-                          (reduce-kv
-                           (fn [result mount instance]
-                             (if (= stage (get-in instance [:host :stage]))
-                               (let [geometry (:geometry instance)
-                                     next-geometry (HostGeometry.
-                                                    (.originX ^HostGeometry geometry)
-                                                    (.originY ^HostGeometry geometry)
-                                                    (int width)
-                                                    (int height)
-                                                    (.scale ^HostGeometry geometry))]
-                                 (assoc result mount
-                                        (if (= geometry next-geometry)
-                                          instance
-                                          (assoc instance :geometry next-geometry))))
-                               (assoc result mount instance)))
-                           {} mounts))))))))
+      (let [width (int width) height (int height)]
+        (when (stage-geometry-stale? (:mounts (runtime-state runtime)) stage width height)
+          (vswap! (:state runtime)
+                  (fn [snapshot]
+                    (update snapshot :mounts
+                            (fn [mounts]
+                              (reduce-kv
+                               (fn [result mount instance]
+                                 (if (= stage (get-in instance [:host :stage]))
+                                   (let [geometry (:geometry instance)
+                                         next-geometry (HostGeometry.
+                                                        (.originX ^HostGeometry geometry)
+                                                        (.originY ^HostGeometry geometry)
+                                                        width
+                                                        height
+                                                        (.scale ^HostGeometry geometry))]
+                                     (assoc result mount
+                                            (if (= geometry next-geometry)
+                                              instance
+                                              (assoc instance :geometry next-geometry))))
+                                   (assoc result mount instance)))
+                               {} mounts))))))))))
 
 ;; ============================== BindResolver ==============================
 
@@ -200,9 +217,24 @@
                   :arena (LayoutArena. 64)
                   :cmdbuf (CmdBuf. 64)
                   :memo (MemoState. (max 1 (long (:binding-count artifact 0))) 1)
-                  :last-stamp nil
-                  :last-rect nil
-                  :last-metrics-epoch -1
+                  :bind-scratch (object-array (max 1 (long (:binding-count artifact 0))))
+                  ;; (subvec path 1) sliced once here instead of every frame
+                  ;; in resolve-bindings! -- :bindings is fixed per artifact.
+                  :bind-rest-paths (mapv (fn [{:keys [id path]}] [(int id) (subvec path 1)])
+                                         (:bindings artifact))
+                  ;; layout-* tracks what the committed arena/root currently
+                  ;; reflects; paint-*/last-result track what :commands
+                  ;; currently reflects. Kept separate because dispatch!
+                  ;; (hit-testing) only ever needs layout to be current,
+                  ;; while extract-stage! (rendering) needs both -- an input
+                  ;; event that only re-runs layout must not let extract-
+                  ;; stage! believe a stale paint is still valid just because
+                  ;; the layout stamp now matches.
+                  :layout-stamp nil
+                  :layout-geometry nil
+                  :layout-metrics-epoch -1
+                  :paint-stamp nil
+                  :last-result nil
                   :root-instance -1
                   :commands nil
                   :focus nil
@@ -238,8 +270,14 @@
 
 (defn update-host! [^UiRuntime runtime mount ^HostGeometry geometry]
   (owner-thread! runtime)
-  (instance! runtime mount)
-  (vswap! (:state runtime) assoc-in [:mounts mount :geometry] geometry)
+  (let [current (:geometry (instance! runtime mount))]
+    ;; Real callers (and update-stage-geometry! below) construct a fresh
+    ;; HostGeometry every call regardless of whether anything actually
+    ;; changed. Keeping the OLD reference when the new one is only
+    ;; value-equal is what lets extract-stage!'s identical? geometry check
+    ;; -- and therefore whole-tree memoization -- ever hit in practice.
+    (when-not (= current geometry)
+      (vswap! (:state runtime) assoc-in [:mounts mount :geometry] geometry)))
   geometry)
 
 ;; ============================== layout ==============================
@@ -271,10 +309,23 @@
         (aset arr (int idx) (float v))))
     arr))
 
+(defn- resolve-bindings!
+  "Refreshes `out` -- a per-mount scratch array allocated once in mount!
+   and reused every frame, never allocated fresh here -- with every
+   :state-scoped binding's current value. MemoState.refreshRevs only reads
+   this array (copying values it hasn't seen before into its own lastVal
+   slots); it never retains the array itself, so reuse is safe."
+  [^objects out bind-rest-paths state]
+  (doseq [[id rest-path] bind-rest-paths]
+    (aset out (int id) (get-in state rest-path)))
+  out)
+
 (defn- ensure-layout!
-  "Always fully recomputes measure+arrange from current state (see the
-   namespace docstring on why memoization isn't wired yet). Returns the
-   root instance index, or -1 for an empty table."
+  "Unconditionally recomputes measure+arrange from current state. Callers
+   that care about cost should go through ensure-layout-current! instead,
+   which only calls this when MemoKernel says the committed arena is
+   actually stale. Returns the root instance index, or -1 for an empty
+   table."
   [instance]
   (let [^NodeTable table (:table instance)
         ^LayoutArena arena (:arena instance)
@@ -288,6 +339,33 @@
                              LayoutKernel/EXACTLY LayoutKernel/EXACTLY)
       (LayoutKernel/arrange table arena ctx root (:x rect) (:y rect) (:width rect) (:height rect) -1))
     root))
+
+(defn- ensure-layout-current!
+  "The shared memoization gate for layout: refreshes bindings (always
+   O(#bindings), needed to even know whether anything changed), then only
+   calls ensure-layout! when MemoKernel says the committed arena is stale.
+   dispatch! (hit-testing needs nothing beyond a current arena) and
+   extract-stage! (which additionally decides whether to skip repainting)
+   both go through this single check, so a pointer move alone never
+   triggers a full re-layout when nothing bound has changed -- see
+   PresentationRuntimeBenchmark.hoverPointerMove."
+  [instance]
+  (let [^MemoState memo (:memo instance)
+        ^NodeTable table (:table instance)
+        ^UiTextMetrics metrics (presentation-bridge/current-text-metrics)
+        metrics-epoch (when metrics (.epoch metrics))
+        geometry (:geometry instance)
+        geometry-unchanged? (identical? geometry (:layout-geometry instance))]
+    (resolve-bindings! (:bind-scratch instance) (:bind-rest-paths instance) (:view-state instance))
+    (.refreshRevs memo (:bind-scratch instance))
+    (when-not geometry-unchanged? (.invalidateGeometry memo))
+    (when (and metrics-epoch (not= metrics-epoch (:layout-metrics-epoch instance)))
+      (.invalidateMetrics memo))
+    (let [scroll-rev (long (hash (:scroll-offsets instance)))
+          stamp (when (pos? (.-n table)) (MemoKernel/subtreeStamp memo table 0 scroll-rev))
+          fresh? (boolean (and stamp (= stamp (:layout-stamp instance)) geometry-unchanged?))]
+      {:stamp stamp :geometry geometry :metrics-epoch metrics-epoch :fresh? fresh?
+       :root (if fresh? (:root-instance instance) (ensure-layout! instance))})))
 
 (defn- scroll-extent
   "Sum of the scroll node's children's own main-axis extent (the total
@@ -456,8 +534,17 @@
   "Route one neutral input or explicit action through the pure reducer, then effects."
   [^UiRuntime runtime mount event]
   (owner-thread! runtime)
-  (let [instance (instance! runtime mount)
-        instance (assoc instance :root-instance (ensure-layout! instance))
+  (let [instance0 (instance! runtime mount)
+        {:keys [root stamp geometry metrics-epoch fresh?]} (ensure-layout-current! instance0)
+        _ (when-not fresh?
+            (vswap! (:state runtime)
+                    (fn [snapshot]
+                      (-> snapshot
+                          (assoc-in [:mounts mount :root-instance] root)
+                          (assoc-in [:mounts mount :layout-stamp] stamp)
+                          (assoc-in [:mounts mount :layout-geometry] geometry)
+                          (assoc-in [:mounts mount :layout-metrics-epoch] metrics-epoch)))))
+        instance (assoc instance0 :root-instance root)
         routed (routed-event instance event)
         {:keys [action payload focus]} routed
         focus (or focus (:focus instance))
@@ -486,19 +573,13 @@
 
 ;; ============================== extract ==============================
 
-(defn- resolve-bindings
-  "Flat Object[] of every :state-scoped binding's current value, indexed by
-   the compiler-assigned binding id -- the one array MemoState.refreshRevs
-   needs to tell which of a view's ~handful of bindings actually changed
-   this frame, in O(#bindings) rather than O(#nodes)."
-  ^objects [artifact state]
-  (let [bindings (:bindings artifact)
-        out (object-array (max 1 (long (:binding-count artifact 0))))]
-    (doseq [{:keys [id path]} bindings]
-      (aset out (int id) (get-in state (subvec path 1))))
-    out))
-
 (defn extract-stage!
+  "On a clean frame (no binding, scroll, geometry, or font-metrics change
+   since the last extraction) this returns the exact same per-mount result
+   map as last time, with zero allocation beyond the O(#bindings) scratch-
+   array refresh every frame always pays to detect that nothing changed —
+   see PresentationRuntimeBenchmark's cleanFrameExtract for the number this
+   is held to (refactor plan §13's acceptance target)."
   [^UiRuntime runtime stage frame-context]
   (owner-thread! runtime)
   (update-stage-geometry! runtime stage frame-context)
@@ -508,40 +589,35 @@
     {:stage stage
      :frame-context frame-context
      :mounts (mapv (fn [instance]
-                     (let [^MemoState memo (:memo instance)
-                           ^NodeTable table (:table instance)
-                           ^LayoutArena arena (:arena instance)
-                           ^UiTextMetrics metrics (presentation-bridge/current-text-metrics)
-                           metrics-epoch (when metrics (.epoch metrics))
-                           rect (content-rect (:artifact instance) (:geometry instance))
-                           scroll-rev (long (hash (:scroll-offsets instance)))]
-                       (.refreshRevs memo (resolve-bindings (:artifact instance) (:view-state instance)))
-                       (when (not= rect (:last-rect instance)) (.invalidateGeometry memo))
-                       (when (and metrics-epoch (not= metrics-epoch (:last-metrics-epoch instance)))
-                         (.invalidateMetrics memo))
-                       (let [stamp (when (pos? (.-n table)) (MemoKernel/subtreeStamp memo table 0 scroll-rev))
-                             reusable? (and stamp (= stamp (:last-stamp instance)) (:commands instance))
-                             [root commands]
-                             (if reusable?
-                               [(:root-instance instance) (:commands instance)]
-                               (let [root (ensure-layout! instance)
-                                     ^CmdBuf cmdbuf (:cmdbuf instance)
-                                     resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
-                                     ctx (LayoutContext. resolver nil nil)]
-                                 (.reset cmdbuf)
-                                 (when (>= root 0)
-                                   (PaintKernel/paint table arena ctx cmdbuf root))
-                                 [root (.finish cmdbuf 0 (.-clipRects arena) (.-resources table))]))]
+                     (let [{:keys [root stamp geometry metrics-epoch fresh?]} (ensure-layout-current! instance)
+                           paint-fresh? (and fresh? (= stamp (:paint-stamp instance)) (:last-result instance))]
+                       (when-not fresh?
                          (vswap! (:state runtime)
                                  (fn [snapshot]
                                    (-> snapshot
                                        (assoc-in [:mounts (:handle instance) :root-instance] root)
-                                       (assoc-in [:mounts (:handle instance) :commands] commands)
-                                       (assoc-in [:mounts (:handle instance) :last-stamp] stamp)
-                                       (assoc-in [:mounts (:handle instance) :last-rect] rect)
-                                       (assoc-in [:mounts (:handle instance) :last-metrics-epoch] metrics-epoch))))
-                         (assoc (select-keys instance [:handle :view-id :geometry])
-                                :commands commands))))
+                                       (assoc-in [:mounts (:handle instance) :layout-stamp] stamp)
+                                       (assoc-in [:mounts (:handle instance) :layout-geometry] geometry)
+                                       (assoc-in [:mounts (:handle instance) :layout-metrics-epoch] metrics-epoch)))))
+                       (if paint-fresh?
+                         (:last-result instance)
+                         (let [^NodeTable table (:table instance)
+                               ^LayoutArena arena (:arena instance)
+                               ^CmdBuf cmdbuf (:cmdbuf instance)
+                               resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+                               ctx (LayoutContext. resolver nil nil)
+                               _ (.reset cmdbuf)
+                               _ (when (>= root 0) (PaintKernel/paint table arena ctx cmdbuf root))
+                               commands (.finish cmdbuf 0 (.-clipRects arena) (.-resources table))
+                               result (assoc (select-keys instance [:handle :view-id :geometry])
+                                             :commands commands)]
+                           (vswap! (:state runtime)
+                                   (fn [snapshot]
+                                     (-> snapshot
+                                         (assoc-in [:mounts (:handle instance) :commands] commands)
+                                         (assoc-in [:mounts (:handle instance) :paint-stamp] stamp)
+                                         (assoc-in [:mounts (:handle instance) :last-result] result))))
+                           result))))
                    instances)}))
 
 (defn semantics [^UiRuntime runtime mount]
