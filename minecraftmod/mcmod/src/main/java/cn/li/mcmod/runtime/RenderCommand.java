@@ -32,10 +32,6 @@ public sealed interface RenderCommand
             text = text == null ? "" : text;
             if (fontSize <= 0.0f) fontSize = 8.0f;
         }
-        /** Backward-compatible ctor; default MSDF size matches tutorial markdown. */
-        public UiText(int fontId, String text, float x, float y, int rgba) {
-            this(fontId, text, x, y, rgba, 8.0f);
-        }
     }
     record UiItemPreview(int itemId, float x, float y, float scale) implements RenderCommand {}
     record UiModelPreview(String modelId, float x, float y, float width, float height) implements RenderCommand {

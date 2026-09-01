@@ -158,6 +158,8 @@ seam 文件不是“只能原样复制”的禁区；正确顺序是先在各目
 
 本次 seam 清理不改变 tick/render 的调用形态：共享 seam 仍是静态 Java 方法，版本特有 API 仍在目标编译期绑定；不引入每次调用的 map 查找、反射、临时集合或包装对象。删除空壳/转发类反而减少类加载、链接和 AOT/Loom 扫描成本。执行删除后必须重新跑六目标 `compileJava`，并跑 `verifyNoThinForwarders`、`verifyNoCompatibilityResidues`、`verifyVersionSeamParity`；任何目标出现缺失 owner 或 class/source 重叠都立即停止提升并回退该单个候选。
 
+本轮复审还收敛了两个 AC 内部双轨入口：技能 cost/cooldown/creative 函数现在只接收一个 context map，删除 `ArityException` 的位置参数回退和多余 `apply-cost!` 旧入口；开发者完成回调只通过中立 hooks 的 UUID 查询取得权威在线玩家，reset 在玩家不可用或物品校验失败时不再绕过校验，也不会清理未执行的会话。该查询不进入 tick 热路径，hooks 注册在平台网络初始化时完成。
+
 ## 明确排除的矛盾方案
 
 - 不保留“source-first 默认 + full-AOT 开关”两套方案；目标 profile 是唯一选择。

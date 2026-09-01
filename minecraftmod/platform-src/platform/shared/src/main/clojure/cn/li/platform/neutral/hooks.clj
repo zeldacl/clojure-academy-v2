@@ -24,7 +24,7 @@
     build-sync-payload player-state-dirty? mark-player-clean! get-player-state
     runtime-activated? sync-player-state! ensure-player-state! fresh-player-state
     register-network-handlers! subscribe-achievement-trigger! register-context-route-fns!
-    register-context-send-fns! get-context-player-uuid register-damage-handler!
+    register-context-send-fns! get-context-player-uuid find-player-by-uuid register-damage-handler!
     unregister-damage-handler! get-active-damage-handlers process-damage-interception
     should-cancel-attack-interception? run-attack-precheck-side-effects!
     resolve-item-use-action on-runtime-item-action! build-item-use-plan compute-aoe-damage
@@ -61,7 +61,7 @@
          build-sync-payload player-state-dirty? mark-player-clean! get-player-state
          runtime-activated? sync-player-state! ensure-player-state! fresh-player-state
          register-network-handlers! subscribe-achievement-trigger! register-context-route-fns!
-         register-context-send-fns! get-context-player-uuid register-damage-handler!
+         register-context-send-fns! get-context-player-uuid find-player-by-uuid register-damage-handler!
          unregister-damage-handler! get-active-damage-handlers process-damage-interception
          should-cancel-attack-interception? run-attack-precheck-side-effects!
          resolve-item-use-action on-runtime-item-action! build-item-use-plan compute-aoe-damage

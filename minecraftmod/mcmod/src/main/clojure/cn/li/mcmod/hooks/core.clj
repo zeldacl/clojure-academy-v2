@@ -48,6 +48,7 @@
    :register-context-route-fns! noop
    :register-context-send-fns! noop
    :get-context-player-uuid (fn [_] nil)
+   :find-player-by-uuid (fn [_] nil)
    :register-damage-handler! (fn [_ _ _] false)
    :unregister-damage-handler! (fn [_] false)
    :get-active-damage-handlers (fn [] [])
@@ -393,6 +394,10 @@
     (update-hooks-core-state! merge validated)
     (publish-hot-client-hooks! validated))
   nil)
+(defn find-player-by-uuid
+  "Resolve a live server player through the platform-installed neutral hook."
+  [uuid-str]
+  ((:find-player-by-uuid (hooks-core-state-snapshot)) uuid-str))
 
 (defn register-action!
   "Register a content-owned action descriptor through the neutral registry."

@@ -229,60 +229,51 @@
                     (assoc :development-data ticked :development-progress prog)
                     (update :energy - ept))))))))))
 
-(defn- run-completion-command! [player-uuid action payload session-id & [player]]
+(defn- run-completion-command! [player-uuid action payload session-id player]
   (let [session-id (or session-id
                        (runtime-hooks/require-player-state-session-id "developer.session"))]
     (case action
       :awaken
-      (command-rt/run-command-in-session!
-        session-id player-uuid
-        {:command :change-category :new-category (:target-category payload)})
+      (do (command-rt/run-command-in-session!
+            session-id player-uuid
+            {:command :change-category :new-category (:target-category payload)})
+          true)
       :level-up
-      (command-rt/run-command-in-session!
-        session-id player-uuid {:command :level-up :force? true})
+      (do (command-rt/run-command-in-session!
+            session-id player-uuid {:command :level-up :force? true})
+          true)
       :learn-skill
-      (command-rt/run-command-in-session!
-        session-id player-uuid
-        {:command :learn-skill
-         :skill-id (:skill-id payload)
-         :check-conditions? false})
+      (do (command-rt/run-command-in-session!
+            session-id player-uuid
+            {:command :learn-skill
+             :skill-id (:skill-id payload)
+             :check-conditions? false})
+          true)
       :reset
-      ;; Items consumed at COMPLETION time (matching original onLearned timing).
-      ;; Re-validate: magnetic coil in main hand + induction factor in inventory.
-      (if player
+      (when player
         (let [item-id (:induction-item-id payload)
               coil-ok? (= special-items/magnetic-coil-item-id
                           (entity/player-get-main-hand-item-id player))
               factor-ok? (and item-id
                               (pos? (entity/player-count-item-by-id player item-id)))]
-          (if (and coil-ok? factor-ok?)
-            (do
-              (entity/player-consume-main-hand-item! player 1)
-              (entity/player-consume-item-by-id! player item-id 1)
-              (command-rt/run-command-in-session!
-                session-id player-uuid
-                {:command :change-category-with-level
-                 :new-category (:target-category payload)
-                 :new-level (:new-level payload)}))
-            nil))
-        ;; Fallback: no player reference, apply anyway (backward compat)
-        (command-rt/run-command-in-session!
-          session-id player-uuid
-          {:command :change-category-with-level
-           :new-category (:target-category payload)
-           :new-level (:new-level payload)}))
-      nil)))
-
+          (when (and coil-ok? factor-ok?)
+            (entity/player-consume-main-hand-item! player 1)
+            (entity/player-consume-item-by-id! player item-id 1)
+            (command-rt/run-command-in-session!
+              session-id player-uuid
+              {:command :change-category-with-level
+               :new-category (:target-category payload)
+               :new-level (:new-level payload)})
+            true)))
+      false)))
 (defn apply-completion!
-  ;; Apply completed development. For :reset action, consumes magnetic coil +
-  ;; induction factor at completion time (matching original onLearned timing).
-  ([state] (apply-completion! state nil))
-  ([state player]
-   (when (:development-complete? state)
-     (let [pid (str (:user-uuid state ""))]
-       (when-not (str/blank? pid)
-         (run-completion-command! pid
-                                  (:development-action state)
-                                  (:development-payload state)
-                                  (:player-state-session-id state)
-                                  player))))))
+  "Apply completed development once the authoritative player is available.
+  Reset always revalidates and consumes its items at completion time."
+  [state player]
+  (when (and (:development-complete? state)
+             (not (str/blank? (str (:user-uuid state "")))))
+    (run-completion-command! (str (:user-uuid state))
+                              (:development-action state)
+                              (:development-payload state)
+                              (:player-state-session-id state)
+                              player)))

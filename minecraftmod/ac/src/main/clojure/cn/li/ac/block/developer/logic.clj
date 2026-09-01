@@ -14,7 +14,9 @@
 						[cn.li.ac.block.developer.schema :as dev-schema]
 						[cn.li.ac.block.developer.session :as dev-session]
 						[cn.li.ac.block.energy-converter.wireless-impl :as wireless-impl]
-						[cn.li.mcmod.util.log :as log]))
+						[cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+))
 
 (def ^:private dev-rt
 	(machine-runtime/schema-runtime dev-schema/developer-schema :server-only? true))
@@ -105,8 +107,10 @@
 (defn- developer-after-commit!
 	[be _level _pos _old-state new-state]
 	(when (:development-complete? new-state)
-		(dev-session/apply-completion! new-state)
-		(machine-runtime/commit-transform! be dev-default-state dev-session/clear-session)))
+		(let [player (when-let [pid (not-empty (str (:user-uuid new-state "")))]
+					 (runtime-hooks/find-player-by-uuid pid))]
+			(when (dev-session/apply-completion! new-state player)
+				(machine-runtime/commit-transform! be dev-default-state dev-session/clear-session)))))
 
 (defn developer-tick-state [state level pos _block-state be]
 	(let [ticker (machine-runtime/advance-tick! state)

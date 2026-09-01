@@ -879,24 +879,12 @@
   [value scale]
   (cond
     (fn? value)
-    ;; Cost/cooldown fns are called either with a ctx map (current convention)
-    ;; or legacy positional (player-id skill-id exp) — the scaled wrapper must
-    ;; accept both, delegating to whichever arity `value` implements.
+    ;; Cost/cooldown fns receive one context map. Keeping this wrapper at a
+    ;; single arity avoids compatibility dispatch in the server hot path.
     (fn scaled
-      ([ctx]
-       (* (double scale)
-          (double (or (try
-                        (value ctx)
-                        (catch clojure.lang.ArityException _
-                          (value (:player-id ctx) (:skill-id ctx) (double (or (:exp ctx) 0.0)))))
-                      0.0))))
-      ([player-id skill-id exp]
-       (* (double scale)
-          (double (or (try
-                        (value player-id skill-id exp)
-                        (catch clojure.lang.ArityException _
-                          (value {:player-id player-id :skill-id skill-id :exp exp})))
-                      0.0)))))
+      [ctx]
+      (* (double scale)
+         (double (or (value ctx) 0.0))))
 
     (number? value)
     (* (double scale) (double value))

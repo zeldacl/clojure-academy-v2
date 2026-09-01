@@ -127,17 +127,15 @@
   true)
 
 (defn- resolve-val
-  ([v player-id skill-id exp]
-   (cond
-     (number? v) (double v)
-     (fn? v) (double (or (try
-                           (v player-id skill-id exp)
-                           (catch clojure.lang.ArityException _
-                             (v {:player-id player-id :skill-id skill-id :exp exp})))
-                         0.0))
-     :else 0.0))
-  ([v evt]
-   (resolve-val v (:player-id evt) (:skill-id evt) (double (or (:exp evt) 0.0)))))
+  [v {:keys [player-id skill-id exp] :as ctx}]
+  (cond
+    (number? v) (double v)
+    (fn? v) (double (or (v (assoc ctx
+                                  :player-id player-id
+                                  :skill-id skill-id
+                                  :exp (double (or exp 0.0))))
+                        0.0))
+    :else 0.0))
 
 (defn- runtime-scaled-cost
   [cost-spec]
@@ -147,49 +145,30 @@
      :overload (* (cfg/runtime-overload-per-tick) overload-speed)}))
 
 (defn apply-cost!
-  "Apply stage cost for a skill spec.
-  Scales cp/overload by the skill's per-skill speed multipliers.
-  Returns true when cost is paid or no cost is defined."
-  ([spec stage player-id skill-id exp]
-   (apply-cost! spec stage player-id skill-id exp nil))
-  ([spec stage player-id skill-id exp player-ref]
-   (let [cost-spec (get-in spec [:cost stage])]
-     (if-not (map? cost-spec)
-       true
-       (let [computed (if (= :runtime-speed (:mode cost-spec))
-                        (runtime-scaled-cost cost-spec)
-                        cost-spec)
-             cp-raw (resolve-val (:cp computed) player-id skill-id exp)
-             overload-raw (resolve-val (:overload computed) player-id skill-id exp)
-             cp-speed (double (or (:cp-consume-speed spec) 1.0))
-             ol-speed (double (or (:overload-consume-speed spec) 1.0))
-             cp (* cp-raw cp-speed)
-             overload (* overload-raw ol-speed)
-             creative-raw (:creative? computed)
-             creative? (boolean (if (fn? creative-raw)
-                                  (try
-                                    (creative-raw player-id skill-id exp player-ref)
-                                    (catch clojure.lang.ArityException _
-                                      (try
-                                        (creative-raw player-id skill-id exp)
-                                        (catch clojure.lang.ArityException _
-                                          (creative-raw {:player-id player-id
-                                                         :skill-id skill-id
-                                                         :exp exp
-                                                         :player-ref player-ref})))))
-                                  creative-raw))]
-         (if (and (zero? cp) (zero? overload))
-           true
-           (let [{:keys [success?]} (perform-resource! player-id overload cp creative?)]
-             (boolean success?)))))))
-  ;; Legacy evt-map arity for tests and transitional call sites.
-  ([spec stage evt]
-   (apply-cost! spec
-                stage
-                (:player-id evt)
-                (:skill-id evt)
-                (double (or (:exp evt) 0.0))
-                (:player-ref evt))))
+  "Apply stage cost for a skill event.
+  Cost and creative predicates receive the event context map only."
+  [spec stage {:keys [player-id skill-id exp player-ref] :as evt}]
+  (let [cost-spec (get-in spec [:cost stage])]
+    (if-not (map? cost-spec)
+      true
+      (let [computed (if (= :runtime-speed (:mode cost-spec))
+                       (runtime-scaled-cost cost-spec)
+                       cost-spec)
+            ctx {:player-id player-id :skill-id skill-id :exp exp :player-ref player-ref}
+            cp-raw (resolve-val (:cp computed) ctx)
+            overload-raw (resolve-val (:overload computed) ctx)
+            cp-speed (double (or (:cp-consume-speed spec) 1.0))
+            ol-speed (double (or (:overload-consume-speed spec) 1.0))
+            cp (* cp-raw cp-speed)
+            overload (* overload-raw ol-speed)
+            creative-raw (:creative? computed)
+            creative? (boolean (if (fn? creative-raw)
+                                 (creative-raw ctx)
+                                 creative-raw))]
+        (if (and (zero? cp) (zero? overload))
+          true
+          (let [{:keys [success?]} (perform-resource! player-id overload cp creative?)]
+            (boolean success?)))))))
 
 (defn apply-cooldown!
   "Apply cooldown for skill according to ctrl-id and cooldown-policy."
