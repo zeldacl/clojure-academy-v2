@@ -1,4 +1,4 @@
-{:ui/schema 1 :view/id :academy.app/ability-interferer
+{:ui/schema 2 :view/id :academy.app/ability-interferer
  :host {:kind :container :design-width 320 :design-height 220 :scale-policy :fit}
  :state-schema {:slots :vector :slot-anchors :vector :machine-state :string :energy-ratio :number
                 :interferer-range :string :interferer-enabled :string

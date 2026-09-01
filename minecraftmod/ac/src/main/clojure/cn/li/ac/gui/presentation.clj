@@ -5,7 +5,6 @@
    namespace owns artifact lookup, mount geometry, deterministic paint,
    and the opaque host bridge; it exposes no renderer implementation details."
   (:require [cn.li.presentation.core.artifact :as artifact]
-            [cn.li.presentation.core.paint :as paint]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log])
@@ -76,8 +75,7 @@
                 :state state
                 :reduce reduce*
                 :run-effect! (or run-effect! (fn [_] nil))
-                :close! (fn [_] (when on-close (on-close)))
-                :paint-fn paint/paint-view})]
+                :close! (fn [_] (when on-close (on-close)))})]
     {:mount mount
      :view-id view-id
      :artifact artifact

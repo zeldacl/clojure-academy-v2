@@ -15,7 +15,8 @@
   (:require [cn.li.mcmod.runtime.presentation-backend :as neutral]
             [cn.li.mc1201.gui.cgui.font :as cgui-font])
   (:import [cn.li.mcmod.runtime FramePacket RenderCommand RenderCommand$Batch
-            RenderCommand$Beam RenderCommand$Billboard RenderCommand$CameraContribution
+            RenderCommand$AudioContribution RenderCommand$Beam RenderCommand$Billboard
+            RenderCommand$CameraContribution
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PostProcess
             RenderCommand$Ribbon RenderPass

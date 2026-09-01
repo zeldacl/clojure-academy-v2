@@ -107,9 +107,9 @@
       (tutorial-app/screen-tick!))
     nil))
 
-(defn- ui-by-stage-array [^RenderStage wanted-stage draw-list]
-  (let [arr (make-array cn.li.mcmod.runtime.ui.UiDrawList (alength (RenderStage/values)))]
-    (when draw-list (aset arr (.ordinal wanted-stage) draw-list))
+(defn- ui-by-stage-array ^objects [^RenderStage wanted-stage draw-list]
+  (let [^objects arr (make-array cn.li.mcmod.runtime.ui.UiDrawList (alength (RenderStage/values)))]
+    (when draw-list (aset arr (int (.ordinal wanted-stage)) draw-list))
     arr))
 
 (defn- frame-packet

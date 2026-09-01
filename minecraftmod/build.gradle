@@ -792,7 +792,14 @@ tasks.register("verifyPresentationJavaPurity") {
                      file("mcmod/src/main/java/cn/li/mcmod/runtime")]
         def violations = []
         roots.findAll { it.directory }.each { File root ->
-            fileTree(root) { include "**/*.java" }.files.each { File source ->
+            fileTree(root) {
+                include "**/*.java"
+                // The layout/paint/hit/memo engine kernels are a separate,
+                // deliberately-scoped tier (mutable arrays, real loops) with
+                // its own isolation rules — see verifyPresentationEngineIsolation.
+                // This ABI tier stays strict record/interface-only everywhere else.
+                exclude "cn/li/presentation/core/engine/**"
+            }.files.each { File source ->
                 def text = source.text
                 // Effect-runtime carriers are intentionally ordinary final
                 // classes (primitive arrays plus constructor assignment),
@@ -818,6 +825,47 @@ tasks.register("verifyPresentationJavaPurity") {
         }
         if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
         logger.lifecycle("[verifyPresentationJavaPurity] ok")
+    }
+}
+
+tasks.register("verifyPresentationEngineIsolation") {
+    group = "verification"
+    description = "The layout/paint/hit/memo engine kernels (presentation-core/.../core/engine) are the one " +
+        "place Presentation Java is allowed real loops and mutable arrays. This gate protects what that " +
+        "carve-out is actually for: no Minecraft/loader coupling, no Clojure runtime coupling beyond the " +
+        "IFn/ILookup interop surface, no concurrency primitives, no I/O, and no static mutable state - the " +
+        "kernels must stay pure functions over the caller-supplied NodeTable/LayoutArena/MemoState/CmdBuf."
+    doLast {
+        def root = file("presentation-core/src/main/java/cn/li/presentation/core/engine")
+        def violations = []
+        if (root.directory) {
+            fileTree(root) { include "**/*.java" }.files.each { File source ->
+                def text = source.text
+                if (text =~ /import\s+(net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|com\.mojang)\./) {
+                    violations << "${source}: engine kernels may not import Minecraft/loader APIs"
+                }
+                if (text =~ /import\s+clojure\.lang\.(?!IFn\b|ILookup\b)/) {
+                    violations << "${source}: engine kernels may not import clojure.lang beyond IFn/ILookup"
+                }
+                if (text =~ /\b(synchronized|volatile)\b/ || text =~ /\bnew\s+Thread\b/ ||
+                    text =~ /import\s+java\.util\.concurrent\./) {
+                    violations << "${source}: engine kernels must be single-threaded (no Thread/Executor/synchronized/volatile)"
+                }
+                if (text =~ /import\s+java\.io\./ || text =~ /import\s+java\.nio\.file\./) {
+                    violations << "${source}: engine kernels may not perform I/O"
+                }
+                // A static *mutable* field: "static" not immediately followed by "final",
+                // whose declaration has no "(" before its terminating ";" (i.e. it is a
+                // field, not a static method signature).
+                (text =~ /static\s+(?!final\b)[A-Za-z_][\w<>\[\],\s.]*?\s[A-Za-z_]\w*\s*(=[^;]*)?;/).each { match ->
+                    if (!match.contains("(")) {
+                        violations << "${source}: engine kernels may not hold static mutable state (${match.trim()})"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationEngineIsolation] ok")
     }
 }
 
@@ -2192,6 +2240,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyRepositoryHygiene",
               "verifyNeutralClojureNoMinecraftApis",
               "verifyPresentationJavaPurity",
+              "verifyPresentationEngineIsolation",
               "verifyPresentationDependencyDirection",
               "verifyPresentationSurfaceCoverage",
               "verifyPresentationRuntimeZeroResidues",

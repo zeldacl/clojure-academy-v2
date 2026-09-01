@@ -1,4 +1,4 @@
-{:ui/schema 1 :view/id :academy.app/media
+{:ui/schema 2 :view/id :academy.app/media
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :items :vector :selected :number :status :string
                 :current-track :string :progress :number :elapsed :string :duration :string
