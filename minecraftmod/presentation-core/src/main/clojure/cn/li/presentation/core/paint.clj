@@ -393,8 +393,7 @@
       host)))
 
 (defn paint-view [artifact state geometry]
-  (let [root (or (get-in state [:presentation/composition :root])
-                 (:nodes artifact))
+  (let [root (:nodes artifact)
         rect (content-rect artifact geometry)]
      (vec (paint-node root (rect-for rect (:layout root))
                           {:state state

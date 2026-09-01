@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.runtime.presentation-bridge-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.mcmod.runtime.presentation-bridge :as bridge])
-  (:import [cn.li.mcmod.runtime UiEditCommand$Remove]))
+            [cn.li.mcmod.runtime.presentation-bridge :as bridge]))
 
 (use-fixtures :each
   (fn [test]
@@ -23,21 +22,11 @@
          #"missing operations"
          (bridge/install-host! {:mount! identity})))))
 
-(deftest host-forwards-neutral-edit-and-lifecycle-operations
+(deftest host-forwards-neutral-lifecycle-operations
   (let [calls (atom [])
-        host (complete-host calls)
-        command (UiEditCommand$Remove. "tree")]
+        host (complete-host calls)]
     (bridge/install-host! host)
-    (is (= :apply-edit! (:operation (bridge/apply-edit! "screen" command))))
-    (is (= :undo-edit! (:operation (bridge/undo-edit! "screen"))))
-    (is (= :redo-edit! (:operation (bridge/redo-edit! "screen"))))
-    (is (= :reset-edits! (:operation (bridge/reset-edits! "screen"))))
-    (is (= 4 (count @calls)))
-    (is (= ["screen" command] (second (first @calls))))))
-
-(deftest edit-forwarding-rejects-non-neutral-values
-  (bridge/install-host! (complete-host (atom [])))
-  (is (thrown-with-msg?
-       clojure.lang.ExceptionInfo
-       #"UiEditCommand"
-       (bridge/apply-edit! "screen" {:target-key "tree"}))))
+    (is (= :dispatch-input! (:operation (bridge/dispatch-input! "screen" {:type :key}))))
+    (is (= :extract-stage! (:operation (bridge/extract-stage! :hud {}))))
+    (is (= :unmount! (:operation (bridge/unmount! "screen"))))
+    (is (= 3 (count @calls)))))

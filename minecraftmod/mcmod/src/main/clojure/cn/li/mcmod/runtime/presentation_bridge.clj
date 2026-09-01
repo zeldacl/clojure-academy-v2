@@ -3,8 +3,7 @@
 
    Presentation owns declarative UI state, while mcmod owns this forwarding
    seam.  Loader/Minecraft adapters are installed behind the host map and are
-   deliberately invisible to Presentation." 
-  (:import [cn.li.mcmod.runtime UiEditCommand]))
+   deliberately invisible to Presentation." )
 
 (def host-kinds #{:hud :world-ui :screen})
 
@@ -34,8 +33,7 @@
 ;; small map of functions makes the boundary explicit and testable without
 ;; exposing any Minecraft/Forge classes to Presentation.
 (def required-host-operations
-  #{:mount! :sync! :dispatch-input! :apply-edit! :undo-edit! :redo-edit!
-    :reset-edits! :begin-frame! :extract-stage! :unmount!})
+  #{:mount! :sync! :dispatch-input! :begin-frame! :extract-stage! :unmount!})
 
 (defonce ^:private presentation-host* (atom nil))
 
@@ -67,20 +65,6 @@
 
 (defn dispatch-input! [mount-id input]
   ((require-host-op :dispatch-input!) mount-id input))
-
-(defn apply-edit! [mount-id command]
-  (when-not (instance? UiEditCommand command)
-    (throw (ex-info "presentation edit must use UiEditCommand" {:value (type command)})))
-  ((require-host-op :apply-edit!) mount-id command))
-
-(defn undo-edit! [mount-id]
-  ((require-host-op :undo-edit!) mount-id))
-
-(defn redo-edit! [mount-id]
-  ((require-host-op :redo-edit!) mount-id))
-
-(defn reset-edits! [mount-id]
-  ((require-host-op :reset-edits!) mount-id))
 
 (defn begin-frame! [stage frame-context]
   ((require-host-op :begin-frame!) stage frame-context))

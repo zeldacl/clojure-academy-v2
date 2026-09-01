@@ -5,14 +5,10 @@
    Minecraft. It owns mount state, host geometry, input routing, reducer
    commits, and effect ordering; rendering is supplied by later renderer code."
   (:require [cn.li.presentation.core.artifact :as artifact]
-            [cn.li.presentation.core.composition :as composition]
             [cn.li.presentation.core.scrollbar :as scrollbar]
             [cn.li.presentation.core.tree :as tree]
             [clojure.string :as string])
-  (:import [cn.li.presentation.core HostGeometry MountHandle]
-           [cn.li.mcmod.runtime UiEditCommand UiEditResult
-            UiEditCommand$Insert UiEditCommand$Replace
-            UiEditCommand$Remove UiEditCommand$Move]))
+  (:import [cn.li.presentation.core HostGeometry MountHandle]))
 
 (defrecord UiRuntime [state owner-thread])
 
@@ -59,54 +55,8 @@
                                (assoc result mount instance)))
                            {} mounts))))))))
 
-(defn- artifact-id [value]
-  (if (keyword? value)
-    (if-let [ns (namespace value)] (str ns "/" (name value)) (name value))
-    (str value)))
-
-(defn- artifact-node->base-node [node path seen]
-  (let [raw-key (or (:key node)
-                    (str "node/" (string/join "/" (map str path))))
-        base-key (artifact-id raw-key)
-        key (if (contains? @seen base-key)
-              (str base-key "@" (string/join "." (map str path)))
-              base-key)
-        _ (swap! seen conj base-key)
-        children (mapv (fn [[index child]]
-                         (artifact-node->base-node child (conj path :child index) seen))
-                       (map-indexed vector (or (:children node) [])))
-        slots (into {}
-                    (map (fn [[slot entries]]
-                           [slot (mapv (fn [[index child]]
-                                         (artifact-node->base-node
-                                          child (conj path :slot slot index) seen))
-                                       (map-indexed vector entries))]))
-                    (or (:slots node) {}))]
-    (cond-> (assoc node :key key
-                   :blueprint (artifact-id (or (:blueprint-id node) (:type node)))
-                   :children children
-                   :slots slots)
-      (get-in node [:style :scrollbar :for])
-      (update-in [:style :scrollbar :for]
-                 #(artifact-id %)))))
-
-(defn- artifact->base-view [artifact]
-  (when (= :pui4 (:magic artifact))
-    {:root (artifact-node->base-node (:nodes artifact) [:root] (atom #{}))
-     :blueprints (into {}
-                       (map (fn [[id descriptor]]
-                              [(str id)
-                               (assoc descriptor
-                                      :id (str id)
-                                      :template {:key "blueprint-template"
-                                                 :blueprint (artifact-id (:primitive descriptor))
-                                                 :type (:primitive descriptor)
-                                                 :children []})]))
-                       (or (:blueprint-catalog artifact) {}))
-     :boundaries (or (:boundaries artifact) {})}))
-
 (defn mount!
-  [^UiRuntime runtime {:keys [host view-id artifact base-view blueprints boundaries state reduce run-effect! close! paint-fn]
+  [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close! paint-fn]
                      :or {state {}
                           reduce (fn [state _action _payload]
                                    {:state state :effects [] :event-result :pass})}}]
@@ -114,12 +64,6 @@
   (let [id (:next-id (runtime-state runtime))
         handle (MountHandle. (long id))
         artifact (or artifact (artifact/load-view view-id))
-        base-view (or base-view (:base-view artifact) (artifact->base-view artifact))
-        base-view (when base-view
-                    (merge base-view
-                           (when blueprints {:blueprints blueprints})
-                           (when boundaries {:boundaries boundaries})))
-        composition (when base-view (composition/base-composition base-view))
         instance {:handle handle
                   :host host
                   :view-id view-id
@@ -129,7 +73,6 @@
                   :run-effect! (or run-effect! (fn [_] nil))
                   :close! (or close! (fn [_] nil))
                   :paint-fn (or paint-fn (fn [_ _ _] []))
-                  :composition composition
                   :geometry (HostGeometry/identity 0 0)
                   :dirty #{:structure :layout :paint :semantics}
                   :commands []
@@ -164,105 +107,6 @@
 (defn update-view! [^UiRuntime runtime mount f & args]
   (let [current (:view-state (instance! runtime mount))]
     (present! runtime mount (apply f current args))))
-
-(defn- java-map [value]
-  (if (nil? value) {} (into {} value)))
-
-(defn- edit-command->map [command]
-  (cond
-    (instance? UiEditCommand$Insert command)
-    {:op :insert
-     :target-key (.targetKey ^UiEditCommand$Insert command)
-     :slot (.slot ^UiEditCommand$Insert command)
-     :index (.index ^UiEditCommand$Insert command)
-     :blueprint (.blueprint ^UiEditCommand$Insert command)
-     :key (.key ^UiEditCommand$Insert command)
-     :props (java-map (.props ^UiEditCommand$Insert command))
-     :slots (java-map (.slots ^UiEditCommand$Insert command))}
-
-    (instance? UiEditCommand$Replace command)
-    {:op :replace
-     :target-key (.targetKey ^UiEditCommand$Replace command)
-     :blueprint (.blueprint ^UiEditCommand$Replace command)
-     :props (java-map (.props ^UiEditCommand$Replace command))
-     :slots (java-map (.slots ^UiEditCommand$Replace command))}
-
-    (instance? UiEditCommand$Remove command)
-    {:op :remove :target-key (.targetKey ^UiEditCommand$Remove command)}
-
-    (instance? UiEditCommand$Move command)
-    {:op :move
-     :target-key (.targetKey ^UiEditCommand$Move command)
-     :parent-key (.parentKey ^UiEditCommand$Move command)
-     :slot (.slot ^UiEditCommand$Move command)
-     :index (.index ^UiEditCommand$Move command)}
-
-    :else
-    (throw (ex-info "unknown UiEditCommand implementation" {:value (type command)}))))
-
-(defn composition [^UiRuntime runtime mount]
-  (when-let [value (:composition (instance! runtime mount))]
-    (composition/composition-view value)))
-
-(defn- mark-composition! [^UiRuntime runtime mount next-composition]
-  (vswap! (:state runtime)
-          (fn [snapshot]
-            (-> snapshot
-                (assoc-in [:mounts mount :composition] next-composition)
-                (update-in [:mounts mount :dirty]
-                           into #{:structure :layout :paint :semantics}))))
-  (composition/composition-view next-composition))
-
-(defn apply-edit!
-  "Apply one neutral UiEditCommand to the mount's ephemeral Composition." 
-  [^UiRuntime runtime mount command]
-  (owner-thread! runtime)
-  (let [instance (instance! runtime mount)
-        current (:composition instance)]
-    (if-not current
-      (UiEditResult/rejected 0 "mount has no editable BaseView" {})
-      (let [result (composition/apply-edit! current (edit-command->map command))]
-        (if (= :applied (:status result))
-          (do
-            (mark-composition! runtime mount (:composition result))
-            (UiEditResult/applied (long (:revision result))))
-          (UiEditResult/rejected (long (:revision result))
-                                 (or (:message result) "UI edit rejected")
-                                 (or (:details result) {})))))))
-
-(defn undo-edit! [^UiRuntime runtime mount]
-  (owner-thread! runtime)
-  (if-let [current (:composition (instance! runtime mount))]
-    (let [result (composition/undo! current)]
-      (case (:status result)
-        :applied (do (mark-composition! runtime mount (:composition result))
-                     (UiEditResult/applied (long (:revision result))))
-        :noop (UiEditResult/noop (long (:revision result)))
-        (UiEditResult/rejected (long (:revision result))
-                               (or (:message result) "UI undo rejected")
-                               (or (:details result) {}))))
-    (UiEditResult/rejected 0 "mount has no editable BaseView" {})))
-
-(defn redo-edit! [^UiRuntime runtime mount]
-  (owner-thread! runtime)
-  (if-let [current (:composition (instance! runtime mount))]
-    (let [result (composition/redo! current)]
-      (case (:status result)
-        :applied (do (mark-composition! runtime mount (:composition result))
-                     (UiEditResult/applied (long (:revision result))))
-        :noop (UiEditResult/noop (long (:revision result)))
-        (UiEditResult/rejected (long (:revision result))
-                               (or (:message result) "UI redo rejected")
-                               (or (:details result) {}))))
-    (UiEditResult/rejected 0 "mount has no editable BaseView" {})))
-
-(defn reset-edits! [^UiRuntime runtime mount]
-  (owner-thread! runtime)
-  (if-let [current (:composition (instance! runtime mount))]
-    (let [next (composition/reset-composition! current)]
-      (mark-composition! runtime mount next)
-      (UiEditResult/applied 0))
-    (UiEditResult/rejected 0 "mount has no editable BaseView" {})))
 
 (defn update-host! [^UiRuntime runtime mount ^HostGeometry geometry]
   (owner-thread! runtime)
@@ -571,9 +415,7 @@
                          (assoc :item (:item env) :index (:index env)))}
              :else nil)))))))
 (defn- effective-artifact [instance]
-  (if-let [current (:composition instance)]
-    (assoc (:artifact instance) :nodes (:root current))
-    (:artifact instance)))
+  (:artifact instance))
 
 (defn- routed-event [instance event]
   (if (:action event)
@@ -811,13 +653,9 @@
                            commands (if repaint?
                                       (vec ((:paint-fn instance)
                                             (:artifact instance)
-                                            (cond-> (assoc (:view-state instance)
-                                                           :presentation/scroll-offsets
-                                                           (:scroll-offsets instance))
-                                              (:composition instance)
-                                              (assoc :presentation/composition
-                                                     (composition/composition-view
-                                                      (:composition instance))))
+                                            (assoc (:view-state instance)
+                                                   :presentation/scroll-offsets
+                                                   (:scroll-offsets instance))
                                             (:geometry instance)))
                                       (:commands instance))
                            dirty (if repaint?

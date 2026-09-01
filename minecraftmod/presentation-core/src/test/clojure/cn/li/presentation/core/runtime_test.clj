@@ -101,7 +101,7 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                   :x 75 :y 10 :button 0})))
-    (is (= [:demo/right {:target "right" :button-id 1}] @seen))))
+    (is (= [:demo/right {:target :right :button-id 1}] @seen))))
 (deftest runtime-routes-repeater-button-with-item-context
   (let [seen (atom nil)
         rt (runtime/create-runtime)
@@ -121,7 +121,7 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
                                                   :x 10 :y 30 :button 0})))
-    (is (= [:demo/item {:target "row/action"
+    (is (= [:demo/item {:target :row/action
                         :item {:label "Two"}
                         :index 1}] @seen))))
 (deftest runtime-routes-text-input
@@ -209,7 +209,7 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})))
     (is (= :input/scroll (first @seen)))
-    (is (= "list" (get-in @seen [1 :target])))
+    (is (= :list (get-in @seen [1 :target])))
     (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))
     (runtime/dispatch! rt mount {:type :pointer :event-type :drag :x 5 :y 10 :drag-y -5.0})
     (is (= true (get-in @seen [1 :drag?])))
@@ -394,7 +394,7 @@
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 120 40 1.0))
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 115 :y 20 :button 0})
     (is (= :input/scroll (first @seen)))
-    (is (= "content" (get-in @seen [1 :target])))
+    (is (= :content (get-in @seen [1 :target])))
     (is (= 20.0 (double (get-in @seen [1 :scroll-offset]))))
     (is (= 1 (count imgs)))
     (is (= 10.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiImage (first imgs)))))))

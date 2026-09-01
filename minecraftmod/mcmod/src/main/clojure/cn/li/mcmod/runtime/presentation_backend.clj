@@ -33,7 +33,7 @@
   (let [backend (atom nil)]
     (let [value {:profile profile
                  :capabilities (get profiles profile {})
-                 :submissions (atom [])
+                 :submitted-count (java.util.concurrent.atomic.AtomicLong. 0)
                  :resource-generation (atom 0)
                  :renderer (atom nil)}]
       ;; Keep the callback opaque to loader/base.  The version backend owns
@@ -53,7 +53,11 @@
       @backend)))
 
 (defn submit! [backend stage frame-packet]
-  (swap! (:submissions backend) conj {:stage stage :frame-packet frame-packet})
+  ;; Diagnostics counter only — the previous implementation retained every
+  ;; FramePacket (and all its commands) forever in an ever-growing vector
+  ;; that nothing ever drained. Callers that need the packet itself already
+  ;; receive it via the :renderer callback below.
+  (.incrementAndGet ^java.util.concurrent.atomic.AtomicLong (:submitted-count backend))
   backend)
 
 (defn reload-resources! [backend generation]
