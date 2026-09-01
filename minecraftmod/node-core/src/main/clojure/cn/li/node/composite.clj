@@ -79,7 +79,21 @@
                       form)
                form (if (keyword? (:ratio-slot form))
                       (update form :ratio-slot rename)
-                      form)]
+                      form)
+               ;; :binds-locals-map renames the KEYS of a map-valued field,
+               ;; not its value (:bind) or the field's own keyword value
+               ;; (:binds-locals). VFX's :vfx/let introduces new local names
+               ;; through {:bindings {name expr, ...}} -- the name is the
+               ;; key, a shape neither of the two mechanisms above covers,
+               ;; and without this a composite body using :vfx/let could not
+               ;; be safely inlined more than once (its introduced names
+               ;; would collide across expansions instead of being made
+               ;; call-site-unique like every other local this fn renames).
+               form (reduce (fn [f field]
+                              (if (map? (get f field))
+                                (update f field #(into {} (map (fn [[k v]] [(rename k) v])) %))
+                                f))
+                            form (:binds-locals-map d))]
            (reduce (fn [f field] (cond-> f (keyword? (get f field)) (update field rename)))
                    form (:binds-locals d)))
 
