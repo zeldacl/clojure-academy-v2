@@ -1,6 +1,6 @@
 # GUI DSL
 
-当前 GUI 分成两个明确层次：`.ui.edn` artifact + `presentation-core` Runtime v2 负责自定义 HUD/Screen/Container 的声明与绘制，`mcmod/gui` 纯数据 spec 只负责 Menu/Slot/容器协议；业务 GUI 由 `ac` 注册，Loader 组件只负责 Minecraft 生命周期与 screen/network glue。
+当前 GUI 分成两个明确层次：`.ui.edn` artifact + `presentation-core` Runtime v3 负责自定义 HUD/Screen/Container 的声明与绘制，`mcmod/gui` 纯数据 spec 只负责 Menu/Slot/容器协议；业务 GUI 由 `ac` 注册，Loader 组件只负责 Minecraft 生命周期与 screen/network glue。
 
 ## mcmod entrypoints
 
@@ -15,10 +15,10 @@
 
 > `cn.li.mcmod.gui.xml-parser` 已不存在（文件已删除）——`ac/src` 下不再有任何
 > `guis/**/*.xml`，XML GUI 已被 Presentation Runtime（`.ui.edn` artifact，见
-> [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md)）
-> 取代。本文档其余部分描述仍然存在的 `mcmod/gui` spec/registry/slot-schema
-> 系统；machine_container、wireless_matrix、wireless_node 用它承载 Menu/Slot 权威，
-> 最终呈现统一由 `presentation-v2` 挂载对应 `ac/src/presentation/resources/academy/app/*.ui.edn`。
+> [PRESENTATION_V3.md](PRESENTATION_V3.md)）取代。本文档其余部分描述仍然存在
+> 的 `mcmod/gui` spec/registry/slot-schema 系统；machine_container、
+> wireless_matrix、wireless_node 用它承载 Menu/Slot 权威，最终呈现统一由
+> Presentation Runtime v3 挂载对应 `ac/src/presentation/resources/academy/app/*.ui.edn`。
 
 ## ac ownership
 

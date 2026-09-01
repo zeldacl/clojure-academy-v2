@@ -10,7 +10,7 @@
 
 - 管理玩家是否已安装终端、已安装哪些终端应用（独立 NBT 键 `academy_terminal`，不经 ability runtime-store）。
 - 通过固定线协议（`terminal.messages`）处理安装终端、安装/卸载应用、查询状态。
-- 客户端主终端使用 `ac/src/presentation/resources/academy/app/terminal.ui.edn` 和 `client/presentation_terminal.clj` 的 Presentation Runtime v2 artifact；按 catalog 元数据分页，已安装应用通过 launcher 表打开各 app GUI。
+- 客户端主终端使用 `ac/src/presentation/resources/academy/app/terminal.ui.edn` 和 `client/presentation_terminal.clj` 的 Presentation Runtime v3 artifact；按 catalog 元数据分页，已安装应用通过 launcher 表打开各 app GUI。
 - 与无线频率发射器等玩法通过 catalog 中的 `:freq-transmitter` 等条目关联，不在服务端持有 GUI 函数。
 
 ## 模块边界

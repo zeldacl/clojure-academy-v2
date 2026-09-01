@@ -1,8 +1,8 @@
 # Wireless GUI 状态与维护手册
 
-> 状态标签：**现行**（Presentation Runtime v2）
+> 状态标签：**现行**（Presentation Runtime v3）
 
-Wireless Matrix 和 Wireless Node 的菜单协议仍由 `mcmod/gui` 的 Menu/Slot schema 管理；最终屏幕呈现统一由 AC 的 `.ui.edn` artifact 和 `presentation-v2` 控制器完成，不再使用 XML GUI。
+Wireless Matrix 和 Wireless Node 的菜单协议仍由 `mcmod/gui` 的 Menu/Slot schema 管理；最终屏幕呈现统一由 AC 的 `.ui.edn` artifact（schema 2）和 Presentation Runtime v3 控制器完成，不再使用 XML GUI。
 
 ## 现行资源与入口
 
@@ -17,7 +17,7 @@ Wireless Matrix 和 Wireless Node 的菜单协议仍由 `mcmod/gui` 的 Menu/Slo
 flowchart LR
   M[Menu/Slot schema] --> C[AC container controller]
   N[network snapshot] --> C
-  A[wireless_matrix.ui.edn / wireless_node.ui.edn] --> R[Presentation Runtime v2]
+  A[wireless_matrix.ui.edn / wireless_node.ui.edn] --> R[Presentation Runtime v3]
   C --> R
   R --> I[neutral Ui* IR]
   I --> P[version backend]

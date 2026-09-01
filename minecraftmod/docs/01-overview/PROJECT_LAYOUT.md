@@ -38,7 +38,7 @@ platform-builds/
 |------|------|
 | `:api` | 对外 Java API 与互操作接口 |
 | `:mcmod` | DSL、协议、生命周期、平台抽象和不依赖 Minecraft 类的运行契约；也是 sealed `RenderCommand`/`RenderStage`/`RenderPass`/`FramePacket` 帧 ABI 的唯一持有者（`cn.li.mcmod.runtime`），presentation-core 与 vfx-core 都只依赖 `:mcmod`，互不依赖 |
-| `:presentation-core` | Runtime v2 + artifact 装载 + Host 生命周期 + 状态提取/中立绘制 IR；不包含旧 retained tree/layout 引擎 |
+| `:presentation-core` | Runtime v3：artifact/NodeTable 装载 + Host 生命周期 + Java 布局/绘制/命中/记忆化引擎（`core/engine/`）+ 状态提取/中立 `UiDrawList` IR；见 [PRESENTATION_V3.md](../06-gui/PRESENTATION_V3.md) |
 | `:presentation-compiler` | 严格校验 `.ui.edn` → 规范化 artifact/manifest 编译器；无运行时模板解释器 |
 | `:vfx-core` | 最终 VFX System/Emitter/Module/Stage/Parameter 运行时：显式四阶段图采样、生命周期/序列幂等、SoA 粒子缓冲与 Java 帧 ABI；无旧 VM/recipe/runtime 兼容层 |
 | `:combat-core` | 纯数据技能程序引擎：`:sequence`/`:query`/`:damage`/`:vfx`/`:world-effect`/`:domain-event` op 编译与执行，永不认识 Minecraft/渲染/VFX 运行时 |
@@ -47,7 +47,7 @@ platform-builds/
 | `:platform` | 唯一平台工程；通过 `scripts/target-gradle.ps1 <target-id>` 选择具体目标 |
 | `:tools:target-launcher` | 目标构建的辅助启动器工程，非运行时代码 |
 
-`combat-core` 与 `vfx-core` 的设计与边界见 [COMBAT_CORE.md](../04-systems/COMBAT_CORE.md)、[VFX_CORE.md](../04-systems/VFX_CORE.md)；Presentation 帧管线见 [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md)。
+`combat-core` 与 `vfx-core` 的设计与边界见 [COMBAT_CORE.md](../04-systems/COMBAT_CORE.md)、[VFX_CORE.md](../04-systems/VFX_CORE.md)；Presentation 帧管线见 [PRESENTATION_V3.md](../06-gui/PRESENTATION_V3.md)。
 
 ## 平台源码组件
 
