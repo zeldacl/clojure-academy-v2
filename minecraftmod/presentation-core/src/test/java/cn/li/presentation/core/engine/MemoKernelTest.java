@@ -19,7 +19,7 @@ class MemoKernelTest {
                 base.flags, base.box, base.widthMode, base.widthValue, base.heightMode, base.heightValue,
                 base.gap, base.aspect, base.declaredX, base.declaredY, base.direction, base.justify,
                 base.alignItems, base.alignSelf, base.style, base.bind, base.action, base.res, base.anim,
-                base.text, base.fontSize, depMask, 1, 8,
+                base.text, base.fontSize, base.rgba, depMask, 1, 8,
                 base.styleTable, base.stringTable, base.resources, base.bindPaths, base.actionTable,
                 base.nodeKeys, base.focusOrder);
     }

@@ -83,6 +83,7 @@ final class NodeTableBuilder {
         int[] alignItems = new int[n];
         int[] alignSelf = new int[n];
         float[] fontSize = new float[n];
+        int[] rgba = new int[n];
         int[] textIdx = new int[n];
         String[] strings = new String[n];
 
@@ -124,6 +125,7 @@ final class NodeTableBuilder {
             alignItems[i] = src.alignItems;
             alignSelf[i] = src.alignSelf;
             fontSize[i] = src.fontSize;
+            rgba[i] = 0xFFFFFFFF;
             if (src.text != null) {
                 strings[i] = src.text;
                 textIdx[i] = i;
@@ -139,7 +141,7 @@ final class NodeTableBuilder {
                 n, op, parent, firstChild, nextSibling, childCount, flags, box,
                 widthMode, widthValue, heightMode, heightValue, gap, aspect, declaredX, declaredY,
                 direction, justify, alignItems, alignSelf,
-                noIdx.clone(), noIdx.clone(), noIdx.clone(), noIdx.clone(), noIdx.clone(), textIdx, fontSize,
+                noIdx.clone(), noIdx.clone(), noIdx.clone(), noIdx.clone(), noIdx.clone(), textIdx, fontSize, rgba,
                 new long[n], 1, 0,
                 new Object[0], strings, new UiResourceRef[0],
                 new Object[0], new Object[0], new Object[n], new int[0]);

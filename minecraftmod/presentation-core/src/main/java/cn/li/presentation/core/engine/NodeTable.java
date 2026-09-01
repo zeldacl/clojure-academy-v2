@@ -55,6 +55,8 @@ public final class NodeTable {
 
     /** Static font size per node (default 8.0, matching the pre-rewrite fallback); a bound :font-size overrides this at paint/measure time. */
     public final float[] fontSize;
+    /** Static ARGB color per node (default 0xFFFFFFFF); a bound :rgba overrides this at paint time. */
+    public final int[] rgba;
 
     // ── memoization: maskWords longs per node, subtree binding closure ──
     public final long[] depMask;
@@ -78,7 +80,7 @@ public final class NodeTable {
             int[] widthMode, float[] widthValue, int[] heightMode, float[] heightValue,
             float[] gap, float[] aspect, float[] declaredX, float[] declaredY,
             int[] direction, int[] justify, int[] alignItems, int[] alignSelf,
-            int[] style, int[] bind, int[] action, int[] res, int[] anim, int[] text, float[] fontSize,
+            int[] style, int[] bind, int[] action, int[] res, int[] anim, int[] text, float[] fontSize, int[] rgba,
             long[] depMask, int maskWords, int bindingCount,
             Object[] styleTable, String[] stringTable, UiResourceRef[] resources,
             Object[] bindPaths, Object[] actionTable, Object[] nodeKeys, int[] focusOrder) {
@@ -109,6 +111,7 @@ public final class NodeTable {
         this.anim = anim;
         this.text = text;
         this.fontSize = fontSize;
+        this.rgba = rgba;
         this.depMask = depMask;
         this.maskWords = maskWords;
         this.bindingCount = bindingCount;

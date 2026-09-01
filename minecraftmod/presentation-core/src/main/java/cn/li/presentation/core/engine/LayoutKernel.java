@@ -119,8 +119,8 @@ public final class LayoutKernel {
         boolean hasDir = t.has(node, NodeFlags.HAS_DIRECTION);
         int dir = hasDir ? t.direction[node] : Direction.NONE;
 
-        float boundW = resolvedFixed(t, ctx.resolver(), node, item, true);
-        float boundH = resolvedFixed(t, ctx.resolver(), node, item, false);
+        float boundW = Bindings.fixedOverride(t, ctx.resolver(), node, item, true);
+        float boundH = Bindings.fixedOverride(t, ctx.resolver(), node, item, false);
         int wMode = boundW >= 0f ? SizeMode.FIXED : t.widthMode[node];
         int hMode = boundH >= 0f ? SizeMode.FIXED : t.heightMode[node];
         float wVal = boundW >= 0f ? boundW : t.widthValue[node];
@@ -161,13 +161,6 @@ public final class LayoutKernel {
         if (min > 0f) r = Math.max(r, min);
         if (max > 0f) r = Math.min(r, max);
         return r;
-    }
-
-    /** A bound WIDTH/HEIGHT override is always a fixed px value (matches the pre-rewrite bound-layout semantics). -1 = unbound. */
-    private static float resolvedFixed(NodeTable t, BindResolver resolver, int node, Object item, boolean width) {
-        if (resolver == null) return -1f;
-        Object v = resolver.attribute(node, width ? BindAttr.WIDTH : BindAttr.HEIGHT, item);
-        return v instanceof Number num ? num.floatValue() : -1f;
     }
 
     private static float weightOf(NodeTable t, int node, boolean row) {
@@ -220,8 +213,8 @@ public final class LayoutKernel {
     private static float[] measureText(NodeTable t, LayoutContext ctx, int node, Object item,
                                         float availW, float availH, int modeW, int modeH,
                                         int wMode, float wVal, int hMode, float hVal) {
-        String text = resolvedText(t, ctx.resolver(), node, item);
-        float fontSize = resolvedFontSize(t, ctx.resolver(), node, item);
+        String text = Bindings.text(t, ctx.resolver(), node, item);
+        float fontSize = Bindings.fontSize(t, ctx.resolver(), node, item);
         UiTextMetrics metrics = ctx.metrics();
         float advance = metrics != null ? metrics.advance(0, text, fontSize) : defaultAdvance(text, fontSize);
         float lineHeight = metrics != null ? metrics.lineHeight(0, fontSize) : fontSize * 1.25f;
@@ -233,23 +226,6 @@ public final class LayoutKernel {
 
     private static float defaultAdvance(String text, float fontSize) {
         return text == null ? 0f : 0.6f * text.length() * fontSize;
-    }
-
-    private static String resolvedText(NodeTable t, BindResolver resolver, int node, Object item) {
-        if (resolver != null) {
-            Object v = resolver.attribute(node, BindAttr.TEXT, item);
-            if (v != null) return String.valueOf(v);
-        }
-        int idx = t.text[node];
-        return idx >= 0 ? t.stringTable[idx] : "";
-    }
-
-    private static float resolvedFontSize(NodeTable t, BindResolver resolver, int node, Object item) {
-        if (resolver != null) {
-            Object v = resolver.attribute(node, BindAttr.FONT_SIZE, item);
-            if (v instanceof Number num) return num.floatValue();
-        }
-        return t.fontSize[node];
     }
 
     private static float[] measureLinear(NodeTable t, LayoutArena a, LayoutContext ctx, int inst,
