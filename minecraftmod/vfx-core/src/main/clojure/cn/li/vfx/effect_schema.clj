@@ -1,19 +1,10 @@
 (ns cn.li.vfx.effect-schema
-  "Pure VFX effect catalog and parameter ABI.")
-(import '(java.security MessageDigest))
-(import '(java.math BigInteger))
+  "Pure VFX effect catalog and parameter ABI."
+  (:require [cn.li.node.digest :as digest]))
 (def ^:const schema-version 1)
 (def mutabilities #{:immutable :per-tick :event})
 (def render-primitives #{:line :quad :plasma-body})
 (def presentation-ports #{:audio-one-shot :audio-loop :camera-fov :camera-shake :post-process})
-(defn- canonical [value]
-  (cond (map? value) (into (sorted-map) (map (fn [[k v]] [k (canonical v)])) value)
-        (set? value) (vec (sort-by pr-str (map canonical value)))
-        (sequential? value) (mapv canonical value)
-        :else value))
-(defn- sha256 [value]
-  (let [^MessageDigest digest (MessageDigest/getInstance "SHA-256") ^bytes bytes (.digest digest (.getBytes (pr-str (canonical value)) "UTF-8"))]
-    (format "%064x" (BigInteger. 1 bytes))))
 (defn parameter [name {:keys [type mutability quantization default] :as spec}]
   (when-not (keyword? name) (throw (ex-info "VFX parameter name must be a keyword" {:name name})))
   (when-not type (throw (ex-info "VFX parameter requires :type" {:name name})))
@@ -27,7 +18,7 @@
   (assoc descriptor :schema-version schema-version :parameters (mapv (fn [[name spec]] (parameter name spec)) (sort-by first (or parameters {}))) :primitives (set primitives)))
 (defn catalog [descriptors]
   (let [effects (into (sorted-map) (map (fn [descriptor] (let [d (effect-descriptor descriptor)] [(:id d) d])) descriptors))]
-    {:schema-version schema-version :effects effects :hash (sha256 effects)}))
+    {:schema-version schema-version :effects effects :hash (digest/content-hash effects)}))
 (defn descriptor [catalog effect-id]
   (or (get-in catalog [:effects effect-id]) (throw (ex-info "unknown VFX effect" {:effect-id effect-id}))))
 (defn diff-mask [parameters before after]

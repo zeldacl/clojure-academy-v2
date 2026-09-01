@@ -9,9 +9,17 @@ layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${proje
 
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes"
+    checkTask.dependsOn ":mcmod:classes", ":node-core:classes"
     // VFX owns its visual vocabulary while sharing node-core's immutable
     // descriptor/environment and expression-kernel contracts with Combat.
+    // node-core is source-first; its .clj sources land only in its own
+    // resources/main dir, which the standard project(":node-core")
+    // compileClasspath resolution does not surface here. Same fix
+    // combat-core/build.gradle applies, for the same underlying reason --
+    // now load-bearing rather than latent, since effect_schema.clj requires
+    // cn.li.node.digest.
+    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {

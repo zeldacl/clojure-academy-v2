@@ -10,6 +10,14 @@
    composite at runtime."
   (:require [cn.li.node.descriptor :as node]))
 
+(def ^:const schema-version
+  "Lifted from ac/final_catalog.clj's validate-manifest, which checked this
+   on every manifest it loaded (combat and vfx alike) before this loader
+   existed to do it centrally -- a real check the manifest shape had, that
+   this generic loader had silently dropped when combat/vfx composite
+   manifests started routing through it instead."
+  1)
+
 (defn- fail [message data]
   (throw (ex-info message data)))
 
@@ -18,6 +26,12 @@
   (let [manifest (document-loader manifest-resource)]
     (when-not (and (map? manifest) (vector? (:documents manifest)))
       (fail "invalid composite manifest" {:resource manifest-resource}))
+    (when-not (= schema-version (:schema-version manifest))
+      (fail "unsupported composite manifest schema version"
+            {:resource manifest-resource :schema-version (:schema-version manifest)}))
+    (let [documents (:documents manifest)]
+      (when-not (= (count documents) (count (set (map :id documents))))
+        (fail "composite manifest contains duplicate ids" {:resource manifest-resource})))
     manifest))
 
 (defn load-documents
