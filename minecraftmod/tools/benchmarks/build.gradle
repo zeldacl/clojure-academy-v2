@@ -34,11 +34,6 @@ dependencies {
     jmhAnnotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:1.37"
     jmhImplementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     jmhImplementation project(":ac")
-    // Presentation Runtime v2 -> v3 rewrite baseline (see docs plan "Presentation
-    // Runtime v3"): benchmarks presentation-core's paint/hit-test path directly,
-    // independent of ac, so the pre-refactor numbers stay measurable even after
-    // ac's HUD wiring changes in later phases.
-    jmhImplementation project(":presentation-core")
 }
 
 tasks.register("jmh", JavaExec) {
@@ -52,19 +47,6 @@ tasks.register("jmh", JavaExec) {
     outputs.upToDateWhen { false }
     doFirst { report.get().asFile.parentFile.mkdirs() }
     args = ["cn.li.tools.benchmark.FinalRuntimeTickBenchmark", "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
-}
-
-tasks.register("jmhPresentationBaseline", JavaExec) {
-    group = "verification"
-    description = "Capture the pre-refactor Presentation Runtime v2 baseline (extract-stage!/hit-test) before Phase 3 of the UI engine rewrite replaces this code."
-    dependsOn tasks.named("jmhClasses")
-    classpath = sourceSets.jmh.runtimeClasspath
-    mainClass = "org.openjdk.jmh.Main"
-    def report = layout.buildDirectory.file("reports/jmh/presentation-baseline.json")
-    outputs.file(report)
-    outputs.upToDateWhen { false }
-    doFirst { report.get().asFile.parentFile.mkdirs() }
-    args = ["cn.li.tools.benchmark.PresentationBaselineBenchmark", "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
 }
 
 tasks.named("check").configure {

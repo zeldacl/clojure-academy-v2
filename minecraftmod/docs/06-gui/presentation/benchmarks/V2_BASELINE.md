@@ -4,9 +4,12 @@
 用 Java 引擎内核替换 `paint.clj`/`runtime.clj` 的几何代码——这是重构前最后一次
 能测到旧实现真实数据的窗口。数字必须留到重构完成后再对比，否则收益无法证明。
 
-- 基准源码：`tools/benchmarks/src/jmh/java/cn/li/tools/benchmark/PresentationBaselineBenchmark.java`
-- Clojure 治具：`tools/benchmarks/src/jmh/resources/cn/li/tools/benchmark/presentation_baseline_support.clj`
-- 运行方式：`./gradlew :tools:benchmarks:jmhPresentationBaseline`
+- 基准源码（已随 Phase 3 对 `paint.clj`/`runtime.clj` 的替换一起删除，
+  数字已固化在本文件与下方 JSON 中；如需复现，检出 commit `f69aae01c` 或
+  更早即可看到 `PresentationBaselineBenchmark.java` 与
+  `presentation_baseline_support.clj` 的完整源码并重新运行）
+- 原运行方式：`./gradlew :tools:benchmarks:jmhPresentationBaseline`（任务
+  随基准源码一起移除）
 - 原始 JSON：[`v2-baseline.json`](./v2-baseline.json)
 - 测试树形状：约 80 节点（1 根 + cp/overload 条 + 20 个技能槽 × 3 子节点），
   与真实战斗 HUD 同数量级，见 `combat_hud.ui.edn` 与 `presentation_hud.clj`。

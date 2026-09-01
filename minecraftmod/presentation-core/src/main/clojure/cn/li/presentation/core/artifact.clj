@@ -8,9 +8,9 @@
 
 (def ^:private manifest-resource
   "META-INF/presentation/catalog.edn")
-(def ^:private artifact-magic :pui4)
-(def ^:private manifest-magic :pui4-catalog)
-(def ^:private artifact-schema 4)
+(def ^:private artifact-magic :pui5)
+(def ^:private manifest-magic :pui5-catalog)
+(def ^:private artifact-schema 5)
 
 (defn- read-resource [resource]
   (when-let [url (io/resource resource)]

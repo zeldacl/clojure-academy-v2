@@ -3,12 +3,26 @@
 
    This namespace intentionally has no dependency on presentation-compiler or
    Minecraft. It owns mount state, host geometry, input routing, reducer
-   commits, and effect ordering; rendering is supplied by later renderer code."
+   commits, and effect ordering; layout/paint/hit-testing are delegated to
+   the Java engine kernels in cn.li.presentation.core.engine, and this
+   namespace's only job is to be that engine's BindResolver -- the one
+   place Clojure-shaped state (get-in paths, item-label coercion, color
+   packing) meets the engine's plain-Object contract.
+
+   Geometry is always fully recomputed on ensure-layout! (no memoization-
+   gated skip yet -- see docs/06-gui/PRESENTATION_V3.md; this matches the
+   pre-rewrite runtime's actual behavior, which also repainted every frame
+   due to the dirty-flag bug this rewrite replaces, so it is not a
+   regression). Wiring MemoKernel-driven subtree reuse is tracked as a
+   direct, self-contained follow-up on top of this correct baseline."
   (:require [cn.li.presentation.core.artifact :as artifact]
-            [cn.li.presentation.core.scrollbar :as scrollbar]
-            [cn.li.presentation.core.tree :as tree]
+            [cn.li.presentation.core.nodetable :as nodetable]
             [clojure.string :as string])
-  (:import [cn.li.presentation.core HostGeometry MountHandle]))
+  (:import [cn.li.presentation.core HostGeometry MountHandle]
+           [cn.li.presentation.core.engine
+            NodeTable LayoutArena LayoutContext LayoutKernel PaintKernel HitKernel HitKernel$Hit
+            CmdBuf BindResolver NodeFlags CompositeSpec]
+           [cn.li.mcmod.runtime.ui UiOp]))
 
 (defrecord UiRuntime [state owner-thread])
 
@@ -49,14 +63,116 @@
                                  (assoc result mount
                                         (if (= geometry next-geometry)
                                           instance
-                                          (-> instance
-                                              (assoc :geometry next-geometry)
-                                              (update :dirty into #{:layout :paint :semantics})))))
+                                          (assoc instance :geometry next-geometry))))
                                (assoc result mount instance)))
                            {} mounts))))))))
 
+;; ============================== BindResolver ==============================
+
+(defn- state-value [state item path]
+  (cond
+    (and (vector? path) (= :state (first path))) (get-in state (subvec path 1))
+    (and (vector? path) (= :item (first path))) (get-in item (subvec path 1))
+    (and (vector? path) (= :parent (first path))) (get-in state (subvec path 1))
+    :else path))
+
+(defn- item-label [item]
+  (cond
+    (nil? item) ""
+    (map? item) (str (or (:label item) (:text item) (:name item)
+                         (:title item) (:skill-id item) ""))
+    :else (str item)))
+
+(defn- component255 [v default]
+  (let [n (double (or v default))]
+    (long (if (<= 0.0 n 1.0) (Math/round (* 255.0 n)) (Math/round n)))))
+
+(defn- runtime-rgba
+  "Matches the pre-rewrite paint.clj `rgba` helper exactly: an integer is
+   used as-is, a map/vector's 0..1 components scale to 0..255."
+  [value fallback]
+  (cond
+    (integer? value) (unchecked-int value)
+    (map? value) (unchecked-int
+                  (bit-or (bit-shift-left (component255 (:a value) 255) 24)
+                          (bit-shift-left (component255 (:r value) 255) 16)
+                          (bit-shift-left (component255 (:g value) 255) 8)
+                          (component255 (:b value) 255)))
+    (vector? value) (let [[r g b a] value]
+                      (unchecked-int
+                       (bit-or (bit-shift-left (component255 a 255) 24)
+                               (bit-shift-left (component255 r 255) 16)
+                               (bit-shift-left (component255 g 255) 8)
+                               (component255 b 255))))
+    :else (unchecked-int fallback)))
+
+(defn- resource-index-for [resource-index src]
+  (cond
+    (nil? src) -1
+    (map? src) (get resource-index [(str (or (:namespace src) "academy")) (str (:path src))] -1)
+    :else (let [[namespace path] (string/split (str src) #":" 2)]
+            (get resource-index [(or namespace "academy") (or path (str src))] -1))))
+
+(defn- composite-spec
+  "Mirrors the pre-rewrite paint.clj :composite case exactly (local-
+   coordinate offsets, the 14px condition-icon clamp, the desaturated
+   0xFF555555 color for an unaccepted condition)."
+  [resource-index item]
+  (when (map? item)
+    (let [kind (:kind item)
+          ix (float (or (:x item) 0.0)) iy (float (or (:y item) 0.0))
+          iw (float (or (:w item) 0.0)) ih (float (or (:h item) 0.0))
+          color (runtime-rgba (:rgba item) 0xFFFFFFFF)]
+      (case kind
+        :quad (CompositeSpec. CompositeSpec/QUAD ix iy iw ih color nil (float 0.0) -1)
+        :image (CompositeSpec. CompositeSpec/IMAGE ix iy iw ih color nil (float 0.0)
+                               (resource-index-for resource-index (:src item)))
+        :text (CompositeSpec. CompositeSpec/TEXT ix iy iw ih color (item-label (:text item))
+                              (float (or (:font-size item) 8.0)) -1)
+        :condition (let [accepted? (boolean (:accepted? item))
+                        icon-color (if accepted? color (unchecked-int 0xFF555555))]
+                    (CompositeSpec. CompositeSpec/CONDITION ix iy (min 14.0 iw) (min 14.0 ih)
+                                    icon-color nil (float 0.0)
+                                    (resource-index-for resource-index (:icon-path item))))
+        :model (CompositeSpec. CompositeSpec/MODEL ix iy iw ih color
+                               (str (or (:model-id item) (:src item) "")) (float 0.0) -1)
+        nil))))
+
+(defn- build-resolver
+  "The engine's only escape hatch into Clojure-shaped data. Every other
+   engine class only ever sees plain Objects/Numbers/Strings/Lists this
+   function hands it; all path resolution, item-label coercion, and color
+   packing lives here, not in Java."
+  ^BindResolver [bind-maps resource-index state]
+  (reify BindResolver
+    (attribute [_ node attr item]
+      (let [bind-map (nth bind-maps node nil)]
+        (case (int attr)
+          11 (composite-spec resource-index item)
+          4 (let [v (state-value state item (:items bind-map))]
+              (when (sequential? v) (vec v)))
+          1 (when-let [path (:text bind-map)] (item-label (state-value state item path)))
+          3 (when-let [path (:rgba bind-map)] (runtime-rgba (state-value state item path) 0xFFFFFFFF))
+          (let [path (case (int attr)
+                       0 (:visible bind-map) 2 (:value bind-map)
+                       5 (:x bind-map) 6 (:y bind-map)
+                       7 (:width bind-map) 8 (:height bind-map)
+                       9 (:font-size bind-map) 10 (:resource bind-map)
+                       nil)]
+            (when path (state-value state item path))))))))
+
+;; ============================== mount ==============================
+
+(defn- build-resource-index [artifact]
+  (into {}
+        (map-indexed (fn [i r] [[(str (:namespace r)) (str (:path r))] i]))
+        (:resources artifact)))
+
+(defn- build-key-index [^NodeTable table]
+  (into {} (map-indexed (fn [i k] [k i])) (.-nodeKeys table)))
+
 (defn mount!
-  [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close! paint-fn]
+  [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close!]
                      :or {state {}
                           reduce (fn [state _action _payload]
                                    {:state state :effects [] :event-result :pass})}}]
@@ -64,18 +180,25 @@
   (let [id (:next-id (runtime-state runtime))
         handle (MountHandle. (long id))
         artifact (or artifact (artifact/load-view view-id))
+        table (nodetable/table-for artifact)
         instance {:handle handle
                   :host host
                   :view-id view-id
                   :artifact artifact
+                  :table table
+                  :bind-maps (:node/bind-map artifact)
+                  :on-maps (:node/on-map artifact)
+                  :resource-index (build-resource-index artifact)
+                  :key-index (build-key-index table)
                   :view-state state
                   :reduce reduce
                   :run-effect! (or run-effect! (fn [_] nil))
                   :close! (or close! (fn [_] nil))
-                  :paint-fn (or paint-fn (fn [_ _ _] []))
                   :geometry (HostGeometry/identity 0 0)
-                  :dirty #{:structure :layout :paint :semantics}
-                  :commands []
+                  :arena (LayoutArena. 64)
+                  :cmdbuf (CmdBuf. 64)
+                  :root-instance -1
+                  :commands nil
                   :focus nil
                   :pointer-capture nil
                   :hover-target nil
@@ -87,21 +210,20 @@
                   (assoc-in [:mounts handle] instance))))
     handle))
 
-(defn- instance! [^UiRuntime runtime mount]
+(defn instance!
+  "The mount's full internal state map. Public as a read-only introspection
+   accessor (tests, debug tooling); callers should treat the result as
+   opaque beyond documented keys (:view-state, :geometry, :focus,
+   :hover-target, :scroll-offsets) since the rest is engine plumbing."
+  [^UiRuntime runtime mount]
   (or (get-in (runtime-state runtime) [:mounts mount])
       (throw (ex-info "unknown Presentation mount" {:mount mount}))))
 
 (defn present!
-  "Replace a mount's complete view state and mark dependent phases dirty." 
   [^UiRuntime runtime mount next-state]
   (owner-thread! runtime)
   (instance! runtime mount)
-  (vswap! (:state runtime)
-          (fn [snapshot]
-            (-> snapshot
-                (assoc-in [:mounts mount :view-state] next-state)
-                (update-in [:mounts mount :dirty]
-                           into #{:layout :paint :semantics}))))
+  (vswap! (:state runtime) assoc-in [:mounts mount :view-state] next-state)
   next-state)
 
 (defn update-view! [^UiRuntime runtime mount f & args]
@@ -111,25 +233,16 @@
 (defn update-host! [^UiRuntime runtime mount ^HostGeometry geometry]
   (owner-thread! runtime)
   (instance! runtime mount)
-  (vswap! (:state runtime)
-          (fn [snapshot]
-            (-> snapshot
-                (assoc-in [:mounts mount :geometry] geometry)
-                (update-in [:mounts mount :dirty]
-                           into #{:layout :paint :semantics}))))
+  (vswap! (:state runtime) assoc-in [:mounts mount :geometry] geometry)
   geometry)
 
-(defn- layout-dimension [value fallback]
-  (cond
-    (number? value) (float value)
-    (= :fill value) (float fallback)
-    :else (float fallback)))
+;; ============================== layout ==============================
 
-(defn- geometry-rect [geometry]
-  {:x (float (.originX ^HostGeometry geometry))
-   :y (float (.originY ^HostGeometry geometry))
-   :width (float (max 1 (.viewportWidth ^HostGeometry geometry)))
-   :height (float (max 1 (.viewportHeight ^HostGeometry geometry)))})
+(defn- geometry-rect [^HostGeometry geometry]
+  {:x (float (.originX geometry))
+   :y (float (.originY geometry))
+   :width (float (max 1 (.viewportWidth geometry)))
+   :height (float (max 1 (.viewportHeight geometry)))})
 
 (defn- content-rect
   "Center the artifact design box inside host geometry when scale-policy is :fit."
@@ -145,442 +258,176 @@
        :height (float dh)}
       host)))
 
-(defn- event-point [event geometry]
+(defn- scroll-offset-array ^floats [key-index scroll-offsets node-count]
+  (let [arr (float-array node-count)]
+    (doseq [[k v] scroll-offsets]
+      (when-let [idx (get key-index k)]
+        (aset arr (int idx) (float v))))
+    arr))
+
+(defn- ensure-layout!
+  "Always fully recomputes measure+arrange from current state (see the
+   namespace docstring on why memoization isn't wired yet). Returns the
+   root instance index, or -1 for an empty table."
+  [instance]
+  (let [^NodeTable table (:table instance)
+        ^LayoutArena arena (:arena instance)
+        resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+        offsets (scroll-offset-array (:key-index instance) (:scroll-offsets instance) (.-n table))
+        ctx (LayoutContext. resolver nil offsets)
+        rect (content-rect (:artifact instance) (:geometry instance))
+        root (LayoutKernel/expand table arena resolver)]
+    (when (>= root 0)
+      (LayoutKernel/measure table arena ctx root (:width rect) (:height rect)
+                             LayoutKernel/EXACTLY LayoutKernel/EXACTLY)
+      (LayoutKernel/arrange table arena ctx root (:x rect) (:y rect) (:width rect) (:height rect) -1))
+    root))
+
+(defn- scroll-extent
+  "Sum of the scroll node's children's own main-axis extent (the total
+   scrollable content size), read directly from the already-arranged
+   arena -- reuses LayoutKernel's own sibling traversal rather than
+   re-deriving child order."
+  [^NodeTable table ^LayoutArena arena scroll-inst]
+  (let [node (aget ^ints (.-nodeOf arena) scroll-inst)
+        row? (= 1 (aget ^ints (.-direction table) node))
+        end (aget ^ints (.-subtreeEnd arena) scroll-inst)
+        meas ^floats (.-meas arena)]
+    (loop [c (LayoutKernel/firstChild arena scroll-inst) sum 0.0]
+      (if (>= c 0)
+        (recur (LayoutKernel/nextSibling arena c end)
+               (+ sum (double (aget meas (if row? (* c 2) (inc (* c 2)))))))
+        sum))))
+
+(defn- scroll-max-offset [^NodeTable table ^LayoutArena arena scroll-inst]
+  (let [content (scroll-extent table arena scroll-inst)
+        viewport (float (.h arena scroll-inst))]
+    (float (max 0.0 (- content viewport)))))
+
+(defn- node-key [^NodeTable table node]
+  (aget ^objects (.-nodeKeys table) node))
+
+(defn- event-point
+  "Version hosts normally provide mount-local coordinates. Explicit
+   :viewport coordinates are accepted for overlays whose origin is nonzero."
+  [event geometry]
   (let [rect (geometry-rect geometry)
         x (float (:x event 0.0))
         y (float (:y event 0.0))]
-    ;; Version hosts normally provide mount-local coordinates. Explicit
-    ;; :viewport coordinates are accepted for overlays whose origin is nonzero.
     (if (= :viewport (:space event))
-      {:x x :y y}
-      {:x (+ x (:x rect))
-       :y (+ y (:y rect))})))
+      [x y]
+      [(+ x (:x rect)) (+ y (:y rect))])))
 
-(defn- node-rect [parent node]
-  (let [{px :x py :y pw :width ph :height} parent
-        layout (:layout node)]
-    {:x (+ px (float (or (:x layout) 0.0)))
-     :y (+ py (float (or (:y layout) 0.0)))
-     :width (layout-dimension (:width layout) pw)
-     :height (layout-dimension (:height layout) ph)}))
+;; ============================== dispatch ==============================
 
-(defn- point-in-rect? [{:keys [x y width height]} px py]
-  (and (<= x (float px) (+ x width))
-       (<= y (float py) (+ y height))))
-
-(defn- child-rects
-  "Pack children along row/column by declared main-axis sizes.
-   Unspecified sizes share the remaining space equally."
-  [rect direction children]
-  (let [horizontal? (= :row direction)
-        main-size (float (if horizontal? (:width rect) (:height rect)))
-        explicit (mapv (fn [child]
-                         (let [v (if horizontal?
-                                   (get-in child [:layout :width])
-                                   (get-in child [:layout :height]))]
-                           (when (number? v) (float v))))
-                       children)
-        known (reduce + 0.0 (keep identity explicit))
-        unknown (count (filter nil? explicit))
-        fill (if (pos? unknown)
-               (float (max 0.0 (/ (- main-size known) unknown)))
-               0.0)]
-    (loop [remaining (map vector children explicit)
-           cursor (float (if horizontal? (:x rect) (:y rect)))
-           acc []]
-      (if (empty? remaining)
-        acc
-        (let [[_child size*] (first remaining)
-              size (float (or size* fill))
-              child-rect (if horizontal?
-                           (assoc rect :x cursor :width size)
-                           (assoc rect :y cursor :height size))]
-          (recur (rest remaining) (float (+ cursor size)) (conj acc child-rect)))))))
-
-
-(defn- button-id [node]
-  (let [key (name (or (:key node) :button))]
-    (cond
-      (.contains key "left") 0
-      (.contains key "right") 1
-      :else nil)))
-
-(defn- bound-value [env node key]
-  (let [path (get-in node [:bind key])]
-    (cond
-      (and (vector? path) (= :state (first path)))
-      (get-in (:state env) (subvec path 1))
-      (and (vector? path) (= :item (first path)))
-      (get-in (:item env) (subvec path 1))
-      (and (vector? path) (= :parent (first path)))
-      (get-in (:parent env) (subvec path 1))
-      :else path)))
-
-(defn- visible-value? [value]
-  (or (nil? value)
-      (and (not (false? value))
-           (not (and (string? value) (string/blank? value))))))
-
-(defn- collection-items [env node]
-  (let [items (bound-value env node :items)]
-    (if (sequential? items) (vec items) [])))
-
-(defn- collection-item-rects [rect node items env]
-  (let [template (or (first (tree/ordered-children node)) {:type :text :layout {}})
-        direction (if (= :grid (:type node)) :row :column)
-        layout (:layout template)
-        count* (max 1 (count items))
-        fallback (if (= :row direction) (/ (:width rect) count*) (/ (:height rect) count*))
-        extent (layout-dimension (if (= :row direction) (:width layout) (:height layout)) fallback)
-        offset (float (or (get-in env [:scroll-offsets (:key node)]) 0.0))]
-    (mapv (fn [index _item]
-            (if (= :row direction)
-              (assoc rect :x (+ (:x rect) (* index extent) (- offset))
-                           :width extent)
-              (assoc rect :y (+ (:y rect) (* index extent) (- offset))
-                           :height extent)))
-          (range) items)))
-
-(defn- hit-scroll
-  ([node parent px py]
-   (hit-scroll node parent {:state {}} px py))
-  ([node parent env px py]
-   (let [rect (node-rect parent node)
-         type (:type node)
-         visible (bound-value env node :visible)]
-     (when (visible-value? visible)
-       (or (when (and (= :scroll type) (point-in-rect? rect px py))
-             (let [items (collection-items env node)
-                   templates (tree/ordered-children node)
-                   item-rects (collection-item-rects rect node items env)]
-               (some (fn [[item item-rect]]
-                       (some #(hit-scroll % item-rect (assoc env :item item) px py)
-                             templates))
-                     (map vector items item-rects))))
-           (when (#{:grid :repeater} type)
-             (let [items (collection-items env node)
-                   templates (tree/ordered-children node)
-                   item-rects (collection-item-rects rect node items env)]
-               (some (fn [[item item-rect]]
-                       (some #(hit-scroll % item-rect (assoc env :item item) px py)
-                             templates))
-                     (map vector items item-rects))))
-           (when (and (= :scroll type) (point-in-rect? rect px py))
-             {:key (:key node) :rect rect
-              :max-offset (let [items (collection-items env node)
-                                template (or (first (tree/ordered-children node)) {:layout {}})
-                                extent (layout-dimension (get-in template [:layout :height])
-                                                         (/ (:height rect) (max 1 (count items))))]
-                            (float (max 0.0 (- (* extent (count items)) (:height rect)))) )})
-           (let [children (tree/ordered-children node)
-                 direction (or (get-in node [:layout :direction])
-                               (when (= :row type) :row)
-                               (when (= :column type) :column))
-                 child-rects* (if direction (child-rects rect direction children)
-                                (mapv (constantly rect) children))]
-             (some (fn [[child child-rect]]
-                     (hit-scroll child child-rect env px py))
-                   (reverse (map vector children child-rects*)))))))))
-(declare hit-action)
-(defn- hover-target-key [node env]
-  {:id (:id node)
-   :key (:key node)
-   :index (:index env)})
-
-(defn- hit-hover
-  "Return the deepest node declaring `:on :hover` under a pointer."
-  ([node parent px py]
-   (hit-hover node parent {:state {}} px py))
-  ([node parent env px py]
-   (let [rect (node-rect parent node)
-         type (:type node)
-         visible (bound-value env node :visible)]
-     (when (visible-value? visible)
-       (or (when (and (= :scroll type) (point-in-rect? rect px py))
-             (let [items (collection-items env node)
-                   templates (tree/ordered-children node)
-                   item-rects (collection-item-rects rect node items env)]
-               (some (fn [[index item item-rect]]
-                       (some (fn [template]
-                               (hit-hover template item-rect
-                                          (assoc env :item item :index index)
-                                          px py))
-                             templates))
-                     (map vector (range) items item-rects))))
-           (when (#{:grid :repeater} type)
-             (let [items (collection-items env node)
-                   templates (tree/ordered-children node)
-                   item-rects (collection-item-rects rect node items env)]
-               (some (fn [[index item item-rect]]
-                       (some (fn [template]
-                               (hit-hover template item-rect
-                                          (assoc env :item item :index index)
-                                          px py))
-                             templates))
-                     (map vector (range) items item-rects))))
-           (let [children (tree/ordered-children node)
-                 direction (or (get-in node [:layout :direction])
-                               (when (= :row type) :row)
-                               (when (= :column type) :column))
-                 child-rects* (if direction (child-rects rect direction children)
-                                (mapv (constantly rect) children))]
-             (some (fn [[child child-rect]]
-                     (hit-hover child child-rect env px py))
-                   (reverse (map vector children child-rects*))))
-           (when (and (point-in-rect? rect px py)
-                      (get-in node [:on :hover]))
-             {:target (hover-target-key node env)
-              :action (get-in node [:on :hover])
-              :payload (cond-> {:target (:key node)}
-                         (contains? env :item)
-                          (assoc :item (:item env) :index (:index env)))}))))))
-(defn- hit-collection [node rect env px py]
-  (let [items (collection-items env node)
-        templates (let [children (tree/ordered-children node)]
-                    (if (seq children) children [{:type :text :layout {}}]))
-        item-rects (collection-item-rects rect node items env)]
-    (some (fn [[index item item-rect]]
-            (some (fn [template]
-                    (hit-action template item-rect
-                                (assoc env :item item :index index)
-                                px py))
-                  templates))
-          (map vector (range) items item-rects))))
-(defn- hit-action
-  ([node parent px py]
-   (hit-action node parent {:state {}} px py))
-  ([node parent env px py]
-   (let [rect (node-rect parent node)
-         type (:type node)
-         visible (bound-value env node :visible)]
-     (when (visible-value? visible)
-       (or (when (and (= :scroll type) (point-in-rect? rect px py))
-           (hit-collection node rect env px py))
-         (when (#{:grid :repeater} type)
-           (hit-collection node rect env px py))
-         (let [children (tree/ordered-children node)
-               direction (or (get-in node [:layout :direction])
-                             (when (= :row type) :row)
-                             (when (= :column type) :column))
-               child-rects* (if direction (child-rects rect direction children)
-                              (mapv (constantly rect) children))]
-           (some (fn [[child child-rect]]
-                   (hit-action child child-rect env px py))
-                 (reverse (map vector children child-rects*))))
-         (when (point-in-rect? rect px py)
-           (cond
-             (= :button type)
-             {:action (get-in node [:on :activate])
-              :payload (cond-> {:target (:key node)}
-                         (some? (button-id node))
-                         (assoc :button-id (button-id node))
-                         (contains? env :item)
-                         (assoc :item (:item env) :index (:index env)))}
-
-             (= :text-input type)
-             {:focus {:key (:key node)
-                      :path (get-in node [:bind :text])
-                      :field (get-in node [:semantics :field])
-                      :on (:on node)}}
-             (= :progress type)
-             (let [ratio (if (pos? (:width rect))
-                           (max 0.0 (min 1.0 (/ (- (float px) (:x rect)) (:width rect))))
-                           0.0)]
-               {:action (or (get-in node [:on :change])
-                            (get-in node [:on :activate])
-                            :input/progress)
-                :payload {:target (:key node) :value ratio :progress ratio :progress-input true}})
-
-             (let [sb (scrollbar/spec node)]
-               (and sb (:for sb) (not (:thumb? sb))))
-             (let [sb (scrollbar/spec node)
-                   target (:for sb)
-                   scroll-node (scrollbar/find-node (:nodes env) target)
-                   max-off (or (scrollbar/max-offset scroll-node env) 0.0)
-                   next-offset (scrollbar/offset-for-pointer sb rect py max-off)]
-               {:action :input/scroll
-                :scroll-offsets {target next-offset}
-                :payload {:target target
-                          :scroll-offset next-offset
-                          :progress (scrollbar/progress next-offset max-off)
-                          :progress-input true
-                          :scrollbar? true
-                          :sb sb
-                          :rect rect}})
-
-             (get-in node [:on :activate])
-             {:action (get-in node [:on :activate])
-              :payload (cond-> {:target (:key node)}
-                         (contains? env :item)
-                         (assoc :item (:item env) :index (:index env)))}
-             :else nil)))))))
-(defn- effective-artifact [instance]
-  (:artifact instance))
+(defn- clamp01 [v] (max 0.0 (min 1.0 v)))
 
 (defn- routed-event [instance event]
   (if (:action event)
     event
-    (let [focus (:focus instance)
-          artifact (effective-artifact instance)]
+    (let [^NodeTable table (:table instance)
+          ^LayoutArena arena (:arena instance)
+          resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+          root (:root-instance instance)
+          bind-maps (:bind-maps instance)
+          focus (:focus instance)]
       (case (:type event)
-        :pointer (let [point (event-point event (:geometry instance))
-                       event (assoc event :x (:x point) :y (:y point))
-                       root-rect (content-rect artifact (:geometry instance))
-                       hit (when (#{:down :drag} (:event-type event))
-                             (hit-action (:nodes artifact) root-rect
-                                        {:state (:view-state instance)
-                                         :nodes (:nodes artifact)
-                                         :scroll-offsets (:scroll-offsets instance)}
-                                        (:x event) (:y event)))
-                       ;; Keep scrollbar dragging alive even if the pointer leaves the track.
-                       hit (or (when (and (= :drag (:event-type event))
-                                          (get-in instance [:pointer-capture :scrollbar?]))
-                                 (let [cap (:pointer-capture instance)
-                                       sb (:sb cap)
-                                       target (:target cap)
-                                       env {:state (:view-state instance)
-                                            :nodes (:nodes artifact)
-                                            :scroll-offsets (:scroll-offsets instance)}
-                                       scroll-node (scrollbar/find-node (:nodes env) target)
-                                       max-off (float (or (:max-off cap)
-                                                          (scrollbar/max-offset scroll-node env)
-                                                          0.0))
-                                       next-offset (scrollbar/offset-for-drag
-                                                     sb
-                                                     (float (or (:start-offset cap) 0.0))
-                                                     (float (or (:start-py cap) (:y event)))
-                                                     (:y event)
-                                                     max-off)]
-                                   {:action :input/scroll
-                                    :scroll-offsets {target next-offset}
-                                    :pointer-capture cap
-                                    :payload {:target target
-                                              :scroll-offset next-offset
-                                              :progress (scrollbar/progress next-offset max-off)
-                                              :progress-input true
-                                              :scrollbar? true
-                                              :drag? true}}))
-                               hit)
-                       hover (when (= :move (:event-type event))
-                               (hit-hover (:nodes artifact) root-rect
-                                          {:state (:view-state instance)
-                                           :nodes (:nodes artifact)
-                                           :scroll-offsets (:scroll-offsets instance)}
-                                          (:x event) (:y event)))
-                       drag-target (when (and (= :drag (:event-type event))
-                                              (not (get-in hit [:payload :scrollbar?])))
-                                    (hit-scroll (:nodes artifact) root-rect
-                                               {:state (:view-state instance)
-                                                :nodes (:nodes artifact)
-                                                :scroll-offsets (:scroll-offsets instance)}
-                                               (:x event) (:y event)))
-                       drag-key (:key drag-target)
-                       drag-current (float (or (get-in instance [:scroll-offsets drag-key]) 0.0))
-                       drag-next (float (max 0.0 (min (float (or (:max-offset drag-target) 0.0))
-                                                     (+ drag-current (* -1.0 (double (or (:drag-y event) 0.0)))))))
-                       previous (:hover-target instance)
-                       changed? (and (= :move (:event-type event))
-                                     (not= (:target hover) (:target previous)))
-                       hover-action (when changed?
-                                      (or (:action hover)
-                                          (when previous (:action previous))))]
-                   (cond
-                     (= :up (:event-type event))
-                     {:action :input/pointer
-                      :pointer-capture nil
-                      :payload event}
+        :pointer
+        (let [[px py] (event-point event (:geometry instance))
+              px (float px) py (float py)
+              event (assoc event :x px :y py)
+              ^HitKernel$Hit hit (when (and (>= root 0) (#{:down :drag} (:event-type event)))
+                                   (HitKernel/topmostAt table arena resolver root px py))
+              ^HitKernel$Hit hover (when (and (>= root 0) (= :move (:event-type event)))
+                                     (HitKernel/topmostAt table arena resolver root px py))
+              hit-node (when hit (.node hit))
+              previous (:hover-target instance)
+              hover-key (when hover (node-key table (.node hover)))
+              prev-key (:key previous)
+              changed? (and (= :move (:event-type event)) (not= hover-key prev-key))]
+          (cond
+            (= :up (:event-type event))
+            {:action :input/pointer :pointer-capture nil :payload event}
 
-                     (and (= :drag (:event-type event))
-                          (get-in hit [:payload :progress-input]))
-                     hit
-                     (and (= :drag (:event-type event)) drag-key)
-                     {:action :input/scroll
-                      :scroll-offsets (assoc (:scroll-offsets instance) drag-key drag-next)
-                      :payload (assoc event :target drag-key :scroll-offset drag-next :drag? true)}
-                     changed?
-                     {:action (or hover-action :input/hover)
-                      :hover-target hover
-                      :payload (merge (or (:payload hover)
-                                          (:payload previous)
-                                          {})
-                                      {:hover? (boolean hover)
-                                       :hover-event (if hover :enter :leave)
-                                       :previous-hover (:target previous)})}
-                     (get-in hit [:payload :scrollbar?])
-                     (let [target (get-in hit [:payload :target])
-                           sb (get-in hit [:payload :sb])
-                           start-offset (float (or (get-in hit [:payload :scroll-offset])
-                                                   (get-in instance [:scroll-offsets target])
-                                                   0.0))
-                           max-off (float (or (scrollbar/max-offset
-                                                (scrollbar/find-node (:nodes artifact) target)
-                                                {:state (:view-state instance)
-                                                 :nodes (:nodes artifact)})
-                                              0.0))]
-                       (assoc hit :pointer-capture {:scrollbar? true
-                                                    :sb sb
-                                                    :rect (get-in hit [:payload :rect])
-                                                    :target target
-                                                    :start-py (float (:y event))
-                                                    :start-offset start-offset
-                                                    :max-off max-off}))
-                     hit
-                     (update hit :payload merge
-                                    (cond-> {}
-                                      (and (contains? event :button) (not= 0 (:button event)))
-                                      (assoc :button (:button event))
-                                      (= :viewport (:space event))
-                                      (assoc :space :viewport)))
-                     :else {:action :input/pointer :payload event}))
+            (and hit (= UiOp/PROGRESS (aget ^ints (.-op table) hit-node)))
+            (let [x (.x arena (.instance hit))
+                  w (.w arena (.instance hit))
+                  ratio (float (if (pos? w) (clamp01 (/ (- px x) w)) 0.0))
+                  on-map (nth (:on-maps instance) hit-node nil)]
+              {:action (or (:change on-map) (:activate on-map) :input/progress)
+               :payload {:target (node-key table hit-node)
+                        :value ratio :progress ratio :progress-input true}})
+
+            (and hit (.has table hit-node NodeFlags/FOCUSABLE))
+            {:focus {:key (node-key table hit-node)
+                    :path (:text (nth bind-maps hit-node nil))
+                    :on (nth (:on-maps instance) hit-node nil)}}
+
+            hit
+            (let [on-map (nth (:on-maps instance) hit-node nil)]
+              {:action (:activate on-map)
+               :payload (cond-> {:target (node-key table hit-node)}
+                          (some? (.item hit))
+                          (assoc :item (.item hit) :index (.itemIndex hit)))})
+
+            (and (= :drag (:event-type event)) (>= root 0))
+            (let [scroll-inst (HitKernel/enclosingScrollAt table arena resolver root px py)]
+              (if (>= scroll-inst 0)
+                (let [node (aget ^ints (.-nodeOf arena) scroll-inst)
+                      key (node-key table node)
+                      max-off (scroll-max-offset table arena scroll-inst)
+                      current (float (or (get (:scroll-offsets instance) key) 0.0))
+                      next-offset (float (max 0.0 (min max-off (+ current (* -1.0 (double (or (:drag-y event) 0.0)))))))]
+                  {:action :input/scroll
+                   :scroll-offsets {key next-offset}
+                   :payload (assoc event :target key :scroll-offset next-offset :drag? true)})
+                {:action :input/pointer :payload event}))
+
+            changed?
+            {:action :input/hover
+             :hover-target (when hover {:key hover-key :instance (.instance ^HitKernel$Hit hover)})
+             :payload {:target hover-key :hover? (boolean hover)
+                      :hover-event (if hover :enter :leave) :previous-hover prev-key}}
+
+            :else {:action :input/pointer :payload event}))
+
         :focus {:action :input/focus :payload event}
+
         :key (let [key-code (int (or (:key-code event) -1))
-                   submit-action (get-in focus [:on :submit])]
-               (cond
-                 (and (= key-code 257) submit-action)
-                 {:action submit-action :payload {:value (let [path (get-in focus [:path])]
-                                                       (get-in (:view-state instance)
-                                                                (if (and (vector? path) (= :state (first path)))
-                                                                  (subvec path 1)
-                                                                  path)))}}
-                 (= key-code 259) {:action :input/backspace :payload event}
-                 :else {:action :input/key :payload event}))
-        :character {:action (or (get-in focus [:on :change]) :input/character)
-                    :payload event}
-        :scroll (let [point (event-point event (:geometry instance))
-                       root-rect (content-rect artifact (:geometry instance))
-                       env {:state (:view-state instance)
-                            :nodes (:nodes artifact)
-                            :scroll-offsets (:scroll-offsets instance)}
-                       target (hit-scroll (:nodes artifact)
-                                          root-rect env
-                                          (:x point) (:y point))
-                       ;; Wheel over the scrollbar track should scroll the linked content.
-                       bar (when-not target
-                             (let [h (hit-action (:nodes artifact) root-rect env
-                                                 (:x point) (:y point))]
-                               (when (get-in h [:payload :scrollbar?]) h)))
-                       key (or (:key target) (get-in bar [:payload :target]))
-                       max-off (float (or (:max-offset target)
-                                          (when key
-                                            (scrollbar/max-offset
-                                              (scrollbar/find-node (:nodes env) key)
-                                              env))
-                                          0.0))
-                       current (float (or (get-in instance [:scroll-offsets key]) 0.0))
-                       delta (float (* -12.0 (double (or (:delta event) 0.0))))
-                       next-offset (float (max 0.0 (min max-off (+ current delta))))]
-                   {:action :input/scroll
-                    :scroll-offsets (if key (assoc (:scroll-offsets instance) key next-offset)
-                                       (:scroll-offsets instance))
-                    :payload (cond-> event
-                               key (assoc :target key :scroll-offset next-offset))})
+                  submit-action (get-in focus [:on :submit])]
+              (cond
+                (and (= key-code 257) submit-action)
+                {:action submit-action
+                 :payload {:value (let [path (:path focus)]
+                                    (get-in (:view-state instance)
+                                            (if (and (vector? path) (= :state (first path)))
+                                              (subvec path 1) path)))}}
+                (= key-code 259) {:action :input/backspace :payload event}
+                :else {:action :input/key :payload event}))
+
+        :character {:action (or (get-in focus [:on :change]) :input/character) :payload event}
+
+        :scroll
+        (let [[px py] (event-point event (:geometry instance))
+              px (float px) py (float py)
+              scroll-inst (when (>= root 0) (HitKernel/enclosingScrollAt table arena resolver root px py))]
+          (if (and scroll-inst (>= scroll-inst 0))
+            (let [node (aget ^ints (.-nodeOf arena) scroll-inst)
+                  key (node-key table node)
+                  max-off (scroll-max-offset table arena scroll-inst)
+                  current (float (or (get (:scroll-offsets instance) key) 0.0))
+                  delta (float (* -12.0 (double (or (:delta event) 0.0))))
+                  next-offset (float (max 0.0 (min max-off (+ current delta))))]
+              {:action :input/scroll
+               :scroll-offsets {key next-offset}
+               :payload (assoc event :target key :scroll-offset next-offset)})
+            {:action :input/unknown :payload event}))
+
         {:action :input/unknown :payload event}))))
 
 (defn- focus-path [focus]
   (when-let [path (:path focus)]
-    (if (and (vector? path) (= :state (first path)))
-      (subvec path 1)
-      path)))
+    (if (and (vector? path) (= :state (first path))) (subvec path 1) path)))
 
 (defn- edit-input-state [state focus action payload]
   (if-let [path (focus-path focus)]
@@ -604,28 +451,22 @@
   [^UiRuntime runtime mount event]
   (owner-thread! runtime)
   (let [instance (instance! runtime mount)
+        instance (assoc instance :root-instance (ensure-layout! instance))
         routed (routed-event instance event)
         {:keys [action payload focus]} routed
         focus (or focus (:focus instance))
         _ (when (contains? routed :focus)
             (vswap! (:state runtime) assoc-in [:mounts mount :focus] focus))
         _ (when (contains? routed :hover-target)
-            (vswap! (:state runtime) assoc-in [:mounts mount :hover-target]
-                    (:hover-target routed)))
-        _ (when (contains? routed :pointer-capture)
-            (vswap! (:state runtime) assoc-in [:mounts mount :pointer-capture]
-                    (:pointer-capture routed)))
+            (vswap! (:state runtime) assoc-in [:mounts mount :hover-target] (:hover-target routed)))
         _ (when (contains? routed :scroll-offsets)
             (vswap! (:state runtime) update-in [:mounts mount :scroll-offsets]
-                    (fn [current]
-                      (merge (or current {}) (:scroll-offsets routed)))))
+                    (fn [current] (merge (or current {}) (:scroll-offsets routed)))))
         state-before (:view-state instance)
         state-edited (edit-input-state state-before focus action payload)
         payload (input-payload state-edited focus action payload)
         response ((:reduce instance) state-edited action payload)
-        next-state (if (contains? response :state)
-                     (:state response)
-                     state-edited)
+        next-state (if (contains? response :state) (:state response) state-edited)
         effects (or (:effects response) [])
         result (or (:event-result response) :pass)]
     (present! runtime mount next-state)
@@ -636,10 +477,10 @@
           (binding [*out* *err*]
             (println "Presentation effect failed:" (pr-str effect) error)))))
     result))
+
+;; ============================== extract ==============================
+
 (defn extract-stage!
-  "Return a stage packet envelope and reuse cached commands when the mount is clean.
-   A present!/host update invalidates :paint; the next extraction repaints once and
-   clears the dependent dirty flags."
   [^UiRuntime runtime stage frame-context]
   (owner-thread! runtime)
   (update-stage-geometry! runtime stage frame-context)
@@ -649,30 +490,26 @@
     {:stage stage
      :frame-context frame-context
      :mounts (mapv (fn [instance]
-                     (let [repaint? (contains? (:dirty instance) :paint)
-                           commands (if repaint?
-                                      (vec ((:paint-fn instance)
-                                            (:artifact instance)
-                                            (assoc (:view-state instance)
-                                                   :presentation/scroll-offsets
-                                                   (:scroll-offsets instance))
-                                            (:geometry instance)))
-                                      (:commands instance))
-                           dirty (if repaint?
-                                   (disj (:dirty instance) :structure :layout :paint :semantics)
-                                   (:dirty instance))]
-                       (when repaint?
+                     (let [root (ensure-layout! instance)
+                           ^CmdBuf cmdbuf (:cmdbuf instance)
+                           resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+                           ctx (LayoutContext. resolver nil nil)]
+                       (.reset cmdbuf)
+                       (when (>= root 0)
+                         (PaintKernel/paint (:table instance) (:arena instance) ctx cmdbuf root))
+                       (let [commands (.finish cmdbuf 0 (.-clipRects ^LayoutArena (:arena instance)) (.-resources ^NodeTable (:table instance)))]
                          (vswap! (:state runtime)
                                  (fn [snapshot]
                                    (-> snapshot
-                                       (assoc-in [:mounts (:handle instance) :commands] commands)
-                                       (assoc-in [:mounts (:handle instance) :dirty] dirty)))))
-                       (assoc (select-keys instance [:handle :view-id :geometry])
-                              :dirty dirty
-                              :commands commands)))
+                                       (assoc-in [:mounts (:handle instance) :root-instance] root)
+                                       (assoc-in [:mounts (:handle instance) :commands] commands))))
+                         (assoc (select-keys instance [:handle :view-id :geometry])
+                                :commands commands))))
                    instances)}))
+
 (defn semantics [^UiRuntime runtime mount]
   (get-in (instance! runtime mount) [:artifact :semantics]))
+
 (defn unmount! [^UiRuntime runtime mount]
   (owner-thread! runtime)
   (when-let [instance (get-in (runtime-state runtime) [:mounts mount])]
