@@ -18,9 +18,9 @@
       (case (long key-code)
         -100 :mouse-left
         -99 :mouse-right
-        (or (bridge/call-adapter :settings-key-name key-code)
+        (or (bridge/settings-key-name key-code)
             (str "KEY_" key-code)))
-      (or (bridge/call-adapter :settings-key-name key-code)
+      (or (bridge/settings-key-name key-code)
           (str "KEY_" key-code)))))
 
 (def ^:private cpbar-scale 0.2)

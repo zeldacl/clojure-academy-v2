@@ -42,6 +42,8 @@
 (def ^:private local-player-pos-fn nil)
 (def ^:private camera-position-fn nil)
 (def ^:private camera-raycast-visible-fn nil)
+(def ^:private settings-key-name-fn nil)
+(def ^:private keybind-get-key-code-fn nil)
 
 (def ^:private hot-operation-vars
   {:slot-key-down #'slot-key-down-fn
@@ -67,6 +69,8 @@
    :local-player-pos #'local-player-pos-fn
    :camera-position #'camera-position-fn
    :camera-raycast-visible? #'camera-raycast-visible-fn
+   :settings-key-name #'settings-key-name-fn
+   :keybind-get-key-code #'keybind-get-key-code-fn
    })
 
 (defn- replace-hot-operations! [ops]
@@ -166,6 +170,9 @@
 (defn camera-raycast-visible? [from-x from-y from-z to-x to-y to-z]
   (when camera-raycast-visible-fn
     (camera-raycast-visible-fn from-x from-y from-z to-x to-y to-z)))
+
+(defn settings-key-name [key-code] (when settings-key-name-fn (settings-key-name-fn key-code)))
+(defn keybind-get-key-code [key-id] (when keybind-get-key-code-fn (keybind-get-key-code-fn key-id)))
 
 (defn terminal-cursor-hide! [] (terminal-cursor-hide-fn))
 (defn terminal-cursor-show! [] (terminal-cursor-show-fn))

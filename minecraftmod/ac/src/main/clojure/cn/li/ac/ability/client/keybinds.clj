@@ -519,9 +519,7 @@
                            ;; Live KeyMapping binding in AC convention (mouse
                            ;; buttons -100+value) — the config value is only
                            ;; the initial seed and goes stale on rebind.
-                           (client-bridge/call-adapter
-                             :keybind-get-key-code
-                             (keyword (str "ability-key-" idx)))))
+                           (client-bridge/keybind-get-key-code (keyword (str "ability-key-" idx)))))
                        (range 4)))
            (when (flashing-active? player-uuid)
              flashing-movement-key-codes))

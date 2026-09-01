@@ -1401,9 +1401,12 @@ tasks.register("verifyClientRenderBridgeBoundary") {
         def bridge = file("mcmod/src/main/clojure/cn/li/mcmod/client/platform_bridge.clj").text
         def renderFiles = [
                 file("ac/src/main/clojure/cn/li/ac/block/imag_phase/render.clj"),
-                file("ac/src/main/clojure/cn/li/ac/block/cat_engine/render.clj")
+                file("ac/src/main/clojure/cn/li/ac/block/cat_engine/render.clj"),
+                file("ac/src/main/clojure/cn/li/ac/ability/client/hud.clj"),
+                file("ac/src/main/clojure/cn/li/ac/ability/client/keybinds.clj")
         ]
-        [":local-player-pos", ":camera-position", ":camera-raycast-visible?"].each { key ->
+        [":local-player-pos", ":camera-position", ":camera-raycast-visible?",
+         ":settings-key-name", ":keybind-get-key-code"].each { key ->
             if (!bridge.contains(key)) {
                 throw new GradleException("client bridge is missing cached render operation ${key}")
             }
@@ -1412,7 +1415,7 @@ tasks.register("verifyClientRenderBridgeBoundary") {
             if (!source.exists()) {
                 throw new GradleException("expected AC renderer is missing: ${source}")
             }
-            if (source.text =~ /call-adapter\s+:local-player-pos|call-adapter\s+:camera-position|call-adapter\s+:camera-raycast-visible\?/) {
+            if (source.text =~ /call-adapter\s+:(local-player-pos|camera-position|camera-raycast-visible\?|settings-key-name|keybind-get-key-code)/) {
                 throw new GradleException("renderer still performs dynamic bridge lookup: ${source}")
             }
         }
