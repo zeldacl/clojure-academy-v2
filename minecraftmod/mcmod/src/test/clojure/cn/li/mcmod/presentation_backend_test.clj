@@ -17,12 +17,14 @@
   (is (true? (get-in (backend/create :mc-26-2) [:capabilities :instancing?]))))
 
 (deftest neutral-render-command-vocabulary-is-sealed
+  ;; UI draw primitives moved to cn.li.mcmod.runtime.ui.UiDrawList (a
+  ;; run-batched struct-of-arrays, not a RenderCommand variant); this
+  ;; interface now covers only the world-space/effect vocabulary vfx-core
+  ;; and the world renderer actually share.
   (let [permitted (->> (.getPermittedSubclasses RenderCommand)
                        (map #(.getSimpleName ^Class %))
                        set)]
-    (is (= #{"UiQuadBatch" "UiImageBatch" "UiText" "UiItemPreview"
-             "UiModelPreview" "PushClip" "PopClip" "Transform" "Mask"
-             "Layer" "Mesh" "Billboard" "ParticleBatch" "Ribbon" "Beam"
+    (is (= #{"Layer" "Mesh" "Billboard" "ParticleBatch" "Ribbon" "Beam"
              "CameraContribution" "PostProcess" "AudioContribution"
              "OrderBarrier" "Batch"}
            permitted))))
