@@ -14,7 +14,7 @@
 (def ^:private skill-path [:registry :skills])
 
 (defn- stable-skill-identity [spec]
-  (select-keys spec [:id :category-id :level :ctrl-id :pattern]))
+  (select-keys spec [:id :category-id :level :ctrl-id]))
 
 (def ^:private ops
   (registry-core/make-registry-ops skill-path

@@ -2616,13 +2616,11 @@ tasks.register("lintClojureNative") {
 // Effect-runtime source is intentionally stricter than the legacy AC code:
 // carriers are Java field bags and all executable behavior remains Clojure.
 def effectRuntimeClojureRoots = [
-    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expr.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/safe_edn.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/seeded_rng.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/effect_schema.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj"),
-    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/effect_contract.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
 ]
 
