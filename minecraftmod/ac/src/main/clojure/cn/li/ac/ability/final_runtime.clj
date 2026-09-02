@@ -61,7 +61,8 @@
                                           true
                                           (handler (merge (:args command)
                                                           {:owner (:owner command)
-                                                           :world-id (:world-id command)}))))]))
+                                                           :world-id (:world-id command)
+                                                           :ability-id (:ability-id command)}))))]))
                               (:actions snapshot))})]
     (create-runtime {:host host
                      :state-provider state-provider

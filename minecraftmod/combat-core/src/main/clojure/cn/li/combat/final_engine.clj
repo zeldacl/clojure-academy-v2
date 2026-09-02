@@ -474,6 +474,16 @@
             (assoc context :txn txn))
           :action
           (let [id (command-id engine path)
+                ;; :ability-id rides along on the command the same way :owner
+                ;; and :world-id already do -- frame-derived infrastructure,
+                ;; not an EDN-authored input. host-command's :keys destructure
+                ;; only requires id/capability/owner/world-id/args to be
+                ;; present; it never strips extra keys (returns (assoc command
+                ;; ...) on the full :as command map), so this survives through
+                ;; to whatever applies the command unmodified. This is what
+                ;; lets a settled continuation (e.g. :projectile/schedule-beam)
+                ;; know which ability -- and therefore which content module --
+                ;; it belongs to, without combat-core knowing tenancy exists.
                 command (contracts/host-command {:id id
                                                  :capability (or (:capability node)
                                                                  (when (contains? (:actions (:host engine)) component)
@@ -482,6 +492,7 @@
                                                                  component)
                                                  :owner (:owner (:frame context))
                                                  :world-id (:world (:frame context))
+                                                 :ability-id (:ability-id (:frame context))
                                                  :args (action-args node context)})
                 context (update context :commands conj command)
                 context (if-let [bind (node-bind node)]

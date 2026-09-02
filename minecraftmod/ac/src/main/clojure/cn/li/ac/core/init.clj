@@ -60,11 +60,16 @@
   ;; precondition R9) -- capability-aware load-time validation can only see
   ;; what's already registered at the moment it runs. World-facing
   ;; capabilities are entirely Combat Core's own; AC only links its own
+  ;; execute-result! is keyed by content-id, not one shared closure -- AC is
+  ;; the only tenant today, so content-id-for is a constant, but the
+  ;; dispatch shape is already what bc/cc plug into later (see
+  ;; cn.li.ability.combat/create-runtime's docstring).
   (ability-combat/install-runtime!
     (ability-combat/create-runtime
-     {:execute-result! (fn [owner result]
-                         (when (= :applied (:status result))
-                           (combat-runtime/finalize-result! owner result))) }))
+     {:execute-result! {:ac (fn [owner result]
+                              (when (= :applied (:status result))
+                                (combat-runtime/finalize-result! owner result)))}
+      :content-id-for (constantly :ac)}))
   (combat-platform/install!
    {:schedule-beam! ability-combat/schedule-installed!})
   (combat-runtime/install-ac-host-capabilities!)
