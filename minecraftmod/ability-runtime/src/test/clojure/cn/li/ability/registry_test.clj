@@ -45,10 +45,15 @@
     (is (= [:ac :bc] (:owners (ex-data error))))
     (is (= :groundshock (:id (ex-data error))))))
 
-(deftest rejects-effect-id-collision-across-tenants-test
-  (let [registry (registry/add-bundle (registry/empty-registry) (bundle :ac [] [:arc-ring]))]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"effect id collision"
-                          (registry/add-bundle registry (bundle :bc [] [:arc-ring]))))))
+(deftest rejects-effect-id-collision-across-tenants-and-names-both-owners-test
+  (let [registry (registry/add-bundle (registry/empty-registry) (bundle :ac [] [:arc-ring]))
+        error (try
+                (registry/add-bundle registry (bundle :bc [] [:arc-ring]))
+                nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is error)
+    (is (= [:ac :bc] (:owners (ex-data error))))
+    (is (= :arc-ring (:id (ex-data error))))))
 
 (deftest freeze-then-add-bundle-throws-test
   (let [registry (registry/freeze (registry/add-bundle (registry/empty-registry) (bundle :ac [] [])))]
@@ -67,3 +72,27 @@
   (let [registry (registry/freeze (registry/add-bundle (registry/empty-registry) (bundle :ac [] [])))]
     (is (= {:id :combat/damage} (registry/descriptor-in registry :ac :combat/damage)))
     (is (nil? (registry/descriptor-in registry :ac :unknown/id)))))
+
+(defn- bundle-with-descriptor
+  "Like `bundle`, but with a caller-supplied :combat/damage descriptor
+   instead of the fixture default -- add-bundle does not collision-check
+   node-environment descriptor ids (a shared id like :combat/damage
+   legitimately appears identically in every tenant's own environment), so
+   two bundles CAN disagree on the same descriptor id without either
+   add-bundle or freeze ever throwing. descriptor-in's own-tenant-first
+   lookup is what has to keep that from becoming cross-tenant leakage."
+  [content-id descriptor]
+  (let [b (compose/compose-catalog
+           content-id
+           {:descriptors {:combat/damage descriptor}}
+           {:registrations []}
+           {:effects {}})]
+    (assoc b :content-hash (node-api/content-hash (compose/catalog-fingerprint-input b)))))
+
+(deftest descriptor-in-prefers-tenants-own-descriptor-over-another-tenants-test
+  (let [registry (registry/freeze
+                  (-> (registry/empty-registry)
+                      (registry/add-bundle (bundle-with-descriptor :ac {:id :combat/damage :tenant :ac}))
+                      (registry/add-bundle (bundle-with-descriptor :bc {:id :combat/damage :tenant :bc}))))]
+    (is (= {:id :combat/damage :tenant :ac} (registry/descriptor-in registry :ac :combat/damage)))
+    (is (= {:id :combat/damage :tenant :bc} (registry/descriptor-in registry :bc :combat/damage)))))
