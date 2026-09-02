@@ -12,19 +12,17 @@
     :margin [0 0 0 0] :padding [0 0 0 0] :min-w 0 :min-h 0 :max-w 0 :max-h 0
     :gap 0.0 :aspect 0.0 :x 0.0 :y 0.0 :font-size 8.0 :rgba 0xFFFFFFFF
     :text nil :resource nil :key nil :bind {} :on {} :children []}"
+  (:require [cn.li.presentation.core.artifact-schema :as schema])
   (:import [cn.li.mcmod.runtime.ui UiOp]))
 
-(def ^:private flag-bits
-  {:has-clip 1 :is-scroll 2 :is-collection 4 :hit-testable 8
-   :has-visible-bind 16 :wrap 32 :focusable 64 :animated 128
-   :opaque 256 :scrollbar 512 :has-direction 1024})
-
-(defn- flags->int [flags] (reduce (fn [acc f] (bit-or acc (get flag-bits f 0))) 0 flags))
-
-(def ^:private direction->int {:none 0 :row 1 :column 2})
-(def ^:private justify->int {:start 0 :center 1 :end 2 :space-between 3 :space-around 4})
-(def ^:private align->int {:inherit -1 :start 0 :center 1 :end 2 :stretch 3})
-(def ^:private size-mode->int {:auto 0 :fixed 1 :pct 2 :weight 3 :fill 4})
+;; The five line-format encoding tables (P5: extracted to artifact_schema,
+;; consumed here and by presentation-compiler's real writer -- this test
+;; constructor used to carry its own duplicate copy).
+(def ^:private flags->int schema/flags->int)
+(def ^:private direction->int schema/direction->int)
+(def ^:private justify->int schema/justify->int)
+(def ^:private align->int schema/align->int)
+(def ^:private size-mode->int schema/size-mode->int)
 
 (def ^:private defaults
   {:op -1 :flags #{} :direction :none :justify :start :align-items :start :align-self :inherit

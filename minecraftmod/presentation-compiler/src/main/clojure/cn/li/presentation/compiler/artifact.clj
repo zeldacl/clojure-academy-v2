@@ -14,7 +14,8 @@
    docs/06-gui/PRESENTATION_V3.md for the full primitive-lowering table."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [cn.li.presentation.core.artifact-schema :as schema])
   (:import [cn.li.mcmod.runtime.ui UiOp]
            [java.io File]
            [java.math BigInteger]
@@ -32,21 +33,16 @@
   (throw (ex-info (str path ": " message) {:path path})))
 
 ;; ============================== flag / mode bits ==============================
-;; Must match presentation-core's cn.li.presentation.core.engine constant
-;; interfaces exactly (NodeFlags / SizeMode / Direction / Justify / Align).
+;; The five line-format encoding tables (flag-bits/direction->int/justify->
+;; int/align->int/size-mode->int) live in presentation-core's artifact_schema
+;; (P5) -- this compiler and presentation-core's own test_artifact.clj both
+;; consume the same numbers, extracted rather than duplicated.
 
-(def ^:private flag-bits
-  {:has-clip 1 :is-scroll 2 :is-collection 4 :hit-testable 8
-   :has-visible-bind 16 :wrap 32 :focusable 64 :animated 128
-   :opaque 256 :scrollbar 512 :has-direction 1024})
-
-(defn- flags->int [flag-set]
-  (reduce (fn [acc f] (bit-or acc (long (get flag-bits f 0)))) 0 flag-set))
-
-(def ^:private size-mode->int {:auto 0 :fixed 1 :pct 2 :weight 3 :fill 4})
-(def ^:private direction->int {:none 0 :row 1 :column 2})
-(def ^:private justify->int {:start 0 :center 1 :end 2 :space-between 3 :space-around 4})
-(def ^:private align->int {:inherit -1 :start 0 :center 1 :end 2 :stretch 3})
+(def ^:private flags->int schema/flags->int)
+(def ^:private size-mode->int schema/size-mode->int)
+(def ^:private direction->int schema/direction->int)
+(def ^:private justify->int schema/justify->int)
+(def ^:private align->int schema/align->int)
 
 (defn- lookup! [table k path]
   (if (contains? table k)
