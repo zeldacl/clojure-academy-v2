@@ -58,6 +58,16 @@ sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/m
 // comment in ac/build.gradle, where this exact gap was found and fixed
 // first.
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/platform/shared/src/main/clojure')
+// cn.li.node.dep-check is node-core's shared dependency-direction checker
+// (P7) -- see the matching comment in vfx-core/build.gradle for why the
+// whole test dir (not just dep_check.clj) is added, and why this cannot
+// double-count node-core's own tests here. Requires node-core's
+// test_runner.clj (pulled in alongside it) to resolve
+// cn.li.test-support.pure-auto-test-runner even though ability-runtime's
+// own test-runner uses the Framework-fixture variant instead -- same gap
+// combat-core/vfx-core already closed with this exact srcDir line.
+sourceSets.test.clojure.srcDir rootProject.file('node-core/src/test/clojure')
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
 
 tasks.named("processResources").configure {
     from(sourceSets.main.clojure.srcDirs) {

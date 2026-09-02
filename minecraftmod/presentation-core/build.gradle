@@ -41,6 +41,16 @@ tasks.register("runCoreClojureTests", JavaExec) {
 // core's tests have no global registry state that fixture exists to isolate.
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
 
+// P7: presentation-core has its own local copy of node-core's dep-check
+// helper (cn.li.presentation.core.dep-check) rather than pulling in
+// node-core/src/test/clojure the way combat-core/vfx-core do -- those two
+// already depend on node-core's main classes for real, so the rest of
+// that directory's test files (which need them) compile fine as
+// collateral; presentation-core deliberately has zero node-core
+// dependency, and this test exists to prove exactly that, so reaching
+// into node-core's classpath just to satisfy unrelated pulled-in files
+// would undermine the thing being tested.
+
 // Core behavior remains Minecraft-free. The only shared compile contract is
 // mcmod's version-neutral domain/data bridge; no loader dependency is allowed.
 // api (not implementation): the frame ABI (RenderCommand/RenderStage/
