@@ -20,7 +20,7 @@
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.combat.vocabulary :as combat-vocabulary]
             [cn.li.node.descriptor :as node-descriptors]
-            [cn.li.ac.client.effect-controller :as effect-controller]
+            [cn.li.ability.client-vfx :as effect-controller]
             [cn.li.ac.ability.registry.skill :as skill-registry]))
 
 ;; Exact public registration baseline extracted from main's Clojure registry:

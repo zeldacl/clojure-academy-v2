@@ -1,7 +1,8 @@
-(ns cn.li.ac.client.effect-controller-test
-  "Headless tests for the final stable-key VFX composition root."
+(ns cn.li.ability.client-vfx-test
+  "Headless tests for the final stable-key VFX composition root, moved out
+   of ac (P4.5) since the file it tests owns no AC-specific state."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.client.effect-controller :as controller]))
+            [cn.li.ability.client-vfx :as controller]))
 
 (defn- final-catalog []
   {:effects
@@ -43,4 +44,3 @@
     (let [instance (first (vals @(:instances (controller/runtime))))]
       (is (= 11 (:event-seq instance)))
       (is (= 2.0 (get-in instance [:params :value]))))))
-

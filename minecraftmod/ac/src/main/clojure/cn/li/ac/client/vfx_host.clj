@@ -3,7 +3,7 @@
 
    This namespace exposes the opaque VFX Frame ABI without coupling it to
    Presentation.  Installation is explicit and idempotent at client startup."
-  (:require [cn.li.ac.client.effect-controller :as vfx]))
+  (:require [cn.li.ability.client-vfx :as vfx]))
 
 (defn install! []
   ;; AC is a standalone neutral module, so the platform-neutral ABI is linked

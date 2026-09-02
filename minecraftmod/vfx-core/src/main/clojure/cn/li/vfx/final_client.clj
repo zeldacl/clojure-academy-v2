@@ -30,11 +30,25 @@
   (set (keys @(:registry runtime))))
 (defn effect-lifecycle [runtime effect-id]
   (get-in @(:registry runtime) [effect-id :lifecycle]))
-(defn register-effect! [runtime descriptor]
-  (when @(:frozen? runtime)
-    (throw (ex-info "final VFX registry is frozen" {:effect-id (:id descriptor)})))
-  (swap! (:registry runtime) assoc (:id descriptor) descriptor)
-  nil)
+(defn register-effect!
+  "opts is {:allow-overwrite? true} to intentionally replace an
+   already-registered descriptor (a test/dev-reload override) -- without
+   it, registering an already-claimed id throws. The one real caller
+   (cn.li.ability.client-vfx/register-catalog!) already self-guards with
+   its own `(when-not (contains? (registered-effects runtime) effect-id) ...)`
+   before calling this, so the default costs it nothing and this only ever
+   fires for a genuine cross-tenant id collision -- previously the second
+   tenant's descriptor silently won with no error."
+  ([runtime descriptor] (register-effect! runtime descriptor {}))
+  ([runtime descriptor {:keys [allow-overwrite?]}]
+   (when @(:frozen? runtime)
+     (throw (ex-info "final VFX registry is frozen" {:effect-id (:id descriptor)})))
+   (when (and (not allow-overwrite?)
+              (contains? @(:registry runtime) (:id descriptor)))
+     (throw (ex-info "VFX effect id already registered"
+                     {:effect-id (:id descriptor)})))
+   (swap! (:registry runtime) assoc (:id descriptor) descriptor)
+   nil))
 
 (defn- validated-params [descriptor params]
   (let [parameters (vec (:parameters descriptor))

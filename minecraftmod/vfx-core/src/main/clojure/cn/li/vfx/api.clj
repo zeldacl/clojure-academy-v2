@@ -1,8 +1,8 @@
 (ns cn.li.vfx.api
-  "The public surface of vfx-core, for the client composition layer (ac's
-   effect_controller.clj today; a future bc/cc would consume the same
-   surface) and, eventually, catalog assembly (system-compiler,
-   vocabulary).
+  "The public surface of vfx-core, for the client composition layer
+   (ability-runtime's cn.li.ability.client-vfx, shared by every content
+   module -- moved out of ac in P4.5) and, eventually, catalog assembly
+   (system-compiler, vocabulary).
 
    Sized from ac's actual consumption of cn.li.vfx.final-client's 15
    functions, not speculative coverage. cn.li.vfx.network has zero real
@@ -12,7 +12,9 @@
   (:require [cn.li.vfx.final-client :as client]))
 
 (defn create-runtime [opts] (client/create-runtime opts))
-(defn register-effect! [runtime descriptor] (client/register-effect! runtime descriptor))
+(defn register-effect!
+  ([runtime descriptor] (client/register-effect! runtime descriptor))
+  ([runtime descriptor opts] (client/register-effect! runtime descriptor opts)))
 (defn freeze-registry! [runtime] (client/freeze-registry! runtime))
 (defn dispatch-signal! [runtime signal] (client/dispatch-signal! runtime signal))
 (defn tick! [runtime context] (client/tick! runtime context))

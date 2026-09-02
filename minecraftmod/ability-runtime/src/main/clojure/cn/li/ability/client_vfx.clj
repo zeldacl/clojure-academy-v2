@@ -1,10 +1,16 @@
-(ns cn.li.ac.client.effect-controller
-  "AC composition root for the final typed VFX catalog.
+(ns cn.li.ability.client-vfx
+  "Shared client composition root for the final typed VFX catalog.
 
-  This adapter owns no skill handlers, singleton aggregates, channels, or
-  legacy descriptors. Every client instance is created and retired by the
-  final VFX runtime from a stable `(effect-id, owner, instance-key)` signal;
-  AC only supplies the catalog and presentation-facing side-channel reads."
+  Moved out of ac (P4.5): this adapter owns no skill handlers, singleton
+  aggregates, channels, or legacy descriptors -- every client instance is
+  created and retired by the final VFX runtime from a stable
+  (effect-id, owner, instance-key) signal, and every content module supplies
+  only its own catalog and reads the presentation-facing side-channels.
+  vfx-core's final-client is one process-wide client runtime shared by every
+  tenant (it owns the instance/tombstone/frame-pool render budget, which is
+  a real client resource, not a per-tenant one); register-effect! now throws
+  on a genuine cross-tenant id collision instead of silently letting the
+  second registrant's descriptor lose to the first (see final_client.clj)."
   (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
             [cn.li.vfx.final-client :as core])
   (:import [java.util ArrayDeque]))
@@ -27,7 +33,14 @@
     (core/release-frame! (runtime) -1)
     (boolean frame)))
 
-(defn register-catalog! [catalog]
+(defn register-catalog!
+  "Register every effect in `catalog` that this runtime doesn't already
+   know about. Self-guards with `contains?` before calling into vfx-core's
+   register-effect!, so re-running this for the SAME tenant's catalog (a
+   world reload re-triggering client bootstrap) is always a no-op after the
+   first call -- register-effect!'s own throw-on-collision only ever fires
+   for a genuine different-tenant id collision, never this idempotent path."
+  [catalog]
   (doseq [[effect-id descriptor] (:effects catalog)]
     (when-not (contains? (core/registered-effects (runtime)) effect-id)
       (core/register-effect!

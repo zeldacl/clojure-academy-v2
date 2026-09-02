@@ -6,7 +6,7 @@
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
             [cn.li.ac.terminal.client.apps.media-reactive :as media]
-            [cn.li.ac.client.effect-controller :as effect-controller]
+            [cn.li.ability.client-vfx :as effect-controller]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.terminal.client.apps.tutorial-reactive :as tutorial-app]
             [cn.li.ac.gui.presentation-container :as presentation-container]
