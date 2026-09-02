@@ -6,8 +6,9 @@
    Sized from combat-core's actual external consumers (ac's core/init.clj,
    final_catalog_service.clj, final_runtime.clj, combat_runtime.clj,
    server_hooks.clj; ability-runtime's combat.clj), not speculative
-   coverage. Replaces four requiring-resolve call sites in ac that existed
-   only because this facade didn't."
+   coverage. Replaces four ac call sites that dynamically resolved
+   combat-core internals at runtime only because this facade didn't exist
+   yet."
   (:require [cn.li.combat.final-engine :as engine]
             [cn.li.combat.final-compiler :as compiler]
             [cn.li.combat.final-damage :as damage]
