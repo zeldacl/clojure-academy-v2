@@ -327,3 +327,41 @@
     (is (= :right (:key (:hover-target (runtime/instance! rt mount)))))
     (is (= [:input/hover {:target :right :hover? true :hover-event :enter :previous-hover :left}]
            (second @seen)))))
+
+(deftest resource-index-for-uses-explicit-namespace-over-default
+  (let [resource-index-for #'runtime/resource-index-for]
+    (is (= 3 (resource-index-for {["bc" "icon"] 3 ["academy" "icon"] 9}
+                                 "academy" {:namespace "bc" :path "icon"})))))
+
+(deftest resource-index-for-falls-back-to-default-namespace-not-a-hardcoded-one
+  ;; Regression for presentation-core hardcoding "academy" as the implicit
+  ;; namespace for every unqualified resource ref, regardless of which
+  ;; content module's view was asking (a real architectural leak this
+  ;; refactor exists to close -- a BC view with an unqualified :src would
+  ;; have silently resolved into AC's resource table, or missed entirely).
+  ;; default-namespace is now the caller's own namespace, not a literal.
+  (let [resource-index-for #'runtime/resource-index-for
+        index {["academy" "icon"] 1 ["bc" "icon"] 2}]
+    (is (= 1 (resource-index-for index "academy" {:path "icon"})))
+    (is (= 2 (resource-index-for index "bc" {:path "icon"})))
+    ;; A string src with its own "ns:path" prefix always wins over
+    ;; default-namespace, map or string form alike.
+    (is (= 1 (resource-index-for index "bc" "academy:icon")))
+    (is (= 2 (resource-index-for index "academy" "bc:icon")))))
+
+(deftest resource-index-for-misses-cleanly-with-no-namespace-anywhere
+  ;; No explicit :namespace and no default-namespace (e.g. an unnamespaced
+  ;; view-id): must miss (-1), not fabricate a "nil" string lookup key that
+  ;; could accidentally collide with a real entry.
+  (let [resource-index-for #'runtime/resource-index-for]
+    (is (= -1 (resource-index-for {[nil "icon"] 5} nil {:path "icon"})))
+    (is (= -1 (resource-index-for {} nil "icon")))))
+
+(deftest item-label-no-longer-falls-back-to-skill-id
+  ;; Regression: presentation-core's generic item-label coercion used to
+  ;; read a :skill-id field -- domain (AC) knowledge with no business being
+  ;; in a neutral rendering helper. A bare :skill-id-only item must not
+  ;; resolve to a label anymore.
+  (let [item-label #'runtime/item-label]
+    (is (= "" (item-label {:skill-id :railgun})))
+    (is (= "explicit" (item-label {:skill-id :railgun :label "explicit"})))))

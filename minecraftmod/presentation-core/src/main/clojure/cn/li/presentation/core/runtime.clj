@@ -98,7 +98,7 @@
   (cond
     (nil? item) ""
     (map? item) (str (or (:label item) (:text item) (:name item)
-                         (:title item) (:skill-id item) ""))
+                         (:title item) ""))
     :else (str item)))
 
 (defn- component255 [v default]
@@ -124,18 +124,29 @@
                                (component255 b 255))))
     :else (unchecked-int fallback)))
 
-(defn- resource-index-for [resource-index src]
+(defn- resource-index-for
+  "src's own :namespace (or a leading `ns:` in a string form) wins; when
+   absent, default-namespace (the mounted view's own view-id namespace --
+   see mount!'s :view-id) fills in, so an unqualified resource ref resolves
+   within whichever content module's view is asking, not a hardcoded one.
+   Neither present -> no guess, just a miss (-1): fabricating a namespace
+   string here would risk matching a real (wrong) resource-index entry."
+  [resource-index default-namespace src]
   (cond
     (nil? src) -1
-    (map? src) (get resource-index [(str (or (:namespace src) "academy")) (str (:path src))] -1)
-    :else (let [[namespace path] (string/split (str src) #":" 2)]
-            (get resource-index [(or namespace "academy") (or path (str src))] -1))))
+    (map? src)
+    (let [ns (or (:namespace src) default-namespace)]
+      (if ns (get resource-index [(str ns) (str (:path src))] -1) -1))
+    :else
+    (let [[namespace path] (string/split (str src) #":" 2)
+          ns (or namespace default-namespace)]
+      (if ns (get resource-index [(str ns) (or path (str src))] -1) -1))))
 
 (defn- composite-spec
   "Mirrors the pre-rewrite paint.clj :composite case exactly (local-
    coordinate offsets, the 14px condition-icon clamp, the desaturated
    0xFF555555 color for an unaccepted condition)."
-  [resource-index item]
+  [resource-index default-namespace item]
   (when (map? item)
     (let [kind (:kind item)
           ix (float (or (:x item) 0.0)) iy (float (or (:y item) 0.0))
@@ -144,14 +155,14 @@
       (case kind
         :quad (CompositeSpec. CompositeSpec/QUAD ix iy iw ih color nil (float 0.0) -1)
         :image (CompositeSpec. CompositeSpec/IMAGE ix iy iw ih color nil (float 0.0)
-                               (resource-index-for resource-index (:src item)))
+                               (resource-index-for resource-index default-namespace (:src item)))
         :text (CompositeSpec. CompositeSpec/TEXT ix iy iw ih color (item-label (:text item))
                               (float (or (:font-size item) 8.0)) -1)
         :condition (let [accepted? (boolean (:accepted? item))
                         icon-color (if accepted? color (unchecked-int 0xFF555555))]
                     (CompositeSpec. CompositeSpec/CONDITION ix iy (min 14.0 iw) (min 14.0 ih)
                                     icon-color nil (float 0.0)
-                                    (resource-index-for resource-index (:icon-path item))))
+                                    (resource-index-for resource-index default-namespace (:icon-path item))))
         :model (CompositeSpec. CompositeSpec/MODEL ix iy iw ih color
                                (str (or (:model-id item) (:src item) "")) (float 0.0) -1)
         nil))))
@@ -161,12 +172,12 @@
    engine class only ever sees plain Objects/Numbers/Strings/Lists this
    function hands it; all path resolution, item-label coercion, and color
    packing lives here, not in Java."
-  ^BindResolver [bind-maps resource-index state]
+  ^BindResolver [bind-maps resource-index default-namespace state]
   (reify BindResolver
     (attribute [_ node attr item]
       (let [bind-map (nth bind-maps node nil)]
         (case (int attr)
-          11 (composite-spec resource-index item)
+          11 (composite-spec resource-index default-namespace item)
           4 (let [v (state-value state item (:items bind-map))]
               (when (sequential? v) (vec v)))
           1 (when-let [path (:text bind-map)] (item-label (state-value state item path)))
@@ -330,7 +341,8 @@
   [instance]
   (let [^NodeTable table (:table instance)
         ^LayoutArena arena (:arena instance)
-        resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+        resolver (build-resolver (:bind-maps instance) (:resource-index instance)
+                                        (some-> instance :view-id namespace) (:view-state instance))
         offsets (scroll-offset-array (:key-index instance) (:scroll-offsets instance) (.-n table))
         ctx (LayoutContext. resolver (presentation-bridge/current-text-metrics) offsets)
         rect (content-rect (:artifact instance) (:geometry instance))
@@ -412,7 +424,8 @@
     event
     (let [^NodeTable table (:table instance)
           ^LayoutArena arena (:arena instance)
-          resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+          resolver (build-resolver (:bind-maps instance) (:resource-index instance)
+                                        (some-> instance :view-id namespace) (:view-state instance))
           root (:root-instance instance)
           bind-maps (:bind-maps instance)
           focus (:focus instance)]
@@ -605,7 +618,8 @@
                          (let [^NodeTable table (:table instance)
                                ^LayoutArena arena (:arena instance)
                                ^CmdBuf cmdbuf (:cmdbuf instance)
-                               resolver (build-resolver (:bind-maps instance) (:resource-index instance) (:view-state instance))
+                               resolver (build-resolver (:bind-maps instance) (:resource-index instance)
+                                        (some-> instance :view-id namespace) (:view-state instance))
                                ctx (LayoutContext. resolver nil nil)
                                _ (.reset cmdbuf)
                                _ (when (>= root 0) (PaintKernel/paint table arena ctx cmdbuf root))

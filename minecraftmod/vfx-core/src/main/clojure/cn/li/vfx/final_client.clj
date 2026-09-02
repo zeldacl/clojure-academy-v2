@@ -4,7 +4,8 @@
    It owns only neutral effect instances and frame batches.  Minecraft and
    renderer objects stay outside this namespace; platform code consumes the
    returned batches through the opaque VFX host ABI."
-  (:require [cn.li.vfx.final-engine :as engine])
+  (:require [cn.li.vfx.final-engine :as engine]
+            [cn.li.node.expr :as expr])
   (:import [java.util ArrayList]
            [cn.li.mcmod.runtime.vfx ParticleBuffer ParticleKernel VfxBatch VfxFrame VfxOutput VfxOutputKind VfxRenderStage]))
 
@@ -209,12 +210,6 @@
               (signal! runtime {:instance internal-id} event params))
             nil))))
     nil))
-(defn- vec3-components [value]
-  (cond
-    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
-    (vector? value) value
-    :else [0.0 0.0 0.0]))
-
 (defn- emit-particle-op! [instance op]
   (when-let [^ParticleBuffer particles (:particle-buffer instance)]
     (let [geometry (:geometry op)]
@@ -224,8 +219,8 @@
               limit (long (max 0 (or (:limit geometry) (.capacity particles))))
               accepted (min rate limit (- (.capacity particles) (.size particles)))
               start (.reserve particles (int accepted))
-              [x y z] (vec3-components (:anchor geometry))
-              [vx vy vz] (vec3-components (:velocity spec))
+              [x y z] (expr/vec3-components (:anchor geometry))
+              [vx vy vz] (expr/vec3-components (:velocity spec))
               lifetime (float (max 0.001 (double (or (:life-ticks spec) (:lifetime spec) 1.0))))]
           (doseq [offset (range accepted)]
             (let [index (+ start offset)]

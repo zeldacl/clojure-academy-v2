@@ -1324,6 +1324,21 @@ tasks.register("verifyNodeKernelSingleSource") {
     }
 }
 
+tasks.register("verifyNoDuplicateUtilities") {
+    group = "verification"
+    description = "vec3-components (vec3 shape dispatch: {:vec3 [...]}/[...]/{:x :y :z}) must be defined exactly once (cn.li.node.expr) -- vfx-core/final_client.clj used to carry a second, narrower copy (no {:x :y :z} support, silently returned [0 0 0] on bad input instead of throwing)."
+    doLast {
+        def definitionSites = fileTree(".") {
+            include "**/*.clj"
+            exclude "**/build/**", "**/.gradle.blocked/**"
+        }.files.findAll { it.text =~ /\(defn-?\s+vec3-components\b/ }
+        if (definitionSites.size() != 1) {
+            throw new GradleException("expected exactly one vec3-components definition site, found: ${definitionSites}")
+        }
+        logger.lifecycle("[verifyNoDuplicateUtilities] ok")
+    }
+}
+
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
     description = "Every effect emitted by an EDN ability must be present in the EDN VFX manifest. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
@@ -2418,6 +2433,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNodeCoreDependencyDirection",
               "verifyNodeCoreLanguageKernel",
               "verifyNodeKernelSingleSource",
+              "verifyNoDuplicateUtilities",
               "verifyNodeLayerDiscipline",
               "verifyVfxDependencyDirection",
               "verifyCombatDependencyDirection",
