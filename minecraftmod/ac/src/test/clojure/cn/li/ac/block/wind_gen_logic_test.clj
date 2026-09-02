@@ -26,14 +26,6 @@
 ;; Position + world mocks
 ;; ============================================================================
 
-(defn- install-pos-mocks!
-  "BlockPos -> [x y z] vectors."
-  []
-  (with-redefs [pos/create-block-pos (fn [x y z] [x y z])
-                pos/pos-x (fn [p] (nth p 0))
-                pos/pos-y (fn [p] (nth p 1))
-                pos/pos-z (fn [p] (nth p 2))]))
-
 (defn- tower-blocks
   "Full tower: base controller at y0, base part at y0+1, `n` pillars
    y0+2..y0+1+n, main on top. Returns map [x y z] -> block id."
@@ -46,8 +38,11 @@
 (defn- scan-completeness
   "Run find-main-above-from-base against `blocks` from base at (x,y0,z)."
   [blocks x y0 z]
-  (install-pos-mocks!)
-  (with-redefs [world/get-tile-entity (fn [_ p] (when-let [id (get blocks p)] {:id id}))
+  (with-redefs [pos/create-block-pos (fn [x y z] [x y z])
+                pos/pos-x (fn [p] (nth p 0))
+                pos/pos-y (fn [p] (nth p 1))
+                pos/pos-z (fn [p] (nth p 2))
+                world/get-tile-entity (fn [_ p] (when-let [id (get blocks p)] {:id id}))
                 platform-be/get-block-id (fn [be] (:id be))
                 ;; the main block must read as the multiblock controller (sub-id 0)
                 platform-be/get-custom-state (fn [_] {:sub-id 0})]
@@ -95,8 +90,11 @@
           ;; inventory empty -> fan-installed stays false; complete flips
           ;; false->true on the first scan, so a sync must fire.
           with-mocks (fn [f]
-                       (install-pos-mocks!)
-                       (with-redefs [world/client-side? (fn [_] false)
+                       (with-redefs [pos/create-block-pos (fn [x y z] [x y z])
+                                     pos/pos-x (fn [p] (nth p 0))
+                                     pos/pos-y (fn [p] (nth p 1))
+                                     pos/pos-z (fn [p] (nth p 2))
+                                     world/client-side? (fn [_] false)
                                      world/get-tile-entity (fn [_ p]
                                                              (when-let [id (get blocks p)]
                                                                {:id id}))
@@ -129,8 +127,8 @@
     (let [field-flags (reduce (fn [m spec] (assoc m (:key spec) spec))
                               {}
                               wind-schema/wind-gen-main-schema)
-          sync-fields (keep (fn [[k spec]] (when (:client-sync? spec) k))
-                            field-flags)]
+          sync-fields (set (keep (fn [[k spec]] (when (:client-sync? spec) k))
+                                  field-flags))]
       (is (every? sync-fields [:complete :no-obstacle :fan-installed])
           "render.clj reads these from client custom-state; without the flag
           the client BE never updates and the fan never draws"))))
