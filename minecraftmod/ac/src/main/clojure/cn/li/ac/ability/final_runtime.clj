@@ -6,11 +6,9 @@
    or VFX runtime is consulted. Catalog initialization is a hard ABI gate;
    a non-final registration aborts startup rather than creating a fallback."
   (:require [cn.li.combat.api :as combat-api]
-            [cn.li.ac.ability.final-catalog-service :as catalog-service]))
-
-(defn- resolve-var [symbol]
-  (or (requiring-resolve symbol)
-      (throw (ex-info "final runtime dependency is unavailable" {:symbol symbol}))))
+            [cn.li.ac.ability.final-catalog-service :as catalog-service]
+            [cn.li.mcmod.runtime.capabilities :as capabilities]
+            [cn.li.mcmod.runtime.host :as host]))
 
 (defn- resolve-runtime-apis
   "Same :apis map shape every call site below already reads through
@@ -49,22 +47,21 @@
    the final host can preflight every command without invoking a mutating
    Minecraft operation; only the apply phase crosses the mcmod boundary."
   [{:keys [state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
-  (let [snapshot ((resolve-var 'cn.li.mcmod.runtime.capabilities/snapshot))
-        create-host (resolve-var 'cn.li.mcmod.runtime.host/create)
-        host (create-host
-              {:queries (:queries snapshot)
-               :actions (into {}
-                              (map (fn [[capability handler]]
-                                     [capability
-                                      (fn [phase command context]
-                                        (if (= :preflight phase)
-                                          true
-                                          (handler (merge (:args command)
-                                                          {:owner (:owner command)
-                                                           :world-id (:world-id command)
-                                                           :ability-id (:ability-id command)}))))]))
-                              (:actions snapshot))})]
-    (create-runtime {:host host
+  (let [snapshot (capabilities/snapshot)
+        host-instance (host/create
+                       {:queries (:queries snapshot)
+                        :actions (into {}
+                                       (map (fn [[capability handler]]
+                                              [capability
+                                               (fn [phase command context]
+                                                 (if (= :preflight phase)
+                                                   true
+                                                   (handler (merge (:args command)
+                                                                   {:owner (:owner command)
+                                                                    :world-id (:world-id command)
+                                                                    :ability-id (:ability-id command)}))))]))
+                                       (:actions snapshot))})]
+    (create-runtime {:host host-instance
                      :state-provider state-provider
                       :commit-state! commit-state!
                       :ability-state-provider ability-state-provider
