@@ -285,4 +285,30 @@ vfx-core 词汇表复用 §1-§7 的全部规则，额外约定：
 | vfx 10 个语义大节点（Clojure 函数） | 同名 `:layer :composite` composite |
 | `reactions.clj` 独立解释器 | 并入同一 node-core VM，`:damage/*` 降级为 composite |
 
+## 13. `cn.li.node.kernel/defresolver`：跨域共享解析语义而不共享调用
+
+combat-core 和 vfx-core 都要在自己的热路径上反复解析 `{:ref [...]}` / `{:expr ...}` / 集合递归，且语义本该完全一致（§4）。但 node-core / combat-core / vfx-core / ac 都是 source-first（`compileClojure` 被 `onlyIf { false }` 禁用），没有 direct linking——跨命名空间的 `defn` 调用是一次真实的 `Var.getRawRoot()` + `IFn.invoke()`，且参数会装箱。`resolve-value` 每个技能每 tick 要递归数百次，protocol 引入 vtable、multimethod 更慢、`^:inline` 对递归不适用，**宏是唯一零调用开销的共享手段**。
+
+`cn.li.node.kernel/defresolver` 在调用方命名空间内联展开一个私有 `[value ctx] -> resolved-value` 函数，`:scopes` 里的作用域集合在编译期展开成字面 `case`，不产生任何跨命名空间调用：
+
+```clojure
+(kernel/defresolver resolve-value ctx
+  {:scopes {:frame (:frame ctx) :input (get-in ctx [:frame :input])
+            :local (:locals ctx) :state (:ability-state ctx)}
+   :local  :local
+   :seed   (if-let [s (:seed* ctx)] (swap! s rng/next-seed) (long (:seed (:frame ctx))))
+   :extras (get-in ctx [:frame :extra-ops])
+   :coll   #{:map :vector :set}})
+```
+
+combat-core 与 vfx-core 用各自的 `:scopes`/`:extras`/`:coll`/`:lerp?` 调用同一个宏——共享的是"如何解析一个 ref/expr/collection"这条**语义**，不是共享一次调用；两边各自的 `case scope`/`case component` 主派发表仍然独立维护，不会被这个宏吞并。
+
+**范围边界**：`defresolver` 只覆盖 ref/expr/collection 解析（对应旧 `node-core/value.clj` 的 `resolve-value`）。combat-core 的 `:flow/foreach` 与 node-core 原 `run-foreach` 已经语义分叉（`:limit` 是原始字段直读、不过 `resolve-value`；缺省值来自 `contracts/budgets` 而非 `(count items)`；循环结束不做 locals 回滚）——这些是真实的行为差异，不是命名重复，折进共享宏前需要先把 `:flow/sequence`/`:flow/branch`/`:flow/foreach`/`:flow/once`/`:flow/phases` 全部分支逐条比对，尚未做，`run-sequence`/`run-branch`/`run-foreach` 三处循环体目前仍在 combat-core 内独立实现。
+
+## 14. `cn.li.node.rng`：全仓唯一的确定性随机流
+
+`cn.li.node.expr` 与曾经的 `mcmod/runtime/seeded_rng.clj` 是**两套不同算法**的 SplitMix64：`expr` 的 `next-seed` 只推进状态、`unit-double` 只在读取时 mix；`seeded-rng` 的 `next-long` 把推进与 mix 合并成一步。同一个 `:seed`，`{:expr :random/chance}` 和一次内核 RNG 调用曾经走两条不一致的随机流——这不是代码重复，是确定性契约分裂。
+
+`cn.li.node.rng` 是修复：保留 `expr` 的"显式 `next-seed` 推进 + 无副作用 `unit-double`/`uniform`/`bounded-int` 读取"语义，作为窄接口暴露给不需要求值整个 EDN 表达式、只需要一个随机数的宿主侧内核（地形破坏预算、散射之类）。调用约定：每次独立抽样前先 `next-seed`，再用**当前**种子读值；不经过 `next-seed` 连续读两次同一个种子会返回相同结果。`mcmod/runtime/seeded_rng.clj` 已删除，全仓不再有第二份 SplitMix64 实现。
+
 

@@ -67,6 +67,11 @@ Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target
 - `verifyRepositoryHygiene`
 - `verifyVersionSeamParity`
 - `verifyNeutralClojureNoMinecraftApis` (and related catalog/entrypoint checks as configured)
+- `verifyNodeKernelSingleSource` (combat/vfx ref/expr resolution goes through `cn.li.node.kernel/defresolver`, not a hand-rolled `case scope`; one SplitMix64 definition point — see [NODE_LANGUAGE.md §13-14](../04-systems/NODE_LANGUAGE.md#13-cnlinodekerneldefresolver跨域共享解析语义而不共享调用))
+- `verifyCombatResourceAgnostic` (`combat-core/src/main` must not contain resource-name literals like `:cp`/`:overload`/`:mana`; cost resources are declared per-policy via `:cost-resource`, not hardcoded)
+- `verifyAbilityActivationCoverage` (every ability EDN must declare a top-level `:activation` recognized by the dispatcher — the gate that keeps B1/B2/B3-class bugs, where a skill's pulse/release/toggle phases silently never ran, from recurring)
+- `verifyAbilityRuntimeNoDynamicResolve` (`ability-runtime/src/main` may not use `requiring-resolve`/`ServiceLoader`/`eval`/context-registry style dynamic dispatch — same discipline as `verifyCombatNoPrivateRuntime`, now that real runtime code lives there)
+- `verifyNoDuplicateUtilities` (`clamp`/`lerp`/`vec3-components`/`nearby-chunk-keys`/the SplitMix64 constants each may have exactly one definition point across the repo)
 
 ## Logging conventions (mandatory)
 
