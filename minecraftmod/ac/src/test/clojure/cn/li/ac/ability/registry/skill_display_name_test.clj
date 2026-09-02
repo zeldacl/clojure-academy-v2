@@ -6,17 +6,31 @@
             [cn.li.ac.content.ability :as content-ability]
             [cn.li.ac.ability.registry.skill :as skill-reg]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.mcmod.i18n :as i18n]))
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.network.server :as network-server]))
 
 (defn- with-skill-registry [f]
   (skill-reg/install-skill-registry-runtime!
     (skill-reg/create-skill-registry-runtime))
-  (content-ability/init-combat-ability-content!)
-  (try
-    (f)
-    (finally
-      (skill-reg/install-skill-registry-runtime!
-        (skill-reg/create-skill-registry-runtime)))))
+  ;; init-combat-ability-content! registers network handlers (via
+  ;; location_teleport_rpc.clj's init!) into cn.li.mcmod.network.server's
+  ;; JVM-global handler registry -- not framework-scoped, so it is never
+  ;; reset between test namespaces. register-handler only tolerates a
+  ;; re-registration when the handler-fn is `identical?` to what's already
+  ;; there; init! builds a fresh closure every call, so any earlier
+  ;; namespace that already ran init-combat-ability-content! (or this same
+  ;; deftest running twice) throws "Conflicting network handler id" on the
+  ;; second registration. Swap in a fresh runtime for the test's duration,
+  ;; same as skill-reg's own install-skill-registry-runtime! above.
+  (network-server/call-with-network-server-runtime
+    (network-server/create-network-server-runtime)
+    (fn []
+      (content-ability/init-combat-ability-content!)
+      (try
+        (f)
+        (finally
+          (skill-reg/install-skill-registry-runtime!
+            (skill-reg/create-skill-registry-runtime)))))))
 
 (deftest skill-display-name-localizes-via-name-key-test
   (with-skill-registry

@@ -72,8 +72,14 @@
       (is (= :no-top (:completeness result))))))
 
 (deftest bare-base-is-base-only
-  (testing "no pillars at all stays BASE_ONLY"
-    (let [blocks (tower-blocks 0 64 0 0)  ;; main directly on the part
+  (testing "nothing built above the base (no pillar, no main) stays BASE_ONLY --
+            a main sitting directly on the part with zero pillars is NO_TOP
+            instead, same as any other under-min-pillars case (see
+            find-main-above-from-base's :wind-main-id? branch: reaching the
+            main at all, regardless of pillar count, only ever yields
+            :complete or :no-top, never :base-only)"
+    (let [blocks (-> (tower-blocks 0 64 0 0)
+                     (dissoc [0 66 0]))  ;; remove the main too -- nothing above the base
           result (scan-completeness blocks 0 64 0)]
       (is (= :base-only (:completeness result))))))
 

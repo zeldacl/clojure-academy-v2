@@ -16,8 +16,14 @@
     (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
                   platform-be/get-custom-state (fn [_] initial-state)
                   machine-runtime/commit-transform!
-                  (fn [_ _ transform & _]
-                    (reset! saved (transform (interferer-logic/interferer-default-state))))]
+                  ;; Mirror commit-transform!'s own state-or-default read
+                  ;; (current tile state, falling back to default-state only
+                  ;; when absent) instead of always feeding transform the
+                  ;; bare default -- otherwise every test here would exercise
+                  ;; transform against {} regardless of the initial-state it
+                  ;; asked for.
+                  (fn [tile default-state transform & _]
+                    (reset! saved (transform (or (platform-be/get-custom-state tile) default-state))))]
       (f saved))))
 
 (deftest handle-set-whitelist-normalizes-and-marks-changed-test

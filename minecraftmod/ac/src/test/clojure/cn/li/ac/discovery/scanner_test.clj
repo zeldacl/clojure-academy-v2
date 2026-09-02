@@ -9,7 +9,16 @@
           path (fn [sym] (str/replace (str sym) #"\\" "/"))]
       (is (pos? (count all)))
       (is (not-any? #(= "cn.li.ac.content.ability.generic/brain-course" (path %)) skill))
-      (is (some #(= "cn.li.ac.content.ability.meltdowner/mine-ray-fx" (path %)) fx))
+      ;; meltdowner/mine-ray-fx no longer exists -- meltdowner's VFX moved to
+      ;; declarative .edn manifests during the node-language v3 migration, so
+      ;; no "-fx" Clojure namespace currently exists under
+      ;; cn.li.ac.content.ability.* at all. Assert the classification
+      ;; invariant scanner/core's fx-namespace? implements (every :fx entry
+      ;; ends in "-fx", every :skill entry does not) against whatever real
+      ;; content is on the classpath right now, instead of a specific example
+      ;; that has since been removed.
+      (is (every? #(str/ends-with? (name %) "-fx") fx))
+      (is (not-any? #(str/ends-with? (name %) "-fx") skill))
       (is (every? #(re-find #"cn\.li\.ac\.content\.ability" (path %)) all)))))
 
 (deftest discover-ability-providers-groups-by-family-and-layout-test

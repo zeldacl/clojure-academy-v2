@@ -86,7 +86,7 @@
     (with-redefs [energy/is-energy-item-supported? (fn [s] (= :battery (get s :kind)))
                   energy/pull-energy-from-item (fn [s amt _]
                                                  (min (double amt) (double (get s :stored 0.0))))]
-      (let [battery (assoc (fake-stack "my_mod:energy_unit" 1) :kind :battery :stored 500.0)
+      (let [battery (assoc (fake-stack "academy:energy_unit" 1) :kind :battery :stored 500.0)
             result (run-ticks! (former-state [nil nil battery] 0.0) 1)]
         (is (= 500.0 (double (:energy result)))
             "battery drain refills machine buffer up to stored amount")))))
