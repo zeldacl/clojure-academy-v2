@@ -131,17 +131,14 @@
         bob (* 0.03 (Math/sin (* t 0.006)))
         yaw-deg (billboard-yaw tile)
         vc (rb/get-cutout-no-cull-buffer buffer-source (:texture (cat-engine-resources)))]
-    (pose/push-pose pose-stack)
-    (try
+    (pose/with-pose pose-stack
       (pose/translate pose-stack 0.5 (+ 0.03 bob) 0.5)
       ;; Faces the quad at the viewer, as upstream RenderCatEngine did.
       (pose/apply-y-rotation pose-stack yaw-deg)
       (pose/translate pose-stack 0.0 0.5 0.0)
       (pose/apply-x-rotation pose-stack rot)
       (pose/translate pose-stack -0.5 -0.5 0.0)
-      (submit-quad! vc pose-stack packed-light packed-overlay)
-      (finally
-        (pose/pop-pose pose-stack)))))
+      (submit-quad! vc pose-stack packed-light packed-overlay))))
 
 (defn register!
   []

@@ -44,13 +44,10 @@
         {:keys [model textures]} (phase-resources)
         tex (nth textures tex-idx (first textures))
         vc (rb/get-solid-buffer buffer-source tex)]
-    (pose/push-pose pose-stack)
-    (try
+    (pose/with-pose pose-stack
       ;; Scripted BER origin is block corner; move OBJ to center like original.
       (pose/translate pose-stack 0.5 0.0 0.5)
-      (obj/render-baked-all! model pose-stack vc packed-light packed-overlay)
-      (finally
-        (pose/pop-pose pose-stack)))))
+      (obj/render-baked-all! model pose-stack vc packed-light packed-overlay))))
 
 (defn register!
   []

@@ -47,15 +47,12 @@
     (when (not= hw-state (last-shield-hw-state-snapshot))
       (machine-render-runtime/put-render-cache! shield-cache-key hw-state))
     (dotimes [i active-plates]
-      (pose/push-pose pose-stack)
-      (try
+      (pose/with-pose pose-stack
         (let [float-height 0.1
               y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
           (pose/translate pose-stack (double 0.0) (double y-offset) (double 0.0))
           (pose/apply-y-rotation pose-stack (+ phase (* dtheta i)))
-          (obj/render-baked-part! (:model (matrix-resources)) "Shield" pose-stack vertex-consumer packed-light packed-overlay))
-        (finally
-          (pose/pop-pose pose-stack))))))
+          (obj/render-baked-part! (:model (matrix-resources)) "Shield" pose-stack vertex-consumer packed-light packed-overlay))))))
 
 (defn render-at-origin
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]

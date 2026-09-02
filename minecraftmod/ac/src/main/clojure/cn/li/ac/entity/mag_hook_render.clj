@@ -36,16 +36,13 @@
    packed-light packed-overlay]
   (try
     (let [{:keys [closed open texture]} (mag-hook-resources)]
-      (pose/push-pose pose-stack)
-      (try
+      (pose/with-pose pose-stack
         ;; Original: glRotated(-yaw + 90, 0,1,0); glRotated(pitch - 90, 0,0,1).
         (pose/apply-y-rotation pose-stack (+ (- (double (or yaw 0.0))) 90.0))
         (pose/apply-z-rotation pose-stack (- (double (or pitch 0.0)) 90.0))
         (pose/scale pose-stack (float model-scale) (float model-scale) (float model-scale))
         (let [vc (rb/get-solid-buffer buffer-source texture)]
           (obj/render-baked-all! (if hit? open closed)
-                                 pose-stack vc packed-light packed-overlay))
-        (finally
-          (pose/pop-pose pose-stack))))
+                                 pose-stack vc packed-light packed-overlay))))
     (catch Exception e
       (log/debug "Error in mag hook renderer:" (ex-message e)))))

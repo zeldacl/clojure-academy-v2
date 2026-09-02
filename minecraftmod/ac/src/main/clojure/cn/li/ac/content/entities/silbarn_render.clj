@@ -41,14 +41,11 @@
             vc (rb/get-solid-buffer buffer-source texture)
             [ax ay az] (spin-axis entity-id)
             spin-angle (* spin-degrees-per-tick (+ (double age-ticks) (double partial-tick)))]
-        (pose/push-pose pose-stack)
-        (try
+        (pose/with-pose pose-stack
           (pose/scale pose-stack 0.05 0.05 0.05)
           (pose/apply-axis-rotation pose-stack spin-angle ax ay az)
           (pose/apply-y-rotation pose-stack (- (double yaw)))
           (pose/apply-x-rotation pose-stack 90.0)
-          (obj/render-baked-all! model pose-stack vc packed-light packed-overlay)
-          (finally
-            (pose/pop-pose pose-stack))))
+          (obj/render-baked-all! model pose-stack vc packed-light packed-overlay)))
       (catch Exception e
         (log/debug "Error in silbarn renderer:" (ex-message e))))))

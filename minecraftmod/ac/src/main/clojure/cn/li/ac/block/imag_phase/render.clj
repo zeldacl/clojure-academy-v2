@@ -318,13 +318,10 @@
         textures (:layer-textures (imag-phase-resources))
         tex (nth textures idx)
         {:keys [vc submit-style]} (pick-buffer-and-submit buffer-source tex)]
-    (pose/push-pose pose-stack)
-    (try
+    (pose/with-pose pose-stack
       (pose/translate pose-stack 0.0 height 0.0)
       (submit-scrolling-quad! vc pose-stack du dv density
-                              packed-light packed-overlay alpha submit-style)
-      (finally
-        (pose/pop-pose pose-stack)))))
+                              packed-light packed-overlay alpha submit-style))))
 
 ;; ---------------------------------------------------------------------------
 ;; Post-translucent stage drawing
@@ -385,17 +382,14 @@
                       (* alpha surface-flash-alpha-boost)
                       alpha)
               time (render/get-render-time)]
-          (pose/push-pose pose-stack)
-          (try
+          (pose/with-pose pose-stack
             (pose/translate pose-stack dx dy dz)
             (doseq [layer layer-defs]
               (when (or (nil? (:condition layer))
                         ((:condition layer) ht))
                 (render-layer! pose-stack buffer-source
                                fullbright-packed-light no-overlay alpha
-                               layer ht fluid-height time)))
-            (finally
-              (pose/pop-pose pose-stack))))))))
+                               layer ht fluid-height time)))))))))
 
 (defn draw-pending!
   "Draw the pool sheets queued by the block-entity pass, after the translucent

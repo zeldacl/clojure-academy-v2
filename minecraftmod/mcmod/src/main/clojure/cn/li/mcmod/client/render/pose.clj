@@ -79,3 +79,20 @@
 
 (defn get-matrix [pose-stack]
   ((or get-matrix-fn (missing-operation :get-matrix)) pose-stack))
+
+(defmacro with-pose
+  "Push pose-stack, run body, pop pose-stack in a finally.
+
+   Every content-module TESR renderer wraps its own geometry in exactly
+   this push/try/finally/pop shape (P6: the same 9 push/pop cycles were
+   duplicated verbatim across 7 render.clj files under ac/src/main) so an
+   exception mid-render still leaves the pose stack balanced -- a leaked
+   push corrupts every subsequent frame's matrix stack, not just the one
+   that threw."
+  [pose-stack & body]
+  `(let [ps# ~pose-stack]
+     (push-pose ps#)
+     (try
+       ~@body
+       (finally
+         (pop-pose ps#)))))
