@@ -1250,6 +1250,12 @@ tasks.register("verifyCombatSkillCoverage") {
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:checkClojure" }
 
+tasks.register("verifyAbilityActivationCoverage") {
+    group = "verification"
+    description = "Every ability EDN must declare a supported :activation, and any ability whose :pulse does real work (not the passive stub) must be :session or :toggle -- otherwise its :pulse silently never dispatches (the B1/B2/B3 class of bug). Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex."
+    dependsOn ":ac:checkClojure"
+}
+
 tasks.register("verifyCombatResourceAgnostic") {
     group = "verification"
     description = "combat-core must not hardcode any content module's resource name -- resource keys arrive only as data (a damage policy's :cost-resource field, or an owner-state :resources map key), never as a literal in combat-core source."
@@ -2411,6 +2417,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatSkillCoverage",
               "verifyCombatContentHash",
               "verifyCombatResourceAgnostic",
+              "verifyAbilityActivationCoverage",
               "verifyCombatIntentOnlyNetwork",
               "verifyCombatLegacyRuntimeRemoval",
               "verifyAbilityCompositionBoundary",

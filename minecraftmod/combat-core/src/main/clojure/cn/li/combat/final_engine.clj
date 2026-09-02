@@ -324,7 +324,14 @@
       :flow/phases
       (let [input (:input (:frame context))
             event (:event input)
-            phase (or (:phase input) (:action input) (when event :event) :start)
+            ;; :phase is the domain-neutral phase key a content module's
+            ;; dispatch layer sets (see ac's combat_runtime.clj); :action
+            ;; used to be read here too, but nothing ever wrote it except
+            ;; for movement sub-events (which :event already covers below),
+            ;; so it silently made every :pulse/:release/:abort dispatch
+            ;; fall through to :start until the content module started
+            ;; setting :phase instead.
+            phase (or (:phase input) (when event :event) :start)
             phase-node (or (when event (get-in node [:events event]))
                            (get node phase))]
         (if phase-node

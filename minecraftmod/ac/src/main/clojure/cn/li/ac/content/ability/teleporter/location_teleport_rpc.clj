@@ -132,7 +132,7 @@
       (let [result (combat-runtime/dispatch-intent!
                     (str owner)
                     {:ability-id skill-id
-                     :action :start
+                     :op :start
                      :context {:location-name name*}})
             result (if (= :accepted (:status result))
                      (combat-runtime/finalize-result! (str owner) result)

@@ -53,7 +53,7 @@
     (runtime-store/get-or-create-player-state!
      player-state-support/test-session-id "p-instant-leak")
     (let [result (combat-runtime/dispatch-intent!
-                  "p-instant-leak" {:action :start :ability-id :arc-gen})]
+                  "p-instant-leak" {:op :start :ability-id :arc-gen})]
       (is (= :accepted (:status result)))
       (is (= :insufficient-resource (:outcome result)))
       (is (not (combat-sessions/active? :ac "p-instant-leak"))))))
@@ -77,14 +77,39 @@
     (let [context (#'combat-runtime/activation-context
                    "p-hold" :thunder-clap {:hold-ticks 42} 7)]
       (is (= 42 (:hold-ticks context))))))
+(deftest toggle-close-edge-test
+  (testing "a second :start on an active :toggle session resolves to the close edge"
+    (is (true? (#'combat-runtime/toggle-close-edge? :start :toggle :flashing :flashing))))
+  (testing "no active session for this ability -- not a close edge"
+    (is (false? (#'combat-runtime/toggle-close-edge? :start :toggle nil :flashing)))
+    (is (false? (#'combat-runtime/toggle-close-edge? :start :toggle :other-ability :flashing))))
+  (testing "not a :toggle activation -- never a close edge, even with a matching session"
+    (is (false? (#'combat-runtime/toggle-close-edge? :start :session :railgun :railgun))))
+  (testing "not a :start op -- never a close edge"
+    (is (false? (#'combat-runtime/toggle-close-edge? :pulse :toggle :flashing :flashing)))))
+
+(deftest should-open-session-test
+  (testing ":session and :toggle both open a session on an accepted :start"
+    (is (true? (#'combat-runtime/should-open-session? :accepted :start :session false false)))
+    (is (true? (#'combat-runtime/should-open-session? :accepted :start :toggle false false))))
+  (testing ":instant and :passive never open a session"
+    (is (false? (#'combat-runtime/should-open-session? :accepted :start :instant false false)))
+    (is (false? (#'combat-runtime/should-open-session? :accepted :start :passive false false))))
+  (testing "a rejected/non-:start result never opens a session"
+    (is (false? (#'combat-runtime/should-open-session? :rejected :start :session false false)))
+    (is (false? (#'combat-runtime/should-open-session? :accepted :pulse :session false false))))
+  (testing "an ability that finished immediately or is already active does not (re-)open one"
+    (is (false? (#'combat-runtime/should-open-session? :accepted :start :session true false)))
+    (is (false? (#'combat-runtime/should-open-session? :accepted :start :session false true)))))
+
 (deftest activation-seed-varies-across-activations
   (testing "each railgun activation gets its own RNG seed, not a constant hash of [owner ability-id] (bug #21)"
     (runtime-store/get-or-create-player-state!
      player-state-support/test-session-id "p-seed-a")
     (runtime-store/get-or-create-player-state!
      player-state-support/test-session-id "p-seed-b")
-    (combat-runtime/dispatch-intent! "p-seed-a" {:action :start :ability-id :railgun})
-    (combat-runtime/dispatch-intent! "p-seed-b" {:action :start :ability-id :railgun})
+    (combat-runtime/dispatch-intent! "p-seed-a" {:op :start :ability-id :railgun})
+    (combat-runtime/dispatch-intent! "p-seed-b" {:op :start :ability-id :railgun})
     (let [seed-a (:activation-seed (combat-sessions/session :ac "p-seed-a"))
           seed-b (:activation-seed (combat-sessions/session :ac "p-seed-b"))]
       (is (some? seed-a))

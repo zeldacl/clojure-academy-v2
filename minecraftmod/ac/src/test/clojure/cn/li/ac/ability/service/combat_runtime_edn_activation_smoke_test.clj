@@ -29,7 +29,7 @@
 
 (defn- dispatch! [owner ability-id op]
   (runtime-store/get-or-create-player-state! player-state-support/test-session-id owner)
-  (combat-runtime/dispatch-intent! owner {:action op :ability-id ability-id}))
+  (combat-runtime/dispatch-intent! owner {:op op :ability-id ability-id}))
 
 (deftest arc-gen-start-does-not-throw
   (testing "instant ability, :cost-cp/:cost-overload/:exp-entity/:exp-block/:cooldown-ticks lerps all evaluate"
@@ -65,7 +65,7 @@
             v1 program's behavior via the new declarative :costs/:progression/:cooldown blocks"
     (flush-with-resources! "smoke-arcgen-behavior")
     (let [result (combat-runtime/dispatch-intent!
-                  "smoke-arcgen-behavior" {:action :start :ability-id :arc-gen})
+                  "smoke-arcgen-behavior" {:op :start :ability-id :arc-gen})
           entries (mapcat :entries (filter #(= :owner-patch (:type %)) (:actions result)))]
       (is (= :accepted (:status result)))
       (is (= :performed (:outcome result)))
@@ -84,14 +84,14 @@
             ability's cost deduction, exp gain, cooldown write, and VFX spawn was a no-op in production)"
     (flush-with-resources! "smoke-actions-arc-gen")
     (let [arc-gen-result (combat-runtime/dispatch-intent!
-                          "smoke-actions-arc-gen" {:action :start :ability-id :arc-gen})]
+                          "smoke-actions-arc-gen" {:op :start :ability-id :arc-gen})]
       (is (= :accepted (:status arc-gen-result)))
       (is (seq (:actions arc-gen-result))
           "arc-gen's unconditional cp/overload cost owner-patch must appear in :actions")
       (is (some #(= :owner-patch (:type %)) (:actions arc-gen-result))))
     (flush-with-resources! "smoke-actions-railgun")
     (let [railgun-result (combat-runtime/dispatch-intent!
-                          "smoke-actions-railgun" {:action :start :ability-id :railgun})]
+                          "smoke-actions-railgun" {:op :start :ability-id :railgun})]
       (is (= :accepted (:status railgun-result)))
       (is (seq (:vfx-signals railgun-result))
           "railgun's :start spawns the railgun-charge VFX; it must appear in :vfx-signals"))))

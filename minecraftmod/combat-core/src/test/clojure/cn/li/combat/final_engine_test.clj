@@ -61,6 +61,34 @@
     (is (instance? clojure.lang.ExceptionInfo error))
     (is (= :unsupported-reference-scope (:reason (ex-data error))))
     (is (= [:item :position] (:reference (ex-data error))))))
+(deftest flow-phases-reads-phase-key-not-action-test
+  ;; Regression for the real production bug this fixes: :flow/phases used to
+  ;; also accept a legacy :action key (nothing ever wrote it except AC's
+  ;; movement sub-events), which meant a content module setting :op ->
+  ;; :action correctly but never setting :phase would see every dispatch
+  ;; silently resolve to :start regardless of the real op -- :pulse/
+  ;; :release/:abort never ran in production. :phase is now the only
+  ;; non-:event key read; a stray :action is inert.
+  (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
+                                       :state-provider (fn [_] {})
+                                       :commit-state! (fn [_])})
+        program (compile-program
+                 {:component :flow/phases
+                  :start {:component :flow/finish :outcome :start-ran}
+                  :pulse {:component :flow/finish :outcome :pulse-ran}
+                  :release {:component :flow/finish :outcome :release-ran}
+                  :abort {:component :flow/finish :outcome :abort-ran}
+                  :events {}})
+        dispatch (fn [input] (:outcome (engine/execute! runtime program
+                                                        {:owner :alice :world "w" :ability-id :skill/a
+                                                         :tick 1 :seed 9 :input input})))]
+    (is (= :start-ran (dispatch {})) "no :phase defaults to :start")
+    (is (= :pulse-ran (dispatch {:phase :pulse})))
+    (is (= :release-ran (dispatch {:phase :release})))
+    (is (= :abort-ran (dispatch {:phase :abort})))
+    (is (= :start-ran (dispatch {:action :pulse}))
+        "a legacy :action key must NOT be read -- only :phase resolves the branch")))
+
 (deftest flow-finish-next-phase-is-propagated-test
   (let [runtime (engine/create-engine {:host (host/create {:queries {} :actions {}})
                                        :state-provider (fn [_] {})

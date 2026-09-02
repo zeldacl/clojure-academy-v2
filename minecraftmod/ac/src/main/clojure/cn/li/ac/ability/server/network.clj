@@ -241,7 +241,7 @@
         ;; the event vocabulary and creative-mode truth.
         intent (cond-> (select-keys payload [:schema-version :intent-id :slot :client-tick :event :context])
                  (not movement?) (assoc :op (:op payload))
-                 valid-movement? (assoc :op :event :action :event :event event)
+                 valid-movement? (assoc :op :event :event event)
                  true (assoc :creative? (boolean (entity/player-creative? player))))
         admission (when (and payload (catalog-handshake-accepted? owner))
                     (admit-input! owner (:intent-id payload)))

@@ -723,5 +723,38 @@
     (is floor-bind)
     (is (= :math/max (get-in floor-bind [:value :expr])))))
 
+(deftest every-ability-declares-a-supported-activation-test
+  (doseq [file (edn-files "src/main/resources/ac/combat/abilities")]
+    (let [doc (read-file! file)]
+      (is (contains? #{:instant :session :toggle :passive} (:activation doc))
+          (str (.getName file) " must declare a supported :activation")))))
+
+(def ^:private inert-phase-stubs
+  ;; :flow/phases structurally requires :start/:pulse/:release/:abort (see
+  ;; cn.li.combat.vocabulary's :flow/phases children), so a :passive/
+  ;; :instant ability carries one of these trivial stubs in every phase
+  ;; slot it doesn't use -- neither ever actually runs, since
+  ;; combat_runtime.clj's should-open-session?/toggle-close-edge? only ever
+  ;; dispatch :pulse/:release for a :session or :toggle activation. Two
+  ;; shapes exist in real content: :outcome :passive (most :passive
+  ;; abilities) and :outcome :unsupported (ray-barrage's :instant, an
+  ;; explicit "this should never be reached" sentinel instead of a
+  ;; passive-flavored one) -- both equally inert, neither preferred.
+  #{{:component :flow/finish :outcome :passive}
+    {:component :flow/finish :outcome :unsupported}})
+
+(deftest substantive-pulse-requires-session-or-toggle-activation-test
+  ;; Consistency check for the B1/B2/B3 fix: any ability whose :pulse does
+  ;; real work (not one of the inert stubs above) but isn't :session/
+  ;; :toggle would silently never reach that :pulse in production --
+  ;; exactly the class of drift those bugs were.
+  (doseq [file (edn-files "src/main/resources/ac/combat/abilities")]
+    (let [doc (read-file! file)
+          program (:program doc)]
+      (when (and (map? program) (= :flow/phases (:component program))
+                 (not (contains? inert-phase-stubs (:pulse program))))
+        (is (contains? #{:session :toggle} (:activation doc))
+            (str (.getName file) " has a substantive :pulse but :activation is "
+                 (:activation doc) ", not :session or :toggle"))))))
 
 

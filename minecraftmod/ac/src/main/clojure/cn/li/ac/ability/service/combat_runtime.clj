@@ -691,6 +691,31 @@
         ticks (long (or (:ticks value) value 0))]
     (pos? ticks)))
 
+(defn- toggle-close-edge?
+  "True when this :start intent must resolve to the toggle's close edge
+   instead: the ability already has an active session with a :toggle
+   activation. Toggle abilities use one physical key for both activation
+   and deactivation -- the client wire intentionally stays neutral
+   (`:start`); the server resolves the edge from the owner-scoped session
+   so a repeated key-down cannot create a second session or overwrite the
+   active state. This is generic for every future :toggle source.
+   Pure/unit-testable independent of a real dispatch -- see
+   toggle-close-edge-test."
+  [op activation active-session-ability-id ability-id]
+  (and (= :start op) (= :toggle activation) (= ability-id active-session-ability-id)))
+
+(defn- should-open-session?
+  "True when an accepted :start result should open a new owner session.
+   :toggle abilities need a session too, not just :session ones -- so a
+   second :start can resolve to toggle-close-edge? above. Before this,
+   only :session ever opened one, so every :toggle ability's \"press again
+   to turn off\" never had a session to detect the second press against.
+   Pure/unit-testable independent of a real dispatch."
+  [status op activation finish-ability? already-active?]
+  (and (= :accepted status) (= :start op)
+       (contains? #{:session :toggle} activation)
+       (not finish-ability?) (not already-active?)))
+
 (defn dispatch-intent! [owner intent]
   ;; Final runtime is the sole production dispatch path. Pending source Final
   ;; graphs return an explicit execution status; there is no alternate
@@ -698,14 +723,8 @@
   (let [ability-id (edn-ability-id owner intent)
         source (combat-source ability-id)
         active-session (combat-sessions/session content-id (str owner))
-        ;; Toggle abilities use one physical key for both activation and
-        ;; deactivation. The client wire intentionally stays neutral (`:start`);
-        ;; the server resolves the edge from its owner-scoped session so a
-        ;; repeated key-down cannot create a second session or overwrite the
-        ;; active state. This is generic for every future :toggle source.
-        intent (if (and (= :start (:op intent))
-                        (= :toggle (:activation source))
-                        (= ability-id (:ability-id active-session)))
+        intent (if (toggle-close-edge? (:op intent) (:activation source)
+                                       (:ability-id active-session) ability-id)
                  (assoc intent :op :abort)
                  intent)
         ;; Key-up release packets do not carry a client hold counter.  Derive
@@ -719,6 +738,19 @@
                                        (long (or (:start-tick active-session)
                                                  @last-known-tick*))))))
                  intent)
+        ;; Phase translation: :op is the client/session-resolved wire
+        ;; vocabulary (:start/:pulse/:release/:abort/:event); combat-core's
+        ;; :flow/phases dispatch (final_engine.clj) reads the
+        ;; domain-neutral :phase key instead, so it never has to know AC's
+        ;; wire shape. Computed here, after the toggle/hold-ticks
+        ;; adjustments above have possibly rewritten :op (the toggle
+        ;; close-edge :start->:abort rewrite in particular), so :phase
+        ;; always reflects the final, corrected op. Before this, nothing
+        ;; ever set :phase (or the :action key final_engine.clj used to
+        ;; read instead), so :pulse/:release/:abort never reached their
+        ;; :flow/phases branch in production -- every non-event intent
+        ;; silently ran the :start branch regardless of :op.
+        intent (assoc intent :phase (:op intent))
         seed (long (or (:activation-seed intent)
                        (generate-activation-seed owner ability-id
                                                  (long (or (:server-tick intent)
@@ -740,11 +772,9 @@
                   (initialize-final-runtime!))
               result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
                             :schema-version 1 :ability-id ability-id)]
-          (when (and (= :accepted (:status result))
-                     (= :start (:op intent))
-                     (= :session (:activation source))
-                     (not (:finish-ability? result))
-                     (not (combat-sessions/active? content-id (str owner))))
+          (when (should-open-session? (:status result) (:op intent) (:activation source)
+                                      (:finish-ability? result)
+                                      (combat-sessions/active? content-id (str owner)))
             (combat-sessions/start! content-id (str owner) ability-id prepared))
           result)))))
 (defn dispatch-trigger!
@@ -756,7 +786,6 @@
   (when (and (map? trigger) (:ability trigger) (:event trigger))
     (dispatch-intent! owner
                       {:op :event
-                       :action :event
                        :ability-id (:ability trigger)
                        :event (:event trigger)
                        :server-tick @last-known-tick*
