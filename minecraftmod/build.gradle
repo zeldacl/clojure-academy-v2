@@ -1243,6 +1243,17 @@ tasks.register("verifyCombatProviderClosure") {
         logger.lifecycle("[verifyCombatProviderClosure] ok")
     }
 }
+tasks.register("verifyAbilityRuntimeNoDynamicResolve") {
+    group = "verification"
+    description = "ability-runtime must use compile-time linked functions, same discipline as verifyCombatNoPrivateRuntime/verifyCombatProviderClosure for combat-core -- a requiring-resolve/load-string/eval reaching into a forbidden tier (the way ac's combat_runtime.clj once dodged this exact check via string concatenation) must fail loudly here instead."
+    doLast {
+        def bad = fileTree(file("ability-runtime/src/main")) { include "**/*.clj" }.files.findAll {
+            it.text =~ /context-registry|context-dispatcher|AbilityContentProvider|ServiceLoader|requiring-resolve|load-string|eval\s*\(/
+        }
+        if (!bad.isEmpty()) throw new GradleException("ability-runtime contains dynamic-resolve/private-runtime references: ${bad}")
+        logger.lifecycle("[verifyAbilityRuntimeNoDynamicResolve] ok")
+    }
+}
 tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
     description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
@@ -2414,6 +2425,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatNoPlatformNamespaces",
               "verifyCombatNoPrivateRuntime",
               "verifyCombatProviderClosure",
+              "verifyAbilityRuntimeNoDynamicResolve",
               "verifyCombatSkillCoverage",
               "verifyCombatContentHash",
               "verifyCombatResourceAgnostic",
