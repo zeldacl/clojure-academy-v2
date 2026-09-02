@@ -939,13 +939,23 @@
 
 (defn apply-commands
   "Apply a sequence of commands to player-state, accumulating events and effects.
-  
-  Returns: {:state final-state :events [all-events] :effects [all-effects]}"
+
+  Returns: {:state final-state :events [all-events] :effects [all-effects]
+            :success? bool}
+
+  :success? starts true and latches false the moment any individual command
+  reports :success? false (per apply-command's docstring, only resource-check
+  commands like :consume-resource carry that key at all -- every other
+  command's absent :success? is not a rejection). Every batch caller
+  (commit-final-state!, commit-edn-owner-patches!, ...) reads this key to
+  decide committed vs rejected; dropping it here silently made every
+  multi-command batch look rejected regardless of what actually happened."
   [player-state commands]
-  (reduce (fn [{:keys [state events effects]} command]
+  (reduce (fn [{:keys [state events effects success?]} command]
             (let [result (apply-command state command)]
-              {:state   (:state result)
-               :events  (into events (:events result))
-               :effects (into effects (:effects result))}))
-          {:state player-state :events [] :effects []}
+              {:state    (:state result)
+               :events   (into events (:events result))
+               :effects  (into effects (:effects result))
+               :success? (and success? (not (false? (:success? result))))}))
+          {:state player-state :events [] :effects [] :success? true}
           commands))

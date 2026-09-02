@@ -5,9 +5,54 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ability.engine :as final-runtime]
             [cn.li.ability.session :as combat-sessions]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
-            [cn.li.ac.test.support.player-state :as player-state-support]))
+            [cn.li.ac.test.support.player-state :as player-state-support]
+            [cn.li.mcmod.runtime.capabilities :as capabilities]))
+
+;; See the identical helper in combat_runtime_edn_activation_smoke_test.clj
+;; for the full rationale: activation-seed-varies-across-activations below
+;; dispatches a real :railgun :start, which reaches a :target/entities node
+;; needing the :entity/select host capability that only production bootstrap
+;; (cn.li.combat.platform/install!, never called by an ac unit test) would
+;; normally register.
+(defn- stub-raycast-miss
+  "Mirror combat-core platform.clj's basic-raycast miss shape (position at
+   the max-range endpoint, everything else nil/false) instead of a bare nil
+   -- EDN programs read :aim-hit's :position/:block-position/:water? fields
+   unconditionally even when nothing was hit, exactly like a real total-miss
+   raycast in production."
+  [{:keys [origin direction distance]}]
+  (let [as-point (fn [{:keys [x y z]}] [(double (or x 0.0)) (double (or y 0.0)) (double (or z 0.0))])
+        [sx sy sz] (as-point origin)
+        [dx dy dz] (as-point direction)
+        distance (double (or distance 0.0))
+        position {:x (+ sx (* dx distance)) :y (+ sy (* dy distance)) :z (+ sz (* dz distance))}]
+    {:hit-type :miss :hit? false :position position :block-position nil
+     :water? false :attacked? false :entity-id nil :entity-type nil
+     :target-id nil :target-width 0.5 :target-height 0.0 :drop-position position}))
+
+(defn- with-stubbed-world-queries [f]
+  (let [prior-queries (select-keys (:queries (capabilities/snapshot))
+                                   [:raycast :entity/select :item/held])
+        prior-runtime (final-runtime/production-runtime)]
+    (try
+      (capabilities/register-query! :raycast stub-raycast-miss {:allow-overwrite? true})
+      (capabilities/register-query! :entity/select (fn [_request] []) {:allow-overwrite? true})
+      (capabilities/register-query! :item/held
+                                    (fn [_request]
+                                      {:present? false :placeable? false
+                                       :item-id nil :block-id nil :count 0 :source nil})
+                                    {:allow-overwrite? true})
+      (reset! @#'cn.li.ability.engine/production-runtime* nil)
+      (f)
+      (finally
+        (doseq [[capability handler] prior-queries]
+          (capabilities/register-query! capability handler {:allow-overwrite? true}))
+        (reset! @#'cn.li.ability.engine/production-runtime* prior-runtime)))))
+
+(use-fixtures :once with-stubbed-world-queries)
 
 (use-fixtures :each
   (fn [f]
@@ -62,7 +107,13 @@
   (testing "the schema v2 :from table (design C) maps AC's context shape into neutral capability names"
     (let [facade (#'combat-runtime/caster-facade
                   "owner-1"
-                  {:eye-pos {:x 1.0 :y 2.0 :z 3.0}
+                  ;; :ability-id is required here too, matching every real
+                  ;; caller: activation-context (the only production builder
+                  ;; of this map) always sets it, and skill-config/destroy-
+                  ;; blocks-enabled? -- read via :ability/destroy-blocks?
+                  ;; below -- calls (name ability-id) unconditionally.
+                  {:ability-id :arc-gen
+                   :eye-pos {:x 1.0 :y 2.0 :z 3.0}
                    :look {:x 0.0 :y 0.0 :z 1.0}
                    :world-id "world-a"
                    :hold-ticks 42})]

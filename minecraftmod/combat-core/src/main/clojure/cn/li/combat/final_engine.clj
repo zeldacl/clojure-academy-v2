@@ -173,9 +173,22 @@
       :ability/caster (caster-capability-values input)
       :ability/tunable (get-in input [:tunables name])
       :ability/budget (get-in input [:budgets name])
-      :ability/progression (get-in input [:progression name])
-      :ability/cooldown (get-in input [:cooldowns name])
-      :ability/invariant (get-in input [:invariants name])
+      ;; Unlike :ability/tunable (already materialized to plain numbers by
+      ;; materialize-final-tunables before it ever reaches :input), :costs/
+      ;; :cooldown/:invariants land in :input verbatim from the EDN source --
+      ;; still containing unresolved {:ref ...}/{:expr ...} leaves (e.g.
+      ;; :progression's :per-mark). A local bound to the raw get-in result
+      ;; here is never re-walked later (:ref substitution reads a local's
+      ;; bound value as-is, it does not recurse into it), so any consumer
+      ;; that reads a nested field straight off the bound value -- as
+      ;; combat_runtime.clj's handle-progression-event! does with :per-mark
+      ;; -- got a leftover ref map instead of a number. :cost/spend avoids
+      ;; this only because it happens to re-run resolve-value on each of its
+      ;; own :resources leaves; resolve here so every :ability/* source is
+      ;; consistently pre-resolved, matching :ability/tunable.
+      :ability/progression (resolve-value (get-in input [:progression name]) context)
+      :ability/cooldown (resolve-value (get-in input [:cooldowns name]) context)
+      :ability/invariant (resolve-value (get-in input [:invariants name]) context)
       :ability/context (get-in input [:context name])
       :state/read (get-in (:ability-state context) [(:key node)])
       :data/bind (resolve-value (:value node) context)
@@ -411,6 +424,14 @@
         (emit context :events (assoc score :type :score/mark :owner owner
                                      :ability-id (:ability-id (:frame context)))))
       :resource/enforce-floor
+      ;; :minimum typically points at :input :invariants (unlike :tunables,
+      ;; never pre-materialized to a plain number -- see :ability/invariant
+      ;; above), so a single resolve-value pass on a {:ref [:input
+      ;; :invariants ...]} node only substitutes the :input fetch; the
+      ;; fetched invariant value is itself commonly another unresolved
+      ;; {:ref ...}/{:expr ...} (e.g. an invariant defined in terms of a
+      ;; tunable curve). resolve-value does not recurse into a value after
+      ;; substituting it, so resolve again until a plain number falls out.
       (update context :commands conj
               (contracts/host-command
                {:id (command-id engine path)
@@ -418,7 +439,9 @@
                 :owner (:owner (:frame context))
                 :world-id (:world (:frame context))
                 :args {:resource (:resource node)
-                       :minimum (double (resolve-value (:minimum node) context))}}))
+                       :minimum (double (resolve-value
+                                          (resolve-value (:minimum node) context)
+                                          context))}}))
       :flow/control (if-let [child (or (:body node) (:then node))]
                       (assoc (run-node engine child context (conj path :control))
                              :control-signal (:signal node))

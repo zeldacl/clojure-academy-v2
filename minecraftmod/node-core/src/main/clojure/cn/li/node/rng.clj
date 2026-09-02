@@ -20,7 +20,14 @@
    intervening next-seed returns the same value both times."
   (:require [cn.li.node.expr :as expr]))
 
-(defn ^long next-seed [^long seed] (expr/next-seed seed))
-(defn ^double unit-double [^long seed] (expr/unit-double seed))
-(defn ^double uniform [^long seed ^double lo ^double hi] (expr/uniform seed lo hi))
-(defn ^long bounded-int [^long seed ^long lo ^long hi] (expr/bounded-int seed lo hi))
+;; Hint the arg vector, not the defn symbol -- matching cn.li.node.expr's own
+;; style below. The symbol-hint form (`defn ^long name [...]`) generated a
+;; wrapper whose compiled class didn't reliably implement the primitive IFn
+;; interface a caller's own compiled call site expected (AbstractMethodError:
+;; "does not define or inherit an implementation of ... IFn$LO.invokePrim",
+;; thrown at runtime, not caught at compile time -- see the primitive-hinted-
+;; fn memory note for how this class of bug surfaces and gets diagnosed).
+(defn next-seed ^long [^long seed] (expr/next-seed seed))
+(defn unit-double ^double [^long seed] (expr/unit-double seed))
+(defn uniform ^double [^long seed ^double lo ^double hi] (expr/uniform seed lo hi))
+(defn bounded-int ^long [^long seed ^long lo ^long hi] (expr/bounded-int seed lo hi))

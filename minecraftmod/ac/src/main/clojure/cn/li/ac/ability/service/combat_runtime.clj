@@ -720,6 +720,19 @@
   ;; Final runtime is the sole production dispatch path. Pending source Final
   ;; graphs return an explicit execution status; there is no alternate
   ;; evaluator or catalog fallback at this boundary.
+  ;;
+  ;; Lazily install/warm the final runtime BEFORE combat-source/final-input
+  ;; read catalog* below: on the very first dispatch of a JVM's (or, in unit
+  ;; tests, a Framework's) lifetime, catalog* is still nil until this runs,
+  ;; so combat-source would silently return nil -- :activation, :budgets,
+  ;; :cooldowns, :progression and :invariants would all resolve as if the
+  ;; ability did not exist, without throwing (should-open-session? just
+  ;; never opens a session; cost/cooldown/progression nodes just no-op).
+  ;; This used to go undetected because some earlier-registered production
+  ;; call path always happened to warm the runtime first in practice.
+  (when-not (final-runtime/production-runtime)
+    (install-ac-host-capabilities!)
+    (initialize-final-runtime!))
   (let [ability-id (edn-ability-id owner intent)
         source (combat-source ability-id)
         active-session (combat-sessions/session content-id (str owner))
@@ -767,14 +780,22 @@
         {:status :rejected :reason :cooldown
          :schema-version 1 :ability-id ability-id
          :feedback [{:type :cooldown-active :ability-id ability-id}]}
-        (let [_ (when-not (final-runtime/production-runtime)
-                  (install-ac-host-capabilities!)
-                  (initialize-final-runtime!))
-              result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
+        (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
                             :schema-version 1 :ability-id ability-id)]
+          ;; already-active? must reflect session state as of BEFORE this
+          ;; dispatch (active-session, captured above), not after: execute!
+          ;; already ran by this point, and its commit-ability-state! callback
+          ;; (cn.li.ability.session/apply-actions!) uses update-in, which
+          ;; auto-vivifies a session entry containing only {:state {...}} the
+          ;; moment the graph's first :state/write patch lands -- for a brand
+          ;; new :start, that phantom entry exists (with no :activation-seed)
+          ;; well before start! would ever run. Re-querying combat-sessions/
+          ;; active? here would see that phantom entry, wrongly conclude a
+          ;; session is "already" active, and skip start! forever, so the
+          ;; session never gets its :activation-seed/:owner/:tick fields.
           (when (should-open-session? (:status result) (:op intent) (:activation source)
                                       (:finish-ability? result)
-                                      (combat-sessions/active? content-id (str owner)))
+                                      (boolean active-session))
             (combat-sessions/start! content-id (str owner) ability-id prepared))
           result)))))
 (defn dispatch-trigger!

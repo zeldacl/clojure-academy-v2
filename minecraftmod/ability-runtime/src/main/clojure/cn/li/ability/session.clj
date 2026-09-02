@@ -16,7 +16,17 @@
 (defn- key-for [content-id owner] [content-id owner])
 
 (defn start! [content-id owner ability-id intent]
-  (let [entry {:owner owner
+  ;; The caller's own VM run (execute!'s commit-ability-state! -> apply-
+  ;; actions! below) can fire before start! does -- apply-actions! uses
+  ;; update-in, which auto-vivifies a {:state {...}} entry at this key the
+  ;; moment the graph's first :state/write patch lands, ahead of start!
+  ;; ever being called for a brand new activation. Preserve whatever :state/
+  ;; :latches already accumulated at this key instead of resetting them to
+  ;; empty, or the ability's own :start-phase session-state defaults would
+  ;; be silently discarded the instant a session opens.
+  (let [k (key-for content-id owner)
+        prior (get @sessions* k)
+        entry {:owner owner
                :content-id content-id
                :ability-id ability-id
                :context (:context intent)
@@ -25,9 +35,9 @@
                                           (hash [content-id owner ability-id])))
                :tick (long (or (:server-tick intent) 0))
                :start-tick (long (or (:server-tick intent) 0))
-               :state {}
-               :latches #{}}]
-    (swap! sessions* assoc (key-for content-id owner) entry)
+               :state (or (:state prior) {})
+               :latches (or (:latches prior) #{})}]
+    (swap! sessions* assoc k entry)
     entry))
 
 (defn active? [content-id owner]
