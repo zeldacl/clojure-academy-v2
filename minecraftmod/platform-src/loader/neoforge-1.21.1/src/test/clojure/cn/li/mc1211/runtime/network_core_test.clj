@@ -1,4 +1,4 @@
-(ns cn.li.mcbase.runtime.network-core-test
+(ns cn.li.mc1211.runtime.network-core-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcbase.runtime.network-core :as network-core]
             [cn.li.mcmod.content.registry :as content-registry]
