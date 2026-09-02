@@ -4,25 +4,26 @@
    This namespace is deliberately Minecraft-free.  Platform adapters provide
    the neutral host and state callbacks; no legacy VM, recipe, interception,
    or VFX runtime is consulted. Catalog initialization is a hard ABI gate;
-   a non-final registration aborts startup rather than creating a fallback.")
+   a non-final registration aborts startup rather than creating a fallback."
+  (:require [cn.li.combat.api :as combat-api]
+            [cn.li.ac.ability.final-catalog-service :as catalog-service]))
 
 (defn- resolve-var [symbol]
   (or (requiring-resolve symbol)
       (throw (ex-info "final runtime dependency is unavailable" {:symbol symbol}))))
 
-(def ^:private runtime-api-symbols
-  {:create-engine 'cn.li.combat.final-engine/create-engine
-   :initialize-catalog 'cn.li.ac.ability.final-catalog-service/initialize!
-   :catalog-status 'cn.li.ac.ability.final-catalog-service/catalog-status
-   :resolve-damage 'cn.li.combat.final-damage/resolve-event
-   :registration 'cn.li.ac.ability.final-catalog-service/registration
-   :execute 'cn.li.combat.final-engine/execute!})
-
-(defn- resolve-runtime-apis []
-  (reduce-kv (fn [apis key symbol]
-               (assoc apis key (resolve-var symbol)))
-             {}
-             runtime-api-symbols))
+(defn- resolve-runtime-apis
+  "Same :apis map shape every call site below already reads through
+   (get-in runtime [:apis ...]) -- only how it's populated changed, from
+   requiring-resolve string-symbol indirection (which existed only because
+   combat-core had no facade) to real, compile-time-checked requires."
+  []
+  {:create-engine combat-api/create-engine
+   :initialize-catalog catalog-service/initialize!
+   :catalog-status catalog-service/catalog-status
+   :resolve-damage combat-api/resolve-damage
+   :registration catalog-service/registration
+   :execute combat-api/execute!})
 
 (defn create-runtime [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
   (when-not (map? host) (throw (ex-info "final runtime requires neutral host" {})))

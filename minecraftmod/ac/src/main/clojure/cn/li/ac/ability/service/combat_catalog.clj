@@ -1,12 +1,10 @@
 (ns cn.li.ac.ability.service.combat-catalog
   "Read-only projection of the single final catalog.
    This service contains no migration status, evaluator fallback or skill-specific
-   suffix logic; all behavior and passive effects come from the compiled EDN.")
+   suffix logic; all behavior and passive effects come from the compiled EDN."
+  (:require [cn.li.ac.ability.final-catalog-service :as catalog-service]))
 
 (defonce ^:private state* (atom {:status :cold}))
-(defn- final-var [symbol]
-  (or (requiring-resolve symbol)
-      (throw (ex-info "final catalog service unavailable" {:symbol symbol}))))
 
 (defn- source-map [assembled] (get-in assembled [:combat :sources] {}))
 (defn- registration-map [assembled]
@@ -27,7 +25,7 @@
         (registration-map assembled)))
 
 (defn initialize! []
-  (let [assembled ((final-var 'cn.li.ac.ability.final-catalog-service/initialize!))
+  (let [assembled (catalog-service/initialize!)
         abilities (ability-map assembled)
         trigger-index (reduce (fn [index source]
                                 (reduce (fn [result trigger]

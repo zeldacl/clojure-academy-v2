@@ -6,15 +6,11 @@
    legacy evaluator or pending fallback."
   (:require [cn.li.node.schema-export :as schema]
             [cn.li.node.scope :as scope]
-            [cn.li.node.validate :as validate]))
+            [cn.li.node.validate :as validate]
+            [cn.li.ac.ability.final-catalog :as final-catalog]
+            [cn.li.combat.api :as combat-api]))
 
 (defonce ^:private catalog-state (atom {:status :cold}))
-
-(defn- catalog-api []
-  (requiring-resolve 'cn.li.ac.ability.final-catalog/assemble))
-
-(defn- compiler-api []
-  (requiring-resolve 'cn.li.combat.final-compiler/compile-program))
 
 (def ^:private forbidden-components #{:session/patch :txn/atomic :guard/resource})
 (defn- legacy-form [value path]
@@ -61,7 +57,7 @@
 (defn- compile-registration [environment registration]
   (try
     (assoc registration
-           :compiled ((compiler-api) environment (:graph registration)))
+           :compiled (combat-api/compile-program environment (:graph registration)))
     (catch clojure.lang.ExceptionInfo error
       (throw (ex-info "final catalog graph compilation failed"
                       (merge {:reason :final-graph-compile-failed
@@ -72,7 +68,7 @@
   "Load and index the immutable final catalog."
   ([] (initialize! {}))
   ([assemble-options]
-   (let [assembled ((catalog-api) assemble-options)
+   (let [assembled (final-catalog/assemble assemble-options)
          node-schema (strict-graphs! assembled)
          registrations (mapv #(compile-registration (:node-environment assembled) %)
                              (get-in assembled [:combat :registrations]))
