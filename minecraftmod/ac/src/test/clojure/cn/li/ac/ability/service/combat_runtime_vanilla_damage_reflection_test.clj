@@ -57,11 +57,12 @@
     (try
       (capabilities/register-action!
        :entity/damage
-       (fn [request] (swap! seen conj request) {:status :applied}))
+       (fn [request] (swap! seen conj request) {:status :applied})
+       {:allow-overwrite? true})
       (f seen)
       (finally
         (when previous
-          (capabilities/register-action! :entity/damage previous))))))
+          (capabilities/register-action! :entity/damage previous {:allow-overwrite? true}))))))
 
 (defn- with-synthetic-reflect-ability
   "Replace the whole compiled :abilities table with just the synthetic
