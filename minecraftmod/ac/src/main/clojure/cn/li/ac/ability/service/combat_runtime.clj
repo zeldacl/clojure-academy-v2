@@ -41,7 +41,14 @@
 (defonce ^:private engine* (atom nil))
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private final-runtime* (atom nil))
-(defonce ^:private edn-host-capabilities-installed? (atom false))
+;; edn-host-capabilities-installed? (a bare defonce atom) previously guarded
+;; install-ac-host-capabilities! below. Replaced by
+;; cn.li.mcmod.runtime.install/framework-once!, keyed
+;; ::ac-host-capabilities-installed? at the call site: same "run once, retry
+;; if it threw" semantics (framework-once! rolls its own flag back on throw,
+;; same as this atom's own catch block used to reset! it), but the flag now
+;; lives in the Framework atom and correctly resets on a real
+;; integrated-server world reload -- a defonce atom does not, and never did.
 ;; The authoritative source for `:now-tick` when a caller does not supply one.
 ;; `tick!` below updates this from the real server tick every call; intents
 ;; dispatched between full tick-loop passes read the last observed value.
@@ -550,12 +557,13 @@
    Public and called from cn.li.ac.core.init/init, ahead of
    combat-catalog/initialize!, so capabilities are registered before the catalog
    ever loads (Design E precondition R9). It also still runs lazily on first
-   dispatch below (compare-and-set! below makes a second call a no-op) as a
-   safety net for any other entry path, but that is no longer the only time
-   it runs."
+   dispatch below (framework-once! makes a second call in the same Framework
+   lifetime a no-op) as a safety net for any other entry path, but that is
+   no longer the only time it runs."
   []
-  (when (compare-and-set! edn-host-capabilities-installed? false true)
-    (try
+  (try
+    (install/framework-once! ::ac-host-capabilities-installed?
+     (fn []
       (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
         (capabilities/register-query!
          :energy/target
@@ -644,12 +652,16 @@
                               {:command :consume-resource
                                :overload amount :cp 0.0 :creative? false})]
                  {:status (if (:success? result) :applied :failed)})
-               {:status :rejected :reason :invalid-resource-add})))))
-      (catch Throwable _
-        ;; A loader may freeze the registry before AC content boots.  Leave the
-        ;; registry state authoritative; missing ports surface as :unhandled.
-        (reset! edn-host-capabilities-installed? false)))
-  (capabilities/snapshot)))
+               {:status :rejected :reason :invalid-resource-add})))))))
+    (catch Throwable _
+      ;; A loader may freeze the registry before AC content boots.  Leave the
+      ;; registry state authoritative; missing ports surface as :unhandled.
+      ;; framework-once! already rolled its own install flag back before
+      ;; re-throwing (same "retry on next call" contract the old manual
+      ;; reset! provided), so swallowing here just keeps this function's own
+      ;; contract of never throwing to its caller.
+      nil))
+  (capabilities/snapshot))
 
 (defn- cooldown-active?
   [owner ability-id]
