@@ -38,7 +38,8 @@
                           :cost-per-damage 0.1
                           :minimum 0.1
                           :max-depth 1
-                          :exp-scale 0.0}}]})
+                          :cost-resource :cp
+                          :progression-scale 0.0}}]})
 
 (use-fixtures :each
   (fn [f]

@@ -117,9 +117,10 @@
                        :ignore-threshold (value (:ignore-threshold program))
                        :max-cost (value (:max-cost program)) :vfx (:vfx program)
                        :owner (:owner-id (get-in event [:metadata :input :context]))
-                       :exp-tag (:exp-tag program)
-                       :exp-amount (value (:exp-scale program))
-                       :exp-eligible? (not (and (some? (:ignore-threshold program))
+                       :cost-resource (:cost-resource program)
+                       :progression-tag (:progression-tag program)
+                       :progression-amount (value (:progression-scale program))
+                       :progression-eligible? (not (and (some? (:ignore-threshold program))
                                                    (> (double (:base event))
                                                       (value (:ignore-threshold program)))))
                        :events (:events program) :input (:input (:metadata event))}]
@@ -130,8 +131,8 @@
                        :last-tick-path (:last-tick-path program) :front? (when (contains? program :front?)
                                  (boolean (eval-value (:front? program) event)))
                        :owner (:owner-id (get-in event [:metadata :input :context]))
-                       :exp-tag (:exp-tag program)
-                       :exp-amount (value (:exp-scale program))
+                       :progression-tag (:progression-tag program)
+                       :progression-amount (value (:progression-scale program))
                        :events (:events program) :input (:input (:metadata event))}]
       :damage/cancel [{:kind :cancel}]
       :damage/reflect [{:kind :reflection :ratio (value (:multiplier program))
@@ -139,9 +140,10 @@
                         :max-depth (long (or (value (:max-depth program)) max-reflection-depth))
                         :cost-per-damage (value (:cost-per-damage program))
                         :owner (:owner-id (get-in event [:metadata :input :context]))
-                        :exp-tag (:exp-tag program)
-                        :exp-amount (value (:exp-scale program))
-                        :exp-eligible? (and (not= :environment (:source event))
+                        :cost-resource (:cost-resource program)
+                        :progression-tag (:progression-tag program)
+                        :progression-amount (value (:progression-scale program))
+                        :progression-eligible? (and (not= :environment (:source event))
                                              (< (long (:depth event))
                                                 (min max-reflection-depth
                                                      (long (or (value (:max-depth program))
@@ -176,14 +178,14 @@
                                                    (program-contributions (:program reaction) pe)))))
                                   matched)
         progression-events (vec (keep (fn [contribution]
-                                        (when (and (:exp-tag contribution)
-                                                   (number? (:exp-amount contribution))
+                                        (when (and (:progression-tag contribution)
+                                                   (number? (:progression-amount contribution))
                                                    (or (= :absorption (:kind contribution))
                                                        (and (contains? #{:reduction :reflection} (:kind contribution))
-                                                            (not= false (:exp-eligible? contribution)))))
+                                                            (not= false (:progression-eligible? contribution)))))
                                           {:type :score/mark
-                                           :tag (:exp-tag contribution)
-                                           :progression (:exp-amount contribution)
+                                           :tag (:progression-tag contribution)
+                                           :progression (:progression-amount contribution)
                                            :owner (:owner contribution)
                                            :ability-id (:ability-id contribution)}))
                                       raw-contributions))
@@ -246,15 +248,29 @@
                                 (merge-with + acc (:cost contribution)))
                               {} (filter #(= :absorption (:kind %)) contributions))
                       {})
-        reduction-cost (reduce + 0.0 (map (fn [contribution] (let [threshold (:ignore-threshold contribution) ignored? (and (some? threshold) (> (double (:base event)) (double threshold)))] (if ignored? 0.0 (min (max 0.0 (double (or (:max-cost contribution) 0.0))) (* (double (:base event)) (double (or (:value contribution) 0.0))))))) (filter #(= :reduction (:kind %)) contributions)))
-        reflection-cost (reduce + 0.0
-                                 (map (fn [contribution]
-                                        (* amount-before-reflect (double (or (:ratio contribution) 0.0))
-                                           (double (or (:cost-per-damage contribution) 0.0))))
-                                      (filter #(= :reflection (:kind %)) contributions)))
-        resource-costs (merge-with + absorb-cost
-                                    (when (pos? reduction-cost) {:cp reduction-cost})
-                                    (when (pos? reflection-cost) {:cp reflection-cost}))]
+        cost-resource! (fn [component contribution]
+                         (or (:cost-resource contribution)
+                             (throw (ex-info "damage policy requires :cost-resource"
+                                             {:component component
+                                              :ability-id (:ability-id contribution)
+                                              :reaction-id (:reaction-id contribution)}))))
+        reduction-costs (keep (fn [contribution]
+                                (let [threshold (:ignore-threshold contribution)
+                                      ignored? (and (some? threshold) (> (double (:base event)) (double threshold)))
+                                      cost (if ignored? 0.0
+                                             (min (max 0.0 (double (or (:max-cost contribution) 0.0)))
+                                                  (* (double (:base event)) (double (or (:value contribution) 0.0)))))]
+                                  (when (pos? cost)
+                                    [(cost-resource! :damage/reduce contribution) cost])))
+                              (filter #(= :reduction (:kind %)) contributions))
+        reflection-costs (keep (fn [contribution]
+                                 (let [cost (* amount-before-reflect (double (or (:ratio contribution) 0.0))
+                                              (double (or (:cost-per-damage contribution) 0.0)))]
+                                   (when (pos? cost)
+                                     [(cost-resource! :damage/reflect contribution) cost])))
+                               (filter #(= :reflection (:kind %)) contributions))
+        resource-costs (reduce (fn [acc [resource cost]] (update acc resource (fnil + 0.0) cost))
+                               absorb-cost (concat reduction-costs reflection-costs))]
     {:event event :matched (mapv #(select-keys % [:ability-id :reaction-id]) matched)
      :amount amount :resource-costs resource-costs :cancelled? (boolean (some #(= :cancel (:kind %)) contributions))
      :critical? critical? :critical-level critical-level :reflections reflections

@@ -583,9 +583,9 @@
     (is (contains? names :tick))
     (is (= 2 (count marks)))
     (is (every? #(map? (:progression %)) marks))
-    (is (= :attacked (:exp-tag absorb)))
+    (is (= :attacked (:progression-tag absorb)))
     (is (= {:ref [:input :tunables :exp-attacked]}
-           (:exp-scale absorb)))))
+           (:progression-scale absorb)))))
 (deftest thunder-bolt-aoe-excludes-caster-and-direct-target-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/thunder_bolt.edn"))
         nodes (component-nodes (:program doc))
@@ -679,16 +679,16 @@
         policy (first (:damage-policies doc))
         program (:program policy)]
     (is (= :damage/reduce (:component program)))
-    (is (= :damaged (:exp-tag program)))
-    (is (= {:ref [:input :tunables :exp-damage-scale]} (:exp-scale program)))))
+    (is (= :damaged (:progression-tag program)))
+    (is (= {:ref [:input :tunables :exp-damage-scale]} (:progression-scale program)))))
 
 (deftest vec-reflection-damage-progression-policy-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/vec_reflection.edn"))
         policy (first (:damage-policies doc))
         program (:program policy)]
     (is (= :damage/reflect (:component program)))
-    (is (= :damaged (:exp-tag program)))
-    (is (= {:ref [:input :params :exp-damage-scale]} (:exp-scale program)))))
+    (is (= :damaged (:progression-tag program)))
+    (is (= {:ref [:input :params :exp-damage-scale]} (:progression-scale program)))))
 
 (deftest electron-missile-only-appends-successfully-spawned-ball-ids-test
   (let [doc (read-file! (io/file "src/main/resources/ac/combat/abilities/electron_missile.edn"))

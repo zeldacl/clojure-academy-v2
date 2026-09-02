@@ -1250,6 +1250,27 @@ tasks.register("verifyCombatSkillCoverage") {
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:checkClojure" }
 
+tasks.register("verifyCombatResourceAgnostic") {
+    group = "verification"
+    description = "combat-core must not hardcode any content module's resource name -- resource keys arrive only as data (a damage policy's :cost-resource field, or an owner-state :resources map key), never as a literal in combat-core source."
+    doLast {
+        def forbidden = [":cp", ":overload", ":mana", ":spirit"]
+        def offenders = []
+        fileTree("combat-core/src/main/clojure") { include "**/*.clj" }.files.each { source ->
+            def text = source.text
+            forbidden.each { token ->
+                if ((text =~ /(?<![a-zA-Z0-9_.\/-])${java.util.regex.Pattern.quote(token)}(?![a-zA-Z0-9_.\/?!*-])/).find()) {
+                    offenders << "${source}: ${token}"
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("combat-core hardcodes a content module's resource name:\n" + offenders.join("\n"))
+        }
+        logger.lifecycle("[verifyCombatResourceAgnostic] ok")
+    }
+}
+
 tasks.register("verifyNodeCoreLanguageKernel") {
     group = "verification"
     description = "Verify node-core's load boundary (immutable descriptor environment, expression evaluator, scope checker, composite expansion, structural validation, schema export)."
@@ -2389,6 +2410,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatProviderClosure",
               "verifyCombatSkillCoverage",
               "verifyCombatContentHash",
+              "verifyCombatResourceAgnostic",
               "verifyCombatIntentOnlyNetwork",
               "verifyCombatLegacyRuntimeRemoval",
               "verifyAbilityCompositionBoundary",

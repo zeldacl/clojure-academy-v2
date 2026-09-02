@@ -29,13 +29,30 @@
 (deftest reduction-ignore-threshold-test
   (let [reaction {:ability-id :deviation :reaction-id :reduce :priority 1
                   :on :combat/damage
-                  :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 5.0}}
+                  :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 5.0
+                            :cost-resource :cp}}
         small (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})
         large (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 6.0 :type :skill :seed 1})]
     (is (= 2.0 (:amount small)))
     (is (= 6.0 (:amount large)))
     (is (= 2.0 (get-in small [:resource-costs :cp])))
     (is (nil? (get-in large [:resource-costs :cp])))))
+
+(deftest reduce-without-cost-resource-throws-when-cost-is-positive-test
+  (let [reaction {:ability-id :deviation :reaction-id :reduce :priority 1
+                  :on :combat/damage
+                  :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 99.0}}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cost-resource"
+          (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})))))
+
+(deftest reduce-is-resource-agnostic-test
+  (let [reaction {:ability-id :bc-ritual :reaction-id :reduce :priority 1
+                  :on :combat/damage
+                  :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 99.0
+                            :cost-resource :mana}}
+        result (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})]
+    (is (= 2.0 (get-in result [:resource-costs :mana])))
+    (is (nil? (get-in result [:resource-costs :cp])))))
 (deftest boundary-commits-only-after-actual-apply-test
   (let [committed (atom nil)]
     (damage/install-boundary! {:reactions [] :commit-state! #(reset! committed %)})
@@ -65,8 +82,8 @@
                   :on :combat/damage
                   :program {:component :damage/absorb :cap 3.0
                             :cost {:cp 10.0}
-                            :exp-tag :attacked
-                            :exp-scale 0.25}}
+                            :progression-tag :attacked
+                            :progression-scale 0.25}}
         result (damage/resolve-event [reaction]
                                       {:world-id "w" :source :a :target :b
                                        :base 10.0 :type :skill :seed 4
@@ -90,7 +107,8 @@
   (let [reaction {:ability-id :vec-deviation :reaction-id :reduce :priority 1
                   :on :combat/damage
                   :program {:component :damage/reduce :rate 0.5 :max-cost 99.0
-                            :ignore-threshold 5.0 :exp-tag :damaged :exp-scale 0.1}}
+                            :ignore-threshold 5.0 :cost-resource :cp
+                            :progression-tag :damaged :progression-scale 0.1}}
         eligible (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})
         ignored (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 6.0 :type :skill :seed 1})]
     (is (= [{:type :score/mark :tag :damaged :progression 0.1
@@ -102,7 +120,7 @@
                   :on :combat/damage
                   :program {:component :damage/reflect :multiplier 0.5 :minimum 0.0
                             :max-depth 5 :cost-per-damage 0.0
-                            :exp-tag :damaged :exp-scale 0.2}}
+                            :progression-tag :damaged :progression-scale 0.2}}
         result (damage/resolve-event [reaction] {:world-id "w" :source :a :target :b :base 10.0 :type :skill :seed 1})]
     (is (= [{:type :score/mark :tag :damaged :progression 0.2
              :owner nil :ability-id :vec-reflection}] (:side-events result)))

@@ -758,9 +758,7 @@
   [event]
   (let [owner (:owner event)
         ability-id (:ability-id event)
-        raw (if (= :progression/mark (:type event))
-              (:progression event)
-              (or (:progression event) (:score event)))
+        raw (or (:progression event) (:score event))
         amount (cond
                  (number? raw) (double raw)
                  (map? raw) (double (or (:amount raw) (:value raw)
@@ -868,7 +866,6 @@
                                 :translate? (boolean (if (nil? translate?) true translate?))}))
       {:status :applied :type (:type event)})
 
-    :progression/mark (handle-progression-event! event)
     :score/mark (handle-progression-event! event)
 
     :world/block-impact

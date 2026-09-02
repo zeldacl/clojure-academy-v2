@@ -398,12 +398,6 @@
                   (contracts/assoc-owner-in (:txn context) owner
                                             [:cooldowns [ability-id name]]
                                             {:ticks ticks :max ticks})))
-      :progression/mark
-      (let [owner (or (:owner node) (:owner (:frame context)))
-            progression (resolve-value (or (:progression node) (:value node) {}) context)]
-        (emit context :events {:type :progression/mark :owner owner
-                               :ability-id (:ability-id (:frame context))
-                               :progression progression}))
       :score/mark
       (let [owner (or (:owner node) (:owner (:frame context)))
             score (resolve-value (dissoc node :component :kind) context)]
