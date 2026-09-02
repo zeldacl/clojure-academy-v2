@@ -16,8 +16,7 @@
    the same object. A per-subtree (rather than whole-view) skip granularity
    remains a possible follow-up; today one changed binding anywhere in a
    view repaints that whole view, not just the affected subtree."
-  (:require [cn.li.presentation.core.artifact :as artifact]
-            [cn.li.presentation.core.nodetable :as nodetable]
+  (:require [cn.li.presentation.core.nodetable :as nodetable]
             [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]
@@ -196,9 +195,11 @@
                           reduce (fn [state _action _payload]
                                    {:state state :effects [] :event-result :pass})}}]
   (owner-thread! runtime)
+  (when-not artifact
+    (throw (ex-info "mount! requires a pre-loaded :artifact"
+                    {:view-id view-id})))
   (let [id (:next-id (runtime-state runtime))
         handle (MountHandle. (long id))
-        artifact (or artifact (artifact/load-view view-id))
         table (nodetable/table-for artifact)
         instance {:handle handle
                   :host host

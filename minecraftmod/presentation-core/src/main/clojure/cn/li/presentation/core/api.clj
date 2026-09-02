@@ -16,7 +16,6 @@
 (defn create-runtime [] (host/create-runtime))
 (defn api [runtime] (host/api runtime))
 
-(defn load-view
-  ([view-id] (artifact/load-view view-id))
-  ([manifest view-id] (artifact/load-view manifest view-id)))
-(defn load-manifest [] (artifact/load-manifest))
+(defn load-view [manifest view-id] (artifact/load-view manifest view-id))
+(defn load-manifest [content-id] (artifact/load-manifest content-id))
+(defn merge-manifests [content-ids] (artifact/merge-manifests content-ids))

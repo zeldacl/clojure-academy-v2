@@ -517,6 +517,14 @@
                   :content-ids [content-id]
                   :views (into (sorted-map) entries)
                   :generated-by :presentation-compiler}
-        manifest-path (.resolve output-root "META-INF/presentation/catalog.edn")]
+        ;; Namespaced by content-id (P5): compile-directory! runs once per
+        ;; content module (ac/build.gradle's compilePresentationViews task,
+        ;; one per module), and every module's generated resources get
+        ;; merged into the SAME mod jar's classpath. A fixed "catalog.edn"
+        ;; name meant a second content module's manifest would silently
+        ;; overwrite the first's at jar-merge time; presentation-core's
+        ;; merge-manifests reads each tenant's own file by this same path.
+        manifest-path (.resolve output-root
+                                (str "META-INF/presentation/" content-id ".catalog.edn"))]
     (write-edn! manifest-path (canonicalize manifest))
     manifest))

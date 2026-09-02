@@ -2082,7 +2082,11 @@ tasks.register("verifyPresentationArtifacts") {
     doLast {
         def sourceRoot = file("ac/src/presentation/resources")
         def generatedRoot = file("build/neutral/ac/generated/resources/presentation")
-        def manifest = new File(generatedRoot, "META-INF/presentation/catalog.edn")
+        // P5: manifest is namespaced by content-id (academy.catalog.edn, not
+        // a fixed catalog.edn) so a second content module's compiled
+        // manifest cannot silently overwrite this one at jar-merge time --
+        // see presentation-compiler/artifact.clj's compile-directory!.
+        def manifest = new File(generatedRoot, "META-INF/presentation/academy.catalog.edn")
         if (!manifest.isFile()) {
             throw new GradleException("Presentation catalog missing: " + manifest)
         }
