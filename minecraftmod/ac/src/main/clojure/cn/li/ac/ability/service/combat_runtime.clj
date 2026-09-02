@@ -38,7 +38,9 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]))
 
-(defonce ^:private engine* (atom nil))
+;; engine* (a bare defonce atom) was write-only outside reset-for-test! --
+;; nothing ever `reset!` it to a non-nil value and nothing read it. Deleted
+;; rather than migrated.
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private final-runtime* (atom nil))
 ;; edn-host-capabilities-installed? (a bare defonce atom) previously guarded
@@ -311,25 +313,37 @@
 
 (defn initialize-final-runtime!
   "Install AC's production final runtime against mcmod neutral capability
-   handlers. This is the only runtime used after the final dispatch cutover."
+   handlers. This is the only runtime used after the final dispatch cutover.
+
+   Gated by framework-once! (keyed ::final-runtime-installed?) instead of
+   the old bare (or @final-runtime* ...) nil-guard: that guard treated a
+   non-nil atom as proof initialization already ran, but the atom is
+   JVM-lifetime while the guard's intent is Framework-lifetime -- a second
+   real world load in the same JVM would have kept serving the FIRST
+   world's stale runtime/catalog forever, never rebuilding. framework-once!
+   correctly re-runs this once per fresh Framework injection; final-runtime*/
+   catalog* still hold the memoized value for cheap reads in between (this
+   is a per-tick-adjacent hot path -- see `engine`/`catalog` below)."
   []
-  (or @final-runtime*
-      (let [_ (install-runtime-adapters!)
-            runtime (final-runtime/install-production!
-                     {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
-                      :commit-state! commit-final-state!
-                      :ability-state-provider (fn [owner]
-                                          (or (combat-sessions/session (str owner)) {}))
-                      :commit-ability-state! (fn [owner patches]
-                                         (when (seq patches)
-                                           (combat-sessions/apply-actions!
-                                            (str owner)
-                                            [{:type :session-patch :entries patches}])))
-                      :remove-ability-state! (fn [owner]
-                                         (combat-sessions/remove! (str owner)))} )]
-        (reset! final-runtime* runtime)
-        (reset! catalog* @(:catalog runtime))
-        runtime)))
+  (install/framework-once!
+   ::final-runtime-installed?
+   (fn []
+     (install-runtime-adapters!)
+     (let [runtime (final-runtime/install-production!
+                    {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
+                     :commit-state! commit-final-state!
+                     :ability-state-provider (fn [owner]
+                                         (or (combat-sessions/session (str owner)) {}))
+                     :commit-ability-state! (fn [owner patches]
+                                        (when (seq patches)
+                                          (combat-sessions/apply-actions!
+                                           (str owner)
+                                           [{:type :session-patch :entries patches}])))
+                     :remove-ability-state! (fn [owner]
+                                        (combat-sessions/remove! (str owner)))})]
+       (reset! final-runtime* runtime)
+       (reset! catalog* @(:catalog runtime)))))
+  @final-runtime*)
 
 (defn final-runtime [] @final-runtime*)
 
@@ -1275,7 +1289,6 @@
   {:combat-session (combat-sessions/session owner)})
 
 (defn reset-for-test! []
-  (reset! engine* nil)
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
   nil)
