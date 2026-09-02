@@ -17,8 +17,7 @@
    already has the full shared vocabulary baked in by compose-catalog).
 
    Ability/effect ids are NOT required to be namespaced by content-id.
-   ac's real ability ids (:groundshock, :railgun, ...) and effect ids
-   (:arc-channel-session, ...) are bare keywords with no namespace at all
+   ac's real ability ids and effect ids are bare keywords with no namespace at all
    -- a hard content-id-prefix requirement would reject every single one
    of them, forcing a content-data migration this module has no business
    requiring. What actually matters for multi-tenancy is detecting a

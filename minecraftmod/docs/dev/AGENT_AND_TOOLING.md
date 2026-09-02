@@ -72,6 +72,7 @@ Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target
 - `verifyAbilityActivationCoverage` (every ability EDN must declare a top-level `:activation` recognized by the dispatcher — the gate that keeps B1/B2/B3-class bugs, where a skill's pulse/release/toggle phases silently never ran, from recurring)
 - `verifyAbilityRuntimeNoDynamicResolve` (`ability-runtime/src/main` may not use `requiring-resolve`/`ServiceLoader`/`eval`/context-registry style dynamic dispatch — same discipline as `verifyCombatNoPrivateRuntime`, now that real runtime code lives there)
 - `verifyNoDuplicateUtilities` (`clamp`/`lerp`/`vec3-components`/`nearby-chunk-keys`/the SplitMix64 constants each may have exactly one definition point across the repo)
+- `verifyContentModuleCoreIsolation` (allow-list gate: `ac` may only reach `node-core`/`combat-core`/`vfx-core`/`presentation-core` through the namespaces already on the allow-list in `build.gradle`, or through `cn.li.ability.*` — catches new direct-core reaches creeping in without requiring the full dispatch-pipeline move that Phase 6 deferred)
 
 ## Logging conventions (mandatory)
 
