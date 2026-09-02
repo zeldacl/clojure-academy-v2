@@ -5,7 +5,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
+            [cn.li.ability.session :as combat-sessions]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.ac.test.support.player-state :as player-state-support]))
 
@@ -56,7 +56,7 @@
                   "p-instant-leak" {:action :start :ability-id :arc-gen})]
       (is (= :accepted (:status result)))
       (is (= :insufficient-resource (:outcome result)))
-      (is (not (combat-sessions/active? "p-instant-leak"))))))
+      (is (not (combat-sessions/active? :ac "p-instant-leak"))))))
 
 (deftest caster-facade-exposes-neutral-capability-names
   (testing "the schema v2 :from table (design C) maps AC's context shape into neutral capability names"
@@ -85,8 +85,8 @@
      player-state-support/test-session-id "p-seed-b")
     (combat-runtime/dispatch-intent! "p-seed-a" {:action :start :ability-id :railgun})
     (combat-runtime/dispatch-intent! "p-seed-b" {:action :start :ability-id :railgun})
-    (let [seed-a (:activation-seed (combat-sessions/session "p-seed-a"))
-          seed-b (:activation-seed (combat-sessions/session "p-seed-b"))]
+    (let [seed-a (:activation-seed (combat-sessions/session :ac "p-seed-a"))
+          seed-b (:activation-seed (combat-sessions/session :ac "p-seed-b"))]
       (is (some? seed-a))
       (is (some? seed-b))
       (is (not= seed-a seed-b))

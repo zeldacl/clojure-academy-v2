@@ -5,7 +5,9 @@
    it with -Dac.test.only=cn.li.ac.ability.final-runtime-perf-test and keep
    the resulting JFR outside the repository's source tree."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.ability.final-runtime :as runtime]))
+            [cn.li.ability.engine :as runtime]
+            [cn.li.combat.api :as combat-api]
+            [cn.li.mcmod.runtime.host :as host]))
 
 (def ^:private program
   {:schema-version 1
@@ -19,9 +21,10 @@
    :tick 0 :seed 1 :input {}})
 
 (defn- benchmark-runtime []
-  {:apis {:execute (fn [_ _ frame]
-                     {:status :accepted :outcome (:tick frame)})}
-   :engine nil
+  {:engine (combat-api/create-engine
+            {:host (host/create {:queries {} :actions {}})
+             :state-provider (fn [_] {})
+             :commit-state! (fn [_] nil)})
    :scheduled (atom (sorted-map))})
 
 (deftest scheduler-hotpath-jfr-benchmark-test

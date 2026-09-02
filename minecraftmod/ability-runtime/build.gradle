@@ -23,8 +23,29 @@ tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach
     checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/resources/main")))
 }
 
+// 反射拦截器 (same guard as ac/build.gradle -- ability-runtime is about to
+// carry the same volume of session/owner-state/dispatch code AC used to
+// hold, so it needs the same protection against a reflective call
+// surviving compile-time and blowing up Loom remap at runtime).
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
+
+    logging.addStandardOutputListener(new StandardOutputListener() {
+        @Override
+        void onOutput(CharSequence output) {
+            String log = output.toString()
+            if (log.contains("Reflection warning")) {
+                throw new GradleException(
+                    "\n[Reflection Guard] 检测到 Clojure AOT 隐式反射调用！\n" +
+                    "反射会导致 Loom remap 失效，使最终 Jar 在运行时崩溃。\n" +
+                    "请添加 ^TypeHint 元数据或使用 Java 桥接类修复：\n" +
+                    "--------------------------------------------------\n" +
+                    log.trim() + "\n" +
+                    "--------------------------------------------------"
+                )
+            }
+        }
+    })
 }
 
 // compileTestClojure hits the same node-core/combat-core/vfx-core

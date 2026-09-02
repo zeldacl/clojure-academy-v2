@@ -1,44 +1,39 @@
-(ns cn.li.ac.ability.final-runtime
-  "AC composition root for the final authoritative combat engine.
-
-   This namespace is deliberately Minecraft-free.  Platform adapters provide
-   the neutral host and state callbacks; no legacy VM, recipe, interception,
-   or VFX runtime is consulted. Catalog initialization is a hard ABI gate;
-   a non-final registration aborts startup rather than creating a fallback."
+(ns cn.li.ability.engine
+  "Content-module-neutral composition root for the final authoritative
+   combat engine. Ported from ac's final_runtime.clj -- that namespace was
+   already Minecraft-free and already only touched combat-core's public
+   API, except for one seam: catalog assembly (:initialize-catalog/
+   :catalog-status/:registration) came straight from AC's
+   final-catalog-service. Those three collapse into a single injected
+   :catalog-compile function here (returns the assembled
+   {:node-environment :combat :vfx ...} map, exactly the shape
+   final-catalog-service/initialize! already produced) -- catalog-status
+   and registration are then plain reads off this runtime's own :catalog
+   atom, which already holds everything the assembled map carries, so no
+   second injected function is needed for either. A future BC/CC pack
+   supplies its own :catalog-compile; this namespace never requires
+   cn.li.ac.* or knows AC's EDN layout exists."
   (:require [cn.li.combat.api :as combat-api]
-            [cn.li.ac.ability.final-catalog-service :as catalog-service]
             [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.mcmod.runtime.host :as host]))
 
-(defn- resolve-runtime-apis
-  "Same :apis map shape every call site below already reads through
-   (get-in runtime [:apis ...]) -- only how it's populated changed, from
-   requiring-resolve string-symbol indirection (which existed only because
-   combat-core had no facade) to real, compile-time-checked requires."
-  []
-  {:create-engine combat-api/create-engine
-   :initialize-catalog catalog-service/initialize!
-   :catalog-status catalog-service/catalog-status
-   :resolve-damage combat-api/resolve-damage
-   :registration catalog-service/registration
-   :execute combat-api/execute!})
-
-(defn create-runtime [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
+(defn create-runtime
+  [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state!
+           catalog-compile remove-ability-state!] :as options}]
   (when-not (map? host) (throw (ex-info "final runtime requires neutral host" {})))
   (when-not (ifn? state-provider) (throw (ex-info "final runtime requires state-provider" {})))
   (when-not (ifn? commit-state!) (throw (ex-info "final runtime requires commit-state!" {})))
-  (let [apis (resolve-runtime-apis)
-        create-engine (:create-engine apis)]
-    {:options options
-     :apis apis
-     :remove-ability-state! remove-ability-state!
-     :engine (create-engine {:host host
-                             :state-provider state-provider
-                             :commit-state! commit-state!
-                             :ability-state-provider ability-state-provider
-                             :commit-ability-state! commit-ability-state!})
-     :catalog (atom nil)
-     :scheduled (atom (sorted-map))}))
+  (when-not (ifn? catalog-compile) (throw (ex-info "final runtime requires catalog-compile" {})))
+  {:options options
+   :catalog-compile catalog-compile
+   :remove-ability-state! remove-ability-state!
+   :engine (combat-api/create-engine {:host host
+                                      :state-provider state-provider
+                                      :commit-state! commit-state!
+                                      :ability-state-provider ability-state-provider
+                                      :commit-ability-state! commit-ability-state!})
+   :catalog (atom nil)
+   :scheduled (atom (sorted-map))})
 
 (defn create-from-capabilities
   "Build the final host from mcmod's neutral capability snapshot.
@@ -46,7 +41,8 @@
    Query handlers receive plain request maps.  Action handlers are wrapped so
    the final host can preflight every command without invoking a mutating
    Minecraft operation; only the apply phase crosses the mcmod boundary."
-  [{:keys [state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!] :as options}]
+  [{:keys [state-provider commit-state! ability-state-provider commit-ability-state!
+           catalog-compile remove-ability-state!] :as options}]
   (let [snapshot (capabilities/snapshot)
         host-instance (host/create
                        {:queries (:queries snapshot)
@@ -66,11 +62,11 @@
                       :commit-state! commit-state!
                       :ability-state-provider ability-state-provider
                       :commit-ability-state! commit-ability-state!
+                      :catalog-compile catalog-compile
                       :remove-ability-state! remove-ability-state!})))
 
 (defn initialize! [runtime]
-  (let [initialize-catalog (get-in runtime [:apis :initialize-catalog])
-        assembled (initialize-catalog)]
+  (let [assembled ((:catalog-compile runtime))]
     (reset! (:catalog runtime)
             (assoc assembled
                    :damage-policies
@@ -81,18 +77,18 @@
     runtime))
 
 (defn catalog-status [runtime]
-  (let [status (get-in runtime [:apis :catalog-status])]
-    (if @(:catalog runtime) (status) {:status :cold})))
+  (if @(:catalog runtime)
+    (select-keys @(:catalog runtime) [:status :content-hash])
+    {:status :cold}))
 
 (defn resolve-damage!
   "Resolve a neutral damage event through the final damage policy engine."
   [runtime raw-event]
-  (let [resolve-event (get-in runtime [:apis :resolve-damage])
-        policies (:damage-policies @(:catalog runtime))]
-    (assoc (resolve-event policies raw-event) :status :accepted)))
+  (let [policies (:damage-policies @(:catalog runtime))]
+    (assoc (combat-api/resolve-damage policies raw-event) :status :accepted)))
 
 (defn- registration [runtime ability-id]
-  ((get-in runtime [:apis :registration]) ability-id))
+  (get-in @(:catalog runtime) [:combat :by-id ability-id]))
 
 (defn- scheduled-program [node]
   {:schema-version 1
@@ -123,8 +119,7 @@
     (let [entry (registration runtime ability-id)]
       (if (nil? entry)
         {:status :rejected :reason :unknown-ability :ability-id ability-id}
-        (let [execute (get-in runtime [:apis :execute])
-              result (assoc (execute (:engine runtime) (:compiled entry) frame)
+        (let [result (assoc (combat-api/execute! (:engine runtime) (:compiled entry) frame)
                             :owner (:owner frame))]
           (when (and (:finish-ability? result) (ifn? (:remove-ability-state! runtime)))
             ((:remove-ability-state! runtime) (:owner frame)))
@@ -152,12 +147,11 @@
                           buckets
                           due-buckets)]
         (reset! (:scheduled runtime) later)
-        (let [execute (get-in runtime [:apis :execute])]
-          {:status :accepted
-           :tick tick
-           :results (mapv (fn [{:keys [program frame]}]
-                            (execute (:engine runtime) program (assoc frame :tick tick)))
-                          due)})))))
+        {:status :accepted
+         :tick tick
+         :results (mapv (fn [{:keys [program frame]}]
+                          (combat-api/execute! (:engine runtime) program (assoc frame :tick tick)))
+                        due)}))))
 
 (defn abort-owner!
   "Cancel scheduled final work for one owner.  This is the shared lifecycle
@@ -177,14 +171,17 @@
 (defonce ^:private production-runtime* (atom nil))
 
 (defn install-production!
-  "Install the one server-side final runtime instance used by AC's
-   composition root.  The caller supplies neutral state callbacks; this
-   function owns no Minecraft objects and is safe to invoke once at startup."
-  [{:keys [state-provider commit-state! ability-state-provider commit-ability-state! remove-ability-state!]}]
+  "Install the one server-side final runtime instance used by a content
+   pack's composition root.  The caller supplies neutral state callbacks and
+   its own catalog-compile; this function owns no Minecraft objects and is
+   safe to invoke once at startup."
+  [{:keys [state-provider commit-state! ability-state-provider commit-ability-state!
+           catalog-compile remove-ability-state!]}]
   (let [runtime (create-from-capabilities {:state-provider state-provider
                                            :commit-state! commit-state!
                                            :ability-state-provider ability-state-provider
                                            :commit-ability-state! commit-ability-state!
+                                           :catalog-compile catalog-compile
                                            :remove-ability-state! remove-ability-state!})]
     (initialize! runtime)
     (reset! production-runtime* runtime)
@@ -199,6 +196,7 @@
       (get-in intent [:context :world-id])
       (get-in intent [:capabilities :world/id])
       "minecraft:overworld"))
+
 (defn dispatch-production! [owner ability-id intent]
   (if-let [runtime @production-runtime*]
     (dispatch! runtime ability-id
@@ -210,5 +208,3 @@
                                 (hash [owner ability-id (:server-tick intent)])))
                 :input (dissoc intent :owner :ability-id)})
     {:status :rejected :reason :final-runtime-not-installed}))
-
-

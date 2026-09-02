@@ -12,8 +12,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.final-runtime :as final-runtime]
-            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
+            [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
+            [cn.li.ability.engine :as final-runtime]
+            [cn.li.ability.session :as combat-sessions]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.registry.event :as ability-event]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -37,6 +38,11 @@
             [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]))
+
+;; This module's identity in every multi-tenant ability-runtime store
+;; (cn.li.ability.session) that's keyed by [content-id owner] so a future
+;; BC/CC module's sessions never collide with AC's.
+(def ^:private content-id :ac)
 
 ;; engine* (a bare defonce atom) was write-only outside reset-for-test! --
 ;; nothing ever `reset!` it to a non-nil value and nothing read it. Deleted
@@ -238,7 +244,7 @@
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :max-cp (double (or (:max-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
-     :active-abilities (if-let [session (combat-sessions/session (str owner))]
+     :active-abilities (if-let [session (combat-sessions/session content-id (str owner))]
                          #{(:ability-id session)}
                          #{})
      ;; {ability-id {sub-id ticks}} -- keyed by BOTH ctrl-id and sub-id, unlike
@@ -332,15 +338,16 @@
      (let [runtime (final-runtime/install-production!
                     {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
                      :commit-state! commit-final-state!
+                     :catalog-compile final-catalog-service/initialize!
                      :ability-state-provider (fn [owner]
-                                         (or (combat-sessions/session (str owner)) {}))
+                                         (or (combat-sessions/session content-id (str owner)) {}))
                      :commit-ability-state! (fn [owner patches]
                                         (when (seq patches)
                                           (combat-sessions/apply-actions!
-                                           (str owner)
+                                           content-id (str owner)
                                            [{:type :session-patch :entries patches}])))
                      :remove-ability-state! (fn [owner]
-                                        (combat-sessions/remove! (str owner)))})]
+                                        (combat-sessions/remove! content-id (str owner)))})]
        (reset! final-runtime* runtime)
        (reset! catalog* @(:catalog runtime)))))
   @final-runtime*)
@@ -690,7 +697,7 @@
   ;; evaluator or catalog fallback at this boundary.
   (let [ability-id (edn-ability-id owner intent)
         source (combat-source ability-id)
-        active-session (combat-sessions/session (str owner))
+        active-session (combat-sessions/session content-id (str owner))
         ;; Toggle abilities use one physical key for both activation and
         ;; deactivation. The client wire intentionally stays neutral (`:start`);
         ;; the server resolves the edge from its owner-scoped session so a
@@ -737,8 +744,8 @@
                      (= :start (:op intent))
                      (= :session (:activation source))
                      (not (:finish-ability? result))
-                     (not (combat-sessions/active? (str owner))))
-            (combat-sessions/start! (str owner) ability-id prepared))
+                     (not (combat-sessions/active? content-id (str owner))))
+            (combat-sessions/start! content-id (str owner) ability-id prepared))
           result)))))
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
@@ -1019,7 +1026,7 @@
                        (owner-state source-id))
         target-data (:ability-data target-state)
         source-data (:ability-data source-state)
-        target-session (combat-sessions/session (str target-id))
+        target-session (combat-sessions/session content-id (str target-id))
         world-id (or (:world-id damage-source) (:world-id target-state) "minecraft:overworld")
         sources (get-in @catalog* [:combat :sources])]
     (into {}
@@ -1174,7 +1181,7 @@
   [owner result]
   (let [patches (vec (or (:ability-state-patches result) []))]
     (when (seq patches)
-      (combat-sessions/apply-actions! (str owner) [{:type :session-patch :entries patches}]))))
+      (combat-sessions/apply-actions! content-id (str owner) [{:type :session-patch :entries patches}]))))
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary and publish its
    authoritative VFX/domain outbox after the state decision is known."
@@ -1243,8 +1250,8 @@
   every other player, while a finished pulse removes its own session through
   the normal Final runtime boundary."
   [tick]
-  (doseq [[owner session] (combat-sessions/snapshot)]
-    (when (= session (combat-sessions/session owner))
+  (doseq [[owner session] (combat-sessions/snapshot content-id)]
+    (when (= session (combat-sessions/session content-id owner))
       (let [hold-ticks (inc (max 0 (- (long tick)
                                       (long (or (:start-tick session) tick)))))
             result (dispatch-intent!
@@ -1283,7 +1290,7 @@
     (final-runtime/abort-owner! runtime owner)
     {:status :rejected :reason :final-runtime-not-installed :owner owner}))
 (defn snapshot-owner [owner]
-  {:combat-session (combat-sessions/session owner)})
+  {:combat-session (combat-sessions/session content-id owner)})
 
 (defn reset-for-test! []
   (reset! catalog* nil)

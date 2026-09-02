@@ -1,31 +1,36 @@
 (ns cn.li.ac.ability.final-runtime-test
+  "Exercises cn.li.ability.engine (the ported final_runtime.clj) with AC's
+   real catalog-compile, so this stays the integration point proving
+   ability-runtime's engine and AC's real EDN abilities actually work
+   together end to end -- the same job this file did before the P4 move,
+   just against the new namespace and its now-explicit :catalog-compile."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ac.ability.final-runtime :as runtime]
+            [cn.li.ability.engine :as runtime]
+            [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
+            [cn.li.combat.api :as combat-api]
             [cn.li.mcmod.runtime.host :as host]))
 
+(defn- new-runtime []
+  (runtime/create-runtime
+   {:host (host/create {:queries {} :actions {}})
+    :state-provider (fn [_] {})
+    :commit-state! (fn [_] nil)
+    :catalog-compile final-catalog-service/initialize!}))
+
 (deftest final-runtime-rejects-before-catalog-initialization-test
-  (let [rt (runtime/create-runtime
-            {:host (host/create {:queries {} :actions {}})
-             :state-provider (fn [_] {})
-             :commit-state! (fn [_] nil)})]
+  (let [rt (new-runtime)]
     (is (= {:status :rejected :reason :catalog-not-initialized}
            (runtime/dispatch! rt :railgun
                               {:owner "alice" :world "w" :tick 0 :seed 1 :input {}})))
     (is (= {:status :cold} (runtime/catalog-status rt)))))
 
 (deftest final-runtime-exposes-fully-lowered-catalog-test
-  (let [rt (runtime/create-runtime
-            {:host (host/create {:queries {} :actions {}})
-             :state-provider (fn [_] {})
-             :commit-state! (fn [_] nil)})]
+  (let [rt (new-runtime)]
     (runtime/initialize! rt)
     (is (= :ready (:status (runtime/catalog-status rt))))))
 
 (deftest final-runtime-executes-migrated-passive-smoke-skill-test
-  (let [rt (runtime/create-runtime
-            {:host (host/create {:queries {} :actions {}})
-             :state-provider (fn [_] {})
-             :commit-state! (fn [_] nil)})]
+  (let [rt (new-runtime)]
     (runtime/initialize! rt)
     (is (= :accepted
            (:status (runtime/dispatch! rt :electromaster/brain-course
@@ -33,10 +38,7 @@
                                        :seed 1 :input {:phase :start}}))))))
 
 (deftest final-runtime-executes-course-family-smoke-test
-  (let [rt (runtime/create-runtime
-            {:host (host/create {:queries {} :actions {}})
-             :state-provider (fn [_] {})
-             :commit-state! (fn [_] nil)})]
+  (let [rt (new-runtime)]
     (runtime/initialize! rt)
     (doseq [ability-id [:electromaster/mind-course
                         :electromaster/brain-course-advanced]]
@@ -46,10 +48,7 @@
                                           :seed 1 :input {:phase :start}})))))))
 
 (deftest final-runtime-tick-executes-precompiled-due-node-test
-  (let [rt (runtime/create-runtime
-            {:host (host/create {:queries {} :actions {}})
-             :state-provider (fn [_] {})
-             :commit-state! (fn [_] nil)})]
+  (let [rt (new-runtime)]
     (runtime/initialize! rt)
     (reset! (:scheduled rt)
             (sorted-map 0 [{:tick 0
@@ -71,11 +70,26 @@
            (runtime/tick! rt 0)))
     (is (= {10 [{:tick 10}]} @scheduled))))
 (deftest final-runtime-dispatch-enqueues-precompiled-scheduled-bucket-test
-  (let [rt {:catalog (atom {:status :ready})
-            :apis {:registration (fn [_] {:compiled :entry})
-                   :execute (fn [_ _ _] {:status :accepted :scheduled [{:tick 7
-                                                    :node {:component :flow/finish :outcome :later}}]})}
-            :engine :engine
+  ;; Real combat-api execute (not a stubbed :apis map, which no longer
+  ;; exists -- dispatch!/registration now read straight off the runtime's
+  ;; own :catalog atom and call combat-api directly): :flow/after with
+  ;; :delay 7 dispatched at :tick 0 schedules its :body for tick 7,
+  ;; exercising the same enqueue-scheduled! bucketing/dissoc-:node behavior
+  ;; this test always covered. :flow/after has no vocabulary descriptor (no
+  ;; real EDN ability ever uses it directly -- it's only produced as a
+  ;; runtime scheduling side-effect), so it cannot go through
+  ;; combat-api/compile-program's node-kind lookup; hand-roll the
+  ;; "compiled" shape instead, exactly as cn.li.ability.engine's own
+  ;; scheduled-program helper already does for continuations.
+  (let [compiled {:schema-version 1
+                  :program {:component :flow/after :delay 7
+                            :body {:component :flow/finish :outcome :later}}
+                  :instructions 1}
+        rt {:catalog (atom {:status :ready :combat {:by-id {:skill/a {:compiled compiled}}}})
+            :engine (combat-api/create-engine
+                     {:host (host/create {:queries {} :actions {}})
+                      :state-provider (fn [_] {})
+                      :commit-state! (fn [_] nil)})
             :scheduled (atom (sorted-map))}
         frame {:owner "alice" :world "w" :tick 0 :seed 1 :input {}}]
     (is (= :accepted (:status (runtime/dispatch! rt :skill/a frame))))
@@ -86,7 +100,7 @@
       (is (not (contains? entry :node))))))
 
 (deftest final-runtime-frame-world-prefers-activation-context-test
-  (let [resolve-world (var-get (ns-resolve 'cn.li.ac.ability.final-runtime 'frame-world-id))]
+  (let [resolve-world (var-get (ns-resolve 'cn.li.ability.engine 'frame-world-id))]
     (is (= "world:nether" (resolve-world {:context {:world-id "world:nether"}})))
     (is (= "world:end" (resolve-world {:capabilities {:world/id "world:end"}})))
     (is (= "world:explicit"

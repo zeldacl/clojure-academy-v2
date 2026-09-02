@@ -11,7 +11,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
+            [cn.li.ability.session :as combat-sessions]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.ac.test.support.player-state :as player-state-support]))
 
