@@ -5,7 +5,8 @@
    it owns no effect instances and performs no network delivery. Instance
    lifecycle and replication belong to the client-side runtime
    (cn.li.vfx.final-client), the only production consumer of sample-graph."
-  (:require [cn.li.node.expr :as expr]))
+  (:require [cn.li.node.expr :as expr]
+            [cn.li.node.kernel :as kernel]))
 
 (def ^:private expression-ops
   {:vfx/ring-point
@@ -34,30 +35,14 @@
                           (:parameters descriptor)))
            params)))
 
-(defn- graph-ref [reference context]
-  (let [[scope key & path] reference
-        root (case scope :input (:params context) :state (:state context)
-               :local (:locals context) :frame (:frame context) nil)]
-    (if (= :local scope)
-      (if (seq path) (get-in (get root key) path) (get root key))
-      (get-in root (into [key] path)))))
-
-(defn- graph-value [value context]
-  (cond
-    (and (map? value) (vector? (:ref value))) (graph-ref (:ref value) context)
-    (and (map? value) (keyword? (:expr value)))
-    (expr/evaluate (:expr value)
-                   (mapv #(graph-value % context) (:args value))
-                   (long (:seed context))
-                   (:expression-ops context))
-    (and (map? value) (contains? value :from) (contains? value :to))
-    (let [t (double (or (:progress context) 0.0))
-          from (double (or (graph-value (:from value) context) 0.0))
-          to (double (or (graph-value (:to value) context) 0.0))]
-      (+ from (* t (- to from))))
-    (map? value) (into {} (map (fn [[k v]] [k (graph-value v context)]) value))
-    (vector? value) (mapv #(graph-value % context) value)
-    :else value))
+(kernel/defresolver graph-value context
+  {:scopes {:input (:params context) :state (:state context)
+            :local (:locals context) :frame (:frame context)}
+   :local :local
+   :seed (long (:seed context))
+   :extras (:expression-ops context)
+   :coll #{:map :vector}
+   :lerp? true})
 
 (defn- fade-factor [node age]
   (let [from (double (or (:from-tick node) 0))

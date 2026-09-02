@@ -20,7 +20,7 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
-            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
+            [cn.li.node.rng :as rng]
             [cn.li.mcmod.runtime.capabilities :as capabilities]))
 
 (set! *warn-on-reflection* true)
@@ -399,8 +399,8 @@
                        (fn [acc entry]
                          (let [[energy seen-blocks seen-entities affected transforms* broken entities rng] acc
                                [_entry [lateral probability]] entry
-                               rng (seeded-rng/next-long rng)]
-                           (if (> (double probability) (seeded-rng/unit-double rng))
+                               rng (rng/next-seed rng)]
+                           (if (> (double probability) (rng/unit-double rng))
                              (let [px (long (Math/floor (+ bx (* (double lateral) spread-x))))
                                    pz (long (Math/floor (+ bz (* (double lateral) spread-z))))
                                    py (long (Math/floor by)) key [px py pz]]
@@ -418,15 +418,15 @@
                                                                         :expected-block-ids [block-id]})
                                                      transforms*)
                                        energy (- energy cost)
-                                       ground-rng (seeded-rng/next-long rng)
+                                       ground-rng (rng/next-seed rng)
                                        break? (and block-id
                                                     (> (double (or ground-break-probability 0.0))
-                                                       (seeded-rng/unit-double ground-rng)))
+                                                       (rng/unit-double ground-rng)))
                                        broken (if break?
                                                 (conj broken {:position {:x bx :y by :z bz}
                                                               :drop? (> (double (or drop-probability 0.0))
-                                                                        (seeded-rng/unit-double
-                                                                         (seeded-rng/next-long ground-rng)))})
+                                                                        (rng/unit-double
+                                                                         (rng/next-seed ground-rng)))})
                                                 broken)
                                        new-entities
                                        (reduce (fn [acc entity]
@@ -442,14 +442,14 @@
                                                                 :velocity (or (:velocity entity) {:x 0.0 :y 0.0 :z 0.0})
                                                                 :launch-y (+ (double (or launch-base 0.6))
                                                                              (* (double (or launch-span 0.3))
-                                                                                (seeded-rng/unit-double
-                                                                                 (seeded-rng/next-long
+                                                                                (rng/unit-double
+                                                                                 (rng/next-seed
                                                                                   (unchecked-add seed (count acc))))))})
                                                      acc))) [] (or candidates []))]
                                    [energy seen-blocks
                                     (into seen-entities (map #(str (:id %)) new-entities))
                                     affected transforms* broken (into entities new-entities)
-                                    (seeded-rng/next-long ground-rng)])))
+                                    (rng/next-seed ground-rng)])))
                              [energy seen-blocks seen-entities affected transforms* broken entities rng])))
                        [energy seen-blocks seen-entities affected transforms* broken entities rng]
                        (map-indexed vector entries))
@@ -590,8 +590,8 @@
       (loop [idx 0 state (long seed) hits (transient [])]
         (if (or (>= idx max-count) (>= idx (count pitches)))
           (persistent! hits)
-          (let [next-state (seeded-rng/next-long state)
-                yaw (seeded-rng/uniform next-state yaw-min yaw-max)
+          (let [next-state (rng/next-seed state)
+                yaw (rng/uniform next-state yaw-min yaw-max)
                 dir (fan-direction [dx dy dz] yaw (double (nth pitches idx)))
                 start [(- (double ox) (* 0.5 (nth dir 0)))
                        (- (double oy) (* 0.5 (nth dir 1)))
@@ -600,7 +600,7 @@
                                             (nth start 0) (nth start 1) (nth start 2)
                                             (nth dir 0) (nth dir 1) (nth dir 2)
                                             distance)]
-            (recur (inc idx) (long (seeded-rng/next-long next-state))
+            (recur (inc idx) (long (rng/next-seed next-state))
                    (if (map? hit)
                      (conj! hits (select-keys hit [:x :y :z :face :hit-x :hit-y :hit-z]))
                      hits)))))
@@ -1206,9 +1206,9 @@
                            length (Math/sqrt (+ (* vx vx) (* vy vy) (* vz vz)))]
                        (if (<= length 1.0e-6)
                          (recur (next xs) (inc index) total)
-                         (let [rng (seeded-rng/next-long
+                         (let [rng (rng/next-seed
                                     (unchecked-add seed index))
-                               magnitude (seeded-rng/uniform rng speed-min speed-max)
+                               magnitude (rng/uniform rng speed-min speed-max)
                                result (entity-impulse!
                                        {:world-id world-id :target entity
                                         :vector [(* (/ vx length) magnitude)
@@ -1247,12 +1247,12 @@
             broken (loop [index 0 total 0]
                      (if (>= index attempts)
                        total
-                       (let [rng (seeded-rng/next-long (unchecked-add seed index))
-                             rx (long (Math/floor (seeded-rng/uniform rng (- radius) radius)))
-                             r1 (seeded-rng/next-long rng)
-                             ry (long (Math/floor (seeded-rng/uniform r1 (- radius) radius)))
-                             r2 (seeded-rng/next-long r1)
-                             rz (long (Math/floor (seeded-rng/uniform r2 (- radius) radius)))
+                       (let [rng (rng/next-seed (unchecked-add seed index))
+                             rx (long (Math/floor (rng/uniform rng (- radius) radius)))
+                             r1 (rng/next-seed rng)
+                             ry (long (Math/floor (rng/uniform r1 (- radius) radius)))
+                             r2 (rng/next-seed r1)
+                             rz (long (Math/floor (rng/uniform r2 (- radius) radius)))
                              x (long (Math/floor (+ ox rx)))
                              y (long (Math/floor (+ oy ry)))
                              z (long (Math/floor (+ oz rz)))
@@ -1264,14 +1264,14 @@
                                            (blocks/can-break-block?
                                             (str owner) (str world-id) x y z))
                              break? (and allowed?
-                                          (<= (seeded-rng/unit-double r2)
+                                          (<= (rng/unit-double r2)
                                               break-probability))
                              did-break? (and break?
                                               (not= false
                                                     (blocks/break-block!
                                                      (str owner) (str world-id)
                                                      x y z
-                                                     (<= (seeded-rng/unit-double r2)
+                                                     (<= (rng/unit-double r2)
                                                          drop-probability))))]
                          (recur (inc index) (if did-break? (inc total) total)))))]
         {:status :applied :broken broken}))))
@@ -1307,7 +1307,7 @@
                                dy (- (double y) oy)
                                dz (- (double z) oz)
                                inside? (<= (+ (* dx dx) (* dy dy) (* dz dz)) radius-sq)
-                               rng (seeded-rng/next-long (unchecked-add seed index))
+                               rng (rng/next-seed (unchecked-add seed index))
                                hardness (if inside?
                                          (double (or (blocks/get-block-hardness
                                                       (str world-id) x y z) -1.0))
@@ -1318,12 +1318,12 @@
                                              (blocks/can-break-block?
                                               (str owner) (str world-id) x y z))
                                break? (and allowed?
-                                            (<= (seeded-rng/unit-double rng)
+                                            (<= (rng/unit-double rng)
                                                 break-probability))
                                drop? (if (or (not allowed?) self-drop?)
                                         false
-                                        (<= (seeded-rng/unit-double
-                                             (seeded-rng/next-long rng))
+                                        (<= (rng/unit-double
+                                             (rng/next-seed rng))
                                             drop-probability))]
                            (if break?
                              (let [result (blocks/break-block!
@@ -1645,7 +1645,8 @@
    :owner/can-fly owner-can-fly!
    :motion/entity-velocity entity-velocity!
    :motion/entity-velocity-add entity-velocity-add!
-   :projectile/redirect projectile-redirect!
+   :projectile/redirect projectile-redirect!
+
    ;; Internal kernel capabilities are not exported by schema-export.
    :kernel/terrain-break-area area-break!
    :kernel/terrain-random-break random-break!

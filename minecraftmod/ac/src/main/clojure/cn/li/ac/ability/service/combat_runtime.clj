@@ -27,7 +27,7 @@
             [cn.li.mcmod.platform.position :as position]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
-            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
+            [cn.li.node.rng :as rng]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
             [cn.li.mcmod.runtime.install :as install]
@@ -900,10 +900,10 @@
           seed (long (or seed 0))
           fish? (and detected-water? (> (double (or skill-exp 0.0))
                                (double (or fishing-exp-threshold 1.0)))
-                     (< (seeded-rng/unit-double seed)
+                     (< (rng/unit-double seed)
                         (double (or fishing-probability 0.0))))
           ignite? (and (not detected-water?)
-                       (< (seeded-rng/unit-double (seeded-rng/next-long seed))
+                       (< (rng/unit-double (rng/next-seed seed))
                           (double (or ignite-probability 0.0))))]
       (cond
         (not (and (string? world-id) (finite-point? point)

@@ -3,7 +3,20 @@
 (require '[cn.li.mcmod.runtime.host :as host]
          '[cn.li.node.contracts :as contracts]
          '[cn.li.node.expr :as expr]
+         '[cn.li.node.kernel :as kernel]
          '[cn.li.combat.final-compiler :as compiler])
+
+(kernel/defresolver resolve-value context
+  {:scopes {:frame (:frame context)
+            :input (get-in (:frame context) [:input])
+            :local (:locals context)
+            :state (:ability-state context)}
+   :local :local
+   :seed (let [seed* (:seed* context)]
+           (if seed* (swap! seed* expr/next-seed) (long (:seed (:frame context)))))
+   :extras (get-in context [:frame :extra-ops])
+   :coll #{:map :vector :set}})
+
 (defn create-engine [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state!]}]
   (when-not (map? host) (throw (ex-info "final combat engine requires host" {})))
   (when-not (ifn? state-provider) (throw (ex-info "final combat engine requires state-provider" {})))
@@ -13,33 +26,6 @@
    :commit-ability-state! (or commit-ability-state! (fn [_ _] nil))
    :next-command (atom 0)})
 
-(defn- ref-value [reference context]
-  (let [[scope key & path] reference
-        root (case scope
-               :frame (:frame context)
-               :input (get-in (:frame context) [:input])
-               :local (:locals context)
-               :state (:ability-state context)
-               nil)]
-    (if (= :local scope)
-      (if (seq path) (get-in (get root key) path) (get root key))
-      (get-in root (into [key] path)))))
-
-(defn- resolve-value [value context]
-  (cond
-    (and (map? value) (vector? (:ref value)))
-    (ref-value (:ref value) context)
-    (and (map? value) (keyword? (:expr value)))
-    (let [seed* (:seed* context)
-          seed (if seed* (swap! seed* expr/next-seed) (long (:seed (:frame context))))]
-      (expr/evaluate (:expr value)
-                     (mapv #(resolve-value % context) (:args value))
-                     seed))
-    (map? value)
-    (into {} (map (fn [[k v]] [k (resolve-value v context)]) value))
-    (vector? value) (mapv #(resolve-value % context) value)
-    (set? value) (set (map #(resolve-value % context) value))
-    :else value))
 (defn- command-id [engine path]
   (let [n (swap! (:next-command engine) inc)] [:combat (vec path) n]))
 (declare run-node merge-action-results normalize-vfx-signal bind-command-results)

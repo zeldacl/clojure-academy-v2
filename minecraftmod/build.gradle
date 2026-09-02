@@ -1256,6 +1256,36 @@ tasks.register("verifyNodeCoreLanguageKernel") {
     dependsOn ":node-core:checkClojure"
 }
 
+tasks.register("verifyNodeKernelSingleSource") {
+    group = "verification"
+    description = "combat-core and vfx-core must resolve {:ref}/{:expr} nodes through cn.li.node.kernel/defresolver, not a hand-written case-based ref resolver of their own; the SplitMix64 mixing constants must be defined in exactly one place (cn.li.node.expr)."
+    doLast {
+        def resolverSources = [
+            file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
+            file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")
+        ]
+        def missingKernel = resolverSources.findAll { !it.text.contains("kernel/defresolver") }
+        if (!missingKernel.isEmpty()) {
+            throw new GradleException("expected kernel/defresolver in: ${missingKernel}")
+        }
+        def handWritten = ~/\(defn-?\s+[a-zA-Z0-9?!*_-]+\s*\[[^\]]*\]\s*\n?\s*\(let \[\[[a-zA-Z-]+ [a-zA-Z-]+ & [a-zA-Z-]+\]/
+        resolverSources.each { source ->
+            if (handWritten.matcher(source.text).find()) {
+                throw new GradleException("hand-written [scope key & path] ref resolver found outside cn.li.node.kernel: ${source}")
+            }
+        }
+        def splitMix64Marker = "9E3779B97F4A7C15"
+        def definitionSites = fileTree(".") {
+            include "**/*.clj"
+            exclude "**/build/**", "**/.gradle.blocked/**"
+        }.files.findAll { it.text.contains(splitMix64Marker) }
+        if (definitionSites.size() != 1) {
+            throw new GradleException("expected exactly one SplitMix64 constant definition site, found: ${definitionSites}")
+        }
+        logger.lifecycle("[verifyNodeKernelSingleSource] ok")
+    }
+}
+
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
     description = "Every effect emitted by an EDN ability must be present in the EDN VFX manifest. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
@@ -2349,6 +2379,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationGoldenArtifacts",
               "verifyNodeCoreDependencyDirection",
               "verifyNodeCoreLanguageKernel",
+              "verifyNodeKernelSingleSource",
               "verifyNodeLayerDiscipline",
               "verifyVfxDependencyDirection",
               "verifyCombatDependencyDirection",
@@ -2617,7 +2648,7 @@ tasks.register("lintClojureNative") {
 // carriers are Java field bags and all executable behavior remains Clojure.
 def effectRuntimeClojureRoots = [
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/safe_edn.clj"),
-    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/seeded_rng.clj"),
+    file("node-core/src/main/clojure/cn/li/node/rng.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/effect_schema.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj"),
