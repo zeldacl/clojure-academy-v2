@@ -41,6 +41,10 @@
    :math/max       {:params [:double :double]         :returns :double}
    :math/abs       {:params [:double]                 :returns :double}
    :math/floor     {:params [:double]                 :returns :double}
+   ;; See cn.li.node.expr's matching comment: the one legitimate
+   ;; double->long narrowing case (a curve-evaluated tick count), named
+   ;; for exactly that use, not a general unsafe cast.
+   :math/floor-long {:params [:double]                :returns :long}
    :math/sqrt      {:params [:double]                 :returns :double}
    :math/pow       {:params [:double :double]         :returns :double}
    :math/sin       {:params [:double]                 :returns :double}
@@ -58,6 +62,10 @@
    ;; type-agnostic (returns whichever arg the boolean picked), this just
    ;; exposes it to DSL authors the same way every other op here does.
    :math/select    {:params [:boolean :any :any]      :returns :any}
+   ;; See cn.li.node.expr's matching comment: a {:curve :pair} tunable's
+   ;; runtime value is an opaque 2-element vector, :any at compile time.
+   :pair/first     {:params [:any]                    :returns :double}
+   :pair/second    {:params [:any]                    :returns :double}
    :value/eq       {:params [:any :any]               :returns :boolean}
    :bool/and       {:params [:boolean :boolean]       :returns :boolean}
    :bool/or        {:params [:boolean :boolean]       :returns :boolean}

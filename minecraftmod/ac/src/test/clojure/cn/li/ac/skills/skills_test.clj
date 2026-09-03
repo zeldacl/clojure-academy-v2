@@ -113,6 +113,37 @@
       (is (= [{:type :score/mark :owner "player-1" :progression 3.0}]
              (mapv #(select-keys % [:type :owner :progression]) (.-events frame)))))))
 
+(deftest mine-detect-test
+  (let [doc (read-skill "mine_detect.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:blindness-duration-ticks 60 :blindness-amplifier 1 :targeting-range 32.0
+                          :cooldown-endpoints [100.0 20.0] :exp-cast 0.1}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld" :progression/mastery 0.6 :progression/level 3
+                              :rng/seed 7 :progression/cast 2.0}}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        frame (run/dispatch! program :default input)]
+    (testing "cost/spend queried with the literal budget name, not a resolved descriptor"
+      (is (= [:query :cost/spend {:budget :activate}] (first @calls))))
+    (testing "sufficient? true -> combat/status landed on the caster (self-target), not aborted"
+      (is (some #(= [:command :entity/status
+                    {:target "player-1" :status-id :blindness :duration-ticks 60.0 :amplifier 1}] %)
+                @calls)))
+    (testing "cooldown-ticks-next = floor(lerp(100.0, 20.0, mastery+exp-cast)) = floor(lerp(100,20,0.7)) = 44"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 44}] %) @calls)))
+    (testing "the vfx signal carries the computed :range/:advanced? values, mastery 0.6 > 0.5 but level 3 < 4"
+      (let [signal (first (.-vfx frame))]
+        (is (= :block-scan-transient (:effect-id signal)))
+        (is (= 32.0 (:range (:payload signal))))
+        (is (false? (:advanced? (:payload signal))))))
+    (testing "the outcome is :performed, not :insufficient-resource"
+      (is (= :performed (:outcome (.-result frame)))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

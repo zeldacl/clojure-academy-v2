@@ -1,0 +1,78 @@
+;; New-DSL conversion of ac/combat/abilities/mine_detect.edn (S6). See
+;; rad_intensify.edn/electron_bomb.edn's docstrings for the general
+;; pattern. New here: a resource-cost guard (cost/spend) and a
+;; dynamically-computed (not pre-resolved) cooldown value.
+;;
+;; :ability/budget (old: binds the WHOLE resource-cost descriptor for
+;; later spending) has no new-DSL equivalent read at all: the new
+;; :cost/spend node takes just a :keyword budget NAME
+;; (cn.li.combat.dsl-vocabulary's own :params declare :budget :keyword,
+;; not a descriptor), so the host is expected to resolve the actual
+;; :cp/:overload amounts by looking the name up against this ability's own
+;; (still-unconverted, see below) :costs map -- the same "verbatim old
+;; data, new engine reads it by name" pattern :cooldown/:damage-policies
+;; already use. cost/spend's boolean return polarity is UNVERIFIED (no
+;; real host implements this new vocab node yet, S6 -- see the session's
+;; staged-migration notes): assumed here to be "true = spend succeeded",
+;; the more idiomatic reading, not "true = insufficient" like the old
+;; :insufficient? name.
+{:schema-version 2
+ :kind :ability
+ :id :mine-detect
+ :revision 2
+ :activation :instant
+ :requires [:caster/id :caster/eye :world/id :progression/mastery :progression/level :rng/seed]
+ :prerequisites [{:skill-id :mag-manip :min-exp 1.0}]
+ :tunables {:targeting-range {:curve :mastery-lerp}
+            :blindness-duration-ticks {:curve :const :type :int}
+            :blindness-amplifier {:curve :const :type :int}
+            :cost-down-cp {:curve :mastery-lerp}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :cooldown-endpoints {:curve :pair}
+            :exp-cast {:curve :const}}
+ :costs {:activate {:resources {:cp {:ref [:input :tunables :cost-down-cp]}
+                                :overload {:ref [:input :tunables :cost-down-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-cast]}}}
+ :program
+ "{:ability :mine-detect
+   :activation :instant
+   :tunables {:blindness-duration-ticks {:type :long} :blindness-amplifier {:type :long}
+              :targeting-range {:type :double} :cooldown-endpoints {:type :any}
+              :exp-cast {:type :double}}
+   :do
+   [(let owner-id ?caster/id)
+    (let eye ?caster/eye)
+    (let mastery ?progression/mastery)
+    (let level ?progression/level)
+    (let cast-progression ?progression/cast)
+    (let cooldown-exp-next (math/add mastery $exp-cast))
+    (let cooldown-ticks-next
+      (math/floor-long (math/lerp (pair/first $cooldown-endpoints) (pair/second $cooldown-endpoints)
+                                  cooldown-exp-next)))
+    (let sufficient? (cost/spend {:budget :activate}))
+    (if sufficient?
+      [(combat/status {:target owner-id :status-id :blindness
+                       :duration-ticks $blindness-duration-ticks :amplifier $blindness-amplifier})
+       (vfx! {:effect-id :block-scan-transient :operation :spawn :instance-key [:activation :scan]
+             :audience {:type :owner}
+             :payload {:life-ticks 100 :rescan-interval 5 :max-results 8400
+                       :max-range $targeting-range
+                       :filter {:include-suffixes [\"_ore\"] :include-substrings [\"ancient_debris\"]
+                               :include-tags [\"forge:ores\"]}
+                       :origin eye
+                       :tier-colors [{:harvest-level 0 :color [161 181 188 165]}
+                                    {:harvest-level 1 :color [87 231 248 190]}
+                                    {:harvest-level 2 :color [97 204 94 210]}
+                                    {:harvest-level 3 :color [235 109 84 225]}]
+                       :base-color [220 235 255 185]
+                       :texture \"academy:textures/effects/mineview.png\"
+                       :advanced? (bool/and (math/gt mastery 0.5) (math/gte level 4))
+                       :range $targeting-range}})
+       (event! {:type :score/mark :owner owner-id :progression cast-progression})
+       (cooldown/start {:name :main :ticks cooldown-ticks-next})
+       (finish {:outcome :performed})]
+      [(finish {:outcome :insufficient-resource})])]}"
+ :invariants nil
+ :mark-policies nil}

@@ -22,6 +22,14 @@
   (is (= 1 (ops/invoke :long/min [1 2])))
   (is (= 2 (ops/invoke :long/max [1 2]))))
 
+(deftest pair-accessors-index-a-curve-pair-value-test
+  (is (= 1.5 (ops/invoke :pair/first [[1.5 2.5]])))
+  (is (= 2.5 (ops/invoke :pair/second [[1.5 2.5]]))))
+
+(deftest floor-long-truncates-and-returns-a-real-long-test
+  (is (= 40 (ops/invoke :math/floor-long [40.9])))
+  (is (integer? (ops/invoke :math/floor-long [40.9]))))
+
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))
 

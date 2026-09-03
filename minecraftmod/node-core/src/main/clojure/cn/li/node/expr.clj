@@ -87,6 +87,17 @@
        :math/max (double (max (double (nth args 0)) (double (nth args 1))))
        :math/abs (double (Math/abs (double (nth args 0))))
        :math/floor (double (Math/floor (double (nth args 0))))
+       ;; A curve-evaluated tick count (math/lerp -> math/floor, mine_detect
+       ;; .edn's :cooldown-ticks-next, S6) is a :double by construction
+       ;; (every :math/* op is), but :cooldown/start's :ticks param is
+       ;; :long -- and cn.li.node.types/assignable? deliberately disallows
+       ;; :double -> :long narrowing (a real authoring-bug guard, not
+       ;; something to route around with a general unsafe cast). This is
+       ;; the one legitimate "I know this is a whole number" case: floor
+       ;; and truncate to :long in a single named op, not a generic
+       ;; double->long escape hatch that could paper over a real bug
+       ;; elsewhere.
+       :math/floor-long (long (Math/floor (double (nth args 0))))
        :math/sqrt (double (Math/sqrt (double (nth args 0))))
        :math/pow (double (Math/pow (double (nth args 0)) (double (nth args 1))))
        :math/sin (double (Math/sin (double (nth args 0))))
@@ -116,6 +127,16 @@
        :long/mul (* (long (nth args 0)) (long (nth args 1)))
        :long/min (min (long (nth args 0)) (long (nth args 1)))
        :long/max (max (long (nth args 0)) (long (nth args 1)))
+
+       ;; A {:curve :pair} tunable's runtime value is a 2-element vector
+       ;; [lo hi] (mine_detect.edn's :cooldown-endpoints, S6) -- the only
+       ;; existing index-into-a-vector op is :collection/nth, which is
+       ;; deliberately hidden from DSL authors (compiler-internal, only
+       ;; for `each`'s own desugaring -- see cn.li.node.ops's docstring).
+       ;; A small dedicated pair accessor keeps that boundary intact
+       ;; instead of exposing the general nth escape hatch to authors.
+       :pair/first (double (nth (nth args 0) 0))
+       :pair/second (double (nth (nth args 0) 1))
 
        :value/eq (= (nth args 0) (nth args 1))
 

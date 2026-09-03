@@ -27,7 +27,15 @@
    into the ?cap sigil uniformly, and combat_runtime.clj's :capabilities
    construction for the real name list)."
   {:caster/eye :vec3 :caster/aim :vec3 :caster/body :vec3
-   :caster/id :string :caster/creative? :boolean
+   ;; :entity-ref, not :string: real content (mine_detect.edn's
+   ;; combat/status :target, S6) uses ?caster/id as a self-target for
+   ;; entity-taking nodes far more often than as opaque string data
+   ;; (a UUID for network/storage is the underlying repr, but that never
+   ;; surfaces as a DSL-visible :string operation anywhere in real
+   ;; content) -- and cn.li.node.types/assignable? has no :string<->
+   ;; :entity-ref conversion, so typing it :string made every real
+   ;; self-target call site a compile error.
+   :caster/id :entity-ref :caster/creative? :boolean
    :world/id :string
    :charge/ticks :double
    :progression/mastery :double :progression/level :long
