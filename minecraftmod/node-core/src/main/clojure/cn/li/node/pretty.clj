@@ -100,6 +100,7 @@
                        (into {:type (:event-type instr)}
                              (map (fn [[k r]] [k (reconstruct ir pidx @let-names* r)]))
                              (:args instr)))
+          :vfx (list 'vfx! (into {} (map (fn [[k r]] [k (reconstruct ir pidx @let-names* r)])) (:args instr)))
           nil)))
     instrs)))
 

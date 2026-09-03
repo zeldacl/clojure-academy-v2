@@ -16,6 +16,7 @@
     :do [(state! :mode :charging)
          (let m %mode)
          (event! {:type :score/mark :tag :effective :weight 1.0})
+         (vfx! {:effect-id :arc-strike-transient :operation :spawn :start ?caster/eye})
          (finish {:outcome :performed :end-ability? true})]}")
 
 (deftest state-write-and-read-and-event-compile-test
@@ -27,7 +28,9 @@
     (testing "%mode compiles to a :state-read instruction"
       (is (some #(and (= :state-read (:op %)) (= :mode (:key %))) instrs)))
     (testing "event! compiles to an :event instruction carrying its :type"
-      (is (some #(and (= :event (:op %)) (= :score/mark (:event-type %))) instrs)))))
+      (is (some #(and (= :event (:op %)) (= :score/mark (:event-type %))) instrs)))
+    (testing "vfx! compiles to a :vfx instruction, args including :effect-id"
+      (is (some #(= :vfx (:op %)) instrs)))))
 
 (deftest unknown-state-key-is-a-real-error-test
   (doseq [text ["{:ability :bad :state {} :do [(state! :nope true) (finish {:outcome :performed})]}"

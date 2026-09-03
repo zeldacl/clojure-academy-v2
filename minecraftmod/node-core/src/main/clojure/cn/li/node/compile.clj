@@ -302,7 +302,14 @@
             {:reg dst :block-id block-id})))
 
       (str/starts-with? s "?")
-      (let [k (surface/str->keyword (subs s 1)) t (get (:capabilities env) k)]
+      ;; ((:capabilities env) k), NOT (get ...): :capabilities may be a
+      ;; plain {key type} map (already callable as a fn, so this is a
+      ;; no-op change for that case) OR a real function -- some capability
+      ;; FAMILIES (?budget/fire, ?cooldown/main, ...) are named per-ability
+      ;; by its own :costs/:cooldown declarations, not fixed repo-wide, so
+      ;; a caller with dynamic families needs to pattern-match on the
+      ;; namespace instead of enumerating every name in a static map.
+      (let [k (surface/str->keyword (subs s 1)) t ((:capabilities env) k)]
         (if (nil? t)
           {:reg (do (report! env {:code :unknown-capability :form form
                                  :message (str "undeclared capability ?" (name k))})
@@ -498,6 +505,28 @@
       (append! env block-id {:op :event :nid (nid! env) :event-type (:type fields) :args resolved})
       {:locals locals :block-id block-id})))
 
+(defn- compile-vfx
+  "vfx! is event!'s sibling: an outbound signal, not a host query/action --
+   mcmod.runtime.effect-emit's :vfx op is distinct from :action precisely
+   because a VFX signal needs no capability dispatch/preflight, only to be
+   appended to the frame's own outbox (see cn.li.combat.dsl-vocabulary's
+   :effect/vfx docstring for why it does NOT go through the ordinary
+   vocab-node :query/:action mechanism). Requires a literal :effect-id;
+   every other field, including :operation, compiles as an ordinary pure
+   expression and is passed through in :args."
+  [env locals block-id depth [_ fields]]
+  (if-not (keyword? (:effect-id fields))
+    (do (report! env {:code :invalid-vfx-signal :form fields
+                      :message "vfx! requires a literal :effect-id keyword"})
+        {:locals locals :block-id block-id})
+    (let [[resolved block-id]
+          (reduce (fn [[acc block-id] [k v-form]]
+                    (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
+                      [(assoc acc k reg) block-id]))
+                  [{} block-id] fields)]
+      (append! env block-id {:op :vfx :nid (nid! env) :args resolved})
+      {:locals locals :block-id block-id})))
+
 (defn compile-stmt [env locals block-id depth stmt]
   (when-not (and (seq? stmt) (symbol? (first stmt)))
     (throw (ex-info "a DSL statement must be a list headed by a symbol" {:stmt stmt})))
@@ -509,6 +538,7 @@
     finish (compile-finish env block-id stmt)
     state! (compile-state-write env locals block-id depth stmt)
     event! (compile-event env locals block-id depth stmt)
+    vfx! (compile-vfx env locals block-id depth stmt)
     (let [{:keys [block-id]} (compile-call env locals block-id depth stmt true)]
       {:locals locals :block-id block-id})))
 
