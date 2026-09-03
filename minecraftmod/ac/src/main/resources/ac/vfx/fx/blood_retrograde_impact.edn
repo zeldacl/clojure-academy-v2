@@ -1,0 +1,26 @@
+;; New-DSL conversion of ac/vfx/effects/blood_retrograde_impact.edn (S6).
+;; :vfx/impact-burst has no sample-node case (confirmed-dead class, see
+;; blood_retrograde_charge.edn's docstring); empty :scene is the honest
+;; port.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :blood-retrograde-impact
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:origin :vec3 :look-dir :vec3
+                  :target-width :float :target-height :float
+                  :surface-hits :any :splash-count :int
+                  :splash-life-ticks :int
+                  :splash-texture-pattern :string
+                  :splash-frame-count :int
+                  :splash-frame-duration-ms :int
+                  :splash-size :float :spray-textures :any
+                  :spray-life-ticks :int :spray-duplicates :int
+                  :seed :int}
+          :destroy {}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :blood-retrograde-impact
+   :do [(finish {:outcome :performed})]}"}

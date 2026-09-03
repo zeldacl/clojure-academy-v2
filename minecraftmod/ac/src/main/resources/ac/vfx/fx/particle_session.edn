@@ -1,0 +1,20 @@
+;; New-DSL conversion of ac/vfx/effects/particle_session.edn (S6). Same
+;; single-child-:at-0-timeline simplification as particle_burst.edn.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :particle-session
+ :revision 1
+ :lifecycle :session
+ ;; Generic moving particle field.  Audio is deliberately a separate
+ ;; transient effect so callers can compose either output independently.
+ :inputs {:spawn {:position :vec3 :rate-per-tick :int :limit :int
+                  :particle :any}
+          :update {:position :vec3}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :particle-session
+   :do [(emitter {:anchor ?position :rate-per-tick ?rate-per-tick :limit ?limit
+                  :particle ?particle})
+        (finish {:outcome :performed})]}"}

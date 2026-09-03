@@ -1,0 +1,20 @@
+;; New-DSL conversion of ac/vfx/effects/ray_fan_transient.edn (S6).
+;; :vfx/ray-fan has no sample-node case (confirmed-dead class, see
+;; blood_retrograde_charge.edn's docstring); empty :scene is the honest
+;; port. Old top-level :bounds dropped, same reasoning.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :ray-fan-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:origin :vec3 :direction :vec3 :length :float
+                  :count :int :yaw-range-degrees :any
+                  :pitch-range-degrees :any :life-ticks :int
+                  :grow-ticks :int :style :any :seed :int
+                  :bounds-radius :float}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :ray-fan-transient
+   :do [(finish {:outcome :performed})]}"}

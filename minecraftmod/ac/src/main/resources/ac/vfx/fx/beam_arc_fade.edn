@@ -1,0 +1,27 @@
+;; New-DSL conversion of ac/vfx/effects/beam_arc_fade.edn (S6). :vfx/
+;; beam-arc-fade has no sample-node case (confirmed-dead class, see
+;; blood_retrograde_charge.edn's docstring); empty :scene is the honest
+;; port. (Not to be confused with the WORKING vfx-core/composites/
+;; beam_arc_fade.edn old-tree composite of the same shape -- that
+;; composite is registered under a DIFFERENT context entirely and is
+;; never referenced by this ability-level :vfx/beam-arc-fade component
+;; at all.) Old top-level :bounds dropped, same reasoning.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :beam-arc-fade
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3
+          :duration-ticks :int :beam-at :int :grow-ticks :int
+          :layers :any :arc-at :int :arc-spacing :any
+          :arc-radius :any :arc-count-limit :int :arc-life-ticks :int
+          :fade-at :int :fade-from-tick :int :fade-to-tick :int
+          :fade-from-alpha :float :fade-to-alpha :float
+          :ring-radius :any :ring-segments :int :ring-color :any}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :beam-arc-fade
+   :do [(finish {:outcome :performed})]}"}

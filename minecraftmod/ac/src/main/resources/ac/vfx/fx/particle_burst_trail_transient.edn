@@ -1,0 +1,20 @@
+;; New-DSL conversion of ac/vfx/effects/particle_burst_trail_transient.edn
+;; (S6). :vfx/particle-trail has no sample-node case (confirmed-dead
+;; class, see blood_retrograde_charge.edn's docstring); empty :scene is
+;; the honest port. Old top-level :bounds dropped, same reasoning.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :particle-burst-trail-transient
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3
+          :spacing :any :radius :any :count-limit :int
+          :life-ticks :int :texture :string :velocity :any
+          :size :any :alpha :any :fade-in :int :fade-out :int}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :particle-burst-trail-transient
+   :do [(finish {:outcome :performed})]}"}

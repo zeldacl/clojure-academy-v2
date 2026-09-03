@@ -1,0 +1,22 @@
+;; New-DSL conversion of ac/vfx/effects/target_box_session.edn (S6).
+;; :vfx/block-progress has no sample-node case (confirmed-dead class, see
+;; blood_retrograde_charge.edn's docstring); empty :scene is the honest
+;; port. Old top-level :bounds (a :vfx/beam-bounds around :position,
+;; radius 1.2) dropped -- audience/network culling is caller-supplied at
+;; the new vfx! call site, not declared per-effect (see
+;; blood_retrograde_charge.edn's docstring).
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :target-box-session
+ :revision 1
+ :lifecycle :session
+ :inputs
+ {:spawn {:position :vec3 :width :float :height :float :color :any}
+  :update {:position :vec3 :width :float :height :float :color :any}
+  :destroy {}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :target-box-session
+   :do [(finish {:outcome :performed})]}"}

@@ -1,0 +1,32 @@
+;; New-DSL conversion of ac/vfx/effects/teleport_marker.edn (S6). Mixed
+;; file: :vfx/humanoid-marker has no sample-node case (confirmed-dead
+;; class, see blood_retrograde_charge.edn's docstring) and is dropped
+;; along with its own :owner/:texture-pattern/:frame-count/:frame-period-
+;; ticks/:facing fields (:owner is now unused by anything real, matching
+;; the ability-conversion "drop dead reads" precedent) -- only the
+;; sibling :vfx/emitter is real. Old top-level :bounds dropped, see
+;; blood_retrograde_charge.edn's docstring.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :teleport-marker
+ :revision 1
+ :lifecycle :session
+ :inputs
+ {:spawn {:owner :entity-ref
+          :position :vec3
+          :color :any
+          :particle-chance :float}
+  :update {:position :vec3
+           :color :any
+           :particle-chance :float}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :teleport-marker
+   :do [(emitter {:anchor ?position :rate-per-tick 1.0 :chance ?particle-chance :limit 256
+                  :particle {:material :additive :life-ticks 12 :speed 0.08 :color ?color
+                            :spread {:x 1.0 :y 1.4 :z 1.0} :velocity {:x 0.03 :y 0.05 :z 0.03}
+                            :size {:min 0.1 :max 0.2} :alpha {:min 153 :max 204}
+                            :fade-in-ticks 5 :fade-out-ticks 20}})
+        (finish {:outcome :performed})]}"}

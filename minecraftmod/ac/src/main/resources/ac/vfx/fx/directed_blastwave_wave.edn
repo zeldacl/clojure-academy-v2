@@ -1,0 +1,17 @@
+;; New-DSL conversion of ac/vfx/effects/directed_blastwave_wave.edn (S6).
+;; :vfx/directional-wave has no sample-node case (confirmed-dead class,
+;; see blood_retrograde_charge.edn's docstring); empty :scene is the
+;; honest port.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :directed-blastwave-wave
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:position :vec3 :direction :vec3 :seed :int}
+          :destroy {}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :directed-blastwave-wave
+   :do [(finish {:outcome :performed})]}"}

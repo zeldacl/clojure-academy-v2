@@ -1,0 +1,19 @@
+;; New-DSL conversion of ac/vfx/effects/audio_one_shot.edn (S6). Same
+;; single-child-:at-0-timeline simplification as particle_burst.edn. Old
+;; top-level :bounds (radius 0.0) dropped, see
+;; blood_retrograde_charge.edn's docstring.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :audio-one-shot
+ :revision 1
+ :lifecycle :transient
+ :inputs {:spawn {:position :vec3 :sound-id :string
+                  :volume :float :pitch :float}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :audio-one-shot
+   :do [(audio-one-shot {:sound-id ?sound-id :volume ?volume :pitch ?pitch
+                         :position ?position})
+        (finish {:outcome :performed})]}"}

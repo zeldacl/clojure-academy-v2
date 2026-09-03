@@ -1,0 +1,48 @@
+;; New-DSL conversion of ac/vfx/effects/energy_orb_session.edn (S6). All
+;; five old timeline children are :at 0 (always run from the first
+;; sample, same simplification as particle_burst.edn). Same fade-into-
+;; :alpha and radius-lerp translations as ring_fade_audio.edn; this
+;; file's fade window is a fixed [0,4096] rather than :input-driven, so
+;; no extra (when (math/gte age at) ...) gate is needed -- the fade
+;; formula itself already saturates to 0.0 alpha once age passes 4096,
+;; matching the old sampler's own clamp exactly.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :energy-orb-session
+ :revision 1
+ :lifecycle :session
+ ;; Generic moving energy body.  The effect deliberately has no skill name:
+ ;; a caller supplies geometry, material, palette and lifetime; audio is a
+ ;; separate composable effect.
+ :inputs
+ {:spawn {:position :vec3
+          :radius :float
+          :segments :int
+          :outer-color :any
+          :inner-color :any
+          :core-color :any
+          :rate-per-tick :int
+          :limit :int
+          :particle :any}
+  :update {:position :vec3}
+  :destroy {:fade-ticks :int}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :energy-orb-session
+   :do [(ring {:center ?position
+              :radius (math/lerp (math/mul ?radius 0.65) ?radius ?progress)
+              :segments ?segments :color ?outer-color})
+        (ring {:center ?position
+              :radius (math/lerp (math/mul ?radius 0.35) (math/mul ?radius 0.72) ?progress)
+              :segments ?segments :color ?inner-color})
+        (ring {:center ?position :radius (math/lerp 0.0 (math/mul ?radius 0.35) ?progress)
+              :segments ?segments :color ?core-color})
+        (emitter {:anchor ?position :rate-per-tick ?rate-per-tick :limit ?limit
+                  :particle ?particle})
+        (let fade-p (math/clamp (math/div ?age (math/max 1.0 4096.0)) 0.0 1.0))
+        (let fade-alpha (math/lerp 1.0 0.0 fade-p))
+        (ring {:center ?position :radius (math/lerp ?radius 0.0 ?progress) :segments ?segments
+              :color ?outer-color :alpha fade-alpha})
+        (finish {:outcome :performed})]}"}

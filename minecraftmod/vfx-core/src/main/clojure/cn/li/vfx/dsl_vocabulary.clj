@@ -27,16 +27,38 @@
 
 (def nodes
   {;; --- geometry --------------------------------------------------------
+   ;; :alpha is NOT a port of anything the old :vfx/ring/:vfx/beam sampler
+   ;; read directly (old final_engine.clj's :vfx/ring case actually reads
+   ;; :material :alpha off a dead (:alpha context) that is never set,
+   ;; always defaulting to 1.0 -- see ring_fade_audio.edn's (S6) own
+   ;; docstring) -- it is the real, working destination the old :vfx/fade
+   ;; MODIFIER wrote its computed alpha into via assoc-in on the
+   ;; CONSTRUCTED op (fade has no primitive-node analogue in the new flat
+   ;; :do sequence, so a faded leaf call now just passes its own computed
+   ;; alpha directly).
    :ring
-   (node {:center (p* :vec3) :radius (p* :double) :segments (opt :long 16) :color (opt :any nil)})
+   (node {:center (p* :vec3) :radius (p* :double) :segments (opt :long 16) :color (opt :any nil)
+         :alpha (opt :double 1.0)})
    :beam
-   (node {:start (p* :vec3) :end (p* :vec3) :layers (opt :any nil) :grow-ticks (opt :long 0)})
+   (node {:start (p* :vec3) :end (p* :vec3) :layers (opt :any nil) :grow-ticks (opt :long 0)
+         :alpha (opt :double 1.0)})
    :ray-beam
    (node {:start (p* :vec3) :end (p* :vec3) :style (opt :any nil) :grow-ticks (opt :long 0)})
    :line
    (node {:from (p* :vec3) :to (p* :vec3) :color (opt :any nil) :material (opt :any nil)})
    :quad
    (node {:geometry (p) :material (opt :any nil)})
+   ;; Old :vfx/emitter (final_engine.clj's sample-node case): a single
+   ;; declarative "spawn an emitter here" draw-batch op per sample, not a
+   ;; per-particle simulation -- the actual particle stepping happens
+   ;; client-side off the :particle description, same as every other
+   ;; scene leaf here. Unrelated to cn.li.vfx.compile's Niagara module-
+   ;; stack machinery (that proves out real CPU particle simulation for
+   ;; FUTURE richer content; none of the 36 real ac/vfx/effects need it,
+   ;; since none of them do per-particle server/headless simulation).
+   :emitter
+   (node {:anchor (p* :vec3) :rate-per-tick (opt :double nil) :limit (opt :long nil)
+         :chance (opt :double nil) :particle (opt :any nil)})
 
    ;; --- audio -------------------------------------------------------------
    :audio-one-shot
