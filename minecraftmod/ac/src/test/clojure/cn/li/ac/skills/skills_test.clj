@@ -895,6 +895,83 @@
     (is (= :destroy (:operation (first (.-vfx frame)))))
     (is (= :no-item (:outcome (.-result frame))))))
 
+(deftest groundshock-start-and-pulse-track-charge-ticks-test
+  (let [doc (read-skill "groundshock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        start-frame (run/dispatch! program :start {:tunables {} :capabilities {}})
+        pulse-frame (run/dispatch! program :pulse
+                                   {:tunables {:charge-max-tolerant-ticks 40}
+                                    :capabilities {} :state {:charge-ticks 5}})]
+    (is (= [{:key :charge-ticks :value 0}] (vec (.-stateWrites start-frame))))
+    (is (= :started (:outcome (.-result start-frame))))
+    (is (= [{:key :charge-ticks :value 6}] (vec (.-stateWrites pulse-frame))))
+    (is (= 6 (:phase-ticks (:payload (first (.-vfx pulse-frame))))))
+    (is (= :charging (:outcome (.-result pulse-frame))))))
+
+(deftest groundshock-pulse-times-out-when-held-too-long-test
+  (let [doc (read-skill "groundshock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        frame (run/dispatch! program :pulse {:tunables {:charge-max-tolerant-ticks 10}
+                                             :capabilities {} :state {:charge-ticks 9}})]
+    (testing "the unconditional phase-ticks :update fires first, then the timeout :destroy"
+      (is (= [:update :destroy] (mapv :operation (.-vfx frame)))))
+    (is (= {:outcome :aborted :next-phase nil :end-ability? true} (.-result frame)))))
+
+(deftest groundshock-release-executes-the-wave-plan-test
+  (let [doc (read-skill "groundshock.edn")
+        calls (atom [])
+        plan {:affected-blocks [{:position {:x 0.0 :y 0.0 :z 0.0}}]
+             :transforms [{:position {:x 1.0 :y 0.0 :z 0.0} :block-id "minecraft:cobblestone"
+                          :expected-block-ids ["minecraft:stone"]}]
+             :broken-blocks [{:position {:x 2.0 :y 0.0 :z 0.0} :drop? true}]
+             :mastery-breaks [{:position {:x 3.0 :y 0.0 :z 0.0}}]
+             :entities [{:id "e1" :velocity {:x 0.1 :y 0.2 :z 0.3} :launch-y 0.9}]}
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :owner/snapshot {:on-ground? true}
+                         :cost/spend true
+                         :kernel/terrain-wave-plan plan
+                         :block/break nil))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:charge-min-ticks 10 :initial-energy 100.0 :max-iterations 200
+                          :entity-search-radius 6.0 :damage 12.0 :launch-base 0.4
+                          :launch-span 0.3 :ground-break-probability 0.5 :drop-probability 0.2
+                          :energy-cost-stone 1.0 :energy-cost-grass 0.5 :energy-cost-farmland 0.5
+                          :energy-cost-default 2.0 :mastery-exp-threshold 0.5 :mastery-radius 3
+                          :mastery-hardness-cap 2.0}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :world/id "overworld" :rng/seed 5 :progression/mastery 0.5
+                              :budget/release {:cp 5.0 :overload 2.0} :progression/hit 1.0
+                              :progression/use 1.0 :cooldown/main 80}
+               :state {:charge-ticks 20}}
+        frame (run/dispatch! program :release input)]
+    (testing "the plan's transforms/broken/mastery blocks each drove their own host action"
+      (is (some #(= [:command :block/set {:position {:x 1.0 :y 0.0 :z 0.0}
+                                          :block-id "minecraft:cobblestone"
+                                          :expected-block-ids ["minecraft:stone"]}] %)
+                @calls))
+      (is (some #(= [:query :block/break {:position {:x 2.0 :y 0.0 :z 0.0} :drop? true}] %) @calls))
+      (is (some #(= [:query :block/break {:position {:x 3.0 :y 0.0 :z 0.0} :drop? true}] %) @calls)))
+    (testing "the launched entity took damage and its velocity was rebuilt from :launch-y"
+      (is (some #(= [:command :entity/damage {:target "e1" :amount 12.0 :damage-type :skill
+                                              :damage-pipeline :skill}] %)
+                @calls))
+      (is (some #(= [:command :motion/entity-velocity {:target "e1" :velocity [0.1 0.9 0.3]}] %)
+                @calls)))
+    (testing "exactly one release spend -- the old content's double-spend bug is not reproduced"
+      (is (= 1 (count (filter #(= :cost/spend (second %)) @calls)))))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 80}] %) @calls))
+    (is (= #{:first-person-motion-session :terrain-shockwave-transient}
+           (set (map :effect-id (.-vfx frame)))))
+    (is (= :performed (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
