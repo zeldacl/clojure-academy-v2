@@ -23,6 +23,19 @@
         program (run/compile-program ir host)]
     (run/dispatch! program entry input)))
 
+(defn- assert-trivial-passive-phases!
+  "Shared shape for the 'passive, no real :do logic of its own' abilities:
+   all four phases are a bare (finish {:outcome :passive}), dispatched
+   against a no-op host, with `tunables` supplying whatever the doc's
+   :program declares (empty map for abilities with none)."
+  [doc tunables]
+  (let [host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables tunables :capabilities {}}]
+    (doseq [phase [:start :pulse :release :abort]]
+      (let [frame (compile-and-dispatch! doc phase host input)]
+        (is (= {:outcome :passive :next-phase nil :end-ability? false} (.-result frame))
+            (str "phase " phase))))))
+
 (deftest rad-intensify-test
   (let [doc (read-skill "rad_intensify.edn")
         host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
@@ -38,3 +51,38 @@
     (testing "the legacy policy/metadata fields are untouched, still consumed by the old path"
       (is (= :radiation (:mark-type (first (:mark-policies doc)))))
       (is (= :radiation (:mark-type (first (:damage-policies doc))))))))
+
+(deftest dim-folding-theorem-test
+  (let [doc (read-skill "dim_folding_theorem.edn")]
+    (assert-trivial-passive-phases!
+     doc {:damage-multipliers [1.5 2.0] :level0-probability 0.2 :exp-per-crit-level 5.0})
+    (testing "damage-policies (chance-based critical multiplier) is untouched"
+      (is (= :damage/critical (:component (:program (first (:damage-policies doc)))))))))
+
+(deftest brain-course-test
+  (let [doc (read-skill "brain_course.edn")]
+    (assert-trivial-passive-phases! doc {})
+    (testing "passive-effects (flat +1000 max-cp) is untouched"
+      (is (= [{:target :max-cp :operation :add :value 1000.0}] (:passive-effects doc))))))
+
+(deftest mind-course-test
+  (let [doc (read-skill "mind_course.edn")]
+    (assert-trivial-passive-phases! doc {})
+    (testing "passive-effects (x1.2 cp-recovery-speed) is untouched"
+      (is (= [{:target :cp-recovery-speed :operation :multiply :value 1.2}] (:passive-effects doc))))))
+
+(deftest space-fluct-test
+  (let [doc (read-skill "space_fluct.edn")]
+    (assert-trivial-passive-phases!
+     doc {:damage-multipliers [1.5 2.0 3.0] :level0-probability 0.2 :level1-probability 0.1
+         :level2-probability 0.05 :exp-critical 5.0})
+    (testing "damage-policies (3-level chance-based critical multiplier) is untouched"
+      (is (= 3 (count (:levels (:program (first (:damage-policies doc))))))))))
+
+(deftest brain-course-advanced-test
+  (let [doc (read-skill "brain_course_advanced.edn")]
+    (assert-trivial-passive-phases! doc {})
+    (testing "passive-effects (+1500 max-cp, +100 max-overload) is untouched"
+      (is (= [{:target :max-cp :operation :add :value 1500.0}
+             {:target :max-overload :operation :add :value 100.0}]
+             (:passive-effects doc))))))
