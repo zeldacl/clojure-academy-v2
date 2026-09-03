@@ -56,6 +56,12 @@
         "budget" :any
         "cooldown" :long
         "progression" :double
+        ;; ?invariant/name (final_engine.clj's :ability/invariant source,
+        ;; e.g. a toggle ability's per-tick resource floor, S6) is always
+        ;; a single tunable-derived number in every real ability seen so
+        ;; far -- unlike ?budget/*, which genuinely needs a whole
+        ;; multi-resource descriptor.
+        "invariant" :double
         "context" :any
         "targeting" :any
         "movement" :boolean

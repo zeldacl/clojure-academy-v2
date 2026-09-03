@@ -184,6 +184,107 @@
       (is (= :audio-one-shot (:effect-id (first (.-vfx frame)))))
       (is (= {:x 3.0 :y 4.0 :z 0.0 :world-id "overworld"} (:position (:payload (first (.-vfx frame)))))))))
 
+(deftest vec-reflection-start-test
+  (let [doc (read-skill "vec_reflection.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) (case cap :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {} :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                                           :budget/activate {:overload 5.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= [:query :cost/spend {:budget {:overload 5.0}}] (first @calls)))
+    (is (= :ring-particle-field (:effect-id (first (.-vfx frame)))))
+    (is (= :spawn (:operation (first (.-vfx frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest vec-reflection-start-insufficient-resource-test
+  (let [doc (read-skill "vec_reflection.edn")
+        host {:query! (fn [_cap _args _fr] false) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {} :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                                           :budget/activate {:overload 5.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (empty? (.-vfx frame)))
+    (is (= {:outcome :insufficient-resource :next-phase nil :end-ability? true} (.-result frame)))))
+
+(deftest vec-reflection-pulse-reflects-only-the-positive-difficulty-projectile-test
+  (let [doc (read-skill "vec_reflection.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:position {:x 5.0 :y 1.0 :z 0.0}}
+                         :entity/select [{:id "p1" :difficulty 2.0 :position {:x 1.0 :y 1.0 :z 0.0}
+                                         :velocity {:x 0.0 :y 0.0 :z 1.0}}
+                                        {:id "p2" :difficulty 0.0 :position {:x 2.0 :y 1.0 :z 0.0}
+                                         :velocity {:x 0.0 :y 0.0 :z 1.0}}]))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:target-radius 8.0 :affected-entity-difficulty [] :excluded-entity-ids []
+                          :large-fireball-ids []}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :budget/per-tick {:cp 2.0} :budget/per-reflect {:cp 1.0}
+                              :invariant/overload-floor 10.0 :progression/reflect-entity 0.5}
+               :state {}}
+        frame (run/dispatch! program :pulse input)]
+    (testing "resource/enforce-floor ran with the resolved invariant, before any scan"
+      (is (some #(= [:command :resource/enforce-floor {:resource :overload :minimum 10.0}] %) @calls)))
+    (testing "only the positive-difficulty projectile (p1) triggered a per-reflect spend and redirect
+              (2 total cost/spend calls: the per-tick guard at the top of pulse, plus exactly one
+              per-reflect spend for p1 -- p2's difficulty 0.0 skips its own reflect-budget spend
+              entirely)"
+      (is (= 2 (count (filter #(= :cost/spend (second %)) @calls))))
+      (is (= 1 (count (filter #(and (= :cost/spend (second %)) (= {:cp 1.0} (:budget (nth % 2)))) @calls))))
+      (is (some #(= [:command :projectile/redirect
+                    {:entity {:id "p1" :difficulty 2.0 :position {:x 1.0 :y 1.0 :z 0.0}
+                             :velocity {:x 0.0 :y 0.0 :z 1.0}}
+                     :target-position {:x 5.0 :y 1.0 :z 0.0} :velocity {:x 0.0 :y 0.0 :z 1.0}
+                     :difficulty 2.0 :replacement-types []}]
+                    %)
+                @calls)))
+    (testing "p1's id was recorded as a state write (the once-per-projectile dedup)"
+      (is (some #(and (= :visited-projectiles (:key %)) (= "p1" (:value %))) (.-stateWrites frame))))
+    (testing "the reflect vfx signal only fired once, for p1"
+      (is (= 1 (count (.-vfx frame)))))
+    (testing "the pulse continues (not an end-ability outcome)"
+      (is (= :continue (:outcome (.-result frame)))))))
+
+(deftest vec-reflection-pulse-insufficient-tick-budget-destroys-the-ring-test
+  (let [doc (read-skill "vec_reflection.edn")
+        calls (atom [])
+        host {:query! (fn [_cap _args _fr] false)
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:target-radius 8.0 :affected-entity-difficulty [] :excluded-entity-ids []
+                          :large-fireball-ids []}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :budget/per-tick {:cp 2.0}}
+               :state {}}
+        frame (run/dispatch! program :pulse input)]
+    (is (= :ring-particle-field (:effect-id (first (.-vfx frame)))))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (empty? @calls) "no resource/enforce-floor or projectile scan ran -- the tick was aborted first")
+    (is (= {:outcome :insufficient-resource :next-phase nil :end-ability? true} (.-result frame)))))
+
+(deftest vec-reflection-release-and-abort-both-destroy-the-ring-test
+  (let [doc (read-skill "vec_reflection.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {} :capabilities {}}]
+    (let [frame (run/dispatch! program :release input)]
+      (is (= :destroy (:operation (first (.-vfx frame)))))
+      (is (= :released (:outcome (.-result frame)))))
+    (let [frame (run/dispatch! program :abort input)]
+      (is (= :destroy (:operation (first (.-vfx frame)))))
+      (is (= :aborted (:outcome (.-result frame)))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
