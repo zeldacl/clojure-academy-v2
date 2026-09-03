@@ -677,6 +677,68 @@
     (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:operation %))) (.-vfx frame)))
     (is (= :too-close (:outcome (.-result frame))))))
 
+(def ^:private flesh-ripping-attacked-trace
+  {:position {:x 5.0 :y 1.0 :z 0.0} :attacked? true :target-width 0.8 :target-height 1.8
+   :target-id "e1"})
+
+(deftest flesh-ripping-start-spawns-a-target-box-test
+  (let [doc (read-skill "flesh_ripping.edn")
+        host {:query! (fn [_cap _args _fr] flesh-ripping-attacked-trace)
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:targeting-range 20.0} :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                                                                 :caster/aim {:x 1.0 :y 0.0 :z 0.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= [{:key :trace :value flesh-ripping-attacked-trace}] (vec (.-stateWrites frame))))
+    (let [signal (first (.-vfx frame))]
+      (is (= :target-box-session (:effect-id signal)))
+      (is (= 0.8 (:width (:payload signal))))
+      (is (= 1.8 (:height (:payload signal))))
+      (is (= [185 25 25 180] (:color (:payload signal)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest flesh-ripping-release-hits-when-attacked-and-affordable-test
+  (let [doc (read-skill "flesh_ripping.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true :random/chance true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:damage 15.0 :nausea-chance 0.5 :nausea-duration-ticks 40
+                          :nausea-amplifier 1}
+               :capabilities {:caster/id "player-1" :caster/creative? false
+                              :budget/release {:cp 5.0} :progression/hit 1.0 :cooldown/main 80}
+               :state {:trace flesh-ripping-attacked-trace}}
+        frame (run/dispatch! program :release input)]
+    (testing "not creative -> spend-scale 1.0"
+      (is (= [:query :cost/spend {:budget {:cp 5.0} :scale 1.0}] (first @calls))))
+    (is (some #(= [:command :entity/damage {:target "e1" :amount 15.0 :damage-type :magic}] %) @calls))
+    (is (some #(= [:command :entity/status {:target "player-1" :status-id :nausea
+                                            :duration-ticks 40.0 :amplifier 1}] %)
+              @calls))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 80}] %) @calls))
+    (is (= #{:particle-burst :audio-one-shot :target-box-session} (set (map :effect-id (.-vfx frame)))))
+    (is (= :performed (:outcome (.-result frame))))))
+
+(deftest flesh-ripping-release-misses-when-not-attacked-test
+  (let [doc (read-skill "flesh_ripping.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) true)
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:damage 15.0 :nausea-chance 0.5 :nausea-duration-ticks 40
+                          :nausea-amplifier 1}
+               :capabilities {:caster/id "player-1" :caster/creative? false}
+               :state {:trace (assoc flesh-ripping-attacked-trace :attacked? false)}}
+        frame (run/dispatch! program :release input)]
+    (is (empty? @calls) "no cost/spend, no damage -- attacked? false short-circuits everything")
+    (is (= #{:audio-one-shot :target-box-session} (set (map :effect-id (.-vfx frame)))))
+    (is (= :miss (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

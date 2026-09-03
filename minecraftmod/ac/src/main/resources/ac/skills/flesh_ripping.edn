@@ -1,0 +1,132 @@
+;; New-DSL conversion of ac/combat/abilities/flesh_ripping.edn (S6). Session
+;; ability. No new language gaps -- every op/node used here was already
+;; added converting earlier abilities.
+{:schema-version 2
+ :kind :ability
+ :id :flesh-ripping
+ :revision 2
+ :activation :session
+ :requires [:caster/id :caster/eye :caster/aim :caster/creative? :world/id :rng/seed]
+ :prerequisites [{:skill-id :mark-teleport :min-exp 0.5} {:skill-id :penetrate-teleport :min-exp 0.5}]
+ :tunables {:targeting-range {:curve :mastery-lerp}
+            :damage {:curve :mastery-lerp}
+            :nausea-chance {:curve :const}
+            :nausea-duration-ticks {:curve :const :type :int}
+            :nausea-amplifier {:curve :const :type :int}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-hit {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:trace {:type :any :default nil}}
+ :program
+ "{:ability :flesh-ripping
+   :activation :session
+   :state {:trace {:type :any :default nil}}
+   :tunables {:targeting-range {:type :double} :release-cp {:type :double}
+              :damage {:type :double} :nausea-chance {:type :double}
+              :nausea-duration-ticks {:type :long} :nausea-amplifier {:type :long}}
+   :phases
+   {:start
+    [(let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let trace (target/raycast {:origin eye :direction aim :distance $targeting-range
+                                 :include-entities? true :include-blocks? false
+                                 :living-only? true}))
+     (state! :trace trace)
+     (let attacked? (:attacked? trace))
+     (vfx! {:effect-id :target-box-session :operation :spawn
+           :instance-key [:activation :flesh-ripping-marker]
+           :payload {:position (:position trace)
+                    :width (math/select attacked? (:target-width trace) 1.0)
+                    :height (math/select attacked? (:target-height trace) 1.0)
+                    :color (math/select attacked? [185 25 25 180] [74 74 74 160])}
+           :audience {:type :nearby :radius 64.0}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let creative? ?caster/creative?)
+     (let context-resources ?context/resources)
+     (let can-afford? (bool/or creative? (math/gte (:cp context-resources) $release-cp)))
+     (if can-afford?
+       [(let eye ?caster/eye)
+        (let aim ?caster/aim)
+        (let trace (target/raycast {:origin eye :direction aim :distance $targeting-range
+                                    :include-entities? true :include-blocks? false
+                                    :living-only? true}))
+        (state! :trace trace)
+        (let attacked? (:attacked? trace))
+        (vfx! {:effect-id :target-box-session :operation :update
+              :instance-key [:activation :flesh-ripping-marker]
+              :payload {:position (:position trace)
+                       :width (math/select attacked? (:target-width trace) 1.0)
+                       :height (math/select attacked? (:target-height trace) 1.0)
+                       :color (math/select attacked? [185 25 25 180] [74 74 74 160])}
+              :audience {:type :nearby :radius 64.0}})
+        (finish {:outcome :continue})]
+       [(vfx! {:effect-id :target-box-session :operation :destroy
+              :instance-key [:activation :flesh-ripping-marker] :payload {}})
+        (finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :release
+    [(let trace %trace)
+     (if (:attacked? trace)
+       [(let release-budget ?budget/release)
+        (let creative? ?caster/creative?)
+        (let spend-scale (math/select creative? 0.0 1.0))
+        (let sufficient? (cost/spend {:budget release-budget :scale spend-scale}))
+        (if sufficient?
+          [(let owner-id ?caster/id)
+           (let hit-progression ?progression/hit)
+           (let main-cooldown ?cooldown/main)
+           (combat/damage {:target (:target-id trace) :amount $damage :damage-type :magic})
+           (let nausea-roll? (random/chance {:probability $nausea-chance}))
+           (when nausea-roll?
+             (combat/status {:target owner-id :status-id :nausea
+                             :duration-ticks $nausea-duration-ticks
+                             :amplifier $nausea-amplifier}))
+           (event! {:type :score/mark :progression hit-progression})
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (vfx! {:effect-id :particle-burst :operation :spawn
+                 :payload {:position (:position trace) :rate-per-tick 6 :limit 6
+                          :particle {:material :additive :color [180 20 20 230]
+                                    :life-ticks 10 :speed 0.08
+                                    :spread {:x 0.35 :y 0.55 :z 0.35}}}
+                 :audience {:type :nearby :radius 64.0}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn
+                 :payload {:position (:position trace) :sound-id \"academy:tp.guts\"
+                          :volume 0.6 :pitch 1.0}
+                 :audience {:type :nearby :radius 64.0}})
+           (vfx! {:effect-id :target-box-session :operation :destroy
+                 :instance-key [:activation :flesh-ripping-marker] :payload {}})
+           (finish {:outcome :performed :end-ability? true})]
+          [(vfx! {:effect-id :particle-burst :operation :spawn
+                 :payload {:position (:position trace) :rate-per-tick 6 :limit 6
+                          :particle {:material :additive :color [180 20 20 230]
+                                    :life-ticks 10 :speed 0.08
+                                    :spread {:x 0.35 :y 0.55 :z 0.35}}}
+                 :audience {:type :nearby :radius 64.0}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn
+                 :payload {:position (:position trace) :sound-id \"academy:tp.guts\"
+                          :volume 0.6 :pitch 1.0}
+                 :audience {:type :nearby :radius 64.0}})
+           (vfx! {:effect-id :target-box-session :operation :destroy
+                 :instance-key [:activation :flesh-ripping-marker] :payload {}})
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :target-box-session :operation :destroy
+              :instance-key [:activation :flesh-ripping-marker] :payload {}})
+        (vfx! {:effect-id :audio-one-shot :operation :spawn
+              :payload {:position (:position trace) :sound-id \"academy:tp.guts\" :volume 0.6
+                       :pitch 1.0}
+              :audience {:type :nearby :radius 64.0}})
+        (finish {:outcome :miss :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :target-box-session :operation :destroy
+           :instance-key [:activation :flesh-ripping-marker] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}
