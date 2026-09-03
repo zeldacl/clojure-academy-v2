@@ -68,7 +68,6 @@
                         ["billboard_session.edn" :billboard-session]
                         ["block_scan_transient.edn" :block-scan-transient]
                         ["trajectory_ribbon_session.edn" :trajectory-ribbon-session]
-                        ["beam_arc_fade.edn" :beam-arc-fade]
                         ["arc_strike_transient.edn" :arc-strike-transient]
                         ["target_mark_session.edn" :target-mark-session]
                         ["ray_fan_transient.edn" :ray-fan-transient]
@@ -155,6 +154,22 @@
         (is (= [:beam :audio-one-shot :beam] (mapv :kind ops)))
         (is (= 0.5 (:alpha (nth ops 2)))
             "age 100, fade-from-tick 50 fade-to-tick 150 -> p=0.5, lerp(1.0,0.0,0.5)=0.5")))))
+
+(deftest beam-arc-fade-expands-its-composite-body-drops-dead-arc-field-test
+  (let [doc (read-fx "beam_arc_fade.edn")
+        caps {:start {:x 0.0 :y 0.0 :z 0.0} :end {:x 1.0 :y 0.0 :z 0.0} :duration-ticks 200
+             :beam-at 0 :grow-ticks 4 :layers :a :arc-at 0 :arc-spacing :s :arc-radius 1.0
+             :arc-count-limit 4 :arc-life-ticks 8 :fade-at 0 :fade-from-tick 50
+             :fade-to-tick 150 :fade-from-alpha 1.0 :fade-to-alpha 0.0 :ring-radius 2.0
+             :ring-segments 16 :ring-color :c}]
+    (testing "age 50 (fade window start) -- beam at full-alpha ring"
+      (let [ops (compile-and-sample! doc caps 50.0)]
+        (is (= [:beam :ring] (mapv :kind ops)))
+        (is (= 1.0 (:alpha (second ops))))
+        (is (= 2.0 (:radius (second ops))) "plain scalar radius, not a lerp")))
+    (testing "age 100 (fade window midpoint) -- ring at half alpha"
+      (let [ops (compile-and-sample! doc caps 100.0)]
+        (is (= 0.5 (:alpha (second ops))))))))
 
 (deftest beam-fade-audio-gates-on-dynamic-at-and-computes-fade-alpha-test
   (assert-fade-beam!
