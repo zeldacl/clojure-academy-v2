@@ -3443,3 +3443,210 @@
         frame (compile-and-dispatch! doc :block-body-hit host input)]
     (is (some #(= [:entity/damage {:target "victim-1" :amount 12.0 :damage-type :skill}] %) @calls))
     (is (= :hit (:outcome (.-result frame))))))
+
+;; --- flashing (final S6 ability) ---------------------------------------------
+;;
+;; The first real content to exercise combat-core/lib's NEW cross-EVENT
+;; :defn composites (combat/blink-preview, combat/blink-release) -- see
+;; ac/skills/flashing.edn's own docstring. These tests are the actual
+;; empirical proof (not just an assumption) that combat/blink-release's
+;; `finish` call inside its own :defn body correctly terminates the
+;; calling :movement/*-release event.
+
+(defn- flashing-host
+  [& {:keys [cost-spend raycast]
+      :or {cost-spend true raycast {:position {:x 5.0 :y 1.0 :z 0.0} :from {:x 0.0 :y 1.0 :z 0.0}}}}]
+  {:query! (fn [cap _args _fr]
+            (case cap
+              :raycast raycast
+              :cost/spend cost-spend))
+   :command! (fn [_cap _args _fr])})
+
+(deftest flashing-start-sufficient-resource-test
+  (let [doc (read-skill "flashing.edn")
+        host (flashing-host)
+        input {:tunables {:activate-cp 5.0 :activate-overload 3.0}
+               :capabilities {:caster/creative? false :context/resources {:overload 10.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:active-ticks 0] [:fall-protect-ticks 0] [:overload-floor 7.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest flashing-start-creative-bypasses-cost-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host) :query! (fn [cap args _fr]
+                                              (swap! calls conj [cap args])
+                                              (case cap :context/resources nil :cost/spend true)))
+        input {:tunables {:activate-cp 5.0 :activate-overload 3.0}
+               :capabilities {:caster/creative? true :context/resources {:overload 10.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (some #(= [:cost/spend {:budget {:resources {:cp 0.0 :overload 0.0}}}] %) @calls))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest flashing-start-insufficient-resource-test
+  (let [doc (read-skill "flashing.edn")
+        host (flashing-host :cost-spend false)
+        input {:tunables {:activate-cp 5.0 :activate-overload 3.0}
+               :capabilities {:caster/creative? false :context/resources {:overload 10.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest flashing-pulse-continues-and-ticks-state-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-active-ticks 200.0}
+               :capabilities {:caster/id "player-1"}
+               :state {:active-ticks 10 :overload-floor 5.0 :fall-protect-ticks 3}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:resource/enforce-floor {:resource :overload :minimum 5.0}] %) @calls))
+    (is (some #(= [:entity/reset-fall-damage {:target "player-1"}] %) @calls))
+    (is (= #{[:active-ticks 11] [:fall-protect-ticks 2]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest flashing-pulse-zero-fall-protect-skips-reset-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-active-ticks 200.0}
+               :capabilities {:caster/id "player-1"}
+               :state {:active-ticks 10 :overload-floor 0.0 :fall-protect-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (not (some #(= :entity/reset-fall-damage (first %)) @calls)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest flashing-pulse-expired-deactivates-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-active-ticks 5.0}
+               :capabilities {:caster/id "player-1" :cooldown/deactivate 80}
+               :state {:active-ticks 10 :overload-floor 0.0 :fall-protect-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (some #(= [:cooldown/start {:name :deactivate :ticks 80}] %) @calls))
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :expired (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest flashing-release-is-a-bare-continue-test
+  (let [doc (read-skill "flashing.edn")
+        host (flashing-host)
+        frame (compile-and-dispatch! doc :release host {:tunables {} :capabilities {}})]
+    (is (empty? (.-stateWrites frame)))
+    (is (empty? (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))
+    (is (false? (:end-ability? (.-result frame))))))
+
+(deftest flashing-abort-deactivates-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {} :capabilities {:cooldown/deactivate 80}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (some #(= [:cooldown/start {:name :deactivate :ticks 80}] %) @calls))
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :aborted (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest flashing-movement-press-affordable-spawns-marker-test
+  (let [doc (read-skill "flashing.edn")
+        host (flashing-host)
+        input {:tunables {:blink-distance 10.0 :blink-cp 3.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/eye-y 1.5
+                              :caster/creative? false :context/resources {:cp 3.0}}}
+        frame (compile-and-dispatch! doc :movement/right-press host input)]
+    (is (= [{:key :destination :value {:position {:x 5.0 :y 1.0 :z 0.0} :from {:x 0.0 :y 1.0 :z 0.0}}}]
+           (vec (.-stateWrites frame))))
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :spawn (:operation (first (.-vfx frame)))))
+    (is (= :teleport-marker (:effect-id (first (.-vfx frame)))))))
+
+(deftest flashing-movement-press-unaffordable-destroys-marker-test
+  (let [doc (read-skill "flashing.edn")
+        host (flashing-host)
+        input {:tunables {:blink-distance 10.0 :blink-cp 3.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/eye-y 1.5
+                              :caster/creative? false :context/resources {:cp 1.0}}}
+        frame (compile-and-dispatch! doc :movement/left-press host input)]
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :destroy (:operation (first (.-vfx frame)))))))
+
+(deftest flashing-movement-tick-updates-marker-test
+  (let [doc (read-skill "flashing.edn")
+        host (flashing-host)
+        input {:tunables {:blink-distance 10.0 :blink-cp 3.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/eye-y 1.5
+                              :caster/creative? false :context/resources {:cp 3.0}}}
+        frame (compile-and-dispatch! doc :movement/back-tick host input)]
+    (is (= :update (:operation (first (.-vfx frame)))))))
+
+(deftest flashing-movement-release-preview-unaffordable-only-destroys-marker-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:blink-distance 10.0 :blink-cp 3.0 :blink-overload 2.0
+                          :post-blink-fall-protect-ticks 40.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/eye-y 1.5
+                              :caster/creative? false :world/id "overworld"
+                              :context/resources {:cp 1.0} :progression/blink 0.5}}
+        frame (compile-and-dispatch! doc :movement/forward-release host input)]
+    (is (empty? @calls))
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :ended (:outcome (.-result frame))))))
+
+(deftest flashing-movement-release-real-spend-insufficient-only-destroys-marker-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host (assoc (flashing-host :cost-spend false)
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:blink-distance 10.0 :blink-cp 3.0 :blink-overload 2.0
+                          :post-blink-fall-protect-ticks 40.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/eye-y 1.5
+                              :caster/creative? false :world/id "overworld"
+                              :context/resources {:cp 3.0} :progression/blink 0.5}}
+        frame (compile-and-dispatch! doc :movement/right-release host input)]
+    (is (not (some #(= :entity/teleport (first %)) @calls)))
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :ended (:outcome (.-result frame))))))
+
+(deftest flashing-movement-release-teleports-and-marks-progression-test
+  (let [calls (atom [])
+        doc (read-skill "flashing.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :raycast {:position {:x 5.0 :y 1.0 :z 0.0} :from {:x 0.0 :y 1.0 :z 0.0}}
+                                :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+        input {:tunables {:blink-distance 10.0 :blink-cp 3.0 :blink-overload 2.0
+                          :post-blink-fall-protect-ticks 40.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/eye-y 1.5
+                              :caster/creative? false :world/id "overworld"
+                              :context/resources {:cp 3.0} :progression/blink 0.5}}
+        frame (compile-and-dispatch! doc :movement/left-release host input)]
+    (is (some #(= [:entity/teleport {:target "player-1" :world-id "overworld"
+                                     :position {:x 5.0 :y 1.0 :z 0.0}
+                                     :dismount? true :reset-fall-damage? true}] %) @calls))
+    (is (= [{:key :destination :value {:position {:x 5.0 :y 1.0 :z 0.0} :from {:x 0.0 :y 1.0 :z 0.0}}}
+            {:key :fall-protect-ticks :value 40}]
+           (vec (.-stateWrites frame))))
+    (is (some #(and (= :score/mark (:type %)) (= 0.5 (:progression %))) (.-events frame)))
+    (is (some #(and (= :achievement/trigger (:type %)) (= "teleporter.flashing" (:id (:payload %))))
+              (.-events frame)))
+    (is (= 2 (count (.-vfx frame))))
+    (is (some #(= :endpoint-burst (:effect-id %)) (.-vfx frame)))
+    (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:operation %))) (.-vfx frame)))
+    (is (= :teleported (:outcome (.-result frame))))))

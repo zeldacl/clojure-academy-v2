@@ -50,7 +50,12 @@
    ;; first real content to read them, each a list of normalized block/
    ;; entity-type ids checked via collection/contains?.
    :caster/normal-metal-blocks :any :caster/weak-metal-blocks :any
-   :caster/metal-entities :any})
+   :caster/metal-entities :any
+   ;; The caster's eye height as a scalar offset (distinct from
+   ;; :caster/eye's full world-space vec3) -- flashing.edn (S6) is the
+   ;; first real content to read it, feeding
+   ;; target/directional-destination's own :eye-y param.
+   :caster/eye-y :double})
 
 (defn capability-type [key]
   (or (get fixed-capabilities key)

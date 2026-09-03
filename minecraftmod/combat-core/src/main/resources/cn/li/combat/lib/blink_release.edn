@@ -1,0 +1,48 @@
+;; New composite (S6), sibling of combat/blink-preview: the -release
+;; event variant of flashing.edn's 4 duplicated movement-direction
+;; bodies (right/back/left/forward), parameterized by :direction the
+;; same way. Re-runs the identical destination + affordability preview
+;; combat/blink-preview computes (this ability's own -press/-tick
+;; events already ran it moments earlier, but the release event has no
+;; way to reuse that result across a separate dispatch), then either
+;; commits the teleport for real (spending blink-cp/blink-overload) or
+;; just tears down the marker. Calls `finish` directly in its own body,
+;; relying on :defn bodies being inlined at the call site (compile.clj's
+;; own compile-fn-call docstring: "Inlines fn-id's body at the call
+;; site") rather than a real call boundary, so a `finish` here
+;; terminates the CALLER's block exactly as if written inline.
+{:defn :combat/blink-release
+ :params [{:name owner-id :type :entity-ref} {:name body :type :vec3} {:name aim :type :vec3}
+          {:name eye-y :type :double} {:name wid :type :string} {:name direction :type :keyword}
+          {:name blink-distance :type :double} {:name blink-cp :type :double}
+          {:name blink-overload :type :double} {:name creative? :type :boolean}
+          {:name post-blink-fall-protect-ticks :type :double}
+          {:name blink-progression :type :double}]
+ :do [(let destination
+        (target/directional-destination body aim eye-y direction blink-distance {}))
+      (state! :destination destination)
+      (let context-resources ?context/resources)
+      (let required-cp (math/select creative? 0.0 blink-cp))
+      (if (math/gte (:cp context-resources) required-cp)
+        [(let sufficient? (cost/spend {:budget {:resources {:cp required-cp
+                                                             :overload blink-overload}}}))
+         (if (bool/not sufficient?)
+           [(vfx! {:effect-id :teleport-marker :operation :destroy
+                  :instance-key [:activation :teleport-marker] :payload {}})]
+           [(entity/teleport {:target owner-id :world-id wid :position (:position destination)
+                              :dismount? true :reset-fall-damage? true})
+            (state! :fall-protect-ticks (math/floor-long post-blink-fall-protect-ticks))
+            (event! {:type :score/mark :progression blink-progression})
+            (event! {:type :achievement/trigger :payload {:id "teleporter.flashing"}})
+            (vfx! {:effect-id :endpoint-burst :operation :spawn :instance-key []
+                  :audience {:type :nearby :radius 64.0}
+                  :payload {:sound-pitch 1.0 :limit 64 :duration-ticks 8 :sound-volume 1.0
+                           :sound-id "academy:tp.tp_flashing"
+                           :particle {:material :additive :life-ticks 8 :speed 0.04
+                                     :color [188 252 238 220]}
+                           :from (:from destination) :rate-per-tick 2 :to (:position destination)}})
+            (vfx! {:effect-id :teleport-marker :operation :destroy
+                  :instance-key [:activation :teleport-marker] :payload {}})
+            (finish {:outcome :teleported})])]
+        [(vfx! {:effect-id :teleport-marker :operation :destroy
+               :instance-key [:activation :teleport-marker] :payload {}})])]}

@@ -36,7 +36,9 @@
    "random_break.edn"
    "teleport_group.edn"
    "radial_impulse_motion.edn"
-   "wave_plan.edn"])
+   "wave_plan.edn"
+   "blink_preview.edn"
+   "blink_release.edn"])
 
 (defn- read-fn-doc [resource-name]
   (let [path (str "cn/li/combat/lib/" resource-name)
