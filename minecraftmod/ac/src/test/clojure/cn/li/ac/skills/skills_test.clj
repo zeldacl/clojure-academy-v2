@@ -972,6 +972,80 @@
            (set (map :effect-id (.-vfx frame)))))
     (is (= :performed (:outcome (.-result frame))))))
 
+(def ^:private penetrate-teleport-available-dest
+  {:available? true :distance 10.0 :marker-position {:x 1.0 :y 1.0 :z 1.0}
+   :position {:x 1.0 :y 1.0 :z 1.0}})
+
+(deftest penetrate-teleport-start-test
+  (let [doc (read-skill "penetrate_teleport.edn")
+        host {:query! (fn [_cap _args _fr] penetrate-teleport-available-dest)
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:max-distance 15.0 :scan-step 0.5 :cp-per-block 1.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :context/resources {:cp 20.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= #{[:desired-distance 15.0] [:destination penetrate-teleport-available-dest]
+             [:can-teleport? true]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (let [signal (first (.-vfx frame))]
+      (is (= [255 255 255 255] (:color (:payload signal))))
+      (is (= 0.4 (:particle-chance (:payload signal)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest penetrate-teleport-release-teleports-when-available-and-affordable-test
+  (let [doc (read-skill "penetrate_teleport.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :raycast penetrate-teleport-available-dest :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:scan-step 0.5 :cp-per-block 1.0 :release-overload 1.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :context/resources {:cp 20.0}
+                              :progression/teleport 1.0 :cooldown/main 60}
+               :state {:desired-distance 10.0}}
+        frame (run/dispatch! program :release input)]
+    (testing "cp-cost = distance(10.0) * cp-per-block(1.0) = 10.0"
+      (is (some #(= [:query :cost/spend {:budget {:cp 10.0 :overload 1.0}}] %) @calls)))
+    (is (some #(= [:command :entity/teleport {:target "player-1" :position {:x 1.0 :y 1.0 :z 1.0}
+                                              :dismount? true :reset-fall-damage? true}] %)
+              @calls))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= :teleported (:outcome (.-result frame))))))
+
+(deftest penetrate-teleport-release-unavailable-skips-spend-test
+  (let [doc (read-skill "penetrate_teleport.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :raycast (assoc penetrate-teleport-available-dest :available? false)
+                             :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:scan-step 0.5 :cp-per-block 1.0 :release-overload 1.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :context/resources {:cp 20.0}}
+               :state {:desired-distance 10.0}}
+        frame (run/dispatch! program :release input)]
+    (is (not (some #(= :cost/spend (second %)) @calls)))
+    (is (= :unavailable (:outcome (.-result frame))))))
+
+(deftest penetrate-teleport-slot-wheel-adjusts-and-clamps-distance-test
+  (let [doc (read-skill "penetrate_teleport.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:max-distance 10.0} :capabilities {:context/delta 2.0}
+               :state {:desired-distance 5.0}}
+        frame (run/dispatch! program :slot-wheel input)]
+    (is (= [{:key :desired-distance :value 7.0}] (vec (.-stateWrites frame))))
+    (is (= :distance-updated (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
