@@ -180,8 +180,16 @@
     :combat/impulse
     (node {:target (p* :entity-ref) :vector (p* :vec3)} nil #{:world-write} :entity/impulse 1)
 
+    ;; :entity-type is a Minecraft resource-location STRING ("academy:
+    ;; entity_md_ball"), not a keyword despite the field-name heuristic
+    ;; this table otherwise follows -- every real spawn site (electron_
+    ;; bomb/electron_missile/light_shield/mag_manip/scatter_bomb.edn) uses
+    ;; a string, and a keyword's namespace/name separator (/) does not
+    ;; even round-trip to the same text as a resource location's (:).
+    ;; Same mistake class as :target/directional-destination-query's
+    ;; :direction fix; caught converting electron_bomb.edn for S6.
     :entity/spawn
-    (node {:entity-type (p* :keyword) :position (p* :vec3) :velocity (opt :vec3 nil)
+    (node {:entity-type (p* :string) :position (p* :vec3) :velocity (opt :vec3 nil)
            :world-id (opt :string nil) :life-ticks (opt :long nil) :owner (opt :any nil)
            :add-tags (opt :any nil) :barrier? (opt :boolean false)}
           :any #{:world-write} nil 2)

@@ -79,6 +79,40 @@
     (testing "damage-policies (3-level chance-based critical multiplier) is untouched"
       (is (= 3 (count (:levels (:program (first (:damage-policies doc))))))))))
 
+(deftest electron-bomb-test
+  (let [doc (read-skill "electron_bomb.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :entity/spawn {:entity-id "ball-uuid"}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:damage 12.0 :cooldown-ticks 40.0 :exp-hit 1.0
+                          :settle-ticks 20 :settle-ticks-improved 40 :improved-exp-threshold 0.5}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"
+                              :progression/mastery 0.8 :rng/seed 42 :progression/cast 3.0
+                              :cooldown/main 40}}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        frame (run/dispatch! program :default input)]
+    (testing "mastery 0.8 > threshold 0.5 -> improved settle-ticks (40) used as life-ticks"
+      (is (= 40 (:life-ticks (nth (first (filter #(= :entity/spawn (second %)) @calls)) 2)))))
+    (testing "entity/spawn got the fixed entity-type string, tags vector, spawn position"
+      (let [[_ _ args] (first (filter #(= :entity/spawn (second %)) @calls))]
+        (is (= "academy:entity_md_ball" (:entity-type args)))
+        (is (= ["ac_electron_bomb"] (:add-tags args)))
+        (is (= {:x 0.0 :y 1.0 :z 0.0} (:position args)))))
+    (testing "projectile/schedule-beam got the spawned ball's id and delay = life-ticks - 2"
+      (let [[_ _ args] (first (filter #(= :projectile/schedule-beam (second %)) @calls))]
+        (is (= "ball-uuid" (:entity-id (:origin-selector args))))
+        (is (= 38 (:delay-ticks args)))
+        (is (= 12.0 (:damage args)))))
+    (testing "cooldown/start committed the resolved ?cooldown/main value"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 40}] %) @calls)))
+    (testing "score/mark landed on the frame's own event outbox, not a host call"
+      (is (= [{:type :score/mark :owner "player-1" :progression 3.0}]
+             (mapv #(select-keys % [:type :owner :progression]) (.-events frame)))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

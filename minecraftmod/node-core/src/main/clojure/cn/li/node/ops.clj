@@ -52,10 +52,23 @@
    :math/eq        {:params [:double :double]         :returns :boolean}
    :math/gte       {:params [:double :double]         :returns :boolean}
    :math/gt        {:params [:double :double]         :returns :boolean}
+   ;; Generic ternary: (math/select cond then else). :any/:any because
+   ;; then/else can be any matching type (a :long tick count, a :vec3, an
+   ;; :entity-ref, ...) -- cn.li.node.expr/evaluate's own impl is already
+   ;; type-agnostic (returns whichever arg the boolean picked), this just
+   ;; exposes it to DSL authors the same way every other op here does.
+   :math/select    {:params [:boolean :any :any]      :returns :any}
    :value/eq       {:params [:any :any]               :returns :boolean}
    :bool/and       {:params [:boolean :boolean]       :returns :boolean}
    :bool/or        {:params [:boolean :boolean]       :returns :boolean}
-   :bool/not       {:params [:boolean]                :returns :boolean}})
+   :bool/not       {:params [:boolean]                :returns :boolean}
+   ;; :long/* -- see cn.li.node.expr's matching comment for why :math/*
+   ;; (hard-coded double) cannot serve :long-typed tick-count arithmetic.
+   :long/add       {:params [:long :long]             :returns :long}
+   :long/sub       {:params [:long :long]             :returns :long}
+   :long/mul       {:params [:long :long]             :returns :long}
+   :long/min       {:params [:long :long]             :returns :long}
+   :long/max       {:params [:long :long]             :returns :long}})
 
 (defn known-op? [op-name] (contains? table op-name))
 

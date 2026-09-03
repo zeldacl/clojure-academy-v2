@@ -102,6 +102,21 @@
        :math/gt (> (double (nth args 0)) (double (nth args 1)))
        :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))
 
+       ;; :long/* -- a real ability's tick-count arithmetic (delay-ticks =
+       ;; some-tick-count - 2, S6's electron_bomb.edn) cannot go through
+       ;; :math/* : those are hard-coded to double, and cn.li.node.types/
+       ;; assignable? deliberately disallows :double -> :long narrowing
+       ;; (a fractional literal into a :long param is a real authoring
+       ;; bug, not implicit narrowing -- see that function's own
+       ;; docstring), so a :math/sub result could never satisfy a :long-
+       ;; typed param like :projectile/schedule-beam's :delay-ticks. Long-
+       ;; typed values need their own arithmetic family, not a cast.
+       :long/add (+ (long (nth args 0)) (long (nth args 1)))
+       :long/sub (- (long (nth args 0)) (long (nth args 1)))
+       :long/mul (* (long (nth args 0)) (long (nth args 1)))
+       :long/min (min (long (nth args 0)) (long (nth args 1)))
+       :long/max (max (long (nth args 0)) (long (nth args 1)))
+
        :value/eq (= (nth args 0) (nth args 1))
 
        :collection/contains? (boolean (some #(= % (nth args 1)) (or (nth args 0) [])))

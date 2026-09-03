@@ -11,6 +11,17 @@
   (is (= {:vec3 [4.0 6.0 8.0]} (ops/invoke :vec3/add [{:vec3 [1.0 2.0 3.0]} {:vec3 [3.0 4.0 5.0]}])))
   (is (= 5.0 (ops/invoke :math/add [2.0 3.0]))))
 
+(deftest math-select-is-a-generic-ternary-test
+  (is (= "then" (ops/invoke :math/select [true "then" "else"])))
+  (is (= "else" (ops/invoke :math/select [false "then" "else"]))))
+
+(deftest long-arithmetic-does-not-go-through-double-test
+  (is (= 3 (ops/invoke :long/add [1 2])))
+  (is (= -1 (ops/invoke :long/sub [1 2])))
+  (is (= 6 (ops/invoke :long/mul [2 3])))
+  (is (= 1 (ops/invoke :long/min [1 2])))
+  (is (= 2 (ops/invoke :long/max [1 2]))))
+
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))
 
