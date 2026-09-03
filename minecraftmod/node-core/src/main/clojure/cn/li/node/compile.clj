@@ -230,7 +230,14 @@
             returns (:returns spec)
             dst (when returns (alloc-reg! env (types/bank returns) returns))]
         (append! env block-id
-                 (cond-> {:op (if returns :query :action) :nid (nid! env) :node node-id :args args}
+                 (cond-> {:op (if returns :query :action) :nid (nid! env) :node node-id :args args
+                         ;; Baked in at compile time so the emitter
+                         ;; (cn.li.mcmod.runtime.effect-emit) never needs
+                         ;; its own node-id -> capability lookup -- it must
+                         ;; stay domain-neutral (mcmod has zero project
+                         ;; deps), so the ONE place that legitimately knows
+                         ;; the vocab is here.
+                         :capability (or (:capability spec) node-id)}
                    (:barrier? spec) (assoc :barrier? true)
                    dst (assoc :dst dst)))
         {:reg dst :block-id block-id}))))
@@ -505,6 +512,11 @@
             ;; known to the transient compile-time env, never to the IR
             ;; itself, since :tun instructions only carry the tunable's :key.
             :tunable-types (:tunable-types env)
+            ;; How many slots per bank a fresh ExecutionFrame needs to run
+            ;; this program (cn.li.mcmod.runtime.effect-emit sizes its
+            ;; register arrays from this) -- known here for free, since
+            ;; alloc-reg! already counted every allocation.
+            :registers @(:reg-counters env)
             :constants @(:const-pools env)
             :entries entries
             :blocks (let [registry @(:block-registry env)]
