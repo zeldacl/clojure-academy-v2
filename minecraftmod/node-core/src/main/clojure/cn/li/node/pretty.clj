@@ -122,6 +122,23 @@
         rest-stmts (unparse-from ir pidx let-names* counter blocks-by-id continue-id stop-at)]
     (into [(list* 'when cond-form then-stmts)] rest-stmts)))
 
+(defn- unparse-if
+  "Uses the :continue breadcrumb compile-if leaves on the branch instr
+   directly, rather than trying to infer where the two arms reconverge
+   from block shape alone (both `if` and `when` compile to a plain
+   :branch {:then :else} at the IR level -- :two-armed?/:continue are what
+   let unparse-from tell them apart at all, the same technique
+   compile-each's :loop-hint uses for the same reason)."
+  [ir pidx let-names* counter blocks-by-id branch stop-at]
+  (let [cond-form (reconstruct ir pidx @let-names* (:test branch))
+        continue-id (:continue branch)
+        then-stmts (unparse-from ir pidx let-names* counter blocks-by-id (:then branch) continue-id)
+        else-stmts (unparse-from ir pidx let-names* counter blocks-by-id (:else branch) continue-id)
+        if-form (list 'if cond-form (vec then-stmts) (vec else-stmts))]
+    (if continue-id
+      (into [if-form] (unparse-from ir pidx let-names* counter blocks-by-id continue-id stop-at))
+      [if-form])))
+
 (defn- unparse-each
   "STRAIGHT-LINE BODY ONLY: assumes body-id's own trailing three
    instructions are exactly the [:pure :long/inc] [:copy] [:jump] triad
@@ -165,9 +182,10 @@
          :finish (conj body-stmts (finish-form terminator))
          :jump (into body-stmts (unparse-from ir pidx let-names* counter blocks-by-id (:target terminator) stop-at))
          :branch (into body-stmts
-                       (if (:loop-hint terminator)
-                         (unparse-each ir pidx let-names* counter blocks-by-id terminator stop-at)
-                         (unparse-when ir pidx let-names* counter blocks-by-id terminator stop-at))))))))
+                       (cond
+                         (:loop-hint terminator) (unparse-each ir pidx let-names* counter blocks-by-id terminator stop-at)
+                         (:two-armed? terminator) (unparse-if ir pidx let-names* counter blocks-by-id terminator stop-at)
+                         :else (unparse-when ir pidx let-names* counter blocks-by-id terminator stop-at))))))))
 
 ;; --- top level ---------------------------------------------------------------
 

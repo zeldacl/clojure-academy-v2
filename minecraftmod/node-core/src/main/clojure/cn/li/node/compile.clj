@@ -411,9 +411,58 @@
     (let [then-id (new-block! env)
           continue-id (new-block! env)]
       (append! env block-id {:op :branch :nid (nid! env) :test cond-reg :then then-id :else continue-id})
-      (let [{final-then :block-id} (compile-stmts! env locals then-id depth (vec body))]
-        (append! env final-then {:op :jump :nid (nid! env) :target continue-id}))
+      ;; continue-id is always reachable via the branch's OWN :else edge
+      ;; (the condition-false path), so it is never an empty/unreachable
+      ;; block regardless of whether the then-body terminates -- but if it
+      ;; DOES terminate (ends in `finish`), appending a :jump after that
+      ;; :finish would put a non-terminal instruction after the block's
+      ;; real terminator, which ir/validate! rejects. A `when` whose body
+      ;; finishes early (a real, common pattern -- "insufficient resource,
+      ;; abort") was uncaught by every test so far because none of them
+      ;; happened to end a when-body in `finish`.
+      (let [{final-then :block-id terminated? :terminated?} (compile-stmts! env locals then-id depth (vec body))]
+        (when-not terminated?
+          (append! env final-then {:op :jump :nid (nid! env) :target continue-id})))
       {:locals locals :block-id continue-id})))
+
+(defn- compile-if
+  "Two-armed: (if cond [then-stmt...] [else-stmt...]) -- bodies are
+   vectors, not trailing variadic forms, so the two arms are unambiguous
+   (unlike `when`, which only ever needs one body and can use & body).
+
+   The emitted :branch carries a :two-armed? breadcrumb (the SAME
+   technique compile-each uses for :loop-hint -- an explicit compiler tag,
+   not something cn.li.node.pretty has to infer from block shape) so the
+   decompiler can tell an `if` apart from a `when`, which are otherwise
+   both just a :branch with :then/:else at the IR level. When both arms
+   terminate, :continue is nil and the breadcrumb still lets the
+   decompiler print the right form instead of guessing."
+  [env locals block-id depth [_ cond-form then-stmts else-stmts]]
+  (let [{cond-reg :reg block-id :block-id} (compile-form env locals block-id depth cond-form false)]
+    (when-not (types/assignable? (type-of env cond-reg) :boolean)
+      (report! env {:code :type-mismatch :form cond-form :want :boolean
+                   :message "if condition must be :boolean"}))
+    (let [then-id (new-block! env) else-id (new-block! env)]
+      (let [{then-final :block-id then-terminated? :terminated?}
+            (compile-stmts! env locals then-id depth (vec then-stmts))
+            {else-final :block-id else-terminated? :terminated?}
+            (compile-stmts! env locals else-id depth (vec else-stmts))
+            continue-id (when-not (and then-terminated? else-terminated?) (new-block! env))]
+        (append! env block-id {:op :branch :nid (nid! env) :test cond-reg :then then-id :else else-id
+                               :two-armed? true :continue continue-id})
+        (when (and continue-id (not then-terminated?))
+          (append! env then-final {:op :jump :nid (nid! env) :target continue-id}))
+        (when (and continue-id (not else-terminated?))
+          (append! env else-final {:op :jump :nid (nid! env) :target continue-id}))
+        (if continue-id
+          {:locals locals :block-id continue-id}
+          ;; Both arms finish -- there is no fall-through at all, so
+          ;; unlike `when` there is no :else edge guaranteeing a
+          ;; continuation block would ever be reached. No continue-id was
+          ;; allocated (ir/validate! rejects a block with zero
+          ;; instructions); this `if` itself terminates its enclosing
+          ;; statement sequence.
+          {:locals nil :block-id then-final :terminated? true})))))
 
 (defn- compile-each
   "Desugars entirely to :pure operations plus :copy/:branch/:jump: iterating
@@ -445,11 +494,19 @@
       (let [item-reg (alloc-reg! env (types/bank elem-type) elem-type)
             _ (append! env body-id {:op :pure :nid (nid! env) :dst item-reg :fn :collection/nth :args [coll-reg index-reg]})
             body-locals (assoc locals sym {:reg item-reg})
-            {final-body :block-id} (compile-stmts! env body-locals body-id depth (vec body))
-            next-index (alloc-reg! env :longs :long)]
-        (append! env final-body {:op :pure :nid (nid! env) :dst next-index :fn :long/inc :args [index-reg]})
-        (append! env final-body {:op :copy :nid (nid! env) :dst index-reg :src next-index})
-        (append! env final-body {:op :jump :nid (nid! env) :target header-id}))
+            {final-body :block-id terminated? :terminated?} (compile-stmts! env body-locals body-id depth (vec body))]
+        ;; after-id is always reachable via the header's OWN :else edge
+        ;; (the loop's natural exit), so it is never an unreachable/empty
+        ;; block regardless of whether the body terminates early -- but if
+        ;; it DOES (a `finish` inside an each body, ending the whole
+        ;; ability mid-iteration -- unusual but not invalid), the
+        ;; increment/back-jump machinery must not be appended after that
+        ;; :finish, same reasoning as compile-when's identical fix.
+        (when-not terminated?
+          (let [next-index (alloc-reg! env :longs :long)]
+            (append! env final-body {:op :pure :nid (nid! env) :dst next-index :fn :long/inc :args [index-reg]})
+            (append! env final-body {:op :copy :nid (nid! env) :dst index-reg :src next-index})
+            (append! env final-body {:op :jump :nid (nid! env) :target header-id}))))
       {:locals locals :block-id after-id})))
 
 (defn- literal-map-value [form]
@@ -534,6 +591,7 @@
     let (let [{:keys [locals block-id]} (compile-let env locals block-id depth stmt)]
           {:locals locals :block-id block-id})
     when (compile-when env locals block-id depth stmt)
+    if (compile-if env locals block-id depth stmt)
     each (compile-each env locals block-id depth stmt)
     finish (compile-finish env block-id stmt)
     state! (compile-state-write env locals block-id depth stmt)
