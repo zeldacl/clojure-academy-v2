@@ -68,7 +68,15 @@
         "invariant" :double
         "context" :any
         "targeting" :any
-        "movement" :boolean
+        ;; A speculative placeholder with no real content behind it until
+        ;; storm_wing.edn (S6): every ?movement/name it reads
+        ;; (forward/right/back/left) is a direction VECTOR consumed both
+        ;; as a motion/flight :direction and as vfx orientation fields,
+        ;; never a boolean -- the first real usage revealed the original
+        ;; guess was wrong, the same class of fix already applied to
+        ;; :target/raycast-fan's :yaw-range-degrees and :entity/spawn's
+        ;; :entity-type.
+        "movement" :vec3
         nil)))
 
 (def invoke-op

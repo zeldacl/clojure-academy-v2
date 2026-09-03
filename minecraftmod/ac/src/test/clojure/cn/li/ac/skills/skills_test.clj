@@ -2892,6 +2892,178 @@
         frame (compile-and-dispatch! doc :release host input)]
     (is (= :continue (:outcome (.-result frame))))))
 
+(defn- storm-wing-host
+  [& {:keys [cost-spend entity-select block-select]
+      :or {cost-spend true entity-select [] block-select []}}]
+  {:query! (fn [cap _args _fr]
+            (case cap
+              :cost/spend cost-spend
+              :owner/snapshot {:can-fly? false}
+              :entity/select entity-select
+              :entity/snapshot {:position {:x 0.0 :y 0.0 :z 0.0}}
+              :block/select block-select
+              :block/break :applied))
+   :command! (fn [_cap _args _fr])})
+
+(deftest storm-wing-start-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        host (assoc (storm-wing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {} :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :rng/seed 1}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:phase 0] [:charge-ticks 0] [:previous-can-fly? false]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(= [:owner/can-fly {:enabled? true}] %) @calls))
+    (is (= 6 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest storm-wing-pulse-charging-continues-test
+  (let [doc (read-skill "storm_wing.edn")
+        host (storm-wing-host)
+        input {:tunables {:low-exp-threshold 0.0 :movement-speed-exp-threshold 1.0
+                          :movement-speed-multipliers [1.0 1.0] :movement-speed-scale [1.0 1.0]
+                          :near-ground-distance 1.0 :near-ground-eye-height 1.5
+                          :hover-near-ground-velocity 0.1 :hover-air-velocity 0.05
+                          :movement-acceleration 0.1 :charge-time 40}
+               :capabilities {:progression/mastery 0.5 :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld"}
+               :state {:phase 0 :charge-ticks 4}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= [{:key :charge-ticks :value 5}] (vec (.-stateWrites frame))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest storm-wing-pulse-charge-complete-transitions-to-flight-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        host (assoc (storm-wing-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:low-exp-threshold 0.0 :movement-speed-exp-threshold 1.0
+                          :movement-speed-multipliers [1.0 1.0] :movement-speed-scale [1.0 1.0]
+                          :near-ground-distance 1.0 :near-ground-eye-height 1.5
+                          :hover-near-ground-velocity 0.1 :hover-air-velocity 0.05
+                          :movement-acceleration 0.1 :charge-time 5}
+               :capabilities {:progression/mastery 0.5 :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld"}
+               :state {:phase 0 :charge-ticks 5}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:charge-ticks 6] [:phase 1] [:charge-ticks 0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (not (some #(= :motion/radial-impulse (first %)) @calls)))
+    (is (some #(= :vortex-column-session (:effect-id %)) (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest storm-wing-pulse-charge-complete-with-mastery-knockback-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        host (assoc (storm-wing-host :entity-select ["victim-1"])
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:low-exp-threshold 0.0 :movement-speed-exp-threshold 1.0
+                          :movement-speed-multipliers [1.0 1.0] :movement-speed-scale [1.0 1.0]
+                          :near-ground-distance 1.0 :near-ground-eye-height 1.5
+                          :hover-near-ground-velocity 0.1 :hover-air-velocity 0.05
+                          :movement-acceleration 0.1 :charge-time 5 :mastery-knockback-radius 4.0
+                          :mastery-knockback-speed [1.0 2.0]}
+               :capabilities {:progression/mastery 1.0 :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld"}
+               :state {:phase 0 :charge-ticks 5}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= :entity/impulse (first %)) @calls))))
+
+(deftest storm-wing-pulse-flying-marks-progression-and-spends-flight-budget-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        host (assoc (storm-wing-host)
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:low-exp-threshold 0.0 :movement-speed-exp-threshold 1.0
+                          :movement-speed-multipliers [1.0 1.0] :movement-speed-scale [1.0 1.0]
+                          :near-ground-distance 1.0 :near-ground-eye-height 1.5
+                          :hover-near-ground-velocity 0.1 :hover-air-velocity 0.05
+                          :movement-acceleration 0.1 :charge-time 40}
+               :capabilities {:progression/mastery 0.5 :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld" :progression/flight-tick 0.2}
+               :state {:phase 1 :charge-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(and (= :score/mark (:type %)) (= :flight-tick (:tag %))) (.-events frame)))
+    (is (empty? (.-stateWrites frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest storm-wing-pulse-flying-insufficient-resource-restores-flight-and-ends-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        host (assoc (storm-wing-host :cost-spend false)
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:low-exp-threshold 0.0 :movement-speed-exp-threshold 1.0
+                          :movement-speed-multipliers [1.0 1.0] :movement-speed-scale [1.0 1.0]
+                          :near-ground-distance 1.0 :near-ground-eye-height 1.5
+                          :hover-near-ground-velocity 0.1 :hover-air-velocity 0.05
+                          :movement-acceleration 0.1 :charge-time 40}
+               :capabilities {:progression/mastery 0.5 :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld" :progression/flight-tick 0.2
+                              :cooldown/main 60}
+               :state {:phase 1 :charge-ticks 0 :previous-can-fly? true}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:owner/can-fly {:enabled? true}] %) @calls))
+    (is (some #(= [:cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= 6 (count (filter #(= :destroy (:operation %)) (.-vfx frame)))))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest storm-wing-pulse-low-mastery-triggers-random-break-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        base-host (storm-wing-host :block-select [{:position {:x 1.0 :y 0.0 :z 1.0}}])
+        host (assoc base-host
+                    :query! (fn [cap args fr]
+                             (swap! calls conj [cap args])
+                             ((:query! base-host) cap args fr)))
+        input {:tunables {:low-exp-threshold 0.5 :soft-block-tries 3 :soft-block-search-radius 2.0
+                          :soft-hardness-max 1.5 :movement-speed-exp-threshold 1.0
+                          :movement-speed-multipliers [1.0 1.0] :movement-speed-scale [1.0 1.0]
+                          :near-ground-distance 1.0 :near-ground-eye-height 1.5
+                          :hover-near-ground-velocity 0.1 :hover-air-velocity 0.05
+                          :movement-acceleration 0.1 :charge-time 40}
+               :capabilities {:progression/mastery 0.1 :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :world/id "overworld"}
+               :state {:phase 0 :charge-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= :block/break (first %)) @calls))))
+
+(deftest storm-wing-release-is-a-no-op-continue-test
+  (let [doc (read-skill "storm_wing.edn")
+        host (storm-wing-host)
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest storm-wing-abort-restores-flight-and-destroys-vfx-test
+  (let [calls (atom [])
+        doc (read-skill "storm_wing.edn")
+        host (assoc (storm-wing-host)
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {} :capabilities {:cooldown/main 60} :state {:previous-can-fly? true}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (some #(= [:owner/can-fly {:enabled? true}] %) @calls))
+    (is (some #(= [:cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= 6 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))))
+
+(deftest storm-wing-movement-events-set-direction-only-while-flying-test
+  (let [doc (read-skill "storm_wing.edn")
+        host (storm-wing-host)
+        input-flying {:tunables {} :capabilities {:movement/right {:x 1.0 :y 0.0 :z 0.0}}
+                      :state {:phase 1}}
+        input-charging {:tunables {} :capabilities {:movement/right {:x 1.0 :y 0.0 :z 0.0}}
+                        :state {:phase 0}}]
+    (testing "phase 1 (flying): press sets move-direction"
+      (let [frame (compile-and-dispatch! doc :movement/right-press host input-flying)]
+        (is (= [{:key :move-direction :value {:x 1.0 :y 0.0 :z 0.0}}] (vec (.-stateWrites frame))))))
+    (testing "phase 0 (charging): press does nothing"
+      (let [frame (compile-and-dispatch! doc :movement/right-press host input-charging)]
+        (is (empty? (.-stateWrites frame)))))
+    (testing "release always clears move-direction regardless of phase"
+      (let [frame (compile-and-dispatch! doc :movement/right-release host input-charging)]
+        (is (= [{:key :move-direction :value nil}] (vec (.-stateWrites frame))))))))
+
 (deftest plasma-cannon-abort-destroys-vfx-test
   (let [doc (read-skill "plasma_cannon.edn")
         host (plasma-cannon-host)
