@@ -2449,3 +2449,141 @@
       (is (every? #(= :destroy (:operation %)) (.-vfx frame)) (str "phase " phase))
       (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
           (str "phase " phase)))))
+
+(deftest jet-engine-start-marks-the-raycast-hit-test
+  (let [doc (read-skill "jet_engine.edn")
+        host {:query! (fn [cap _args _fr] (case cap :raycast {:position {:x 1.0 :y 2.0 :z 3.0}}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:target-range 8.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:phase :marking] [:hold-ticks 0] [:target-position {:x 1.0 :y 2.0 :z 3.0}]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(= :ring-particle-field (:effect-id %)) (.-vfx frame)))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest jet-engine-pulse-marking-continues-while-cp-holds-test
+  (let [doc (read-skill "jet_engine.edn")
+        host {:query! (fn [cap _args _fr] (case cap :raycast {:position {:x 1.0 :y 2.0 :z 3.0}}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:target-range 8.0 :hold-required-cp 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :context/resources {:cp 5.0}}
+               :state {:phase :marking :hold-ticks 4}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:hold-ticks 5] [:target-position {:x 1.0 :y 2.0 :z 3.0}]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest jet-engine-pulse-marking-insufficient-cp-ends-test
+  (let [doc (read-skill "jet_engine.edn")
+        host {:query! (fn [cap _args _fr] (case cap :raycast {:position {:x 1.0 :y 2.0 :z 3.0}}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:target-range 8.0 :hold-required-cp 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :context/resources {:cp 1.0}}
+               :state {:phase :marking :hold-ticks 4}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (some #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest jet-engine-pulse-triggering-completes-at-15-ticks-test
+  (let [doc (read-skill "jet_engine.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {} :state {:phase :triggering :trigger-ticks 15}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= 5 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :completed (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest jet-engine-pulse-triggering-advances-and-damages-entity-hit-test
+  (let [calls (atom [])
+        doc (read-skill "jet_engine.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :raycast {:hit-type :entity :entity-id "victim-1"}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:damage 6.0}
+               :capabilities {:caster/id "player-1"}
+               :state {:phase :triggering :trigger-ticks 0 :start-position {:x 0.0 :y 0.0 :z 0.0}
+                      :last-position {:x 0.0 :y 0.0 :z 0.0} :velocity {:x 8.0 :y 0.0 :z 0.0}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:command :motion/velocity {:velocity {:x 8.0 :y 0.0 :z 0.0} :dismount? true
+                                              :reset-fall-damage? true}] %)
+              @calls))
+    (is (some #(= [:command :entity/damage {:target "victim-1" :amount 6.0 :damage-type :magic}] %)
+              @calls))
+    (is (some #(= [:command :entity/mark {:target "victim-1" :mark-type :radiation
+                                          :duration-ticks 60.0 :requires-ability :rad-intensify}]
+                  %)
+              @calls))
+    (testing "next-position = [0,0,0] + [8,0,0]*(0+1)/8 = [1,0,0]"
+      (is (= #{[:trigger-ticks 1] [:last-position {:vec3 [1.0 0.0 0.0]}]}
+             (set (map (juxt :key :value) (.-stateWrites frame))))))
+    (is (= 4 (count (.-vfx frame))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest jet-engine-pulse-triggering-no-damage-when-hitting-a-block-or-self-test
+  (doseq [[label hit] [["block" {:hit-type :block}]
+                       ["self" {:hit-type :entity :entity-id "player-1"}]]]
+    (let [calls (atom [])
+          doc (read-skill "jet_engine.edn")
+          host {:query! (fn [cap _args _fr] (case cap :raycast hit))
+                :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+          input {:tunables {:damage 6.0}
+                 :capabilities {:caster/id "player-1"}
+                 :state {:phase :triggering :trigger-ticks 0 :start-position {:x 0.0 :y 0.0 :z 0.0}
+                        :last-position {:x 0.0 :y 0.0 :z 0.0} :velocity {:x 8.0 :y 0.0 :z 0.0}}}
+          frame (compile-and-dispatch! doc :pulse host input)]
+      (is (not (some #(= :entity/damage (second %)) @calls)) (str "hit=" label))
+      (is (= :continue (:outcome (.-result frame))) (str "hit=" label)))))
+
+(deftest jet-engine-release-marking-sufficient-triggers-and-computes-velocity-test
+  (let [calls (atom [])
+        doc (read-skill "jet_engine.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true :owner/snapshot {:position {:x 0.0 :y 0.0 :z 0.0}}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {} :capabilities {:progression/use 0.4 :cooldown/main 60}
+               :state {:phase :marking :target-position {:x 8.0 :y 0.0 :z 0.0}}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (testing "velocity = (target(8,0,0) - owner(0,0,0)) / 8 = (1,0,0)"
+      (is (= #{[:phase :triggering] [:start-position {:x 0.0 :y 0.0 :z 0.0}]
+               [:last-position {:x 0.0 :y 0.0 :z 0.0}] [:velocity {:vec3 [1.0 0.0 0.0]}]
+               [:trigger-ticks 0]}
+             (set (map (juxt :key :value) (.-stateWrites frame))))))
+    (is (some #(and (= :score/mark (:type %)) (= 0.4 (:progression %))) (.-events frame)))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= 6 (count (.-vfx frame))))
+    (is (= :triggering (:outcome (.-result frame))))
+    (is (false? (:end-ability? (.-result frame))))))
+
+(deftest jet-engine-release-marking-insufficient-resource-test
+  (let [doc (read-skill "jet_engine.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {} :state {:phase :marking}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest jet-engine-release-while-triggering-is-ignored-test
+  (let [doc (read-skill "jet_engine.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {} :state {:phase :triggering}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :ignored (:outcome (.-result frame))))))
+
+(deftest jet-engine-abort-both-phases-test
+  (doseq [[phase vfx-count] [[:marking 1] [:triggering 5]]]
+    (let [doc (read-skill "jet_engine.edn")
+          host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+          input {:tunables {} :capabilities {} :state {:phase phase}}
+          frame (compile-and-dispatch! doc :abort host input)]
+      (is (= vfx-count (count (.-vfx frame))) (str "phase " phase))
+      (is (= :aborted (:outcome (.-result frame))) (str "phase " phase)))))
