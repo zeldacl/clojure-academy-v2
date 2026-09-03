@@ -108,6 +108,14 @@
 (defn- resource-location ^ResourceLocation [^UiResourceRef ref]
   (ResourceLocations/of (.namespace ref) (.path ref)))
 
+(defn- run-resource
+  "IMAGE/NINE runs may carry res=-1 when the view has no bound texture."
+  ^UiResourceRef [^objects resources ^ints run-res r]
+  (let [idx (int (aget run-res r))]
+    (when (and (>= idx 0) (< idx (alength resources)))
+      (let [ref (aget resources idx)]
+        (when (instance? UiResourceRef ref) ref)))))
+
 (defn- apply-scissor-clip!
   [^GuiGraphics gg ^floats clip-rects cur-clip clip]
   (when (not= clip cur-clip)
@@ -135,7 +143,8 @@
               (cond
                 (= op UiOp/RECT) (draw-rect-run! gg dl s e)
                 (or (= op UiOp/IMAGE) (= op UiOp/NINE))
-                (draw-image-run! gg dl s e (resource-location (aget resources (aget run-res r))))
+                (when-let [ref (run-resource resources run-res r)]
+                  (draw-image-run! gg dl s e (resource-location ref)))
                 (= op UiOp/TEXT) (draw-text-run! gg dl s e)
                 (= op UiOp/ITEM) (draw-item-run! gg context stage dl s e)
                 (= op UiOp/MODEL) (draw-model-run! gg context stage dl s e)
