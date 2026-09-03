@@ -818,6 +818,83 @@
     (is (= :destroy (:operation (first (.-vfx frame)))))
     (is (= :undercharged (:outcome (.-result frame))))))
 
+(def ^:private threatening-teleport-hand-item {:present? true :item-id "academy:needle"})
+(def ^:private threatening-teleport-hit-trace
+  {:position {:x 5.0 :y 1.0 :z 0.0} :attacked? true :target-width 0.6 :target-height 1.8
+   :target-id "e1" :drop-position {:x 5.0 :y 0.0 :z 0.0}})
+
+(deftest threatening-teleport-start-with-item-spawns-marker-test
+  (let [doc (read-skill "threatening_teleport.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :item/held threatening-teleport-hand-item
+                             :raycast threatening-teleport-hit-trace))
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:maximum-range 20.0} :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                                                               :caster/aim {:x 1.0 :y 0.0 :z 0.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= #{[:hand-item threatening-teleport-hand-item] [:trace threatening-teleport-hit-trace]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (let [signal (first (.-vfx frame))]
+      (is (= 0.6 (:width (:payload signal))))
+      (is (= 1.8 (:height (:payload signal))))
+      (is (= [186 178 35 42] (:color (:payload signal)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest threatening-teleport-release-hits-with-a-needle-and-drops-the-item-test
+  (let [doc (read-skill "threatening_teleport.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :item/held threatening-teleport-hand-item
+                         :cost/spend true
+                         :random/chance true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:damage 10.0 :needle-damage-multiplier 2.0 :drop-prob-hit 0.2
+                          :drop-prob-miss 0.05}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :caster/creative? false
+                              :budget/release {:cp 5.0} :progression/hit 1.0
+                              :progression/miss 0.5 :cooldown/main 60}
+               :state {:trace threatening-teleport-hit-trace}}
+        frame (run/dispatch! program :release input)]
+    (testing "needle multiplier applied: 10.0 * 2.0 = 20.0"
+      (is (some #(= [:command :entity/damage {:target "e1" :amount 20.0 :damage-type :magic}] %)
+                @calls)))
+    (testing "drop-prob-hit (0.2) used since the trace was a hit, and the item settles at the drop position"
+      (is (some #(= [:query :random/chance {:probability 0.2}] %) @calls))
+      (is (some #(= [:command :inventory/settle {:source :main-hand :count 1
+                                                 :position {:x 5.0 :y 0.0 :z 0.0} :drop? true
+                                                 :creative? false}] %)
+                @calls)))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (some #(and (= :achievement/trigger (:type %))
+                    (= "teleporter.threatening_teleport" (:id (:payload %))))
+              (.-events frame)))
+    (is (= #{:target-box-session :teleport-trail-transient} (set (map :effect-id (.-vfx frame)))))
+    (is (= :performed (:outcome (.-result frame))))))
+
+(deftest threatening-teleport-release-no-item-skips-everything-test
+  (let [doc (read-skill "threatening_teleport.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :item/held {:present? false} :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:damage 10.0 :needle-damage-multiplier 2.0 :drop-prob-hit 0.2
+                          :drop-prob-miss 0.05}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :caster/creative? false}
+               :state {:trace threatening-teleport-hit-trace}}
+        frame (run/dispatch! program :release input)]
+    (is (not (some #(= :cost/spend (second %)) @calls)))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :no-item (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
