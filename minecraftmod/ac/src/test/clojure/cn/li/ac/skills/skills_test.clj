@@ -1116,6 +1116,52 @@
     (testing "no :end-ability? -- a successful punch keeps the session alive for another charge"
       (is (= {:outcome :punched :next-phase nil :end-ability? false} (.-result frame))))))
 
+(deftest blood-retrograde-pulse-discharges-on-full-charge-with-a-target-test
+  (let [doc (read-skill "blood_retrograde.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :raycast {:entity-id "e1" :position {:x 5.0 :y 0.0 :z 0.0}}
+                         :cost/spend true
+                         :random/int 2))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:max-charge-ticks 10 :targeting-distance 20.0 :release-cp 3.0
+                          :release-overload 1.0 :damage 25.0 :fx-ratio-ticks 8.0
+                          :fallback-width 0.6 :fallback-height 1.8 :spray-angles [-10.0 10.0]}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :caster/body {:x 0.0 :y 1.0 :z 0.0} :rng/seed 4
+                              :progression/hit 1.0 :cooldown/main 40}
+               :state {:charge-ticks 9}}
+        frame (run/dispatch! program :pulse input)]
+    (is (some #(= [:command :entity/damage {:target "e1" :amount 25.0 :damage-type :skill
+                                            :damage-pipeline :skill}] %)
+              @calls))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 40}] %) @calls))
+    (testing "splash-count = 6 + the rolled random/int (2) = 8"
+      (is (= 8 (:splash-count (:payload (some #(when (= :blood-retrograde-impact (:effect-id %)) %)
+                                              (.-vfx frame)))))))
+    (is (= {:outcome :performed :next-phase nil :end-ability? true} (.-result frame)))))
+
+(deftest blood-retrograde-release-no-target-ends-immediately-test
+  (let [doc (read-skill "blood_retrograde.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :raycast {:entity-id nil}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:targeting-distance 20.0} :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                                                                    :caster/aim {:x 1.0 :y 0.0 :z 0.0}}
+               :state {}}
+        frame (run/dispatch! program :release input)]
+    (is (not (some #(= :cost/spend (second %)) @calls)))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= {:outcome :no-target :next-phase nil :end-ability? true} (.-result frame)))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

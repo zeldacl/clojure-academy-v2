@@ -115,11 +115,22 @@
            :living-only? (opt :boolean false) :policy (opt :any nil)}
           :hit-result #{:world-read} :raycast 2)
 
+    ;; :yaw-range-degrees is a [min max] range pair, not a scalar --
+    ;; every real call site (blood_retrograde.edn, S6) passes a 2-element
+    ;; vector, matching :pitch-angles' own already-:any shape. Same
+    ;; mistake class as the earlier :direction/:entity-type fixes.
+    ;;
+    ;; :returns was also wrong -- shipped as nil (void/action), but a
+    ;; raycast fan obviously produces a value (the old composite's own
+    ;; :result :spray-hits, read back later as :surface-hits); every real
+    ;; call site would have hit :void-let-rhs the moment anyone tried to
+    ;; bind its result. Fixed to :any, matching target/raycast's own
+    ;; :returns shape.
     :target/raycast-fan
     (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
-           :yaw-range-degrees (opt :double 0.0) :pitch-angles (opt :any nil)
+           :yaw-range-degrees (opt :any 0.0) :pitch-angles (opt :any nil)
            :limit (opt :long 8) :seed (opt :long nil)}
-          nil #{:world-read} :raycast 3)
+          :any #{:world-read} :raycast 3)
 
     :target/entities
     (node {:shape (p) :filter (opt :any nil) :limit (opt :long 128)

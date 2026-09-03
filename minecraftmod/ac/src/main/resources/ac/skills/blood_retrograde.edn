@@ -1,0 +1,179 @@
+;; New-DSL conversion of ac/combat/abilities/blood_retrograde.edn (S6).
+;; Session ability. Fixed a real vocab bug found while porting:
+;; target/raycast-fan's :yaw-range-degrees was typed :double, but every
+;; real call site passes a [min max] range pair, matching :pitch-angles'
+;; own already-:any shape -- same mistake class as the earlier
+;; :direction/:entity-type fixes (see cn.li.combat.dsl-vocabulary's own
+;; comment on the fix).
+;;
+;; :period-ticks/:max-session-ticks (top-level ability metadata, not
+;; :program logic) stay untouched, same as every other still-unconverted
+;; metadata field.
+{:schema-version 2
+ :kind :ability
+ :id :blood-retrograde
+ :revision 2
+ :period-ticks 1
+ :max-session-ticks 30
+ :activation :session
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed :charge/ticks]
+ :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}]
+ :tunables {:max-charge-ticks {:curve :const :type :int}
+            :targeting-distance {:curve :const}
+            :entity-search-radius {:curve :const}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :damage {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-hit {:curve :const}
+            :fx-ratio-ticks {:curve :const}
+            :fallback-width {:curve :const}
+            :fallback-height {:curve :const}
+            :fallback-eye-height {:curve :const}
+            :spray-angles {:curve :pair}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}
+ :program
+ "{:ability :blood-retrograde
+   :activation :session
+   :state {:charge-ticks {:type :long :default 0}}
+   :tunables {:max-charge-ticks {:type :long} :targeting-distance {:type :double}
+              :release-cp {:type :double} :release-overload {:type :double}
+              :damage {:type :double} :fx-ratio-ticks {:type :double}
+              :fallback-width {:type :double} :fallback-height {:type :double}
+              :spray-angles {:type :any}}
+   :phases
+   {:start
+    [(state! :charge-ticks 0)
+     (vfx! {:effect-id :blood-retrograde-charge :operation :spawn
+           :instance-key [:activation :blood-charge] :audience {:type :owner}
+           :payload {:speed 0.1}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let charge-ticks-cur %charge-ticks)
+     (let charge-ticks-next (long/add charge-ticks-cur 1))
+     (state! :charge-ticks charge-ticks-next)
+     (let ratio (math/clamp (math/div charge-ticks-next $fx-ratio-ticks) 0.0 1.0))
+     (vfx! {:effect-id :blood-retrograde-charge :operation :update
+           :instance-key [:activation :blood-charge] :audience {:type :owner}
+           :payload {:speed (math/lerp 0.1 0.007 ratio)}})
+     (let fully-charged? (math/gte charge-ticks-next $max-charge-ticks))
+     (if fully-charged?
+       [(vfx! {:effect-id :blood-retrograde-charge :operation :destroy
+              :instance-key [:activation :blood-charge] :payload {}})
+        (let eye ?caster/eye)
+        (let aim ?caster/aim)
+        (let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-distance
+                                      :include-entities? true :include-blocks? false
+                                      :living-only? true}))
+        (let target-entity-id (:entity-id aim-hit))
+        (if target-entity-id
+          [(let target-base (:position aim-hit))
+           (let target-origin
+             (vec3/add target-base (vec3/scale [0.0 1.0 0.0] (math/mul $fallback-height 0.6))))
+           (let seed ?rng/seed)
+           (let spray-hits (target/raycast-fan {:pitch-angles $spray-angles :limit 9
+                                                :yaw-range-degrees [-20.0 20.0] :seed seed
+                                                :origin target-origin :distance 5.5
+                                                :direction aim}))
+           (let sufficient?
+             (cost/spend {:budget {:cp $release-cp :overload $release-overload}}))
+           (if sufficient?
+             [(combat/damage {:target target-entity-id :amount $damage :damage-type :skill
+                              :damage-pipeline :skill})
+              (let hit-progression ?progression/hit)
+              (event! {:type :score/mark :tag :hit :progression hit-progression})
+              (let main-cooldown ?cooldown/main)
+              (cooldown/start {:name :main :ticks main-cooldown})
+              (let body ?caster/body)
+              (let splash-roll (random/int {:min 0 :max 3}))
+              (let splash-count (long/add 6 splash-roll))
+              (vfx! {:effect-id :blood-retrograde-impact :operation :spawn
+                    :instance-key [:activation :blood-impact]
+                    :audience {:type :nearby :radius 32.0}
+                    :payload {:spray-duplicates 2 :spray-life-ticks 24 :look-dir aim
+                             :splash-frame-count 10 :splash-frame-duration-ms 50
+                             :splash-texture-pattern \"academy:textures/effects/blood_splash/%d.png\"
+                             :splash-life-ticks 10 :target-height $fallback-height :seed seed
+                             :spray-textures
+                             {:ground [\"academy:textures/effects/blood_spray/grnd/0.png\"
+                                      \"academy:textures/effects/blood_spray/grnd/1.png\"
+                                      \"academy:textures/effects/blood_spray/grnd/2.png\"]
+                              :wall [\"academy:textures/effects/blood_spray/wall/0.png\"
+                                    \"academy:textures/effects/blood_spray/wall/1.png\"
+                                    \"academy:textures/effects/blood_spray/wall/2.png\"]}
+                             :origin target-base :surface-hits spray-hits
+                             :splash-count splash-count :splash-size 1.4
+                             :target-width $fallback-width}})
+              (vfx! {:effect-id :audio-one-shot :operation :spawn
+                    :audience {:type :nearby :radius 32.0}
+                    :payload {:position body :sound-id \"academy:vecmanip.blood_retro\"
+                             :volume 1.0 :pitch 1.0}})
+              (finish {:outcome :performed :end-ability? true})]
+             [(finish {:outcome :insufficient-resource :end-ability? true})])]
+          [(finish {:outcome :no-target :end-ability? true})])]
+       [(finish {:outcome :charging})])]
+
+    :release
+    [(vfx! {:effect-id :blood-retrograde-charge :operation :destroy
+           :instance-key [:activation :blood-charge] :payload {}})
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-distance
+                                   :include-entities? true :include-blocks? false
+                                   :living-only? true}))
+     (let target-entity-id (:entity-id aim-hit))
+     (if target-entity-id
+       [(let target-base (:position aim-hit))
+        (let target-origin
+          (vec3/add target-base (vec3/scale [0.0 1.0 0.0] (math/mul $fallback-height 0.6))))
+        (let seed ?rng/seed)
+        (let spray-hits (target/raycast-fan {:pitch-angles $spray-angles :limit 9
+                                             :yaw-range-degrees [-20.0 20.0] :seed seed
+                                             :origin target-origin :distance 5.5
+                                             :direction aim}))
+        (let sufficient? (cost/spend {:budget {:cp $release-cp :overload $release-overload}}))
+        (if sufficient?
+          [(combat/damage {:target target-entity-id :amount $damage :damage-type :skill
+                           :damage-pipeline :skill})
+           (let hit-progression ?progression/hit)
+           (event! {:type :score/mark :tag :hit :progression hit-progression})
+           (let main-cooldown ?cooldown/main)
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (let body ?caster/body)
+           (let splash-roll (random/int {:min 0 :max 3}))
+              (let splash-count (long/add 6 splash-roll))
+           (vfx! {:effect-id :blood-retrograde-impact :operation :spawn
+                 :instance-key [:activation :blood-impact]
+                 :audience {:type :nearby :radius 32.0}
+                 :payload {:spray-duplicates 2 :spray-life-ticks 24 :look-dir aim
+                          :splash-frame-count 10 :splash-frame-duration-ms 50
+                          :splash-texture-pattern \"academy:textures/effects/blood_splash/%d.png\"
+                          :splash-life-ticks 10 :target-height $fallback-height :seed seed
+                          :spray-textures
+                          {:ground [\"academy:textures/effects/blood_spray/grnd/0.png\"
+                                   \"academy:textures/effects/blood_spray/grnd/1.png\"
+                                   \"academy:textures/effects/blood_spray/grnd/2.png\"]
+                           :wall [\"academy:textures/effects/blood_spray/wall/0.png\"
+                                 \"academy:textures/effects/blood_spray/wall/1.png\"
+                                 \"academy:textures/effects/blood_spray/wall/2.png\"]}
+                          :origin target-base :surface-hits spray-hits
+                          :splash-count splash-count :splash-size 1.4
+                          :target-width $fallback-width}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn
+                 :audience {:type :nearby :radius 32.0}
+                 :payload {:position body :sound-id \"academy:vecmanip.blood_retro\" :volume 1.0
+                          :pitch 1.0}})
+           (finish {:outcome :performed :end-ability? true})]
+          [(finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(finish {:outcome :no-target :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :blood-retrograde-charge :operation :destroy
+           :instance-key [:activation :blood-charge] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}
