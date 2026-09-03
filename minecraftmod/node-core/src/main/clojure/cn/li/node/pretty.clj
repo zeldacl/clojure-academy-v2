@@ -64,13 +64,14 @@
         :tun (sigil-sym "$" (:key instr))
         :cap (sigil-sym "?" (:key instr))
         :state-read (sigil-sym "%" (:key instr))
+        :map-lit (into {} (map (fn [[k r]] [k (reconstruct ir pidx let-names r)])) (:args instr))
         (:copy :convert) (reconstruct ir pidx let-names (:src instr))
         (throw (ex-info "cannot reconstruct expression for this register"
                         {:reg reg :instr instr}))))))
 
 ;; --- statement-range printing -----------------------------------------------
 
-(defn- inline-op? [op] (contains? #{:pure :get :tun :cap :copy :convert} op))
+(defn- inline-op? [op] (contains? #{:pure :get :tun :cap :copy :convert :map-lit :state-read} op))
 
 (defn- fresh-sym! [counter prefix] (symbol (str prefix (swap! counter inc))))
 

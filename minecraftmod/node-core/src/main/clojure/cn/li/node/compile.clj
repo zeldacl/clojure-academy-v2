@@ -368,6 +368,24 @@
       (append! env block-id {:op :pure :nid (nid! env) :dst dst :fn op :args arg-regs})
       {:reg dst :block-id block-id})))
 
+(defn- compile-map-literal
+  "{...} in expression position -> a :map-lit instruction. Every value is
+   compiled as an ordinary pure expression (never a further call -- see
+   compile-form's :else branch for why); keys are used as-is (must already
+   be literal EDN values, always keywords in practice). Threads block-id
+   through even though none of the values it compiles can currently change
+   it (pure-only), for the same uniformity every other multi-value
+   compiler here already follows."
+  [env locals block-id depth form]
+  (let [[resolved block-id]
+        (reduce (fn [[acc block-id] [k v-form]]
+                  (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
+                    [(assoc acc k reg) block-id]))
+                [{} block-id] form)
+        dst (alloc-reg! env :objects :any)]
+    (append! env block-id {:op :map-lit :nid (nid! env) :dst dst :args resolved})
+    {:reg dst :block-id block-id}))
+
 (defn compile-form
   "Compile one expression/call form against `locals` at `block-id`.
    allow-calls?: when false (pure-op args, node/fn call args, when/each
@@ -392,6 +410,14 @@
         (compile-pure-call env locals block-id depth form)
         (compile-call env locals block-id depth form allow-calls?))
       :else (throw (ex-info "malformed DSL call: head must be a symbol or keyword" {:form form})))
+    ;; A literal EDN map appearing where an expression is expected (e.g.
+    ;; :policy {:type :penetration :scan-step $x}, mixing a literal :type
+    ;; with a dynamic :scan-step) -- opaque :any-typed data the HOST
+    ;; interprets, not something node-core's type system decomposes.
+    ;; Every value compiles as an ordinary pure expression (never a
+    ;; further call: a map literal is data construction, not control
+    ;; flow); keys must be literal (always keywords in every real use).
+    (map? form) (compile-map-literal env locals block-id depth form)
     :else (throw (ex-info "unsupported DSL form" {:form form}))))
 
 ;; --- statement compilation ---------------------------------------------------

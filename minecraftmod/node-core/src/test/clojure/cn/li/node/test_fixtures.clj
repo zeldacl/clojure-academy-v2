@@ -14,7 +14,8 @@
 
 (def vocab
   {:target/raycast
-   {:params {:from {:type :vec3} :dir {:type :vec3} :distance {:type :double}}
+   {:params {:from {:type :vec3} :dir {:type :vec3} :distance {:type :double}
+            :policy {:type :any :default nil}}
     :returns :hit-result :effects #{:world-read} :capability :raycast
     :barrier? true :cost 2}
 

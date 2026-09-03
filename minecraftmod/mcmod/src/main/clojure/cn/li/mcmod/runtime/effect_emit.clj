@@ -117,6 +117,10 @@
     (let [src (compile-reader (:src instr) consts) wr (compile-writer (:dst instr))]
       (fn [^ExecutionFrame fr] (wr fr (src fr)) -1))
 
+    :map-lit
+    (let [argf (compile-args (:args instr) consts) wr (compile-writer (:dst instr))]
+      (fn [^ExecutionFrame fr] (wr fr (argf fr)) -1))
+
     :convert
     (let [src (compile-reader (:src instr) consts) wr (compile-writer (:dst instr)) to (:to instr)]
       (fn [^ExecutionFrame fr]
