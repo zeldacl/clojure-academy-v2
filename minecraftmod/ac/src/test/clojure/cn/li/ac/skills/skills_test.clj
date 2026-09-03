@@ -1822,3 +1822,156 @@
       (is (light-shield-deactivate-calls-ok? @calls) (str "phase " phase))
       (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
           (str "phase " phase)))))
+
+(deftest directed-shock-start-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:charge-ticks 0] [:punched? false] [:punch-ticks 0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 1 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest directed-shock-pulse-charges-and-continues-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-max-tolerant-ticks 30 :punch-animation-ticks 6}
+               :state {:charge-ticks 4 :punched? false :punch-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:charge-ticks 5] [:punch-ticks 0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(= :prepare (:stage (:payload %))) (.-vfx frame)))
+    (is (= :charging (:outcome (.-result frame))))))
+
+(deftest directed-shock-pulse-aborts-when-overcharged-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-max-tolerant-ticks 10 :punch-animation-ticks 6}
+               :state {:charge-ticks 9 :punched? false :punch-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest directed-shock-pulse-punch-animation-completes-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-max-tolerant-ticks 30 :punch-animation-ticks 5}
+               :state {:charge-ticks 20 :punched? true :punch-ticks 5}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:charge-ticks 21] [:punch-ticks 6]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(= :punch (:stage (:payload %))) (.-vfx frame)))
+    (is (= :performed (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest directed-shock-release-undercharged-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 5 :charge-max-accepted-ticks 30}
+               :state {:charge-ticks 2}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :undercharged (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest directed-shock-release-insufficient-resource-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 5 :charge-max-accepted-ticks 30 :targeting-distance 6.0
+                          :target-eye-height 1.5 :hit-impulse 3.0 :knockback-y-adjust 0.0
+                          :knockback-scale 2.0 :knockback-exp-threshold 1.0 :damage 8.0}
+               :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0} :progression/mastery 0.0
+                              :progression/hit 1.0 :progression/miss 0.2 :cooldown/main 40}
+               :state {:charge-ticks 10}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest directed-shock-release-miss-when-no-target-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true :raycast {:entity-id nil}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 5 :charge-max-accepted-ticks 30 :targeting-distance 6.0
+                          :target-eye-height 1.5 :hit-impulse 3.0 :knockback-y-adjust 0.0
+                          :knockback-scale 2.0 :knockback-exp-threshold 1.0 :damage 8.0}
+               :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0} :progression/mastery 0.0
+                              :progression/hit 1.0 :progression/miss 0.2 :cooldown/main 40}
+               :state {:charge-ticks 10}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (some #(and (= :score/mark (:type %)) (= 0.2 (:progression %))) (.-events frame)))
+    (is (= :miss (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest directed-shock-release-low-mastery-hit-applies-damage-and-impulse-only-test
+  (let [calls (atom [])
+        doc (read-skill "directed_shock.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id "e1" :position {:x 0.0 :y 0.0 :z 5.0}
+                                  :eye-height nil}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:charge-min-ticks 5 :charge-max-accepted-ticks 30 :targeting-distance 6.0
+                          :target-eye-height 0.0 :hit-impulse 3.0 :knockback-y-adjust 0.0
+                          :knockback-scale 2.0 :knockback-exp-threshold 1.0 :damage 8.0}
+               :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0} :progression/mastery 0.0
+                              :progression/hit 1.0 :progression/miss 0.2 :cooldown/main 40}
+               :state {:charge-ticks 10}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (some #(= [:command :entity/damage
+                  {:target "e1" :amount 8.0 :damage-type :skill :damage-pipeline :skill}] %)
+              @calls))
+    (testing "low mastery: velocity-add only, no teleport, moved-hit-position == raw hit-position"
+      (is (some #(= [:command :motion/entity-velocity-add
+                    {:target "e1" :velocity {:vec3 [0.0 0.0 3.0]}}] %)
+                @calls))
+      (is (not (some #(= :entity/teleport (second %)) @calls)))
+      (is (not (some #(= :motion/entity-velocity (second %)) @calls))))
+    (is (= #{[:punched? true] [:punch-ticks 0]} (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 40}] %) @calls))
+    (is (= :punched (:outcome (.-result frame))))))
+
+(deftest directed-shock-release-high-mastery-hit-teleports-and-adds-knockback-test
+  (let [calls (atom [])
+        doc (read-skill "directed_shock.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id "e1" :position {:x 0.0 :y 0.0 :z 4.0}
+                                  :eye-height 0.0}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:charge-min-ticks 5 :charge-max-accepted-ticks 30 :targeting-distance 6.0
+                          :target-eye-height 1.5 :hit-impulse 3.0 :knockback-y-adjust 0.0
+                          :knockback-scale 2.0 :knockback-exp-threshold 1.0 :damage 8.0}
+               :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0} :progression/mastery 2.0
+                              :progression/hit 1.0 :progression/miss 0.2 :cooldown/main 40}
+               :state {:charge-ticks 10}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (testing "eye-height present (0.0) is used as-is, not the target-eye-height tunable fallback"
+      (is (some #(= [:command :entity/teleport {:target "e1" :position {:vec3 [0.0 0.1 4.0]}}] %)
+                @calls)))
+    (testing "high mastery: velocity replaces velocity-add; knockback collapsed to [0 0 0]
+              (with-z set its own Z to its own Y, 0.0), so velocity is just hit-impulse-vec"
+      (is (some #(and (= :command (first %)) (= :motion/entity-velocity (second %))
+                      (= "e1" (:target (nth % 2)))
+                      (let [[x y z] (:vec3 (:velocity (nth % 2)))]
+                        (and (zero? x) (< 0.0749 y 0.0751) (< 2.998 z 3.0))))
+                @calls))
+      (is (not (some #(= :motion/entity-velocity-add (second %)) @calls))))
+    (is (= :punched (:outcome (.-result frame))))))
+
+(deftest directed-shock-abort-test
+  (let [doc (read-skill "directed_shock.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (some #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))))

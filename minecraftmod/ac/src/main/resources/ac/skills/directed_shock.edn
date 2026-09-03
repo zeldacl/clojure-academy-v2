@@ -1,0 +1,210 @@
+;; New-DSL conversion of ac/combat/abilities/directed_shock.edn (S6).
+;; Session hold-charge punch ability: charge past a minimum, release
+;; within a window to raycast for a target and apply damage +
+;; mastery-gated knockback/teleport-nudge.
+;;
+;; Two real vec3-construction gaps found:
+;; - [0.0 dynamic-value 0.0] (e.g. the target-eye-height offset, the
+;;   knockback-y-adjust offset) is NOT a vec3 literal here --
+;;   compile.clj's vec3-literal? requires every element to already be a
+;;   NUMBER at parse time (every? number? form); a bound local fails
+;;   that check and falls through to the general non-vec3 vector path
+;;   (an untyped :objects/:any register, not usable as a :vec3 arg).
+;;   Only vec3/with-z exists (no with-x/with-y), so the fix is
+;;   `(vec3/scale [0.0 1.0 0.0] dynamic-value)`, a real :vec3 result.
+;; - {:ref [:local :knockback-base :vec3 1]} directly indexed the old
+;;   engine's internal {:vec3 [x y z]} representation to read a Y
+;;   component -- ports as the existing vec3/y pure op instead.
+;;
+;; The old :entity/teleport / :motion/entity-velocity(-add) components
+;; passed the WHOLE aim-hit hit-result as :target (the old engine's
+;; :target field was untyped). The new vocab types :target :entity-ref
+;; on all three, a genuinely different opaque type from :hit-result
+;; (cn.li.node.types/assignable? has no path between two different
+;; concrete opaque types), so all three now extract (:entity-id aim-hit)
+;; first -- exactly the same extraction combat/damage's own :target
+;; already needed on the very next old component, just applied
+;; consistently to the two call sites that used to skip it.
+;;
+;; math/select's condition must be a real :boolean -- the old
+;; target-eye-height2 select used aim-hit's raw (possibly-nil)
+;; :eye-height field as a truthy condition (the "use if present, else
+;; default" idiom), translated via the same
+;; (bool/not (value/eq field nil)) pattern threatening_teleport.edn's
+;; own docstring already established for a :hit-result truthy check.
+{:schema-version 2
+ :kind :ability
+ :id :directed-shock
+ :revision 2
+ :activation :session
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed :progression/mastery]
+ :tunables {:charge-min-ticks {:curve :const :type :int}
+            :charge-max-accepted-ticks {:curve :const :type :int}
+            :charge-max-tolerant-ticks {:curve :const :type :int}
+            :punch-animation-ticks {:curve :const :type :int}
+            :targeting-distance {:curve :const}
+            :target-eye-height {:curve :const}
+            :hit-impulse {:curve :const}
+            :knockback-y-adjust {:curve :const}
+            :knockback-scale {:curve :const}
+            :knockback-exp-threshold {:curve :const}
+            :damage {:curve :mastery-lerp}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-hit {:curve :const}
+            :exp-miss {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}
+              :miss {:per-mark {:ref [:input :tunables :exp-miss]}}}
+ :session-state {:charge-ticks {:type :int :default 0}
+                 :punched? {:type :bool :default false}
+                 :punch-ticks {:type :int :default 0}}
+ :program
+ "{:ability :directed-shock
+   :activation :session
+   :state {:charge-ticks {:type :long :default 0} :punched? {:type :boolean :default false}
+           :punch-ticks {:type :long :default 0}}
+   :tunables {:charge-min-ticks {:type :long} :charge-max-accepted-ticks {:type :long}
+              :charge-max-tolerant-ticks {:type :long} :punch-animation-ticks {:type :long}
+              :targeting-distance {:type :double} :target-eye-height {:type :double}
+              :hit-impulse {:type :double} :knockback-y-adjust {:type :double}
+              :knockback-scale {:type :double} :knockback-exp-threshold {:type :double}
+              :damage {:type :double}}
+   :phases
+   {:start
+    [(state! :charge-ticks 0)
+     (state! :punched? false)
+     (state! :punch-ticks 0)
+     (vfx! {:effect-id :first-person-motion-session :operation :spawn
+           :instance-key [:activation :directed-shock-hand] :audience {:type :owner}
+           :payload {:stage :prepare :phase-ticks 0 :duration-ticks 3
+                    :curves {:prepare {:tx [[0.0 0.0] [1.0 -0.02]]
+                                       :ty [[0.0 0.0] [0.5 0.2] [1.0 0.4]]
+                                       :tz [[0.0 0.0] [1.0 -0.05]]
+                                       :rot-x [[0.0 0.0] [1.0 -20.0]]
+                                       :rot-y [[0.0 0.0] [1.0 0.0]]
+                                       :rot-z [[0.0 0.0] [1.0 0.0]]}
+                            :punch {:tx [[0.0 -0.04] [0.5 -0.04] [1.0 0.0]]
+                                    :ty [[0.0 0.8] [0.5 0.75] [1.0 0.0]]
+                                    :tz [[0.0 0.0] [0.3 -0.4] [1.0 0.0]]
+                                    :rot-x [[0.0 -40.0] [0.5 -45.0] [1.0 0.0]]
+                                    :rot-y [[0.0 0.0] [0.3 10.0] [1.0 0.0]]
+                                    :rot-z [[0.0 0.0] [1.0 0.0]]}}}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let charge-ticks-cur %charge-ticks)
+     (let charge-ticks-next (long/add charge-ticks-cur 1))
+     (state! :charge-ticks charge-ticks-next)
+     (let punched? %punched?)
+     (let punch-ticks-cur %punch-ticks)
+     (let punch-ticks-next (long/add punch-ticks-cur (math/select punched? 1 0)))
+     (state! :punch-ticks punch-ticks-next)
+     (if punched?
+       [(vfx! {:effect-id :first-person-motion-session :operation :update
+              :instance-key [:activation :directed-shock-hand] :audience {:type :owner}
+              :payload {:stage :punch :phase-ticks punch-ticks-next :duration-ticks 6}})]
+       [(vfx! {:effect-id :first-person-motion-session :operation :update
+              :instance-key [:activation :directed-shock-hand] :audience {:type :owner}
+              :payload {:stage :prepare :phase-ticks charge-ticks-next :duration-ticks 3}})])
+     (let charge-max-tolerant-ticks $charge-max-tolerant-ticks)
+     (if (math/gte charge-ticks-next charge-max-tolerant-ticks)
+       [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+              :instance-key [:activation :directed-shock-hand] :payload {}})
+        (finish {:outcome :aborted :end-ability? true})]
+       [(let punch-animation-ticks $punch-animation-ticks)
+        (if (bool/and punched? (math/gt punch-ticks-next punch-animation-ticks))
+          [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+                 :instance-key [:activation :directed-shock-hand] :payload {}})
+           (finish {:outcome :performed :end-ability? true})]
+          [(finish {:outcome :charging})])])]
+
+    :release
+    [(let charge-ticks %charge-ticks)
+     (let charge-min-ticks $charge-min-ticks)
+     (let charge-max-accepted-ticks $charge-max-accepted-ticks)
+     (if (bool/and (math/gt charge-ticks charge-min-ticks)
+                  (math/lt charge-ticks charge-max-accepted-ticks))
+       [(let eye ?caster/eye)
+        (let aim ?caster/aim)
+        (let body ?caster/body)
+        (let mastery ?progression/mastery)
+        (let release-budget ?budget/release)
+        (let hit-progression ?progression/hit)
+        (let miss-progression ?progression/miss)
+        (let main-cooldown ?cooldown/main)
+        (let targeting-distance $targeting-distance)
+        (let target-eye-height $target-eye-height)
+        (let hit-impulse $hit-impulse)
+        (let knockback-y-adjust $knockback-y-adjust)
+        (let knockback-scale $knockback-scale)
+        (let knockback-exp-threshold $knockback-exp-threshold)
+        (let damage $damage)
+        (let sufficient? (cost/spend {:budget release-budget}))
+        (if sufficient?
+          [(let aim-hit (target/raycast {:origin eye :direction aim :distance targeting-distance
+                                        :include-entities? true :include-blocks? false}))
+           (let has-target? (bool/not (value/eq (:entity-id aim-hit) nil)))
+           (if has-target?
+             [(let target-id (:entity-id aim-hit))
+              (let hit-position (:position aim-hit))
+              (let has-eye-height? (bool/not (value/eq (:eye-height aim-hit) nil)))
+              (let target-eye-height2
+                (math/select has-eye-height? (:eye-height aim-hit) target-eye-height))
+              (let target-head (vec3/add hit-position (vec3/scale [0.0 1.0 0.0] target-eye-height2)))
+              (let mastery-sufficient? (math/gte mastery knockback-exp-threshold))
+              (let knockback-y-offset
+                (vec3/scale [0.0 1.0 0.0] (math/mul -1.0 knockback-y-adjust)))
+              (let knockback-base
+                (vec3/scale
+                 (vec3/normalize (vec3/add (vec3/normalize (vec3/sub eye target-head))
+                                           knockback-y-offset))
+                 knockback-scale))
+              (let knockback
+                (math/select mastery-sufficient? (vec3/with-z knockback-base (vec3/y knockback-base))
+                            [0.0 0.0 0.0]))
+              (let moved-hit-position
+                (math/select mastery-sufficient? (vec3/add hit-position [0.0 0.1 0.0]) hit-position))
+              (let hit-impulse-vec
+                (vec3/scale (vec3/normalize (vec3/sub moved-hit-position body)) hit-impulse))
+              (combat/damage {:target target-id :amount damage :damage-type :skill
+                              :damage-pipeline :skill})
+              (if mastery-sufficient?
+                [(entity/teleport {:target target-id :position moved-hit-position})
+                 (motion/entity-velocity {:target target-id
+                                          :velocity (vec3/add knockback hit-impulse-vec)})]
+                [(motion/entity-velocity-add {:target target-id :velocity hit-impulse-vec})])
+              (vfx! {:effect-id :first-person-motion-session :operation :update
+                    :instance-key [:activation :directed-shock-hand] :audience {:type :owner}
+                    :payload {:stage :punch :phase-ticks 0 :duration-ticks 6}})
+              (vfx! {:effect-id :audio-one-shot :operation :spawn
+                    :audience {:type :nearby :radius 32.0}
+                    :payload {:position body :sound-id \"academy:vecmanip.directed_shock\"
+                             :volume 0.5 :pitch 1.0}})
+              (state! :punched? true)
+              (state! :punch-ticks 0)
+              (event! {:type :score/mark :progression hit-progression})
+              (cooldown/start {:name :main :ticks main-cooldown})
+              (vfx! {:effect-id :first-person-motion-session :operation :destroy
+                    :instance-key [:activation :directed-shock-hand] :payload {}})
+              (finish {:outcome :punched :end-ability? true})]
+             [(event! {:type :score/mark :progression miss-progression})
+              (vfx! {:effect-id :first-person-motion-session :operation :destroy
+                    :instance-key [:activation :directed-shock-hand] :payload {}})
+              (finish {:outcome :miss :end-ability? true})])]
+          [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+                 :instance-key [:activation :directed-shock-hand] :payload {}})
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+              :instance-key [:activation :directed-shock-hand] :payload {}})
+        (finish {:outcome :undercharged :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+           :instance-key [:activation :directed-shock-hand] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}
