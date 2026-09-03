@@ -1,60 +1,108 @@
 # VFX Core 维护手册
 
-本文描述当前唯一的 final VFX 路径。旧的 `vm.clj`、`recipe.clj`、`runtime.clj`、component registry 和 singleton 聚合模型不属于当前生产架构；源码级检查不允许它们重新成为入口。历史缺口档案中的“Batch/尚未迁移”文字不构成当前 TODO。
+> 语言本体见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md) §7（场景 DSL）——本文只讲
+> vfx-core 如何使用它、模块边界、以及排障。**先读 NODE_LANGUAGE.md §0**：两套
+> 引擎并存，本文档同时描述两者，注意区分。
 
-## 当前 ABI 锁定（不可回退）
+## 系统职责
 
-生产入口固定为 `final catalog → final-client/final-engine → presentation adapter`，服务端
-信号经 `ability-runtime`/AC adapter 后只走 mcmod fixed-channel。不得恢复 effect-id 硬编码
-handler、channel/topic 总线、singleton 状态或兼容 VFX runtime。可视图只暴露效果业务参数；
-`instance-key`、`instance-id`、owner/world、event-seq、dirty-mask 和 tombstone 是内部复制
-ABI，不得作为编辑器节点输入输出。未知 effect、旧操作或 malformed packet 必须 fail-closed。
+`vfx-core` 是特效侧的执行引擎。特效被采样成一帧份的中立绘制/音频/相机 op
+（`{:kind :ring|:beam|:emitter|:audio-one-shot|... ...args}`），从不直接持有
+Minecraft 渲染状态；真正的渲染由 `platform-src` 的 loader 消费这些 op。
 
-## 模块边界
+## 两套引擎，同一份内容目录树的两个版本
 
-- `mcmod/src/main/java/cn/li/mcmod/runtime/vfx/`：Java ABI 与热路径。包含 `ParticleBuffer` SoA 存储、`ParticleKernel`、system/emitter carrier、render frame/batch/output、带 neutral geometry payload 的 `VfxBatch`、packet identity、wire codec 和 channel 常量。
-- `vfx-core/src/main/clojure/cn/li/vfx/compiler.clj`：独立的 VFX composite 展开器。VFX 不依赖 Combat 的运行时解释器，但与 Combat 共享 node-core 的描述符、表达式和作用域语言内核。
-- `vfx-core/src/main/clojure/cn/li/vfx/final-engine.clj`：headless/fake-host 的 final graph sampler 与生命周期测试端口。
-- `vfx-core/src/main/clojure/cn/li/vfx/final-client.clj`：客户端 per-instance runtime、四阶段采样、Java frame 投影、乱序/墓碑处理。
-- `vfx-core/src/main/clojure/cn/li/vfx/replication.clj`：服务端 tracking、baseline、snapshot/replay、destroy/clear-owner 生命周期。
-- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：读取 final VFX system EDN、展开 composite、生成 emitter stages 和静态 descriptor，再通过 ability-runtime 组合 catalog。
-- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：将 VFX catalog 与 Combat、Presentation、NodeEnvironment 组合；VFX Core 本身不反向依赖这些内容模块。
-- `ac/src/main/clojure/cn/li/ac/client/effect_controller.clj`：AC composition root；只安装 catalog、转发 signal、采样 frame，不持有旧 handler 或 singleton aggregate。
-- Combat Core 只产生中立 VFX Intent；按 self/tracking/world audience 的路由由 ability-runtime 与 AC adapter 完成，VFX Core 不提供 Combat 发布器。
+| | 旧（当前实机路径） | 新（已验证，未接入实机） |
+|---|---|---|
+| 入口 | `cn.li.vfx.final-engine`（`sample-node`，树遍历） | `cn.li.vfx.scene`（`compile-doc!`/`sample!`，surface DSL → IR → 闭包） |
+| 词汇表 | `cn.li.vfx.vocabulary`（`component-specs`，~24 种叶子 + 结构节点） | `cn.li.vfx.dsl-vocabulary`（`nodes`，扁平 `:do` 序列里的普通调用） |
+| 内容资源 | `ac/vfx/effects/*.edn`（`:control-graph` 字段，旧节点树） | `ac/vfx/fx/*.edn`（`:scene` 字段内嵌新 DSL 文本，其余顶层键——`:schema-version`/`:asset/type`/`:asset/version`/`:id`/`:revision`/`:lifecycle`/`:audience`/`:inputs`/`:state-slots`——跟旧文件逐字节相同；`:bounds`/`:control-graph` 没有对应物，见下） |
+| 复用单元 | `vfx-core/composites/*.edn`（旧宏替换式 composite） | 无（36 个真实效果都不需要跨效果复用；见 NODE_LANGUAGE.md §8） |
+| 粒子模拟 | 客户端渲染器自己做逐粒子演化；图这一层只有"发射器"这一条声明式指令 | `cn.li.vfx.compile`（Niagara 模块栈 + SoA 布局）证明了模型，但没有真实内容在用它 |
 
-## 执行模型
+旧文件在新版本转换完成后**原样保留，未被删除或修改**——`ac/vfx/fx/*.edn` 是
+`ac/vfx/effects/*.edn` 的**新增同级文件**，不是替换。
 
-每个 VFX system 明确包含：
+## 关键事实：旧引擎里约一半的组件种类从未真正渲染过
 
-```text
-System
- └─ Emitter*
-     ├─ Spawn stage       emission / allocation
-     ├─ Initialize stage  initial attributes
-     ├─ Update stage      modules / integration / compaction
-     └─ Output stage      render batches / audio / camera / post
-```
+`cn.li.vfx.final-engine/sample-node` 的 `case` 分支只覆盖：`:vfx/let :vfx/repeat
+:vfx/timeline :vfx/group :vfx/branch :vfx/fade :vfx/ring :vfx/beam :vfx/ray-beam
+:vfx/line :vfx/quad :vfx/emitter :vfx/audio :vfx/audio-one-shot :vfx/audio-loop
+:vfx/camera :vfx/camera-fov :vfx/camera-shake :vfx/post-process`，其余任何
+`"vfx"` 命名空间下的组件 id 落进一个把字段原样打包成 `:typed-vfx` quad op 的
+兜底——这个兜底本身也没有渲染器认识 `:typed-vfx`，所以**这些组件今天在游戏里
+本来就不产生任何真实像素**：`charge-slow`/`charge-ring`/`directional-wave`/
+`vortex-column`/`impact-burst`/`mark-sparks`/`particle-trail`/`block-progress`/
+`channel-arc`/`first-person-motion`/`block-scan`/`billboard-sequence`/
+`trajectory-ribbon`/`humanoid-marker`/`beam-arc-fade`/`arc-strike`/`ray-fan`/
+`arc-field`。
 
-阶段顺序由 catalog 生成的 opcode/stage vector 固定，不依赖 map 遍历顺序。粒子数据在 Java `ParticleBuffer` 中以 SoA 保存；`ParticleKernel` 使用有界容量和原地 compact，禁止热路径隐式扩容。
+两个真实例外：`:vfx/beam-arc-fade` 和 `:vfx/humanoid-marker` 是**composite**
+（`vfx-core/composites/beam_arc_fade.edn`/`humanoid_marker.edn`），`final_catalog.
+clj` 的 `load-vfx` 在采样前就把它们展开成真正的子树——`beam-arc-fade` 展开后确实
+含有能画的 `:vfx/beam`/`:vfx/ring`；`humanoid-marker` 展开后唯一的子节点
+`:vfx/model-marker` 恰好也没有 `sample-node` 分支，所以展开了也还是不画东西。
+`vfx-core/composites/` 下另外三个（`charge_ring.edn`/`block_progress.edn`/
+`trajectory_ribbon.edn`）注册在 `:vfx.fx/*`（带额外的 `.fx` 段）命名空间下，跟
+`ac/vfx/effects/*.edn` 里实际引用的 `:vfx/*`（不带 `.fx` 段）id 对不上，永远
+不会被展开，是彻底不可达的孤儿资源。
+
+转换到新引擎时，对应处理：确认无渲染的组件 → 诚实的空 `:scene`（不是发明新的
+视觉设计）；`beam-arc-fade` → 把它的 composite 展开结果直接内联进
+`ac/vfx/fx/beam_arc_fade.edn` 的 `:scene`（新引擎没有宏展开机制，`:defn` 组合
+是唯一的复用单元，而这个效果只有一个调用点，不值得为它单独建一个组合）；其余
+三个孤儿 composite 保持原样不动——它们零调用点、零真实渲染输出，转换成新语言
+只会是凭空发明未被使用的基础设施。
+
+## 场景 DSL 的模块边界（新引擎）
+
+- `vfx-core/src/main/clojure/cn/li/vfx/dsl_vocabulary.clj`：场景叶子节点词汇
+  表，每个节点 `:returns nil`（`:action-kind`——采样没有 host 好查，"调用"就是
+  往这帧的 outbox 追加一条构造好的 op）。
+- `vfx-core/src/main/clojure/cn/li/vfx/scene.clj`：`compile-doc!`（surface DSL
+  文本 + 效果自己声明的 `:user` capability 类型 → IR）、`compile-program`（IR →
+  闭包，`host` 固定成"往 frame.actions 里 append"）、`sample!`（跑一次，返回
+  这次采样产出的 op 向量）。
+- `vfx-core/src/main/clojure/cn/li/vfx/layout.clj` + `compile.clj`：Niagara
+  模块栈机制，粒子属性 → SoA 列布局 → 编译好的逐粒子闭包。目前没有真实
+  `ac/vfx/fx/*.edn` 内容在用；是给未来需要真正 CPU 端逐粒子模拟的内容留的
+  能力，不是当前 36 个效果缺的东西。
+
+## 旧引擎的模块边界（仍是实机路径）
+
+- `vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj`：headless/fake-host
+  的 final graph sampler，`sample-node`/`sample-graph`。
+- `vfx-core/src/main/clojure/cn/li/vfx/final_client.clj`：客户端 per-instance
+  runtime、四阶段采样、Java frame 投影。
+- `vfx-core/src/main/clojure/cn/li/vfx/vocabulary.clj`：旧词汇表
+  （`component-specs`/`vfx-runtime-specs`/`composite-only-ids`），
+  `environment`/`descriptor-specs` 是加载入口。
+- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：`load-vfx` 读取
+  `ac/vfx/effects/*.edn` + `ac/vfx/manifest.edn`，展开 composite。
+- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：把 VFX catalog
+  与 Combat、Presentation、NodeEnvironment 组合。
 
 ## 生命周期与网络
 
-信号操作只有 `spawn/update/trigger/destroy/clear-owner/snapshot`。实例身份由 `effect-id + owner + world-id + instance-key` 或远端 `instance-id` 组成；`state-seq` 和 `event-seq` 独立检查。`snapshot` 只建立 baseline，不重放历史 event；`clear-owner` 清理 owner 作用域；`destroy` 写入 tombstone，阻止延迟 update 复活。旧 `release`/`signal` 操作不属于当前生产 contract。
+信号操作：`spawn/update/trigger/destroy/clear-owner/snapshot`。实例身份由
+`effect-id + owner + world-id + instance-key` 或远端 `instance-id` 组成；
+`state-seq`/`event-seq` 独立检查。`mcmod/runtime/fixed_channel.clj` 对完整
+signal 做有界二进制编码，`max-vfx-frame-bytes` 是协议上限。这一层新旧两套
+引擎共用，没有变化。
 
-网络分两层：
+## 排障手册
 
-1. `VfxPacketKind`/`VfxLifecyclePacket` 提供 Java typed identity 和方向验证；
-2. mcmod fixed channel 对完整 signal 做 bounded binary encoding，服务端只发送 catalog hello、VFX 生命周期和 combat feedback，客户端先解码/校验再进入 final-client。
+**新引擎**（`ac/vfx/fx/*.edn` 编译/测试相关）：
 
-服务端必须先完成 catalog schema/hash 握手；客户端不能提交技能图、目标、伤害或 VFX recipient。参数 update 只能携带 dirty mask 指示的变化字段；固定通道还强制每包最多 64 个参数和 1 个 64-bit dirty-mask word。
-
-## 扩展规则
-
-1. 新效果必须是 `ac/vfx/effects/*.edn` 中的 `:vfx/system`，并登记到 manifest。
-2. 可复用结构必须是 EDN composite，由 `cn.li.vfx.compiler/expand-graph` 展开；不得增加第二套运行时 composite loader。
-3. 参数必须声明 type/scope/mutability/default；网络字段必须进入 catalog schema，不能通过任意 map 字段绕过校验。
-4. 新输出必须映射到 neutral `draw-batch`、audio、camera 或 post operation，并能投影到 Java `VfxFrame`。
-5. Java carrier 直接写 Java；不得在 VFX ABI 中新增 `deftype`、`defrecord` 或 `definterface`。
+- 一份效果编译报 `unknown-node` → 对照 `dsl_vocabulary.clj` 声明的叶子节点
+  名字/字段；旧内容常见字段名对不上是因为旧 `component-specs` 声明了字段但
+  `sample-node` 从不读它（比如 `:vfx/ray-beam` 声明过 `:life-ticks` 但从没读
+  过）——新词汇表按`真正被读的字段`设计，不是照抄旧声明。
+- 需要按 `:progress`/年龄插值的字段（旧的 `{:from :to}` 隐式 lerp）→ 显式写
+  `(math/lerp from to ?progress)`，新引擎没有这个糖，见
+  NODE_LANGUAGE.md §7。
+- 需要渐隐效果（旧的 `:vfx/fade` 包裹修饰器）→ 本地算 alpha，直接传给叶子
+  节点的 `:alpha` 字段，不要找"包裹"语法——新引擎没有。
 
 ## 验收门
 
@@ -63,7 +111,10 @@ verifyNoGeneratedClojureTypes
 verifyVfxJavaBoundary
 vfx-core:checkClojure
 vfx-core:runVfxClojureTests
+ac:runAcClojureTests   （包含 cn.li.ac.vfx.fx-test，36/36 新效果的 compile+sample 证明）
 ac:runAcEdnCoverageTests
 ```
 
-实机渲染、多人可见性、材质数值和 loader datagen 属于后续运行时任务；它们不能反向引入旧 VFX runtime 或兼容 facade。
+实机渲染、多人可见性、材质数值和 loader datagen 属于后续运行时任务，不在新引擎
+的验收范围内（新引擎的验收标准是"能编译、能针对假 host 正确采样"，见
+NODE_LANGUAGE.md §0）。
