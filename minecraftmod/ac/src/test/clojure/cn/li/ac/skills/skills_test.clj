@@ -124,12 +124,13 @@
                           :cooldown-endpoints [100.0 20.0] :exp-cast 0.1}
                :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
                               :world/id "overworld" :progression/mastery 0.6 :progression/level 3
-                              :rng/seed 7 :progression/cast 2.0}}
+                              :rng/seed 7 :progression/cast 2.0
+                              :budget/activate {:cp 12.0 :overload 3.0}}}
         ir (run/compile-doc! (:program doc) lib/fns)
         program (run/compile-program ir host)
         frame (run/dispatch! program :default input)]
-    (testing "cost/spend queried with the literal budget name, not a resolved descriptor"
-      (is (= [:query :cost/spend {:budget :activate}] (first @calls))))
+    (testing "cost/spend queried with the resolved ?budget/activate descriptor, not a bare name"
+      (is (= [:query :cost/spend {:budget {:cp 12.0 :overload 3.0}}] (first @calls))))
     (testing "sufficient? true -> combat/status landed on the caster (self-target), not aborted"
       (is (some #(= [:command :entity/status
                     {:target "player-1" :status-id :blindness :duration-ticks 60.0 :amplifier 1}] %)
@@ -143,6 +144,45 @@
         (is (false? (:advanced? (:payload signal))))))
     (testing "the outcome is :performed, not :insufficient-resource"
       (is (= :performed (:outcome (.-result frame)))))))
+
+(deftest location-teleport-test
+  (let [doc (read-skill "location_teleport.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :owner/snapshot {:position {:x 0.0 :y 0.0 :z 0.0 :world-id "overworld"}}
+                         :saved-location {:x 3.0 :y 4.0 :z 0.0 :world-id "overworld"}
+                         :entity/select ["e1"]
+                         :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:cross-dimension-exp-threshold 0.5 :teleport-radius 20.0
+                          :cp-base [10.0 5.0] :overload 2.0 :cross-dimension-multiplier 1.5
+                          :min-distance-multiplier 1.0 :distance-cap 4.0
+                          :cooldown-ticks [100.0 20.0] :int-distance-threshold 10.0
+                          :exp-short 1.0 :exp-long 5.0}
+               :capabilities {:progression/mastery 0.6 :context/location-name :home}}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        frame (run/dispatch! program :default input)]
+    (testing "same world-id -> not cross-dimension, so the exp-threshold gate never blocks"
+      (is (= :teleported (:outcome (.-result frame)))))
+    (testing "cp-cost = lerp(10,5,0.6){=7.0} * 1.0(no cross-dim multiplier) * max(1.0,sqrt(min(4.0,5.0))){=2.0} = 14.0"
+      (is (= {:cp 14.0 :overload 2.0} (:budget (nth (first (filter #(= :cost/spend (second %)) @calls)) 2)))))
+    (testing "combat/teleport-group (cn.li.combat.lib's composite) actually ran: entities queried around the destination, then teleported"
+      (is (= [:query :entity/select {:shape {:type :sphere :center {:x 3.0 :y 4.0 :z 0.0 :world-id "overworld"}
+                                             :radius 20.0}
+                                    :limit 128}]
+             (first (filter #(= :entity/select (second %)) @calls))))
+      (is (some #(= [:command :entity/teleport {:target "e1" :position {:x 3.0 :y 4.0 :z 0.0 :world-id "overworld"}}] %)
+                @calls)))
+    (testing "distance 5.0 < int-distance-threshold 10.0 -> exp-short (1.0), not exp-long"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 52}] %) @calls)))
+    (testing "not cross-dimension -> no achievement/trigger event"
+      (is (empty? (filter #(= :achievement/trigger (:type %)) (.-events frame)))))
+    (testing "the audio vfx signal landed with the resolved destination"
+      (is (= :audio-one-shot (:effect-id (first (.-vfx frame)))))
+      (is (= {:x 3.0 :y 4.0 :z 0.0 :world-id "overworld"} (:position (:payload (first (.-vfx frame)))))))))
 
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]

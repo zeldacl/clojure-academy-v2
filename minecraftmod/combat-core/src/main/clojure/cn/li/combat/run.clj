@@ -44,7 +44,16 @@
 (defn capability-type [key]
   (or (get fixed-capabilities key)
       (case (namespace key)
-        "budget" :double
+        ;; :any, not :double: a ?budget/name capability is the WHOLE
+        ;; already-materialized resources descriptor (resource-key ->
+        ;; amount, or {:resources {...}}), the same shape cn.li.combat.dsl-
+        ;; vocabulary's :cost/spend :budget param takes -- see that
+        ;; node's own docstring for why. A single number had no field to
+        ;; carry more than one resource's cost, which every real
+        ;; multi-resource budget (S6's mine_detect.edn and
+        ;; location_teleport.edn both spend two resources per activation)
+        ;; needs.
+        "budget" :any
         "cooldown" :long
         "progression" :double
         "context" :any

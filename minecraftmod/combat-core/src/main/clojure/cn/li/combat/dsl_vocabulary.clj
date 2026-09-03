@@ -269,8 +269,24 @@
           nil #{:inventory-write})}
 
    ;; --- cost/cooldown/resource/progression/score : action, owner-write --
+   ;; :budget is a RESOLVED resources descriptor ({:resources {resource-key
+   ;; amount ...}}, or a bare {resource-key amount ...} map -- final_engine
+   ;; .clj's own spend-budget handles both via
+   ;; (or (:resources budget) budget {})), with resource keys as data, not
+   ;; combat-core source (verifyCombatResourceAgnostic's own gate),
+   ;; NOT a keyword name: the old engine's :ability/budget source read
+   ;; already-materialized amounts straight out of :input, and real
+   ;; content (location_teleport.edn, S6) also builds one ad hoc at
+   ;; runtime for a distance-scaled cost -- a bare name has nowhere to put
+   ;; either. A static per-ability budget now reads via the ?budget/name
+   ;; sigil (cn.li.combat.run's capability-type types every ?budget/* as
+   ;; :any for exactly this shape) and gets passed straight through.
+   ;; Originally shipped as :keyword (wrong on both counts -- caught
+   ;; converting location_teleport.edn for S6, after mine_detect.edn's
+   ;; own conversion had already made the same mistake and had to be
+   ;; fixed alongside this).
    {:cost/spend
-    (node {:budget (p* :keyword) :scale (opt :double 1.0) :partial? (opt :boolean false)}
+    (node {:budget (p* :any) :scale (opt :double 1.0) :partial? (opt :boolean false)}
           :boolean #{:owner-write} :cost/spend 1)
     :cooldown/start
     (node {:name (p* :keyword) :ticks (p* :long)} nil #{:owner-write} :cooldown/start 1)

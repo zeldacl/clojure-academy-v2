@@ -3,19 +3,20 @@
 ;; pattern. New here: a resource-cost guard (cost/spend) and a
 ;; dynamically-computed (not pre-resolved) cooldown value.
 ;;
-;; :ability/budget (old: binds the WHOLE resource-cost descriptor for
-;; later spending) has no new-DSL equivalent read at all: the new
-;; :cost/spend node takes just a :keyword budget NAME
-;; (cn.li.combat.dsl-vocabulary's own :params declare :budget :keyword,
-;; not a descriptor), so the host is expected to resolve the actual
-;; :cp/:overload amounts by looking the name up against this ability's own
-;; (still-unconverted, see below) :costs map -- the same "verbatim old
-;; data, new engine reads it by name" pattern :cooldown/:damage-policies
-;; already use. cost/spend's boolean return polarity is UNVERIFIED (no
-;; real host implements this new vocab node yet, S6 -- see the session's
-;; staged-migration notes): assumed here to be "true = spend succeeded",
-;; the more idiomatic reading, not "true = insufficient" like the old
-;; :insufficient? name.
+;; :ability/budget (old: binds the WHOLE resource-cost descriptor, already
+;; materialized to plain :cp/:overload numbers, for later spending) folds
+;; into the ?budget/name sigil, per cn.li.combat.dsl-vocabulary's own
+;; docstring -- ?budget/activate reads exactly the same pre-resolved
+;; descriptor final_engine.clj's :ability/budget source did
+;; ((get-in input [:budgets name])), passed straight through as
+;; cost/spend's :budget arg (originally mis-converted here as a bare
+;; :activate keyword -- fixed alongside cn.li.combat.dsl-vocabulary's own
+;; :budget-param-type fix once location_teleport.edn's ad-hoc {:resources
+;; ...} budget shape exposed the mistake).cost/spend's boolean return
+;; polarity is UNVERIFIED (no real host implements this new vocab node
+;; yet, S6 -- see the session's staged-migration notes): assumed here to
+;; be "true = spend succeeded", the more idiomatic reading, not
+;; "true = insufficient" like the old :insufficient? name.
 {:schema-version 2
  :kind :ability
  :id :mine-detect
@@ -51,7 +52,8 @@
     (let cooldown-ticks-next
       (math/floor-long (math/lerp (pair/first $cooldown-endpoints) (pair/second $cooldown-endpoints)
                                   cooldown-exp-next)))
-    (let sufficient? (cost/spend {:budget :activate}))
+    (let activate-budget ?budget/activate)
+    (let sufficient? (cost/spend {:budget activate-budget}))
     (if sufficient?
       [(combat/status {:target owner-id :status-id :blindness
                        :duration-ticks $blindness-duration-ticks :amplifier $blindness-amplifier})
