@@ -1,0 +1,217 @@
+;; New-DSL conversion of ac/combat/abilities/meltdowner.edn (S6). Session
+;; hold-charge beam ability. Second real ac call site of
+;; cn.li.combat.lib's combat/beam-strike (after railgun.edn) -- and this
+;; one exposes a real double-damage bug the old content had: the OLD
+;; :combat/beam-strike COMPOSITE (combat-core/composites/beam_strike.edn,
+;; the direct source combat-core/lib/beam_strike.edn was ported from)
+;; already applies direct-or-reflection combat/damage to every hit
+;; entity internally. meltdowner's old :release then ran its OWN SEPARATE
+;; flow/foreach over the SAME beam-result :entities, calling combat/damage
+;; AGAIN for every hit (both the reflection and direct branches) with the
+;; identical target/amount the composite had just applied -- genuinely
+;; double-inflicted damage, not an intentional second effect. railgun.edn
+;; (the first beam-strike call site) shows what the correctly-scoped
+;; second loop looks like: side-effect bookkeeping only (there,
+;; achievement triggers), never a second combat/damage. Ported here as
+;; the reflection-only VFX spawn the second loop legitimately adds,
+;; with the redundant combat/damage calls dropped -- the same class of
+;; real bug already found and fixed this session (groundshock.edn's
+;; double cost/spend, scatter_bomb.edn's stale +1 vfx display).
+;;
+;; :hold-ticks's :pulse-time overcharge/camera-offset comparisons read
+;; {:ref [:state :hold-ticks]} AFTER this same :pulse already wrote the
+;; freshly-incremented value earlier in the sequence -- the established
+;; same-activation state-visibility gotcha (final_engine.clj's
+;; bind-state! mutates immediately; groundshock.edn/directed_blastwave.edn
+;; already document the fix): translated as the already-computed
+;; `next-hold-ticks` local, never a %hold-ticks re-read.
+;;
+;; The old top-level EDN has no :session-state key at all (verified by
+;; grep -- genuinely absent, not a truncation), even though :start/:pulse
+;; both state/write hold-ticks/time-rate/overload-floor. Kept absent
+;; here too, matching the "preserve every OLD top-level key exactly,
+;; including its absence" rule already established for this migration.
+{:schema-version 2
+ :kind :ability
+ :id :meltdowner
+ :revision 1
+ :activation :session
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :caster/creative? :world/id
+            :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :scatter-bomb :min-exp 0.8} {:skill-id :light-shield :min-exp 0.8}]
+ :tunables {:charge-min-ticks {:curve :const :type :int}
+            :charge-max-ticks {:curve :const :type :int}
+            :charge-max-tolerant-ticks {:curve :const :type :int}
+            :charge-time-rate {:curve :pair}
+            :beam-radius {:curve :mastery-lerp}
+            :beam-query-radius {:curve :const}
+            :beam-step {:curve :const}
+            :beam-max-distance {:curve :const}
+            :beam-visual-distance {:curve :const}
+            :beam-damage {:curve :mastery-lerp}
+            :beam-block-energy {:curve :mastery-lerp}
+            :reflection-shot-distance {:curve :const}
+            :reflection-damage-multiplier {:curve :const}
+            :reflection-base-damage {:curve :mastery-lerp}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :cooldown-base-multiplier {:curve :const}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :exp-use {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :cost-down-overload]}}}
+         :tick {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}
+ :cooldown {:main {:ticks {:expr :math/mul
+                          :args [{:ref [:state :time-rate]}
+                                 {:ref [:input :tunables :cooldown-base-multiplier]}
+                                 {:ref [:input :tunables :cooldown-ticks]}]}}}
+ :progression {:use {:per-mark {:ref [:input :tunables :exp-use]} :weight {:ref [:state :time-rate]}}}
+ :program
+ "{:ability :meltdowner
+   :activation :session
+   :state {:hold-ticks {:type :long :default 0} :time-rate {:type :double :default 0.8}
+           :overload-floor {:type :double :default 0.0}}
+   :tunables {:cost-down-overload {:type :double} :charge-min-ticks {:type :long}
+              :charge-max-ticks {:type :long} :charge-max-tolerant-ticks {:type :long}
+              :charge-time-rate {:type :any} :beam-radius {:type :double}
+              :beam-query-radius {:type :double} :beam-step {:type :double}
+              :beam-max-distance {:type :double} :beam-visual-distance {:type :double}
+              :beam-damage {:type :double} :beam-block-energy {:type :double}
+              :reflection-shot-distance {:type :double}
+              :reflection-damage-multiplier {:type :double} :reflection-base-damage {:type :double}}
+   :phases
+   {:start
+    [(let activate-budget ?budget/activate)
+     (let sufficient? (cost/spend {:budget activate-budget}))
+     (if sufficient?
+       [(state! :hold-ticks 0)
+        (state! :time-rate 0.8)
+        (let context-resources ?context/resources)
+        (state! :overload-floor (math/sub (:overload context-resources) $cost-down-overload))
+        (let body ?caster/body)
+        (vfx! {:effect-id :audio-loop-session :operation :spawn
+              :instance-key [:activation :meltdowner-audio] :audience {:type :owner}
+              :payload {:position body :sound-id \"academy:md.md_charge\" :volume 0.5 :pitch 1.0}})
+        (vfx! {:effect-id :particle-session :operation :spawn
+              :instance-key [:activation :meltdowner-particles] :audience {:type :nearby :radius 32.0}
+              :payload {:position body :rate-per-tick 4 :limit 256
+                       :particle {:material :additive :life-ticks 10 :speed 0.04
+                                 :color [106 242 106 150] :spread {:x 0.7 :y 0.7 :z 0.7}}}})
+        (vfx! {:effect-id :camera-fov-session :operation :spawn
+              :instance-key [:activation :meltdowner-camera] :audience {:type :owner}
+              :payload {:offset 0.0}})
+        (finish {:outcome :started})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let overload-floor %overload-floor)
+     (resource/enforce-floor {:resource :overload :minimum overload-floor})
+     (let tick-budget ?budget/tick)
+     (let tick-sufficient? (cost/spend {:budget tick-budget}))
+     (if tick-sufficient?
+       [(let hold-ticks %hold-ticks)
+        (let next-hold-ticks (long/add hold-ticks 1))
+        (state! :hold-ticks next-hold-ticks)
+        (let charge-min-ticks $charge-min-ticks)
+        (let charge-max-ticks $charge-max-ticks)
+        (let rate-lo (pair/first $charge-time-rate))
+        (let rate-hi (pair/second $charge-time-rate))
+        (let progress
+          (math/clamp (math/div (math/sub next-hold-ticks charge-min-ticks)
+                                (math/sub charge-max-ticks charge-min-ticks))
+                     0.0 1.0))
+        (state! :time-rate (math/lerp rate-lo rate-hi progress))
+        (let body ?caster/body)
+        (vfx! {:effect-id :audio-loop-session :operation :update
+              :instance-key [:activation :meltdowner-audio] :payload {:position body}})
+        (vfx! {:effect-id :particle-session :operation :update
+              :instance-key [:activation :meltdowner-particles] :payload {:position body}})
+        (let camera-progress (math/clamp (math/div next-hold-ticks charge-max-ticks) 0.0 1.0))
+        (vfx! {:effect-id :camera-fov-session :operation :update
+              :instance-key [:activation :meltdowner-camera] :audience {:type :owner}
+              :payload {:offset (math/mul 24.0 camera-progress)}})
+        (if (math/gt next-hold-ticks $charge-max-tolerant-ticks)
+          [(vfx! {:effect-id :audio-loop-session :operation :destroy
+                 :instance-key [:activation :meltdowner-audio] :payload {:fade-ticks 0}})
+           (vfx! {:effect-id :particle-session :operation :destroy
+                 :instance-key [:activation :meltdowner-particles] :payload {}})
+           (vfx! {:effect-id :camera-fov-session :operation :destroy
+                 :instance-key [:activation :meltdowner-camera] :payload {}})
+           (finish {:outcome :overcharged :end-ability? true})]
+          [(finish {:outcome :continue})])]
+       [(vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :meltdowner-audio] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :particle-session :operation :destroy
+              :instance-key [:activation :meltdowner-particles] :payload {}})
+        (vfx! {:effect-id :camera-fov-session :operation :destroy
+              :instance-key [:activation :meltdowner-camera] :payload {}})
+        (finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :release
+    [(let hold-ticks %hold-ticks)
+     (if (math/lt hold-ticks $charge-min-ticks)
+       [(vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :meltdowner-audio] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :particle-session :operation :destroy
+              :instance-key [:activation :meltdowner-particles] :payload {}})
+        (vfx! {:effect-id :camera-fov-session :operation :destroy
+              :instance-key [:activation :meltdowner-camera] :payload {}})
+        (finish {:outcome :undercharged :end-ability? true})]
+       [(let time-rate %time-rate)
+        (let eye ?caster/eye)
+        (let aim ?caster/aim)
+        (let body ?caster/body)
+        (let beam-damage (math/mul time-rate $beam-damage))
+        (let reflection-policy {:shot-distance $reflection-shot-distance
+                                :damage-multiplier $reflection-damage-multiplier
+                                :reflection-base-damage $reflection-base-damage})
+        (let beam-result
+          (combat/beam-strike eye body aim $beam-max-distance $beam-visual-distance $beam-radius
+                              $beam-query-radius 256 beam-damage :magic 4096
+                              reflection-policy $beam-step))
+        (each target (:entities beam-result)
+          (when (:reflection-accepted? target)
+            (vfx! {:effect-id :ray-beam-transient :operation :spawn
+                  :instance-key [:activation :meltdowner-reflected]
+                  :audience {:type :nearby :radius 64.0}
+                  :payload {:start (:reflection-start target) :end (:reflection-end target)
+                           :life-ticks 50 :grow-ticks 3
+                           :style {:layers [{:shape :tube :radius 0.17 :color [106 242 106 180]}]}
+                           :bounds-radius 0.4}})))
+        (let break-energy (math/mul time-rate $beam-block-energy))
+        (terrain/apply-break-budget (:blocks beam-result) break-energy 0.05)
+        (vfx! {:effect-id :beam-arc-fade :operation :spawn
+              :instance-key [:activation :meltdowner-beam] :audience {:type :nearby :radius 64.0}
+              :payload {:fade-at 30 :duration-ticks 50 :arc-at 3 :arc-count-limit 64 :beam-at 0
+                       :arc-radius {:min 0.1 :max 0.25} :start (:start beam-result)
+                       :ring-radius 0.34 :arc-life-ticks 30 :fade-to-tick 50
+                       :arc-spacing {:min 1.0 :max 2.0} :fade-from-alpha 1.0
+                       :layers [{:shape :tube :radius 0.22 :color [106 242 106 50]}
+                               {:shape :tube :radius 0.17 :color [216 248 216 230]}
+                               {:shape :line :width 0.02 :color [180 255 180 180]}]
+                       :grow-ticks 4 :fade-to-alpha 0.0 :end (:end beam-result)
+                       :fade-from-tick 30 :ring-color [188 252 238 180] :ring-segments 12}})
+        (vfx! {:effect-id :audio-one-shot :operation :spawn
+              :instance-key [:activation :meltdowner-shot] :audience {:type :nearby :radius 64.0}
+              :payload {:position eye :sound-id \"academy:md.meltdowner\" :volume 0.5 :pitch 1.0}})
+        (let main-cooldown ?cooldown/main)
+        (cooldown/start {:name :main :ticks main-cooldown})
+        (let use-progression ?progression/use)
+        (event! {:type :score/mark :tag :use :progression use-progression})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :meltdowner-audio] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :particle-session :operation :destroy
+              :instance-key [:activation :meltdowner-particles] :payload {}})
+        (vfx! {:effect-id :camera-fov-session :operation :destroy
+              :instance-key [:activation :meltdowner-camera] :payload {}})
+        (finish {:outcome :performed :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :meltdowner-audio] :payload {:fade-ticks 0}})
+     (vfx! {:effect-id :particle-session :operation :destroy
+           :instance-key [:activation :meltdowner-particles] :payload {}})
+     (vfx! {:effect-id :camera-fov-session :operation :destroy
+           :instance-key [:activation :meltdowner-camera] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}

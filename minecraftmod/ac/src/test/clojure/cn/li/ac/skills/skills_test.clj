@@ -1572,3 +1572,113 @@
     (is (some #(= [:activation :shift-teleport-destination] (:instance-key %)) (.-vfx frame)))
     (is (some #(= [:activation :shift-teleport-target "t1"] (:instance-key %)) (.-vfx frame)))
     (is (= :aborted (:outcome (.-result frame))))))
+
+(deftest meltdowner-start-test
+  (let [doc (read-skill "meltdowner.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 10.0}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :context/resources {:overload 40.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:hold-ticks 0] [:time-rate 0.8] [:overload-floor 30.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame)))))
+  (testing "insufficient activate budget"
+    (let [doc (read-skill "meltdowner.edn")
+          host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+                :command! (fn [_cap _args _fr])}
+          input {:tunables {} :capabilities {}}
+          frame (compile-and-dispatch! doc :start host input)]
+      (is (= :insufficient-resource (:outcome (.-result frame))))
+      (is (true? (:end-ability? (.-result frame))))
+      (is (empty? (.-stateWrites frame))))))
+
+(deftest meltdowner-pulse-charges-and-continues-test
+  (let [doc (read-skill "meltdowner.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 0 :charge-max-ticks 40 :charge-max-tolerant-ticks 60
+                          :charge-time-rate [0.8 2.0]}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0}}
+               :state {:overload-floor 5.0 :hold-ticks 19}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (testing "hold-ticks incremented, time-rate lerped by progress 20/40=0.5 -> 0.8+0.5*(2.0-0.8)=1.4"
+      (is (= #{[:hold-ticks 20] [:time-rate 1.4]}
+             (set (map (juxt :key :value) (.-stateWrites frame))))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest meltdowner-pulse-overcharged-destroys-vfx-and-ends-test
+  (let [doc (read-skill "meltdowner.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 0 :charge-max-ticks 40 :charge-max-tolerant-ticks 45
+                          :charge-time-rate [0.8 2.0]}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0}}
+               :state {:overload-floor 5.0 :hold-ticks 45}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= 3 (count (filter #(= :destroy (:operation %)) (.-vfx frame)))))
+    (is (= :overcharged (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest meltdowner-pulse-insufficient-tick-budget-ends-test
+  (let [doc (read-skill "meltdowner.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {} :state {:overload-floor 5.0 :hold-ticks 10}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest meltdowner-release-undercharged-ends-test
+  (let [doc (read-skill "meltdowner.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 10} :capabilities {} :state {:hold-ticks 5}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :undercharged (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest meltdowner-release-applies-damage-exactly-once-per-hit-test
+  (let [calls (atom [])
+        doc (read-skill "meltdowner.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :kernel/trace-beam
+                         {:blocks [] :start {:x 0.0 :y 1.0 :z 0.0} :end {:x 0.0 :y 1.0 :z 10.0}
+                          :entities [{:id "e1" :damage 5.0 :damage-type :magic
+                                     :reflection-accepted? false}
+                                    {:reflection-accepted? true :reflection-target "e2"
+                                     :reflection-damage 3.0 :damage-type :magic
+                                     :reflection-start {:x 0.0 :y 1.0 :z 5.0}
+                                     :reflection-end {:x 1.0 :y 1.0 :z 5.0}}]}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:charge-min-ticks 10 :beam-damage 4.0 :beam-max-distance 30.0
+                          :beam-visual-distance 30.0 :beam-radius 0.3 :beam-query-radius 1.0
+                          :beam-step 0.5 :beam-block-energy 2.0 :reflection-shot-distance 6.0
+                          :reflection-damage-multiplier 1.0 :reflection-base-damage 2.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 1.0 :z 0.0} :cooldown/main 60
+                              :progression/use 1.0}
+               :state {:hold-ticks 20 :time-rate 1.0}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (testing "each hit entity is damaged exactly once, not twice (the old content's own double-damage bug)"
+      (is (= [[:command :entity/damage {:target "e1" :amount 5.0 :damage-type :magic}]
+             [:command :entity/damage {:target "e2" :amount 3.0 :damage-type :magic}]]
+             (filter #(and (= :command (first %)) (= :entity/damage (second %))) @calls))))
+    (testing "the reflection-accepted hit still gets its VFX"
+      (is (some #(= :ray-beam-transient (:effect-id %)) (.-vfx frame))))
+    (is (some #(and (= :score/mark (:type %)) (= :use (:tag %))) (.-events frame)))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= :performed (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest meltdowner-abort-destroys-session-vfx-test
+  (let [doc (read-skill "meltdowner.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (= 3 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))))
