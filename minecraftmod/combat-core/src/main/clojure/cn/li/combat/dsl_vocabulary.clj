@@ -67,6 +67,36 @@
 
 (def nodes
   (merge
+   ;; --- kernel/* : host-facing primitives composites call directly ------
+   ;; The old system's :layer :kernel tier does not exist here (the redesign
+   ;; plan replaces it with plain :effects tagging, not a hard authorability
+   ;; boundary -- see this module's own docstring) -- these are ordinary
+   ;; query nodes, findable and callable like any other, just unusually
+   ;; complex/host-implemented ones.
+   {:kernel/trace-beam
+    (node {:origin (p* :vec3) :trace-origin (opt :vec3 nil) :direction (p* :vec3)
+           :length (p* :double) :visual-length (opt :double nil) :radius (p* :double)
+           :query-radius (opt :double nil) :entity-limit (opt :long 256)
+           :damage (opt :double 0.0) :damage-type (opt :keyword :generic)
+           :block-limit (opt :long 4096) :reflection-policy (opt :any nil) :step (opt :double nil)}
+          :any #{:world-write} :kernel/trace-beam 4)
+
+    :kernel/terrain-wave-plan
+    (node {:origin (p* :vec3) :direction (p* :vec3) :initial-energy (p* :double)
+           :max-iterations (p* :long) :seed (p* :long) :spread (p) :energy-cost (p)
+           :block-transforms (p) :mastery (p* :double) :mastery-threshold (p* :double)
+           :mastery-radius (p* :long) :mastery-hardness-cap (p* :double)
+           :ground-break-probability (p* :double) :drop-probability (p* :double)
+           :launch-base (p* :double) :launch-span (p* :double) :entity-search-radius (p* :double)}
+          :any #{:world-read} :kernel/terrain-wave-plan 4)
+
+    ;; A seeded probability roll needs the activation's own RNG cursor,
+    ;; which only the host frame carries -- unlike node-core's pure ops
+    ;; (cn.li.node.ops), which are deliberately seed-free (see that
+    ;; namespace's docstring), so this is a :query, not a :pure op.
+    :random/chance
+    (node {:probability (p* :double)} :boolean #{} :random/chance 0)}
+
    ;; --- target/* : query, world-read -----------------------------------
    {:target/raycast
     (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)

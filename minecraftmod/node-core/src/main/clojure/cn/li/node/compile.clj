@@ -243,11 +243,20 @@
                    dst (assoc :dst dst)))
         {:reg dst :block-id block-id}))))
 
-(defn- compile-fn-call [env locals block-id depth fn-id form]
+(defn- compile-fn-call
+  "Inlines fn-id's body at the call site. When the :defn declares :returns
+   (a local name bound somewhere in its body -- see
+   cn.li.node.surface/normalize's :defn case), that local's register
+   becomes this call's result, letting a :defn be used as an expression
+   (`let dest (ac/some-fn ...)`) exactly like a vocab query -- the
+   original composites this is closing the gap for (target/raycast-
+   destination and friends) are fundamentally value-producing, not the
+   purely-effectful shape :defn only supported before this."
+  [env locals block-id depth fn-id form]
   (when (>= depth max-inline-depth)
     (report! env {:code :inline-depth-exceeded :form form
                  :message (str "inlining " fn-id " exceeded max depth " max-inline-depth)}))
-  (if-let [{:keys [params body]} (get (:fns env) fn-id)]
+  (if-let [{:keys [params body returns]} (get (:fns env) fn-id)]
     (let [arg-forms (vec (rest form))]
       (when (not= (count arg-forms) (count params))
         (report! env {:code :arity-mismatch :form form
@@ -261,8 +270,17 @@
                              (report! env {:code :type-mismatch :form arg-form :want type
                                           :message (str "param " name " of " fn-id " wants " type " got " got)}))
                            [name {:reg (coerce! env block-id reg got type)}]))
-                       params arg-forms))]
-        (compile-stmts! env callee-locals block-id (inc depth) body)))
+                       params arg-forms))
+            {result-locals :locals final-block :block-id :as result}
+            (compile-stmts! env callee-locals block-id (inc depth) body)]
+        (if returns
+          (if-let [{:keys [reg]} (get result-locals returns)]
+            {:reg reg :block-id final-block}
+            (do (report! env {:code :unknown-return-local :form form
+                             :message (str fn-id " declares :returns " returns
+                                         " but no such local is bound in its body")})
+                {:reg (dummy-register! env :any) :block-id final-block}))
+          result)))
     (do (report! env {:code :unknown-call-target :form form :message (str "no :defn named " fn-id)})
         {:reg nil :block-id block-id})))
 

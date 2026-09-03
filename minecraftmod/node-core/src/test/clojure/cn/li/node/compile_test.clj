@@ -69,6 +69,41 @@
       (catch clojure.lang.ExceptionInfo e
         (is (= :unreachable-code (:code (ex-data e))))))))
 
+(deftest defn-with-returns-is-usable-as-an-expression-test
+  (testing "a :defn declaring :returns can be called from a `let` RHS, its
+            declared local's value becoming the call's own result -- the
+            gap composite -> :defn conversion (S6) surfaced: composites
+            like target/raycast-destination are fundamentally value-
+            producing, not purely effectful like cn.li.node.ops's original
+            ac/strike example"
+    (let [fns (assoc fx/fns
+                     :ac/double-hit
+                     {:params [{:name 'hit :type :hit-result}]
+                      :body '[(let doubled (vec3/scale (:position hit) 2.0))]
+                      :returns 'doubled})
+          opts (assoc fx/opts :fns fns)
+          doc (surface/parse
+               "{:ability :uses-return :tunables {:range {:type :double}}
+                 :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
+                      (let far (ac/double-hit hit))
+                      (finish {:outcome :performed})]}")
+          ir (compile/compile! doc opts)]
+      (is (map? (ir/validate! ir)))
+      (testing "the returned register really is vec3/scale's result, not a dummy"
+        (is (some #(and (= :pure (:op %)) (= :vec3/scale (:fn %))) (mapcat :instrs (:blocks ir))))))))
+
+(deftest defn-void-call-still-reports-void-let-rhs-test
+  (testing "a :defn with NO :returns stays void -- binding its call via
+            `let` is still a real error, not silently allowed now"
+    (let [doc (surface/parse
+               "{:ability :void-bind :tunables {:damage {:type :double}}
+                 :do [(let x (ac/strike nil $damage)) (finish {:outcome :performed})]}")]
+      (try
+        (compile/compile! doc fx/opts)
+        (is false "expected compile! to throw")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :void-let-rhs (:code (ex-data e)))))))))
+
 (deftest each-desugars-without-a-host-round-trip-test
   (testing "each lowers entirely to :pure/:copy/:branch/:jump -- iterating
             an already-produced list is deterministic, not a host query"

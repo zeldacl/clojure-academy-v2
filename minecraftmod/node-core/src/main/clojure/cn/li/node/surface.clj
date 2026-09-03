@@ -106,6 +106,15 @@
                      {:name name :type type})
                    (:params doc))
      :body (vec (:do doc))
+     ;; Optional: the bare symbol of a local bound somewhere in :body (a
+     ;; :let target, matching :params' own name convention) whose value
+     ;; becomes this call's result register -- see
+     ;; cn.li.node.compile/compile-fn-call. Omitted means void (a purely
+     ;; effectful function, cn.li.node.compile's original -- and still
+     ;; most common -- shape). A function needing more than one output
+     ;; returns a {:map-lit} bundling them; callers read a field off it,
+     ;; the same pattern any host query result already uses.
+     :returns (:returns doc)
      :meta (meta doc)}
 
     (contains? doc :ability)
