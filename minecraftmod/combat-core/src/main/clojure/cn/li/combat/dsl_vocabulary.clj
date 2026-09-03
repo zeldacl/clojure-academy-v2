@@ -204,6 +204,16 @@
     :energy/target
     (node {:hit (p)} :any #{:world-read} :energy/target 1)
 
+    ;; current_charging.edn's (S6) counterpart to :energy/target: push
+    ;; :amount energy units into either a held item (:mode :item, :target
+    ;; the item-held snapshot) or a targeted block's energy store
+    ;; (:mode :block, :target the energy/target snapshot). No node
+    ;; anywhere returned or consumed a result from this old component
+    ;; (never :bind-bound), so :returns nil -- an action, not a query.
+    :energy/charge
+    (node {:mode (p* :keyword) :world-id (opt :string nil) :target (p) :amount (p* :double)}
+          nil #{:world-write})
+
     :data/random-item
     (node {:items (p)} :any #{} :data/random-item 1)}
 

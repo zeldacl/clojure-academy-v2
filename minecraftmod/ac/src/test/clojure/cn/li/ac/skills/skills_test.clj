@@ -2278,3 +2278,174 @@
     (is (= 2 (count (.-vfx frame))))
     (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
     (is (= :aborted (:outcome (.-result frame))))))
+
+(deftest current-charging-start-item-present-uses-owner-audience-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :cost/spend true :item/held {:present? true :supported? true}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0 :visual-max-ticks 60 :targeting-range 6.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:is-item true] [:charge-ticks 0] [:overload-floor 15.0]}
+           (set (map (juxt :key :value) (filter #(not= :style (:key %)) (.-stateWrites frame))))))
+    (is (some #(= :style (:key %)) (.-stateWrites frame)))
+    (is (some #(and (= :arc-channel-session (:effect-id %)) (= {:type :owner} (:audience %))
+                    (nil? (:target (:payload %))) (= :item (:mode (:payload %))))
+              (.-vfx frame)))
+    (is (some #(= {:type :owner} (:audience %)) (filter #(= :audio-loop-session (:effect-id %))
+                                                         (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest current-charging-start-item-absent-targets-block-with-nearby-audience-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :cost/spend true :item/held {:present? false}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0 :visual-max-ticks 60 :targeting-range 6.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (some #(= {:key :is-item :value false} (select-keys % [:key :value])) (.-stateWrites frame)))
+    (is (some #(and (= :arc-channel-session (:effect-id %))
+                    (= {:type :nearby :radius 64.0} (:audience %))
+                    (= :block (:mode (:payload %)))
+                    (= {:vec3 [0.0 1.5 6.0]} (:target (:payload %))))
+              (.-vfx frame)))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest current-charging-start-insufficient-resource-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :cost/spend false :item/held {:present? false}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0 :visual-max-ticks 60 :targeting-range 6.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (empty? (.-stateWrites frame)))))
+
+(deftest current-charging-pulse-item-missing-ends-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr] (case cap :item/held {:present? false}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :charge-amount 4.0 :visual-max-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld"}
+               :state {:overload-floor 5.0 :charge-ticks 3 :is-item true :style {}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= 2 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :item-missing (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest current-charging-pulse-item-effective-charges-and-marks-progression-test
+  (let [calls (atom [])
+        doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :item/held {:present? true :supported? true} :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:targeting-range 6.0 :charge-amount 4.7 :visual-max-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :progression/effective 0.3}
+               :state {:overload-floor 5.0 :charge-ticks 3 :is-item true :style {:beam {}}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:command :energy/charge {:mode :item :world-id "overworld" :target
+                                            {:present? true :supported? true} :amount 4.0}]
+                  %)
+              @calls))
+    (is (some #(and (= :score/mark (:type %)) (= 0.3 (:progression %))) (.-events frame)))
+    (is (some #(and (= :arc-channel-session (:effect-id %)) (true? (:good? (:payload %)))
+                    (= 4 (:charge-ticks (:payload %))))
+              (.-vfx frame)))
+    (is (= [{:key :charge-ticks :value 4}] (vec (.-stateWrites frame))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest current-charging-pulse-item-ineffective-when-unsupported-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :item/held {:present? true :supported? false} :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :charge-amount 4.0 :visual-max-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :progression/ineffective 0.1}
+               :state {:overload-floor 5.0 :charge-ticks 3 :is-item true :style {}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(and (= :score/mark (:type %)) (= 0.1 (:progression %))) (.-events frame)))
+    (is (some #(and (= :arc-channel-session (:effect-id %)) (false? (:good? (:payload %))))
+              (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest current-charging-pulse-item-insufficient-charging-budget-ends-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :item/held {:present? true :supported? true} :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :charge-amount 4.0 :visual-max-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld"}
+               :state {:overload-floor 5.0 :charge-ticks 3 :is-item true :style {}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= 2 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest current-charging-pulse-block-effective-then-insufficient-budget-ends-test
+  (let [calls (atom [])
+        doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :raycast {:position {:x 0.0 :y 1.5 :z 6.0}}
+                         :energy/target {:chargeable? true :block-bounds {:min [0 0 0] :max [1 1 1]}
+                                         :block-pos {:x 0 :y 0 :z 6}}
+                         :cost/spend false))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:targeting-range 6.0 :charge-amount 4.0 :visual-max-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :progression/effective 0.3}
+               :state {:overload-floor 5.0 :charge-ticks 3 :is-item false :style {}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:command :energy/charge {:mode :block :world-id "overworld"
+                                            :target {:chargeable? true
+                                                    :block-bounds {:min [0 0 0] :max [1 1 1]}
+                                                    :block-pos {:x 0 :y 0 :z 6}}
+                                            :amount 4.0}]
+                  %)
+              @calls))
+    (is (some #(and (= :score/mark (:type %)) (= 0.3 (:progression %))) (.-events frame)))
+    (is (= 2 (count (filter #(= :destroy (:operation %)) (.-vfx frame)))))
+    (is (= :insufficient-resource (:outcome (.-result frame))))))
+
+(deftest current-charging-pulse-block-ineffective-when-not-chargeable-test
+  (let [doc (read-skill "current_charging.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :raycast {:position {:x 0.0 :y 1.5 :z 6.0}}
+                         :energy/target {:chargeable? false}
+                         :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :charge-amount 4.0 :visual-max-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :world/id "overworld" :progression/ineffective 0.1}
+               :state {:overload-floor 5.0 :charge-ticks 3 :is-item false :style {}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(and (= :score/mark (:type %)) (= 0.1 (:progression %))) (.-events frame)))
+    (is (some #(and (= :arc-channel-session (:effect-id %)) (false? (:good? (:payload %))))
+              (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest current-charging-release-and-abort-both-destroy-vfx-test
+  (doseq [phase [:release :abort]]
+    (let [doc (read-skill "current_charging.edn")
+          host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+          input {:tunables {} :capabilities {}}
+          frame (compile-and-dispatch! doc phase host input)]
+      (is (= 2 (count (.-vfx frame))) (str "phase " phase))
+      (is (every? #(= :destroy (:operation %)) (.-vfx frame)) (str "phase " phase))
+      (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
+          (str "phase " phase)))))
