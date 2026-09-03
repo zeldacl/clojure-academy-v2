@@ -481,6 +481,64 @@
                      @calls))))
     (is (= :performed (:outcome (.-result frame))))))
 
+(deftest thunder-bolt-direct-and-aoe-targets-test
+  (let [doc (read-skill "thunder_bolt.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id "d1" :entity-type "minecraft:zombie"
+                                  :position {:x 5.0 :y 1.0 :z 0.0}}
+                         :entity/select (if (contains? (:filter args) :entity-ids)
+                                         [{:id "d1" :type "minecraft:zombie" :living? true}]
+                                         [{:id "a1" :type "minecraft:creeper" :living? true}])
+                         :random/chance true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:targeting-range 20.0 :direct-damage 12.0 :aoe-radius 6.0 :aoe-damage 4.0
+                          :slowness-chance 0.3 :slowness-exp-threshold 0.5
+                          :slowness-duration-ticks 40 :slowness-aoe-retry-duration-ticks 20
+                          :slowness-amplifier 1 :creeper-charge-chance 0.5}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :world/id "overworld"
+                              :progression/mastery 0.9 :budget/fire {:cp 2.0}
+                              :progression/effective 1.0 :progression/ineffective 0.5
+                              :cooldown/main 80}}
+        frame (run/dispatch! program :default input)]
+    (testing "both the direct target and the aoe target took damage"
+      (is (some #(= [:command :entity/damage {:target "d1" :amount 12.0 :damage-type :skill
+                                              :damage-pipeline :skill}] %)
+                @calls))
+      (is (some #(= [:command :entity/damage {:target "a1" :amount 4.0 :damage-type :skill
+                                              :damage-pipeline :skill}] %)
+                @calls)))
+    (testing "the direct target (not a creeper) got slowed once from the direct-hit check
+              (duration-ticks arrives as 40.0, not 40: combat/status's :duration-ticks is
+              :double, so the :long tunable literal gets widened at compile time)"
+      (is (some #(= [:command :entity/status {:target "d1" :status-id :slowness
+                                              :duration-ticks 40.0 :amplifier 1}] %)
+                @calls)))
+    (testing "the aoe target (a creeper) got powered, and the direct target got slowed AGAIN
+              with the aoe-retry duration -- the old content's own odd but faithfully-ported
+              behavior: the aoe loop's slowness re-check always targets the direct target, not
+              the aoe-loop target itself"
+      (is (some #(= [:command :entity/status {:target "a1" :status-id :powered-creeper
+                                              :duration-ticks 1.0 :amplifier 0}] %)
+                @calls))
+      (is (some #(= [:command :entity/status {:target "d1" :status-id :slowness
+                                              :duration-ticks 20.0 :amplifier 1}] %)
+                @calls)))
+    (testing "lightning struck, the arc vfx carries the resolved aoe-targets list, cooldown committed"
+      (is (some #(= :world/lightning (second %)) @calls))
+      (is (= [{:id "a1" :type "minecraft:creeper" :living? true}]
+             (:aoe-points (:payload (first (.-vfx frame))))))
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 80}] %) @calls)))
+    (testing "at least one real target -> :effective progression, not :ineffective"
+      (is (some #(and (= :score/mark (:type %)) (= :effective (:tag %))) (.-events frame))))
+    (is (= {:outcome :performed :next-phase nil :end-ability? true} (.-result frame)))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
