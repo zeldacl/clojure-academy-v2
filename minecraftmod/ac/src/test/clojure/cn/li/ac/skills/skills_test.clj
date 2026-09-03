@@ -3228,3 +3228,218 @@
       (is (= 2 (count (.-vfx frame))) (str "phase " phase))
       (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
           (str "phase " phase)))))
+
+(defn- mag-manip-host
+  [& {:keys [cost-spend item-held raycast block-break entity-select entity-snapshot]
+      :or {cost-spend true item-held {:present? false} raycast {} block-break :applied
+          entity-select [] entity-snapshot {}}}]
+  {:query! (fn [cap _args _fr]
+            (case cap
+              :item/held item-held
+              :raycast raycast
+              :block/break block-break
+              :entity/spawn {:entity-id "body-1"}
+              :owner/snapshot {:position {:x 0.0 :y 0.0 :z 0.0} :eye-position {:x 0.0 :y 1.5 :z 0.0}}
+              :entity/select entity-select
+              :entity/snapshot entity-snapshot
+              :cost/spend cost-spend))
+   :command! (fn [_cap _args _fr])})
+
+(deftest mag-manip-start-grabs-from-held-item-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        host (assoc (mag-manip-host :item-held {:present? true :block-id "minecraft:iron_block"})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:targeting-grab-range 6.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/normal-metal-blocks ["minecraft:iron_block"]
+                              :caster/weak-metal-blocks []}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (some #(= [:inventory/consume {:source :main-hand :count 1}] %) @calls))
+    (is (= #{[:holding? true] [:held-block-id "minecraft:iron_block"] [:held-source-position nil]
+             [:hold-ticks 0] [:body-id "body-1"]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 2 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mag-manip-start-grabs-by-breaking-an-aimed-block-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        host (assoc (mag-manip-host
+                     :raycast {:hit-type :block :block-id "minecraft:copper_block"
+                              :block-position {:x 3.0 :y 1.0 :z 0.0}})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:targeting-grab-range 6.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/normal-metal-blocks []
+                              :caster/weak-metal-blocks ["minecraft:copper_block"]}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:holding? true] [:held-block-id "minecraft:copper_block"]
+             [:held-source-position {:x 3.0 :y 1.0 :z 0.0}] [:hold-ticks 0] [:body-id "body-1"]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mag-manip-start-no-target-test
+  (let [doc (read-skill "mag_manip.edn")
+        host (mag-manip-host :raycast {:hit-type :block :block-id "minecraft:dirt"})
+        input {:tunables {:targeting-grab-range 6.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/normal-metal-blocks [] :caster/weak-metal-blocks []}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (= :no-target (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-manip-pulse-homes-toward-focus-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        held-body {:id "body-1" :position {:x 0.0 :y 1.5 :z 5.0}}
+        host (assoc (mag-manip-host :entity-select [held-body]
+                                    :entity-snapshot {:id "body-1" :position {:x 0.0 :y 1.5 :z 5.0}
+                                                      :alive? true})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:movement-hold-head-y-offset 0.0 :movement-hold-distance 5.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+               :state {:held-block-id "minecraft:iron_block" :hold-ticks 4 :body-id "body-1"}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= :motion/entity-velocity (first %)) @calls))
+    (is (some #(= [:entity/configure {:world-id "overworld" :entity held-body
+                                      :block-id "minecraft:iron_block" :place-when-collide? false}]
+                  %)
+              @calls))
+    (is (= #{[:body-id held-body] [:hold-ticks 5]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest mag-manip-pulse-entity-missing-ends-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        host (assoc (mag-manip-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:movement-hold-head-y-offset 0.0 :movement-hold-distance 5.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0} :world/id "overworld"}
+               :state {:body-id "body-1"}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:entity/configure {:world-id "overworld" :entity "body-1"
+                                      :place-when-collide? true}] %)
+              @calls))
+    (is (= 2 (count (.-vfx frame))))
+    (is (= :entity-missing (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-manip-release-throws-at-raycast-hit-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        held-body {:id "body-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        host (assoc (mag-manip-host :cost-spend true :entity-select [held-body]
+                                    :raycast {:hit? true :position {:x 10.0 :y 1.0 :z 0.0}}
+                                    :entity-snapshot {:id "body-1" :position {:x 0.0 :y 1.0 :z 0.0}
+                                                      :alive? true})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:targeting-max-hold-distance 10.0 :targeting-throw-range 20.0
+                          :movement-throw-speed 3.0 :progression-exp-throw 0.4}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/creative? false :world/id "overworld" :cooldown/main 60}
+               :state {}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (some #(= [:motion/entity-velocity {:target held-body :velocity {:vec3 [3.0 0.0 0.0]}}] %)
+              @calls))
+    (is (some #(and (= :score/mark (:type %)) (= 0.4 (:progression %))) (.-events frame)))
+    (is (some #(= [:cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= :thrown (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-manip-release-throws-toward-aim-when-raycast-misses-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        held-body {:id "body-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        host (assoc (mag-manip-host :cost-spend true :entity-select [held-body]
+                                    :raycast {:hit? false}
+                                    :entity-snapshot {:id "body-1" :position {:x 0.0 :y 1.0 :z 0.0}
+                                                      :alive? true})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:targeting-max-hold-distance 10.0 :targeting-throw-range 20.0
+                          :movement-throw-speed 3.0 :progression-exp-throw 0.4}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/creative? false :world/id "overworld" :cooldown/main 60}
+               :state {}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (testing "no hit -> throw-target = held-body.position + aim*throw-range = (0,1,0)+(20,0,0) = (20,1,0)"
+      (is (some #(= [:motion/entity-velocity {:target held-body :velocity {:vec3 [3.0 0.0 0.0]}}] %)
+                @calls)))
+    (is (= :thrown (:outcome (.-result frame))))))
+
+(deftest mag-manip-release-insufficient-resource-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        held-body {:id "body-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        host (assoc (mag-manip-host :cost-spend false :entity-select [held-body]
+                                    :entity-snapshot {:id "body-1" :position {:x 0.0 :y 1.0 :z 0.0}
+                                                      :alive? true})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:targeting-max-hold-distance 10.0 :targeting-throw-range 20.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/creative? false :world/id "overworld"}
+               :state {}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (some #(= [:entity/configure {:world-id "overworld" :entity held-body
+                                      :place-when-collide? true}] %)
+              @calls))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-manip-release-too-far-test
+  (let [doc (read-skill "mag_manip.edn")
+        held-body {:id "body-1" :position {:x 100.0 :y 1.0 :z 0.0}}
+        host (mag-manip-host :cost-spend true :entity-select [held-body]
+                             :entity-snapshot {:id "body-1" :position {:x 100.0 :y 1.0 :z 0.0}
+                                               :alive? true})
+        input {:tunables {:targeting-max-hold-distance 10.0 :targeting-throw-range 20.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/creative? false :world/id "overworld"}
+               :state {}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :too-far (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-manip-release-entity-missing-test
+  (let [doc (read-skill "mag_manip.edn")
+        host (mag-manip-host :entity-select [])
+        input {:tunables {:targeting-max-hold-distance 10.0 :targeting-throw-range 20.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                             :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                             :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                             :caster/creative? false :world/id "overworld"}
+               :state {}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :entity-missing (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-manip-abort-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        host (assoc (mag-manip-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {} :capabilities {:world/id "overworld"} :state {:body-id "body-1"}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (some #(= [:entity/configure {:world-id "overworld" :entity "body-1"
+                                      :place-when-collide? true}] %)
+              @calls))
+    (is (= 2 (count (.-vfx frame))))
+    (is (= :aborted (:outcome (.-result frame))))))
+
+(deftest mag-manip-block-body-hit-event-damages-target-test
+  (let [calls (atom [])
+        doc (read-skill "mag_manip.edn")
+        host (assoc (mag-manip-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:throw-damage 12.0} :capabilities {:context/target-id "victim-1"}}
+        frame (compile-and-dispatch! doc :block-body-hit host input)]
+    (is (some #(= [:entity/damage {:target "victim-1" :amount 12.0 :damage-type :skill}] %) @calls))
+    (is (= :hit (:outcome (.-result frame))))))

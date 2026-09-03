@@ -169,13 +169,22 @@
        ;; at all (already namespaced) passes through unchanged, so this
        ;; is safe regardless of which shape the host actually hands back.
        ;; Same never-wired-up-reference class already established this
-       ;; session (:vec3/launch, :value/status-id).
+       ;; session (:vec3/launch, :value/status-id). nil-safe: node-core's
+       ;; IR has no short-circuiting -- every :pure op's args are
+       ;; computed as separate instructions before the op combines them
+       ;; (found via mag_manip.edn, S6: (bool/and present? (collection/
+       ;; contains? ... (value/normalize-id block-id))) evaluates the
+       ;; normalize-id call regardless of present?, so an absent held
+       ;; item's nil :block-id reaches here even on the branch that
+       ;; never uses the result).
        :value/normalize-id
-       (let [s (nth args 0) dot1 (.indexOf ^String s ".")]
-         (if (neg? dot1)
-           s
-           (let [tail (subs s (inc dot1)) dot2 (.indexOf ^String tail ".")]
-             (if (neg? dot2) tail (str (subs tail 0 dot2) ":" (subs tail (inc dot2)))))))
+       (if (nil? (nth args 0))
+         nil
+         (let [s (nth args 0) dot1 (.indexOf ^String s ".")]
+           (if (neg? dot1)
+             s
+             (let [tail (subs s (inc dot1)) dot2 (.indexOf ^String tail ".")]
+               (if (neg? dot2) tail (str (subs tail 0 dot2) ":" (subs tail (inc dot2))))))))
 
        :collection/contains? (boolean (some #(= % (nth args 1)) (or (nth args 0) [])))
        :collection/concat (vec (concat (or (nth args 0) []) (or (nth args 1) [])))

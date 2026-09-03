@@ -1,0 +1,285 @@
+;; New-DSL conversion of ac/combat/abilities/mag_manip.edn (S6). Session
+;; ability: grab a metal block (from hand or by breaking one aimed at)
+;; into a physics-driven \"held body\" entity that homes toward a focus
+;; point in front of the caster every :pulse, then throw it on release.
+;;
+;; :pulse's old first half (query \"preflight-bodies\", re-affirm
+;; body-id from it, compute a `holding-nearby?` local) is CONFIRMED
+;; dead: `holding-nearby?` is bound but never referenced anywhere else
+;; in the phase, and the SAME entity query is repeated immediately
+;; after as \"held-bodies\" to do the actual work (which ALSO re-writes
+;; body-id state). This is a genuinely redundant duplicate host query
+;; with zero behavioral difference, not merely an unused read -- dropped
+;; entirely, keeping only the real held-bodies query and its logic.
+;;
+;; :release's throw logic is duplicated in the old content for the
+;; \"raycast hit something\" vs \"raycast missed, throw toward the aimed
+;; point instead\" cases -- only the throw TARGET position differs
+;; between them (:throw-hit's own :position vs held-body.position +
+;; aim*throw-range), and node-core's math/select is a plain expression
+;; (its branches never need a host call), so this collapses into one
+;; `throw-target` computed via math/select up front, then a single
+;; throw body using it -- unlike mag_movement.edn's consolidation
+;; (which needed the predeclare+set! pattern because ITS two paths
+;; differed by real host queries, not a plain value), this one needed
+;; no restructuring device at all.
+;;
+;; :events :block-body-hit's old ability/caster bind pulled
+;; owner-id/eye/aim/body/creative?/world-id -- none of which are ever
+;; read in the event body (only :throw-damage and ?context/target-id
+;; are), and :abort's own ability/caster bind is unused past :world-id.
+;; Both dropped to just the fields actually read, the same class of
+;; dead-read simplification already established this session
+;; (shift_teleport.edn, jet_engine.edn, mag_movement.edn).
+{:schema-version 2
+ :kind :ability
+ :id :mag-manip
+ :revision 3
+ :activation :session
+ :requires [:caster/id :caster/eye :caster/aim :caster/body :caster/creative? :world/id
+            :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :mag-movement :min-exp 0.5}]
+ :tunables {:targeting-grab-range {:curve :const}
+            :targeting-throw-range {:curve :const}
+            :targeting-max-hold-distance {:curve :const}
+            :movement-hold-distance {:curve :const}
+            :movement-hold-head-y-offset {:curve :const}
+            :movement-throw-speed {:curve :mastery-lerp}
+            :cost-up-cp {:curve :mastery-lerp}
+            :cost-up-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :progression-exp-throw {:curve :const}
+            :throw-damage {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :cost-up-cp]}
+                               :overload {:ref [:input :tunables :cost-up-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:holding? {:type :bool :default false}
+                 :held-block-id {:type :any :default nil}
+                 :held-source-position {:type :any :default nil}
+                 :hold-ticks {:type :int :default 0}
+                 :body-id {:type :any :default nil}}
+ :program
+ "{:ability :mag-manip
+   :activation :session
+   :state {:holding? {:type :boolean :default false} :held-block-id {:type :any :default nil}
+           :held-source-position {:type :any :default nil} :hold-ticks {:type :long :default 0}
+           :body-id {:type :any :default nil}}
+   :tunables {:targeting-grab-range {:type :double} :targeting-throw-range {:type :double}
+              :targeting-max-hold-distance {:type :double} :movement-hold-distance {:type :double}
+              :movement-hold-head-y-offset {:type :double} :movement-throw-speed {:type :double}
+              :progression-exp-throw {:type :double} :throw-damage {:type :double}}
+   :phases
+   {:start
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let body ?caster/body)
+     (let normal-metal-blocks ?caster/normal-metal-blocks)
+     (let weak-metal-blocks ?caster/weak-metal-blocks)
+     (let targeting-grab-range $targeting-grab-range)
+     (let held-item (target/item-held {:source :main-hand}))
+     (let metal-blocks (collection/concat normal-metal-blocks weak-metal-blocks))
+     (if (bool/and (:present? held-item)
+                  (collection/contains? metal-blocks (value/normalize-id (:block-id held-item))))
+       [(inventory/consume {:source :main-hand :count 1})
+        (state! :holding? true)
+        (state! :held-block-id (value/normalize-id (:block-id held-item)))
+        (state! :held-source-position nil)
+        (state! :hold-ticks 0)
+        (let spawn-result
+          (entity/spawn {:owner owner-id :entity-type \"academy:entity_magmanip_block_body\"
+                        :position body :velocity [0.0 0.0 0.0] :life-ticks 4096 :barrier? true}))
+        (state! :body-id (:entity-id spawn-result))
+        (vfx! {:effect-id :arc-channel-session :operation :spawn
+              :instance-key [:activation :mag-manip-hold] :audience {:type :nearby :radius 64.0}
+              :payload {:block-bounds nil :charge-ticks 0 :mode :magnetic-hold
+                       :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                     :width 0.04 :color [165 230 255 190]}}
+                       :good? true :target eye :caster eye :block-pos nil
+                       :visual-max-ticks 4096}})
+        (vfx! {:effect-id :audio-loop-session :operation :spawn
+              :instance-key [:activation :mag-manip-hold-audio] :audience {:type :owner}
+              :payload {:position eye :sound-id \"academy:em.lf_loop\" :volume 0.5 :pitch 1.0}})
+        (finish {:outcome :started})]
+       [(let grab-hit (target/raycast {:origin eye :direction aim :distance targeting-grab-range
+                                       :include-entities? false :include-blocks? true}))
+        (if (bool/and (value/eq (:hit-type grab-hit) :block)
+                     (collection/contains? metal-blocks (value/normalize-id (:block-id grab-hit))))
+          [(block/break {:position (:block-position grab-hit) :expected-block-id (:block-id grab-hit)
+                        :drop? false})
+           (state! :holding? true)
+           (state! :held-block-id (value/normalize-id (:block-id grab-hit)))
+           (state! :held-source-position (:block-position grab-hit))
+           (state! :hold-ticks 0)
+           (let spawn-result
+             (entity/spawn {:owner owner-id :entity-type \"academy:entity_magmanip_block_body\"
+                           :position body :velocity [0.0 0.0 0.0] :life-ticks 4096 :barrier? true}))
+           (state! :body-id (:entity-id spawn-result))
+           (vfx! {:effect-id :arc-channel-session :operation :spawn
+                 :instance-key [:activation :mag-manip-hold] :audience {:type :nearby :radius 64.0}
+                 :payload {:block-bounds nil :charge-ticks 0 :mode :magnetic-hold
+                          :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                        :width 0.04 :color [165 230 255 190]}}
+                          :good? true :target eye :caster eye
+                          :block-pos (:block-position grab-hit) :visual-max-ticks 4096}})
+           (vfx! {:effect-id :audio-loop-session :operation :spawn
+                 :instance-key [:activation :mag-manip-hold-audio] :audience {:type :owner}
+                 :payload {:position eye :sound-id \"academy:em.lf_loop\" :volume 0.5 :pitch 1.0}})
+           (finish {:outcome :started})]
+          [(finish {:outcome :no-target :end-ability? true})])])]
+
+    :pulse
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let wid ?world/id)
+     (let movement-hold-head-y-offset $movement-hold-head-y-offset)
+     (let movement-hold-distance $movement-hold-distance)
+     (let owner-now (owner/snapshot {:projection [:position :eye-position]}))
+     (let body-id-state %body-id)
+     (let held-bodies
+       (target/entities {:shape {:type :sphere :center (:position owner-now) :radius 8.0}
+                         :filter {:entity-types [\"academy:entity_magmanip_block_body\"]
+                                 :owner-id owner-id :entity-ids [body-id-state]}
+                         :projection [:id :type :position]
+                         :sort [{:by :id :order :ascending}] :limit 1}))
+     (if (collection/nonempty held-bodies)
+       [(let held-block-id %held-block-id)
+        (let held-source-position %held-source-position)
+        (let hold-ticks-cur %hold-ticks)
+        (let body-id (collection/first held-bodies))
+        (let held-body
+          (target/entity-snapshot {:entity-id (:id body-id) :projection [:id :position :alive?]}))
+        (let focus
+          (vec3/add (vec3/sub eye (vec3/scale [0.0 1.0 0.0] movement-hold-head-y-offset))
+                   (vec3/scale aim movement-hold-distance)))
+        (entity/configure {:world-id wid :entity body-id :block-id held-block-id
+                           :place-when-collide? false})
+        (let delta (vec3/sub focus (:position held-body)))
+        (let distance-squared (vec3/dot delta delta))
+        (let homing-scale
+          (math/mul 0.2 (math/select (math/lt distance-squared 4.0) (math/div distance-squared 4.0)
+                                    1.0)))
+        (motion/entity-velocity {:target body-id
+                                 :velocity (vec3/scale (vec3/normalize delta) homing-scale)})
+        (state! :body-id body-id)
+        (let hold-ticks-next (long/add hold-ticks-cur 1))
+        (state! :hold-ticks hold-ticks-next)
+        (vfx! {:effect-id :arc-channel-session :operation :update
+              :instance-key [:activation :mag-manip-hold]
+              :payload {:block-bounds nil :charge-ticks hold-ticks-next :mode :magnetic-hold
+                       :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                     :width 0.04 :color [165 230 255 190]}}
+                       :good? true :target focus :caster eye :block-pos held-source-position
+                       :visual-max-ticks 4096}})
+        (vfx! {:effect-id :audio-loop-session :operation :update
+              :instance-key [:activation :mag-manip-hold-audio] :payload {:position eye}})
+        (finish {:outcome :continue})]
+       [(entity/configure {:world-id wid :entity body-id-state :place-when-collide? true})
+        (vfx! {:effect-id :arc-channel-session :operation :destroy
+              :instance-key [:activation :mag-manip-hold] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :mag-manip-hold-audio] :payload {:fade-ticks 0}})
+        (finish {:outcome :entity-missing :end-ability? true})])]
+
+    :release
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let body ?caster/body)
+     (let creative? ?caster/creative?)
+     (let wid ?world/id)
+     (let targeting-max-hold-distance $targeting-max-hold-distance)
+     (let targeting-throw-range $targeting-throw-range)
+     (let body-id-state %body-id)
+     (let held-bodies
+       (target/entities {:shape {:type :sphere :center body :radius 8.0}
+                         :filter {:entity-types [\"academy:entity_magmanip_block_body\"]
+                                 :owner-id owner-id :entity-ids [body-id-state]}
+                         :projection [:id :type :position] :limit 1}))
+     (if (collection/nonempty held-bodies)
+       [(let body-id (collection/first held-bodies))
+        (let held-body
+          (target/entity-snapshot {:entity-id (:id body-id) :projection [:id :position :alive?]}))
+        (state! :body-id body-id)
+        (let distance (vec3/distance body (:position held-body)))
+        (let release-budget ?budget/release)
+        (let release-scale
+          (math/select (bool/or creative? (math/gte distance targeting-max-hold-distance)) 0.0 1.0))
+        (let sufficient? (cost/spend {:budget release-budget :scale release-scale}))
+        (if (bool/not sufficient?)
+          [(entity/configure {:world-id wid :entity body-id :place-when-collide? true})
+           (vfx! {:effect-id :arc-channel-session :operation :destroy
+                 :instance-key [:activation :mag-manip-hold] :payload {:fade-ticks 0}})
+           (vfx! {:effect-id :audio-loop-session :operation :destroy
+                 :instance-key [:activation :mag-manip-hold-audio] :payload {:fade-ticks 0}})
+           (finish {:outcome :insufficient-resource :end-ability? true})]
+          [(if (math/lt distance targeting-max-hold-distance)
+             [(let throw-hit (target/raycast {:origin eye :direction aim
+                                              :distance targeting-throw-range
+                                              :include-entities? true :include-blocks? true}))
+              (let throw-target
+                (math/select (:hit? throw-hit) (:position throw-hit)
+                            (vec3/add (:position held-body) (vec3/scale aim targeting-throw-range))))
+              (let movement-throw-speed $movement-throw-speed)
+              (let progression-exp-throw $progression-exp-throw)
+              (let main-cooldown ?cooldown/main)
+              (let throw-direction (vec3/normalize (vec3/sub throw-target (:position held-body))))
+              (entity/configure {:world-id wid :entity body-id :place-when-collide? true})
+              (motion/entity-velocity {:target body-id
+                                       :velocity (vec3/scale throw-direction movement-throw-speed)})
+              (vfx! {:effect-id :beam-arc-fade :operation :spawn
+                    :instance-key [:activation :mag-manip-throw]
+                    :audience {:type :nearby :radius 64.0}
+                    :payload {:fade-at 8 :duration-ticks 12 :arc-at 2 :arc-count-limit 64
+                             :beam-at 0 :arc-radius {:min 0.1 :max 0.25}
+                             :start (:position held-body) :ring-radius {:from 0.12 :to 0.34}
+                             :arc-life-ticks 8 :fade-to-tick 12 :arc-spacing {:min 1.0 :max 2.0}
+                             :fade-from-alpha 1.0
+                             :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
+                                     {:shape :tube :radius 0.09 :color [241 240 222 200]}
+                                     {:shape :line :width 0.02 :color [165 230 255 160]}]
+                             :grow-ticks 2 :fade-to-alpha 0.0 :end throw-target
+                             :fade-from-tick 8 :ring-color [188 252 238 180] :ring-segments 12}})
+              (vfx! {:effect-id :audio-one-shot :operation :spawn :instance-key []
+                    :audience {:type :nearby :radius 64.0}
+                    :payload {:position (:position held-body) :sound-id \"academy:em.mag_manip\"
+                             :volume 0.9 :pitch 1.0}})
+              (event! {:type :score/mark :progression progression-exp-throw})
+              (cooldown/start {:name :main :ticks main-cooldown})
+              (vfx! {:effect-id :arc-channel-session :operation :destroy
+                    :instance-key [:activation :mag-manip-hold] :payload {:fade-ticks 0}})
+              (vfx! {:effect-id :audio-loop-session :operation :destroy
+                    :instance-key [:activation :mag-manip-hold-audio] :payload {:fade-ticks 0}})
+              (finish {:outcome :thrown :end-ability? true})]
+             [(entity/configure {:world-id wid :entity body-id :place-when-collide? true})
+              (vfx! {:effect-id :arc-channel-session :operation :destroy
+                    :instance-key [:activation :mag-manip-hold] :payload {:fade-ticks 0}})
+              (vfx! {:effect-id :audio-loop-session :operation :destroy
+                    :instance-key [:activation :mag-manip-hold-audio] :payload {:fade-ticks 0}})
+              (finish {:outcome :too-far :end-ability? true})])])]
+       [(entity/configure {:world-id wid :entity body-id-state :place-when-collide? true})
+        (vfx! {:effect-id :arc-channel-session :operation :destroy
+              :instance-key [:activation :mag-manip-hold] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :mag-manip-hold-audio] :payload {:fade-ticks 0}})
+        (finish {:outcome :entity-missing :end-ability? true})])]
+
+    :abort
+    [(let wid ?world/id)
+     (let body-id %body-id)
+     (entity/configure {:world-id wid :entity body-id :place-when-collide? true})
+     (vfx! {:effect-id :arc-channel-session :operation :destroy
+           :instance-key [:activation :mag-manip-hold] :payload {:fade-ticks 0}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :mag-manip-hold-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :aborted :end-ability? true})]
+
+    :block-body-hit
+    [(let throw-damage $throw-damage)
+     (let target-id ?context/target-id)
+     (combat/damage {:target target-id :amount throw-damage :damage-type :skill})
+     (finish {:outcome :hit})]}}"
+ :progression nil
+ :invariants nil
+ :mark-policies nil}
