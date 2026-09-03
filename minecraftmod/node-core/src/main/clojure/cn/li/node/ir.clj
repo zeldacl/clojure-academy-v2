@@ -30,7 +30,7 @@
 
 (def instr-ops
   #{:pure :get :tun :cap :query :action :vfx :event :state-read :state-write
-    :copy :convert :map-lit :branch :jump :finish})
+    :copy :convert :map-lit :vec-lit :branch :jump :finish})
 
 (def terminator-ops #{:branch :jump :finish})
 

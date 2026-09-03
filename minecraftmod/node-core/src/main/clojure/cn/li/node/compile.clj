@@ -404,6 +404,31 @@
     (append! env block-id {:op :map-lit :nid (nid! env) :dst dst :args resolved})
     {:reg dst :block-id block-id}))
 
+(defn- compile-vec-literal
+  "[...] in expression position -> a :vec-lit instruction, compile-map-
+   literal's sibling for ORDERED rather than keyed data (:add-tags [\"x\"],
+   :instance-key [:activation :foo] -- both real shapes in ac's ability
+   content once entity/spawn and projectile/schedule-beam calls started
+   getting converted, S6). A plain [x y z] all-number vector is NOT this:
+   literal?/compile-literal! already claim that shape as a folded :vec3
+   constant (see this file's own docstring on vec3-literal?), checked
+   before compile-form ever reaches this function -- so this only ever
+   sees a non-vec3 vector. Every element compiles as an ordinary pure
+   expression, same allow-calls?=false rule as compile-map-literal, and
+   :args is a VECTOR of registers (order-preserving) rather than a map,
+   which cn.li.node.ir/validate-instr! and cn.li.mcmod.runtime.effect-
+   emit/compile-args already both handle generically alongside :map-lit's
+   map shape -- no format-specific plumbing needed on either side."
+  [env locals block-id depth form]
+  (let [[resolved block-id]
+        (reduce (fn [[acc block-id] v-form]
+                  (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
+                    [(conj acc reg) block-id]))
+                [[] block-id] form)
+        dst (alloc-reg! env :objects :any)]
+    (append! env block-id {:op :vec-lit :nid (nid! env) :dst dst :args resolved})
+    {:reg dst :block-id block-id}))
+
 (defn compile-form
   "Compile one expression/call form against `locals` at `block-id`.
    allow-calls?: when false (pure-op args, node/fn call args, when/each
@@ -436,6 +461,10 @@
     ;; further call: a map literal is data construction, not control
     ;; flow); keys must be literal (always keywords in every real use).
     (map? form) (compile-map-literal env locals block-id depth form)
+    ;; Reached only for a non-vec3 vector (literal?/vec3-literal? above
+    ;; already claimed the [x y z]-all-numbers shape) -- see
+    ;; compile-vec-literal's own docstring.
+    (vector? form) (compile-vec-literal env locals block-id depth form)
     :else (throw (ex-info "unsupported DSL form" {:form form}))))
 
 ;; --- statement compilation ---------------------------------------------------

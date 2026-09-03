@@ -65,6 +65,7 @@
         :cap (sigil-sym "?" (:key instr))
         :state-read (sigil-sym "%" (:key instr))
         :map-lit (into {} (map (fn [[k r]] [k (reconstruct ir pidx let-names r)])) (:args instr))
+        :vec-lit (mapv #(reconstruct ir pidx let-names %) (:args instr))
         (:copy :convert) (reconstruct ir pidx let-names (:src instr))
         (throw (ex-info "cannot reconstruct expression for this register"
                         {:reg reg :instr instr}))))))
@@ -79,7 +80,7 @@
    silently drop the reassignment entirely. Takes the whole instr, not
    just its :op, for exactly this per-instruction distinction."
   [instr]
-  (and (contains? #{:pure :get :tun :cap :copy :convert :map-lit :state-read} (:op instr))
+  (and (contains? #{:pure :get :tun :cap :copy :convert :map-lit :vec-lit :state-read} (:op instr))
        (not (:reassign? instr))))
 
 (defn- fresh-sym! [counter prefix] (symbol (str prefix (swap! counter inc))))

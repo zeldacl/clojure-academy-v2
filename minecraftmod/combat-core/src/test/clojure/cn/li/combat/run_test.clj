@@ -99,6 +99,25 @@
            actually checked and decremented each iteration, not just
            evaluated once against the starting energy"))))
 
+(deftest vec-literal-actually-reaches-the-host-as-an-ordered-vector-test
+  (testing "found converting ac's real content for S6 (electron_bomb.edn's
+            entity/spawn :add-tags [\"ac_electron_bomb\"]) -- proves a
+            :vec-lit argument's RUNTIME value, not just that it compiles"
+    (let [ir (run/compile-doc!
+              "{:ability :tag-test :activation :instant :tunables {}
+                :do [(cooldown/start {:name :main :ticks 1})
+                     (vfx! {:effect-id :arc-strike-transient :operation :spawn
+                           :start ?caster/eye :tags [:a \"b\" 3]})
+                     (finish {:outcome :performed :end-ability? true})]}")
+          calls (atom [])
+          host {:query! (fn [_cap _args _fr])
+                :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+          program (run/compile-program ir host)
+          input {:tunables {} :capabilities {:caster/eye {:x 1.0 :y 2.0 :z 3.0}}}
+          frame (run/dispatch! program :default input)]
+      (is (= [:a "b" 3] (:tags (first (.-vfx frame)))))
+      (is (= [[:cooldown/start {:name :main :ticks 1}]] @calls)))))
+
 (deftest damage-does-not-run-when-raycast-misses-test
   (let [ir (run/compile-doc! thunder-bolt-ish)
         calls (atom [])
