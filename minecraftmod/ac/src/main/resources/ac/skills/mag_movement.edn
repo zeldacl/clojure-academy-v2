@@ -1,0 +1,254 @@
+;; New-DSL conversion of ac/combat/abilities/mag_movement.edn (S6).
+;; Session ability: lock onto a metal block or metal entity, then pull
+;; the caster toward it every tick until released/aborted/lost.
+;;
+;; The old :start cascades through THREE structurally identical
+;; \"lock onto this target\" bodies (normal-metal block, weak-metal
+;; block, metal entity -- differing only in what target-kind/id/
+;; position get set to) and FOUR structurally identical \"no valid
+;; target\" fallback bodies (one per cascade exit). Both are
+;; consolidated here into a single lock-on block and a single fallback
+;; block, reached via one combined boolean condition computed with the
+;; established predeclare-then-set! pattern (apply_break_budget.edn/
+;; scatter_bomb.edn) rather than duplicated 3x/4x -- this is a
+;; deliberate, provably behavior-preserving restructuring (every old
+;; condition is still checked, every action still taken exactly once
+;; on the same inputs), not a simplification of live logic the way
+;; this migration's other conversions have avoided. The scale here
+;; (3-4x duplication of already-large blocks) is what makes literal
+;; duplication impractical where every other converted ability's
+;; smaller repeated blocks were kept duplicated as-is.
+;; :pulse's :entity vs :block target-kind branches are consolidated
+;; the same way: the entity branch's only real difference is refreshing
+;; target-position from a live snapshot (and bailing to :target-lost if
+;; the entity died) before falling into the identical movement update
+;; both branches already shared.
+;;
+;; Two real vocabulary gaps found, both the same never-wired-up-
+;; reference class already established this session (:vec3/launch,
+;; :value/status-id):
+;; - :value/normalize-id (comparing a raycast hit's raw block/entity-
+;;   type id against a magnetic-material allowlist) was referenced but
+;;   never implemented. mcmod/runtime/expression_catalog.clj's own
+;;   worked example (\"block.minecraft.iron_block\") is a translation
+;;   key, not the \"minecraft:iron_block\" namespaced-id shape an
+;;   allowlist actually contains -- implemented to drop the leading
+;;   type-prefix segment and turn the next '.' into ':', passing an
+;;   already-namespaced string through unchanged.
+;; - :caster/normal-metal-blocks, :caster/weak-metal-blocks,
+;;   :caster/metal-entities (bound via the old ability/caster
+;;   component, so they LOOK like per-player state) are actually
+;;   server-configured constant allowlists -- added to
+;;   combat-core/run.clj's fixed-capabilities as :any.
+;;
+;; A genuinely dead :world/id read in :pulse's old entity branch
+;; (bound as :wid, never referenced again -- target/entity-snapshot's
+;; vocab node has no :world-id param at all) is dropped, the same class
+;; of simplification already established (shift_teleport.edn).
+{:schema-version 2
+ :kind :ability
+ :id :mag-movement
+ :revision 3
+ :activation :session
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative? :world/id
+            :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :arc-gen :min-exp 0.0} {:skill-id :current-charging :min-exp 0.7}]
+ :tunables {:targeting-range {:curve :const}
+            :acceleration {:curve :const}
+            :weak-metal-exp-threshold {:curve :const}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :exp-min {:curve :const}
+            :exp-distance-scale {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :cost-down-overload]}}}
+         :pulse {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}
+ :session-state {:has-target {:type :bool :default false}
+                 :target-kind {:type :any :default nil}
+                 :target-id {:type :any :default nil}
+                 :target-position {:type :any :default nil}
+                 :start-position {:type :any :default nil}
+                 :motion {:type :any :default nil}
+                 :movement-ticks {:type :int :default 0}
+                 :overload-floor {:type :float :default 0.0}}
+ :program
+ "{:ability :mag-movement
+   :activation :session
+   :state {:has-target {:type :boolean :default false} :target-kind {:type :any :default nil}
+           :target-id {:type :any :default nil} :target-position {:type :any :default nil}
+           :start-position {:type :any :default nil} :motion {:type :any :default nil}
+           :movement-ticks {:type :long :default 0} :overload-floor {:type :double :default 0.0}}
+   :tunables {:targeting-range {:type :double} :cost-down-overload {:type :double}
+              :acceleration {:type :double} :exp-min {:type :double}
+              :exp-distance-scale {:type :double}}
+   :phases
+   {:start
+    [(let creative? ?caster/creative?)
+     (let activate-budget ?budget/activate)
+     (let activate-scale (math/select creative? 0.0 1.0))
+     (let sufficient? (cost/spend {:budget activate-budget :scale activate-scale}))
+     (if sufficient?
+       [(let eye0 ?caster/eye)
+        (let aim0 ?caster/aim)
+        (let normal-metal-blocks ?caster/normal-metal-blocks)
+        (let weak-metal-blocks ?caster/weak-metal-blocks)
+        (let metal-entities ?caster/metal-entities)
+        (let targeting-range $targeting-range)
+        (let aim-hit (target/raycast {:origin eye0 :direction aim0 :distance targeting-range
+                                      :include-entities? true :include-blocks? true}))
+        (let target-kind nil)
+        (let target-id nil)
+        (let target-position nil)
+        (let found? false)
+        (when (value/eq (:hit-type aim-hit) :block)
+          (let block-id-norm (value/normalize-id (:block-id aim-hit)))
+          (when (bool/or (collection/contains? normal-metal-blocks block-id-norm)
+                        (collection/contains? weak-metal-blocks block-id-norm))
+            (set! target-kind :block)
+            (set! target-position (:position aim-hit))
+            (set! found? true)))
+        (when (value/eq (:hit-type aim-hit) :entity)
+          (let target-entity
+            (target/entity-snapshot {:entity-id (:entity-id aim-hit)
+                                     :projection [:id :type :entity-type :eye-position :alive?]}))
+          (let entity-type-norm (value/normalize-id (:entity-type target-entity)))
+          (when (bool/and (:alive? target-entity)
+                          (collection/contains? metal-entities entity-type-norm))
+            (set! target-kind :entity)
+            (set! target-id (:id target-entity))
+            (set! target-position (:eye-position target-entity))
+            (set! found? true)))
+        (if found?
+          [(let owner-id ?caster/id)
+           (let cost-down-overload $cost-down-overload)
+           (let context-resources ?context/resources)
+           (let owner-now (owner/snapshot {:projection [:position :velocity]}))
+           (let overload-floor
+             (math/max 0.0 (math/sub (:overload context-resources)
+                                    (math/mul cost-down-overload activate-scale))))
+           (state! :has-target true)
+           (state! :target-kind target-kind)
+           (state! :target-id target-id)
+           (state! :target-position target-position)
+           (state! :start-position (:position owner-now))
+           (state! :motion (:velocity owner-now))
+           (state! :movement-ticks 0)
+           (state! :overload-floor overload-floor)
+           (vfx! {:effect-id :arc-channel-session :operation :spawn
+                 :instance-key [:activation :mag-movement-arc] :audience {:type :nearby :radius 64.0}
+                 :payload {:block-bounds nil :charge-ticks 0 :mode :movement
+                          :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                        :width 0.04 :color [165 230 255 190]}}
+                          :good? true :target target-position :caster eye0 :block-pos nil
+                          :visual-max-ticks 4096}})
+           (vfx! {:effect-id :audio-loop-session :operation :spawn
+                 :instance-key [:activation :mag-movement-audio] :audience {:type :nearby :radius 32.0}
+                 :payload {:position eye0 :sound-id \"academy:em.move_loop\" :volume 0.58
+                          :pitch 1.0}})
+           (finish {:outcome :started})]
+          [(let owner-id ?caster/id)
+           (let exp-min $exp-min)
+           (let exp-distance-scale $exp-distance-scale)
+           (let traveled 0.0)
+           (event! {:type :score/mark
+                   :progression (math/max exp-min (math/mul exp-distance-scale traveled))})
+           (entity/reset-fall-damage {:target owner-id})
+           (finish {:outcome :no-target :end-ability? true})])]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let target-kind %target-kind)
+     (let target-position-cur %target-position)
+     (let target-lost? false)
+     (when (value/eq target-kind :entity)
+       (let target-id %target-id)
+       (let target-entity
+         (target/entity-snapshot {:entity-id target-id
+                                  :projection [:id :type :entity-type :eye-position :alive?]}))
+       (if (:alive? target-entity)
+         [(set! target-position-cur (:eye-position target-entity))
+          (state! :target-position target-position-cur)]
+         [(set! target-lost? true)]))
+     (if target-lost?
+       [(let owner-id ?caster/id)
+        (let exp-min $exp-min)
+        (let exp-distance-scale $exp-distance-scale)
+        (let start-position %start-position)
+        (let finish-owner (owner/snapshot {:projection [:position]}))
+        (let traveled (vec3/distance (:position finish-owner) start-position))
+        (event! {:type :score/mark
+                :progression (math/max exp-min (math/mul exp-distance-scale traveled))})
+        (entity/reset-fall-damage {:target owner-id})
+        (vfx! {:effect-id :arc-channel-session :operation :destroy
+              :instance-key [:activation :mag-movement-arc] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :mag-movement-audio] :payload {:fade-ticks 0}})
+        (finish {:outcome :target-lost :end-ability? true})]
+       [(let acceleration $acceleration)
+        (let pulse-budget ?budget/pulse)
+        (let owner-id ?caster/id)
+        (let eye ?caster/eye)
+        (let creative? ?caster/creative?)
+        (let overload-floor %overload-floor)
+        (let prior-motion %motion)
+        (let movement-ticks-cur %movement-ticks)
+        (resource/enforce-floor {:resource :overload :minimum overload-floor})
+        (let owner-now (owner/snapshot {:projection [:position :velocity]}))
+        (let pulse-scale (math/select creative? 0.0 1.0))
+        (let sufficient? (cost/spend {:budget pulse-budget :scale pulse-scale}))
+        (if (bool/not sufficient?)
+          [(finish {:outcome :insufficient-resource :next-phase :release})]
+          [(let desired (vec3/normalize (vec3/sub target-position-cur (:position owner-now))))
+           (let speed-delta
+             (math/abs (math/sub (vec3/dot (:velocity owner-now) (:velocity owner-now))
+                                 (vec3/dot prior-motion prior-motion))))
+           (let base-velocity
+             (math/select (math/gt speed-delta 0.5) (:velocity owner-now) prior-motion))
+           (let next-velocity (vec3/approach base-velocity desired acceleration))
+           (motion/velocity {:velocity next-velocity})
+           (state! :motion next-velocity)
+           (let movement-ticks-next (long/add movement-ticks-cur 1))
+           (state! :movement-ticks movement-ticks-next)
+           (vfx! {:effect-id :arc-channel-session :operation :update
+                 :instance-key [:activation :mag-movement-arc]
+                 :payload {:block-bounds nil :charge-ticks movement-ticks-next :mode :movement
+                          :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                        :width 0.04 :color [165 230 255 190]}}
+                          :good? true :target target-position-cur :caster eye :block-pos nil
+                          :visual-max-ticks 4096}})
+           (vfx! {:effect-id :audio-loop-session :operation :update
+                 :instance-key [:activation :mag-movement-audio] :payload {:position eye}})
+           (finish {:outcome :continue})])])]
+
+    :release
+    [(let owner-id ?caster/id)
+     (let exp-min $exp-min)
+     (let exp-distance-scale $exp-distance-scale)
+     (let start-position %start-position)
+     (let finish-owner (owner/snapshot {:projection [:position]}))
+     (let traveled (vec3/distance (:position finish-owner) start-position))
+     (event! {:type :score/mark :progression (math/max exp-min (math/mul exp-distance-scale traveled))})
+     (entity/reset-fall-damage {:target owner-id})
+     (vfx! {:effect-id :arc-channel-session :operation :destroy
+           :instance-key [:activation :mag-movement-arc] :payload {:fade-ticks 0}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :mag-movement-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :released :end-ability? true})]
+
+    :abort
+    [(let owner-id ?caster/id)
+     (let exp-min $exp-min)
+     (let exp-distance-scale $exp-distance-scale)
+     (let start-position %start-position)
+     (let finish-owner (owner/snapshot {:projection [:position]}))
+     (let traveled (vec3/distance (:position finish-owner) start-position))
+     (event! {:type :score/mark :progression (math/max exp-min (math/mul exp-distance-scale traveled))})
+     (entity/reset-fall-damage {:target owner-id})
+     (vfx! {:effect-id :arc-channel-session :operation :destroy
+           :instance-key [:activation :mag-movement-arc] :payload {:fade-ticks 0}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :mag-movement-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :cooldown nil
+ :progression nil
+ :invariants nil
+ :mark-policies nil}

@@ -43,7 +43,14 @@
    ;; A server-side region/permission gate, not per-ability-named like
    ;; ?budget/* or ?cooldown/* -- mine_ray.edn (S6) is the first real
    ;; content to read it, guarding every block-mining branch.
-   :ability/destroy-blocks? :boolean})
+   :ability/destroy-blocks? :boolean
+   ;; Server-configured magnetic-material allowlists, not real per-player
+   ;; state despite living under the :caster/* namespace in the old
+   ;; content's own ability/caster bind -- mag_movement.edn (S6) is the
+   ;; first real content to read them, each a list of normalized block/
+   ;; entity-type ids checked via collection/contains?.
+   :caster/normal-metal-blocks :any :caster/weak-metal-blocks :any
+   :caster/metal-entities :any})
 
 (defn capability-type [key]
   (or (get fixed-capabilities key)

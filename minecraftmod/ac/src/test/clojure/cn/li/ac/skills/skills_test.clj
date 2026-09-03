@@ -3071,3 +3071,160 @@
         frame (compile-and-dispatch! doc :abort host input)]
     (is (= 3 (count (.-vfx frame))))
     (is (= :aborted (:outcome (.-result frame))))))
+
+(defn- mag-movement-host
+  [& {:keys [cost-spend raycast entity-snapshot]
+      :or {cost-spend true raycast {} entity-snapshot {}}}]
+  {:query! (fn [cap args _fr]
+            (case cap
+              :raycast raycast
+              :entity/snapshot entity-snapshot
+              :owner/snapshot {:position {:x 0.0 :y 0.0 :z 0.0} :velocity {:x 0.0 :y 0.0 :z 0.0}}
+              :cost/spend cost-spend))
+   :command! (fn [_cap _args _fr])})
+
+(deftest mag-movement-start-locks-onto-a-normal-metal-block-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host
+              :raycast {:hit-type :block :block-id "minecraft:iron_block"
+                       :position {:x 5.0 :y 1.0 :z 0.0}})
+        input {:tunables {:targeting-range 8.0 :cost-down-overload 5.0}
+               :capabilities {:caster/creative? false :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :caster/normal-metal-blocks ["minecraft:iron_block"]
+                              :caster/weak-metal-blocks [] :caster/metal-entities []
+                              :context/resources {:overload 15.0} :caster/id "player-1"}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:has-target true] [:target-kind :block] [:target-id nil]
+             [:target-position {:x 5.0 :y 1.0 :z 0.0}] [:start-position {:x 0.0 :y 0.0 :z 0.0}]
+             [:motion {:x 0.0 :y 0.0 :z 0.0}] [:movement-ticks 0] [:overload-floor 10.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 2 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mag-movement-start-locks-onto-a-weak-metal-block-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host
+              :raycast {:hit-type :block :block-id "minecraft:copper_block"
+                       :position {:x 5.0 :y 1.0 :z 0.0}})
+        input {:tunables {:targeting-range 8.0 :cost-down-overload 5.0}
+               :capabilities {:caster/creative? false :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/normal-metal-blocks []
+                              :caster/weak-metal-blocks ["minecraft:copper_block"]
+                              :caster/metal-entities [] :context/resources {:overload 15.0}
+                              :caster/id "player-1"}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (some #(= {:key :target-kind :value :block} (select-keys % [:key :value]))
+              (.-stateWrites frame)))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mag-movement-start-locks-onto-a-metal-entity-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host
+              :raycast {:hit-type :entity :entity-id "iron-golem-1"}
+              :entity-snapshot {:id "iron-golem-1" :entity-type "minecraft:iron_golem"
+                                :eye-position {:x 6.0 :y 1.8 :z 0.0} :alive? true})
+        input {:tunables {:targeting-range 8.0 :cost-down-overload 5.0}
+               :capabilities {:caster/creative? false :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/normal-metal-blocks []
+                              :caster/weak-metal-blocks []
+                              :caster/metal-entities ["minecraft:iron_golem"]
+                              :context/resources {:overload 15.0} :caster/id "player-1"}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:has-target true] [:target-kind :entity] [:target-id "iron-golem-1"]
+             [:target-position {:x 6.0 :y 1.8 :z 0.0}] [:start-position {:x 0.0 :y 0.0 :z 0.0}]
+             [:motion {:x 0.0 :y 0.0 :z 0.0}] [:movement-ticks 0] [:overload-floor 10.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mag-movement-start-no-valid-target-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host :raycast {:hit-type :block :block-id "minecraft:dirt"})
+        input {:tunables {:targeting-range 8.0 :cost-down-overload 5.0 :exp-min 0.1
+                          :exp-distance-scale 0.01}
+               :capabilities {:caster/creative? false :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :caster/normal-metal-blocks []
+                              :caster/weak-metal-blocks [] :caster/metal-entities []
+                              :context/resources {:overload 15.0} :caster/id "player-1"}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (some #(and (= :score/mark (:type %)) (= 0.1 (:progression %))) (.-events frame)))
+    (is (= :no-target (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-movement-start-insufficient-resource-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host :cost-spend false)
+        input {:tunables {} :capabilities {:caster/creative? false}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (empty? (.-stateWrites frame)))))
+
+(deftest mag-movement-pulse-block-target-moves-caster-test
+  (let [calls (atom [])
+        doc (read-skill "mag_movement.edn")
+        host (assoc (mag-movement-host) :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:acceleration 0.1}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/creative? false}
+               :state {:target-kind :block :target-position {:x 10.0 :y 0.0 :z 0.0}
+                      :overload-floor 5.0 :motion {:x 0.0 :y 0.0 :z 0.0} :movement-ticks 3}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= :motion/velocity (first %)) @calls))
+    (is (= #{[:motion {:vec3 [0.1 0.0 0.0]}] [:movement-ticks 4]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest mag-movement-pulse-entity-target-refreshes-position-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host
+              :entity-snapshot {:eye-position {:x 12.0 :y 1.0 :z 0.0} :alive? true})
+        input {:tunables {:acceleration 0.1}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/creative? false}
+               :state {:target-kind :entity :target-id "iron-golem-1"
+                      :target-position {:x 10.0 :y 0.0 :z 0.0} :overload-floor 5.0
+                      :motion {:x 0.0 :y 0.0 :z 0.0} :movement-ticks 3}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= {:key :target-position :value {:x 12.0 :y 1.0 :z 0.0}}
+                  (select-keys % [:key :value]))
+              (.-stateWrites frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest mag-movement-pulse-entity-died-ends-with-target-lost-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host :entity-snapshot {:alive? false})
+        input {:tunables {:exp-min 0.1 :exp-distance-scale 0.01}
+               :capabilities {:caster/id "player-1"}
+               :state {:target-kind :entity :target-id "iron-golem-1"
+                      :target-position {:x 10.0 :y 0.0 :z 0.0} :overload-floor 5.0
+                      :start-position {:x 0.0 :y 0.0 :z 0.0}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= :target-lost (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mag-movement-pulse-insufficient-budget-routes-to-release-test
+  (let [doc (read-skill "mag_movement.edn")
+        host (mag-movement-host :cost-spend false)
+        input {:tunables {:acceleration 0.1}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/creative? false}
+               :state {:target-kind :block :target-position {:x 10.0 :y 0.0 :z 0.0}
+                      :overload-floor 5.0 :motion {:x 0.0 :y 0.0 :z 0.0} :movement-ticks 3}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (= :release (:next-phase (.-result frame))))))
+
+(deftest mag-movement-release-and-abort-both-mark-progression-and-destroy-vfx-test
+  (doseq [phase [:release :abort]]
+    (let [doc (read-skill "mag_movement.edn")
+          host (mag-movement-host)
+          input {:tunables {:exp-min 0.1 :exp-distance-scale 0.01}
+                 :capabilities {:caster/id "player-1"}
+                 :state {:start-position {:x 0.0 :y 0.0 :z 0.0}}}
+          frame (compile-and-dispatch! doc phase host input)]
+      (is (some #(and (= :score/mark (:type %)) (= 0.1 (:progression %))) (.-events frame))
+          (str "phase " phase))
+      (is (= 2 (count (.-vfx frame))) (str "phase " phase))
+      (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
+          (str "phase " phase)))))

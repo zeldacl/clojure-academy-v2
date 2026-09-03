@@ -77,6 +77,8 @@
    ;; :vec3/launch and :vec3/scatter-end already established.
    :value/status-id             {:params [:string] :returns :keyword}
    :value/status-max-amplifier  {:params [:string] :returns :long}
+   ;; See cn.li.node.expr's matching comment. S6's mag_movement.edn.
+   :value/normalize-id          {:params [:string] :returns :string}
    ;; cn.li.node.expr already implements this (a projectile-type
    ;; allowlist/blocklist check, S6's vec_deviation.edn); exposing it here
    ;; is the same "wire an existing-but-unreachable expr opcode into

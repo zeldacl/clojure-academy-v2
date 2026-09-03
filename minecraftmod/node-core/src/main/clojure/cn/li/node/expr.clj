@@ -158,6 +158,25 @@
        :value/status-id (keyword (first (str/split (nth args 0) #":")))
        :value/status-max-amplifier (Long/parseLong (second (str/split (nth args 0) #":")))
 
+       ;; mag_movement.edn's (S6) block/entity-type ids, comparing a
+       ;; raycast hit's raw :block-id/:entity-type against a magnetic-
+       ;; material allowlist. mcmod/runtime/expression-catalog.clj's own
+       ;; worked example ("block.minecraft.iron_block") is a Minecraft
+       ;; translation key, not the "minecraft:iron_block" namespaced-id
+       ;; shape an allowlist actually contains -- drop the leading
+       ;; type-prefix segment (the part before the first '.') and turn
+       ;; the next '.' into the real ':' separator. A string with no '.'
+       ;; at all (already namespaced) passes through unchanged, so this
+       ;; is safe regardless of which shape the host actually hands back.
+       ;; Same never-wired-up-reference class already established this
+       ;; session (:vec3/launch, :value/status-id).
+       :value/normalize-id
+       (let [s (nth args 0) dot1 (.indexOf ^String s ".")]
+         (if (neg? dot1)
+           s
+           (let [tail (subs s (inc dot1)) dot2 (.indexOf ^String tail ".")]
+             (if (neg? dot2) tail (str (subs tail 0 dot2) ":" (subs tail (inc dot2)))))))
+
        :collection/contains? (boolean (some #(= % (nth args 1)) (or (nth args 0) [])))
        :collection/concat (vec (concat (or (nth args 0) []) (or (nth args 1) [])))
        :collection/remove (vec (remove #(= % (nth args 1)) (or (nth args 0) [])))
