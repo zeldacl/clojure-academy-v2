@@ -285,6 +285,73 @@
       (is (= :destroy (:operation (first (.-vfx frame)))))
       (is (= :aborted (:outcome (.-result frame)))))))
 
+(deftest arc-gen-entity-hit-creeper-charged-test
+  (let [doc (read-skill "arc_gen.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id "e1" :entity-type "minecraft:creeper"
+                                  :position {:x 1.0 :y 0.0 :z 0.0}}
+                         :random/chance true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:damage 10.0 :max-distance 20.0 :ignite-probability 0.1
+                          :fishing-probability 0.1 :fishing-exp-threshold 0.5
+                          :creeper-charge-chance 0.5 :cooldown-endpoints [100.0 20.0]
+                          :exp-entity 0.2 :exp-block 0.1}
+               :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :world/id "overworld" :progression/mastery 0.5 :rng/seed 3
+                              :budget/activate {:cp 5.0} :progression/hit-entity 1.0
+                              :progression/hit-block 1.0}}
+        frame (run/dispatch! program :default input)]
+    (testing "entity hit -> combat/damage, not the block-impact path"
+      (is (some #(= [:command :entity/damage {:target "e1" :amount 10.0 :damage-type :skill}] %) @calls)))
+    (testing "creeper + charged roll -> powered-creeper status applied"
+      (is (some #(= [:command :entity/status
+                    {:target "e1" :status-id :powered-creeper :duration-ticks 1.0 :amplifier 0}] %)
+                @calls)))
+    (testing "cooldown-ticks-next = floor(lerp(100,20, mastery+exp-entity)) = floor(lerp(100,20,0.7)) = 44"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 44}] %) @calls)))
+    (testing "the electromaster.arc_gen achievement event fired"
+      (is (some #(and (= :achievement/trigger (:type %)) (= "electromaster.arc_gen" (:id (:payload %))))
+                (.-events frame))))
+    (is (= :performed (:outcome (.-result frame))))))
+
+(deftest arc-gen-block-hit-test
+  (let [doc (read-skill "arc_gen.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id nil :block-position {:x 2.0 :y 0.0 :z 0.0}
+                                  :position {:x 2.0 :y 0.0 :z 0.0} :water? true}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:damage 10.0 :max-distance 20.0 :ignite-probability 0.1
+                          :fishing-probability 0.1 :fishing-exp-threshold 0.5
+                          :creeper-charge-chance 0.5 :cooldown-endpoints [100.0 20.0]
+                          :exp-entity 0.2 :exp-block 0.1}
+               :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :world/id "overworld" :progression/mastery 0.5 :rng/seed 3
+                              :budget/activate {:cp 5.0} :progression/hit-entity 1.0
+                              :progression/hit-block 1.0}}
+        frame (run/dispatch! program :default input)]
+    (testing "no entity -> no combat/damage or creeper-charge roll, no random/chance query at all"
+      (is (not (some #(= :entity/damage (second %)) @calls)))
+      (is (not (some #(= :random/chance (second %)) @calls))))
+    (testing "the block-impact event carries the resolved fields, not raw refs"
+      (is (some #(and (= :world/block-impact (:type %)) (true? (:water? (:payload %)))
+                      (= "overworld" (:world-id (:payload %))))
+                (.-events frame))))
+    (testing "cooldown-ticks-next = floor(lerp(100,20, mastery+exp-block)) = floor(lerp(100,20,0.6)) = 52"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 52}] %) @calls)))
+    (is (= :performed (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
