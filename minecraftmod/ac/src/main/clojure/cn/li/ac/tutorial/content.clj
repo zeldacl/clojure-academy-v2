@@ -95,20 +95,21 @@
   cannot be found."
   ([tut-id] (load-tutorial-content nil tut-id))
   ([lang tut-id]
-   (let [resolved-lang (resolve-lang lang)
-         path (resource-path resolved-lang tut-id)]
-     (try
-       (if-let [res (io/resource path)]
-         (let [raw (slurp res)
-               parsed (parse-sections raw)]
-           (log/debug "Loaded tutorial content:" (name tut-id) "from" path)
-           parsed)
-         (do
-           (log/debug "Tutorial content not found:" path)
-           nil))
-       (catch Exception e
-         (log/warn "Failed to load tutorial content" {:path path :error (ex-message e)})
-         nil)))))
+   (when tut-id
+     (let [resolved-lang (resolve-lang lang)
+           path (resource-path resolved-lang tut-id)]
+       (try
+         (if-let [res (io/resource path)]
+           (let [raw (slurp res)
+                 parsed (parse-sections raw)]
+             (log/debug "Loaded tutorial content:" (name tut-id) "from" path)
+             parsed)
+           (do
+             (log/debug "Tutorial content not found:" path)
+             nil))
+         (catch Exception e
+           (log/warn "Failed to load tutorial content" {:path path :error (ex-message e)})
+           nil))))))
 
 ;; --- Client-side language helper ---
 

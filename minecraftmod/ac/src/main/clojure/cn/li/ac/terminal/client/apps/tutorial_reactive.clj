@@ -90,8 +90,10 @@
                :glow-left-x0 (* s (- ln)) :glow-left-x1 (* s (- len2 ln)))))))
 
 (defn- tutorial-title [lang tutorial]
-  (or (:title (tut-content/load-tutorial-content lang (:id tutorial)))
-      (name (:id tutorial))))
+  (or (when-let [id (:id tutorial)]
+        (:title (tut-content/load-tutorial-content lang id)))
+      (some-> tutorial :id name)
+      ""))
 
 (defn- markdown-lines
   ([text misaka-id] (markdown-lines text misaka-id markdown/max-content-width))
@@ -129,7 +131,10 @@
 
 (defn- current-content [ctx]
   (let [{:keys [lang player-uuid current-tut-id]} @ctx
-        cd (or (tut-content/load-tutorial-content lang current-tut-id) {})
+        ;; Open with no selection until the player picks an entry (matches main).
+        cd (if current-tut-id
+             (or (tut-content/load-tutorial-content lang current-tut-id) {})
+             {})
         misaka (client-state/get-misaka-id player-uuid)]
     {:brief-lines (markdown-lines (:brief cd) misaka brief-width)
      :content-lines (markdown-lines (:content cd) misaka)}))

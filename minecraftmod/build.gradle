@@ -235,9 +235,6 @@ subprojects {
             def clojureMain = layout.buildDirectory.dir("clojure/main")
             def clojureStripped = layout.buildDirectory.dir("clojure/main-stripped")
             task.onlyIf {
-                if (rootProject.ext.fullAotEnabled) {
-                    return false
-                }
                 def main = clojureMain.get().asFile
                 def stripped = clojureStripped.get().asFile
                 (main.directory && main.listFiles()?.length) ||

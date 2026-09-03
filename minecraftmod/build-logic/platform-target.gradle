@@ -773,7 +773,7 @@ if (target.loader != "none") {
         // runClient and dominated the 9-minute launch path.
         inputs.files(platformAotSourceRoots).withPathSensitivity(PathSensitivity.RELATIVE)
         inputs.files(neutralClojureSourceRoots).withPathSensitivity(PathSensitivity.RELATIVE)
-        inputs.property("fullAot", rootProject.ext.fullAotEnabled)
+        inputs.property("platformRemapAot", rootProject.ext.platformRemapAotEnabled)
         inputs.property("platformTarget", target.id)
         if (findProperty("forcePlatformAot")?.toString()?.equalsIgnoreCase("true")) {
             outputs.upToDateWhen { false }
@@ -1074,38 +1074,36 @@ if (target.loader != "none") {
             // Drop AOT leftovers only for source-first neutral modules. Keep
             // presentation-core (and any other aotAll runtime module) classes
             // that copy*RuntimeClasses mirrored into the platform output.
-            if (!rootProject.ext.fullAotEnabled) {
-                def sourceFirstRoots = ([mcmodProject] + runtimeProjects + contentProjects)
-                    .findAll { Project p -> p.path in rootProject.ext.neutralSourceFirstProjects }
-                    .collectMany { Project p ->
-                        def roots = p.hasProperty("neutralRuntimeSourceRoots")
-                            ? p.neutralRuntimeSourceRoots
-                            : [p.file("src/main/clojure")]
-                        roots as List
-                    }
-                sourceFirstRoots.each { File sourceRoot ->
-                    if (!sourceRoot.isDirectory()) {
-                        return
-                    }
-                    fileTree(sourceRoot) {
-                        include "**/*.clj"
-                        include "**/*.cljc"
-                    }.files.each { File sourceFile ->
-                        def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
-                        def classPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
-                        def classBaseName = classPath.substring(classPath.lastIndexOf("/") + 1)
-                        def packageDir = classPath.contains("/")
-                            ? new File(classesRoot, classPath.substring(0, classPath.lastIndexOf("/")))
-                            : classesRoot
-                        if (packageDir.isDirectory()) {
-                            packageDir.listFiles(new FilenameFilter() {
-                                boolean accept(File dir, String fileName) {
-                                    fileName == "${classBaseName}__init.class" ||
-                                        fileName == "${classBaseName}.class" ||
-                                        (fileName.startsWith("${classBaseName}\$") && fileName.endsWith(".class"))
-                                }
-                            })?.each { File staleClass -> staleClass.delete() }
-                        }
+            def sourceFirstRoots = ([mcmodProject] + runtimeProjects + contentProjects)
+                .findAll { Project p -> p.path in rootProject.ext.neutralSourceFirstProjects }
+                .collectMany { Project p ->
+                    def roots = p.hasProperty("neutralRuntimeSourceRoots")
+                        ? p.neutralRuntimeSourceRoots
+                        : [p.file("src/main/clojure")]
+                    roots as List
+                }
+            sourceFirstRoots.each { File sourceRoot ->
+                if (!sourceRoot.isDirectory()) {
+                    return
+                }
+                fileTree(sourceRoot) {
+                    include "**/*.clj"
+                    include "**/*.cljc"
+                }.files.each { File sourceFile ->
+                    def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
+                    def classPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
+                    def classBaseName = classPath.substring(classPath.lastIndexOf("/") + 1)
+                    def packageDir = classPath.contains("/")
+                        ? new File(classesRoot, classPath.substring(0, classPath.lastIndexOf("/")))
+                        : classesRoot
+                    if (packageDir.isDirectory()) {
+                        packageDir.listFiles(new FilenameFilter() {
+                            boolean accept(File dir, String fileName) {
+                                fileName == "${classBaseName}__init.class" ||
+                                    fileName == "${classBaseName}.class" ||
+                                    (fileName.startsWith("${classBaseName}\$") && fileName.endsWith(".class"))
+                            }
+                        })?.each { File staleClass -> staleClass.delete() }
                     }
                 }
             }
