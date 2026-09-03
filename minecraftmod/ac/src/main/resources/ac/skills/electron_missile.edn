@@ -1,0 +1,267 @@
+;; New-DSL conversion of ac/combat/abilities/electron_missile.edn (S6).
+;; Session ability: spawns a swarm of orbiting balls (up to
+;; :max-balls) and periodically fires one at the nearest living target
+;; in range. The "discard every remaining ball + destroy the charge vfx
+;; + start cooldown" cleanup sequence appears four times in the old
+;; content (charging-insufficient, timeout, release, abort) -- kept
+;; duplicated rather than factored into a shared :defn, the same choice
+;; already established for this session's other same-ability repeated
+;; blocks.
+;;
+;; Two real branch-escaping accumulators, both solved with the
+;; established set!-after-let pattern (apply_break_budget.edn/
+;; scatter_bomb.edn): the old engine's flat per-activation local
+;; namespace let a :data/bind INSIDE the spawn `when` be read by a
+;; LATER, separate `when` (the fire branch needs balls-out, the
+;; spawn-count possibly just updated) -- ported as `balls-out`/
+;; `next-spawn-tick-out` predeclared via `let` before the spawn `when`
+;; and reassigned via `set!` inside it. Kept in :long arithmetic
+;; throughout (long/add, a plain 0/1 delta via `when`+`set!` rather than
+;; math/select) specifically to avoid the type mismatch a :double
+;; math/select result would hit trying to flow back into a :long
+;; accumulator (math/select's own :returns is always :any -- see
+;; ops.clj's own docstring -- and :any->:long IS assignable, but a real
+;; :double->:long attempt is not, per cn.li.node.types/assignable?).
+;; Same technique for `spawned-ball-id` (predeclared nil, set! inside
+;; the innermost spawn `when`, read by the sibling ball-ids-append
+;; `when`) -- nil is a literal, so this also exercises this session's
+;; compile-let fix (any let-bound literal is promoted to a real mutable
+;; register, not left as an unwritable :const) from scatter_bomb.edn.
+;;
+;; :collection/remove existed in cn.li.node.expr but, like
+;; :collection/concat before it, had no ops.clj table entry -- added
+;; alongside it.
+;;
+;; The ad-hoc attack-cost budget is {:resources {:cp ... :overload ...}},
+;; NOT the bare {:cp ... :overload ...} shape every other converted
+;; ability's ad-hoc budget has used -- both are real, interchangeable
+;; resources-descriptor shapes (combat-core/run.clj's own capability-
+;; type docstring: "a ?budget/name capability is the WHOLE already-
+;; materialized resources descriptor (resource-key -> amount, OR
+;; {:resources {...}})"), so this is ported as-is, not normalized.
+{:schema-version 2
+ :kind :ability
+ :id :electron-missile
+ :revision 2
+ :activation :session
+ :requires [:caster/body :caster/id :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :jet-engine :min-exp 0.3}]
+ :tunables {:seek-range {:curve :mastery-lerp}
+            :max-hold-ticks {:curve :mastery-lerp :type :int}
+            :max-balls {:curve :const :type :int}
+            :spawn-interval-ticks {:curve :const :type :int}
+            :fire-interval-ticks {:curve :const :type :int}
+            :damage {:curve :mastery-lerp}
+            :cost-down-overload {:curve :const}
+            :cost-attack-cp {:curve :mastery-lerp}
+            :cost-attack-overload {:curve :mastery-lerp}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :const :type :int}
+            :exp-hit {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :cost-down-overload]}}}
+         :charging {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:ticks {:type :int :default 0}
+                 :balls {:type :int :default 0}
+                 :next-spawn-tick {:type :int :default 0}
+                 :next-fire-tick {:type :int :default 0}
+                 :overload-floor {:type :float :default 0.0}
+                 :ball-ids {:type :any :default []}}
+ :program
+ "{:ability :electron-missile
+   :activation :session
+   :state {:ticks {:type :long :default 0} :balls {:type :long :default 0}
+           :next-spawn-tick {:type :long :default 0} :next-fire-tick {:type :long :default 0}
+           :overload-floor {:type :double :default 0.0} :ball-ids {:type :any :default []}}
+   :tunables {:fire-interval-ticks {:type :long} :cost-down-overload {:type :double}
+              :max-balls {:type :long} :max-hold-ticks {:type :long}
+              :seek-range {:type :double} :spawn-interval-ticks {:type :long}
+              :damage {:type :double} :cost-attack-cp {:type :double}
+              :cost-attack-overload {:type :double}}
+   :phases
+   {:start
+    [(let owner-id ?caster/id)
+     (let body ?caster/body)
+     (let activate-budget ?budget/activate)
+     (let fire-interval-ticks $fire-interval-ticks)
+     (let cost-down-overload $cost-down-overload)
+     (let context-resources ?context/resources)
+     (let sufficient? (cost/spend {:budget activate-budget}))
+     (if sufficient?
+       [(state! :ticks 0)
+        (state! :balls 0)
+        (state! :ball-ids [])
+        (state! :next-spawn-tick 0)
+        (state! :next-fire-tick fire-interval-ticks)
+        (let overload-floor (math/sub (:overload context-resources) cost-down-overload))
+        (state! :overload-floor overload-floor)
+        (vfx! {:effect-id :particle-session :operation :spawn
+              :instance-key [:activation :electron-missile-charge]
+              :audience {:type :nearby :radius 32.0}
+              :payload {:position body :rate-per-tick 2 :limit 256
+                       :particle {:material :additive
+                                 :texture \"academy:textures/effects/md_particle.png\"
+                                 :life-ticks 10 :speed 1.0 :spread {:x 0.5 :y 0.8 :z 0.5}
+                                 :velocity {:x 0.02 :y 0.03 :z 0.02}}}})
+        (vfx! {:effect-id :audio-one-shot :operation :spawn :audience {:type :nearby :radius 32.0}
+              :payload {:position body :sound-id \"academy:md.em_start\" :volume 0.5 :pitch 1.0}})
+        (finish {:outcome :started})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let owner-id ?caster/id)
+     (let body ?caster/body)
+     (let overload-floor %overload-floor)
+     (let charging-budget ?budget/charging)
+     (resource/enforce-floor {:resource :overload :minimum overload-floor})
+     (let charging-sufficient? (cost/spend {:budget charging-budget}))
+     (if (bool/not charging-sufficient?)
+       [(let max-balls $max-balls)
+        (let main-cooldown ?cooldown/main)
+        (let ball-ids %ball-ids)
+        (let remaining-balls
+          (target/entities {:shape {:type :sphere :center body :radius 4.0}
+                            :filter {:entity-types [\"academy:entity_md_ball\"]
+                                    :required-tags [\"ac_electron_missile\"] :owner-id owner-id
+                                    :entity-ids ball-ids}
+                            :projection [:id :type :position :owner-id] :limit max-balls}))
+        (each ball remaining-balls (entity/discard {:entity ball}))
+        (vfx! {:effect-id :particle-session :operation :destroy
+              :instance-key [:activation :electron-missile-charge] :payload {}})
+        (cooldown/start {:name :main :ticks main-cooldown})
+        (finish {:outcome :insufficient-resource :end-ability? true})]
+       [(vfx! {:effect-id :particle-session :operation :update
+              :instance-key [:activation :electron-missile-charge] :payload {:position body}})
+        (let max-hold-ticks $max-hold-ticks)
+        (let ticks-check %ticks)
+        (if (math/gt ticks-check max-hold-ticks)
+          [(let max-balls $max-balls)
+           (let main-cooldown ?cooldown/main)
+           (let ball-ids %ball-ids)
+           (let remaining-balls
+             (target/entities {:shape {:type :sphere :center body :radius 4.0}
+                               :filter {:entity-types [\"academy:entity_md_ball\"]
+                                       :required-tags [\"ac_electron_missile\"] :owner-id owner-id
+                                       :entity-ids ball-ids}
+                               :projection [:id :type :position :owner-id] :limit max-balls}))
+           (each ball remaining-balls (entity/discard {:entity ball}))
+           (vfx! {:effect-id :particle-session :operation :destroy
+                 :instance-key [:activation :electron-missile-charge] :payload {}})
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (finish {:outcome :timeout :end-ability? true})]
+          [(let max-balls $max-balls)
+           (let seek-range $seek-range)
+           (let spawn-interval-ticks $spawn-interval-ticks)
+           (let fire-interval-ticks $fire-interval-ticks)
+           (let damage $damage)
+           (let cost-attack-cp $cost-attack-cp)
+           (let cost-attack-overload $cost-attack-overload)
+           (let hit-progression ?progression/hit)
+           (let ticks %ticks)
+           (let balls %balls)
+           (let next-spawn-tick %next-spawn-tick)
+           (let next-fire-tick %next-fire-tick)
+           (let ball-ids %ball-ids)
+           (let balls-list
+             (target/entities {:shape {:type :sphere :center body :radius 4.0}
+                               :filter {:entity-types [\"academy:entity_md_ball\"]
+                                       :required-tags [\"ac_electron_missile\"] :owner-id owner-id
+                                       :entity-ids ball-ids}
+                               :projection [:id :type :position :owner-id] :limit max-balls}))
+           (let targets
+             (target/entities {:shape {:type :sphere :center body :radius seek-range}
+                               :filter {:living? true :excluded-entity-ids [owner-id]}
+                               :projection [:id :type :position :eye-height :living?]
+                               :sort [{:by :distance-squared :order :ascending}] :limit 1}))
+           (let balls-out balls)
+           (let next-spawn-tick-out next-spawn-tick)
+           (when (math/gte ticks next-spawn-tick)
+             (let spawned-ball-id nil)
+             (when (math/lt balls max-balls)
+               (let spawn-result
+                 (entity/spawn {:owner owner-id :entity-type \"academy:entity_md_ball\"
+                               :add-tags [\"ac_electron_missile\"] :position body
+                               :velocity [0.0 0.0 0.0] :life-ticks 400 :barrier? true}))
+               (set! spawned-ball-id (:entity-id spawn-result)))
+             (when (bool/not (value/eq spawned-ball-id nil))
+               (let ball-ids-current %ball-ids)
+               (let ball-ids-next (collection/concat ball-ids-current [spawned-ball-id]))
+               (state! :ball-ids ball-ids-next))
+             (set! next-spawn-tick-out (long/add next-spawn-tick spawn-interval-ticks))
+             (state! :next-spawn-tick next-spawn-tick-out)
+             (let balls-delta 0)
+             (when (math/lt balls max-balls) (set! balls-delta 1))
+             (set! balls-out (long/add balls balls-delta))
+             (state! :balls balls-out))
+           (when (bool/and (math/gte ticks next-fire-tick)
+                           (bool/and (collection/nonempty balls-list) (collection/nonempty targets)))
+             (let attack-sufficient?
+               (cost/spend {:budget {:resources {:cp cost-attack-cp
+                                                 :overload cost-attack-overload}}}))
+             (when attack-sufficient?
+               (let ball (data/random-item {:items balls-list}))
+               (let target (collection/first targets))
+               (combat/damage {:target (:id target) :amount damage :damage-type :magic
+                               :reset-invulnerable-time? true})
+               (entity/discard {:entity ball})
+               (let ball-ids-after-fire (collection/remove ball-ids (:id ball)))
+               (state! :ball-ids ball-ids-after-fire)
+               (let balls-after-fire (long/sub balls-out 1))
+               (state! :balls balls-after-fire)
+               (event! {:type :score/mark :progression hit-progression})
+               (vfx! {:effect-id :beam-fade-audio :operation :spawn
+                     :audience {:type :nearby :radius 64.0}
+                     :payload {:sound-position (:position ball) :fade-at 6 :sound-pitch 1.0
+                              :duration-ticks 14 :sound-volume 0.8 :fade-layers []
+                              :beam-at 0 :start (:position ball) :sound-id \"academy:md.ray_small\"
+                              :fade-to-tick 14 :fade-from-alpha 1.0
+                              :layers [{:shape :tube :radius 0.045 :color [106 242 106 50]}
+                                      {:shape :tube :radius 0.03 :color [216 248 216 230]}
+                                      {:shape :line :width 0.3 :color [255 255 255 127]}]
+                              :grow-ticks 4 :fade-to-alpha 0.0
+                              :end (vec3/add (:position target) [0.0 (:eye-height target) 0.0])
+                              :fade-from-tick 6}})
+               (let next-fire-tick-out (long/add next-fire-tick fire-interval-ticks))
+               (state! :next-fire-tick next-fire-tick-out)))
+           (let ticks-out (long/add ticks 1))
+           (state! :ticks ticks-out)
+           (finish {:outcome :continue})])])]
+
+    :release
+    [(let owner-id ?caster/id)
+     (let body ?caster/body)
+     (let max-balls $max-balls)
+     (let main-cooldown ?cooldown/main)
+     (let ball-ids %ball-ids)
+     (let remaining-balls
+       (target/entities {:shape {:type :sphere :center body :radius 4.0}
+                         :filter {:entity-types [\"academy:entity_md_ball\"]
+                                 :required-tags [\"ac_electron_missile\"] :owner-id owner-id
+                                 :entity-ids ball-ids}
+                         :projection [:id :type :position :owner-id] :limit max-balls}))
+     (each ball remaining-balls (entity/discard {:entity ball}))
+     (vfx! {:effect-id :particle-session :operation :destroy
+           :instance-key [:activation :electron-missile-charge] :payload {}})
+     (cooldown/start {:name :main :ticks main-cooldown})
+     (finish {:outcome :released :end-ability? true})]
+
+    :abort
+    [(let owner-id ?caster/id)
+     (let body ?caster/body)
+     (let max-balls $max-balls)
+     (let main-cooldown ?cooldown/main)
+     (let ball-ids %ball-ids)
+     (let remaining-balls
+       (target/entities {:shape {:type :sphere :center body :radius 4.0}
+                         :filter {:entity-types [\"academy:entity_md_ball\"]
+                                 :required-tags [\"ac_electron_missile\"] :owner-id owner-id
+                                 :entity-ids ball-ids}
+                         :projection [:id :type :position :owner-id] :limit max-balls}))
+     (each ball remaining-balls (entity/discard {:entity ball}))
+     (vfx! {:effect-id :particle-session :operation :destroy
+           :instance-key [:activation :electron-missile-charge] :payload {}})
+     (cooldown/start {:name :main :ticks main-cooldown})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}

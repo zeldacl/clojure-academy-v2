@@ -91,6 +91,10 @@
    ;; session-tracked ball-ids list. Same "wire an existing-but-
    ;; unreachable expr opcode" fix as the others above.
    :collection/concat    {:params [:any :any]           :returns :any}
+   ;; S6's electron_missile.edn: drop a spent ball's id out of the
+   ;; session-tracked ball-ids list. Same "wire an existing-but-
+   ;; unreachable expr opcode" fix as the others above.
+   :collection/remove    {:params [:any :any]           :returns :any}
    :bool/and       {:params [:boolean :boolean]       :returns :boolean}
    :bool/or        {:params [:boolean :boolean]       :returns :boolean}
    :bool/not       {:params [:boolean]                :returns :boolean}

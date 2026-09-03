@@ -2587,3 +2587,152 @@
           frame (compile-and-dispatch! doc :abort host input)]
       (is (= vfx-count (count (.-vfx frame))) (str "phase " phase))
       (is (= :aborted (:outcome (.-result frame))) (str "phase " phase)))))
+
+(deftest electron-missile-start-test
+  (let [doc (read-skill "electron_missile.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:fire-interval-ticks 20 :cost-down-overload 5.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :context/resources {:overload 15.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:ticks 0] [:balls 0] [:ball-ids []] [:next-spawn-tick 0] [:next-fire-tick 20]
+             [:overload-floor 10.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 2 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(defn- electron-missile-host
+  [& {:keys [balls-list targets spawn-id cost-spend attack-spend]
+      :or {balls-list [] targets [] spawn-id "ball-1" cost-spend true attack-spend true}}]
+  {:query! (fn [cap args _fr]
+            (case cap
+              :entity/select (if (get-in args [:filter :entity-types]) balls-list targets)
+              :entity/spawn {:entity-id spawn-id}
+              :data/random-item (first (:items args))
+              :cost/spend (if (contains? (:budget args) :resources) attack-spend cost-spend)))
+   :command! (fn [_cap _args _fr])})
+
+(deftest electron-missile-pulse-charging-insufficient-discards-balls-and-cools-down-test
+  (let [calls (atom [])
+        doc (read-skill "electron_missile.edn")
+        ball {:id "ball-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        host (assoc (electron-missile-host :balls-list [ball] :cost-spend false)
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-balls 3} :capabilities {:caster/id "player-1"
+                                                        :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                                                        :cooldown/main 40}
+               :state {:overload-floor 5.0 :ball-ids ["ball-1"]}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:entity/discard {:entity ball}] %) @calls))
+    (is (some #(= [:cooldown/start {:name :main :ticks 40}] %) @calls))
+    (is (some #(= :particle-session (:effect-id %)) (.-vfx frame)))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest electron-missile-pulse-timeout-discards-balls-and-cools-down-test
+  (let [calls (atom [])
+        doc (read-skill "electron_missile.edn")
+        ball {:id "ball-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        host (assoc (electron-missile-host :balls-list [ball])
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-balls 3 :max-hold-ticks 100}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :cooldown/main 40}
+               :state {:overload-floor 5.0 :ball-ids ["ball-1"] :ticks 101}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:entity/discard {:entity ball}] %) @calls))
+    (is (some #(= [:cooldown/start {:name :main :ticks 40}] %) @calls))
+    (is (= :timeout (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest electron-missile-pulse-spawns-a-ball-under-cap-test
+  (let [doc (read-skill "electron_missile.edn")
+        host (electron-missile-host :spawn-id "ball-1")
+        input {:tunables {:max-balls 3 :max-hold-ticks 200 :seek-range 16.0
+                          :spawn-interval-ticks 5 :fire-interval-ticks 20 :damage 6.0
+                          :cost-attack-cp 1.0 :cost-attack-overload 0.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :progression/hit 0.4}
+               :state {:overload-floor 5.0 :ticks 0 :balls 0 :next-spawn-tick 0
+                      :next-fire-tick 20 :ball-ids []}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:ball-ids ["ball-1"]] [:next-spawn-tick 5] [:balls 1] [:ticks 1]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest electron-missile-pulse-does-not-spawn-when-at-cap-test
+  (let [doc (read-skill "electron_missile.edn")
+        host (electron-missile-host)
+        input {:tunables {:max-balls 2 :max-hold-ticks 200 :seek-range 16.0
+                          :spawn-interval-ticks 5 :fire-interval-ticks 20 :damage 6.0
+                          :cost-attack-cp 1.0 :cost-attack-overload 0.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :progression/hit 0.4}
+               :state {:overload-floor 5.0 :ticks 0 :balls 2 :next-spawn-tick 0
+                      :next-fire-tick 20 :ball-ids ["b1" "b2"]}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:next-spawn-tick 5] [:balls 2] [:ticks 1]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest electron-missile-pulse-fires-at-nearest-target-test
+  (let [calls (atom [])
+        doc (read-skill "electron_missile.edn")
+        ball {:id "ball-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        target {:id "victim-1" :position {:x 5.0 :y 0.0 :z 0.0} :eye-height 1.5}
+        host (assoc (electron-missile-host :balls-list [ball] :targets [target])
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-balls 3 :max-hold-ticks 200 :seek-range 16.0
+                          :spawn-interval-ticks 5 :fire-interval-ticks 20 :damage 6.0
+                          :cost-attack-cp 1.0 :cost-attack-overload 0.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :progression/hit 0.4}
+               :state {:overload-floor 5.0 :ticks 10 :balls 1 :next-spawn-tick 100
+                      :next-fire-tick 5 :ball-ids ["ball-1"]}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:entity/damage {:target "victim-1" :amount 6.0 :damage-type :magic
+                                   :reset-invulnerable-time? true}] %)
+              @calls))
+    (is (some #(= [:entity/discard {:entity ball}] %) @calls))
+    (is (some #(and (= :score/mark (:type %)) (= 0.4 (:progression %))) (.-events frame)))
+    (testing "balls-out unchanged (no spawn this tick) then -1 for the fired ball = 0"
+      (is (= #{[:ball-ids []] [:balls 0] [:next-fire-tick 25] [:ticks 11]}
+             (set (map (juxt :key :value) (.-stateWrites frame))))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest electron-missile-pulse-no-fire-when-attack-budget-insufficient-test
+  (let [calls (atom [])
+        doc (read-skill "electron_missile.edn")
+        ball {:id "ball-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+        target {:id "victim-1" :position {:x 5.0 :y 0.0 :z 0.0} :eye-height 1.5}
+        host (assoc (electron-missile-host :balls-list [ball] :targets [target] :attack-spend false)
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:max-balls 3 :max-hold-ticks 200 :seek-range 16.0
+                          :spawn-interval-ticks 5 :fire-interval-ticks 20 :damage 6.0
+                          :cost-attack-cp 1.0 :cost-attack-overload 0.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :progression/hit 0.4}
+               :state {:overload-floor 5.0 :ticks 10 :balls 1 :next-spawn-tick 100
+                      :next-fire-tick 5 :ball-ids ["ball-1"]}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (not (some #(= :entity/damage (first %)) @calls)))
+    (is (= [{:key :ticks :value 11}] (vec (.-stateWrites frame))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest electron-missile-release-and-abort-both-discard-balls-test
+  (doseq [phase [:release :abort]]
+    (let [calls (atom [])
+          doc (read-skill "electron_missile.edn")
+          ball {:id "ball-1" :position {:x 0.0 :y 1.0 :z 0.0}}
+          host (assoc (electron-missile-host :balls-list [ball])
+                      :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+          input {:tunables {:max-balls 3} :capabilities {:caster/id "player-1"
+                                                          :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                                                          :cooldown/main 40}
+                 :state {:ball-ids ["ball-1"]}}
+          frame (compile-and-dispatch! doc phase host input)]
+      (is (some #(= [:entity/discard {:entity ball}] %) @calls) (str "phase " phase))
+      (is (some #(= [:cooldown/start {:name :main :ticks 40}] %) @calls) (str "phase " phase))
+      (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
+          (str "phase " phase)))))
