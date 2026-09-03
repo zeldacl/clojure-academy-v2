@@ -2736,3 +2736,166 @@
       (is (some #(= [:cooldown/start {:name :main :ticks 40}] %) @calls) (str "phase " phase))
       (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
           (str "phase " phase)))))
+
+(defn- plasma-cannon-host
+  [& {:keys [cost-spend raycast resolve-dest]
+      :or {cost-spend true raycast {} resolve-dest {}}}]
+  {:query! (fn [cap args _fr]
+            (case cap
+              :raycast (if (contains? args :hit) resolve-dest raycast)
+              :entity/select []
+              :cost/spend cost-spend))
+   :command! (fn [_cap _args _fr])})
+
+(deftest plasma-cannon-start-test
+  (let [calls (atom [])
+        doc (read-skill "plasma_cannon.edn")
+        host (assoc (plasma-cannon-host
+                     :raycast {:position {:x 0.0 :y 0.0 :z 0.0}}
+                     :resolve-dest {:target-hit? true :hit-position {:x 0.0 :y 0.0 :z 0.0}
+                                    :position {:x 9.0 :y 9.0 :z 9.0}})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:spawn-y-offset 2.0 :ground-search-distance 10.0 :overload-keep 5.0}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :rng/seed 42
+                              :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:overload-floor 15.0] [:mode 0] [:position {:vec3 [0.0 3.0 0.0]}]
+             [:vortex-base {:x 0.0 :y 0.0 :z 0.0}] [:flight-ticks 0] [:sync-ticks 0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(= [:resource/add {:resource :overload :amount 5.0}] %) @calls))
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest plasma-cannon-start-insufficient-resource-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host :cost-spend false
+                                  :raycast {:position {:x 0.0 :y 0.0 :z 0.0}}
+                                  :resolve-dest {:target-hit? false :position {:x 0.0 :y 0.0 :z 0.0}})
+        input {:tunables {:spawn-y-offset 2.0 :ground-search-distance 10.0 :overload-keep 5.0}
+               :capabilities {:caster/body {:x 0.0 :y 1.0 :z 0.0} :rng/seed 42
+                              :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (empty? (.-stateWrites frame)))))
+
+(deftest plasma-cannon-pulse-charging-continues-and-insufficient-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host)
+        input {:tunables {:charge-time 40}
+               :capabilities {:charge/ticks 10.0}
+               :state {:mode 0 :overload-floor 5.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= :charging (:outcome (.-result frame)))))
+  (testing "insufficient charging budget destroys the session vfx"
+    (let [doc (read-skill "plasma_cannon.edn")
+          host (plasma-cannon-host :cost-spend false)
+          input {:tunables {:charge-time 40}
+                 :capabilities {:charge/ticks 10.0}
+                 :state {:mode 0 :overload-floor 5.0}}
+          frame (compile-and-dispatch! doc :pulse host input)]
+      (is (= 3 (count (.-vfx frame))))
+      (is (= :insufficient-resource (:outcome (.-result frame))))
+      (is (true? (:end-ability? (.-result frame)))))))
+
+(deftest plasma-cannon-pulse-charged-when-hold-complete-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host)
+        input {:tunables {:charge-time 40} :capabilities {:charge/ticks 40.0}
+               :state {:mode 0 :overload-floor 5.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= :charged (:outcome (.-result frame))))))
+
+(deftest plasma-cannon-pulse-flight-continues-toward-destination-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host :raycast {:hit? false})
+        input {:tunables {:charge-time 40 :block-hit-extra-distance 0.5 :destination-epsilon 0.1
+                          :max-flight-ticks 200 :sync-interval-ticks 4}
+               :capabilities {:charge/ticks 0.0}
+               :state {:mode 1 :overload-floor 5.0 :position {:x 0.0 :y 0.0 :z 0.0}
+                      :destination {:position {:x 10.0 :y 0.0 :z 0.0}} :flight-ticks 0
+                      :sync-ticks 1}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (testing "next-position = [0,0,0] + normalize([10,0,0])*1.0 = [1,0,0]; sync-ticks decrements to
+              0 (its own write), which then immediately re-triggers the vfx resync (a second write
+              resetting it back to sync-interval-ticks)"
+      (is (= #{[:position {:vec3 [1.0 0.0 0.0]}] [:flight-ticks 1] [:sync-ticks 0] [:sync-ticks 4]}
+             (set (map (juxt :key :value) (.-stateWrites frame))))))
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :flight (:outcome (.-result frame))))))
+
+(deftest plasma-cannon-pulse-flight-impacts-on-block-hit-test
+  (let [calls (atom [])
+        doc (read-skill "plasma_cannon.edn")
+        host (assoc (plasma-cannon-host :raycast {:hit? true})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:charge-time 40 :block-hit-extra-distance 0.5 :destination-epsilon 0.1
+                          :max-flight-ticks 200 :sync-interval-ticks 4 :damage-radius 3.0
+                          :damage 20.0 :explosion-radius 2.0}
+               :capabilities {:charge/ticks 0.0 :caster/id "player-1" :progression/fire 0.6
+                              :cooldown/main 80}
+               :state {:mode 1 :overload-floor 5.0 :position {:x 0.0 :y 0.0 :z 0.0}
+                      :destination {:position {:x 10.0 :y 0.0 :z 0.0}} :flight-ticks 5
+                      :sync-ticks 1}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:world/explosion {:owner "player-1" :position {:x 10.0 :y 0.0 :z 0.0}
+                                     :radius 2.0 :fire? false :terrain? true}] %)
+              @calls))
+    (is (some #(and (= :score/mark (:type %)) (= 0.6 (:progression %))) (.-events frame)))
+    (is (some #(= [:cooldown/start {:name :main :ticks 80}] %) @calls))
+    (is (= :performed (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest plasma-cannon-pulse-idle-mode-continues-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host)
+        input {:tunables {:charge-time 40} :capabilities {:charge/ticks 0.0}
+               :state {:mode 2 :overload-floor 5.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest plasma-cannon-release-fires-when-charged-test
+  (let [calls (atom [])
+        doc (read-skill "plasma_cannon.edn")
+        host (assoc (plasma-cannon-host
+                     :raycast {:entity-id nil}
+                     :resolve-dest {:position {:x 10.0 :y 0.0 :z 0.0}})
+                    :command! (fn [cap args _fr] (swap! calls conj [cap args])))
+        input {:tunables {:charge-time 40 :targeting-distance 20.0 :eye-height 1.6
+                          :sync-interval-ticks 4}
+               :capabilities {:charge/ticks 40.0 :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :progression/fire 0.6
+                              :cooldown/main 80}
+               :state {:mode 0}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= #{[:mode 1] [:destination {:position {:x 10.0 :y 0.0 :z 0.0}}] [:flight-ticks 0]
+             [:sync-ticks 4]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (some #(and (= :score/mark (:type %)) (= 0.6 (:progression %))) (.-events frame)))
+    (is (some #(= [:cooldown/start {:name :main :ticks 80}] %) @calls))
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :released (:outcome (.-result frame))))
+    (is (false? (:end-ability? (.-result frame))))))
+
+(deftest plasma-cannon-release-undercharged-aborts-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host)
+        input {:tunables {:charge-time 40} :capabilities {:charge/ticks 10.0} :state {:mode 0}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :undercharged (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest plasma-cannon-release-while-flying-is-continue-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host)
+        input {:tunables {:charge-time 40} :capabilities {:charge/ticks 0.0} :state {:mode 1}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest plasma-cannon-abort-destroys-vfx-test
+  (let [doc (read-skill "plasma_cannon.edn")
+        host (plasma-cannon-host)
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (= 3 (count (.-vfx frame))))
+    (is (= :aborted (:outcome (.-result frame))))))
