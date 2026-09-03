@@ -1975,3 +1975,193 @@
         frame (compile-and-dispatch! doc :abort host input)]
     (is (some #(= :destroy (:operation %)) (.-vfx frame)))
     (is (= :aborted (:outcome (.-result frame))))))
+
+(def ^:private mine-ray-runtime
+  {:beam-style :beam :progress-color [255 0 0] :loop-sound-id "loop" :startup-sound-id "start"
+   :particle :dust :fortune-level 0 :tool-tier-capped? false})
+
+(deftest mine-ray-start-test
+  (let [doc (read-skill "mine_ray.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :context/resources {:overload 20.0}
+                              :context/ability-runtime mine-ray-runtime}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:target nil] [:hardness-left 3.4028235E38] [:starting-hardness 3.4028235E38]
+             [:overload-floor 15.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 4 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mine-ray-start-insufficient-resource-test
+  (let [doc (read-skill "mine_ray.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :context/resources {:overload 20.0}
+                              :context/ability-runtime mine-ray-runtime}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (empty? (.-stateWrites frame)))))
+
+(deftest mine-ray-pulse-insufficient-tick-budget-test
+  (let [calls (atom [])
+        doc (read-skill "mine_ray.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend false))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0} :cooldown/main 40
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= 3 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 40}] %) @calls))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest mine-ray-pulse-no-blocks-in-range-clears-target-test
+  (let [doc (read-skill "mine_ray.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true :block/select []))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0 :target {:x 1.0 :y 1.0 :z 1.0}}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:target nil] [:hardness-left 3.4028235E38] [:starting-hardness 3.4028235E38]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest mine-ray-pulse-continues-mining-the-same-target-test
+  (let [doc (read-skill "mine_ray.edn")
+        target-pos {:x 1.0 :y 1.0 :z 1.0}
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :cost/spend true
+                         :block/select [{:position target-pos :hardness 10.0 :block-id "stone"
+                                         :breakable? true :requires-high-tier-tool? false}]))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :ability/destroy-blocks? true
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0 :target target-pos :hardness-left 10.0
+                       :starting-hardness 10.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (testing "new-hardness = 10-3 = 7, progress = 1 - 7/10 = 0.3"
+      (is (= [{:key :hardness-left :value 7.0}] (vec (.-stateWrites frame))))
+      (is (some #(let [p (:progress (:payload %))] (and p (< 0.299 p 0.301))) (.-vfx frame))))
+    (is (some #(= :particle-burst (:effect-id %)) (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest mine-ray-pulse-breaks-block-and-marks-progression-test
+  (let [calls (atom [])
+        doc (read-skill "mine_ray.edn")
+        target-pos {:x 1.0 :y 1.0 :z 1.0}
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :block/select [{:position target-pos :hardness 10.0 :block-id "stone"
+                                         :breakable? true :requires-high-tier-tool? false}]
+                         :block/break :applied))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :ability/destroy-blocks? true :progression/block 0.4
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0 :target target-pos :hardness-left 2.0
+                       :starting-hardness 10.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:query :block/break {:position target-pos :expected-block-id "stone" :drop? true
+                                        :fortune-level 0 :tool-tier-capped? false :barrier? true}]
+                  %)
+              @calls))
+    (is (some #(and (= :score/mark (:type %)) (= 0.4 (:progression %))) (.-events frame)))
+    (is (= #{[:target nil] [:hardness-left 3.4028235E38] [:starting-hardness 3.4028235E38]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest mine-ray-pulse-break-not-applied-still-clears-target-test
+  (let [doc (read-skill "mine_ray.edn")
+        target-pos {:x 1.0 :y 1.0 :z 1.0}
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :cost/spend true
+                         :block/select [{:position target-pos :hardness 10.0 :block-id "stone"
+                                         :breakable? true :requires-high-tier-tool? false}]
+                         :block/break :cancelled))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :ability/destroy-blocks? true
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0 :target target-pos :hardness-left 2.0
+                       :starting-hardness 10.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (empty? (filter #(and (= :score/mark (:type %))) (.-events frame))))
+    (is (= #{[:target nil] [:hardness-left 3.4028235E38] [:starting-hardness 3.4028235E38]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))))
+
+(deftest mine-ray-pulse-starts-a-new-target-test
+  (let [doc (read-skill "mine_ray.edn")
+        new-pos {:x 2.0 :y 1.0 :z 1.0}
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :cost/spend true
+                         :block/select [{:position new-pos :hardness 12.0 :block-id "stone"
+                                         :breakable? true :requires-high-tier-tool? false}]))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :ability/destroy-blocks? true
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0 :target nil}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:target new-pos] [:hardness-left 12.0] [:starting-hardness 12.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))))
+
+(deftest mine-ray-pulse-cannot-destroy-blocks-clears-target-test
+  (let [doc (read-skill "mine_ray.edn")
+        target-pos {:x 1.0 :y 1.0 :z 1.0}
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :cost/spend true
+                         :block/select [{:position target-pos :hardness 10.0 :block-id "stone"
+                                         :breakable? true :requires-high-tier-tool? false}]))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:targeting-range 6.0 :break-speed 3.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :ability/destroy-blocks? false
+                              :context/ability-runtime mine-ray-runtime}
+               :state {:overload-floor 5.0 :target target-pos :hardness-left 2.0
+                       :starting-hardness 10.0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:target nil] [:hardness-left 3.4028235E38] [:starting-hardness 3.4028235E38]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))))
+
+(deftest mine-ray-release-destroys-vfx-and-starts-cooldown-test
+  (let [calls (atom [])
+        doc (read-skill "mine_ray.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+        input {:tunables {} :capabilities {:cooldown/main 40}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= 3 (count (.-vfx frame))))
+    (is (some #(= [:cooldown/start {:name :main :ticks 40}] %) @calls))
+    (is (= :released (:outcome (.-result frame))))))

@@ -39,7 +39,11 @@
    :world/id :string
    :charge/ticks :double
    :progression/mastery :double :progression/level :long
-   :rng/seed :long})
+   :rng/seed :long
+   ;; A server-side region/permission gate, not per-ability-named like
+   ;; ?budget/* or ?cooldown/* -- mine_ray.edn (S6) is the first real
+   ;; content to read it, guarding every block-mining branch.
+   :ability/destroy-blocks? :boolean})
 
 (defn capability-type [key]
   (or (get fixed-capabilities key)
