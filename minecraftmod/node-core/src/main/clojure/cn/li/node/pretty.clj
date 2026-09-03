@@ -71,7 +71,16 @@
 
 ;; --- statement-range printing -----------------------------------------------
 
-(defn- inline-op? [op] (contains? #{:pure :get :tun :cap :copy :convert :map-lit :state-read} op))
+(defn- inline-op?
+  "A :copy tagged :reassign? (compile.clj's `set!`) is NOT inlinable like
+   an ordinary compiler-internal :copy (each's index bookkeeping, coerce!'s
+   bank conversions): it is a real, author-visible mutation of an existing
+   local, and printing it as an inline expression at its use site would
+   silently drop the reassignment entirely. Takes the whole instr, not
+   just its :op, for exactly this per-instruction distinction."
+  [instr]
+  (and (contains? #{:pure :get :tun :cap :copy :convert :map-lit :state-read} (:op instr))
+       (not (:reassign? instr))))
 
 (defn- fresh-sym! [counter prefix] (symbol (str prefix (swap! counter inc))))
 
@@ -89,13 +98,15 @@
   (vec
    (keep
     (fn [instr]
-      (when-not (inline-op? (:op instr))
+      (when-not (inline-op? instr)
         (case (:op instr)
           :query (let [sym (fresh-sym! counter "v")
                       form (call-form ir pidx @let-names* (:node instr) (:args instr))]
                   (swap! let-names* assoc (:dst instr) sym)
                   (list 'let sym form))
           :action (call-form ir pidx @let-names* (:node instr) (:args instr))
+          :copy (throw (ex-info "pretty-printing set! (a reassignment of an existing local) is not yet supported"
+                                {:instr instr}))
           :state-write (list 'state! (:key instr) (reconstruct ir pidx @let-names* (:src instr)))
           :event (list 'event!
                        (into {:type (:event-type instr)}

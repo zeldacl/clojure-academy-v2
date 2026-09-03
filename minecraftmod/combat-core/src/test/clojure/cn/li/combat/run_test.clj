@@ -56,6 +56,49 @@
     (testing "finish set the frame's result"
       (is (= {:outcome :performed :next-phase nil :end-ability? true} (.-result frame))))))
 
+(def ^:private break-budget-text
+  "{:ability :break-budget-test
+    :tunables {:energy {:type :double}}
+    :do
+    [(let remaining $energy)
+     (let blocks (target/blocks {:shape {} :limit 128}))
+     (each block blocks
+       (if (math/lte (:hardness block) remaining)
+         [(block/break {:position (:position block)})
+          (set! remaining (math/sub remaining (:hardness block)))]
+         []))
+     (finish {:outcome :performed})]}")
+
+(deftest set-accumulator-actually-decreases-across-real-loop-iterations-test
+  (testing "terrain/apply-break-budget's real shape: an each-loop
+            accumulator gating which iterations act, proven by ACTUALLY
+            DISPATCHING against three candidate blocks (hardness 2.0 each,
+            starting energy 5.0) -- must break exactly the first two
+            (2.0+2.0=4.0 <= 5.0) and skip the third (would need 6.0), not
+            just compile without checking the runtime numbers"
+    (let [ir (run/compile-doc! break-budget-text)
+          calls (atom [])
+          ;; block/break has real declared outputs (:status/:block-id/
+          ;; :position, matching the old system) -- :returns :any makes it
+          ;; a :query node, dispatched via the host's :query!, not
+          ;; :command!.
+          host {:query! (fn [cap args _fr]
+                         (case cap
+                           :block/select [{:hardness 2.0 :position {:x 0.0 :y 0.0 :z 0.0}}
+                                         {:hardness 2.0 :position {:x 1.0 :y 0.0 :z 0.0}}
+                                         {:hardness 2.0 :position {:x 2.0 :y 0.0 :z 0.0}}]
+                           :block/break (do (swap! calls conj [cap args]) nil)))
+                :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+          program (run/compile-program ir host)
+          input {:tunables {:energy 5.0} :capabilities {}}]
+      (run/dispatch! program :default input)
+      (is (= 2 (count @calls)) "exactly two blocks broken, not all three")
+      (is (= [{:x 0.0 :y 0.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0}]
+             (mapv #(:position (second %)) @calls))
+          "the FIRST two candidates broke, in order -- proves remaining was
+           actually checked and decremented each iteration, not just
+           evaluated once against the starting energy"))))
+
 (deftest damage-does-not-run-when-raycast-misses-test
   (let [ir (run/compile-doc! thunder-bolt-ish)
         calls (atom [])

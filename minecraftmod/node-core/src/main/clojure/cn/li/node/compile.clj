@@ -587,6 +587,34 @@
                                  :src (coerce! env block-id reg got want)})
           {:locals locals :block-id block-id})))))
 
+(defn- compile-set!
+  "set! reassigns an EXISTING local (bound by an outer let/each/param) to
+   a new value -- the loop-accumulator pattern (each with (let sym) taking a
+   sub-collection: energy/budget totals decreasing per iteration, and
+   similar) that node-core's IR always physically supported (registers are
+   mutable per-bank slots, not true SSA -- see cn.li.node.ir's own
+   docstring) but had no DSL statement exposing until porting terrain/
+   apply-break-budget (S6) needed exactly this. Implemented as a plain
+   :copy into the EXISTING register, tagged :reassign? true so
+   cn.li.node.pretty can tell it apart from an ordinary compiler-internal
+   :copy (each's index bookkeeping, coerce!'s bank conversions) -- see
+   that namespace's inline-op?/stmts-for-range for why pretty-printing a
+   :reassign? copy is a deliberate, safe deferral (throws a clear error)
+   rather than attempted here."
+  [env locals block-id depth [_ sym value-form]]
+  (if-let [{target-reg :reg} (get locals sym)]
+    (let [want (type-of env target-reg)
+          {:keys [reg block-id]} (compile-form env locals block-id depth value-form false)
+          got (type-of env reg)]
+      (when-not (types/assignable? got want)
+        (report! env {:code :type-mismatch :form value-form :want want
+                     :message (str "set! " sym " wants " want " got " got)}))
+      (append! env block-id {:op :copy :nid (nid! env) :dst target-reg
+                             :src (coerce! env block-id reg got want) :reassign? true})
+      {:locals locals :block-id block-id})
+    (do (report! env {:code :unbound-local :form sym :message (str "set! target " sym " is not bound")})
+        {:locals locals :block-id block-id})))
+
 (defn- compile-event
   "event! is deliberately untyped against any vocab (:type's payload shape
    varies per event, unlike a node call's fixed :params) -- every field
@@ -639,6 +667,7 @@
     each (compile-each env locals block-id depth stmt)
     finish (compile-finish env block-id stmt)
     state! (compile-state-write env locals block-id depth stmt)
+    set! (compile-set! env locals block-id depth stmt)
     event! (compile-event env locals block-id depth stmt)
     vfx! (compile-vfx env locals block-id depth stmt)
     (let [{:keys [block-id]} (compile-call env locals block-id depth stmt true)]

@@ -64,9 +64,33 @@
   [op-name]
   (get table op-name))
 
+;; cn.li.node.compile/compile-each emits :pure instructions naming these
+;; three ops directly (see that function's own docstring), but they are
+;; deliberately absent from `table`/known-op?/signature: compile-pure-call
+;; only ever recognizes a DSL-authored (op-name ...) call via known-op?,
+;; so a graph author can never reference them -- they exist purely to
+;; desugar `each`. invoke, unlike known-op?, is the SHARED execution
+;; entry point cn.li.mcmod.runtime.effect-emit calls for every :pure
+;; instruction regardless of origin, so it must still know how to run
+;; them; this is the one intentional gap between "known to authors" and
+;; "known to invoke" in this namespace. Caught by run_test.clj's
+;; set-accumulator test failing at DISPATCH time (not compile time) --
+;; no `each`-containing program had ever actually been executed
+;; end-to-end before that test, since every earlier fixture happened to
+;; avoid loops.
+(defn- synthetic-invoke [op-name args]
+  (case op-name
+    :collection/count (long (count (first args)))
+    :collection/nth (nth (first args) (long (second args)))
+    :long/inc (inc (long (first args)))
+    ::not-synthetic))
+
 (defn invoke
   "Call op-name's underlying pure function against already-resolved args."
   [op-name args]
-  (when-not (known-op? op-name)
-    (throw (ex-info "unknown pure op" {:op op-name})))
-  (expr/evaluate op-name (vec args)))
+  (let [synthetic (synthetic-invoke op-name args)]
+    (if-not (= ::not-synthetic synthetic)
+      synthetic
+      (do (when-not (known-op? op-name)
+            (throw (ex-info "unknown pure op" {:op op-name})))
+          (expr/evaluate op-name (vec args))))))
