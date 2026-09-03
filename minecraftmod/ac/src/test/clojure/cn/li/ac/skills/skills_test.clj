@@ -614,6 +614,69 @@
     (is (= :destroy (:operation (first (.-vfx frame)))))
     (is (= :not-performable (:outcome (.-result frame))))))
 
+(defn- mark-teleport-host [{:keys [dest]}]
+  {:query! (fn [cap args _fr]
+            (case cap
+              :raycast (if (contains? args :hit) dest {:entity-id nil})
+              :cost/spend true))
+   :command! (fn [_cap _args _fr])})
+
+(def ^:private mark-teleport-input
+  {:tunables {:minimum-distance 2.0 :maximum-range 50.0 :range-per-hold-tick 2.0
+             :cp-per-block 1.0 :release-overload 1.0 :entity-eye-height 1.6}
+   :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                  :caster/aim {:x 1.0 :y 0.0 :z 0.0} :world/id "overworld" :charge/ticks 5
+                  :context/resources {:cp 20.0} :progression/teleport 1.0 :cooldown/main 60}
+   :state {}})
+
+(deftest mark-teleport-start-spawns-a-marker-at-a-valid-destination-test
+  (let [doc (read-skill "mark_teleport.edn")
+        dest {:valid? true :position {:x 12.0 :y 1.0 :z 0.0} :distance 12.0 :world-id "overworld"}
+        host (mark-teleport-host {:dest dest})
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        frame (run/dispatch! program :start mark-teleport-input)]
+    (is (= [{:key :destination :value dest}] (vec (.-stateWrites frame))))
+    (is (= :teleport-marker (:effect-id (first (.-vfx frame)))))
+    (is (= "player-1" (:owner (:payload (first (.-vfx frame))))))
+    (is (= {:x 12.0 :y 1.0 :z 0.0} (:position (:payload (first (.-vfx frame))))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest mark-teleport-release-teleports-when-valid-and-affordable-test
+  (let [doc (read-skill "mark_teleport.edn")
+        dest {:valid? true :position {:x 12.0 :y 1.0 :z 0.0} :distance 12.0 :world-id "overworld"}
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc mark-teleport-input :state {:destination dest})
+        frame (run/dispatch! program :release input)]
+    (testing "cp-cost = distance(12.0) * cp-per-block(1.0) = 12.0"
+      (is (= [:query :cost/spend {:budget {:cp 12.0 :overload 1.0}}] (first @calls))))
+    (is (some #(= [:command :entity/teleport {:target "player-1" :position {:x 12.0 :y 1.0 :z 0.0}
+                                              :dismount? true :reset-fall-damage? true}] %)
+              @calls))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:operation %))) (.-vfx frame)))
+    (is (= :teleported (:outcome (.-result frame))))))
+
+(deftest mark-teleport-release-too-close-skips-spend-entirely-test
+  (let [doc (read-skill "mark_teleport.edn")
+        dest {:valid? false}
+        calls (atom [])
+        host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) true)
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc mark-teleport-input :state {:destination dest})
+        frame (run/dispatch! program :release input)]
+    (is (empty? @calls))
+    (is (some #(and (= :teleport-marker (:effect-id %)) (= :destroy (:operation %))) (.-vfx frame)))
+    (is (= :too-close (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
