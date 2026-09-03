@@ -739,6 +739,85 @@
     (is (= #{:audio-one-shot :target-box-session} (set (map :effect-id (.-vfx frame)))))
     (is (= :miss (:outcome (.-result frame))))))
 
+(def ^:private thunder-clap-input
+  {:tunables {:targeting-range 20.0 :charge-min 2 :charge-max 10 :damage 10.0
+             :overcharge-multiplier [1.0 3.0] :aoe-radius 6.0}
+   :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                  :caster/aim {:x 1.0 :y 0.0 :z 0.0} :world/id "overworld"
+                  :progression/cast 1.0 :cooldown/main 100}})
+
+(deftest thunder-clap-pulse-discharges-at-full-charge-test
+  (let [doc (read-skill "thunder_clap.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :raycast {:position {:x 5.0 :y 1.0 :z 0.0}}
+                             :entity/select [{:id "e1"} {:id "e2"}]))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc-in thunder-clap-input [:capabilities :charge/ticks] 10)
+        frame (run/dispatch! program :pulse input)]
+    (testing "overcharge-ratio = clamp((10-2)/(10-2))=1.0 -> damage = 10.0 * lerp(1.0,3.0,1.0) = 30.0"
+      (is (= 2 (count (filter #(= :entity/damage (second %)) @calls))))
+      (is (every? #(= {:amount 30.0 :damage-type :skill} (select-keys (nth % 2) [:amount :damage-type]))
+                  (filter #(= :entity/damage (second %)) @calls))))
+    (is (some #(= :world/lightning (second %)) @calls))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 100}] %) @calls))
+    (is (some #(and (= :achievement/trigger (:type %))
+                    (= "electromaster.thunder_clap" (:id (:payload %))))
+              (.-events frame)))
+    (is (= :performed (:outcome (.-result frame))))))
+
+(deftest thunder-clap-pulse-cost-failed-exactly-at-min-jumps-to-release-test
+  (let [doc (read-skill "thunder_clap.edn")
+        host {:query! (fn [_cap _args _fr]
+                       (case _cap :raycast {:position {:x 5.0 :y 1.0 :z 0.0}} :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc-in thunder-clap-input [:capabilities :charge/ticks] 2)
+        frame (run/dispatch! program :pulse input)]
+    (is (= {:outcome :cost-failed-at-min :next-phase :release :end-ability? false} (.-result frame)))))
+
+(deftest thunder-clap-pulse-cost-failed-below-min-aborts-test
+  (let [doc (read-skill "thunder_clap.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :raycast {:position {:x 5.0 :y 1.0 :z 0.0}} :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc-in thunder-clap-input [:capabilities :charge/ticks] 1)
+        frame (run/dispatch! program :pulse input)]
+    (testing "the unconditional ring :update fires first, then the abort-only :destroy"
+      (is (= [:update :destroy] (mapv :operation (.-vfx frame)))))
+    (is (= {:outcome :insufficient-resource :next-phase nil :end-ability? true} (.-result frame)))))
+
+(deftest thunder-clap-pulse-still-charging-continues-when-affordable-test
+  (let [doc (read-skill "thunder_clap.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :raycast {:position {:x 5.0 :y 1.0 :z 0.0}} :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc-in thunder-clap-input [:capabilities :charge/ticks] 1)
+        frame (run/dispatch! program :pulse input)]
+    (is (= {:outcome :continue :next-phase nil :end-ability? false} (.-result frame)))))
+
+(deftest thunder-clap-release-undercharged-does-nothing-test
+  (let [doc (read-skill "thunder_clap.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args]) (case cap :raycast {:position {:x 5.0 :y 1.0 :z 0.0}}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input (assoc-in thunder-clap-input [:capabilities :charge/ticks] 1)
+        frame (run/dispatch! program :release input)]
+    (is (not (some #(= :entity/damage (second %)) @calls)))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :undercharged (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

@@ -1,0 +1,164 @@
+;; New-DSL conversion of ac/combat/abilities/thunder_clap.edn (S6). Session
+;; ability (auto-discharges on full charge during :pulse, or on manual
+;; :release once past the minimum charge).
+;;
+;; Third (of 3) callback-typed old composite inlined at its call site --
+;; see vec_reflection.edn/arc_gen.edn's docstrings for the first two.
+;; combat/charged-area-damage's :on-impact is an EMPTY step list here (no
+;; per-target follow-up beyond the damage itself), and its own body
+;; computes an :overcharge-ratio LOCAL that the CALLER's own :damage
+;; argument expression references -- a macro-style shared-scope trick the
+;; old composite-expansion pipeline supported (the :ratio-slot input names
+;; which local the composite binds, and the caller's argument expression
+;; stays unresolved until the expanded tree's later nodes actually read
+;; it). Inlining sidesteps this entirely: compute the ratio, then the
+;; damage, then the query+foreach, as plain sequential `let`s in the
+;; ability's own scope -- ordinary lexical scoping, no special-casing
+;; needed. The old content's own two call sites (the :pulse full-charge
+;; branch and :release) already duplicated this whole block verbatim, so
+;; duplicating it here too is a faithful port, not a regression; it is
+;; deliberately NOT hoisted into a shared cn.li.combat.lib composite,
+;; since combat-core must not carry skill-specific knowledge
+;; (verifyCoreNoSkillKnowledge) and nothing else needs this exact
+;; sequence.
+;;
+;; Also the first real use of `finish`'s :next-phase field (:cost-failed-
+;; at-min jumps straight to :release from mid-:pulse) -- already
+;; supported by cn.li.node.compile/compile-finish, no new gap.
+{:schema-version 2
+ :kind :ability
+ :id :thunder-clap
+ :revision 2
+ :activation :session
+ :requires [:caster/eye :caster/aim :world/id :charge/ticks]
+ :tunables {:targeting-range {:curve :const}
+            :charge-min {:curve :const :type :int}
+            :charge-max {:curve :const :type :int}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :damage {:curve :mastery-lerp}
+            :overcharge-multiplier {:curve :pair}
+            :aoe-radius {:curve :mastery-lerp}
+            :cooldown-per-hold {:curve :mastery-lerp}
+            :exp-use {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :cost-down-overload]}}}
+         :charging {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}
+ :cooldown {:main {:ticks {:expr :math/mul :args [{:ref [:input :capabilities :charge/ticks]}
+                                                  {:ref [:input :tunables :cooldown-per-hold]}]}}}
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-use]}}}
+ :program
+ "{:ability :thunder-clap
+   :activation :session
+   :tunables {:targeting-range {:type :double} :charge-min {:type :long}
+              :charge-max {:type :long} :damage {:type :double}
+              :overcharge-multiplier {:type :any} :aoe-radius {:type :double}}
+   :phases
+   {:start
+    [(let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-range
+                                   :include-entities? false :include-blocks? true}))
+     (let activate-budget ?budget/activate)
+     (let sufficient? (cost/spend {:budget activate-budget}))
+     (if sufficient?
+       [(vfx! {:effect-id :arc-ring-session :operation :spawn
+              :instance-key [:activation :thunder-clap] :audience {:type :nearby :radius 64.0}
+              :payload {:sound-position (:position aim-hit) :fade-at 40 :sound-pitch 1.0
+                       :duration-ticks 64 :fade-ring-from 1.5 :sound-volume 0.7
+                       :arc-count-limit 64 :arc-radius {:min 0.08 :max 0.22} :start eye
+                       :fade-ring-to 2.0 :sound-id \"minecraft:entity.lightning_bolt.thunder\"
+                       :arc-life-ticks 60 :ring-to 1.5 :fade-to-tick 64
+                       :arc-spacing {:min 1.0 :max 2.0} :fade-color [236 170 93 150]
+                       :fade-segments 24 :ring-from 0.25 :end (:position aim-hit)
+                       :ring-color [188 252 238 210] :ring-segments 24}})
+        (finish {:outcome :started})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let charge-ticks ?charge/ticks)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-range
+                                   :include-entities? false :include-blocks? true}))
+     (let fully-charged? (math/gte charge-ticks $charge-max))
+     (if fully-charged?
+       [(let overcharge-ratio
+          (math/clamp (math/div (math/sub charge-ticks $charge-min)
+                                (math/sub $charge-max $charge-min)) 0.0 1.0))
+        (let damage
+          (math/mul $damage (math/lerp (pair/first $overcharge-multiplier)
+                                       (pair/second $overcharge-multiplier) overcharge-ratio)))
+        (let owner-id ?caster/id)
+        (let area-targets
+          (target/entities {:shape {:type :sphere :center (:position aim-hit) :radius $aoe-radius}
+                            :filter {:excluded-entity-ids [owner-id]} :limit 256}))
+        (each area-target area-targets
+          (combat/damage {:target (:id area-target) :amount damage :damage-type :skill}))
+        (world/lightning {:world-id ?world/id :position (:position aim-hit) :visual-only? true})
+        (let cast-progression ?progression/cast)
+        (event! {:type :score/mark :tag :cast :progression cast-progression})
+        (let main-cooldown ?cooldown/main)
+        (cooldown/start {:name :main :ticks main-cooldown})
+        (vfx! {:effect-id :arc-ring-session :operation :update
+              :instance-key [:activation :thunder-clap] :payload {:end (:position aim-hit)}})
+        (vfx! {:effect-id :arc-ring-session :operation :destroy
+              :instance-key [:activation :thunder-clap] :payload {}})
+        (event! {:type :achievement/trigger :payload {:id \"electromaster.thunder_clap\"}})
+        (finish {:outcome :performed :end-ability? true})]
+       [(vfx! {:effect-id :arc-ring-session :operation :update
+              :instance-key [:activation :thunder-clap] :payload {:end (:position aim-hit)}})
+        (let below-min? (math/lte charge-ticks $charge-min))
+        (if below-min?
+          [(let charging-budget ?budget/charging)
+           (let charge-sufficient? (cost/spend {:budget charging-budget}))
+           (if charge-sufficient?
+             [(finish {:outcome :continue})]
+             [(let at-min? (math/gte charge-ticks $charge-min))
+              (if at-min?
+                [(finish {:outcome :cost-failed-at-min :next-phase :release})]
+                [(vfx! {:effect-id :arc-ring-session :operation :destroy
+                       :instance-key [:activation :thunder-clap] :payload {}})
+                 (finish {:outcome :insufficient-resource :end-ability? true})])])]
+          [(finish {:outcome :continue})])])]
+
+    :release
+    [(let charge-ticks ?charge/ticks)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-range
+                                   :include-entities? false :include-blocks? true}))
+     (let charged-enough? (math/gte charge-ticks $charge-min))
+     (if charged-enough?
+       [(let overcharge-ratio
+          (math/clamp (math/div (math/sub charge-ticks $charge-min)
+                                (math/sub $charge-max $charge-min)) 0.0 1.0))
+        (let damage
+          (math/mul $damage (math/lerp (pair/first $overcharge-multiplier)
+                                       (pair/second $overcharge-multiplier) overcharge-ratio)))
+        (let owner-id ?caster/id)
+        (let area-targets
+          (target/entities {:shape {:type :sphere :center (:position aim-hit) :radius $aoe-radius}
+                            :filter {:excluded-entity-ids [owner-id]} :limit 256}))
+        (each area-target area-targets
+          (combat/damage {:target (:id area-target) :amount damage :damage-type :skill}))
+        (world/lightning {:world-id ?world/id :position (:position aim-hit) :visual-only? true})
+        (let cast-progression ?progression/cast)
+        (event! {:type :score/mark :tag :cast :progression cast-progression})
+        (let main-cooldown ?cooldown/main)
+        (cooldown/start {:name :main :ticks main-cooldown})
+        (vfx! {:effect-id :arc-ring-session :operation :update
+              :instance-key [:activation :thunder-clap] :payload {:end (:position aim-hit)}})
+        (vfx! {:effect-id :arc-ring-session :operation :destroy
+              :instance-key [:activation :thunder-clap] :payload {}})
+        (event! {:type :achievement/trigger :payload {:id \"electromaster.thunder_clap\"}})
+        (finish {:outcome :performed :end-ability? true})]
+       [(vfx! {:effect-id :arc-ring-session :operation :destroy
+              :instance-key [:activation :thunder-clap] :payload {}})
+        (finish {:outcome :undercharged :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :arc-ring-session :operation :destroy
+           :instance-key [:activation :thunder-clap] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}
