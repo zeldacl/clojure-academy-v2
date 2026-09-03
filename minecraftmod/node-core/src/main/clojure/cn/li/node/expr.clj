@@ -200,6 +200,34 @@
        (let [[fx fy fz] (vec3-components (nth args 0)) [tx ty tz] (vec3-components (nth args 1))
              step (Math/abs (double (nth args 2)))]
          {:vec3 [(approach-component fx tx step) (approach-component fy ty step) (approach-component fz tz step)]})
+       ;; A ballistic launch vector: `direction` pitched up/down by
+       ;; `pitch-offset` radians (rotated about the horizontal axis
+       ;; perpendicular to `direction`, keeping its yaw), then scaled to
+       ;; `speed`. This opcode was REFERENCED by real content
+       ;; (vec_accel.edn, S6) under the old system but never actually
+       ;; implemented anywhere -- this docstring once called it out as
+       ;; "domain-specific, supplied through the NodeEnvironment", but an
+       ;; exhaustive search of both combat-core and ac turned up no
+       ;; :extra-ops map that ever registered it, so it would have thrown
+       ;; "unsupported expression opcode" the one time it was actually
+       ;; invoked. Since it is genuinely pure (no RNG, no host state), it
+       ;; belongs in the core vec3 family rather than behind a NodeEnvironment
+       ;; extension point that nothing else has ever needed -- this is a
+       ;; new, from-scratch implementation, not a port of a working one.
+       :vec3/launch
+       (let [[dx dy dz] (vec3-components (nth args 0))
+             speed (double (nth args 1))
+             pitch-offset (double (nth args 2))
+             horiz (Math/sqrt (+ (* dx dx) (* dz dz)))]
+         (if (zero? horiz)
+           ;; Straight up/down: yaw is undefined, so pitch-offset only
+           ;; ever changes magnitude along the existing (vertical) axis.
+           {:vec3 [0.0 (* speed (Math/signum (double dy))) 0.0]}
+           (let [pitch (Math/atan2 dy horiz)
+                 pitch' (+ pitch pitch-offset)
+                 yaw-x (/ dx horiz) yaw-z (/ dz horiz)
+                 cos-p (Math/cos pitch')]
+             {:vec3 [(* speed cos-p yaw-x) (* speed (Math/sin pitch')) (* speed cos-p yaw-z)]})))
 
        :random/uniform (uniform seed (double (nth args 0)) (double (nth args 1)))
        :random/int (bounded-int seed (long (nth args 0)) (long (nth args 1)))

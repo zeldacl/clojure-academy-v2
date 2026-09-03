@@ -33,6 +33,9 @@
    :vec3/z         {:params [:vec3]                   :returns :double}
    :vec3/with-z    {:params [:vec3 :double]           :returns :vec3}
    :vec3/approach  {:params [:vec3 :vec3 :double]     :returns :vec3}
+   ;; direction, speed, pitch-offset-radians -- see cn.li.node.expr's
+   ;; matching comment for why this is a new implementation, not a port.
+   :vec3/launch    {:params [:vec3 :double :double]   :returns :vec3}
    :math/add       {:params [:double :double]         :returns :double}
    :math/sub       {:params [:double :double]         :returns :double}
    :math/mul       {:params [:double :double]         :returns :double}

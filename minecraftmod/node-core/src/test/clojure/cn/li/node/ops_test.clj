@@ -1,5 +1,5 @@
 (ns cn.li.node.ops-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is testing]]
             [cn.li.node.ops :as ops]))
 
 (deftest known-op-and-signature-test
@@ -40,6 +40,15 @@
   (is (nil? (ops/invoke :collection/first [[]])))
   (is (true? (ops/invoke :collection/nonempty [["a"]])))
   (is (false? (ops/invoke :collection/nonempty [[]]))))
+
+(deftest vec3-launch-pitches-and-scales-the-direction-test
+  (testing "level aim (no vertical component), zero pitch offset -> straight ahead at the given speed"
+    (is (= {:vec3 [5.0 0.0 0.0]} (ops/invoke :vec3/launch [[1.0 0.0 0.0] 5.0 0.0]))))
+  (testing "positive pitch-offset tilts the result upward"
+    (let [{[_ y _] :vec3} (ops/invoke :vec3/launch [[1.0 0.0 0.0] 5.0 (/ Math/PI 2)])]
+      (is (< 4.99 y 5.01))))
+  (testing "straight-up direction has no horizontal component to pitch -- magnitude only"
+    (is (= {:vec3 [0.0 3.0 0.0]} (ops/invoke :vec3/launch [[0.0 1.0 0.0] 3.0 0.5])))))
 
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))

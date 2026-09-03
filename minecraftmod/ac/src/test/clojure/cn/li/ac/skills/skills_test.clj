@@ -539,6 +539,81 @@
       (is (some #(and (= :score/mark (:type %)) (= :effective (:tag %))) (.-events frame))))
     (is (= {:outcome :performed :next-phase nil :end-ability? true} (.-result frame)))))
 
+(deftest vec-accel-start-test
+  (let [doc (read-skill "vec_accel.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {} :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                                           :caster/aim {:x 1.0 :y 0.0 :z 0.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= #{[:charge-ticks 0] [:can-perform? true] [:look-dir {:x 1.0 :y 0.0 :z 0.0}]
+             [:init-vel {:vec3 [0.0 0.0 0.0]}]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :spawn (:operation (first (.-vfx frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest vec-accel-pulse-charges-and-computes-a-launch-velocity-test
+  (let [doc (read-skill "vec_accel.edn")
+        host {:query! (fn [_cap _args _fr] {:block-position {:x 0.0 :y -1.0 :z 0.0}})
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:ground-check-distance 2.0 :groundless-exp-threshold 0.9
+                          :speed-progress [0.0 1.0] :max-charge-ticks 10 :max-velocity 2.0
+                          :pitch-offset-radians 0.0}
+               :capabilities {:caster/body {:x 0.0 :y 0.0 :z 0.0} :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 1.0 :y 0.0 :z 0.0} :progression/mastery 0.1}
+               :state {:charge-ticks 5}}
+        frame (run/dispatch! program :pulse input)
+        writes (into {} (map (juxt :key :value)) (.-stateWrites frame))
+        expected-speed (* (Math/sin 0.6) 2.0)]
+    (testing "the ground hit alone makes can-perform? true even though mastery is below the groundless threshold"
+      (is (true? (:can-perform? writes))))
+    (testing "charge-ticks incremented from the carried-forward state (5 -> 6)"
+      (is (= 6 (:charge-ticks writes))))
+    (testing "init-vel = vec3/launch(aim, sin(lerp(0,1,6/10))*2.0, 0.0), level aim -> all speed on x"
+      (let [[x y z] (:vec3 (:init-vel writes))]
+        (is (< (Math/abs (- x expected-speed)) 1.0e-9))
+        (is (< (Math/abs y) 1.0e-9))
+        (is (< (Math/abs z) 1.0e-9))))
+    (is (= :charging (:outcome (.-result frame))))))
+
+(deftest vec-accel-release-launches-when-performable-and-affordable-test
+  (let [doc (read-skill "vec_accel.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) (case cap :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:release-cp 3.0 :release-overload 1.0 :cooldown-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :progression/launch 1.0}
+               :state {:can-perform? true :init-vel {:vec3 [1.0 0.0 0.0]}}}
+        frame (run/dispatch! program :release input)]
+    (is (= [:query :cost/spend {:budget {:cp 3.0 :overload 1.0}}] (first @calls)))
+    (is (some #(= [:command :motion/velocity {:velocity {:vec3 [1.0 0.0 0.0]} :dismount? true
+                                              :reset-fall-damage? true}] %)
+              @calls))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (some #(and (= :trajectory-ribbon-session (:effect-id %)) (= :destroy (:operation %)))
+              (.-vfx frame)))
+    (is (= :launched (:outcome (.-result frame))))))
+
+(deftest vec-accel-release-not-performable-skips-spend-entirely-test
+  (let [doc (read-skill "vec_accel.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) true)
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:release-cp 3.0 :release-overload 1.0 :cooldown-ticks 60}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :progression/launch 1.0}
+               :state {:can-perform? false :init-vel {:vec3 [1.0 0.0 0.0]}}}
+        frame (run/dispatch! program :release input)]
+    (is (empty? @calls))
+    (is (= :destroy (:operation (first (.-vfx frame)))))
+    (is (= :not-performable (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})
