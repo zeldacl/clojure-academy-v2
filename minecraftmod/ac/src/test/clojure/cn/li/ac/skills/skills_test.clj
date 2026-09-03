@@ -1682,3 +1682,143 @@
     (is (= 3 (count (.-vfx frame))))
     (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
     (is (= :aborted (:outcome (.-result frame))))))
+
+(defn- light-shield-deactivate-calls-ok?
+  [calls]
+  (and (some #(= [:command :entity/discard {:entity {:id "shield-1"}}] %) calls)
+       (some #(= [:command :entity/status {:target "player-1" :status-id :slowness
+                                           :duration-ticks 100.0 :amplifier 1}] %)
+             calls)
+       (some #(= [:command :cooldown/start {:name :deactivate :ticks 80}] %) calls)))
+
+(deftest light-shield-start-test
+  (let [calls (atom [])
+        doc (read-skill "light_shield.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :entity/spawn {:entity-id "shield-1"}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:activate-overload 5.0 :max-active-ticks 200.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{:active-ticks :last-absorb-tick :overload-floor :shield-id}
+           (set (map :key (.-stateWrites frame)))))
+    (is (some #(= {:key :overload-floor :value 15.0} (select-keys % [:key :value]))
+              (.-stateWrites frame)))
+    (is (= 4 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest light-shield-start-insufficient-resource-test
+  (let [doc (read-skill "light_shield.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (empty? (.-stateWrites frame)))))
+
+(deftest light-shield-pulse-touches-in-cone-and-continues-test
+  (let [calls (atom [])
+        doc (read-skill "light_shield.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :owner/snapshot {:position {:x 0.0 :y 1.0 :z 0.0}
+                                          :eye-position {:x 0.0 :y 1.5 :z 0.0}
+                                          :look {:x 0.0 :y 0.0 :z 1.0}}
+                         :entity/select [{:id "victim-1" :position {:x 0.0 :y 1.0 :z 2.0}
+                                          :invulnerable-time 0.0}]))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:touch-radius 3.0 :front-cone-degrees 45.0 :touch-damage 4.0
+                          :max-active-ticks 200.0}
+               :capabilities {:caster/id "player-1" :progression/touch 0.5 :progression/tick 1.0}
+               :state {:overload-floor 5.0 :active-ticks 10}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(= [:command :entity/damage {:target "victim-1" :amount 4.0 :damage-type :magic}] %)
+              @calls))
+    (is (some #(and (= :score/mark (:type %)) (= :touch (:tag %))) (.-events frame)))
+    (is (some #(and (= :score/mark (:type %)) (= :tick (:tag %))) (.-events frame)))
+    (is (= #{[:active-ticks 11]} (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest light-shield-pulse-skips-touch-when-budget-insufficient-test
+  (let [calls (atom [])
+        doc (read-skill "light_shield.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :owner/snapshot {:position {:x 0.0 :y 1.0 :z 0.0}
+                                          :eye-position {:x 0.0 :y 1.5 :z 0.0}
+                                          :look {:x 0.0 :y 0.0 :z 1.0}}
+                         :entity/select [{:id "victim-1" :position {:x 0.0 :y 1.0 :z 2.0}
+                                          :invulnerable-time 0.0}]
+                         :cost/spend (not= :touch-budget (:budget args))))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:touch-radius 3.0 :front-cone-degrees 45.0 :touch-damage 4.0
+                          :max-active-ticks 200.0}
+               :capabilities {:caster/id "player-1" :progression/touch 0.5 :progression/tick 1.0
+                              :budget/tick :tick-budget :budget/touch :touch-budget}
+               :state {:overload-floor 5.0 :active-ticks 10}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (not (some #(= :entity/damage (second %)) @calls)))
+    (is (not (some #(and (= :score/mark (:type %)) (= :touch (:tag %))) (.-events frame))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest light-shield-pulse-timeout-deactivates-test
+  (let [calls (atom [])
+        doc (read-skill "light_shield.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :owner/snapshot {:position {:x 0.0 :y 1.0 :z 0.0}
+                                          :eye-position {:x 0.0 :y 1.5 :z 0.0}
+                                          :look {:x 0.0 :y 0.0 :z 1.0}}
+                         :entity/select []))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:touch-radius 3.0 :front-cone-degrees 45.0 :touch-damage 4.0
+                          :max-active-ticks 10.0 :slowness-duration-ticks 100.0
+                          :slowness-amplifier 1}
+               :capabilities {:caster/id "player-1" :progression/touch 0.5 :progression/tick 1.0
+                              :cooldown/deactivate 80}
+               :state {:overload-floor 5.0 :active-ticks 10 :shield-id "shield-1"}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (light-shield-deactivate-calls-ok? @calls))
+    (testing "3 session-update vfx during the tick, then 3 destroy vfx from the timeout cleanup"
+      (is (= 3 (count (filter #(= :destroy (:operation %)) (.-vfx frame))))))
+    (is (= :timeout (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest light-shield-pulse-insufficient-tick-budget-deactivates-test
+  (let [calls (atom [])
+        doc (read-skill "light_shield.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend false))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:slowness-duration-ticks 100.0 :slowness-amplifier 1}
+               :capabilities {:caster/id "player-1" :cooldown/deactivate 80}
+               :state {:overload-floor 5.0 :shield-id "shield-1"}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (light-shield-deactivate-calls-ok? @calls))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest light-shield-release-and-abort-both-deactivate-test
+  (doseq [phase [:release :abort]]
+    (let [calls (atom [])
+          doc (read-skill "light_shield.edn")
+          host {:query! (fn [cap args _fr] (swap! calls conj [:query cap args]) nil)
+                :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+          input {:tunables {:slowness-duration-ticks 100.0 :slowness-amplifier 1}
+                 :capabilities {:caster/id "player-1" :cooldown/deactivate 80}
+                 :state {:shield-id "shield-1"}}
+          frame (compile-and-dispatch! doc phase host input)]
+      (is (light-shield-deactivate-calls-ok? @calls) (str "phase " phase))
+      (is (= (if (= phase :release) :released :aborted) (:outcome (.-result frame)))
+          (str "phase " phase)))))
