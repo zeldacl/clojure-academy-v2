@@ -233,6 +233,23 @@ sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/m
 // build, and any clean rebuild breaks.
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/platform/shared/src/main/clojure')
 
+// combat-core is source-first (its own compileClojure is disabled -- see
+// combat-core/build.gradle); its *.edn resources (e.g.
+// cn/li/combat/lib/*.edn, cn.li.combat.lib's :defn function library) only
+// land in its own build/neutral/combat-core/resources/main, which the
+// standard project(':ability-runtime') -> api project(':combat-core')
+// dependency chain does not surface onto compileTestClojure's own
+// classpath (clojurephant's compileTestClojure does not resolve through
+// the same variant-aware graph runAcClojureTests's plain JavaExec
+// classpath does). Same gap ability-runtime/build.gradle's own
+// compileTestClojure config already closed, for the same reason -- see
+// that file's matching comment.
+tasks.named('compileTestClojure').configure {
+    dependsOn ':combat-core:classes'
+    classpath.from(files(rootProject.layout.buildDirectory.dir('neutral/combat-core/resources/main')))
+    classpath.from(files(rootProject.layout.buildDirectory.dir('neutral/combat-core/clojure/main')))
+}
+
 tasks.matching { it.name == 'checkClojure' }.configureEach {
     dependsOn tasks.named('compileClojure')
     def existingArgs = forkOptions.jvmArgs ?: []
