@@ -69,6 +69,7 @@
    ;; runtime value is an opaque 2-element vector, :any at compile time.
    :pair/first     {:params [:any]                    :returns :double}
    :pair/second    {:params [:any]                    :returns :double}
+   :pair/third     {:params [:any]                    :returns :double}
    :value/eq       {:params [:any :any]               :returns :boolean}
    ;; cn.li.node.expr already implements this (a projectile-type
    ;; allowlist/blocklist check, S6's vec_deviation.edn); exposing it here

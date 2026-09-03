@@ -24,7 +24,8 @@
 
 (deftest pair-accessors-index-a-curve-pair-value-test
   (is (= 1.5 (ops/invoke :pair/first [[1.5 2.5]])))
-  (is (= 2.5 (ops/invoke :pair/second [[1.5 2.5]]))))
+  (is (= 2.5 (ops/invoke :pair/second [[1.5 2.5]])))
+  (is (= 3.5 (ops/invoke :pair/third [[1.5 2.5 3.5]]))))
 
 (deftest floor-long-truncates-and-returns-a-real-long-test
   (is (= 40 (ops/invoke :math/floor-long [40.9])))

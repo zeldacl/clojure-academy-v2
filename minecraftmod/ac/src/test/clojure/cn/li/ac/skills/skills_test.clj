@@ -1046,6 +1046,76 @@
     (is (= [{:key :desired-distance :value 7.0}] (vec (.-stateWrites frame))))
     (is (= :distance-updated (:outcome (.-result frame))))))
 
+(deftest directed-blastwave-pulse-charges-and-detects-punch-completion-test
+  (let [doc (read-skill "directed_blastwave.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        charging-frame (run/dispatch! program :pulse
+                                      {:tunables {:charge-max-accepted-ticks 20
+                                                  :charge-max-tolerant-ticks 40
+                                                  :punch-animation-ticks 10}
+                                       :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}}
+                                       :state {:charge-ticks 5 :punched? false :punch-ticks 0}})
+        punch-done-frame (run/dispatch! program :pulse
+                                        {:tunables {:charge-max-accepted-ticks 20
+                                                    :charge-max-tolerant-ticks 40
+                                                    :punch-animation-ticks 10}
+                                         :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0}}
+                                         :state {:charge-ticks 5 :punched? true :punch-ticks 10}})]
+    (is (= :charging (:outcome (.-result charging-frame))))
+    (testing "punched? true -> punch-ticks increments too (10 -> 11, past the 10-tick animation)"
+      (is (= #{[:charge-ticks 6] [:punch-ticks 11]}
+             (set (map (juxt :key :value) (.-stateWrites punch-done-frame))))))
+    (is (= :performed (:outcome (.-result punch-done-frame))))))
+
+(deftest directed-blastwave-release-punches-when-charged-and-affordable-test
+  (let [doc (read-skill "directed_blastwave.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:position {:x 5.0 :y 0.0 :z 0.0}}
+                         :entity/select [{:id "e1" :position {:x 2.0 :y -0.1 :z 0.0}}]
+                         :block/select []))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:charge-min-ticks 0 :charge-max-accepted-ticks 20
+                          :targeting-distance 20.0 :aoe-radius 6.0 :damage 10.0
+                          :knockback-scale 1.0 :hardness-low-threshold 0.3
+                          :hardness-mid-threshold 0.7 :hardness-caps [1.0 2.0 3.0]
+                          :break-probability [0.2 0.6] :drop-probability [0.1 0.3]}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :caster/body {:x 0.0 :y 0.0 :z 0.0} :caster/id "player-1"
+                              :world/id "overworld" :rng/seed 3 :progression/mastery 0.5
+                              :budget/release {:cp 5.0} :progression/hit 1.0
+                              :progression/miss 0.5 :cooldown/main 60}
+               :state {:charge-ticks 5}}
+        frame (run/dispatch! program :release input)]
+    (is (some #(= [:command :entity/damage {:target "e1" :amount 10.0 :damage-type :skill
+                                            :damage-pipeline :skill}] %)
+              @calls))
+    (testing "knockback: direction (1,0,0) normalized * (0.2 * |1.0|) = (0.2, 0.0, 0.0)"
+      (is (some #(= :entity/impulse (second %)) @calls))
+      (let [[_ _ impulse-args] (first (filter #(= :entity/impulse (second %)) @calls))
+            [ix iy iz] (:vec3 (:vector impulse-args))]
+        (is (< (Math/abs (- ix 0.2)) 1.0e-9))
+        (is (< (Math/abs iy) 1.0e-9))
+        (is (< (Math/abs iz) 1.0e-9))))
+    (testing "block/select ran with the mid-tier hardness cap (mastery 0.5 is between the two thresholds)"
+      (is (some #(and (= :block/select (second %)) (= 2.0 (:max-hardness (:projection (nth % 2)))))
+                @calls)))
+    (is (some #(and (= :score/mark (:type %)) (= :hit (:tag %))) (.-events frame)))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+    (is (= #{:directed-blastwave-charge :directed-blastwave-wave :audio-one-shot}
+           (set (map :effect-id (.-vfx frame)))))
+    (is (= #{[:punched? true] [:punch-ticks 0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (testing "no :end-ability? -- a successful punch keeps the session alive for another charge"
+      (is (= {:outcome :punched :next-phase nil :end-ability? false} (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

@@ -137,6 +137,13 @@
        ;; instead of exposing the general nth escape hatch to authors.
        :pair/first (double (nth (nth args 0) 0))
        :pair/second (double (nth (nth args 0) 1))
+       ;; A real content inconsistency, not a new curve shape: directed_
+       ;; blastwave.edn's :hardness-caps tunable is declared {:curve
+       ;; :pair} but real usage indexes a THIRD element (S6) -- rather
+       ;; than generalize to an author-facing nth (the same escape hatch
+       ;; :pair/first,second were added specifically to avoid exposing),
+       ;; one more named accessor for this one documented case.
+       :pair/third (double (nth (nth args 0) 2))
 
        :value/eq (= (nth args 0) (nth args 1))
 
