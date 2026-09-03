@@ -88,9 +88,15 @@
    VfxRenderStage/FIRST_PERSON RenderStage/FIRST_PERSON
    VfxRenderStage/SCREEN RenderStage/SCREEN})
 
-(defn- vfx-command [^VfxBatch batch]
+(defn- vfx-command
+  "(.primitive batch) directly, NOT (str (.primitiveId batch)): the batch
+   already carries the stable primitive name every loader's renderer
+   compares against (see cn.li.mcmod.runtime.vfx.VfxBatch's docstring) --
+   the previous int-then-stringify encoding never matched that string set,
+   so no VFX draw batch this fold produced ever reached a renderer."
+  [^VfxBatch batch]
   (RenderCommand$Batch. (or (get vfx-stage->render-stage (.stage batch)) RenderStage/WORLD_AFTER_TRANSLUCENT)
-                        (str (.primitiveId batch)) (str (.materialId batch)) "vfx"
+                        (.primitive batch) (str (.materialId batch)) "vfx"
                         0 (long (.instanceCount batch)) "stable" (.payload batch)))
 
 (defn- vfx-output-command [^VfxOutput output]

@@ -281,14 +281,17 @@
    :first-person VfxRenderStage/FIRST_PERSON
    :screen VfxRenderStage/SCREEN})
 
-(def ^:private primitive->java
-  {:billboard 1 :particle 2 :beam 3 :ribbon 4 :line 5 :mesh 6 :quad 7})
-
-(defn- op->java-batch [op]
+(defn- op->java-batch
+  "primitive is passed through as its own name (\"line\"/\"quad\"/
+   \"particle\") -- every loader's renderer gates on that exact string set
+   (cn.li.mcmod.runtime.vfx.VfxBatch's docstring); a prior int encoding
+   here never matched what any consumer actually checked, so no VFX batch
+   reached a renderer through this path at all."
+  [op]
   (let [^ParticleBuffer particles (:particle-buffer op)]
     (VfxBatch. (or (get stage->java (:stage op)) VfxRenderStage/WORLD_TRANSLUCENT)
                (int (hash (or (:material op) :default)))
-               (int (get primitive->java (:primitive op) 0))
+               (name (or (:primitive op) :line))
                (if particles (.size particles) 0)
                particles
                (or (:payload op) op))))
