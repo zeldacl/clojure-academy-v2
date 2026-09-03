@@ -64,7 +64,14 @@ public final class HitKernel {
         int end = a.subtreeEnd[inst];
         int result = myScroll;
         for (int c = LayoutKernel.firstChild(a, inst); c >= 0; c = LayoutKernel.nextSibling(a, c, end)) {
-            result = scrollWalk(t, a, resolver, c, px, py, myScroll);
+            // Prefer a scroll found in a child subtree. Non-scroll siblings that
+            // cover the same point (e.g. tutorial's absolute scrollbar strip over
+            // the markdown pane) must NOT wipe a previously found scroll back to
+            // the ancestor — that made mouse-wheel over mid-panel content a no-op.
+            int childResult = scrollWalk(t, a, resolver, c, px, py, myScroll);
+            if (childResult != myScroll) {
+                result = childResult;
+            }
         }
         return result;
     }

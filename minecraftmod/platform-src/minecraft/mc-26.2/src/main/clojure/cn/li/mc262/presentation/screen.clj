@@ -7,14 +7,14 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.client.gui GuiGraphicsExtractor]))
 
+(defn- consumed? [result]
+  (or (= result :consume) (= result :capture-pointer)))
+
 (defn open! [mount title & [on-close]]
-  (let [value (doto (DelegatingScreen.
+  (let [scrollbar-drag? (atom false)
+        value (doto (DelegatingScreen.
                       (Component/literal (str title))
                       (fn [s ^GuiGraphicsExtractor graphics mouse-x mouse-y partial-tick]
-                        ;; Same as 1.20.1/1.21.1: draw the vanilla dark/blur scrim.
-                        ;; Reactive host skips a second extractBackground because its
-                        ;; extractRenderState path already did one; Presentation's
-                        ;; DelegatingScreen.render replaces that path entirely.
                         (.renderBackground ^DelegatingScreen s graphics
                                            (int mouse-x) (int mouse-y) (float partial-tick))
                         (presentation/submit-current-frame!
@@ -33,29 +33,37 @@
                           mount {:type :character :text (str character) :composing? false})
                         false)
                       (fn [_ mouse-x mouse-y button]
-                        (presentation/dispatch-input!
-                          mount {:type :pointer :event-type :down
-                                 :x mouse-x :y mouse-y :button button})
-                        false)
+                        (let [result (presentation/dispatch-input!
+                                       mount {:type :pointer :event-type :down
+                                              :x mouse-x :y mouse-y :button button})]
+                          (reset! scrollbar-drag? (= result :capture-pointer))
+                          (consumed? result)))
                       (fn [_] nil)
                       (fn [_]
+                        (reset! scrollbar-drag? false)
                         (presentation/unmount! mount)
                         (when on-close (on-close))))
                 (.withMouseReleased
                   (fn [_ mouse-x mouse-y button]
-                    (presentation/dispatch-input!
-                      mount {:type :pointer :event-type :up
-                             :x mouse-x :y mouse-y :button button})
-                    false))
+                    (reset! scrollbar-drag? false)
+                    (consumed?
+                      (presentation/dispatch-input!
+                        mount {:type :pointer :event-type :up
+                               :x mouse-x :y mouse-y :button button}))))
                 (.withMouseDragged
                   (fn [_ mouse-x mouse-y button drag-x drag-y]
-                    (presentation/dispatch-input!
-                      mount {:type :pointer :event-type :drag
-                             :x mouse-x :y mouse-y :button button
-                             :drag-x drag-x :drag-y drag-y})
-                    false))
+                    (consumed?
+                      (presentation/dispatch-input!
+                        mount {:type :pointer :event-type :drag
+                               :x mouse-x :y mouse-y :button button
+                               :drag-x drag-x :drag-y drag-y}))))
                 (.withMouseMoved
                   (fn [_ mouse-x mouse-y]
+                    (when @scrollbar-drag?
+                      (presentation/dispatch-input!
+                        mount {:type :pointer :event-type :drag
+                               :x mouse-x :y mouse-y :button 0
+                               :drag-x 0.0 :drag-y 0.0}))
                     (presentation/dispatch-input!
                       mount {:type :pointer :event-type :move
                              :x mouse-x :y mouse-y})

@@ -30,7 +30,7 @@
    :margin [0.0 0.0 0.0 0.0] :padding [0.0 0.0 0.0 0.0]
    :min-w 0.0 :min-h 0.0 :max-w 0.0 :max-h 0.0
    :gap 0.0 :aspect 0.0 :x 0.0 :y 0.0 :font-size 8.0 :rgba 0xFFFFFFFF
-   :text nil :resource nil :key nil :bind {} :on {} :children []})
+   :text nil :resource nil :key nil :bind {} :on {} :scrollbar nil :children []})
 
 (defn- flatten-tree [root]
   (let [rows (atom []) parent (atom []) first-child (atom []) next-sibling (atom []) child-count (atom [])]
@@ -142,6 +142,7 @@
      :node/key (mapv :key rows)
      :node/bind-map (mapv :bind rows)
      :node/on-map (mapv :on rows)
+     :node/scrollbar (mapv :scrollbar rows)
      :node/semantics (vec (repeat (count rows) nil))
      :focus-order []
      :semantics {}

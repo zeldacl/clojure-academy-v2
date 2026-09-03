@@ -17,12 +17,14 @@
    remains a possible follow-up; today one changed binding anywhere in a
    view repaints that whole view, not just the affected subtree."
   (:require [cn.li.presentation.core.nodetable :as nodetable]
+            [cn.li.presentation.core.scrollbar :as scrollbar]
             [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]
            [cn.li.presentation.core.engine
             NodeTable LayoutArena LayoutContext LayoutKernel PaintKernel HitKernel HitKernel$Hit
             CmdBuf BindResolver NodeFlags CompositeSpec MemoState MemoKernel]
+           [cn.li.mcmod.runtime UiResourceRef UiResourceRef$Kind]
            [cn.li.mcmod.runtime.ui UiOp UiTextMetrics]))
 
 (defrecord UiRuntime [state owner-thread])
@@ -127,20 +129,61 @@
 (defn- resource-index-for
   "src's own :namespace (or a leading `ns:` in a string form) wins; when
    absent, default-namespace (the mounted view's own view-id namespace --
-   see mount!'s :view-id) fills in, so an unqualified resource ref resolves
-   within whichever content module's view is asking, not a hardcoded one.
-   Neither present -> no guess, just a miss (-1): fabricating a namespace
-   string here would risk matching a real (wrong) resource-index entry."
+   see mount!'s :view-id) fills in. Plain {[ns path] idx} maps (tests) stay
+   read-only; mount resource tables from make-resource-table intern misses."
   [resource-index default-namespace src]
-  (cond
-    (nil? src) -1
-    (map? src)
-    (let [ns (or (:namespace src) default-namespace)]
-      (if ns (get resource-index [(str ns) (str (:path src))] -1) -1))
-    :else
-    (let [[namespace path] (string/split (str src) #":" 2)
-          ns (or namespace default-namespace)]
-      (if ns (get resource-index [(str ns) (or path (str src))] -1) -1))))
+  (let [lookup (fn [ns path]
+                 (let [k [(str ns) (str path)]]
+                   (cond
+                     (and (map? resource-index) (contains? resource-index :intern!))
+                     (or (get @(:index resource-index) k)
+                         ((:intern! resource-index) ns path))
+                     (map? resource-index)
+                     (get resource-index k -1)
+                     :else -1)))]
+    (cond
+      (nil? src) -1
+      (map? src)
+      (let [ns (or (:namespace src) default-namespace)]
+        (if ns (lookup ns (:path src)) -1))
+      :else
+      (let [[namespace path] (string/split (str src) #":" 2)
+            ns (or namespace default-namespace)]
+        (if ns (lookup ns (or path (str src))) -1)))))
+
+(defn- make-resource-table
+  "Static artifact resources plus a growable dynamic sidecar for composite
+   textures (tutorial recipe BGs, tag icons) that only exist at runtime."
+  [^objects static-resources]
+  (let [static-n (alength static-resources)
+        index (atom (into {}
+                          (keep (fn [i]
+                                  (let [r (aget static-resources (int i))]
+                                    (when (instance? UiResourceRef r)
+                                      [[(.namespace ^UiResourceRef r)
+                                        (.path ^UiResourceRef r)]
+                                       (int i)]))))
+                          (range static-n)))
+        dynamic (atom [])
+        intern! (fn [ns path]
+                  (let [k [(str ns) (str path)]]
+                    (or (get @index k)
+                        (let [idx (+ static-n (count @dynamic))
+                              ref (UiResourceRef. (str ns) (str path) UiResourceRef$Kind/TEXTURE)]
+                          (swap! dynamic conj ref)
+                          (swap! index assoc k idx)
+                          idx))))]
+    {:index index
+     :intern! intern!
+     :finish (fn []
+               (let [dyn @dynamic]
+                 (if (zero? (count dyn))
+                   static-resources
+                   (let [^objects out (make-array UiResourceRef (+ static-n (count dyn)))]
+                     (System/arraycopy static-resources 0 out 0 static-n)
+                     (dotimes [i (count dyn)]
+                       (aset ^objects out (int (+ static-n i)) ^UiResourceRef (nth dyn i)))
+                     out))))}))
 
 (defn- composite-spec
   "Mirrors the pre-rewrite paint.clj :composite case exactly (local-
@@ -200,6 +243,10 @@
 (defn- build-key-index [^NodeTable table]
   (into {} (map-indexed (fn [i k] [k i])) (.-nodeKeys table)))
 
+(defn- finish-resources [resource-index]
+  (when-let [finish (:finish resource-index)]
+    (finish)))
+
 (defn mount!
   [^UiRuntime runtime {:keys [host view-id artifact state reduce run-effect! close!]
                      :or {state {}
@@ -212,6 +259,7 @@
   (let [id (:next-id (runtime-state runtime))
         handle (MountHandle. (long id))
         table (nodetable/table-for artifact)
+        resource-index (make-resource-table (.-resources table))
         instance {:handle handle
                   :host host
                   :view-id view-id
@@ -219,7 +267,8 @@
                   :table table
                   :bind-maps (:node/bind-map artifact)
                   :on-maps (:node/on-map artifact)
-                  :resource-index (build-resource-index artifact)
+                  :scrollbar-maps (or (:node/scrollbar artifact) [])
+                  :resource-index resource-index
                   :key-index (build-key-index table)
                   :view-state state
                   :reduce reduce
@@ -230,18 +279,8 @@
                   :cmdbuf (CmdBuf. 64)
                   :memo (MemoState. (max 1 (long (:binding-count artifact 0))) 1)
                   :bind-scratch (object-array (max 1 (long (:binding-count artifact 0))))
-                  ;; (subvec path 1) sliced once here instead of every frame
-                  ;; in resolve-bindings! -- :bindings is fixed per artifact.
                   :bind-rest-paths (mapv (fn [{:keys [id path]}] [(int id) (subvec path 1)])
                                          (:bindings artifact))
-                  ;; layout-* tracks what the committed arena/root currently
-                  ;; reflects; paint-*/last-result track what :commands
-                  ;; currently reflects. Kept separate because dispatch!
-                  ;; (hit-testing) only ever needs layout to be current,
-                  ;; while extract-stage! (rendering) needs both -- an input
-                  ;; event that only re-runs layout must not let extract-
-                  ;; stage! believe a stale paint is still valid just because
-                  ;; the layout stamp now matches.
                   :layout-stamp nil
                   :layout-geometry nil
                   :layout-metrics-epoch -1
@@ -404,6 +443,31 @@
 (defn- node-key [^NodeTable table node]
   (aget ^objects (.-nodeKeys table) node))
 
+(defn- hover-target-from-hit
+  "Identity for hover change detection. Collection templates share one node
+   key (often nil), so instance index — unique per expanded item — is the
+   stable id. Carries :item/:index/:action so leave can reuse the enter
+   node's :on :hover handler and item payload (pre-rewrite parity)."
+  [^NodeTable table on-maps ^HitKernel$Hit hover]
+  (when hover
+    (let [node (.node hover)
+          on-map (nth on-maps node nil)]
+      {:key (node-key table node)
+       :instance (.instance hover)
+       :node node
+       :item (.item hover)
+       :index (.itemIndex hover)
+       :action (:hover on-map)})))
+
+(defn- hover-payload [target previous hover?]
+  (let [src (or target previous)]
+    (cond-> {:target (:key target)
+             :hover? (boolean hover?)
+             :hover-event (if hover? :enter :leave)
+             :previous-hover (:key previous)}
+      (some? (:item src))
+      (assoc :item (:item src) :index (:index src)))))
+
 (defn- event-point
   "Version hosts normally provide mount-local coordinates. Explicit
    :viewport coordinates are accepted for overlays whose origin is nonzero."
@@ -419,6 +483,80 @@
 
 (defn- clamp01 [v] (max 0.0 (min 1.0 v)))
 
+(defn- find-instance-for-node
+  "First arena instance whose node index matches, or -1."
+  [^LayoutArena arena node]
+  (let [n (.-n arena)
+        node (int node)]
+    (loop [i (int 0)]
+      (cond
+        (>= i n) -1
+        (= node (aget ^ints (.-nodeOf arena) i)) i
+        :else (recur (unchecked-inc-int i))))))
+
+(defn- apply-scrollbar-thumbs!
+  "Move thumb instances to match linked scroll progress (pre-rewrite paint parity)."
+  [instance]
+  (let [^NodeTable table (:table instance)
+        ^LayoutArena arena (:arena instance)
+        scrollbar-maps (:scrollbar-maps instance)
+        scroll-offsets (:scroll-offsets instance)
+        key-index (:key-index instance)]
+    (when (seq scrollbar-maps)
+      (let [n (.-n arena)]
+        (dotimes [inst n]
+          (let [node (aget ^ints (.-nodeOf arena) inst)
+                sb (nth scrollbar-maps node nil)]
+            (when (and (map? sb) (:thumb? sb) (:for sb))
+              (let [target (:for sb)
+                    scroll-node (get key-index target)
+                    scroll-inst (when (some? scroll-node)
+                                  (find-instance-for-node arena scroll-node))
+                    max-off (if (and scroll-inst (>= scroll-inst 0))
+                              (scroll-max-offset table arena scroll-inst)
+                              0.0)
+                    offset (float (or (get scroll-offsets target) 0.0))
+                    local-y (scrollbar/thumb-y sb (scrollbar/progress offset max-off))
+                    parent (aget ^ints (.-parentOf arena) inst)
+                    parent-y (if (>= parent 0) (.y arena parent) 0.0)]
+                (.setRect arena inst (.x arena inst) (float (+ parent-y local-y))
+                          (.w arena inst) (.h arena inst))))))))))
+
+(defn- scrollbar-route
+  "Click/drag a SCROLLBAR-flagged node into a scroll-offset update for :for."
+  [instance ^NodeTable table ^LayoutArena arena hit-node hit px py event-type]
+  (let [sb (nth (:scrollbar-maps instance) hit-node nil)
+        target (:for sb)
+        scroll-node (when target (get (:key-index instance) target))
+        scroll-inst (when (some? scroll-node) (find-instance-for-node arena scroll-node))
+        max-off (if (and scroll-inst (>= scroll-inst 0))
+                  (scroll-max-offset table arena scroll-inst)
+                  0.0)
+        current (float (or (get (:scroll-offsets instance) target) 0.0))]
+    (when (and (map? sb) target)
+      (if (= :drag event-type)
+        (let [cap (:pointer-capture instance)]
+          (when (:scrollbar? cap)
+            (let [next-offset (scrollbar/offset-for-drag (:sb cap) (:start-offset cap)
+                                                        (:start-py cap) py (:max-off cap))]
+              {:action :input/scroll
+               :scroll-offsets {(:target cap) next-offset}
+               :pointer-capture cap
+               :payload {:target (:target cap) :scroll-offset next-offset
+                         :progress (scrollbar/progress next-offset (:max-off cap))
+                         :scrollbar? true}})))
+        (let [rect-y (if hit (.y arena (.instance ^HitKernel$Hit hit)) py)
+              next-offset (if (:thumb? sb)
+                            current
+                            (scrollbar/offset-for-pointer sb rect-y py max-off))]
+          {:action :input/scroll
+           :scroll-offsets {target next-offset}
+           :pointer-capture {:scrollbar? true :sb sb :target target
+                             :start-py py :start-offset next-offset :max-off max-off}
+           :payload {:target target :scroll-offset next-offset
+                     :progress (scrollbar/progress next-offset max-off)
+                     :scrollbar? true}})))))
+
 (defn- routed-event [instance event]
   (if (:action event)
     event
@@ -428,7 +566,9 @@
                                         (some-> instance :view-id namespace) (:view-state instance))
           root (:root-instance instance)
           bind-maps (:bind-maps instance)
-          focus (:focus instance)]
+          on-maps (:on-maps instance)
+          focus (:focus instance)
+          capture (:pointer-capture instance)]
       (case (:type event)
         :pointer
         (let [[px py] (event-point event (:geometry instance))
@@ -440,18 +580,26 @@
                                      (HitKernel/topmostAt table arena resolver root px py))
               hit-node (when hit (.node hit))
               previous (:hover-target instance)
-              hover-key (when hover (node-key table (.node hover)))
-              prev-key (:key previous)
-              changed? (and (= :move (:event-type event)) (not= hover-key prev-key))]
+              hover-target (hover-target-from-hit table on-maps hover)
+              changed? (and (= :move (:event-type event))
+                            (not= (:instance hover-target) (:instance previous)))
+              hover-action (when changed?
+                             (or (:action hover-target) (:action previous)))]
           (cond
             (= :up (:event-type event))
             {:action :input/pointer :pointer-capture nil :payload event}
+
+            ;; mouseDragged is not always delivered (some hosts only get mouseMoved
+            ;; while the button is held). Keep scrollbar dragging alive on :move too.
+            (and (#{:drag :move} (:event-type event)) (:scrollbar? capture))
+            (or (scrollbar-route instance table arena 0 nil px py :drag)
+                {:action :input/pointer :payload event})
 
             (and hit (= UiOp/PROGRESS (aget ^ints (.-op table) hit-node)))
             (let [x (.x arena (.instance hit))
                   w (.w arena (.instance hit))
                   ratio (float (if (pos? w) (clamp01 (/ (- px x) w)) 0.0))
-                  on-map (nth (:on-maps instance) hit-node nil)]
+                  on-map (nth on-maps hit-node nil)]
               {:action (or (:change on-map) (:activate on-map) :input/progress)
                :payload {:target (node-key table hit-node)
                         :value ratio :progress ratio :progress-input true}})
@@ -459,10 +607,15 @@
             (and hit (.has table hit-node NodeFlags/FOCUSABLE))
             {:focus {:key (node-key table hit-node)
                     :path (:text (nth bind-maps hit-node nil))
-                    :on (nth (:on-maps instance) hit-node nil)}}
+                    :on (nth on-maps hit-node nil)}}
+
+            (and hit (.has table hit-node NodeFlags/SCROLLBAR)
+                 (= :down (:event-type event)))
+            (or (scrollbar-route instance table arena hit-node hit px py :down)
+                {:action :input/pointer :payload event})
 
             hit
-            (let [on-map (nth (:on-maps instance) hit-node nil)]
+            (let [on-map (nth on-maps hit-node nil)]
               {:action (:activate on-map)
                :payload (cond-> {:target (node-key table hit-node)}
                           (some? (.item hit))
@@ -482,10 +635,9 @@
                 {:action :input/pointer :payload event}))
 
             changed?
-            {:action :input/hover
-             :hover-target (when hover {:key hover-key :instance (.instance ^HitKernel$Hit hover)})
-             :payload {:target hover-key :hover? (boolean hover)
-                      :hover-event (if hover :enter :leave) :previous-hover prev-key}}
+            {:action (or hover-action :input/hover)
+             :hover-target hover-target
+             :payload (hover-payload hover-target previous (boolean hover))}
 
             :else {:action :input/pointer :payload event}))
 
@@ -566,16 +718,29 @@
             (vswap! (:state runtime) assoc-in [:mounts mount :focus] focus))
         _ (when (contains? routed :hover-target)
             (vswap! (:state runtime) assoc-in [:mounts mount :hover-target] (:hover-target routed)))
+        _ (when (contains? routed :pointer-capture)
+            (vswap! (:state runtime) assoc-in [:mounts mount :pointer-capture] (:pointer-capture routed)))
         _ (when (contains? routed :scroll-offsets)
             (vswap! (:state runtime) update-in [:mounts mount :scroll-offsets]
                     (fn [current] (merge (or current {}) (:scroll-offsets routed)))))
+        ;; Scrollbar/thumb geometry depends on offsets; force a paint next frame.
+        _ (when (contains? routed :scroll-offsets)
+            (vswap! (:state runtime) assoc-in [:mounts mount :paint-stamp] nil))
         state-before (:view-state instance)
         state-edited (edit-input-state state-before focus action payload)
         payload (input-payload state-edited focus action payload)
         response ((:reduce instance) state-edited action payload)
         next-state (if (contains? response :state) (:state response) state-edited)
         effects (or (:effects response) [])
-        result (or (:event-result response) :pass)]
+        ;; Scrollbar thumbs register no :activate reducer; Minecraft only
+        ;; delivers mouseDragged after mouseClicked returned true. Claim the
+        ;; press/drag while a scrollbar capture is armed.
+        result (let [base (or (:event-result response) :pass)
+                     cap (or (:pointer-capture routed)
+                             (when (and (= :pointer (:type event))
+                                        (#{:drag :move} (:event-type event)))
+                               (:pointer-capture instance)))]
+                 (if (:scrollbar? cap) :capture-pointer base))]
     (present! runtime mount next-state)
     (doseq [effect effects]
       (try
@@ -621,9 +786,13 @@
                                resolver (build-resolver (:bind-maps instance) (:resource-index instance)
                                         (some-> instance :view-id namespace) (:view-state instance))
                                ctx (LayoutContext. resolver nil nil)
+                               _ (apply-scrollbar-thumbs! (assoc instance :root-instance root
+                                                                 :arena arena))
                                _ (.reset cmdbuf)
                                _ (when (>= root 0) (PaintKernel/paint table arena ctx cmdbuf root))
-                               commands (.finish cmdbuf 0 (.-clipRects arena) (.-resources table))
+                               resources (or (finish-resources (:resource-index instance))
+                                             (.-resources table))
+                               commands (.finish cmdbuf 0 (.-clipRects arena) resources)
                                result (assoc (select-keys instance [:handle :view-id :geometry])
                                              :commands commands)]
                            (vswap! (:state runtime)

@@ -55,6 +55,29 @@
     (is (= [{:id 0 :path [:state :mask]}] (:bindings compiled)))
     (is (= {:rgba [:state :mask]} (nth (:node/bind-map compiled) 0)))))
 
+(deftest text-with-on-activate-is-hit-testable
+  ;; Tutorial list rows are :text + :on, not :button. Without this flag
+  ;; HitKernel skips them and activate/hover never fire.
+  (let [compiled (compile* {:type :text :bind {:text [:item :label]}
+                            :on {:activate :demo/item :hover :demo/hover}})
+        flags (nth (:node/flags compiled) 0)]
+    (is (pos? (bit-and flags 8)))
+    (is (= {:activate 0 :hover 1} (nth (:node/action-ids compiled) 0)))))
+
+(deftest image-with-on-activate-is-hit-testable
+  (let [compiled (compile* {:type :image :on {:activate :demo/go}})
+        flags (nth (:node/flags compiled) 0)]
+    (is (pos? (bit-and flags 8)))))
+
+(deftest scrollbar-style-compiles-to-hit-testable-scrollbar-flag
+  (let [compiled (compile* {:type :image
+                            :style {:scrollbar {:for :content :min-y 0.0 :max-y 10.0}}})
+        flags (nth (:node/flags compiled) 0)]
+    (is (pos? (bit-and flags 8)) "HIT_TESTABLE")
+    (is (pos? (bit-and flags 512)) "SCROLLBAR")
+    (is (= {:for :content :min-y 0.0 :max-y 10.0}
+           (nth (:node/scrollbar compiled) 0)))))
+
 (deftest button-lowers-to-a-hit-testable-wrapper-with-rect-and-text-children
   (let [compiled (compile* {:type :button :bind {:text [:state :label]} :on {:activate :demo/go}})]
     (is (= 3 (:node-count compiled)))

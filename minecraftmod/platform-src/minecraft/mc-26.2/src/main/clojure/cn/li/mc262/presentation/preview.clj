@@ -35,20 +35,30 @@
              (ResourceLocations/parse block-id))]
     (.getValue ^net.minecraft.core.Registry (registry/builtin "BLOCK") id)))
 
+(defn- spin-yaw-degrees []
+  (mod (/ (System/currentTimeMillis) 80.0) 360.0))
+
 (defn draw-model-preview!
   "Submit one typed 26.2 item/block PIP preview.
 
    `model-id` is emitted by the neutral presentation compiler as
-   `item:<id>` or `block:<id>`. Missing registry values produce no state."
+   `item:<id>` or `block:<id>`. Missing registry values produce no state.
+   Block previews spin like upstream tutorial showArea (time/80°)."
   [^GuiGraphicsExtractor graphics _stage model-id x y width height]
-  (let [[kind id] (parse-model-id model-id)]
+  (let [[kind id] (parse-model-id model-id)
+        w (float width) h (float height)
+        large? (and (>= w 64.0) (>= h 64.0))]
     (case kind
       "block" (when-let [^Block block (resolve-block id)]
                 (ReactivePreviewRenderState/submitBlock
-                 graphics block x y width height 1.0 0.0 0.0))
+                 graphics (.defaultBlockState block) x y width height 0.8 (spin-yaw-degrees) 0.0))
       "item" (when-let [^Item item (resolve-item id)]
-               (ReactivePreviewRenderState/submit
-                graphics (ItemStack. item) x y width height 1.0 0.0 0.0))
+               (if large?
+                 (ReactivePreviewRenderState/submit
+                  graphics (ItemStack. item) x y width height 1.0 0.0 0.0)
+                 ;; Small recipe-slot icons: PIP still works; keep yaw fixed.
+                 (ReactivePreviewRenderState/submit
+                  graphics (ItemStack. item) x y width height 1.0 0.0 0.0)))
       false)))
 
 (defn backend-context []

@@ -23,6 +23,13 @@
 (def ^:private logo3-start-y 63.0)   ;; unscaled XML offset during blendy
 (def ^:private logo3-final-y -36.0)
 
+;; Tag tooltip geometry — mirrors tutorial.ui.edn absolute tree + main step/offset.
+;; right-panel(92,9.75) + show-window(173.5,0) + tag-area(12,120.75); step 17.
+(def ^:private tag-abs-x0 277.5)
+(def ^:private tag-abs-y0 130.5)
+(def ^:private tag-step 17.0)
+(def ^:private tag-tooltip-y-offset -8.0)
+
 ;; logo1-anchor scale 0.25 — glow dslots are screen-pixel offsets from logo1 center.
 (def ^:private glow-s 0.25)
 (def ^:private glow-ln 500.0)
@@ -96,18 +103,30 @@
       ""))
 
 (defn- markdown-lines
+  "Project markdown segments into Presentation list/composite items.
+   Text rows keep :label for :text bindings; image rows are :kind :image
+   composites so the middle pane can blit textures (not `[image]` placeholders)."
   ([text misaka-id] (markdown-lines text misaka-id markdown/max-content-width))
   ([text misaka-id max-width]
-   (vec
-     (mapcat (fn [segment]
-               (if (= :image (:type segment))
-                 [{:label (str "[image] " (:texture-path segment))
-                   :font-size (or (:font-size segment) markdown/default-font-size)}]
-                 (map (fn [line]
-                        {:label line
-                         :font-size (or (:font-size segment) markdown/default-font-size)})
-                      (str/split-lines (str (:text segment))))))
-             (markdown/render-segments (or text "") misaka-id max-width)))))
+   (let [w (float max-width)]
+     (vec
+       (mapcat (fn [segment]
+                 (if (= :image (:type segment))
+                   (let [h (float (or (:img-h segment) markdown/default-image-height))]
+                     [{:kind :image
+                       :src (:texture-path segment)
+                       :x 0.0 :y 0.0 :w w :h h
+                       :label ""
+                       :font-size markdown/default-font-size}])
+                   (map (fn [line]
+                          (let [fs (or (:font-size segment) markdown/default-font-size)]
+                            {:kind :text
+                             :text line
+                             :label line
+                             :font-size fs
+                             :x 0.0 :y 0.0 :w w :h markdown/line-height}))
+                        (str/split-lines (str (:text segment))))))
+               (markdown/render-segments (or text "") misaka-id max-width))))))
 
 (defn- active? [player-uuid tut]
   (or (:default-installed? tut)
@@ -120,13 +139,21 @@
       (fn [response]
         (when response (client-state/apply-sync! response))))))
 
-(defn- tutorial-items [entries player-uuid lang]
+(defn- tutorial-items [entries player-uuid lang hovered-id selected-id]
   (let [ordered (sort-by (fn [t] (if (active? player-uuid t) 0 1)) entries)]
     (mapv (fn [t]
-            {:label (str (when-not (active? player-uuid t) "[locked] ")
-                          (tutorial-title lang t))
-             :action-label "Open"
-             :tutorial-id (:id t)})
+            (let [id (:id t)
+                  hovered? (= id hovered-id)
+                  selected? (= id selected-id)]
+              {:label (str (when-not (active? player-uuid t) "[locked] ")
+                            (tutorial-title lang t))
+               :action-label "Open"
+               :tutorial-id id
+               ;; Cyan hover / soft-yellow selected — readable on the dark left panel.
+               :rgba (cond
+                       hovered? [0.208 0.780 1.0 1.0]
+                       selected? [1.0 1.0 0.55 1.0]
+                       :else [1.0 1.0 1.0 1.0])}))
           ordered)))
 
 (defn- current-content [ctx]
@@ -139,28 +166,38 @@
     {:brief-lines (markdown-lines (:brief cd) misaka brief-width)
      :content-lines (markdown-lines (:content cd) misaka)}))
 
+(defn- tag-tooltip-pos
+  "Root-local (x,y) for the tooltip above tag `idx` — main sets the text
+   node to the hovered tag's X and Y-8 (upstream font.draw at 0,-8)."
+  [idx]
+  (let [i (double (or idx 0))]
+    {:tag-tooltip-x (float (+ tag-abs-x0 (* i tag-step)))
+     :tag-tooltip-y (float (+ tag-abs-y0 tag-tooltip-y-offset))}))
+
 (defn- current-preview [ctx]
   (let [pvs (:pvs @ctx)
         vg (preview/current-view-group pvs)
         view (preview/current-sub-view pvs)
-        groups (or (:view-groups @pvs) [])]
-    {:tag-items (mapv (fn [[idx group]]
-                        (let [tag (or (:tag group) :view)
-                              src (or (get preview/tag-textures tag)
-                                      (get preview/tag-textures :view))]
-                          {:kind :image
-                           :src src
-                           :x 1.0 :y 1.0 :w 16.0 :h 16.0
-                           :tag-index idx
-                           :label (or (:display-text group) "")}))
-                      (map-indexed vector groups))
-     :preview-items (if view (preview/preview-items view) [])
-     :tag-tooltip (or (when-let [idx (:hovered-tag @ctx)]
-                        (when (number? idx)
-                          (:display-text (nth groups idx nil))))
-                      "")
-     :button-left {:label "Previous" :visible? (> (count (or (:sub-views vg) [])) 1)}
-     :button-right {:label "Next" :visible? (> (count (or (:sub-views vg) [])) 1)}}))
+        groups (or (:view-groups @pvs) [])
+        hover-idx (:hovered-tag @ctx)
+        tip (when (number? hover-idx)
+              (:display-text (nth groups hover-idx nil)))]
+    (merge
+     {:tag-items (mapv (fn [[idx group]]
+                         (let [tag (or (:tag group) :view)
+                               src (or (get preview/tag-textures tag)
+                                       (get preview/tag-textures :view))]
+                           {:kind :image
+                            :src src
+                            :x 1.0 :y 1.0 :w 16.0 :h 16.0
+                            :tag-index idx
+                            :label (or (:display-text group) "")}))
+                       (map-indexed vector groups))
+      :preview-items (if view (preview/preview-items view) [])
+      :tag-tooltip (or tip "")
+      :button-left {:label "Previous" :visible? (> (count (or (:sub-views vg) [])) 1)}
+      :button-right {:label "Next" :visible? (> (count (or (:sub-views vg) [])) 1)}}
+     (tag-tooltip-pos (or hover-idx 0)))))
 
 (defn- anim-overlay
   "Project logo/left-bg/glow animation channels into snapshot fields."
@@ -196,14 +233,19 @@
      :anim-start-ms anim-start-ms}))
 
 (defn- snapshot [ctx]
-  (let [{:keys [entries player-uuid lang current-tut-id]} @ctx
+  (let [{:keys [entries player-uuid lang current-tut-id hovered-tut]} @ctx
+        items (tutorial-items entries player-uuid lang hovered-tut current-tut-id)
+        selected (or (first (keep-indexed (fn [i item]
+                                            (when (= (:tutorial-id item) current-tut-id) i))
+                                          items))
+                     -1)
         title (if current-tut-id
                 (tutorial-title lang (tut-registry/tutorial-by-id current-tut-id))
                 "Select a tutorial")]
     (merge {:title "MisakaCloud Terminal"
             :status title
-            :tutorial-items (tutorial-items entries player-uuid lang)
-            :selected 0}
+            :tutorial-items items
+            :selected (double selected)}
            (anim-overlay ctx)
            (current-content ctx)
            (current-preview ctx))))
@@ -224,8 +266,12 @@
                           logo-timings))
         blendy-start 700.0
         blendy-dur 400.0
+        ;; Main: keep logo3 at final Y until blendy starts, then jump to 63 and
+        ;; slide to -36 (pre-setting 63 made it sit low for the first 0.7s).
         blendy-t (max 0.0 (min 1.0 (/ (- elapsed blendy-start) blendy-dur)))
-        logo3-y (+ logo3-start-y (* (- logo3-final-y logo3-start-y) blendy-t))
+        logo3-y (if (< elapsed blendy-start)
+                  logo3-final-y
+                  (+ logo3-start-y (* (- logo3-final-y logo3-start-y) blendy-t)))
         left-start 1750.0
         left-dur 300.0
         left-a (if (>= elapsed left-start)
@@ -242,8 +288,13 @@
             :panels-visible? false})
     (when (and list-visible? (not (:first-open-marked? @ctx)))
       (mark-first-open-done!)
+      ;; Match main setup-static-glow!: only logo1 remains; 0/2/3 hidden.
       (swap! ctx merge (static-glow-geom)
-             {:first-open-marked? true :phase :idle-glow}))))
+             {:first-open-marked? true
+              :phase :idle-glow
+              :logo-alphas {:logo0 0.0 :logo1 1.0 :logo2 0.0 :logo3 0.0}
+              :logo3-y logo3-final-y
+              :left-bg-alpha 1.0}))))
 
 (defn- tick-fade-out! [ctx elapsed]
   (let [a (float (max 0.0 (- 1.0 (/ elapsed 300.0))))]
@@ -284,6 +335,11 @@
     (case action
       :tutorial/select
       (select-tutorial! ctx (:tutorial-id selected-item))
+
+      :tutorial/item-hover
+      (if (= :enter (:hover-event current))
+        (swap! ctx assoc :hovered-tut (:tutorial-id selected-item))
+        (swap! ctx assoc :hovered-tut nil))
 
       :tutorial/tag
       (when-let [idx (:tag-index selected-item)]
@@ -330,6 +386,7 @@
                           :lang lang
                           :entries entries
                           :current-tut-id nil
+                          :hovered-tut nil
                           :pvs (atom (preview/create-preview-state :welcome))
                           :phase phase
                           :anim-start-ms (now-ms)

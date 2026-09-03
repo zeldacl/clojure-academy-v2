@@ -115,7 +115,7 @@
    :min-w 0.0 :min-h 0.0 :max-w 0.0 :max-h 0.0
    :width [:auto 0.0] :height [:auto 0.0] :gap 0.0 :aspect 0.0
    :x 0.0 :y 0.0 :justify :start :align-items :start :align-self :inherit
-   :font-size 8.0 :rgba 0xFFFFFFFF :resource nil
+   :font-size 8.0 :rgba 0xFFFFFFFF :resource nil :scrollbar nil
    :bind {} :on {} :key nil :text nil :children []})
 
 (defn- base-fields [source]
@@ -123,7 +123,8 @@
   (let [layout (or (:layout source) {})
         style (or (:style source) {})
         bind (or (:bind source) {})
-        on (or (:on source) {})]
+        on (or (:on source) {})
+        scrollbar (let [sb (:scrollbar style)] (when (map? sb) sb))]
     (when-not (map? bind) (fail "node.bind" "must be a map"))
     (when-not (map? on) (fail "node.on" "must be a map"))
     (merge default-physical
@@ -145,6 +146,7 @@
             :font-size (double (or (:font-size style) 8.0))
             :rgba (parse-static-rgba (:rgba style))
             :resource (:resource style)
+            :scrollbar scrollbar
             :bind (into {} (map (fn [[k v]] [(normalize-attr-key k) v])) bind)
             :on on
             :key (:key source)
@@ -209,47 +211,62 @@
          :phys-op UiOp/NINE :flags #{} :direction :none :children []
          :bind (select-keys (:bind physical) [:visible])))
 
+(defn- with-on-hit-testable
+  "Any node that declares :on handlers must be hit-testable. :button/:text-input
+   already set the flag explicitly; :text/:image/:composite (and peers) used by
+   tutorial list rows / tags / arrow buttons only carry :on in source and would
+   otherwise compile to flags=0 — HitKernel then never sees them, so hover and
+   activate silently no-op (pre-rewrite hit-action keyed off :on directly).
+   Scrollbar tracks also need hit-testable so drag/click can drive the linked
+   :scroll offset."
+  [physical]
+  (cond-> physical
+    (seq (:on physical)) (update :flags (fnil conj #{}) :hit-testable)
+    (map? (:scrollbar physical))
+    (-> (update :flags (fnil conj #{}) :hit-testable :scrollbar))))
+
 (defn- lower-node [source]
   (let [physical (base-fields source)
         raw-type (:type source)
         type (if raw-type (keyword (name raw-type)) (fail "node" "missing :type"))
         layout (or (:layout source) {})]
-    (case type
-      (:row :column) (lower-container physical type #{:has-direction})
-      :box (lower-container physical (or (:direction layout) :none)
-                            (cond-> #{} (:direction layout) (conj :has-direction)))
-      (:absolute :stack) (lower-container physical :none #{})
-      :clip (lower-container physical (or (:direction layout) :none)
-                             (cond-> #{:has-clip} (:direction layout) (conj :has-direction)))
-      :scroll (lower-container physical (or (:direction layout) :column)
-                               #{:has-clip :is-scroll :is-collection :has-direction})
-      :repeater (lower-container physical (or (:direction layout) :column)
-                                 #{:is-collection :has-direction})
-      :grid (lower-container physical (or (:direction layout) :row)
-                             #{:is-collection :has-direction})
-      :portal (assoc physical :phys-op nil :flags #{} :direction :none :children [])
+    (with-on-hit-testable
+     (case type
+       (:row :column) (lower-container physical type #{:has-direction})
+       :box (lower-container physical (or (:direction layout) :none)
+                             (cond-> #{} (:direction layout) (conj :has-direction)))
+       (:absolute :stack) (lower-container physical :none #{})
+       :clip (lower-container physical (or (:direction layout) :none)
+                              (cond-> #{:has-clip} (:direction layout) (conj :has-direction)))
+       :scroll (lower-container physical (or (:direction layout) :column)
+                                #{:has-clip :is-scroll :is-collection :has-direction})
+       :repeater (lower-container physical (or (:direction layout) :column)
+                                  #{:is-collection :has-direction})
+       :grid (lower-container physical (or (:direction layout) :row)
+                              #{:is-collection :has-direction})
+       :portal (assoc physical :phys-op nil :flags #{} :direction :none :children [])
 
-      :rect (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children [])
-      :line (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children [])
-      :gradient (assoc physical :phys-op UiOp/GRADIENT :flags #{} :direction :none :children [])
-      :image (assoc physical :phys-op UiOp/IMAGE :flags #{} :direction :none :children [])
-      :nine-slice (assoc physical :phys-op UiOp/NINE :flags #{} :direction :none :children [])
-      :text (assoc physical :phys-op UiOp/TEXT :flags #{} :direction :none :children []
-                   :text (:text source))
-      (:progress :radial-progress)
-      (assoc physical :phys-op UiOp/PROGRESS :flags #{:hit-testable} :direction :none :children [])
-      :item-preview (assoc physical :phys-op UiOp/ITEM :flags #{} :direction :none :children [])
-      :model-preview (assoc physical :phys-op UiOp/MODEL :flags #{} :direction :none :children [])
-      :composite (assoc physical :phys-op UiOp/COMPOSITE :flags #{} :direction :none :children [])
-      :slot-anchor (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children []
-                          :rgba 0x22000000)
-      :transform (lower-container physical :none #{})
+       :rect (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children [])
+       :line (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children [])
+       :gradient (assoc physical :phys-op UiOp/GRADIENT :flags #{} :direction :none :children [])
+       :image (assoc physical :phys-op UiOp/IMAGE :flags #{} :direction :none :children [])
+       :nine-slice (assoc physical :phys-op UiOp/NINE :flags #{} :direction :none :children [])
+       :text (assoc physical :phys-op UiOp/TEXT :flags #{} :direction :none :children []
+                    :text (:text source))
+       (:progress :radial-progress)
+       (assoc physical :phys-op UiOp/PROGRESS :flags #{:hit-testable} :direction :none :children [])
+       :item-preview (assoc physical :phys-op UiOp/ITEM :flags #{} :direction :none :children [])
+       :model-preview (assoc physical :phys-op UiOp/MODEL :flags #{} :direction :none :children [])
+       :composite (assoc physical :phys-op UiOp/COMPOSITE :flags #{} :direction :none :children [])
+       :slot-anchor (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children []
+                           :rgba 0x22000000)
+       :transform (lower-container physical :none #{})
 
-      :button (lower-button physical)
-      :text-input (lower-text-input physical)
-      :glow-line (lower-glow-line physical)
+       :button (lower-button physical)
+       :text-input (lower-text-input physical)
+       :glow-line (lower-glow-line physical)
 
-      (fail "node.type" (str "unsupported v3 primitive " type)))))
+       (fail "node.type" (str "unsupported v3 primitive " type))))))
 
 ;; ============================== flatten ==============================
 
@@ -393,6 +410,7 @@
      :node/key (mapv :key rows)
      :node/bind-map (mapv :bind rows)
      :node/on-map (mapv :on rows)
+     :node/scrollbar (mapv :scrollbar rows)
      :node/semantics (mapv (fn [n]
                               (let [s (:semantics n)]
                                 (when (some? s)

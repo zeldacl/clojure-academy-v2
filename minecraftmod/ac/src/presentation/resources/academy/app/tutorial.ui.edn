@@ -3,7 +3,8 @@
 {:ui/schema 2 :view/id :academy.app/tutorial
  :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :tutorial-items :vector :tag-items :vector :brief-lines :vector
-                :content-lines :vector :preview-items :vector :tag-tooltip :string :status :string
+                :content-lines :vector :preview-items :vector :tag-tooltip :string
+                :tag-tooltip-x :number :tag-tooltip-y :number :status :string
                 :button-left :map :button-right :map :selected :number
                 :panels-visible? :boolean :logos-visible? :boolean :list-visible? :boolean
                 :glow-visible? :boolean
@@ -29,10 +30,10 @@
       :bind {:items [:state :tutorial-items] :visible [:state :list-visible?]}
       :semantics {:role :list}
       :children
-      [{:type :text :layout {:height 12.0}
+      [{:type :text :layout {:width :fill :height 12.0}
         :style {:font-size 9.0}
-        :bind {:text [:item :label]}
-        :on {:activate :tutorial/select}
+        :bind {:text [:item :label] :rgba [:item :rgba]}
+        :on {:activate :tutorial/select :hover :tutorial/item-hover}
         :semantics {:role :button}}]}]}
 
    ;; Right panel — pos 92,0 size 332×220.5 align left,center
@@ -78,45 +79,50 @@
              :glow-sz [:state :glow-sz]}
       :semantics {:role :image}}
 
-     ;; Center markdown — 160×210.5 at (2,0) align left,center
+     ;; Center markdown — mixed text/image rows via composite.
      {:type :scroll :key :tutorial/content
       :layout {:x 2.0 :y 5.0 :width 160.0 :height 210.5}
       :bind {:items [:state :content-lines] :visible [:state :panels-visible?]}
       :semantics {:role :list}
       :children
-      [{:type :text :layout {:height 13.0}
-        :style {:font-size 8.0}
-        :bind {:text [:item :label] :font-size [:item :font-size]}
+      [{:type :composite :layout {:width :fill :height 13.0}
+        :bind {:item [:state :item] :height [:item :h]}
         :semantics {:role :list-item}}]}
 
-     ;; Scrollbar — track is the hit target; thumb follows content scroll.
+     ;; Scrollbar strip only (do not cover the markdown pane — that stole wheel hits).
+     ;; Container is also a scrollbar hit target so presses near thumb/track arm drag.
      {:type :absolute :key :tutorial/scroll-container
-      :layout {:x 0.0 :y 0.0 :width 172.0 :height 220.5}
+      :layout {:x 162.5 :y 0.0 :width 9.5 :height 220.5}
+      :style {:scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0}}
       :bind {:visible [:state :panels-visible?]}
+      :semantics {:role :scrollbar}
       :children
       [{:type :image :key :tutorial/scroll-track
-        :layout {:x 162.5 :y 2.0 :width 9.5 :height 216.5}
+        :layout {:x 0.0 :y 2.0 :width 9.5 :height 216.5}
         :style {:resource {:namespace "academy" :path "textures/guis/button/widget_scroll_1.png"}
                 :scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0}}
         :semantics {:role :scrollbar}}
        {:type :image :key :tutorial/scroll-thumb
-        :layout {:x 162.5 :y 2.0 :width 9.5 :height 53.0}
+        :layout {:x 0.0 :y 2.0 :width 9.5 :height 53.0}
         :style {:resource {:namespace "academy" :path "textures/guis/button/widget_scroll_2.png"}
                 :rgba [1.0 1.0 1.0 0.8]
                 :scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0 :thumb? true}}
-        :semantics {:role :image}}]}
+        :semantics {:role :scrollbar}}]}
 
      ;; Preview window — 158.5×136 align right,top
      {:type :absolute :key :tutorial/show-window
       :layout {:x 173.5 :y 0.0 :width 158.5 :height 136.0}
       :bind {:visible [:state :panels-visible?]}
       :children
-      [{:type :repeater :key :tutorial/preview
+      [;; Items carry absolute local x/y; height-0 rows overlay (column would stack).
+       {:type :repeater :key :tutorial/preview
         :layout {:x 12.25 :y 0.0 :width 134.0 :height 134.0}
         :bind {:items [:state :preview-items]}
-        :children [{:type :composite :bind {:item [:state :item]}}]}
+        :children [{:type :composite :layout {:width 134.0 :height 0.0}
+                    :bind {:item [:state :item]}}]}
+       ;; Tag icons: main uses step 17 with 18×18 cells (1px overlap).
        {:type :grid :key :tutorial/tags
-        :layout {:x 12.0 :y 120.75 :width 133.0 :height 18.0}
+        :layout {:x 12.0 :y 120.75 :width 133.0 :height 18.0 :gap -1.0}
         :bind {:items [:state :tag-items]}
         :semantics {:role :list}
         :children
@@ -139,7 +145,8 @@
         :on {:activate :tutorial/next}
         :semantics {:role :button}}]}
 
-     ;; Right text window — brief clipped to 146×50; wrap width 130 in controller.
+     ;; Right text window — main XML center-align + 3px inset:
+     ;; centered 146px area at (158.5-146)/2 = 6.25, then +3 → 9.25.
      {:type :absolute :key :tutorial/right-window
       :layout {:x 173.5 :y 138.5 :width 158.5 :height 82.0}
       :bind {:visible [:state :panels-visible?]}
@@ -149,22 +156,26 @@
         :style {:resource {:namespace "academy" :path "textures/guis/window_tutorial_left.png"}}
         :semantics {:role :image}}
        {:type :text :key :tutorial/status
-        :layout {:x 3.0 :y 6.25 :width 146.0 :height 12.0}
+        :layout {:x 9.25 :y 6.25 :width 140.0 :height 12.0}
         :style {:font-size 10.0}
         :bind {:text [:state :status]}
         :semantics {:role :heading}}
        {:type :scroll :key :tutorial/brief
-        :layout {:x 8.0 :y 18.25 :width 130.0 :height 50.0}
+        :layout {:x 9.25 :y 18.25 :width 130.0 :height 50.0}
         :bind {:items [:state :brief-lines]}
         :semantics {:role :list}
         :children
-        [{:type :text :layout {:height 13.0}
+        [{:type :text :layout {:width :fill :height 13.0}
           :style {:font-size 8.0}
           :bind {:text [:item :label] :font-size [:item :font-size]}
           :semantics {:role :list-item}}]}]}]}
 
+   ;; Tag tooltip — main tutorial.xml: 120×14 font 10 white, no background.
+   ;; Position follows hovered tag at (tag.x, tag.y - 8), same as main's
+   ;; attach-tag-hover-tick! / upstream font.draw(0, -8).
    {:type :text :key :tutorial/tag-tooltip
-    :layout {:x 200.0 :y 120.0 :width 120.0 :height 14.0}
-    :style {:font-size 10.0}
-    :bind {:text [:state :tag-tooltip] :visible [:state :tag-tooltip]}
+    :layout {:x 0.0 :y 0.0 :width 120.0 :height 14.0}
+    :style {:font-size 10.0 :rgba [1.0 1.0 1.0 1.0]}
+    :bind {:text [:state :tag-tooltip] :visible [:state :tag-tooltip]
+           :x [:state :tag-tooltip-x] :y [:state :tag-tooltip-y]}
     :semantics {:role :generic}}]}}

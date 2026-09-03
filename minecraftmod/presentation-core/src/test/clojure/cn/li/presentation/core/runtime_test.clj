@@ -304,7 +304,7 @@
     (is (= 12.0 (double (get (:scroll-offsets (runtime/instance! rt mount)) :list))))))
 
 (deftest hover-target-tracks-across-pointer-moves
-  ;; One :input/hover dispatch per move (matching the pre-rewrite runtime's
+  ;; One hover dispatch per move (matching the pre-rewrite runtime's
   ;; single combined action per move rather than a separate leave+enter
   ;; pair) -- the payload's :hover-event/:previous-hover distinguish moving
   ;; onto vs off of a target.
@@ -327,6 +327,36 @@
     (is (= :right (:key (:hover-target (runtime/instance! rt mount)))))
     (is (= [:input/hover {:target :right :hover? true :hover-event :enter :previous-hover :left}]
            (second @seen)))))
+
+(deftest collection-item-hover-dispatches-on-hover-with-item-payload
+  ;; List/grid templates share one node key; hover must key off instance and
+  ;; fire the node's :on :hover with the item, or tutorial list/tag hover never
+  ;; updates while moving between rows.
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/list-hover
+                           {:key :list :flags #{:has-clip :is-scroll :is-collection :has-direction}
+                            :direction :column :height [:fixed 40.0] :width [:fixed 80.0]
+                            :bind {:items [:state :rows]}
+                            :children [{:flags #{:hit-testable} :width [:fixed 80.0] :height [:fixed 20.0]
+                                        :on {:hover :demo/row-hover :activate :demo/row}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:rows [{:id :a} {:id :b}]}
+                                  :reduce (fn [state action payload]
+                                            (swap! seen conj [action payload])
+                                            {:state state :event-result :pass})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 80 40 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 5})
+    (is (= :demo/row-hover (ffirst @seen)))
+    (is (= :a (:id (:item (second (first @seen))))))
+    (is (= :enter (:hover-event (second (first @seen)))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 25})
+    (is (= :demo/row-hover (first (second @seen))))
+    (is (= :b (:id (:item (second (second @seen))))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 5})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 5})
+    (is (= :demo/row (first (last @seen))))
+    (is (= :a (:id (:item (second (last @seen))))))))
 
 (deftest resource-index-for-uses-explicit-namespace-over-default
   (let [resource-index-for #'runtime/resource-index-for]
@@ -365,3 +395,31 @@
   (let [item-label #'runtime/item-label]
     (is (= "" (item-label {:skill-id :railgun})))
     (is (= "explicit" (item-label {:skill-id :railgun :label "explicit"})))))
+
+(deftest scrollbar-press-returns-capture-pointer
+  ;; Minecraft only delivers mouseDragged after mouseClicked returned true.
+  ;; Presentation screen hosts treat :capture-pointer as consumed — without
+  ;; this return, tutorial/settings scrollbar thumbs cannot be dragged.
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/scrollbar
+                           {:key :root :width [:fixed 40.0] :height [:fixed 100.0]
+                            :children
+                            [{:key :list :flags #{:has-clip :is-scroll :is-collection :has-direction}
+                              :direction :column :width [:fixed 20.0] :height [:fixed 40.0]
+                              :x 0.0 :y 0.0
+                              :bind {:items [:state :items]}
+                              :children [{:height [:fixed 20.0] :bind {:text [:item :label]}}]}
+                             {:key :thumb :op UiOp/IMAGE
+                              :flags #{:hit-testable :scrollbar}
+                              :width [:fixed 10.0] :height [:fixed 20.0]
+                              :x 25.0 :y 2.0
+                              :scrollbar {:for :list :min-y 2.0 :max-y 20.0 :thumb? true}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:items (mapv (fn [n] {:label (str n)}) (range 4))}})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 40 100 1.0))
+    (is (= :capture-pointer
+           (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 28 :y 10 :button 0})))
+    (is (true? (get-in (runtime/instance! rt mount) [:pointer-capture :scrollbar?])))
+    ;; :move while captured also advances the thumb (hosts that skip mouseDragged).
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 28 :y 18})
+    (is (pos? (double (or (get (:scroll-offsets (runtime/instance! rt mount)) :list) 0.0))))))

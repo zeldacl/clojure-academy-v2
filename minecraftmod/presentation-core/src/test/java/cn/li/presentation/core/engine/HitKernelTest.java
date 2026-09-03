@@ -177,6 +177,39 @@ class HitKernelTest {
     }
 
     @Test
+    void enclosingScrollAtSurvivesOverlappingNonScrollSibling() {
+        // Tutorial markdown scroll + absolute scrollbar strip: the strip is a
+        // later sibling that covers the same point but is not IS_SCROLL. Wheel
+        // routing must keep the scroll found earlier, not the ancestor.
+        NodeTableBuilder b = new NodeTableBuilder();
+        int root = b.root();
+        int scroll = b.child(root, n -> {
+            n.flags = NodeFlags.IS_SCROLL | NodeFlags.HAS_CLIP | NodeFlags.HAS_DIRECTION;
+            n.direction = Direction.COLUMN;
+            n.widthMode = SizeMode.FIXED;
+            n.widthValue = 40f;
+            n.heightMode = SizeMode.FIXED;
+            n.heightValue = 40f;
+        });
+        b.child(scroll, n -> {
+            n.widthMode = SizeMode.FILL;
+            n.heightMode = SizeMode.FIXED;
+            n.heightValue = 20f;
+        });
+        b.child(root, n -> {
+            n.declaredX = 0f;
+            n.declaredY = 0f;
+            n.widthMode = SizeMode.FIXED;
+            n.widthValue = 50f;
+            n.heightMode = SizeMode.FIXED;
+            n.heightValue = 50f;
+        });
+        NodeTable t = b.build();
+        LayoutArena a = layout(t);
+        assertEquals(scroll, HitKernel.enclosingScrollAt(t, a, null, 0, 10, 10));
+    }
+
+    @Test
     void itemAndItemIndexAreCarriedFromTheEnclosingCollection() {
         NodeTableBuilder b = new NodeTableBuilder();
         int root = b.root();

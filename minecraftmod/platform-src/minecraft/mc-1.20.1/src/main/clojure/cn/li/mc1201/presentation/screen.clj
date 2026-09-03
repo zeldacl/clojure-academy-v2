@@ -7,11 +7,16 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.client.gui GuiGraphics]))
 
+(defn- consumed? [result]
+  (or (= result :consume) (= result :capture-pointer)))
+
 (defn open! [mount title & [on-close]]
-  (let [value (doto (DelegatingScreen.
+  ;; Latch only on scrollbar capture (:capture-pointer). General :consume from
+  ;; the app reducer must not turn every click into a drag stream.
+  (let [scrollbar-drag? (atom false)
+        value (doto (DelegatingScreen.
                       (Component/literal (str title))
                       (fn [s ^GuiGraphics graphics mouse-x mouse-y partial-tick]
-                        ;; Match main reactive host: vanilla dark/blur scrim behind the UI.
                         (.renderBackground ^DelegatingScreen s graphics)
                         (presentation/submit-current-frame!
                           :screen (float partial-tick) (.-width ^DelegatingScreen s)
@@ -28,29 +33,38 @@
                           mount {:type :character :text (str character) :composing? false})
                         false)
                       (fn [_ mouse-x mouse-y button]
-                        (presentation/dispatch-input!
-                          mount {:type :pointer :event-type :down
-                                 :x mouse-x :y mouse-y :button button})
-                        false)
+                        (let [result (presentation/dispatch-input!
+                                       mount {:type :pointer :event-type :down
+                                              :x mouse-x :y mouse-y :button button})]
+                          (reset! scrollbar-drag? (= result :capture-pointer))
+                          (consumed? result)))
                       (fn [_] nil)
                       (fn [_]
+                        (reset! scrollbar-drag? false)
                         (presentation/unmount! mount)
                         (when on-close (on-close))))
                 (.withMouseReleased
                   (fn [_ mouse-x mouse-y button]
-                    (presentation/dispatch-input!
-                      mount {:type :pointer :event-type :up
-                             :x mouse-x :y mouse-y :button button})
-                    false))
+                    (reset! scrollbar-drag? false)
+                    (consumed?
+                      (presentation/dispatch-input!
+                        mount {:type :pointer :event-type :up
+                               :x mouse-x :y mouse-y :button button}))))
                 (.withMouseDragged
                   (fn [_ mouse-x mouse-y button drag-x drag-y]
-                    (presentation/dispatch-input!
-                      mount {:type :pointer :event-type :drag
-                             :x mouse-x :y mouse-y :button button
-                             :drag-x drag-x :drag-y drag-y})
-                    false))
+                    (consumed?
+                      (presentation/dispatch-input!
+                        mount {:type :pointer :event-type :drag
+                               :x mouse-x :y mouse-y :button button
+                               :drag-x drag-x :drag-y drag-y}))))
                 (.withMouseMoved
                   (fn [_ mouse-x mouse-y]
+                    ;; Fallback when the host never delivers mouseDragged.
+                    (when @scrollbar-drag?
+                      (presentation/dispatch-input!
+                        mount {:type :pointer :event-type :drag
+                               :x mouse-x :y mouse-y :button 0
+                               :drag-x 0.0 :drag-y 0.0}))
                     (presentation/dispatch-input!
                       mount {:type :pointer :event-type :move
                              :x mouse-x :y mouse-y})
