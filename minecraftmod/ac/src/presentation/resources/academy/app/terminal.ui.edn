@@ -1,4 +1,4 @@
-{:view/id :academy.app/terminal
+{:ui/schema 2 :view/id :academy.app/terminal
  :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
  :state-schema {:apps :vector :page :string :query :string :modal :map :loading? :boolean}
  :root {:type :transform :key :terminal/perspective :layout {:x 8 :y 8 :width 304 :height 224}

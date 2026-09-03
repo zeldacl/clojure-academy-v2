@@ -6,16 +6,17 @@
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
             [cn.li.ac.terminal.client.apps.media-reactive :as media]
-            [cn.li.ac.client.effect-controller :as effect-controller]
+            [cn.li.ability.client-vfx :as effect-controller]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.terminal.client.apps.tutorial-reactive :as tutorial-app]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.presentation.core.host :as presentation-host]
+            [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderStage RenderCommand$Batch RenderCommand$AudioContribution RenderCommand$CameraContribution RenderCommand$PostProcess]
-           [cn.li.mcmod.runtime.vfx VfxFrame VfxRenderStage VfxOutputKind]))
+  (:import [cn.li.mcmod.runtime FramePacket RenderStage]
+           [cn.li.mcmod.runtime.vfx VfxFrame]))
 
 (defonce ^:private presentation-runtime* (atom nil))
 
@@ -49,73 +50,45 @@
           vm
           @terminal*))))
 
-(def ^:private vfx-stage->render-stage
-  {VfxRenderStage/WORLD_TRANSLUCENT RenderStage/WORLD_BEFORE_TRANSLUCENT
-   VfxRenderStage/WORLD_ADDITIVE RenderStage/WORLD_GLOW
-   VfxRenderStage/WORLD_AFTER_TRANSLUCENT RenderStage/WORLD_AFTER_TRANSLUCENT
-   VfxRenderStage/FIRST_PERSON RenderStage/FIRST_PERSON
-   VfxRenderStage/SCREEN RenderStage/SCREEN})
+(defonce ^:private vfx-sample-cache* (atom {:frame-id nil :vfx nil}))
 
-(defn- vfx-command [^cn.li.mcmod.runtime.vfx.VfxBatch batch]
-  (RenderCommand$Batch. (or (get vfx-stage->render-stage (.stage batch)) RenderStage/WORLD_AFTER_TRANSLUCENT)
-                         (str (.primitiveId batch)) (str (.materialId batch)) "vfx"
-                         0 (long (.instanceCount batch)) "stable" (.payload batch)))
+(defn- sampled-vfx-frame!
+  "Client-side VFX sampling stays here (it is stateful, version-frame-
+   dependent sampling of live effect state, not a pure fold) - only the
+   fold into RenderCommand/RenderPass (ability-compose/merge-vfx-into-frame)
+   moved to ability-runtime, since that is the only module allowed to
+   depend on both vfx-core and presentation-core.
 
-(defn- vfx-output-command [^cn.li.mcmod.runtime.vfx.VfxOutput output]
-  (case (.kind output)
-    VfxOutputKind/AUDIO (RenderCommand$AudioContribution. (or (.resourceId output) "") (.amount output) 1.0)
-    VfxOutputKind/CAMERA (RenderCommand$CameraContribution. (.amount output) 0.0 0.0 0.0)
-    VfxOutputKind/SCREEN (RenderCommand$PostProcess. (.value output) (.amount output))
-    nil))
+   :frame-with-context! is the seam every stage submission goes through
+   (world, first-person, HUD, screen, ...), and the neutral seam coalesces
+   same-real-frame submissions onto one frame-id (see
+   cn.li.platform.neutral.presentation/current-frame-id!) -- without this
+   cache, a real frame with N eligible render stages would re-run VFX
+   sampling (a full live-instance walk) N times instead of once."
+  ^VfxFrame [frame-id partial-tick]
+  (let [cache @vfx-sample-cache*]
+    (if (= frame-id (:frame-id cache))
+      (:vfx cache)
+      (let [vfx (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick})]
+        (reset! vfx-sample-cache* {:frame-id frame-id :vfx vfx})
+        vfx))))
 
-(def ^:private vfx-output->render-stage
-  {VfxOutputKind/AUDIO RenderStage/AUDIO
-   VfxOutputKind/CAMERA RenderStage/CAMERA
-   VfxOutputKind/SCREEN RenderStage/POST_PROCESS})
-
-(def ^:private render-stage-order
-  [RenderStage/WORLD_AFTER_SKY
-   RenderStage/WORLD_BEFORE_TRANSLUCENT
-   RenderStage/WORLD_AFTER_TRANSLUCENT
-   RenderStage/WORLD_ALWAYS_ON_TOP
-   RenderStage/WORLD_GLOW
-   RenderStage/FIRST_PERSON
-   RenderStage/CAMERA
-   RenderStage/HUD_UNDERLAY
-   RenderStage/HUD
-   RenderStage/HUD_OVERLAY
-   RenderStage/SCREEN
-   RenderStage/POST_PROCESS
-   RenderStage/AUDIO])
-
-(defn- merge-vfx-passes
-  [_vfx-context frame-id partial-tick ^FramePacket packet]
-  (let [^VfxFrame vfx (effect-controller/sample-java-frame! {:frame-id frame-id :partial-tick partial-tick})
-        vfx-pairs (concat
-                   (map (fn [^cn.li.mcmod.runtime.vfx.VfxBatch batch]
-                          [(get vfx-stage->render-stage (.stage batch)) (vfx-command batch)])
-                        (.batches vfx))
-                   (keep (fn [^cn.li.mcmod.runtime.vfx.VfxOutput output]
-                           (when-let [stage (get vfx-output->render-stage (.kind output))]
-                             [stage (vfx-output-command output)]))
-                         (.outputs vfx)))
-        existing (mapcat (fn [^RenderPass pass]
-                           (map (fn [command] [(.stage pass) command]) (.commands pass)))
-                         (.passes packet))
-        commands-by-stage (reduce (fn [acc [stage command]]
-                                    (if stage
-                                      (update acc stage (fnil conj []) command)
-                                      acc))
-                                  {}
-                                  (concat existing vfx-pairs))
-        passes (->> render-stage-order
-                    (keep (fn [stage]
-                            (when-let [commands (seq (get commands-by-stage stage))]
-                              (RenderPass. stage commands))))
-                    vec)]
-    (FramePacket. (.frameId packet) passes)))
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
+
+(defn- install-presentation-boundary!
+  "Install the opaque Runtime API behind mcmod's version-neutral bridge.
+   Minecraft/loader code can call the bridge; it never reaches Presentation
+   implementation maps directly." 
+  []
+  (let [api (core-host-api)]
+    (presentation-bridge/install-host!
+     {:mount! (:mount! api)
+      :sync! (:sync! api)
+      :dispatch-input! (:dispatch-input! api)
+      :begin-frame! (:begin-frame! api)
+      :extract-stage! (:extract-stage! api)
+      :unmount! (:unmount! api)})))
 
 (def ^:private stage->render-stage
   {:world-before-translucent RenderStage/WORLD_BEFORE_TRANSLUCENT
@@ -148,30 +121,26 @@
       (tutorial-app/screen-tick!))
     nil))
 
+(defn- ui-by-stage-array ^objects [^RenderStage wanted-stage draw-list]
+  (let [^objects arr (make-array cn.li.mcmod.runtime.ui.UiDrawList (alength (RenderStage/values)))]
+    (when draw-list (aset arr (int (.ordinal wanted-stage)) draw-list))
+    arr))
+
 (defn- frame-packet
+  "UI-only FramePacket for one stage's mounts, merged into a single
+   UiDrawList (the zero-copy fast path when 0 or 1 mount is active, which
+   is the overwhelmingly common case — Minecraft shows one Screen and one
+   HUD at a time) and placed at that stage's slot in uiByStage."
   [frame-id stage frame-context]
   ;; Extract via the core Runtime API — presentation-host-api is the outer
   ;; AC wrapper and must not be consulted here (no :extract-stage!, and it
   ;; would rebuild the wrapper map every frame).
   (let [api (core-host-api)
         extracted ((:extract-stage! api) stage frame-context)
-        contributors (mapv (fn [[index mount]]
-                             (ability-compose/contributor
-                              (keyword (format "mount-%08d" index))
-                              (fn [_] (:commands mount))))
-                           (map-indexed vector (:mounts extracted)))
-        composed (ability-compose/compose-frame
-                  {:player-id :client
-                   :max-render-commands-per-frame 8192}
-                  contributors
-                  {:frame-seq frame-id
-                   :stage stage
-                   :frame-context frame-context})
-        commands (:commands composed)]
-    (FramePacket. (long frame-id)
-                  [(RenderPass. (or (get stage->render-stage stage)
-                                    RenderStage/SCREEN)
-                                commands)])))
+        draw-lists (keep :commands (:mounts extracted))
+        merged (ability-compose/merge-draw-lists frame-id draw-lists)
+        wanted (or (get stage->render-stage stage) RenderStage/SCREEN)]
+    (FramePacket. (long frame-id) (ui-by-stage-array wanted merged) [])))
 
 (defn presentation-host-api
   "Single AC host contract. All view mounts and frame extraction use Runtime;
@@ -194,12 +163,12 @@
                 (refresh-stage-state! :screen width height)
                 ;; Raw FramePacket — dispatch-runtime-stage! wraps {:stage :frame}.
                 (frame-packet frame-id :screen {:width width :height height}))
-      :frame-with-context! (fn [stage frame-id delta-seconds width height vfx-context]
+      :frame-with-context! (fn [stage frame-id delta-seconds width height _vfx-context]
                              (refresh-stage-state! stage width height)
-                             (let [frame (frame-packet frame-id stage
-                                                       {:width width :height height})
-                                   packet (merge-vfx-passes vfx-context frame-id
-                                                            delta-seconds frame)]
+                             (let [ui-packet (frame-packet frame-id stage
+                                                           {:width width :height height})
+                                   vfx (sampled-vfx-frame! frame-id delta-seconds)
+                                   packet (ability-compose/merge-vfx-into-frame ui-packet vfx)]
                                ;; Same envelope as dispatch-runtime-stage!: the
                                ;; neutral seam submits (:stage result)/(:frame result).
                                (when packet
@@ -232,12 +201,18 @@
                       ((:unmount-all! core-api)))})))
 
 (defn install-bridge!
-  "Install the Presentation Runtime bridge into the neutral client boundary."
+  "Install the Presentation Runtime host at the client bootstrap boundary."
   []
-  (bridge/merge-client-bridge!
-    {:presentation-host-api presentation-host-api})
+  (install-presentation-boundary!)
+  (let [api (presentation-host-api)]
+    ;; Keep one immutable map for both the AC UI adapter and neutral render
+    ;; seam. The neutral seam caches the same map; no per-frame reconstruction.
+    (bridge/merge-client-bridge!
+      {:presentation-host-api (constantly api)})
+    ((requiring-resolve
+       'cn.li.platform.neutral.presentation/install-host!)
+     api))
   (log/info "Presentation Runtime bridge installed"))
-
 
 
 

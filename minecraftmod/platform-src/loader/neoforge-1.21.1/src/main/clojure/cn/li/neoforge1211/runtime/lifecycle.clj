@@ -1,10 +1,10 @@
 (ns cn.li.neoforge1211.runtime.lifecycle
   "Forge player lifecycle hooks for runtime system."
-  (:require [cn.li.mc1211.runtime.nbt-core :as runtime-nbt]
-            [cn.li.mc1211.runtime.lifecycle-core :as lifecycle-core]
+  (:require [cn.li.mcbase.runtime.nbt-core :as runtime-nbt]
+            [cn.li.mcbase.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mcbase.runtime.sync-core :as runtime-sync]
             [cn.li.mc1211.runtime.world-effects-core :as world-effects]
-            [cn.li.mc1211.runtime.network-core :as network-core]
+            [cn.li.mcbase.runtime.network-core :as network-core]
             [cn.li.mcbase.runtime.spi.network-transport :as transport-spi]
             [cn.li.neoforge1211.runtime.adapters.registry :as runtime-adapters-registry]
             [cn.li.mcbase.runtime.adapter-registry :as adapter-registry]

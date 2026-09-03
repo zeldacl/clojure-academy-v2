@@ -44,6 +44,18 @@ dependencies {
             transitive = false
         }
     }
+    // JEI is an optional third-party integration. Keep its typed API on the
+    // compile classpath and the loader implementation runtime-only; the
+    // plugin discovery seam is only loaded when JEI is installed.
+    if (target.dependencies.jeiCommonApi) {
+        compileOnly target.dependencies.jeiCommonApi
+    }
+    if (target.dependencies.jeiNeoForgeApi) {
+        compileOnly target.dependencies.jeiNeoForgeApi
+    }
+    if (target.dependencies.jeiNeoForgeRuntime) {
+        runtimeOnly target.dependencies.jeiNeoForgeRuntime
+    }
 }
 
 def preparedJarJarLibraries = packagedRuntimeLibraries.collect { dependencyNotation ->

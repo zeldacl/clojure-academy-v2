@@ -56,7 +56,7 @@
   [world]
   (when-let [clear! (try
                       (requiring-resolve
-                       'cn.li.ac.client.effect-controller/clear-world!)
+                       'cn.li.ability.client-vfx/clear-world!)
                       (catch Throwable _ nil))]
     (try
       (clear! (world-owner-key/world-id world))

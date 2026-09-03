@@ -54,18 +54,14 @@
 (defn resolve-ticks-value
   "Evaluate a `ticks-spec` declaration to whole ticks (>= 1).
 
-  A fn declaration is called with (player-id skill-id exp), falling back to a
-  single {:player-id :skill-id :exp} map — skills author both shapes. An absent
-  or unusable declaration is one tick, i.e. effectively no cooldown."
-  ^long [v {:keys [player-id skill-id exp]}]
-  (let [exp (double (or exp 0.0))
+  A fn declaration receives one immutable context map containing
+  `:player-id`, `:skill-id`, and `:exp`. An absent or unusable declaration is
+  one tick, i.e. effectively no cooldown."
+  ^long [v {:keys [exp] :as ctx}]
+  (let [ctx (assoc ctx :exp (double (or exp 0.0)))
         raw (cond
               (number? v) (double v)
-              (fn? v) (double (or (try
-                                    (v player-id skill-id exp)
-                                    (catch clojure.lang.ArityException _
-                                      (v {:player-id player-id :skill-id skill-id :exp exp})))
-                                  0.0))
+              (fn? v) (double (or (v ctx) 0.0))
               :else 0.0)]
     (max 1 (Math/round (double raw)))))
 

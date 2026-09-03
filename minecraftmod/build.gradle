@@ -40,22 +40,19 @@ ext {
         coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.6.122-alpha8"
     ]
 
-    // Neutral runtime projects (:ac, :mcmod, :vfx-core and :combat-core) are source-first by default.
-    // Pass -PfullAot or -PfullAot=true to restore the historical full-AOT build.
-    def fullAotRaw = findProperty("fullAot")
-    def fullAotText = fullAotRaw == null ? "false" : fullAotRaw.toString().trim()
-    if (fullAotText.isEmpty()) {
-        fullAotText = "true"
-    }
-    if (!fullAotText.equalsIgnoreCase("true") && !fullAotText.equalsIgnoreCase("false")) {
-        throw new GradleException("-PfullAot must be true or false (or pass -PfullAot for true), got '${fullAotRaw}'")
-    }
-    fullAotEnabled = fullAotText.equalsIgnoreCase("true")
-    // Neutral Clojure projects remain source-first in normal platform builds.
-    // Only platform namespaces that touch Minecraft/Loader APIs are required
-    // to be AOT/remapped.  The explicit fullAot switch remains available for
-    // the historical diagnostic build mode.
-    neutralSourceFirstProjects = [":ac", ":mcmod", ":node-core", ":vfx-core", ":combat-core", ":ability-runtime"]
+    // Runtime representation is selected by the target profile, never by a
+    // User configuration cannot override this policy. Only targets whose Loom output is
+    // remapped require platform namespaces to be AOT roots.  Neutral projects
+    // remain source-first; a platform compile may still pull them into its
+    // transitive AOT closure, which is filtered namespace-by-namespace later.
+    def aotCatalog = new JsonSlurper().parse(rootProject.file("platform-catalog.json"))
+    def aotTargetId = (findProperty("platformTarget") ?: aotCatalog.defaultTarget).toString()
+    def aotTarget = aotCatalog.targets[aotTargetId]
+    def aotProfile = aotTarget == null ? null : aotCatalog.buildProfiles[aotTarget.buildProfile.toString()]
+    platformRemapAotEnabled = aotProfile?.obfuscationMode?.toString() == "remapped"
+    neutralSourceFirstProjects = [":ac", ":mcmod", ":node-core", ":vfx-core", ":combat-core",
+                                  ":ability-runtime", ":presentation-core"]
+    aotRequiredProjects = platformRemapAotEnabled ? [":platform"] : []
 }
 
 allprojects {
@@ -139,7 +136,7 @@ subprojects {
             clojure {
                 builds {
                     main {
-                        if (rootProject.ext.fullAotEnabled || !(project.path in rootProject.ext.neutralSourceFirstProjects)) {
+                        if (project.path in rootProject.ext.aotRequiredProjects) {
                             aotAll()
                         } else {
                             // Empty AOT set keeps the plugin available for source
@@ -154,7 +151,7 @@ subprojects {
 
             tasks.named("compileClojure").configure { task ->
                 doLast {
-                    if (!rootProject.ext.fullAotEnabled && project.path in rootProject.ext.neutralSourceFirstProjects) {
+                    if (!(project.path in rootProject.ext.aotRequiredProjects)) {
                         return
                     }
                     def sourceRoots = sourceSets.main.clojure.srcDirs.findAll { it.isDirectory() }
@@ -172,7 +169,7 @@ subprojects {
                         }
                     }.findAll { namespaceAndClass -> !namespaceAndClass[1].isFile() }
                     if (!missingAotClasses.isEmpty()) {
-                        throw new GradleException("Full AOT output is incomplete for ${project.path}: " +
+                        throw new GradleException("Required remapped Clojure output is incomplete for ${project.path}: " +
                             missingAotClasses.collect { it[0] }.sort())
                     }
                 }
@@ -308,8 +305,17 @@ tasks.register("verifyNoThinForwarders") {
             exclude "**/build/**"
             exclude "**/.gradle/**"
         }.files
+        def versionThinSeams = fileTree(rootProject.projectDir) {
+            include "platform-src/minecraft/mc-*/src/main/clojure/**/*.clj"
+            exclude "**/build/**"
+            exclude "**/.gradle/**"
+        }.findAll { f ->
+            def text = f.getText("UTF-8")
+            text.contains("Thin re-export") || text.contains("re-export of")
+        }
+        offenders.addAll(versionThinSeams)
         if (!offenders.isEmpty()) {
-            throw new GradleException("Thin/legacy platform bootstrap residues remain: " + offenders)
+            throw new GradleException("Thin/legacy platform bootstrap or version seam residues remain: " + offenders)
         }
     }
 }
@@ -323,7 +329,9 @@ tasks.register("verifyNoCompatibilityResidues") {
             ~/backward compatible/,
             ~/install-[A-Za-z0-9_-]+-only!/,
             ~/install-platform-foundation\+hooks!/,
-            ~/install-foundation!/
+            ~/install-foundation!/,
+            ~/No-op compatibility hook/,
+            ~/Compatibility overload matching older/
         ]
         def hits = []
         fileTree(rootProject.projectDir) {
@@ -797,6 +805,31 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
     }
 }
 
+tasks.register("verifyNeutralBuildScripts") {
+    group = "verification"
+    description = "Require the neutral ac/mcmod Gradle build scripts and their language tasks to remain present."
+    doLast {
+        def problems = []
+        ["ac/build.gradle", "mcmod/build.gradle"].each { String path ->
+            def buildFile = file(path)
+            if (!buildFile.isFile() || buildFile.length() == 0L || !buildFile.getText("UTF-8").trim()) {
+                problems << "${path}: missing or empty build script"
+                return
+            }
+            def text = buildFile.getText("UTF-8")
+            ["java-library", "dev.clojurephant.clojure", "compileJava", "compileClojure", "processResources"].each { marker ->
+                if (!text.contains(marker)) {
+                    problems << "${path}: required marker '${marker}' is missing"
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new GradleException("verifyNeutralBuildScripts failed:\n" + problems.join("\n"))
+        }
+        logger.lifecycle("[verifyNeutralBuildScripts] ok (ac/mcmod scripts present and language tasks declared)")
+    }
+}
+
 tasks.register("verifyPresentationJavaPurity") {
     group = "verification"
     description = "Ensure Presentation Java contracts stay free of Minecraft APIs; allow explicit neutral VFX ABI and particle-kernel Java classes."
@@ -812,7 +845,14 @@ tasks.register("verifyPresentationJavaPurity") {
                      file("mcmod/src/main/java/cn/li/mcmod/runtime")]
         def violations = []
         roots.findAll { it.directory }.each { File root ->
-            fileTree(root) { include "**/*.java" }.files.each { File source ->
+            fileTree(root) {
+                include "**/*.java"
+                // The layout/paint/hit/memo engine kernels are a separate,
+                // deliberately-scoped tier (mutable arrays, real loops) with
+                // its own isolation rules — see verifyPresentationEngineIsolation.
+                // This ABI tier stays strict record/interface-only everywhere else.
+                exclude "cn/li/presentation/core/engine/**"
+            }.files.each { File source ->
                 def text = source.text
                 // Effect-runtime carriers are intentionally ordinary final
                 // classes (primitive arrays plus constructor assignment),
@@ -841,6 +881,47 @@ tasks.register("verifyPresentationJavaPurity") {
     }
 }
 
+tasks.register("verifyPresentationEngineIsolation") {
+    group = "verification"
+    description = "The layout/paint/hit/memo engine kernels (presentation-core/.../core/engine) are the one " +
+        "place Presentation Java is allowed real loops and mutable arrays. This gate protects what that " +
+        "carve-out is actually for: no Minecraft/loader coupling, no Clojure runtime coupling beyond the " +
+        "IFn/ILookup interop surface, no concurrency primitives, no I/O, and no static mutable state - the " +
+        "kernels must stay pure functions over the caller-supplied NodeTable/LayoutArena/MemoState/CmdBuf."
+    doLast {
+        def root = file("presentation-core/src/main/java/cn/li/presentation/core/engine")
+        def violations = []
+        if (root.directory) {
+            fileTree(root) { include "**/*.java" }.files.each { File source ->
+                def text = source.text
+                if (text =~ /import\s+(net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|com\.mojang)\./) {
+                    violations << "${source}: engine kernels may not import Minecraft/loader APIs"
+                }
+                if (text =~ /import\s+clojure\.lang\.(?!IFn\b|ILookup\b)/) {
+                    violations << "${source}: engine kernels may not import clojure.lang beyond IFn/ILookup"
+                }
+                if (text =~ /\b(synchronized|volatile)\b/ || text =~ /\bnew\s+Thread\b/ ||
+                    text =~ /import\s+java\.util\.concurrent\./) {
+                    violations << "${source}: engine kernels must be single-threaded (no Thread/Executor/synchronized/volatile)"
+                }
+                if (text =~ /import\s+java\.io\./ || text =~ /import\s+java\.nio\.file\./) {
+                    violations << "${source}: engine kernels may not perform I/O"
+                }
+                // A static *mutable* field: "static" not immediately followed by "final",
+                // whose declaration has no "(" before its terminating ";" (i.e. it is a
+                // field, not a static method signature).
+                (text =~ /static\s+(?!final\b)[A-Za-z_][\w<>\[\],\s.]*?\s[A-Za-z_]\w*\s*(=[^;]*)?;/).each { match ->
+                    if (!match.contains("(")) {
+                        violations << "${source}: engine kernels may not hold static mutable state (${match.trim()})"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationEngineIsolation] ok")
+    }
+}
+
 tasks.register("verifyPresentationDependencyDirection") {
     group = "verification"
     description = "Enforce Presentation Runtime module dependency direction."
@@ -865,7 +946,7 @@ tasks.register("verifyPresentationDependencyDirection") {
             def path = rootDir.toPath().relativize(buildFile.toPath()).toString().replace('\\', '/')
             def mentionsCore = buildFile.text =~ /project\([\"']:?presentation-core[\"']\)/
             if (mentionsCore && path != "build.gradle" && !(path in ["ac/build.gradle", "ability-runtime/build.gradle", "presentation-core/build.gradle",
-                                           "presentation-compiler/build.gradle"])) {
+                                           "presentation-compiler/build.gradle", "tools/benchmarks/build.gradle"])) {
                 violations << "${buildFile}: forbidden direct dependency on presentation-core (platform/base must use mcmod contract)"
             }
         }
@@ -1009,31 +1090,18 @@ tasks.register("verifyVfxDependencyDirection") {
 
 tasks.register("verifyVfxAotBoundary") {
     group = "verification"
-    description = "Verify source-first VFX packaging and the platform AOT exclusion boundary."
+    description = "Verify source-first VFX packaging and target-derived AOT closure filtering."
     dependsOn ":platform:prepareNeutralClojureRuntimeSources"
     doLast {
         def violations = []
         def vfxBuild = file("vfx-core/build.gradle").text
-        if (!(vfxBuild =~ /onlyIf\s*\{\s*rootProject\.ext\.fullAotEnabled\s*\}/)) {
-            violations << "vfx-core compileClojure must remain disabled unless -PfullAot=true"
-        }
-        if (!rootProject.ext.fullAotEnabled) {
-            def neutralVfxSource = file("build/neutral/ac/neutral-runtime-sources/cn/li/vfx/final_client.clj")
-            if (!neutralVfxSource.file) {
-                violations << "default neutral runtime must publish vfx-core source-first final_client.clj"
-            }
-            fileTree(file("build")) { include "**/*__init.class" }.files.each { File classFile ->
-                def normalized = classFile.absolutePath.replace('\\', '/')
-                if (!normalized.contains('/clojure/test/') &&
-                    (normalized.contains('/cn/li/vfx/') || normalized.contains('/cn/li/ac/vfx/'))) {
-                    violations << "default AOT output contains VFX namespace: ${classFile}"
-                }
-            }
+        if (!(vfxBuild.contains("compileClojure") && vfxBuild.contains("onlyIf { false }"))) {
+            violations << "vfx-core compileClojure must remain disabled for source-first neutral runtime"
         }
         if (!violations.isEmpty()) {
             throw new GradleException("VFX AOT boundary violations:\n" + violations.unique().join("\n"))
         }
-        logger.lifecycle("[verifyVfxAotBoundary] ok (fullAot={})", rootProject.ext.fullAotEnabled)
+        logger.lifecycle("[verifyVfxAotBoundary] ok (source-first neutral VFX)")
     }
 }
 
@@ -1228,6 +1296,17 @@ tasks.register("verifyCombatProviderClosure") {
         logger.lifecycle("[verifyCombatProviderClosure] ok")
     }
 }
+tasks.register("verifyAbilityRuntimeNoDynamicResolve") {
+    group = "verification"
+    description = "ability-runtime must use compile-time linked functions, same discipline as verifyCombatNoPrivateRuntime/verifyCombatProviderClosure for combat-core -- a requiring-resolve/load-string/eval reaching into a forbidden tier (the way ac's combat_runtime.clj once dodged this exact check via string concatenation) must fail loudly here instead."
+    doLast {
+        def bad = fileTree(file("ability-runtime/src/main")) { include "**/*.clj" }.files.findAll {
+            it.text =~ /context-registry|context-dispatcher|AbilityContentProvider|ServiceLoader|requiring-resolve|load-string|eval\s*\(/
+        }
+        if (!bad.isEmpty()) throw new GradleException("ability-runtime contains dynamic-resolve/private-runtime references: ${bad}")
+        logger.lifecycle("[verifyAbilityRuntimeNoDynamicResolve] ok")
+    }
+}
 tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
     description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
@@ -1235,10 +1314,82 @@ tasks.register("verifyCombatSkillCoverage") {
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:checkClojure" }
 
+tasks.register("verifyAbilityActivationCoverage") {
+    group = "verification"
+    description = "Every ability EDN must declare a supported :activation, and any ability whose :pulse does real work (not the passive stub) must be :session or :toggle -- otherwise its :pulse silently never dispatches (the B1/B2/B3 class of bug). Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex."
+    dependsOn ":ac:checkClojure"
+}
+
+tasks.register("verifyCombatResourceAgnostic") {
+    group = "verification"
+    description = "combat-core must not hardcode any content module's resource name -- resource keys arrive only as data (a damage policy's :cost-resource field, or an owner-state :resources map key), never as a literal in combat-core source."
+    doLast {
+        def forbidden = [":cp", ":overload", ":mana", ":spirit"]
+        def offenders = []
+        fileTree("combat-core/src/main/clojure") { include "**/*.clj" }.files.each { source ->
+            def text = source.text
+            forbidden.each { token ->
+                if ((text =~ /(?<![a-zA-Z0-9_.\/-])${java.util.regex.Pattern.quote(token)}(?![a-zA-Z0-9_.\/?!*-])/).find()) {
+                    offenders << "${source}: ${token}"
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("combat-core hardcodes a content module's resource name:\n" + offenders.join("\n"))
+        }
+        logger.lifecycle("[verifyCombatResourceAgnostic] ok")
+    }
+}
+
 tasks.register("verifyNodeCoreLanguageKernel") {
     group = "verification"
     description = "Verify node-core's load boundary (immutable descriptor environment, expression evaluator, scope checker, composite expansion, structural validation, schema export)."
     dependsOn ":node-core:checkClojure"
+}
+
+tasks.register("verifyNodeKernelSingleSource") {
+    group = "verification"
+    description = "combat-core and vfx-core must resolve {:ref}/{:expr} nodes through cn.li.node.kernel/defresolver, not a hand-written case-based ref resolver of their own; the SplitMix64 mixing constants must be defined in exactly one place (cn.li.node.expr)."
+    doLast {
+        def resolverSources = [
+            file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
+            file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")
+        ]
+        def missingKernel = resolverSources.findAll { !it.text.contains("kernel/defresolver") }
+        if (!missingKernel.isEmpty()) {
+            throw new GradleException("expected kernel/defresolver in: ${missingKernel}")
+        }
+        def handWritten = ~/\(defn-?\s+[a-zA-Z0-9?!*_-]+\s*\[[^\]]*\]\s*\n?\s*\(let \[\[[a-zA-Z-]+ [a-zA-Z-]+ & [a-zA-Z-]+\]/
+        resolverSources.each { source ->
+            if (handWritten.matcher(source.text).find()) {
+                throw new GradleException("hand-written [scope key & path] ref resolver found outside cn.li.node.kernel: ${source}")
+            }
+        }
+        def splitMix64Marker = "9E3779B97F4A7C15"
+        def definitionSites = fileTree(".") {
+            include "**/*.clj"
+            exclude "**/build/**", "**/.gradle.blocked/**"
+        }.files.findAll { it.text.contains(splitMix64Marker) }
+        if (definitionSites.size() != 1) {
+            throw new GradleException("expected exactly one SplitMix64 constant definition site, found: ${definitionSites}")
+        }
+        logger.lifecycle("[verifyNodeKernelSingleSource] ok")
+    }
+}
+
+tasks.register("verifyNoDuplicateUtilities") {
+    group = "verification"
+    description = "vec3-components (vec3 shape dispatch: {:vec3 [...]}/[...]/{:x :y :z}) must be defined exactly once (cn.li.node.expr) -- vfx-core/final_client.clj used to carry a second, narrower copy (no {:x :y :z} support, silently returned [0 0 0] on bad input instead of throwing)."
+    doLast {
+        def definitionSites = fileTree(".") {
+            include "**/*.clj"
+            exclude "**/build/**", "**/.gradle.blocked/**"
+        }.files.findAll { it.text =~ /\(defn-?\s+vec3-components\b/ }
+        if (definitionSites.size() != 1) {
+            throw new GradleException("expected exactly one vec3-components definition site, found: ${definitionSites}")
+        }
+        logger.lifecycle("[verifyNoDuplicateUtilities] ok")
+    }
 }
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
@@ -1278,8 +1429,12 @@ tasks.register("verifyVfxDirectHostBoundary") {
     doLast {
         def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj").text
         def host = file("ac/src/main/clojure/cn/li/ac/client/vfx_host.clj")
-        if (!host.exists() || !host.text.contains(":vfx-host-api")) {
-            throw new GradleException("AC VFX Core host seam is missing")
+        if (!host.exists() || !host.text.contains("cn.li.platform.neutral.vfx/install-host!") ||
+                !host.text.contains("vfx/vfx-host-api")) {
+            throw new GradleException("AC VFX Core direct cached host seam is missing")
+        }
+        if (host.text.contains("merge-client-bridge!") || host.text.contains("client-bridge")) {
+            throw new GradleException("AC VFX Core host still routes through the client bridge")
         }
         if (presentation =~ /:vfx-host-api/) {
             throw new GradleException("Presentation bridge still exports VFX host API")
@@ -1322,6 +1477,32 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
     }
 }
 
+tasks.register("verifyContentModuleCoreIsolation") {
+    group = "verification"
+    description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here."
+    doLast {
+        def allowed = [
+            "cn.li.combat.api", "cn.li.combat.damage-math", "cn.li.combat.final-damage",
+            "cn.li.combat.platform", "cn.li.combat.vocabulary",
+            "cn.li.node.composite", "cn.li.node.composite-loader", "cn.li.node.digest",
+            "cn.li.node.rng", "cn.li.node.schema-export", "cn.li.node.scope", "cn.li.node.validate",
+            "cn.li.presentation.core", "cn.li.presentation.core.artifact", "cn.li.presentation.core.host",
+            "cn.li.vfx.system-compiler", "cn.li.vfx.vocabulary"
+        ] as Set
+        def offenders = []
+        fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
+            def text = f.text.replaceAll(/;.*$/, "")
+            (text =~ /cn\.li\.(?:combat|vfx|node|presentation)\.[a-zA-Z0-9](?:[a-zA-Z0-9.\-]*[a-zA-Z0-9])?/).each { m ->
+                if (!allowed.contains(m)) offenders << "${f.path}: ${m}"
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("content module reaches a core directly (not in the Phase 4 allow-list):\n" + offenders.join("\n"))
+        }
+        logger.lifecycle("[verifyContentModuleCoreIsolation] ok (${allowed.size()} allow-listed namespaces)")
+    }
+}
+
 tasks.register("verifyAbilityCompositionBoundary") {
     group = "verification"
     description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary."
@@ -1339,8 +1520,8 @@ tasks.register("verifyAbilityCompositionBoundary") {
             violations << "AC catalog must use compose-catalog"
         }
         if (!presentation.text.contains("cn.li.ability.compose") ||
-            !presentation.text.contains("compose-frame")) {
-            violations << "AC Presentation extraction must use ability-runtime compose-frame"
+            !presentation.text.contains("merge-vfx-into-frame")) {
+            violations << "AC Presentation extraction must use ability-runtime merge-vfx-into-frame"
         }
         if (acBuild =~ /implementation\s+project\(['\"]:(?:node-core|combat-core|vfx-core|presentation-core)['\"]\)/) {
             violations << "AC must consume core modules through ability-runtime, not direct Gradle edges"
@@ -1404,56 +1585,224 @@ tasks.register("verifyAcNoWorldCapabilities") {
     }
 }
 
-tasks.register("verifyNeutralSourceAotXor") {
+tasks.register("verifyClojureRuntimeRepresentation") {
     group = "verification"
-    description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
-    dependsOn ":platform:prepareNeutralClojureRuntimeSources"
+    description = "Ensure target-derived AOT closures and source runtime namespaces are mutually exclusive."
+    dependsOn ":platform:verifyNeutralClojurePackaging", ":platform:verifyPlatformAotCoverage"
     doLast {
-        def violations = []
-        rootProject.ext.neutralSourceFirstProjects.each { projectPath ->
-            def p = project(projectPath)
-            def sourceNamespaces = [] as Set
-            p.sourceSets.main.clojure.srcDirs.findAll { it.directory }.each { File root ->
-                fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.files.each { File f ->
-                    def rel = root.toPath().relativize(f.toPath()).toString().replace('\\','/')
-                    sourceNamespaces << rel.replaceAll(/\.cljc?$/, '').replace('/','.')
-                        .replace('_','-')
-                }
-            }
-            def classRoots = [
-                p.layout.buildDirectory.dir("clojure/main").get().asFile,
-                p.layout.buildDirectory.dir("classes/java/main").get().asFile
-            ]
-            def aotNamespaces = [] as Set
-            classRoots.findAll { it.directory }.each { File root ->
-                fileTree(root) { include "**/*__init.class" }.files.each { File f ->
-                    def rel = root.toPath().relativize(f.toPath()).toString().replace('\\','/')
-                    aotNamespaces << rel.replaceFirst(/__init\.class$/, '').replace('/','.')
-                        .replace('_','-')
-                }
-            }
-            def overlap = sourceNamespaces.intersect(aotNamespaces)
-            if (!rootProject.ext.fullAotEnabled && !overlap.isEmpty()) {
-                violations << "${projectPath}: neutral namespaces present as both source and AOT: ${overlap.sort()}"
-            }
-            if (rootProject.ext.fullAotEnabled) {
-                def missing = sourceNamespaces.findAll { !(it in aotNamespaces) }
-                if (!missing.isEmpty()) violations << "${projectPath}: fullAot missing classes: ${missing.sort()}"
+        def catalog = new groovy.json.JsonSlurper().parse(file("platform-catalog.json"))
+        def selectedTarget = (findProperty("platformTarget") ?: catalog.defaultTarget).toString()
+        def runtimeRoot = file("platform/build/targets/${selectedTarget}/platform")
+        def resourcesRoot = new File(runtimeRoot, "resources/main")
+        def classesRoots = [new File(runtimeRoot, "classes/java/main"), new File(runtimeRoot, "clojure/main")]
+        def sourceBases = [] as Set
+        if (resourcesRoot.isDirectory()) {
+            fileTree(resourcesRoot) {
+                include "**/*.clj"
+                include "**/*.cljc"
+            }.files.each { File source ->
+                sourceBases << resourcesRoot.toPath().relativize(source.toPath()).toString()
+                    .replace("\\", "/").replaceFirst(/\.(clj|cljc)$/, "")
             }
         }
-        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
-        logger.lifecycle("[verifyNeutralSourceAotXor] ok")
+        def classBases = [] as Set
+        classesRoots.findAll { it.isDirectory() }.each { File classesRoot ->
+            fileTree(classesRoot) { include "**/*__init.class" }.files.each { File clazz ->
+                classBases << classesRoot.toPath().relativize(clazz.toPath()).toString()
+                    .replace("\\", "/").replaceFirst(/__init\.class$/, "")
+            }
+        }
+        def overlap = sourceBases.intersect(classBases).sort()
+        if (!overlap.isEmpty()) {
+            throw new GradleException("Clojure runtime representation overlap in ${selectedTarget}: ${overlap}")
+        }
+        logger.lifecycle("[verifyClojureRuntimeRepresentation] ok (target AOT closure XOR source runtime)")
     }
 }
 
-// In diagnostic full-AOT mode the verifier must build the neutral class
-// outputs first; otherwise it would report every source namespace as missing
-// merely because callers invoked the gate in isolation.
-if (rootProject.ext.fullAotEnabled) {
-    tasks.named("verifyNeutralSourceAotXor").configure {
-        dependsOn rootProject.ext.neutralSourceFirstProjects.collect { projectPath ->
-            project(projectPath).tasks.named("classes")
+tasks.register("verifyPresentationDirectHostBoundary") {
+    group = "verification"
+    description = "Ensure Presentation render/input paths use the bootstrap-cached host API."
+    doLast {
+        def neutral = file("platform-src/platform/shared/src/main/clojure/cn/li/platform/neutral/presentation.clj")
+        def ac = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
+        if (!neutral.exists() || !neutral.text.contains("def ^:private presentation-api")) {
+            throw new GradleException("Presentation direct host cache is missing")
         }
+        if (neutral.text.contains("client-runtime/call-adapter") || neutral.text.contains("lifecycle/host-api")) {
+            throw new GradleException("Presentation hot path still performs dynamic/lifecycle host lookup")
+        }
+        if (!ac.exists() || !ac.text.contains("cn.li.platform.neutral.presentation/install-host!") ||
+                !ac.text.contains(":presentation-host-api (constantly api)")) {
+            throw new GradleException("AC Presentation bootstrap does not install one cached host map")
+        }
+        logger.lifecycle("[verifyPresentationDirectHostBoundary] ok")
+    }
+}
+
+tasks.register("verifyClientRenderBridgeBoundary") {
+    group = "verification"
+    description = "Ensure AC block renderers use bootstrap-cached bridge callbacks."
+    doLast {
+        def bridge = file("mcmod/src/main/clojure/cn/li/mcmod/client/platform_bridge.clj").text
+        def renderFiles = [
+                file("ac/src/main/clojure/cn/li/ac/block/imag_phase/render.clj"),
+                file("ac/src/main/clojure/cn/li/ac/block/cat_engine/render.clj"),
+                file("ac/src/main/clojure/cn/li/ac/ability/client/hud.clj"),
+                file("ac/src/main/clojure/cn/li/ac/ability/client/keybinds.clj")
+        ]
+        def hotSeams = [
+                file("mcmod/src/main/clojure/cn/li/mcmod/client/render/pose.clj"),
+                file("mcmod/src/main/clojure/cn/li/mcmod/util/render.clj")
+        ]
+        [":local-player-pos", ":camera-position", ":camera-raycast-visible?",
+         ":settings-key-name", ":keybind-get-key-code"].each { key ->
+            if (!bridge.contains(key)) {
+                throw new GradleException("client bridge is missing cached render operation ${key}")
+            }
+        }
+        renderFiles.each { source ->
+            if (!source.exists()) {
+                throw new GradleException("expected AC renderer is missing: ${source}")
+            }
+            if (source.text =~ /call-adapter\s+:(local-player-pos|camera-position|camera-raycast-visible\?|settings-key-name|keybind-get-key-code)/) {
+                throw new GradleException("renderer still performs dynamic bridge lookup: ${source}")
+            }
+        }
+        def hotRegionStarts = [
+                "pose.clj": "(defn pose-ops-available?",
+                "render.clj": "(defn bind-texture"
+        ]
+        hotSeams.each { source ->
+            if (!source.exists()) {
+                throw new GradleException("expected cached render seam is missing: ${source}")
+            }
+            def text = source.text
+            def start = text.indexOf(hotRegionStarts[source.name])
+            if (start < 0) {
+                throw new GradleException("cached render seam hot region is missing: ${source}")
+            }
+            def hotRegion = text.substring(start)
+            if (hotRegion =~ /get-in\s+@|fw\/fw-atom|\(apply\s+/) {
+                throw new GradleException("render seam still performs Framework/map/app hot-path lookup: ${source}")
+            }
+        }
+        logger.lifecycle("[verifyClientRenderBridgeBoundary] ok")
+    }
+}
+
+tasks.register("verifyDatagenOwnsLanguageFiles") {
+    group = "verification"
+    description = "Require every mod language JSON to be produced by datagen, never committed as a source resource."
+    doLast {
+        def roots = [
+                file("platform-src"),
+                file("ac/src/main"),
+                file("mcmod/src/main"),
+                file("api/src/main")
+        ]
+        def sourceLanguageFiles = []
+        roots.findAll { it.directory }.each { File root ->
+            fileTree(root) {
+                include "**/assets/*/lang/*.json"
+            }.files.each { sourceLanguageFiles << it }
+        }
+        if (!sourceLanguageFiles.isEmpty()) {
+            throw new GradleException("Language JSON must be generated by datagen; remove source resources: ${sourceLanguageFiles.sort()}")
+        }
+        logger.lifecycle("[verifyDatagenOwnsLanguageFiles] ok (no source language JSON)")
+    }
+}
+
+tasks.register("verifyPlatformResourceOwnership") {
+    group = "verification"
+    description = "Allow only loader metadata and unavoidable version-specific resources in platform source roots."
+    doLast {
+        def platformRoot = file("platform-src")
+        def unexpected = []
+        if (platformRoot.directory) {
+            fileTree(platformRoot) {
+                include "**/src/main/resources/**"
+            }.files.each { File resource ->
+                def rel = platformRoot.toPath().relativize(resource.toPath()).toString().replace("\\", "/")
+                def allowed =
+                    (rel ==~ /loader\/[^\/]+\/src\/main\/resources\/(fabric\.mod\.json|academy\.mixins\.json|pack\.mcmeta)/) ||
+                    (rel ==~ /loader\/[^\/]+\/src\/main\/resources\/META-INF\/(mods\.toml|neoforge\.mods\.toml)/) ||
+                    (rel == "minecraft/mc-1.21.1/src/main/resources/data/academy/pack.mcmeta") ||
+                    (rel == "minecraft/mc-26.2/src/main/resources/data/academy/pack.mcmeta") ||
+                    (rel ==~ /minecraft\/mc-26\.2\/src\/main\/resources\/assets\/academy\/shaders\/core\/.+_26\.(fsh|vsh)/)
+                if (!allowed) unexpected << rel
+            }
+        }
+        if (!unexpected.isEmpty()) {
+            throw new GradleException("Unexpected platform resources; move to common resources or datagen, or document a version/loader requirement: ${unexpected.sort()}")
+        }
+        logger.lifecycle("[verifyPlatformResourceOwnership] ok (only loader metadata and unavoidable version-specific resources remain)")
+    }
+}
+
+tasks.register("verifyOptionalIntegrations") {
+    group = "verification"
+    description = "Verify JEI is a real typed adapter and IC2 reflection stays inside the optional third-party boundary."
+    doLast {
+        def catalog = new groovy.json.JsonSlurper().parse(file("platform-catalog.json"))
+        def jeiTargets = [
+            [id: "forge-1.20.1", loader: "forge", wrapper: "platform-src/loader/forge-1.20.1/src/main/java/cn/li/forge1201/integration/JEIPluginWrapper.java", impl: "platform-src/loader/forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/jei_impl.clj"],
+            [id: "fabric-1.20.1", loader: "fabric", wrapper: "platform-src/loader/fabric-1.20.1/src/main/java/cn/li/fabric1201/integration/JEIPluginWrapper.java", impl: "platform-src/loader/fabric-1.20.1/src/main/clojure/cn/li/fabric1201/integration/jei_impl.clj"],
+            [id: "fabric-1.21.1", loader: "fabric", wrapper: "platform-src/loader/fabric-1.21.1/src/main/java/cn/li/fabric1211/integration/JEIPluginWrapper.java", impl: "platform-src/loader/fabric-1.21.1/src/main/clojure/cn/li/fabric1211/integration/jei_impl.clj"],
+            [id: "neoforge-1.21.1", loader: "neoforge", wrapper: "platform-src/loader/neoforge-1.21.1/src/main/java/cn/li/neoforge1211/integration/JEIPluginWrapper.java", impl: "platform-src/loader/neoforge-1.21.1/src/main/clojure/cn/li/neoforge1211/integration/jei_impl.clj"],
+            [id: "neoforge-26.2", loader: "neoforge", wrapper: "platform-src/loader/neoforge-26.2/src/main/java/cn/li/neoforge262/integration/JEIPluginWrapper.java", impl: "platform-src/loader/neoforge-26.2/src/main/clojure/cn/li/neoforge262/integration/jei_impl.clj"],
+            [id: "fabric-26.2", loader: "fabric", wrapper: "platform-src/loader/fabric-26.2/src/main/java/cn/li/fabric262/integration/JEIPluginWrapper.java", impl: "platform-src/loader/fabric-26.2/src/main/clojure/cn/li/fabric262/integration/jei_impl.clj"]
+        ]
+        jeiTargets.each { spec ->
+            def target = catalog.targets[spec.id]
+            def caps = (target.capabilities ?: []) as List
+            if (!("jei" in caps) || !(target.capabilityOwners?.jei ?: []).contains(spec.id)) {
+                throw new GradleException("${spec.id} must declare exactly one JEI capability owner")
+            }
+            def wrapper = file(spec.wrapper)
+            def impl = file(spec.impl)
+            if (!wrapper.isFile() || !impl.isFile() || wrapper.text.contains("placeholder") || impl.text.contains("stub")) {
+                throw new GradleException("${spec.id} JEI adapter must be a real typed implementation")
+            }
+            if (spec.loader == "fabric" && !file("platform-src/loader/${spec.id}/src/main/resources/fabric.mod.json").text.contains("jei_mod_plugin")) {
+                throw new GradleException("${spec.id} must expose the JEI Fabric entrypoint")
+            }
+        }
+        def ic2Files = [
+            file("platform-src/platform/shared/src/main/clojure/cn/li/platform/optional/ic2_energy.clj")
+        ]
+        def allowlistedReflection = ~/java\.lang\.reflect|Class\/forName|Proxy\/newProxyInstance|Method\.invoke|setAccessible|clojure\.lang\.Reflector|getDeclaredConstructor/
+        def forbiddenOutsideIsland = []
+        def applicationMainRoots = [file("ac/src/main"), file("mcmod/src/main"), file("api/src/main")]
+        def platformMainRoot = file("platform-src")
+        applicationMainRoots.findAll { it.directory }.each { root ->
+            fileTree(root) { include "**/*.clj"; include "**/*.java" }.files.each { source ->
+                if (!ic2Files.contains(source) && (source.text =~ allowlistedReflection).find()) {
+                    forbiddenOutsideIsland << source
+                }
+            }
+        }
+        if (platformMainRoot.directory) {
+            fileTree(platformMainRoot) {
+                include "**/src/main/**/*.clj"
+                include "**/src/main/**/*.cljc"
+                include "**/src/main/**/*.java"
+            }.files.each { source ->
+                if (!ic2Files*.canonicalFile.contains(source.canonicalFile) && (source.text =~ allowlistedReflection).find()) {
+                    forbiddenOutsideIsland << source
+                }
+            }
+        }
+        if (!forbiddenOutsideIsland.isEmpty()) {
+            throw new GradleException("Reflection is only permitted in the IC2 third-party adapter: ${forbiddenOutsideIsland}")
+        }
+        ic2Files.each { source ->
+            if (source.text.contains("requiring-resolve") || source.text.contains("cap-call")) {
+                throw new GradleException("IC2 adapter must use direct capability callbacks: ${source}")
+            }
+        }
+        logger.lifecycle("[verifyOptionalIntegrations] JEI typed adapters and IC2 reflection island verified")
     }
 }
 
@@ -1792,11 +2141,8 @@ tasks.register("verifyVersionSeamParity") {
             }
         }
 
-        def seamSets = [:]
-        components.each { componentId, component ->
-            if (component.kind?.toString() != "minecraft" || !component.source) {
-                return
-            }
+        def collectSeamNames = { component ->
+            if (!component?.source) return [] as Set
             def root = file(component.source.toString())
             def seamRoot = new File(root, "java/cn/li/mcver")
             def names = new TreeSet()
@@ -1815,14 +2161,32 @@ tasks.register("verifyVersionSeamParity") {
                     names << rel.replaceAll(/\.clj$/, "").replace("/", ".").replace("_", "-")
                 }
             }
-            seamSets[componentId.toString()] = names
+            names
+        }
+
+        // Compare the effective seam surface delivered to each target.  A
+        // family shared component (for example minecraft-classic for 1.20.1
+        // and 1.21.1) is part of that target's surface; it must not be treated
+        // as a second version implementation.
+        def seamSets = [:]
+        catalog.targets.each { targetId, target ->
+            if (target.loader?.toString() == "none") return
+            def names = new TreeSet()
+            (target.sourceComponents ?: []).each { componentId ->
+                def component = components[componentId.toString()]
+                def kind = component?.kind?.toString()
+                if (kind == "minecraft" || kind == "minecraft-shared") {
+                    names.addAll(collectSeamNames(component))
+                }
+            }
+            seamSets[targetId.toString()] = names
         }
 
         def reference = seamSets.find { k, v -> !v.isEmpty() }
         if (reference != null) {
-            seamSets.each { componentId, names ->
+            seamSets.each { targetId, names ->
                 if (names != reference.value) {
-                    problems << "version seam mismatch for ${componentId}: expected ${reference.value}, found ${names}"
+                    problems << "version seam mismatch for ${targetId}: expected ${reference.value}, found ${names}"
                 }
             }
         }
@@ -1830,7 +2194,7 @@ tasks.register("verifyVersionSeamParity") {
         if (!problems.isEmpty()) {
             throw new GradleException("verifyVersionSeamParity failed:\n" + problems.take(40).join("\n"))
         }
-        logger.lifecycle("[verifyVersionSeamParity] ok ({} version components)", seamSets.size())
+        logger.lifecycle("[verifyVersionSeamParity] ok ({} target seam surfaces)", seamSets.size())
     }
 }
 
@@ -1841,7 +2205,7 @@ tasks.register("verifyMinecraftComponentNeutrality") {
         def catalog = rootProject.ext.platformCatalog()
         def problems = []
         (catalog.components ?: [:]).each { componentId, component ->
-            if (component.kind?.toString() != "minecraft" || !component.source) {
+            if (!(component.kind?.toString() in ["minecraft", "minecraft-shared"]) || !component.source) {
                 return
             }
             def root = file(component.source.toString())
@@ -1880,7 +2244,11 @@ tasks.register("verifyPresentationArtifacts") {
     doLast {
         def sourceRoot = file("ac/src/presentation/resources")
         def generatedRoot = file("build/neutral/ac/generated/resources/presentation")
-        def manifest = new File(generatedRoot, "META-INF/presentation/catalog.edn")
+        // P5: manifest is namespaced by content-id (academy.catalog.edn, not
+        // a fixed catalog.edn) so a second content module's compiled
+        // manifest cannot silently overwrite this one at jar-merge time --
+        // see presentation-compiler/artifact.clj's compile-directory!.
+        def manifest = new File(generatedRoot, "META-INF/presentation/academy.catalog.edn")
         if (!manifest.isFile()) {
             throw new GradleException("Presentation catalog missing: " + manifest)
         }
@@ -1900,6 +2268,21 @@ tasks.register("verifyPresentationArtifacts") {
                 throw new GradleException("Compiled manifest is missing " + viewId + " from " + source)
             }
         }
+        // High-level component names are compile-time syntax only.  A runtime
+        // artifact must contain primitive nodes and numeric/catalog metadata;
+        // reject both component tags and their legacy spelling in generated
+        // files so a future compiler change cannot silently reintroduce the
+        // forbidden runtime dependency on TreeView/ListView.
+        def artifactFiles = fileTree(generatedRoot).matching { include "**/*.uic.edn" }.files
+        def forbiddenArtifactTokens = [~/(?i)tree-view/, ~/(?i)list-view/, ~/:component\b/]
+        def artifactResidues = artifactFiles.collectMany { artifact ->
+            def text = artifact.getText("UTF-8")
+            forbiddenArtifactTokens.findAll { token -> token.matcher(text).find() }
+                    .collect { token -> artifact.toString() + " contains " + token }
+        }
+        if (!artifactResidues.isEmpty()) {
+            throw new GradleException("High-level UI names leaked into runtime artifacts: " + artifactResidues)
+        }
         def legacyRoots = [
             file("ac/src/main/resources/assets/academy/presentation"),
             file("presentation-compiler/src/main/clojure/cn/li/presentation/compiler/core.clj"),
@@ -1910,6 +2293,49 @@ tasks.register("verifyPresentationArtifacts") {
             throw new GradleException("Legacy Presentation UI residues remain: " + residues)
         }
         logger.lifecycle("[verifyPresentationArtifacts] ok (" + sources.size() + " sources)")
+    }
+}
+
+tasks.register("verifyPresentationGoldenArtifacts") {
+    group = "verification"
+    description = "Diff every freshly-compiled .uic.edn against its checked-in golden copy under " +
+        "docs/06-gui/presentation/golden/. The compiler is a pure function of its .ui.edn source " +
+        "(canonicalized, deterministically ordered), so any diff here means either an unintentional " +
+        "compiler regression or a deliberate .ui.edn change whose golden fixture needs updating alongside it."
+    dependsOn ":ac:compilePresentationViews"
+    doLast {
+        def goldenRoot = file("docs/06-gui/presentation/golden/assets")
+        def generatedRoot = file("build/neutral/ac/generated/resources/presentation/assets")
+        if (!goldenRoot.isDirectory()) {
+            throw new GradleException("Golden artifact directory missing: " + goldenRoot)
+        }
+        def goldenFiles = fileTree(goldenRoot) { include "**/*.uic.edn" }.files
+        def violations = []
+        goldenFiles.each { File golden ->
+            def relative = goldenRoot.toPath().relativize(golden.toPath())
+            def generated = generatedRoot.toPath().resolve(relative).toFile()
+            if (!generated.isFile()) {
+                violations << "missing (view removed or renamed?): " + relative
+            } else if (golden.getText("UTF-8") != generated.getText("UTF-8")) {
+                violations << "content differs: " + relative
+            }
+        }
+        def generatedFiles = fileTree(generatedRoot) { include "**/*.uic.edn" }.files
+        def goldenRelatives = goldenFiles.collect { goldenRoot.toPath().relativize(it.toPath()).toString() } as Set
+        generatedFiles.each { File generated ->
+            def relative = generatedRoot.toPath().relativize(generated.toPath()).toString()
+            if (!goldenRelatives.contains(relative)) {
+                violations << "new view has no golden fixture yet: " + relative
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                "Compiled artifacts diverged from docs/06-gui/presentation/golden/ - " +
+                "if this is an intentional .ui.edn change, copy build/neutral/ac/generated/resources/" +
+                "presentation/assets over docs/06-gui/presentation/golden/assets and commit both:\n" +
+                violations.join("\n"))
+        }
+        logger.lifecycle("[verifyPresentationGoldenArtifacts] ok (" + goldenFiles.size() + " golden fixtures)")
     }
 }
 
@@ -1969,6 +2395,59 @@ tasks.register("verifyPresentationSurfaceCoverage") {
     }
 }
 
+tasks.register("verifyPresentationNoRetainedPackets") {
+    group = "verification"
+    description = "presentation_backend.clj's submissions counter must stay a diagnostics-only AtomicLong, never " +
+        "a growing collection (that was the Phase 0 leak: an ever-growing vector of retained FramePackets that " +
+        "nothing ever drained)."
+    doLast {
+        def source = file("mcmod/src/main/clojure/cn/li/mcmod/runtime/presentation_backend.clj")
+        def violations = []
+        if (source.exists()) {
+            def text = source.getText("UTF-8")
+            if (text =~ /\(conj\s+[^)]*submi/ || text =~ /swap!\s+[^)\n]*submi[^)\n]*conj/) {
+                violations << "${source}: submissions must stay a counter, not an accumulated collection"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationNoRetainedPackets] ok")
+    }
+}
+
+tasks.register("verifyPresentationBackendDispatch") {
+    group = "verification"
+    description = "Each version backend must dispatch UI draw commands by UiDrawList/UiOp run, never by " +
+        "instanceof on a RenderCommand UI variant (those variants no longer exist - UI moved to the neutral " +
+        "UiDrawList/UiOp opcode ABI), and must install a UiTextMetrics implementation so layout measures real " +
+        "text instead of the headless test fallback."
+    doLast {
+        def backends = [
+            file("platform-src/minecraft/mc-1.20.1/src/main/clojure/cn/li/mc1201/presentation/backend.clj"),
+            file("platform-src/minecraft/mc-1.21.1/src/main/clojure/cn/li/mc1211/presentation/backend.clj"),
+            file("platform-src/minecraft/mc-26.2/src/main/clojure/cn/li/mc262/presentation/backend.clj"),
+        ]
+        def violations = []
+        backends.each { File source ->
+            if (!source.exists()) {
+                violations << "${source}: missing version backend"
+                return
+            }
+            def text = source.getText("UTF-8")
+            if (text =~ /RenderCommand.Ui/) {
+                violations << "${source}: must not dispatch on a RenderCommand UI variant"
+            }
+            if (!(text =~ /UiDrawList/)) {
+                violations << "${source}: must dispatch UI draw commands via UiDrawList"
+            }
+            if (!(text =~ /install-text-metrics!/)) {
+                violations << "${source}: must install a UiTextMetrics implementation (see cgui-font/text-metrics)"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationBackendDispatch] ok (${backends.size()} backends)")
+    }
+}
+
 tasks.register("verifyPresentationRuntimeZeroResidues") {
     group = "verification"
     description = "Verify zero runtime compiler/legacy-template dependencies and no UI source reads at runtime."
@@ -1987,7 +2466,7 @@ tasks.register("verifyPresentationRuntimeZeroResidues") {
         def uiProductionText = uiProductionRoots.findAll { it.directory }.collectMany { root ->
             fileTree(root) { include "**/*.clj", "**/*.java", "**/*.edn" }.files
         }.collect { it.getText("UTF-8") }.join("\n")
-        def oldApi = uiProductionText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree)/
+        def oldApi = uiProductionText =~ /(?:CompiledTemplate|UiRt|mount-tree!|reconcile-tree!|layout-tree!|retained-tree|child-rects)/
         if (oldApi.find()) {
             throw new GradleException("legacy Presentation ViewModel/API reference remains")
         }
@@ -2018,15 +2497,22 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoTargetHardcoding",
               "verifyBuildProfiles",
               "verifyTargetBuildEntrypoints",
+              "verifyNeutralBuildScripts",
               "verifySingleApiBoundary",
               "verifyRepositoryHygiene",
               "verifyNeutralClojureNoMinecraftApis",
               "verifyPresentationJavaPurity",
+              "verifyPresentationEngineIsolation",
               "verifyPresentationDependencyDirection",
               "verifyPresentationSurfaceCoverage",
               "verifyPresentationRuntimeZeroResidues",
+              "verifyPresentationNoRetainedPackets",
+              "verifyPresentationBackendDispatch",
+              "verifyPresentationGoldenArtifacts",
               "verifyNodeCoreDependencyDirection",
               "verifyNodeCoreLanguageKernel",
+              "verifyNodeKernelSingleSource",
+              "verifyNoDuplicateUtilities",
               "verifyNodeLayerDiscipline",
               "verifyVfxDependencyDirection",
               "verifyCombatDependencyDirection",
@@ -2034,20 +2520,29 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatNoPlatformNamespaces",
               "verifyCombatNoPrivateRuntime",
               "verifyCombatProviderClosure",
+              "verifyAbilityRuntimeNoDynamicResolve",
               "verifyCombatSkillCoverage",
               "verifyCombatContentHash",
+              "verifyCombatResourceAgnostic",
+              "verifyAbilityActivationCoverage",
               "verifyCombatIntentOnlyNetwork",
               "verifyCombatLegacyRuntimeRemoval",
               "verifyAbilityCompositionBoundary",
+              "verifyContentModuleCoreIsolation",
               "verifyCombatSingleDamagePath",
               "verifyAcNoWorldCapabilities",
               "verifyAbilityVfxRegistryCoverage",
               "verifyVfxSingleTickPath",
               "verifyVfxDirectHostBoundary",
+              "verifyClientRenderBridgeBoundary",
+              "verifyPresentationDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxJavaBoundary",
               "verifyVfxAotBoundary",
-              "verifyNeutralSourceAotXor",
+              "verifyClojureRuntimeRepresentation",
+              "verifyDatagenOwnsLanguageFiles",
+              "verifyPlatformResourceOwnership",
+              "verifyOptionalIntegrations",
               "verifyPresentationLoaderHooks",
               "verifyPresentationAtomicSwitch",
               "verifyNeutralProviderClosure",
@@ -2289,13 +2784,11 @@ tasks.register("lintClojureNative") {
 // Effect-runtime source is intentionally stricter than the legacy AC code:
 // carriers are Java field bags and all executable behavior remains Clojure.
 def effectRuntimeClojureRoots = [
-    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expr.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/safe_edn.clj"),
-    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/seeded_rng.clj"),
+    file("node-core/src/main/clojure/cn/li/node/rng.clj"),
     file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/effect_schema.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj"),
-    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/effect_contract.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
 ]
 
@@ -2360,8 +2853,8 @@ tasks.register("verifyEffectRuntimeJavaCarriers") {
 
 tasks.register("verifyCoreNoSkillKnowledge") {
     group = "verification"
-    description = "Keep skill ids out of combat-core and vfx-core source."
-    def roots = [file("combat-core/src/main/clojure"), file("vfx-core/src/main/clojure")]
+    description = "Keep skill ids out of combat-core, vfx-core, and ability-runtime source."
+    def roots = [file("combat-core/src/main/clojure"), file("vfx-core/src/main/clojure"), file("ability-runtime/src/main/clojure")]
     inputs.files(roots)
     doLast {
         roots.collectMany { root ->
@@ -2422,6 +2915,7 @@ tasks.register("verifyCoreNoReflectionOrBoxing") {
 tasks.register("verifyCorePerformance") {
     group = "verification"
     description = "Validate static hot-path budgets before running platform benchmarks."
+    dependsOn ":tools:benchmarks:jmhClasses"
     doLast {
         def budgets = [ir: 4096, dispatch: 8192, entities: 256, blocks: 4096,
                        sessions: 4096, vfxInstances: 8192, vfxSignals: 32768]

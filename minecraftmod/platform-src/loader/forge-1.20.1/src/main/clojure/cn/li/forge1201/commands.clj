@@ -1,10 +1,10 @@
 (ns cn.li.forge1201.commands
   "Brigadier command registration for Forge 1.20.1.
 
-  Delegates tree-building to the shared cn.li.mc1201.command.brigadier-tree
+  Delegates tree-building to the shared cn.li.mcbase.command.brigadier-tree
   namespace; this file only contains the Forge-specific command registration
   entry point called from ForgeEventBusManager.java."
-  (:require [cn.li.mc1201.command.executor-core]
+  (:require [cn.li.mcbase.command.executor-core]
             [cn.li.mcbase.command.brigadier-registry :as brig-reg])
   (:import [com.mojang.brigadier CommandDispatcher]))
 

@@ -35,11 +35,6 @@ public final class ScriptedEntitySpecAccess {
 
         ScriptedBlockBodySpec getScriptedBlockBodySpec(EntityType<?> entityType);
 
-        boolean registerScriptedEffectHookClass(String hookId, String className);
-
-        boolean registerScriptedRayHookClass(String hookId, String className);
-
-        boolean registerScriptedMarkerHookClass(String hookId, String className);
     }
 
     private static final Accessor UNINITIALIZED = new Accessor() {
@@ -82,20 +77,6 @@ public final class ScriptedEntitySpecAccess {
             throw uninitialized();
         }
 
-        @Override
-        public boolean registerScriptedEffectHookClass(String hookId, String className) {
-            throw uninitialized();
-        }
-
-        @Override
-        public boolean registerScriptedRayHookClass(String hookId, String className) {
-            throw uninitialized();
-        }
-
-        @Override
-        public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-            throw uninitialized();
-        }
     };
 
     private static volatile Accessor accessor = UNINITIALIZED;
@@ -132,15 +113,4 @@ public final class ScriptedEntitySpecAccess {
         return accessor.getScriptedBlockBodySpec(entityType);
     }
 
-    public static boolean registerScriptedEffectHookClass(String hookId, String className) {
-        return accessor.registerScriptedEffectHookClass(hookId, className);
-    }
-
-    public static boolean registerScriptedRayHookClass(String hookId, String className) {
-        return accessor.registerScriptedRayHookClass(hookId, className);
-    }
-
-    public static boolean registerScriptedMarkerHookClass(String hookId, String className) {
-        return accessor.registerScriptedMarkerHookClass(hookId, className);
-    }
 }

@@ -12,8 +12,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.final-runtime :as final-runtime]
-            [cn.li.ac.ability.service.combat-sessions :as combat-sessions]
+            [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
+            [cn.li.ability.engine :as final-runtime]
+            [cn.li.ability.session :as combat-sessions]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.registry.event :as ability-event]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -27,19 +28,35 @@
             [cn.li.mcmod.platform.position :as position]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
-            [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]
+            [cn.li.node.rng :as rng]
             [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
+            [cn.li.mcmod.runtime.install :as install]
+            [cn.li.combat.platform :as combat-platform]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]))
 
-(defonce ^:private engine* (atom nil))
+;; This module's identity in every multi-tenant ability-runtime store
+;; (cn.li.ability.session) that's keyed by [content-id owner] so a future
+;; BC/CC module's sessions never collide with AC's.
+(def ^:private content-id :ac)
+
+;; engine* (a bare defonce atom) was write-only outside reset-for-test! --
+;; nothing ever `reset!` it to a non-nil value and nothing read it. Deleted
+;; rather than migrated.
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private final-runtime* (atom nil))
-(defonce ^:private edn-host-capabilities-installed? (atom false))
+;; edn-host-capabilities-installed? (a bare defonce atom) previously guarded
+;; install-ac-host-capabilities! below. Replaced by
+;; cn.li.mcmod.runtime.install/framework-once!, keyed
+;; ::ac-host-capabilities-installed? at the call site: same "run once, retry
+;; if it threw" semantics (framework-once! rolls its own flag back on throw,
+;; same as this atom's own catch block used to reset! it), but the flag now
+;; lives in the Framework atom and correctly resets on a real
+;; integrated-server world reload -- a defonce atom does not, and never did.
 ;; The authoritative source for `:now-tick` when a caller does not supply one.
 ;; `tick!` below updates this from the real server tick every call; intents
 ;; dispatched between full tick-loop passes read the last observed value.
@@ -53,8 +70,34 @@
 ;; Entries contain only neutral ids/ticks; no entity object or cross-player atom
 ;; is retained, so one player's mark cannot affect another world or target.
 (defonce ^:private combat-marks* (atom {}))
+(def ^:private find-nearby-player-uuids-fn nil)
+(def ^:private damage-fn nil)
 (declare owner-state resolve-slot finalize-result! initialize-final-runtime!
          dispatch-domain-event! mark-rate-for)
+
+(defn- no-nearby-player-uuids
+  [_source-player-uuid _radius]
+  [])
+
+(defn- install-runtime-adapters!
+  "Freeze neutral runtime callbacks once after platform bootstrap.
+
+   These callbacks sit on VFX and reflected-damage paths.  Resolve their
+   concrete implementations at startup so neither path performs namespace
+   lookup, Var discovery, or SPI map discovery on every signal/hit."
+  []
+  (let [nearby-fn (try
+                    ;; Keep the platform namespace out of the neutral compile
+                    ;; dependency graph; resolve it exactly once at bootstrap.
+                    (requiring-resolve
+                     (symbol (str "cn.li." "mcbase.runtime.spi.network-transport/find-nearby-player-uuids")))
+                    (catch Throwable _ nil))]
+    (install/install-root! #'find-nearby-player-uuids-fn
+                           (if (ifn? nearby-fn)
+                             nearby-fn
+                             no-nearby-player-uuids))
+    (install/install-root! #'damage-fn combat-platform/damage!))
+  nil)
 
 (defn- generate-activation-seed
   "Produce a fresh per-activation RNG seed. Never deterministic across
@@ -201,7 +244,7 @@
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :max-cp (double (or (:max-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
-     :active-abilities (if-let [session (combat-sessions/session (str owner))]
+     :active-abilities (if-let [session (combat-sessions/session content-id (str owner))]
                          #{(:ability-id session)}
                          #{})
      ;; {ability-id {sub-id ticks}} -- keyed by BOTH ctrl-id and sub-id, unlike
@@ -276,24 +319,38 @@
 
 (defn initialize-final-runtime!
   "Install AC's production final runtime against mcmod neutral capability
-   handlers. This is the only runtime used after the final dispatch cutover."
+   handlers. This is the only runtime used after the final dispatch cutover.
+
+   Gated by framework-once! (keyed ::final-runtime-installed?) instead of
+   the old bare (or @final-runtime* ...) nil-guard: that guard treated a
+   non-nil atom as proof initialization already ran, but the atom is
+   JVM-lifetime while the guard's intent is Framework-lifetime -- a second
+   real world load in the same JVM would have kept serving the FIRST
+   world's stale runtime/catalog forever, never rebuilding. framework-once!
+   correctly re-runs this once per fresh Framework injection; final-runtime*/
+   catalog* still hold the memoized value for cheap reads in between (this
+   is a per-tick-adjacent hot path -- see `engine`/`catalog` below)."
   []
-  (or @final-runtime*
-      (let [runtime (final-runtime/install-production!
-                     {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
-                      :commit-state! commit-final-state!
-                      :ability-state-provider (fn [owner]
-                                          (or (combat-sessions/session (str owner)) {}))
-                      :commit-ability-state! (fn [owner patches]
-                                         (when (seq patches)
-                                           (combat-sessions/apply-actions!
-                                            (str owner)
-                                            [{:type :session-patch :entries patches}])))
-                      :remove-ability-state! (fn [owner]
-                                         (combat-sessions/remove! (str owner)))} )]
-        (reset! final-runtime* runtime)
-        (reset! catalog* @(:catalog runtime))
-        runtime)))
+  (install/framework-once!
+   ::final-runtime-installed?
+   (fn []
+     (install-runtime-adapters!)
+     (let [runtime (final-runtime/install-production!
+                    {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
+                     :commit-state! commit-final-state!
+                     :catalog-compile final-catalog-service/initialize!
+                     :ability-state-provider (fn [owner]
+                                         (or (combat-sessions/session content-id (str owner)) {}))
+                     :commit-ability-state! (fn [owner patches]
+                                        (when (seq patches)
+                                          (combat-sessions/apply-actions!
+                                           content-id (str owner)
+                                           [{:type :session-patch :entries patches}])))
+                     :remove-ability-state! (fn [owner]
+                                        (combat-sessions/remove! content-id (str owner)))})]
+       (reset! final-runtime* runtime)
+       (reset! catalog* @(:catalog runtime)))))
+  @final-runtime*)
 
 (defn final-runtime [] @final-runtime*)
 
@@ -521,12 +578,13 @@
    Public and called from cn.li.ac.core.init/init, ahead of
    combat-catalog/initialize!, so capabilities are registered before the catalog
    ever loads (Design E precondition R9). It also still runs lazily on first
-   dispatch below (compare-and-set! below makes a second call a no-op) as a
-   safety net for any other entry path, but that is no longer the only time
-   it runs."
+   dispatch below (framework-once! makes a second call in the same Framework
+   lifetime a no-op) as a safety net for any other entry path, but that is
+   no longer the only time it runs."
   []
-  (when (compare-and-set! edn-host-capabilities-installed? false true)
-    (try
+  (try
+    (install/framework-once! ::ac-host-capabilities-installed?
+     (fn []
       (when-not (contains? (:queries (capabilities/snapshot)) :energy/target)
         (capabilities/register-query!
          :energy/target
@@ -615,12 +673,16 @@
                               {:command :consume-resource
                                :overload amount :cp 0.0 :creative? false})]
                  {:status (if (:success? result) :applied :failed)})
-               {:status :rejected :reason :invalid-resource-add})))))
-      (catch Throwable _
-        ;; A loader may freeze the registry before AC content boots.  Leave the
-        ;; registry state authoritative; missing ports surface as :unhandled.
-        (reset! edn-host-capabilities-installed? false)))
-  (capabilities/snapshot)))
+               {:status :rejected :reason :invalid-resource-add})))))))
+    (catch Throwable _
+      ;; A loader may freeze the registry before AC content boots.  Leave the
+      ;; registry state authoritative; missing ports surface as :unhandled.
+      ;; framework-once! already rolled its own install flag back before
+      ;; re-throwing (same "retry on next call" contract the old manual
+      ;; reset! provided), so swallowing here just keeps this function's own
+      ;; contract of never throwing to its caller.
+      nil))
+  (capabilities/snapshot))
 
 (defn- cooldown-active?
   [owner ability-id]
@@ -629,21 +691,53 @@
         ticks (long (or (:ticks value) value 0))]
     (pos? ticks)))
 
+(defn- toggle-close-edge?
+  "True when this :start intent must resolve to the toggle's close edge
+   instead: the ability already has an active session with a :toggle
+   activation. Toggle abilities use one physical key for both activation
+   and deactivation -- the client wire intentionally stays neutral
+   (`:start`); the server resolves the edge from the owner-scoped session
+   so a repeated key-down cannot create a second session or overwrite the
+   active state. This is generic for every future :toggle source.
+   Pure/unit-testable independent of a real dispatch -- see
+   toggle-close-edge-test."
+  [op activation active-session-ability-id ability-id]
+  (and (= :start op) (= :toggle activation) (= ability-id active-session-ability-id)))
+
+(defn- should-open-session?
+  "True when an accepted :start result should open a new owner session.
+   :toggle abilities need a session too, not just :session ones -- so a
+   second :start can resolve to toggle-close-edge? above. Before this,
+   only :session ever opened one, so every :toggle ability's \"press again
+   to turn off\" never had a session to detect the second press against.
+   Pure/unit-testable independent of a real dispatch."
+  [status op activation finish-ability? already-active?]
+  (and (= :accepted status) (= :start op)
+       (contains? #{:session :toggle} activation)
+       (not finish-ability?) (not already-active?)))
+
 (defn dispatch-intent! [owner intent]
   ;; Final runtime is the sole production dispatch path. Pending source Final
   ;; graphs return an explicit execution status; there is no alternate
   ;; evaluator or catalog fallback at this boundary.
+  ;;
+  ;; Lazily install/warm the final runtime BEFORE combat-source/final-input
+  ;; read catalog* below: on the very first dispatch of a JVM's (or, in unit
+  ;; tests, a Framework's) lifetime, catalog* is still nil until this runs,
+  ;; so combat-source would silently return nil -- :activation, :budgets,
+  ;; :cooldowns, :progression and :invariants would all resolve as if the
+  ;; ability did not exist, without throwing (should-open-session? just
+  ;; never opens a session; cost/cooldown/progression nodes just no-op).
+  ;; This used to go undetected because some earlier-registered production
+  ;; call path always happened to warm the runtime first in practice.
+  (when-not (final-runtime/production-runtime)
+    (install-ac-host-capabilities!)
+    (initialize-final-runtime!))
   (let [ability-id (edn-ability-id owner intent)
         source (combat-source ability-id)
-        active-session (combat-sessions/session (str owner))
-        ;; Toggle abilities use one physical key for both activation and
-        ;; deactivation. The client wire intentionally stays neutral (`:start`);
-        ;; the server resolves the edge from its owner-scoped session so a
-        ;; repeated key-down cannot create a second session or overwrite the
-        ;; active state. This is generic for every future :toggle source.
-        intent (if (and (= :start (:op intent))
-                        (= :toggle (:activation source))
-                        (= ability-id (:ability-id active-session)))
+        active-session (combat-sessions/session content-id (str owner))
+        intent (if (toggle-close-edge? (:op intent) (:activation source)
+                                       (:ability-id active-session) ability-id)
                  (assoc intent :op :abort)
                  intent)
         ;; Key-up release packets do not carry a client hold counter.  Derive
@@ -657,6 +751,19 @@
                                        (long (or (:start-tick active-session)
                                                  @last-known-tick*))))))
                  intent)
+        ;; Phase translation: :op is the client/session-resolved wire
+        ;; vocabulary (:start/:pulse/:release/:abort/:event); combat-core's
+        ;; :flow/phases dispatch (final_engine.clj) reads the
+        ;; domain-neutral :phase key instead, so it never has to know AC's
+        ;; wire shape. Computed here, after the toggle/hold-ticks
+        ;; adjustments above have possibly rewritten :op (the toggle
+        ;; close-edge :start->:abort rewrite in particular), so :phase
+        ;; always reflects the final, corrected op. Before this, nothing
+        ;; ever set :phase (or the :action key final_engine.clj used to
+        ;; read instead), so :pulse/:release/:abort never reached their
+        ;; :flow/phases branch in production -- every non-event intent
+        ;; silently ran the :start branch regardless of :op.
+        intent (assoc intent :phase (:op intent))
         seed (long (or (:activation-seed intent)
                        (generate-activation-seed owner ability-id
                                                  (long (or (:server-tick intent)
@@ -673,17 +780,23 @@
         {:status :rejected :reason :cooldown
          :schema-version 1 :ability-id ability-id
          :feedback [{:type :cooldown-active :ability-id ability-id}]}
-        (let [_ (when-not (final-runtime/production-runtime)
-                  (install-ac-host-capabilities!)
-                  (initialize-final-runtime!))
-              result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
+        (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
                             :schema-version 1 :ability-id ability-id)]
-          (when (and (= :accepted (:status result))
-                     (= :start (:op intent))
-                     (= :session (:activation source))
-                     (not (:finish-ability? result))
-                     (not (combat-sessions/active? (str owner))))
-            (combat-sessions/start! (str owner) ability-id prepared))
+          ;; already-active? must reflect session state as of BEFORE this
+          ;; dispatch (active-session, captured above), not after: execute!
+          ;; already ran by this point, and its commit-ability-state! callback
+          ;; (cn.li.ability.session/apply-actions!) uses update-in, which
+          ;; auto-vivifies a session entry containing only {:state {...}} the
+          ;; moment the graph's first :state/write patch lands -- for a brand
+          ;; new :start, that phantom entry exists (with no :activation-seed)
+          ;; well before start! would ever run. Re-querying combat-sessions/
+          ;; active? here would see that phantom entry, wrongly conclude a
+          ;; session is "already" active, and skip start! forever, so the
+          ;; session never gets its :activation-seed/:owner/:tick fields.
+          (when (should-open-session? (:status result) (:op intent) (:activation source)
+                                      (:finish-ability? result)
+                                      (boolean active-session))
+            (combat-sessions/start! content-id (str owner) ability-id prepared))
           result)))))
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
@@ -694,7 +807,6 @@
   (when (and (map? trigger) (:ability trigger) (:event trigger))
     (dispatch-intent! owner
                       {:op :event
-                       :action :event
                        :ability-id (:ability trigger)
                        :event (:event trigger)
                        :server-tick @last-known-tick*
@@ -703,9 +815,7 @@
   [event]
   (let [owner (:owner event)
         ability-id (:ability-id event)
-        raw (if (= :progression/mark (:type event))
-              (:progression event)
-              (or (:progression event) (:score event)))
+        raw (or (:progression event) (:score event))
         amount (cond
                  (number? raw) (double raw)
                  (map? raw) (double (or (:amount raw) (:value raw)
@@ -813,7 +923,6 @@
                                 :translate? (boolean (if (nil? translate?) true translate?))}))
       {:status :applied :type (:type event)})
 
-    :progression/mark (handle-progression-event! event)
     :score/mark (handle-progression-event! event)
 
     :world/block-impact
@@ -845,10 +954,10 @@
           seed (long (or seed 0))
           fish? (and detected-water? (> (double (or skill-exp 0.0))
                                (double (or fishing-exp-threshold 1.0)))
-                     (< (seeded-rng/unit-double seed)
+                     (< (rng/unit-double seed)
                         (double (or fishing-probability 0.0))))
           ignite? (and (not detected-water?)
-                       (< (seeded-rng/unit-double (seeded-rng/next-long seed))
+                       (< (rng/unit-double (rng/next-seed seed))
                           (double (or ignite-probability 0.0))))]
       (cond
         (not (and (string? world-id) (finite-point? point)
@@ -894,15 +1003,11 @@
         radius (double (or (:radius audience) 32.0))]
     (case kind
       :nearby (let [nearby (try
-                             (when-let [f (requiring-resolve
-                                           'cn.li.mcbase.runtime.spi.network-transport/find-nearby-player-uuids)]
-                               (vec (f (str owner) radius)))
+                             (vec (find-nearby-player-uuids-fn (str owner) radius))
                              (catch Throwable _ []))]
                 (vec (distinct (cons (str owner) nearby))))
       :all (let [nearby (try
-                          (when-let [f (requiring-resolve
-                                        'cn.li.mcbase.runtime.spi.network-transport/find-nearby-player-uuids)]
-                            (vec (f (str owner) Double/MAX_VALUE)))
+                          (vec (find-nearby-player-uuids-fn (str owner) Double/MAX_VALUE))
                           (catch Throwable _ []))]
              (vec (distinct (cons (str owner) nearby))))
       [(str owner)])))
@@ -971,7 +1076,7 @@
                        (owner-state source-id))
         target-data (:ability-data target-state)
         source-data (:ability-data source-state)
-        target-session (combat-sessions/session (str target-id))
+        target-session (combat-sessions/session content-id (str target-id))
         world-id (or (:world-id damage-source) (:world-id target-state) "minecraft:overworld")
         sources (get-in @catalog* [:combat :sources])]
     (into {}
@@ -1019,8 +1124,7 @@
 
 (defn- apply-reflections-once!
   [result]
-  (let [damage-fn (requiring-resolve 'cn.li.combat.platform/damage!)]
-    (boolean
+  (boolean
      (some (fn [reflection]
              (let [event (:event reflection)
                    claim [(:world-id event) (:source event) (:target event)
@@ -1044,7 +1148,7 @@
                                              :owner (:source event)
                                              :reflected? true})))
                    (catch Throwable _ false)))))
-           (:reflections result)))))
+           (:reflections result))))
 (defn- final-damage-request
   [player-id attacker-id original-damage damage-source precheck?]
   (let [runtime (final-runtime/production-runtime)
@@ -1127,7 +1231,7 @@
   [owner result]
   (let [patches (vec (or (:ability-state-patches result) []))]
     (when (seq patches)
-      (combat-sessions/apply-actions! (str owner) [{:type :session-patch :entries patches}]))))
+      (combat-sessions/apply-actions! content-id (str owner) [{:type :session-patch :entries patches}]))))
 (defn finalize-result!
   "Apply one accepted result at the AC composition boundary and publish its
    authoritative VFX/domain outbox after the state decision is known."
@@ -1196,8 +1300,8 @@
   every other player, while a finished pulse removes its own session through
   the normal Final runtime boundary."
   [tick]
-  (doseq [[owner session] (combat-sessions/snapshot)]
-    (when (= session (combat-sessions/session owner))
+  (doseq [[owner session] (combat-sessions/snapshot content-id)]
+    (when (= session (combat-sessions/session content-id owner))
       (let [hold-ticks (inc (max 0 (- (long tick)
                                       (long (or (:start-tick session) tick)))))
             result (dispatch-intent!
@@ -1236,10 +1340,9 @@
     (final-runtime/abort-owner! runtime owner)
     {:status :rejected :reason :final-runtime-not-installed :owner owner}))
 (defn snapshot-owner [owner]
-  {:combat-session (combat-sessions/session owner)})
+  {:combat-session (combat-sessions/session content-id owner)})
 
 (defn reset-for-test! []
-  (reset! engine* nil)
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
   nil)

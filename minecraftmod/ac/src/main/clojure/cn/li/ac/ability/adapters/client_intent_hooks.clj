@@ -122,7 +122,7 @@
   (when (compare-and-set! handlers-registered?* false true)
     (net-client/register-push-handler! messages/MSG-CATALOG-HELLO
       (fn [{:keys [wire]}]
-        (when (and (instance? (Class/forName "[B") wire)
+        (when (and (bytes? wire)
                    (client-bridge/local-player-uuid))
           (let [remote (fixed-channel/decode-catalog-hello wire)
                 local (select-keys (combat-catalog/catalog)
@@ -140,7 +140,7 @@
                         {:local local :remote remote}))))))
     (net-client/register-push-handler! messages/MSG-COMBAT-RESULT
       (fn [{:keys [wire]}]
-        (when (instance? (Class/forName "[B") wire)
+        (when (bytes? wire)
           (try
             (let [result (fixed-channel/decode-combat-feedback wire)]
               (doseq [feedback (:feedback result)]
@@ -155,7 +155,7 @@
     ;; -- caster or bystander -- always receives exactly one push per signal.
     (net-client/register-push-handler! messages/MSG-COMBAT-VFX
       (fn [{:keys [wire]}]
-        (when (instance? (Class/forName "[B") wire)
+        (when (bytes? wire)
           (try
             (combat-vfx/dispatch-signal! (fixed-channel/decode-vfx-signal wire))
             (catch Throwable error

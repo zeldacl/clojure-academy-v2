@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.runtime.network-core-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.mc1201.runtime.network-core :as network-core]
+            [cn.li.mcbase.runtime.network-core :as network-core]
             [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.hooks.messages :as messages]))

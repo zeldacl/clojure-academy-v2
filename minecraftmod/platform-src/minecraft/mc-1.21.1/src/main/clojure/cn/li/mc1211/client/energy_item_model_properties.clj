@@ -14,7 +14,7 @@
            [cn.li.mc1211.client.render.item EnergyItemPropertyFunction
             FrameItemPropertyFunction
             MatterKindItemPropertyFunction]
-           [cn.li.mc1211.runtime ItemRegistry]))
+           [cn.li.mcbase.runtime ItemRegistry]))
 
 (defn- resolve-item
   ^Item

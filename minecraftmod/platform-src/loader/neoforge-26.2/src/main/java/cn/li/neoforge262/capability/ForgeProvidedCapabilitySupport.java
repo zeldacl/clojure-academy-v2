@@ -85,9 +85,4 @@ public final class ForgeProvidedCapabilitySupport {
         return LegacyCapabilityBoundary.itemCapabilityForType(capabilityType);
     }
 
-    @Deprecated
-    @Nullable
-    public static BlockCapability<?, Direction> forgeProvidedCapabilityForType(Class<?> capabilityType) {
-        return blockCapabilityForType(capabilityType);
-    }
 }

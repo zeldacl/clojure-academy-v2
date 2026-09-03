@@ -14,7 +14,8 @@
             [cn.li.mcbase.platform.world-block-ops :as world-block-ops]
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
             [cn.li.mcmod.runtime.install :as install])
-  (:import [cn.li.mc1211.runtime BlockRegistry RuntimeAccess]
+  (:import [cn.li.mcbase.runtime BlockRegistry]
+           [cn.li.mc1211.runtime RuntimeAccess]
            [net.minecraft.core BlockPos Direction]
            [net.minecraft.core.component DataComponents]
            [net.minecraft.nbt CompoundTag ListTag StringTag]

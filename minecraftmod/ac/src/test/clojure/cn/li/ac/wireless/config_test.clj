@@ -23,7 +23,11 @@
       (is (= 2000.0 (wireless-config/buffer-max)))))
   (testing "empty config map falls back to built-in network defaults"
     (with-redefs [config-reg/get-config-values (fn [_] {})]
-      (is (= 40 (wireless-config/update-interval-ticks)))
+      ;; :network-update-interval-ticks's descriptor default is 1, not 40 --
+      ;; see its :comment: 40 made node-to-node transfer ~0.75 IF/t instead of
+      ;; upstream's ~30 IF/t, "effectively invisible" -- a deliberate balance
+      ;; fix this test's expectation predates.
+      (is (= 1 (wireless-config/update-interval-ticks)))
       (is (= 2000.0 (wireless-config/buffer-max))))))
 
 (deftest search-config-override-and-fallback-test

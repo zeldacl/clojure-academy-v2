@@ -6,6 +6,7 @@ import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc262.client.render.GuiRenderPipelines;
 import cn.li.mc262.client.render.ModRenderTypes;
 import cn.li.mc262.client.render.PlasmaRenderTypes;
+import cn.li.mc262.client.render.PerspectiveQuadRenderState;
 import cn.li.mc262.client.render.ReactivePreviewPipRenderer;
 import cn.li.mc262.client.render.ReactivePreviewRenderState;
 import cn.li.mc262.client.render.item.EnergyItemPropertyFunction;
@@ -14,6 +15,7 @@ import cn.li.mc262.client.render.item.MatterKindItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
 import org.joml.Matrix3x2f;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleType;
@@ -129,6 +131,21 @@ public final class ModClientRenderSetup {
      * cannot reference (they must compile against the vanilla jar for Fabric).
      */
     private static void installGuiExtractionHooks() {
+        GuiGraphicsHelper.installWarpedQuadSubmitter((graphics, pipeline, textures,
+                pose, warp, x0, y0, x1, y1, u0, u1, v0, v1, colorTop, colorBottom) -> {
+            GuiElementRenderState state = textures != null && textures.texure0() != null
+                    ? PerspectiveQuadRenderState.textured(
+                            warp, pose, pipeline, textures, x0, y0, x1, y1,
+                            u0, v0, u1, v1, colorTop, graphics.peekScissorStack())
+                    : PerspectiveQuadRenderState.colored(
+                            warp, pose, pipeline, textures, x0, y0, x1, y1,
+                            colorTop, colorBottom, graphics.peekScissorStack());
+            if (state == null) {
+                return false;
+            }
+            graphics.submitGuiElementRenderState(state);
+            return true;
+        });
         // Two-sampler GUI pipelines (skill_progbar / cpbar_overload) sample a
         // mask from Sampler1; the vanilla extractor blits single textures, so
         // submit a BlitRenderState carrying the double TextureSetup through

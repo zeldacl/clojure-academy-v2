@@ -6,7 +6,7 @@
             [cn.li.mcbase.entity.mob-logic-pipeline :as mob-pipeline]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.protocol.core :as registry-core]
-            [cn.li.mc1211.block.blockstate-properties :as bsp]
+            [cn.li.mcbase.block.blockstate-properties :as bsp]
             [cn.li.mc1211.item.item-properties :as item-properties]
             [cn.li.platform.registry.content-registration-core :as core])
   (:import [cn.li.fabric1211.entity FabricScriptedEntityAccess]

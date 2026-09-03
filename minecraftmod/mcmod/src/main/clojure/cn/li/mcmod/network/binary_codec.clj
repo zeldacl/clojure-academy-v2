@@ -57,7 +57,7 @@
       (.writeDouble out (.-x p))
       (.writeDouble out (.-y p))
       (.writeDouble out (.-z p)))
-    (instance? (Class/forName "[B") v)
+    (bytes? v)
     (let [size (alength ^bytes v)]
       (when (> size max-byte-payload)
         (throw (ex-info "binary-codec: byte payload exceeds bound"

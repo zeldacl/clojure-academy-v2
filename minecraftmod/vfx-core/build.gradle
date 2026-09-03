@@ -9,31 +9,52 @@ layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${proje
 
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes"
+    checkTask.dependsOn ":mcmod:classes", ":node-core:classes"
     // VFX owns its visual vocabulary while sharing node-core's immutable
     // descriptor/environment and expression-kernel contracts with Combat.
+    // node-core is source-first; its .clj sources land only in its own
+    // resources/main dir, which the standard project(":node-core")
+    // compileClasspath resolution does not surface here. Same fix
+    // combat-core/build.gradle applies, for the same underlying reason --
+    // now load-bearing rather than latent, since effect_schema.clj requires
+    // cn.li.node.digest.
+    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
 }
 
-// See the matching comment in combat-core/build.gradle.
+// node-core is source-first; its .clj sources land only in its own
+// resources/main dir, which the standard project(":node-core")
+// compileClasspath resolution does not surface here. Same fix
+// combat-core/build.gradle applies, for the same underlying reason -- this
+// block was previously an empty stub pointing at that comment without
+// actually doing what it described.
 tasks.named("compileTestClojure").configure {
+    dependsOn ":node-core:classes"
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
 }
 
+// cn.li.node.dep-check is node-core's shared dependency-direction checker;
+// see the matching comment in combat-core/build.gradle for why the whole
+// directory (not just dep_check.clj) is added.
+sourceSets.test.clojure.srcDir rootProject.file('node-core/src/test/clojure')
+// node-core's own test_runner.clj (pulled in by the srcDir addition above)
+// requires this; without it, compileTestClojure fails to resolve it even
+// though cn.li.vfx.test-runner never calls it.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
+
 tasks.named("processResources").configure {
-    if (rootProject.ext.fullAotEnabled) {
-        exclude "**/*.clj", "**/*.cljc"
-    } else {
-        from(sourceSets.main.clojure.srcDirs) {
-            include "**/*.clj", "**/*.cljc"
-        }
+    from(sourceSets.main.clojure.srcDirs) {
+        include "**/*.clj", "**/*.cljc"
     }
 }
 
 tasks.named("compileClojure").configure { task ->
-    onlyIf { rootProject.ext.fullAotEnabled }
+    onlyIf { false }
     dependsOn ":mcmod:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
@@ -44,11 +65,11 @@ tasks.named("compileClojure").configure { task ->
 }
 
 // A source-first neutral module must not retain classes produced by an
-// explicit diagnostic full-AOT build.  Clearing the module-local output on
+// a prior remapped build. Clearing the module-local output on
 // every normal classes/jar invocation makes the source XOR AOT boundary
 // deterministic even when developers switch build modes in one checkout.
 def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
-    onlyIf { !rootProject.ext.fullAotEnabled }
+    onlyIf { true }
     doLast {
         delete(layout.buildDirectory.dir("clojure/main").get().asFile)
     }

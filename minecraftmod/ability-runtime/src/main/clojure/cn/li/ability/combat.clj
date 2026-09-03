@@ -9,14 +9,27 @@
 
 (defn create-runtime
   "Create one logical server combat continuation runtime.
-   `execute-result!` receives [owner neutral-result] and is the content
-   composition boundary for VFX/result publication."
-  [{:keys [execute-result!]}]
+
+   `execute-result!` is {content-id -> (fn [owner neutral-result])}, the
+   content composition boundary for VFX/result publication -- one entry per
+   content module, not one shared closure. `content-id-for` is
+   (fn [ability-id] -> content-id), used to route a settled continuation
+   (which only carries :ability-id -- see final_engine.clj's :action branch
+   and final_runtime.clj's create-from-capabilities, which thread it through
+   combat-core's command/apply boundary the same way :owner/:world-id
+   already were) to the right tenant's finalizer. A payload with no
+   :ability-id (nothing upstream supplied one) or an ability-id
+   content-id-for can't place still settles -- beam/settle! always runs --
+   it just has no one to notify."
+  [{:keys [execute-result! content-id-for]}]
   (continuation/create
    {:execute! (fn [owner payload]
-                (let [result (beam/settle! payload)]
-                  (when (ifn? execute-result!)
-                    (execute-result! owner result))
+                (let [result (beam/settle! payload)
+                      content-id (when (ifn? content-id-for)
+                                   (content-id-for (:ability-id payload)))
+                      finalize! (get execute-result! content-id)]
+                  (when (ifn? finalize!)
+                    (finalize! owner result))
                   result))}))
 
 (defn schedule!

@@ -5,8 +5,8 @@
 
   Fabric has no OBJ model loader, so a 3D item's `_3d` model is written as a
   plain vanilla model that only carries the display transforms and the atlas
-  texture. The mesh is attached at bake time — see
-  `cn.li.fabric262.client.obj-model-registration`."
+  texture. The generated vanilla model is the single authoritative path;
+  there is no runtime OBJ registration seam."
   (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
             [cn.li.mcbase.datagen.gson-util :as gson-util]

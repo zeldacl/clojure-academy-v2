@@ -1,0 +1,7 @@
+{:schema-version 1
+ :documents
+ [{:kind :composite :id :vfx.fx/charge-ring :resource "cn/li/vfx/composites/charge_ring.edn"}
+  {:kind :composite :id :vfx.fx/block-progress :resource "cn/li/vfx/composites/block_progress.edn"}
+  {:kind :composite :id :vfx.fx/trajectory-ribbon :resource "cn/li/vfx/composites/trajectory_ribbon.edn"}
+  {:kind :composite :id :vfx/beam-arc-fade :resource "cn/li/vfx/composites/beam_arc_fade.edn"}
+  {:kind :composite :id :vfx/humanoid-marker :resource "cn/li/vfx/composites/humanoid_marker.edn"}]}

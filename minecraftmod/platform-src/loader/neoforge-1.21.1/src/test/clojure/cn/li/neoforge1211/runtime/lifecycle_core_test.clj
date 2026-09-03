@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.runtime.lifecycle-core-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc1211.runtime.lifecycle-core :as lifecycle-core]
+            [cn.li.mcbase.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def ^:private test-owner {:server-session-id :test-session})

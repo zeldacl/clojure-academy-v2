@@ -6,7 +6,7 @@ import cn.li.forge1201.AcademyCraft1201;
 import cn.li.forge1201.entity.ModEntities;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
-import cn.li.mc1201.client.effects.particle.MdParticle;
+import cn.li.mcbase.client.effects.particle.MdParticle;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;

@@ -3,9 +3,10 @@
 
   Reuses existing runtime RPC handlers and Fabric GUI S2C transport.
   Keeps protocol/message IDs aligned with Forge runtime network implementation."
-  (:require [cn.li.fabric262.gui.network.server :as gui-network]
+  (:require [cn.li.mcmod.hooks.core :as hooks]
+            [cn.li.fabric262.gui.network.server :as gui-network]
             [cn.li.fabric262.adapter.server-context :as _server-context]
-            [cn.li.mc262.runtime.network-core :as network-core]))
+            [cn.li.mcbase.runtime.network-core :as network-core]))
 
 (def send-sync-to-client!
   network-core/send-sync-to-client!)
@@ -13,6 +14,7 @@
 (defn init!
   "Initialize runtime network stack: register server handlers and injected send fns."
   []
+  (hooks/register-power-runtime-hooks! {:find-player-by-uuid network-core/default-find-player-by-uuid})
   (network-core/install-runtime-network-transport! {:label "Fabric"
                                                    :install-server-context! _server-context/install-server-context!
                                                    :send-push-to-client! gui-network/send-push-to-client!}))

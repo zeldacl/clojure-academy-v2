@@ -18,7 +18,7 @@
 | 特效核心（VFX Core） | [VFX_CORE.md](VFX_CORE.md) | `:vfx-core`、`ac/client/effect_controller.clj`、`ac/ability/client/fx_spec.clj` |
 | Combat/VFX 平台缺口工单 | [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md)（历史审计档案，非当前工单/架构文档） | 同上两行 |
 | UI 系统（GUI/CGUI，legacy） | [UI_SYSTEM_MAINTENANCE.md](UI_SYSTEM_MAINTENANCE.md) | `ac/gui`、`mcmod/gui`、`forge1201/gui` |
-| Presentation Runtime | [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md) | `:presentation-core`、`:presentation-compiler`、`ac/gui/reactive/register.clj` |
+| Presentation Runtime | [PRESENTATION_V3.md](../06-gui/PRESENTATION_V3.md) | `:presentation-core`、`:presentation-compiler`、`ac/gui/reactive/register.clj` |
 | 无线系统（Wireless） | [WIRELESS_SYSTEM_MAINTENANCE.md](WIRELESS_SYSTEM_MAINTENANCE.md) | `ac/wireless` |
 | 数据终端（Terminal） | [TERMINAL_SYSTEM_MAINTENANCE.md](TERMINAL_SYSTEM_MAINTENANCE.md) | `ac/terminal`、`ac/terminal/client` |
 | 能量系统（Energy） | [ENERGY_SYSTEM_MAINTENANCE.md](ENERGY_SYSTEM_MAINTENANCE.md) | `ac/energy` |

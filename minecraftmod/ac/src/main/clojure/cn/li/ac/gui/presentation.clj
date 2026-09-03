@@ -5,7 +5,6 @@
    namespace owns artifact lookup, mount geometry, deterministic paint,
    and the opaque host bridge; it exposes no renderer implementation details."
   (:require [cn.li.presentation.core.artifact :as artifact]
-            [cn.li.presentation.core.paint :as paint]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log])
@@ -14,6 +13,18 @@
 (defn- host-api []
   (or (bridge/call-adapter :presentation-host-api)
       (throw (ex-info "Presentation Runtime bridge is not installed" {}))))
+
+(def ^:private merged-manifest
+  ;; P5: presentation-core no longer has a content-id-free default manifest
+  ;; (a second content module compiling its own views would otherwise
+  ;; silently collide on a fixed "catalog.edn" resource name -- see
+  ;; artifact.clj's merge-manifests docstring). AC is the only real content
+  ;; module today, so this is a one-element merge, but it is the same
+  ;; bootstrap-once/read-many shape a real bc/cc would extend. A delay
+  ;; (rather than eager eval at ns load) defers the classpath read past
+  ;; ns-load order, same rationale as the other P3-era delay entries in
+  ;; docs/dev/top-level-mutable-state-whitelist.tsv.
+  (delay (artifact/merge-manifests ["academy"])))
 
 (defn- stage-for [host-kind]
   (case host-kind
@@ -51,7 +62,7 @@
     :or {host-kind :screen state {}}}]
   (let [api (host-api)
         view-id (view-id-for view-id)
-        artifact (artifact/load-view view-id)
+        artifact (artifact/load-view @merged-manifest view-id)
         state* (atom state)
         dispatch-action! (or dispatch-action!
                              (fn [_action _payload current] current))
@@ -76,8 +87,7 @@
                 :state state
                 :reduce reduce*
                 :run-effect! (or run-effect! (fn [_] nil))
-                :close! (fn [_] (when on-close (on-close)))
-                :paint-fn paint/paint-view})]
+                :close! (fn [_] (when on-close (on-close)))})]
     {:mount mount
      :view-id view-id
      :artifact artifact

@@ -17,17 +17,13 @@ tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" 
 }
 
 tasks.named("processResources").configure {
-    if (rootProject.ext.fullAotEnabled) {
-        exclude "**/*.clj", "**/*.cljc"
-    } else {
-        from(sourceSets.main.clojure.srcDirs) {
-            include "**/*.clj", "**/*.cljc"
-        }
+    from(sourceSets.main.clojure.srcDirs) {
+        include "**/*.clj", "**/*.cljc"
     }
 }
 
 tasks.named("compileClojure").configure { task ->
-    onlyIf { rootProject.ext.fullAotEnabled }
+    onlyIf { false }
     def targetDir = layout.buildDirectory.dir("clojure/main")
     if (task.metaClass.hasProperty(task, "destinationDirectory")) {
         task.destinationDirectory = targetDir
@@ -37,7 +33,7 @@ tasks.named("compileClojure").configure { task ->
 }
 
 def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
-    onlyIf { !rootProject.ext.fullAotEnabled }
+    onlyIf { true }
     doLast { delete(layout.buildDirectory.dir("clojure/main").get().asFile) }
 }
 tasks.named("classes").configure { dependsOn clearNeutralAotOutput }
@@ -50,6 +46,14 @@ tasks.register("runNodeCoreClojureTests", JavaExec) {
     mainClass = "clojure.main"
     args "-m", "cn.li.node.test-runner"
 }
+
+// cn.li.test-support.pure-auto-test-runner has no mcmod dependency (unlike
+// cn.li.test-support.auto-test-runner, ac/mcmod's Framework-fixture-wrapped
+// equivalent) -- node-core must never depend on mcmod, even in test scope.
+// Lives in its own directory precisely so this addition cannot also pull in
+// the mcmod- and Minecraft-coupled files that sit alongside the impure
+// runner elsewhere under platform-src/test-support.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
 
 dependencies {
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"

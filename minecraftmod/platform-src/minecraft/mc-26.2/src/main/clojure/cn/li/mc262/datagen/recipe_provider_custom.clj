@@ -4,11 +4,11 @@
   Outputs use ItemStackTemplate (like vanilla 26.2 recipes): its codec uses
   plain Item.CODEC and never requires the item holder to have components
   bound, so datagen and the runtime datapack reload both serialize it."
-  (:require [cn.li.mc262.datagen.metadata-resolver :as metadata-resolver]
-            [cn.li.mc262.datagen.resource-location :as rl]
+  (:require [cn.li.mcbase.datagen.metadata-resolver :as metadata-resolver]
+            [cn.li.mcbase.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
             [cn.li.platform.neutral.config :as modid])
-  (:import [cn.li.mc262.recipe ContentRecipe]
+  (:import [cn.li.mc262.recipe ContentRecipe ItemStackTemplateFactory]
            [cn.li.mc262.shim DelegatingFinishedRecipe]
            [cn.li.mcver ResourceLocations]
            [net.minecraft.core Holder HolderGetter]
@@ -28,7 +28,7 @@
         ^Holder output-holder (.getOrThrow items
                                            (ResourceKey/create Registries/ITEM output-id))
         ^ItemStackTemplate output-template
-        (ItemStackTemplate. output-holder (int (:count out 1)))
+        (ItemStackTemplateFactory/create output-holder (int (:count out 1)))
         consume-liquid (int (or (:consume-liquid recipe) 0))
         craft-time (int (or (:time recipe) 200))
         mode (str (or (:mode recipe) ""))]

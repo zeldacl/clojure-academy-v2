@@ -1,6 +1,6 @@
 package cn.li.mc262.item;
 
-import cn.li.mc262.bridge.NbtAccess;
+import cn.li.mcver.NbtAccess;
 import cn.li.mcver.ItemData;
 import clojure.lang.IFn;
 import net.minecraft.nbt.CompoundTag;

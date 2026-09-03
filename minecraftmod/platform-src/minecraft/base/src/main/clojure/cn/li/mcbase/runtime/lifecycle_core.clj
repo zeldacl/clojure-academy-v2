@@ -180,16 +180,29 @@
           (.put cache uuid value)
           value))))
 
-(defn player-tick!
-  [runtime ^ServerPlayer player owner]
-  (let [uuid (cached-player-uuid runtime player)
-        hooks (.hooks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
-        callbacks (.callbacks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)]
-    ((get hooks :on-player-tick!) uuid player)
-    (when ((get hooks :player-state-dirty?) uuid)
-      (when-let [mark-dirty! (get callbacks :mark-player-dirty!)]
-        (mark-dirty! owner uuid))))
+(defn- player-tick-with-callbacks!
+  [runtime ^ServerPlayer player owner on-player-tick! player-state-dirty? mark-player-dirty!]
+  (let [uuid (cached-player-uuid runtime player)]
+    (on-player-tick! uuid player)
+    (when (player-state-dirty? uuid)
+      (when mark-player-dirty!
+        (mark-player-dirty! owner uuid))))
   nil)
+
+(defn player-tick!
+  "Run one player tick through the runtime's frozen callbacks.
+
+  Kept as a small public seam for platform/tests; the server coordinator uses
+  the callback-specialized helper below so map/interface lookups happen once
+  per server tick rather than once per player.
+  "
+  [runtime ^ServerPlayer player owner]
+  (let [hooks (.hooks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
+        callbacks (.callbacks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)]
+    (player-tick-with-callbacks! runtime player owner
+                                 (get hooks :on-player-tick!)
+                                 (get hooks :player-state-dirty?)
+                                 (get callbacks :mark-player-dirty!))))
 
 (defn world-tick!
   [runtime level]
@@ -211,7 +224,12 @@
   "Run start -> N players -> end/sync exactly once for one server tick."
   [^MinecraftServer server callbacks]
   (let [runtime (ensure-server-runtime! server callbacks)
-        game-time (long (.getTickCount server))]
+        game-time (long (.getTickCount server))
+        hooks (.hooks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
+        runtime-callbacks (.callbacks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
+        on-player-tick! (get hooks :on-player-tick!)
+        player-state-dirty? (get hooks :player-state-dirty?)
+        mark-player-dirty! (get runtime-callbacks :mark-player-dirty!)]
     (.beginTick ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime game-time)
     (let [owner (server-runtime/runtime-owner runtime)
           old-context (player-hooks/push-player-state-owner! owner)]
@@ -221,7 +239,10 @@
          game-time)
         (let [^PlayerList player-list (.getPlayerList server)]
           (doseq [^ServerPlayer player (.getPlayers player-list)]
-            (player-tick! runtime player owner)))
+            (player-tick-with-callbacks! runtime player owner
+                                         on-player-tick!
+                                         player-state-dirty?
+                                         mark-player-dirty!)))
         (doseq [level (.getAllLevels server)]
           (world-tick! runtime level))
         (server-tick-end! runtime game-time owner)

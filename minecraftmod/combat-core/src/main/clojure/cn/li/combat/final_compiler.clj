@@ -51,6 +51,32 @@
                        (keep identity (map #(get node %) [:start :pulse :release :abort]))
                        (vals (:events node))))
     []))
+(defn- attach-children [component node compiled-children]
+  (let [nodes (mapv :node compiled-children)]
+    (case component
+      :flow/sequence (assoc node :steps nodes)
+      :flow/branch (let [keys (vec (keep #(when (get node %) %) [:then :else]))]
+                     (reduce (fn [result [key child]] (assoc result key child))
+                             node
+                             (map vector keys nodes)))
+      :flow/foreach (if (seq nodes) (assoc node :body (first nodes)) node)
+      :flow/after (if (seq nodes) (assoc node :body (first nodes)) node)
+      :flow/once (let [keys (vec (keep #(when (get node %) %) [:body :on-first]))]
+                   (reduce (fn [result [key child]] (assoc result key child))
+                           node
+                           (map vector keys nodes)))
+      :flow/phases
+      (let [phase-keys (vec (keep #(when (get node %) %) [:start :pulse :release :abort]))
+            event-keys (vec (keys (:events node)))
+            phase-count (count phase-keys)
+            result (reduce (fn [result [key child]] (assoc result key child))
+                           node
+                           (map vector phase-keys (take phase-count nodes)))
+            event-nodes (drop phase-count nodes)]
+        (if (seq event-keys)
+          (assoc result :events (into {} (map vector event-keys event-nodes)))
+          result))
+      node)))
 (defn- compile-node [environment node path flags]
   (when-not (map? node) (fail :not-a-node {:path path :node node}))
   (let [component (:component node)
@@ -84,11 +110,11 @@
           (let [instructions (inc (reduce + 0 (map :instructions compiled)))]
             (when (> instructions max-instructions)
               (fail :instruction-budget-exceeded {:path path :count instructions :max max-instructions}))
-            {:node (cond-> (assoc node :kind kind) (:layer descriptor) (assoc :layer (:layer descriptor))) :children compiled :instructions instructions :mutated? (:mutated? current-flags)}))))))
+            {:node (attach-children component (cond-> (assoc node :kind kind) (:layer descriptor) (assoc :layer (:layer descriptor))) compiled) :children compiled :instructions instructions :mutated? (:mutated? current-flags)}))))))
 (defn compile-program [environment program]
   (validate-reference-scopes program [:program])
   (let [compiled (compile-node environment program [:program] {:mutated? false :deferred? false})]
-    {:schema-version 1 :program program :instructions (:instructions compiled)
+    {:schema-version 1 :program (:node compiled) :instructions (:instructions compiled)
      :content-hash (str (hash (pr-str program)))}))
 
 

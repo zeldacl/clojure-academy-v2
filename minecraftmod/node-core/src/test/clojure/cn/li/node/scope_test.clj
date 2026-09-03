@@ -1,57 +1,45 @@
 (ns cn.li.node.scope-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.node.descriptor :as registry]
+  (:require [clojure.test :refer [deftest is]]
+            [cn.li.node.environment :as environment]
             [cn.li.node.scope :as scope]))
 
-(use-fixtures :each
-  (fn [f]
-    (registry/reset-for-test!)
-    ;; A minimal synthetic vocabulary exercising all three :flow kinds plus
-    ;; a callback-typed input, independent of node-core's own flow.clj so
-    ;; this test proves the checker is genuinely descriptor-driven and not
-    ;; secretly hardcoded to the 5 builtins.
-    (registry/register-primitive!
-     {:id :test/emit :revision 1 :inputs {:value {:type :any}} :outputs {} :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/produce :revision 1 :inputs {} :outputs {:result {:type :float}} :impl (fn [_ _] {:result 1.0})})
-    (registry/register-primitive!
-     {:id :test/seq :revision 1 :children {:steps {:kind :seq :flow :sequential}} :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/branch :revision 1
-      :children {:then {:kind :single :flow :branch} :else {:kind :single :flow :branch}}
-      :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/loop :revision 1 :children {:body {:kind :single :flow :closed}} :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/field-loop :revision 1
-      :inputs {:as {:type :keyword} :index-as {:type :keyword :default nil}}
-      :children {:body {:kind :single :flow :closed}}
-      :binds-locals #{:as :index-as}
-      :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/field-bind :revision 1
-      :inputs {:to {:type :keyword} :value {:type :any}}
-      :binds-locals #{:to}
-      :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/result-bind :revision 1
-      :inputs {:result {:type :keyword}}
-      :outputs {:value {:type :any}}
-      :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/with-callback :revision 1
-      :inputs {:on-each {:type :node :scope {:item {:type :float}}}}
-      :impl (fn [_ _] {})})
-    (f)
-    (registry/reset-for-test!)))
+(def ^:private test-environment
+  (environment/build {:descriptors
+                      [{:id :test/emit :revision 1 :layer :primitive
+                        :inputs {:value {:type :any}} :impl (fn [_ _] {})}
+                       {:id :test/produce :revision 1 :layer :primitive
+                        :inputs {} :outputs {:result {:type :float}} :impl (fn [_ _] {})}
+                       {:id :test/seq :revision 1 :layer :primitive
+                        :children {:steps {:kind :seq :flow :sequential}} :impl (fn [_ _] {})}
+                       {:id :test/branch :revision 1 :layer :primitive
+                        :children {:then {:kind :single :flow :branch} :else {:kind :single :flow :branch}}
+                        :impl (fn [_ _] {})}
+                       {:id :test/loop :revision 1 :layer :primitive
+                        :children {:body {:kind :single :flow :closed}} :impl (fn [_ _] {})}
+                       {:id :test/field-loop :revision 1 :layer :primitive
+                        :inputs {:as {:type :keyword} :index-as {:type :keyword :default nil}}
+                        :children {:body {:kind :single :flow :closed}}
+                        :binds-locals #{:as :index-as} :impl (fn [_ _] {})}
+                       {:id :test/field-bind :revision 1 :layer :primitive
+                        :inputs {:to {:type :keyword} :value {:type :any}}
+                        :binds-locals #{:to} :impl (fn [_ _] {})}
+                       {:id :test/result-bind :revision 1 :layer :primitive
+                        :inputs {:result {:type :keyword}} :outputs {:value {:type :any}}
+                        :impl (fn [_ _] {})}
+                       {:id :test/with-callback :revision 1 :layer :primitive
+                        :inputs {:on-each {:type :node :scope {:item {:type :float}}}}
+                        :impl (fn [_ _] {})}]}))
+
+(defn- check! ([node] (scope/check-in-environment! test-environment node))
+  ([node seed-bound] (scope/check-in-environment! test-environment node seed-bound)))
 
 (deftest unbound-local-read-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unbound-local"
-       (scope/check! {:component :test/emit :value {:ref [:local :never-bound]}}))))
+       (check! {:component :test/emit :value {:ref [:local :never-bound]}}))))
 
 (deftest sequential-port-threads-binds-forward-test
-  (is (nil? (scope/check!
+  (is (nil? (check!
              {:component :test/seq
               :steps [{:component :test/produce :bind {:result :r}}
                       {:component :test/emit :value {:ref [:local :r]}}]}))))
@@ -59,7 +47,7 @@
 (deftest sequential-order-matters-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unbound-local"
-       (scope/check!
+       (check!
         {:component :test/seq
          :steps [{:component :test/emit :value {:ref [:local :r]}}
                  {:component :test/produce :bind {:result :r}}]}))))
@@ -69,7 +57,7 @@
   ;; sibling reading :r afterward is a compile error.
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unbound-local"
-       (scope/check!
+       (check!
         {:component :test/seq
          :steps [{:component :test/branch
                   :then {:component :test/produce :bind {:result :r}}
@@ -77,7 +65,7 @@
                  {:component :test/emit :value {:ref [:local :r]}}]}))))
 
 (deftest branch-binds-name-bound-on-every-path-succeeds-test
-  (is (nil? (scope/check!
+  (is (nil? (check!
              {:component :test/seq
               :steps [{:component :test/branch
                        :then {:component :test/produce :bind {:result :r}}
@@ -87,14 +75,14 @@
 (deftest closed-port-does-not-leak-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unbound-local"
-       (scope/check!
+       (check!
         {:component :test/seq
          :steps [{:component :test/loop
                   :body {:component :test/produce :bind {:result :r}}}
        {:component :test/emit :value {:ref [:local :r]}}]}))))
 
 (deftest closed-field-binding-is-visible-inside-loop-test
-  (is (nil? (scope/check!
+  (is (nil? (check!
              {:component :test/field-loop :as :item
               :body {:component :test/emit
                      :value {:ref [:local :item]}}}))))
@@ -102,7 +90,7 @@
 (deftest closed-field-binding-does-not-leak-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unbound-local"
-       (scope/check!
+       (check!
         {:component :test/seq
          :steps [{:component :test/field-loop :as :item
                   :body {:component :test/emit
@@ -110,26 +98,26 @@
                  {:component :test/emit :value {:ref [:local :item]}}]}))))
 
 (deftest leaf-field-binding-threads-to-next-sibling-test
-  (is (nil? (scope/check!
+  (is (nil? (check!
              {:component :test/seq
               :steps [{:component :test/field-bind :to :value :value 1}
                       {:component :test/emit :value {:ref [:local :value]}}]}))))
 
 (deftest compact-result-binding-threads-to-next-sibling-test
-  (is (nil? (scope/check!
+  (is (nil? (check!
              {:component :test/seq
               :steps [{:component :test/result-bind :result :value}
                       {:component :test/emit :value {:ref [:local :value]}}]}))))
 
 (deftest callback-input-sees-declared-scope-test
-  (is (nil? (scope/check!
+  (is (nil? (check!
              {:component :test/with-callback
               :on-each {:component :test/emit :value {:ref [:local :item]}}}))))
 
 (deftest callback-input-scope-does-not-leak-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unbound-local"
-       (scope/check!
+       (check!
         {:component :test/seq
          :steps [{:component :test/with-callback
                   :on-each {:component :test/emit :value {:ref [:local :item]}}}
@@ -138,13 +126,13 @@
 (deftest unknown-output-port-in-bind-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unknown-output-port"
-       (scope/check! {:component :test/produce :bind {:not-a-real-port :x}}))))
+       (check! {:component :test/produce :bind {:not-a-real-port :x}}))))
 
 (deftest unknown-component-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unknown-component"
-       (scope/check! {:component :test/does-not-exist}))))
+       (check! {:component :test/does-not-exist}))))
 
 (deftest seed-bound-is-honored-test
-  (is (nil? (scope/check! {:component :test/emit :value {:ref [:local :seeded]}} #{:seeded}))))
+  (is (nil? (check! {:component :test/emit :value {:ref [:local :seeded]}} #{:seeded}))))
 

@@ -15,8 +15,10 @@
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc262.runtime.registry :as registry])
-  (:import [cn.li.mc262.bridge ItemStackInterop McAccess NbtAccess]
-           [cn.li.mc262.runtime BlockRegistry RuntimeAccess]
+  (:import [cn.li.mc262.bridge ItemStackInterop]
+           [cn.li.mcbase.runtime BlockRegistry]
+           [cn.li.mcver McAccess NbtAccess]
+           [cn.li.mc262.runtime RuntimeAccess]
            [cn.li.mcver ItemData ResourceLocations]
            [net.minecraft.core BlockPos Direction Holder]
            [net.minecraft.core.component DataComponents]

@@ -1,6 +1,6 @@
 ;; Layout mirrors main-branch guis/new/tutorial.xml (frame 427×240).
 ;; Absolute positions resolve left/right/center align math from that tree.
-{:view/id :academy.app/tutorial
+{:ui/schema 2 :view/id :academy.app/tutorial
  :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :tutorial-items :vector :tag-items :vector :brief-lines :vector
                 :content-lines :vector :preview-items :vector :tag-tooltip :string :status :string

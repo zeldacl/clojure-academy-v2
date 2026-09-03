@@ -8,11 +8,9 @@ import net.minecraft.client.player.LocalPlayer;
  * Client-only accessors for player/level/server APIs that drift by mapping.
  *
  * Deliberately separate from {@link McAccess}: the dedicated-server dist cannot
- * load client-typed classes ({@code @OnlyIn(CLIENT)}), and Clojure compiles
- * static-method calls by reflecting over every public method of the class
- * (Compiler$StaticMethodExpr -> Class.getMethods), which would pull Window /
- * Minecraft onto the server and fail dist checks. Any method whose signature
- * mentions a client-only type belongs here, never in McAccess.
+ * load client-typed classes ({@code @OnlyIn(CLIENT)}). These methods are
+ * direct Java seam calls; any method whose signature mentions a client-only
+ * type belongs here, never in McAccess.
  */
 public final class McClientAccess {
     private McClientAccess() {
@@ -97,8 +95,8 @@ public final class McClientAccess {
 
     /**
      * Client-side motion override for a loaded entity. VecReflection's
-     * c_reflectEntity re-runs the reflection on the client so a bounced arrow
-     * turns the instant the message lands, instead of holding its old course
+     * c_reflectEntity reapplies the server-computed velocity on the client so
+     * a bounced arrow turns as soon as the message lands, instead of holding its old course
      * until the next velocity sync. The server sends the velocity it already
      * computed, so the two sides cannot disagree about the new direction.
      *

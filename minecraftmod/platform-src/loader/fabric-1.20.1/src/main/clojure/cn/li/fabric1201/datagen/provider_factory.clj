@@ -6,11 +6,11 @@
   (:require [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]
             [cn.li.fabric1201.datagen.worldgen-provider :as worldgen-provider]
-            [cn.li.mc1201.datagen.advancement-provider-shell :as advancement-shell]
-            [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell]
+            [cn.li.mcbase.datagen.advancement-provider-shell :as advancement-shell]
+            [cn.li.mcbase.datagen.blockstate-provider-shell :as blockstate-shell]
             [cn.li.mc1201.datagen.block-loot-provider-shell :as block-loot]
             [cn.li.mc1201.datagen.block-tag-provider-shell :as block-tags]
-            [cn.li.mc1201.datagen.lang-provider-shell :as lang-shell])
+            [cn.li.mcbase.datagen.lang-provider-shell :as lang-shell])
   (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory]))
 
 (def ^:private blockstate-provider-name

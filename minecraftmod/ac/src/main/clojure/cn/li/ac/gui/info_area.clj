@@ -1,20 +1,8 @@
 (ns cn.li.ac.gui.info-area
-  "AC themed InfoArea composition over presentation-core primitives."
-  (:require [cn.li.presentation.core.components :as components]))
-
-(defn property-node [key label-bind value-bind]
-  (components/property-row key label-bind value-bind {:height 18}))
-
-(defn histogram-node [key value-bind]
-  (components/histogram key value-bind {:height 6}))
-
-(defn info-area-node [key fields]
-  (components/panel key {:direction :column :width :fill :height :fill}
-                    (mapv (fn [{:keys [id label value ratio]}]
-                            (if ratio
-                              (histogram-node id ratio)
-                              (property-node id label value)))
-                          fields)))
+  "AC themed InfoArea projection: pure state, no node-builder layer.
+   Layout for the InfoArea panel lives in the declarative .ui.edn sources
+   that bind against this namespace's snapshot; there is nothing here to
+   compose imperatively anymore.")
 
 (defn snapshot
   [data policy]

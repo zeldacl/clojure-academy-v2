@@ -3,7 +3,20 @@
 (require '[cn.li.mcmod.runtime.host :as host]
          '[cn.li.node.contracts :as contracts]
          '[cn.li.node.expr :as expr]
+         '[cn.li.node.kernel :as kernel]
          '[cn.li.combat.final-compiler :as compiler])
+
+(kernel/defresolver resolve-value context
+  {:scopes {:frame (:frame context)
+            :input (get-in (:frame context) [:input])
+            :local (:locals context)
+            :state (:ability-state context)}
+   :local :local
+   :seed (let [seed* (:seed* context)]
+           (if seed* (swap! seed* expr/next-seed) (long (:seed (:frame context)))))
+   :extras (get-in context [:frame :extra-ops])
+   :coll #{:map :vector :set}})
+
 (defn create-engine [{:keys [host state-provider commit-state! ability-state-provider commit-ability-state!]}]
   (when-not (map? host) (throw (ex-info "final combat engine requires host" {})))
   (when-not (ifn? state-provider) (throw (ex-info "final combat engine requires state-provider" {})))
@@ -13,33 +26,6 @@
    :commit-ability-state! (or commit-ability-state! (fn [_ _] nil))
    :next-command (atom 0)})
 
-(defn- ref-value [reference context]
-  (let [[scope key & path] reference
-        root (case scope
-               :frame (:frame context)
-               :input (get-in (:frame context) [:input])
-               :local (:locals context)
-               :state (:ability-state context)
-               nil)]
-    (if (= :local scope)
-      (if (seq path) (get-in (get root key) path) (get root key))
-      (get-in root (into [key] path)))))
-
-(defn- resolve-value [value context]
-  (cond
-    (and (map? value) (vector? (:ref value)))
-    (ref-value (:ref value) context)
-    (and (map? value) (keyword? (:expr value)))
-    (let [seed* (:seed* context)
-          seed (if seed* (swap! seed* expr/next-seed) (long (:seed (:frame context))))]
-      (expr/evaluate (:expr value)
-                     (mapv #(resolve-value % context) (:args value))
-                     seed))
-    (map? value)
-    (into {} (map (fn [[k v]] [k (resolve-value v context)]) value))
-    (vector? value) (mapv #(resolve-value % context) value)
-    (set? value) (set (map #(resolve-value % context) value))
-    :else value))
 (defn- command-id [engine path]
   (let [n (swap! (:next-command engine) inc)] [:combat (vec path) n]))
 (declare run-node merge-action-results normalize-vfx-signal bind-command-results)
@@ -187,9 +173,22 @@
       :ability/caster (caster-capability-values input)
       :ability/tunable (get-in input [:tunables name])
       :ability/budget (get-in input [:budgets name])
-      :ability/progression (get-in input [:progression name])
-      :ability/cooldown (get-in input [:cooldowns name])
-      :ability/invariant (get-in input [:invariants name])
+      ;; Unlike :ability/tunable (already materialized to plain numbers by
+      ;; materialize-final-tunables before it ever reaches :input), :costs/
+      ;; :cooldown/:invariants land in :input verbatim from the EDN source --
+      ;; still containing unresolved {:ref ...}/{:expr ...} leaves (e.g.
+      ;; :progression's :per-mark). A local bound to the raw get-in result
+      ;; here is never re-walked later (:ref substitution reads a local's
+      ;; bound value as-is, it does not recurse into it), so any consumer
+      ;; that reads a nested field straight off the bound value -- as
+      ;; combat_runtime.clj's handle-progression-event! does with :per-mark
+      ;; -- got a leftover ref map instead of a number. :cost/spend avoids
+      ;; this only because it happens to re-run resolve-value on each of its
+      ;; own :resources leaves; resolve here so every :ability/* source is
+      ;; consistently pre-resolved, matching :ability/tunable.
+      :ability/progression (resolve-value (get-in input [:progression name]) context)
+      :ability/cooldown (resolve-value (get-in input [:cooldowns name]) context)
+      :ability/invariant (resolve-value (get-in input [:invariants name]) context)
       :ability/context (get-in input [:context name])
       :state/read (get-in (:ability-state context) [(:key node)])
       :data/bind (resolve-value (:value node) context)
@@ -338,7 +337,14 @@
       :flow/phases
       (let [input (:input (:frame context))
             event (:event input)
-            phase (or (:phase input) (:action input) (when event :event) :start)
+            ;; :phase is the domain-neutral phase key a content module's
+            ;; dispatch layer sets (see ac's combat_runtime.clj); :action
+            ;; used to be read here too, but nothing ever wrote it except
+            ;; for movement sub-events (which :event already covers below),
+            ;; so it silently made every :pulse/:release/:abort dispatch
+            ;; fall through to :start until the content module started
+            ;; setting :phase instead.
+            phase (or (:phase input) (when event :event) :start)
             phase-node (or (when event (get-in node [:events event]))
                            (get node phase))]
         (if phase-node
@@ -412,18 +418,20 @@
                   (contracts/assoc-owner-in (:txn context) owner
                                             [:cooldowns [ability-id name]]
                                             {:ticks ticks :max ticks})))
-      :progression/mark
-      (let [owner (or (:owner node) (:owner (:frame context)))
-            progression (resolve-value (or (:progression node) (:value node) {}) context)]
-        (emit context :events {:type :progression/mark :owner owner
-                               :ability-id (:ability-id (:frame context))
-                               :progression progression}))
       :score/mark
       (let [owner (or (:owner node) (:owner (:frame context)))
             score (resolve-value (dissoc node :component :kind) context)]
         (emit context :events (assoc score :type :score/mark :owner owner
                                      :ability-id (:ability-id (:frame context)))))
       :resource/enforce-floor
+      ;; :minimum typically points at :input :invariants (unlike :tunables,
+      ;; never pre-materialized to a plain number -- see :ability/invariant
+      ;; above), so a single resolve-value pass on a {:ref [:input
+      ;; :invariants ...]} node only substitutes the :input fetch; the
+      ;; fetched invariant value is itself commonly another unresolved
+      ;; {:ref ...}/{:expr ...} (e.g. an invariant defined in terms of a
+      ;; tunable curve). resolve-value does not recurse into a value after
+      ;; substituting it, so resolve again until a plain number falls out.
       (update context :commands conj
               (contracts/host-command
                {:id (command-id engine path)
@@ -431,7 +439,9 @@
                 :owner (:owner (:frame context))
                 :world-id (:world (:frame context))
                 :args {:resource (:resource node)
-                       :minimum (double (resolve-value (:minimum node) context))}}))
+                       :minimum (double (resolve-value
+                                          (resolve-value (:minimum node) context)
+                                          context))}}))
       :flow/control (if-let [child (or (:body node) (:then node))]
                       (assoc (run-node engine child context (conj path :control))
                              :control-signal (:signal node))
@@ -474,6 +484,16 @@
             (assoc context :txn txn))
           :action
           (let [id (command-id engine path)
+                ;; :ability-id rides along on the command the same way :owner
+                ;; and :world-id already do -- frame-derived infrastructure,
+                ;; not an EDN-authored input. host-command's :keys destructure
+                ;; only requires id/capability/owner/world-id/args to be
+                ;; present; it never strips extra keys (returns (assoc command
+                ;; ...) on the full :as command map), so this survives through
+                ;; to whatever applies the command unmodified. This is what
+                ;; lets a settled continuation (e.g. :projectile/schedule-beam)
+                ;; know which ability -- and therefore which content module --
+                ;; it belongs to, without combat-core knowing tenancy exists.
                 command (contracts/host-command {:id id
                                                  :capability (or (:capability node)
                                                                  (when (contains? (:actions (:host engine)) component)
@@ -482,6 +502,7 @@
                                                                  component)
                                                  :owner (:owner (:frame context))
                                                  :world-id (:world (:frame context))
+                                                 :ability-id (:ability-id (:frame context))
                                                  :args (action-args node context)})
                 context (update context :commands conj command)
                 context (if-let [bind (node-bind node)]

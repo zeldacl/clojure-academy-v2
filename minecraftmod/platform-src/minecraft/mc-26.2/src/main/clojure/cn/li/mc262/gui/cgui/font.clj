@@ -237,3 +237,44 @@
 
 (defn get-fallback-scale-factor []
   1.0)
+
+;; ============================== UiTextMetrics ==============================
+;; presentation-core's layout engine measures text through this contract
+;; instead of touching MC/MSDF directly; see cn.li.mcmod.runtime.ui.UiTextMetrics.
+
+(defonce ^:private metrics-epoch* (atom 0))
+(defonce ^:private metrics-last-ready?* (atom false))
+
+(defn- bump-metrics-epoch-if-ready-changed! []
+  (let [ready? (msdf-ready?)]
+    (when (not= ready? @metrics-last-ready?*)
+      (reset! metrics-last-ready?* ready?)
+      (swap! metrics-epoch* inc)))
+  @metrics-epoch*)
+
+(defn- naive-break-index [^String text font-size ^double max-width]
+  (let [n (.length text)]
+    (loop [i 0 w 0.0]
+      (if (>= i n)
+        n
+        (let [cw (double (text-width nil (subs text i (inc i)) font-size))]
+          (if (> (+ w cw) max-width)
+            i
+            (recur (inc i) (+ w cw))))))))
+
+(defn text-metrics
+  "A cn.li.mcmod.runtime.ui.UiTextMetrics backed by this namespace's
+   existing MSDF/vanilla measurement (bake-cached text-width). epoch()
+   bumps whenever the MSDF font face's ready state flips, so the layout
+   engine's memoization treats a face becoming ready mid-session as a
+   global text-node invalidation instead of leaving pre-ready
+   measurements wrong forever."
+  ^cn.li.mcmod.runtime.ui.UiTextMetrics []
+  (reify cn.li.mcmod.runtime.ui.UiTextMetrics
+    (epoch [_] (bump-metrics-epoch-if-ready-changed!))
+    (advance [_ _font-id text font-size]
+      (float (text-width nil text font-size)))
+    (lineHeight [_ _font-id font-size]
+      (float (* 1.25 font-size)))
+    (breakIndex [_ _font-id text font-size max-width]
+      (int (naive-break-index text font-size max-width)))))

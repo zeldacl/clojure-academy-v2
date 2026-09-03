@@ -4,7 +4,8 @@
    It owns only neutral effect instances and frame batches.  Minecraft and
    renderer objects stay outside this namespace; platform code consumes the
    returned batches through the opaque VFX host ABI."
-  (:require [cn.li.vfx.final-engine :as engine])
+  (:require [cn.li.vfx.final-engine :as engine]
+            [cn.li.node.expr :as expr])
   (:import [java.util ArrayList]
            [cn.li.mcmod.runtime.vfx ParticleBuffer ParticleKernel VfxBatch VfxFrame VfxOutput VfxOutputKind VfxRenderStage]))
 
@@ -30,11 +31,25 @@
   (set (keys @(:registry runtime))))
 (defn effect-lifecycle [runtime effect-id]
   (get-in @(:registry runtime) [effect-id :lifecycle]))
-(defn register-effect! [runtime descriptor]
-  (when @(:frozen? runtime)
-    (throw (ex-info "final VFX registry is frozen" {:effect-id (:id descriptor)})))
-  (swap! (:registry runtime) assoc (:id descriptor) descriptor)
-  nil)
+(defn register-effect!
+  "opts is {:allow-overwrite? true} to intentionally replace an
+   already-registered descriptor (a test/dev-reload override) -- without
+   it, registering an already-claimed id throws. The one real caller
+   (cn.li.ability.client-vfx/register-catalog!) already self-guards with
+   its own `(when-not (contains? (registered-effects runtime) effect-id) ...)`
+   before calling this, so the default costs it nothing and this only ever
+   fires for a genuine cross-tenant id collision -- previously the second
+   tenant's descriptor silently won with no error."
+  ([runtime descriptor] (register-effect! runtime descriptor {}))
+  ([runtime descriptor {:keys [allow-overwrite?]}]
+   (when @(:frozen? runtime)
+     (throw (ex-info "final VFX registry is frozen" {:effect-id (:id descriptor)})))
+   (when (and (not allow-overwrite?)
+              (contains? @(:registry runtime) (:id descriptor)))
+     (throw (ex-info "VFX effect id already registered"
+                     {:effect-id (:id descriptor)})))
+   (swap! (:registry runtime) assoc (:id descriptor) descriptor)
+   nil))
 
 (defn- validated-params [descriptor params]
   (let [parameters (vec (:parameters descriptor))
@@ -195,12 +210,6 @@
               (signal! runtime {:instance internal-id} event params))
             nil))))
     nil))
-(defn- vec3-components [value]
-  (cond
-    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
-    (vector? value) value
-    :else [0.0 0.0 0.0]))
-
 (defn- emit-particle-op! [instance op]
   (when-let [^ParticleBuffer particles (:particle-buffer instance)]
     (let [geometry (:geometry op)]
@@ -210,8 +219,8 @@
               limit (long (max 0 (or (:limit geometry) (.capacity particles))))
               accepted (min rate limit (- (.capacity particles) (.size particles)))
               start (.reserve particles (int accepted))
-              [x y z] (vec3-components (:anchor geometry))
-              [vx vy vz] (vec3-components (:velocity spec))
+              [x y z] (expr/vec3-components (:anchor geometry))
+              [vx vy vz] (expr/vec3-components (:velocity spec))
               lifetime (float (max 0.001 (double (or (:life-ticks spec) (:lifetime spec) 1.0))))]
           (doseq [offset (range accepted)]
             (let [index (+ start offset)]

@@ -27,7 +27,7 @@ tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach
 // Gradle detects that :mcmod:compileClojure output flows into :ac:compileJava classpath
 // but cannot infer a dependency automatically.
 tasks.named('compileJava').configure {
-    dependsOn project(':mcmod').tasks.named(rootProject.ext.fullAotEnabled ? 'compileClojure' : 'compileJava')
+    dependsOn project(':mcmod').tasks.named('compileJava')
 }
 
 // 反射拦截器
@@ -52,14 +52,10 @@ tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' 
     })
 }
 
-// Source-first by default; full-AOT mode uses classes as the only runtime representation.
+// Neutral runtime is source-first; selected platform AOT closure is staged by build-logic.
 tasks.named('processResources').configure {
-    if (rootProject.ext.fullAotEnabled) {
-        exclude '**/*.clj', '**/*.cljc'
-    } else {
-        from(sourceSets.main.clojure.srcDirs) {
-            include '**/*.clj', '**/*.cljc'
-        }
+    from(sourceSets.main.clojure.srcDirs) {
+        include '**/*.clj', '**/*.cljc'
     }
 }
 
@@ -68,7 +64,7 @@ tasks.named('processResources').configure {
 // anti-pattern: task output tracking breaks, and one task may silently delete the
 // other's outputs. Keep them isolated so the build is deterministic.
 tasks.named('compileClojure').configure { task ->
-    onlyIf { rootProject.ext.fullAotEnabled }
+    onlyIf { false }
     def targetDirProvider = layout.buildDirectory.dir('clojure/main')
     def targetDirFile = targetDirProvider.get().asFile
     task.forkOptions.memoryMaximumSize = '512m'
@@ -91,7 +87,7 @@ tasks.named('compileClojure').configure { task ->
 // TinyRemapper (Loom 1.13) can crash on bad/nested LVT slots from Clojure AOT.
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
-    onlyIf { rootProject.ext.fullAotEnabled }
+    onlyIf { false }
     def classesDir = layout.buildDirectory.dir('clojure/main')
     def strippedDir = layout.buildDirectory.dir('clojure/main-stripped')
     inputs.dir(classesDir)
@@ -153,7 +149,7 @@ def stripAotLvt = tasks.register('stripAotLvt') {
     }
 }
 def clearNeutralAotOutput = tasks.register('clearNeutralAotOutput') {
-    onlyIf { !rootProject.ext.fullAotEnabled }
+    onlyIf { true }
     doLast {
         delete(layout.buildDirectory.dir('clojure/main').get().asFile)
         delete(layout.buildDirectory.dir('clojure/main-stripped').get().asFile)
@@ -313,6 +309,9 @@ tasks.register('runAcClojureTestsFast', JavaExec) {
     mainClass = 'clojure.main'
     if (System.getProperty('ac.test.only') != null) {
         systemProperty 'ac.test.only', System.getProperty('ac.test.only')
+    }
+    if (System.getProperty('ac.test.jfr') != null) {
+        jvmArgs "-XX:StartFlightRecording=filename=${System.getProperty('ac.test.jfr')},settings=profile"
     }
     args '-m', 'cn.li.ac.test-runner'
 }

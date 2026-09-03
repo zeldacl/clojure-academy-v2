@@ -4,8 +4,8 @@
   Requires a HolderGetter<Item> (RecipeProvider.items) because shaped/shapeless
   builders and tag ingredients are HolderGetter-backed. save() takes
   ResourceKey<Recipe<?>>."
-  (:require [cn.li.mc262.datagen.resource-location :as rl]
-            [cn.li.mc262.datagen.metadata-resolver :as metadata-resolver]
+  (:require [cn.li.mcbase.datagen.resource-location :as rl]
+            [cn.li.mcbase.datagen.metadata-resolver :as metadata-resolver]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
             [cn.li.mcbase.datagen.recipe-patterns :as recipe-patterns]
             [cn.li.platform.neutral.config :as modid])

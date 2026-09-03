@@ -6,7 +6,8 @@
   - client-side requests use mcmod.network.client/send-to-server
 
   Here we provide helper send-fns for context manager and sync service."
-  (:require [cn.li.mc1201.runtime.network-core :as network-core]
+  (:require [cn.li.mcmod.hooks.core :as hooks]
+            [cn.li.mcbase.runtime.network-core :as network-core]
             [cn.li.mcbase.runtime.network-payload :as network-payload]
             [cn.li.forge1201.adapter.server-context :as _server-context])
   (:import [cn.li.forge1201.network ClojureNetwork]
@@ -22,6 +23,7 @@
 (defn init!
   "Initialize runtime network stack: register server handlers and injected send fns."
   []
+  (hooks/register-power-runtime-hooks! {:find-player-by-uuid network-core/default-find-player-by-uuid})
   (network-core/install-runtime-network-transport! {:label "Forge"
                                                    :install-server-context! _server-context/install-server-context!
                                                    :send-push-to-client! send-push-to-client!}))

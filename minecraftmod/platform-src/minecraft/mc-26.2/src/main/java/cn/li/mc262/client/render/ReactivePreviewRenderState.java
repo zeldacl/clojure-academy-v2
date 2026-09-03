@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
+import net.minecraft.client.renderer.block.BlockModelResolver;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.item.TrackingItemStackRenderState;
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
@@ -29,8 +30,7 @@ import org.joml.Vector2f;
  * {@code GuiGraphicsExtractor.submitPictureInPictureRenderState} and
  * {@code peekScissorStack}, which the NeoForge loader installs via
  * {@link #installSubmitter}; loaders without those APIs (Fabric) never
- * install one and {@link #submit} falls back to false, leaving the caller's
- * compatibility path active.</p>
+ * install one, so preview submission is explicitly reported as unsupported.</p>
  */
 public record ReactivePreviewRenderState(
         TrackingItemStackRenderState itemRenderState,
@@ -74,7 +74,7 @@ public record ReactivePreviewRenderState(
 
     /**
      * Extract and submit a PIP state. Returns false when the loader did not
-     * install a submitter, allowing the caller to use its compatibility path.
+     * install a submitter, so this loader reports preview submission as unsupported.
      */
     public static boolean submit(
             GuiGraphicsExtractor graphics,
@@ -138,7 +138,7 @@ public record ReactivePreviewRenderState(
         }
 
         BlockModelRenderState blockRenderState = new BlockModelRenderState();
-        mc.getBlockModelResolver().update(
+        new BlockModelResolver(mc.getModelManager()).update(
                 blockRenderState, blockState, BlockDisplayContext.create());
 
         return fn.submit(

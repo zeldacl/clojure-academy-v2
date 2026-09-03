@@ -14,7 +14,7 @@
             [cn.li.platform.neutral.config :as modid]
             [cn.li.platform.registry.metadata :as registry-metadata]
             [clojure.string :as str])
-  (:import [cn.li.mc262.bridge McAccess] [net.minecraft.world.item ItemStack]
+  (:import [cn.li.mcver McAccess] [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]
            [net.neoforged.neoforge.event BuildCreativeModeTabContentsEvent]
            [net.minecraft.network.chat Component]

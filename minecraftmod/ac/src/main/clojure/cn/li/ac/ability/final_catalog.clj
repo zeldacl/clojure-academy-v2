@@ -6,58 +6,43 @@
    Combat programs remain source graphs until their nodes have been lowered to
   the final compiler vocabulary; VFX descriptors are validated immediately so
   the combat catalog can depend on a stable VFX ABI first."
-  (:require [cn.li.ability.compose :as ability-compose]
+  (:require [clojure.java.io :as io]
+            [cn.li.ability.compose :as ability-compose]
             [cn.li.node.composite :as composite]
-            [cn.li.vfx.compiler :as vfx-compiler]
-            [cn.li.ac.ability.final-vocabulary :as vocabulary]))
+            [cn.li.node.composite-loader :as composite-loader]
+            [cn.li.node.digest :as digest]
+            [cn.li.vfx.vocabulary :as vfx-vocabulary]
+            [cn.li.vfx.system-compiler :as vfx-system-compiler]
+            [cn.li.combat.vocabulary :as vocabulary]))
 (def ^:const schema-version 1)
 (def ^:const expected-combat-sources 39)
 (def ^:const expected-combat-registrations 50)
 (def ^:const expected-vfx-effects 36)
 
-(def scalar-types #{:bool :int :float :string :resource-id :tick :duration
-                    :angle :ratio :seed})
-(def geometry-types #{:vec2 :vec3 :unit-vec3 :block-pos :quat :transform
-                      :aabb :color})
-(def reference-types #{:world-ref :entity-ref :living-entity-ref :player-ref
-                       :projectile-ref :block-ref :item-stack-ref
-                       :energy-target-ref})
-(def record-types #{:caster-snapshot :hit-result :destination :block-placement
-                    :entity-snapshot :item-snapshot :query-shape :entity-filter
-                    :terrain-plan :beam-result :projectile-candidate
-                    :resource-budget :resource-cost :cooldown :progression
-                    :feedback :damage-event :damage-contribution
-                    :damage-resolution :vfx-audience :vfx-anchor :vfx-signal
-                    :vfx-material :render-batch :particle-layout})
-(defn- final-type? [type]
-  (or (= type :any) (= type :unit)
-      (contains? (into #{} (concat scalar-types geometry-types reference-types
-                                   record-types)) type)
-      (and (vector? type) (= 2 (count type))
-           (contains? #{:option :list :set :range :curve :enum :handle :record}
-                      (first type)))))
-
-(defn- normalize-type [type]
-  (when-not (final-type? type)
-    (throw (ex-info "non-canonical final type" {:type type})))
-  type)
-
-(defn- canonical [value]
-  (cond
-    (map? value) (into (sorted-map-by (fn [left right]
-                                       (compare (pr-str left) (pr-str right))))
-                           (map (fn [[k v]] [k (canonical v)])) value)
-    (set? value) (vec (sort-by pr-str (map canonical value)))
-    (sequential? value) (mapv canonical value)
-    :else value))
-
-(defn content-hash [value]
-  (format "%x" (hash (pr-str (canonical value)))))
+(defn content-hash
+  "Deterministic, cross-process content identity -- see cn.li.node.digest.
+   Previously this file's own copy fed the same kind of catalog value into
+   clojure.core/hash, a JVM-LOCAL hash meaningless across two processes
+   (two players' clients, or a client and a server) even though it was used
+   for exactly that purpose."
+  [value]
+  (digest/content-hash value))
 
 (defn read-resource
-  "Read one classpath EDN resource through mcmod's safe data boundary."
+  "Read one classpath EDN resource.
+
+   Uses clojure.java.io/resource (works under every loader's classloader,
+   unlike ClassLoader/getSystemResource, which under Forge/Fabric's module
+   classloaders is not necessarily the mod's own classloader) but
+   deliberately keeps the permissive read-string parser rather than
+   cn.li.mcmod.runtime.safe-edn's stricter reader: safe-edn rejects any map
+   with a non-keyword key, and real content already ships that shape (e.g.
+   ac/combat/abilities/groundshock.edn's :energy-cost and :block-transforms
+   are keyed by block-id strings like \"minecraft:stone\" -- a pre-existing,
+   already-documented content defect, not something this relocation should
+   silently start rejecting)."
   [resource]
-  (let [url (ClassLoader/getSystemResource resource)]
+  (let [url (io/resource resource)]
     (when-not url
       (throw (ex-info "AC catalog resource not found" {:resource resource})))
     (binding [*read-eval* false]
@@ -67,22 +52,6 @@
   (when-not (keyword? value)
     (throw (ex-info (str label " must be a keyword") (assoc data :value value))))
   value)
-
-(defn compile-input-schema
-  "Compile an explicit typed input map; no arbitrary map merging is allowed."
-  [inputs]
-  (when-not (map? inputs)
-    (throw (ex-info "typed input schema must be a map" {:inputs inputs})))
-  (into (sorted-map)
-        (map (fn [[name spec]]
-               (require-keyword "input name" name {})
-               (let [spec (if (keyword? spec) {:type spec} spec)
-                     type (normalize-type (:type spec))]
-                 (when-not (final-type? type)
-                   (throw (ex-info "input has unknown final type"
-                                   {:input name :type (:type spec)})))
-                 [name (assoc spec :type type)])))
-        inputs))
 
 (defn- validate-bindings [bindings]
   (when-not (map? bindings)
@@ -126,21 +95,15 @@
       (throw (ex-info "AC manifest contains duplicate ids" {:kind kind}))))
   manifest)
 
-(defn- load-composite-docs [manifest-resource]
-  (let [manifest (validate-manifest (read-resource manifest-resource) :composite)]
-    (into {}
-          (map (fn [{:keys [id resource kind]}]
-                 (when-not (= :composite kind)
-                   (throw (ex-info "composite manifest contains non-composite" {:id id :kind kind})))
-                 (let [document (read-resource resource)]
-                   (when-not (= id (:id document))
-                     (throw (ex-info "composite source id mismatch"
-                                     {:manifest-id id :source-id (:id document)})))
-                   (when-not (= :composite (:layer document))
-                     (throw (ex-info "composite must declare :composite layer"
-                                     {:id id :layer (:layer document)})))
-                   [id document])))
-          (:documents manifest))))
+(defn- load-composite-docs
+  "Load a composite manifest's documents through cn.li.node.composite-loader
+   -- the generic manifest+document loader combat-core and vfx-core's own
+   composites now route through too (see P1.2/P2.1 refactor commits) --
+   instead of this file's own former copy of the same
+   schema-version/duplicate-id/id-match/:composite-layer checks."
+  [manifest-resource]
+  (:documents (composite-loader/load-documents
+               {:manifest-resource manifest-resource :document-loader read-resource})))
 
 (defn- load-combat [combat-manifest node-environment composites]
   (let [manifest (validate-manifest (read-resource combat-manifest) :combat)
@@ -178,119 +141,7 @@
       :content-hash (content-hash {:sources sources :registrations registrations})
       :composites composites}))
 
-(defn- normalize-vfx-type [type]
-  (normalize-type (if (map? type) (:type type) type)))
-
-(defn- graph-components [graph]
-  (letfn [(walk [value]
-            (cond
-              (map? value) (into #{} (concat (when-let [component (:component value)] [component])
-                                             (mapcat walk (vals value))))
-              (sequential? value) (into #{} (mapcat walk value))
-              :else #{}))]
-    (walk graph)))
-
-(defn- validate-vfx-graph!
-  "Validate every executable VFX component after composite expansion.
-   Timeline children are {:at t :node n} data wrappers, so this walks the
-   graph shape directly instead of applying combat's child-port validator."
-  [graph effect-id]
-  (letfn [(walk [value path]
-            (cond
-              (map? value)
-              (do
-                (when-let [component (:component value)]
-                  (when-not (= "vfx" (namespace component))
-                    (throw (ex-info "VFX graph references unknown final node"
-                                    {:effect-id effect-id :component component :path path}))))
-                (doseq [[k v] value]
-                  (walk v (conj path k))))
-              (sequential? value)
-              (doseq [[idx item] (map-indexed vector value)]
-                (walk item (conj path idx)))
-              :else nil))]
-    (walk graph [:control-graph])
-    graph))
-
-(defn- expand-vfx-graph
-  "Expand VFX composites with the standalone VFX compiler."
-  [graph composites]
-  (vfx-compiler/expand-graph graph composites))
-
-(defn- vfx-emitter-stages
-  "Compile the mandatory Niagara-style four-stage emitter contract.
-   Modules are explicit data with stable numeric opcodes; execution order is
-   the stage vector order, never inferred from node traversal." 
-  [emitter-id capacity components]
-  (let [particle? (some components #{:vfx/emitter :vfx/particle :vfx/particle-field
-                                      :vfx/ring-particle-field :vfx/particle-trail})
-        spawn (cond-> []
-                (some components #{:vfx/emitter})
-                (conj {:opcode 100 :module :emission/rate :component :vfx/emitter})
-                particle? (conj {:opcode 110 :module :particle/allocate :component :vfx/particle}))
-        initialize (if particle? [{:opcode 200 :module :particle/initialize}] [])
-        update (if particle? [{:opcode 300 :module :particle/integrate}
-                              {:opcode 310 :module :particle/compact}] [])
-        output (if particle? [{:opcode 400 :module :particle/output}] [])]
-    (when (and (seq spawn) (not= (map :opcode spawn) (sort (map :opcode spawn))))
-      (throw (ex-info "VFX emitter stage order is not monotonic" {:emitter emitter-id})))
-    {:id emitter-id
-     :capacity (long (max 1 capacity))
-     :stages {:spawn spawn :initialize initialize :update update :output output}}))
-
-(defn- vfx-descriptor [{:keys [id lifecycle inputs control-graph state-slots bounds revision] :as effect}]
-  (let [parameters (into {}
-                        (map (fn [[name type]]
-                               [name {:type (normalize-vfx-type type)
-                                      :scope :user
-                                      :mutability :immutable}]))
-                        (or (get inputs :spawn) {}))
-        components (graph-components control-graph)
-        particle? (boolean (some components #{:vfx/emitter :vfx/particle :vfx/particle-field
-                                               :vfx/ring-particle-field :vfx/particle-trail}))
-        emitter (when particle? (vfx-emitter-stages :default 1024 components))
-        snapshot-mode (case lifecycle
-                        :transient :none
-                        :session :restart
-                        :persistent :procedural-seek)]
-    (when-not (contains? #{:transient :session :persistent} lifecycle)
-      (throw (ex-info "invalid VFX lifecycle" {:id id :lifecycle lifecycle})))
-    (when (> (count parameters) 64)
-      (throw (ex-info "VFX system has too many network parameters" {:id id :count (count parameters)})))
-    {:id id
-     :kind :vfx/system
-     :asset/type :vfx/system
-     :asset/version 1
-     :schema-version 1
-     :lifecycle lifecycle
-     :snapshot-mode snapshot-mode
-     :replication {:audience :tracking :priority 50 :max-distance 96.0}
-     :parameters (mapv (fn [[name spec]] (assoc spec :name name))
-                       (sort-by first (seq parameters)))
-     :primitives (let [components (graph-components control-graph)]
-                   (cond-> #{}
-                     (some components #{:vfx/ring :vfx/beam :vfx/line :vfx/beam-bounds}) (conj :line)
-                     (some components #{:vfx/quad :vfx/emitter :vfx/particle}) (conj :quad)))
-     :control-graph control-graph
-     ;; Temporary compiler metadata is the only place that knows the source
-     ;; graph shape. Runtime execution consumes :control-graph and these
-     ;; explicit stages, never an untyped node-core program.
-     :emitters (vec (remove nil? [emitter]))
-     :particle-capacity (some-> emitter :capacity long)
-     :system-outputs (vec (keep (fn [component]
-                                  (case component
-                                    :vfx/audio :audio
-                                    :vfx/audio-one-shot :audio
-                                    :vfx/audio-loop :audio
-                                    :vfx/camera-fov :camera
-                                    :vfx/camera-shake :camera
-                                    :vfx/post-process :screen
-                                    nil)) components))
-     :bounds bounds
-     :state-slots (or state-slots {})
-     :input-schemas inputs
-     :revision revision}))
-(defn- load-vfx [vfx-manifest composites]
+(defn- load-vfx [vfx-manifest node-environment composites]
   (let [manifest (validate-manifest (read-resource vfx-manifest) :vfx)
         effects (mapv (fn [{:keys [id resource kind]}]
                         (when-not (= :vfx/system kind)
@@ -300,9 +151,9 @@
                           (when-not (= id (:id effect))
                             (throw (ex-info "vfx source id mismatch"
                                             {:manifest-id id :source-id (:id effect)})))
-                           (let [expanded (expand-vfx-graph (:control-graph effect) composites)]
-                             (validate-vfx-graph! expanded id)
-                             (vfx-descriptor (assoc effect :control-graph expanded)))))
+                           (let [expanded (vfx-system-compiler/expand-graph node-environment (:control-graph effect) composites)]
+                             (vfx-system-compiler/validate-vfx-graph! expanded id)
+                             (vfx-system-compiler/compile-system (assoc effect :control-graph expanded)))))
                       (:documents manifest))
         catalog (into (sorted-map) (map (fn [effect] [(:id effect) effect]) effects))]
     {:manifest manifest
@@ -320,11 +171,12 @@
   ([{:keys [combat-manifest vfx-manifest combat-composites vfx-composites]
      :or {combat-manifest "ac/combat/manifest.edn"
           vfx-manifest "ac/vfx/manifest.edn"
-          combat-composites "ac/combat/composites.edn"
-          vfx-composites "ac/vfx/composites.edn"}}]
+          combat-composites "cn/li/combat/composites/manifest.edn"
+          vfx-composites "cn/li/vfx/composites/manifest.edn"}}]
    (let [combat-composite-docs (load-composite-docs combat-composites)
          vfx-composite-docs (load-composite-docs vfx-composites)
-         vfx (load-vfx vfx-manifest vfx-composite-docs)
+         vfx-node-environment (vfx-vocabulary/environment vfx-composite-docs)
+         vfx (load-vfx vfx-manifest vfx-node-environment vfx-composite-docs)
          node-environment (vocabulary/environment combat-composite-docs)
          combat (load-combat combat-manifest node-environment combat-composite-docs)]
      (let [bundle (ability-compose/compose-catalog :ac node-environment combat vfx)]

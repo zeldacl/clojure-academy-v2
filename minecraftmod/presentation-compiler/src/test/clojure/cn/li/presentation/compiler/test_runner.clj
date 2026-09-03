@@ -1,8 +1,14 @@
 (ns cn.li.presentation.compiler.test-runner
-  (:require [clojure.test :as test]
-            [cn.li.presentation.compiler.artifact-test]))
+  "Auto-discovers presentation-compiler test namespaces and runs
+   clojure.test. Supports -Dpresentation-compiler.test.only=ns1,ns2 to run a
+   subset.
+
+   Previously a hardcoded single-namespace require+run-tests list: a new
+   *_test.clj here compiled fine but was silently never run unless this file
+   was also edited by hand."
+  (:require [cn.li.test-support.pure-auto-test-runner :as runner]))
 
 (defn -main [& _]
-  (let [result (test/run-tests 'cn.li.presentation.compiler.artifact-test)]
-    (when (pos? (+ (:fail result) (:error result)))
-      (System/exit 1))))
+  (runner/run-tests! {:root-segments ["src" "test" "clojure" "cn" "li" "presentation" "compiler"]
+                      :base-ns "cn.li.presentation.compiler"
+                      :only-property "presentation-compiler.test.only"}))

@@ -1,11 +1,11 @@
 (ns cn.li.fabric1201.integration.events.lifecycle
   "Fabric player/server lifecycle handlers extracted from monolithic events namespace."
   (:require [cn.li.mcbase.integration.event-support :as event-support]
-            [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
+            [cn.li.mcbase.runtime.nbt-core :as runtime-nbt]
             [cn.li.mcbase.runtime.sync-core :as runtime-sync]
             [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.fabric1201.adapter.network :as runtime-network]
-            [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core])
+            [cn.li.mcbase.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]))
 

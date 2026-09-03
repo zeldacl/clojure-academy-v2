@@ -31,6 +31,7 @@
      :be-get-custom-state (fn [^ScriptedBlockEntity be] (.getCustomState be))
      :be-set-custom-state! (fn [^ScriptedBlockEntity be state] (.setCustomState be state))
      :be-get-block-id (fn [^ScriptedBlockEntity be] (.getBlockId be))
+     :be-get-tile-id (fn [^ScriptedBlockEntity be] (.getTileId be))
      :be-set-changed! (fn [^ScriptedBlockEntity be] (.setChanged be))
      :be-sync-to-client! (fn [^ScriptedBlockEntity be] (.syncCustomStateToClient be))
      :be-get-fluid-height (fn [^ScriptedBlockEntity be]

@@ -28,7 +28,7 @@
                :development-action :level-up
                :development-payload {}
                :user-uuid "player-1"}]
-    (with-redefs [session/apply-completion! (fn [_] (swap! completed inc))
+    (with-redefs [session/apply-completion! (fn [_ _] (swap! completed inc) true)
                   machine-runtime/commit-transform! (fn [& _] (swap! cleared inc))]
       (#'dev-logic/developer-after-commit! :tile nil nil {} state)
       (is (= 1 @completed))

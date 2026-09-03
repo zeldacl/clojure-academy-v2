@@ -30,7 +30,7 @@ Version-seam rules: [MC_VERSION_SEAM.md](MC_VERSION_SEAM.md). Loader hook capabi
 - Dev client launch: `.\scripts\target-gradle.ps1 <target-id> :platform:runClient` — **source-first** (skips platform AOT; AOT is for Loom remap of release jars). Datagen/`jar` still AOT. Override with `-PplatformAotForRun=true` if needed.
 - Clojure lint gate (must run **per target** so that target's source roots are scanned): `.\scripts\target-gradle.ps1 <target-id> lintClojureNative`. Also attached to `:platform:jar` / `check` / `remapJar` / `shadowJar` — **not** to `runClient`.
 - Neutral-layer API gate: `cmd /c .\gradlew.bat verifyNeutralClojureNoMinecraftApis` (blocks `net.minecraft.*` / Forge / Fabric / NeoForge refs in `ac`/`mcmod`; clj-kondo hook also errors on `:import` there). Note: `:import` is **not** a Clojure reflection warning — Reflection Guard only catches untyped interop.
-- `verifyUiXmlIds` (**dead, do not rely on it**): scans `guis/**/*.xml`, which no longer exists anywhere under `ac/src` — the XML GUI system it audited was replaced by the Presentation Runtime (`.ui.edn` templates compiled by `presentation-compiler`, see [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md)). It still runs and always reports 0 files, which is not the same as passing a real check.
+- `verifyUiXmlIds` (**dead, do not rely on it**): scans `guis/**/*.xml`, which no longer exists anywhere under `ac/src` — the XML GUI system it audited was replaced by the Presentation Runtime (`.ui.edn` templates compiled by `presentation-compiler`, see [PRESENTATION_V3.md](../06-gui/PRESENTATION_V3.md)). It still runs and always reports 0 files, which is not the same as passing a real check.
 - LVT strip (packaging): always on (`stripAotLvt` / `stripPlatformOutputLvt` / `stripShadowJarLvt`) for Loom 1.13 tiny-remapper. AOT also sets `-Dclojure.compile.elide-meta=[:doc]` (keeps `:file`/`:line`). MDG targets do not remap; LVT strip still runs for packaging hygiene where configured.
 - Forge compile: `.\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileClojure`
 - Fabric compile: `.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:compileClojure`
@@ -68,6 +68,12 @@ Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target
 - `verifyRepositoryHygiene`
 - `verifyVersionSeamParity`
 - `verifyNeutralClojureNoMinecraftApis` (and related catalog/entrypoint checks as configured)
+- `verifyNodeKernelSingleSource` (combat/vfx ref/expr resolution goes through `cn.li.node.kernel/defresolver`, not a hand-rolled `case scope`; one SplitMix64 definition point — see [NODE_LANGUAGE.md §13-14](../04-systems/NODE_LANGUAGE.md#13-cnlinodekerneldefresolver跨域共享解析语义而不共享调用))
+- `verifyCombatResourceAgnostic` (`combat-core/src/main` must not contain resource-name literals like `:cp`/`:overload`/`:mana`; cost resources are declared per-policy via `:cost-resource`, not hardcoded)
+- `verifyAbilityActivationCoverage` (every ability EDN must declare a top-level `:activation` recognized by the dispatcher — the gate that keeps B1/B2/B3-class bugs, where a skill's pulse/release/toggle phases silently never ran, from recurring)
+- `verifyAbilityRuntimeNoDynamicResolve` (`ability-runtime/src/main` may not use `requiring-resolve`/`ServiceLoader`/`eval`/context-registry style dynamic dispatch — same discipline as `verifyCombatNoPrivateRuntime`, now that real runtime code lives there)
+- `verifyNoDuplicateUtilities` (`clamp`/`lerp`/`vec3-components`/`nearby-chunk-keys`/the SplitMix64 constants each may have exactly one definition point across the repo)
+- `verifyContentModuleCoreIsolation` (allow-list gate: `ac` may only reach `node-core`/`combat-core`/`vfx-core`/`presentation-core` through the namespaces already on the allow-list in `build.gradle`, or through `cn.li.ability.*` — catches new direct-core reaches creeping in without requiring the full dispatch-pipeline move that Phase 6 deferred)
 
 ## Logging conventions (mandatory)
 

@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.runtime.entity-damage
   "Forge implementation of IEntityDamage protocol."
-  (:require [cn.li.mc1211.runtime.adapter.entity-damage :as entity-damage]
+  (:require [cn.li.mcbase.runtime.adapter.entity-damage :as entity-damage]
             [cn.li.neoforgebase.adapter.server-context :as server-context])
   (:import [cn.li.mc1211.runtime WorldEntity]
            [net.minecraft.server.level ServerLevel]

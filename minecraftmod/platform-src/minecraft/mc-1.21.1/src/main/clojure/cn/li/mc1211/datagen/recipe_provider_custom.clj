@@ -1,7 +1,7 @@
 (ns cn.li.mc1211.datagen.recipe-provider-custom
   "Custom content recipe emission for datagen (1.21.1 RecipeOutput)."
-  (:require [cn.li.mc1211.datagen.metadata-resolver :as metadata-resolver]
-            [cn.li.mc1211.datagen.resource-location :as rl]
+  (:require [cn.li.mcbase.datagen.metadata-resolver :as metadata-resolver]
+            [cn.li.mcbase.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
             [cn.li.platform.neutral.config :as modid])
   (:import [cn.li.mc1211.recipe ContentRecipe]

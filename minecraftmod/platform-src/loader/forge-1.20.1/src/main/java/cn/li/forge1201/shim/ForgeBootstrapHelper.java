@@ -7,7 +7,13 @@ import cn.li.mcbase.block.SharedDynamicStateBlock;
 import cn.li.mc1201.block.SharedScriptedBlock;
 import cn.li.mc1201.block.ScriptedRenderShapes;
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
-import cn.li.mc1201.runtime.BlockRegistry;
+import cn.li.mcbase.runtime.BlockRegistry;
+import cn.li.mc1201.entity.ScriptedProjectileEntity;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedRayEntity;
+import cn.li.mc1201.entity.ScriptedMarkerEntity;
+import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
+import cn.li.mc1201.entity.ScriptedMobEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
@@ -34,7 +40,7 @@ import net.minecraftforge.fluids.ForgeFlowingFluid;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 
-import java.lang.reflect.Constructor;
+
 import java.util.function.Function;
 import java.util.List;
 import java.util.function.Supplier;
@@ -249,20 +255,22 @@ public final class ForgeBootstrapHelper {
                                                  int clientTrackingRange,
                                                  int updateInterval,
                                                  boolean fireImmune) {
-        Class<? extends Entity> typedClass = (Class<? extends Entity>) entityClass;
-        Constructor<? extends Entity> ctor;
-        try {
-            ctor = typedClass.getConstructor(EntityType.class, net.minecraft.world.level.Level.class);
-        } catch (NoSuchMethodException e) {
-            throw new IllegalStateException("Entity class must have constructor (EntityType, Level): " + typedClass.getName(), e);
+        EntityType.EntityFactory<Entity> factory;
+        if (entityClass == ScriptedProjectileEntity.class) {
+            factory = (type, level) -> new ScriptedProjectileEntity((EntityType) type, level);
+        } else if (entityClass == ScriptedEffectEntity.class) {
+            factory = (type, level) -> new ScriptedEffectEntity((EntityType) type, level);
+        } else if (entityClass == ScriptedRayEntity.class) {
+            factory = (type, level) -> new ScriptedRayEntity((EntityType) type, level);
+        } else if (entityClass == ScriptedMarkerEntity.class) {
+            factory = (type, level) -> new ScriptedMarkerEntity((EntityType) type, level);
+        } else if (entityClass == ScriptedBlockBodyEntity.class) {
+            factory = (type, level) -> new ScriptedBlockBodyEntity((EntityType) type, level);
+        } else if (entityClass == ScriptedMobEntity.class) {
+            factory = (type, level) -> new ScriptedMobEntity((EntityType) type, level);
+        } else {
+            throw new IllegalArgumentException("Unsupported scripted entity class: " + entityClass.getName());
         }
-        EntityType.EntityFactory<Entity> factory = (type, level) -> {
-            try {
-                return ctor.newInstance(type, level);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to instantiate entity: " + typedClass.getName(), e);
-            }
-        };
         MobCategory mobCategory = switch (String.valueOf(category)) {
             case "monster" -> MobCategory.MONSTER;
             case "creature" -> MobCategory.CREATURE;

@@ -1,0 +1,74 @@
+plugins {
+    id "java"
+}
+
+description = "Isolated JMH benchmarks for neutral runtime hot paths; never packaged into a platform Jar."
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+tasks.withType(JavaCompile).configureEach { options.release = 17 }
+
+sourceSets {
+    jmh {
+        java.srcDir("src/jmh/java")
+        // "src/jmh/resources" is already this sourceSet's conventional default
+        // resources dir; the explicit srcDir(...) below duplicates it, which
+        // silently no-ops until resources actually exist there (see the
+        // duplicatesStrategy fix on processJmhResources).
+        resources.srcDir("src/jmh/resources")
+        // PresentationRuntimeBenchmark loads the real combat_hud golden
+        // fixture as its test data - pointing straight at the checked-in
+        // golden directory (rather than a copy) means it can never drift
+        // from what verifyPresentationGoldenArtifacts actually diffs against.
+        resources.srcDir(rootProject.file("docs/06-gui/presentation/golden"))
+    }
+}
+
+tasks.named("processJmhResources", Copy).configure {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+configurations {
+    jmhImplementation.extendsFrom(implementation)
+    jmhRuntimeOnly.extendsFrom(runtimeOnly)
+}
+
+dependencies {
+    jmhImplementation "org.openjdk.jmh:jmh-core:1.37"
+    jmhAnnotationProcessor "org.openjdk.jmh:jmh-generator-annprocess:1.37"
+    jmhImplementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
+    jmhImplementation project(":ac")
+    jmhImplementation project(":presentation-core")
+}
+
+tasks.register("jmh", JavaExec) {
+    group = "verification"
+    description = "Run isolated neutral-runtime JMH benchmarks; output is never part of the mod Jar."
+    dependsOn tasks.named("jmhClasses")
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = "org.openjdk.jmh.Main"
+    def report = layout.buildDirectory.file("reports/jmh/results.json")
+    outputs.file(report)
+    outputs.upToDateWhen { false }
+    doFirst { report.get().asFile.parentFile.mkdirs() }
+    args = ["cn.li.tools.benchmark.FinalRuntimeTickBenchmark", "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
+}
+
+tasks.register("jmhPresentation", JavaExec) {
+    group = "verification"
+    description = "Run the Presentation Runtime v3 acceptance benchmarks (refactor plan §13) against the " +
+        "pre-rewrite numbers in docs/06-gui/presentation/benchmarks/V2_BASELINE.md."
+    dependsOn tasks.named("jmhClasses")
+    classpath = sourceSets.jmh.runtimeClasspath
+    mainClass = "org.openjdk.jmh.Main"
+    def report = layout.buildDirectory.file("reports/jmh/presentation-results.json")
+    outputs.file(report)
+    outputs.upToDateWhen { false }
+    doFirst { report.get().asFile.parentFile.mkdirs() }
+    args = ["cn.li.tools.benchmark.PresentationRuntimeBenchmark", "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
+}
+
+tasks.named("check").configure {
+    dependsOn tasks.named("jmhClasses")
+}

@@ -103,8 +103,13 @@
   nil)
 
 (defn run-world-tick! [world]
-  (doseq [f (:world-tick-fns (lifecycle-state))]
-    (f world)))
+  "Dispatch the frozen world-tick vector without creating a seq/Iterator per tick."
+  (let [fns (:world-tick-fns (lifecycle-state))
+        size (count fns)]
+    (loop [idx 0]
+      (when (< idx size)
+        ((nth fns idx) world)
+        (recur (inc idx))))))
 
 ;; ============================================================================
 ;; Datagen Metadata Init

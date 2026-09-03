@@ -36,17 +36,27 @@ public final class GuiGraphicsHelper {
                                         float x0, float y0, float x1, float y1,
                                         float u0, float u1, float v0, float v1,
                                         int argb) {
-        // 26.2 exposes GUI extraction through GuiRenderState rather than a
-        // public submit method on GuiGraphicsExtractor. Keep this seam as a
-        // no-op until the custom perspective state is ported to addGuiElement.
-        return false;
+        WarpedQuadSubmitFunction submitter = warpedQuadSubmitter;
+        float[] warp = GuiPerspectiveWarp.active();
+        if (submitter == null || warp == null) {
+            return false;
+        }
+        return submitter.submit(gge, pipeline, textures, gge.pose(), warp,
+                x0, y0, x1, y1, u0, u1, v0, v1, argb, argb);
     }
 
     /** Solid/gradient counterpart of {@link #submitWarped}. */
     private static boolean submitWarpedFill(GuiGraphicsExtractor gge, RenderPipeline pipeline,
                                             int x0, int y0, int x1, int y1,
                                             int argbTop, int argbBottom) {
-        return false;
+        WarpedQuadSubmitFunction submitter = warpedQuadSubmitter;
+        float[] warp = GuiPerspectiveWarp.active();
+        if (submitter == null || warp == null) {
+            return false;
+        }
+        return submitter.submit(gge, pipeline, TextureSetup.noTexture(), gge.pose(), warp,
+                x0, y0, x1, y1, 0.0F, 0.0F, 0.0F, 0.0F,
+                argbTop, argbBottom);
     }
 
     /** Solid rectangle, warped when a perspective camera is installed. */
@@ -200,15 +210,6 @@ public final class GuiGraphicsHelper {
         gge.blit(texture, x, y, x + w, y + h, u0, u1, v0, v1);
     }
 
-    /** Compatibility overload matching older float-free call sites. */
-    public static void blitTexturedQuad(Object graphics, Identifier texture,
-                                        int x0, int y0, int x1, int y1,
-                                        float u0, float v0, float u1, float v1) {
-        blitTexturedQuad(graphics, texture,
-                (float) x0, (float) y0, (float) x1, (float) y1, 0f,
-                u0, u1, v0, v1);
-    }
-
     /** Full-texture blit at pixel size (w×h). */
     public static void blit(Object graphics, Identifier texture, int x, int y, int w, int h) {
         if (!(graphics instanceof GuiGraphicsExtractor gge)) {
@@ -284,6 +285,22 @@ public final class GuiGraphicsHelper {
         boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
                        Matrix3x2f pose, int x0, int y0, int x1, int y1,
                        float u0, float u1, float v0, float v1, int color);
+    }
+
+    @FunctionalInterface
+    public interface WarpedQuadSubmitFunction {
+        boolean submit(GuiGraphicsExtractor graphics, RenderPipeline pipeline, TextureSetup textures,
+                       Matrix3x2fc pose, float[] warp,
+                       float x0, float y0, float x1, float y1,
+                       float u0, float u1, float v0, float v1,
+                       int colorTop, int colorBottom);
+    }
+
+    private static volatile WarpedQuadSubmitFunction warpedQuadSubmitter;
+
+    /** Install the loader callback that can append a custom warped GUI state. */
+    public static void installWarpedQuadSubmitter(WarpedQuadSubmitFunction function) {
+        warpedQuadSubmitter = function;
     }
 
     private static volatile GuiElementSubmitFunction guiElementSubmitter;

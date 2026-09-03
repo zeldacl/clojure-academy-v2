@@ -98,14 +98,14 @@
 (defn- camera-pos
   "Camera position, re-read at most once per frame-length window and shared by
   every cat engine in view — the TESR runs per block per frame and
-  `call-adapter` costs a Framework deref plus a map lookup."
+  the loader callback is already frozen in the client bridge."
   []
   (let [now (System/currentTimeMillis)
         {:keys [at-ms pos]} (machine-render-runtime/render-cache
                               camera-pos-cache-key camera-pos-initial)]
     (if (< (- now at-ms) camera-pos-refresh-ms)
       pos
-      (let [fresh (bridge/call-adapter :camera-position)]
+      (let [fresh (bridge/camera-position)]
         (machine-render-runtime/put-render-cache!
           camera-pos-cache-key {:at-ms now :pos fresh})
         fresh))))
@@ -131,17 +131,14 @@
         bob (* 0.03 (Math/sin (* t 0.006)))
         yaw-deg (billboard-yaw tile)
         vc (rb/get-cutout-no-cull-buffer buffer-source (:texture (cat-engine-resources)))]
-    (pose/push-pose pose-stack)
-    (try
+    (pose/with-pose pose-stack
       (pose/translate pose-stack 0.5 (+ 0.03 bob) 0.5)
       ;; Faces the quad at the viewer, as upstream RenderCatEngine did.
       (pose/apply-y-rotation pose-stack yaw-deg)
       (pose/translate pose-stack 0.0 0.5 0.0)
       (pose/apply-x-rotation pose-stack rot)
       (pose/translate pose-stack -0.5 -0.5 0.0)
-      (submit-quad! vc pose-stack packed-light packed-overlay)
-      (finally
-        (pose/pop-pose pose-stack)))))
+      (submit-quad! vc pose-stack packed-light packed-overlay))))
 
 (defn register!
   []

@@ -1,28 +1,13 @@
 (ns cn.li.node.test-runner
-  (:require [clojure.test :as t]
-            [cn.li.node.descriptor-test]
-            [cn.li.node.expr-test]
-            [cn.li.node.value-test]
-            [cn.li.node.flow-test]
-            [cn.li.node.scope-test]
-            [cn.li.node.composite-test]
-            [cn.li.node.composite-loader-test]
-            [cn.li.node.validate-test]
-            [cn.li.node.schema-export-test]
-            [cn.li.node.schema-contracts-test]
-            [cn.li.node.dependency-direction-test]))
+  "Auto-discovers node-core test namespaces and runs clojure.test.
+   Supports -Dnode-core.test.only=ns1,ns2 to run a subset.
+
+   Previously a hardcoded require+run-tests list: a new *_test.clj here
+   compiled fine but was silently never run unless this file was also
+   edited by hand."
+  (:require [cn.li.test-support.pure-auto-test-runner :as runner]))
 
 (defn -main [& _]
-  (let [result (t/run-tests 'cn.li.node.descriptor-test
-                            'cn.li.node.expr-test
-                            'cn.li.node.value-test
-                            'cn.li.node.flow-test
-                            'cn.li.node.scope-test
-                            'cn.li.node.composite-test
-                            'cn.li.node.composite-loader-test
-                            'cn.li.node.validate-test
-                            'cn.li.node.schema-export-test
-                            'cn.li.node.schema-contracts-test
-                            'cn.li.node.dependency-direction-test)]
-    (when (pos? (+ (:fail result) (:error result))) (System/exit 1))))
-
+  (runner/run-tests! {:root-segments ["src" "test" "clojure" "cn" "li" "node"]
+                      :base-ns "cn.li.node"
+                      :only-property "node-core.test.only"}))

@@ -5,7 +5,8 @@ plugins {
 
 // Ability Runtime is the only neutral composition layer allowed to depend
 // on Combat, VFX and Presentation together.  It is source-first in normal
-// platform builds and AOT-capable for the diagnostic/full-AOT build.
+// platform builds; Loom-remapped platform targets may include its namespaces
+// in their transitive AOT closure.
 layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
 
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
@@ -22,22 +23,81 @@ tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach
     checkTask.classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/resources/main")))
 }
 
+// 反射拦截器 (same guard as ac/build.gradle -- ability-runtime is about to
+// carry the same volume of session/owner-state/dispatch code AC used to
+// hold, so it needs the same protection against a reflective call
+// surviving compile-time and blowing up Loom remap at runtime).
 tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
     forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
+
+    logging.addStandardOutputListener(new StandardOutputListener() {
+        @Override
+        void onOutput(CharSequence output) {
+            String log = output.toString()
+            if (log.contains("Reflection warning")) {
+                throw new GradleException(
+                    "\n[Reflection Guard] 检测到 Clojure AOT 隐式反射调用！\n" +
+                    "反射会导致 Loom remap 失效，使最终 Jar 在运行时崩溃。\n" +
+                    "请添加 ^TypeHint 元数据或使用 Java 桥接类修复：\n" +
+                    "--------------------------------------------------\n" +
+                    log.trim() + "\n" +
+                    "--------------------------------------------------"
+                )
+            }
+        }
+    })
 }
 
+// compileTestClojure hits the same node-core/combat-core/vfx-core
+// resources-not-on-compileClasspath gap as checkClojure above (they are
+// source-first; their .clj sources land only in their own resources/main
+// dir, which the standard project(":x") compileClasspath resolution does
+// not surface). presentation-core is not source-first, so its normally
+// compiled classes are already reachable through the ordinary
+// api project(":presentation-core") dependency below and need no special
+// wiring here.
+tasks.named("compileTestClojure").configure {
+    dependsOn ":node-core:classes", ":combat-core:classes", ":vfx-core:classes"
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/node-core/clojure/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/combat-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/combat-core/clojure/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/resources/main")))
+    classpath.from(files(rootProject.layout.buildDirectory.dir("neutral/vfx-core/clojure/main")))
+}
+
+// ability-runtime legitimately depends on mcmod (api project(":mcmod")
+// below), so unlike node-core/presentation-core/presentation-compiler it
+// uses the full Framework-fixture-wrapped auto-test-runner rather than the
+// pure variant -- P4.7's registry/tenancy tests are expected to touch
+// process-level state that fixture exists to isolate between namespaces.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
+// test-support's runtime-facades installs the neutral provider facades
+// (cn.li.platform.neutral.*, self-contained namespaces with no requires of
+// their own), so they have to be on the test source path with it. Without
+// this, compileTestClojure fails to resolve them -- see the matching
+// comment in ac/build.gradle, where this exact gap was found and fixed
+// first.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/platform/shared/src/main/clojure')
+// cn.li.node.dep-check is node-core's shared dependency-direction checker
+// (P7) -- see the matching comment in vfx-core/build.gradle for why the
+// whole test dir (not just dep_check.clj) is added, and why this cannot
+// double-count node-core's own tests here. Requires node-core's
+// test_runner.clj (pulled in alongside it) to resolve
+// cn.li.test-support.pure-auto-test-runner even though ability-runtime's
+// own test-runner uses the Framework-fixture variant instead -- same gap
+// combat-core/vfx-core already closed with this exact srcDir line.
+sourceSets.test.clojure.srcDir rootProject.file('node-core/src/test/clojure')
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')
+
 tasks.named("processResources").configure {
-    if (rootProject.ext.fullAotEnabled) {
-        exclude "**/*.clj", "**/*.cljc"
-    } else {
-        from(sourceSets.main.clojure.srcDirs) {
-            include "**/*.clj", "**/*.cljc"
-        }
+    from(sourceSets.main.clojure.srcDirs) {
+        include "**/*.clj", "**/*.cljc"
     }
 }
 
 tasks.named("compileClojure").configure { task ->
-    onlyIf { rootProject.ext.fullAotEnabled }
+    onlyIf { false }
     dependsOn ":mcmod:compileClojure", ":node-core:compileClojure",
             ":combat-core:compileClojure", ":vfx-core:compileClojure"
     def targetDir = layout.buildDirectory.dir("clojure/main")
@@ -49,13 +109,22 @@ tasks.named("compileClojure").configure { task ->
 }
 
 def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
-    onlyIf { !rootProject.ext.fullAotEnabled }
+    onlyIf { true }
     doLast {
         delete(layout.buildDirectory.dir("clojure/main").get().asFile)
     }
 }
 tasks.named("classes").configure { dependsOn clearNeutralAotOutput }
 tasks.named("jar").configure { dependsOn clearNeutralAotOutput }
+
+tasks.register("runAbilityClojureTests", JavaExec) {
+    group = "verification"
+    description = "Run clojure.test suites for ability-runtime via cn.li.ability.test-runner."
+    dependsOn "compileTestClojure", "classes"
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    args "-m", "cn.li.ability.test-runner"
+}
 
 // Runtime source/class roots are consumed by the platform target through the
 // selected content project (AC today, BC/CC content packs later).  The

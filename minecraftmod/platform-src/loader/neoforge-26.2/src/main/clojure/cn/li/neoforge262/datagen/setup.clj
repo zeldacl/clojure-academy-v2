@@ -6,13 +6,13 @@
   causes HashCache on the second run to delete the first run's files.
   NeoForge guidance for a single aggregate :platform:runData is therefore:
   put every provider on GatherDataEvent.Client and use clientData() only."
-  (:require [cn.li.mc262.datagen.advancement-provider-shell :as adv-shell]
-            [cn.li.mc262.datagen.blockstate-provider-shell :as blockstate-shell]
+  (:require [cn.li.mcbase.datagen.advancement-provider-shell :as adv-shell]
+            [cn.li.mcbase.datagen.blockstate-provider-shell :as blockstate-shell]
             [cn.li.mc262.datagen.block-loot-provider-shell :as block-loot]
             [cn.li.mc262.datagen.block-tag-provider-shell :as block-tags]
-            [cn.li.mc262.datagen.lang-provider-shell :as lang-shell]
-            [cn.li.mc262.datagen.setup-common :as setup-common]
-            [cn.li.mc262.datagen.worldgen-provider-shell :as worldgen-shell]
+            [cn.li.mcbase.datagen.lang-provider-shell :as lang-shell]
+            [cn.li.mcbase.datagen.setup-common :as setup-common]
+            [cn.li.mcbase.datagen.worldgen-provider-shell :as worldgen-shell]
             [cn.li.neoforge262.datagen.item-model-provider :as item-model-provider]
             [cn.li.neoforge262.datagen.recipe-provider :as recipe-provider])
   (:import [net.neoforged.neoforge.data.event GatherDataEvent

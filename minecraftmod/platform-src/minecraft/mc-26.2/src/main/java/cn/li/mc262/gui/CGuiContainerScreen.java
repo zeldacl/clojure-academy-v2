@@ -29,12 +29,6 @@ public class CGuiContainerScreen<T extends AbstractContainerMenu> extends Abstra
         this.extractBackground(graphics, mouseX, mouseY, partialTick);
     }
 
-    /** @deprecated 26.2 image size is constructor-final; no-op kept for call-site compatibility. */
-    @Deprecated
-    public void setImageSize(int w, int h) {
-        // imageWidth/imageHeight are final in 26.2 — construct with sized ctor instead
-    }
-
     public int getImageWidthPublic() {
         return this.imageWidth;
     }

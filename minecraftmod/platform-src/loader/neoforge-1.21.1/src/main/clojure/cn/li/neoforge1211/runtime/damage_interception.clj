@@ -3,7 +3,7 @@
 
   Intercepts LivingIncomingDamageEvent (cancel) and LivingDamageEvent.Pre
   (mutable amount) so runtime effects can rewrite incoming damage."
-  (:require [cn.li.mc1211.runtime.damage-interception-core :as core]
+  (:require [cn.li.mcbase.runtime.damage-interception-core :as core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]

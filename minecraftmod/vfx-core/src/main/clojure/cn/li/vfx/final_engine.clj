@@ -1,12 +1,12 @@
 (ns cn.li.vfx.final-engine
-  "Headless VFX execution engine for the final typed effect ABI.
+  "Headless VFX graph sampling for the final typed effect ABI.
 
-   It owns effect instances and lifecycle/state transitions. Rendering and
-   network delivery are ports: replication produces packets, while the
-   returned render batches are consumed by a client renderer later."
-  (:require [cn.li.vfx.effect-schema :as schema]
-            [cn.li.vfx.replication :as replication]
-            [cn.li.vfx.expr :as expr]))
+   Sampling is a pure function of (descriptor, params, state, age, seed):
+   it owns no effect instances and performs no network delivery. Instance
+   lifecycle and replication belong to the client-side runtime
+   (cn.li.vfx.final-client), the only production consumer of sample-graph."
+  (:require [cn.li.node.expr :as expr]
+            [cn.li.node.kernel :as kernel]))
 
 (def ^:private expression-ops
   {:vfx/ring-point
@@ -18,14 +18,8 @@
                (double y)
                (+ (double z) (* r (Math/sin angle)))]}))})
 
-(def ^:const max-instances 4096)
-(def ^:const max-ticks 72000)
-
 (defn- fail [message data]
   (throw (ex-info message data)))
-
-(defn- descriptor [runtime effect-id]
-  (schema/descriptor (:catalog @runtime) effect-id))
 
 (defn- validate-params [descriptor params]
   (let [declared (into {} (map (juxt :name identity) (:parameters descriptor)))
@@ -41,30 +35,14 @@
                           (:parameters descriptor)))
            params)))
 
-(defn- graph-ref [reference context]
-  (let [[scope key & path] reference
-        root (case scope :input (:params context) :state (:state context)
-               :local (:locals context) :frame (:frame context) nil)]
-    (if (= :local scope)
-      (if (seq path) (get-in (get root key) path) (get root key))
-      (get-in root (into [key] path)))))
-
-(defn- graph-value [value context]
-  (cond
-    (and (map? value) (vector? (:ref value))) (graph-ref (:ref value) context)
-    (and (map? value) (keyword? (:expr value)))
-    (expr/evaluate (:expr value)
-                   (mapv #(graph-value % context) (:args value))
-                   (long (:seed context))
-                   (:expression-ops context))
-    (and (map? value) (contains? value :from) (contains? value :to))
-    (let [t (double (or (:progress context) 0.0))
-          from (double (or (graph-value (:from value) context) 0.0))
-          to (double (or (graph-value (:to value) context) 0.0))]
-      (+ from (* t (- to from))))
-    (map? value) (into {} (map (fn [[k v]] [k (graph-value v context)]) value))
-    (vector? value) (mapv #(graph-value % context) value)
-    :else value))
+(kernel/defresolver graph-value context
+  {:scopes {:input (:params context) :state (:state context)
+            :local (:locals context) :frame (:frame context)}
+   :local :local
+   :seed (long (:seed context))
+   :extras (:expression-ops context)
+   :coll #{:map :vector}
+   :lerp? true})
 
 (defn- fade-factor [node age]
   (let [from (double (or (:from-tick node) 0))
@@ -168,98 +146,3 @@
                 :seed (long seed) :locals {}
                 :expression-ops expression-ops}))
 
-(defn create-runtime
-  [{:keys [catalog replication-service seed-source]
-    :or {seed-source (fn [_] 0)}}]
-  (when-not (map? catalog) (fail "VFX runtime requires catalog" {}))
-  (atom {:catalog catalog
-         :replication replication-service
-         :seed-source seed-source
-         :next-handle 1
-         :instances {}
-         :outbox []}))
-
-(defn- allocate-handle [runtime]
-  (let [handle (:next-handle @runtime)]
-    (swap! runtime update :next-handle inc)
-    handle))
-
-(defn- render-batches [instance]
-  (let [{:keys [descriptor params state age seed handle]} instance]
-    (let [ops (if (:control-graph descriptor)
-                (sample-graph descriptor params state age seed)
-                (mapv (fn [primitive]
-                        {:operation :draw-batch :stage :world-after-translucent :primitive primitive
-                         :handle handle :effect-id (:id descriptor)
-                         :age-ticks age :params params})
-                      (:primitives descriptor)))]
-      (mapv #(assoc % :handle handle :effect-id (:id descriptor) :age-ticks age) ops))))
-
-(defn- mapvcat [f coll]
-  (vec (mapcat f coll)))
-
-(defn spawn!
-  [runtime effect-id {:keys [owner world-id anchor params] :as request}]
-  (let [descriptor (descriptor runtime effect-id)
-        _ (when-not descriptor
-            (fail "unknown VFX effect" {:effect-id effect-id}))
-        local-handle (allocate-handle runtime)
-        params (validate-params descriptor params)
-        replication-result (when-let [service (:replication @runtime)]
-                             (replication/spawn! service effect-id
-                                                  (assoc request :seed local-handle
-                                                         :params params)))
-        handle (or (:handle replication-result) local-handle)
-        instance {:handle handle :owner owner :world-id world-id :anchor anchor
-                  :descriptor descriptor :params params :age 0
-                  :state (or (:state-slots descriptor) {})
-                  :seed ((:seed-source @runtime) local-handle)}]
-    (when (>= (count (:instances @runtime)) max-instances)
-      (fail "VFX instance budget exceeded" {:limit max-instances}))
-    (swap! runtime assoc-in [:instances handle] instance)
-    {:handle handle :packet (:packet replication-result)
-     :render (render-batches instance)}))
-
-(defn update!
-  [runtime handle params]
-  (let [instance (or (get-in @runtime [:instances handle])
-                     (fail "unknown VFX handle" {:handle handle}))
-        descriptor (:descriptor instance)
-        next-params (validate-params descriptor (merge (:params instance) params))
-        result (assoc instance :params next-params)]
-    (swap! runtime assoc-in [:instances handle] result)
-    {:handle handle
-     :packet (when-let [service (:replication @runtime)]
-               (:packet (replication/update! service handle next-params)))
-     :render (render-batches result)}))
-
-(defn destroy!
-  [runtime handle]
-  (let [instance (get-in @runtime [:instances handle])]
-    (when instance
-      (swap! runtime update :instances dissoc handle)
-      (when-let [service (:replication @runtime)]
-        (replication/destroy! service handle))
-      {:handle handle :destroyed? true})))
-
-(defn tick!
-  [runtime]
-  (let [expired (atom [])]
-    (swap! runtime update :instances
-           (fn [instances]
-             (into {}
-                   (keep (fn [[handle instance]]
-                           (let [age (inc (long (:age instance)))
-                                 duration (get (:params instance) :duration-ticks)
-                                 expired? (and (= :transient (get-in instance [:descriptor :lifecycle]))
-                                               duration (>= age (long duration)))]
-                             (if expired?
-                               (do (swap! expired conj handle) nil)
-                               [handle (assoc instance :age (min max-ticks age))]))))
-                   instances)))
-    (doseq [handle @expired] (destroy! runtime handle))
-    {:expired (vec @expired)
-     :render (mapvcat render-batches (vals (:instances @runtime)))}))
-
-(defn snapshot [runtime]
-  (select-keys @runtime [:instances :outbox]))

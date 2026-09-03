@@ -3,11 +3,12 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.event-runtime :as world-lifecycle]
             [cn.li.platform.neutral.event-runtime :as world-save-cache]
+            [cn.li.platform.optional.ic2-energy :as ic2-energy]
             [cn.li.platform.neutral.event-runtime :as world-state-notify]
             [cn.li.platform.neutral.event-runtime :as wok]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mc262.integration.saveddata.world-lifecycle :as wl-saved])
-	  (:import [cn.li.mc262.bridge McAccess] [net.minecraft.server.level ServerLevel]
+	  (:import [cn.li.mcver McAccess] [net.minecraft.server.level ServerLevel]
            [net.neoforged.neoforge.event.level LevelEvent$Load LevelEvent$Unload LevelEvent$Save]
            [net.neoforged.neoforge.event.tick LevelTickEvent$Post]))
 
@@ -43,6 +44,7 @@
 (defn handle-world-unload
   [^LevelEvent$Unload evt]
   (try
+    (ic2-energy/clear-proxy-cache!)
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)
         (log/debug "World unloading, dispatching to lifecycle handlers")

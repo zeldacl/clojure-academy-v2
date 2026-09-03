@@ -1,60 +1,58 @@
 (ns cn.li.node.validate-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.node.descriptor :as registry]
+  (:require [clojure.test :refer [deftest is]]
+            [cn.li.node.environment :as environment]
             [cn.li.node.validate :as validate]))
 
-(use-fixtures :each
-  (fn [f]
-    (registry/reset-for-test!)
-    (registry/register-primitive!
-     {:id :test/leaf :revision 1
-      :inputs {:amount {:type :float} :label {:type :string :default "x"}}
-      :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/wrapper :revision 1
+(def ^:private test-environment
+  (environment/build
+   {:descriptors
+    [{:id :test/leaf :revision 1 :layer :primitive
+      :inputs {:amount {:type :double} :label {:type :string :default "x"}}
+      :impl (fn [_ _] {})}
+     {:id :test/wrapper :revision 1 :layer :primitive
       :children {:child {:kind :single}}
-      :impl (fn [_ _] {})})
-    (registry/register-primitive!
-     {:id :test/with-callback :revision 1
+      :impl (fn [_ _] {})}
+     {:id :test/with-callback :revision 1 :layer :primitive
       :inputs {:on-each {:type :node :scope {}}}
-      :impl (fn [_ _] {})})
-    (f)
-    (registry/reset-for-test!)))
+      :impl (fn [_ _] {})}]}))
+
+(defn- validate! [node]
+  (validate/validate-in-environment! test-environment node))
 
 (deftest valid-node-passes-test
-  (is (nil? (validate/validate! {:component :test/leaf :amount 5.0}))))
+  (is (nil? (validate! {:component :test/leaf :amount 5.0}))))
 
 (deftest missing-required-field-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"missing-required-field"
-       (validate/validate! {:component :test/leaf}))))
+       (validate! {:component :test/leaf}))))
 
 (deftest default-field-may-be-omitted-test
-  (is (nil? (validate/validate! {:component :test/leaf :amount 5.0}))))
+  (is (nil? (validate! {:component :test/leaf :amount 5.0}))))
 
 (deftest unknown-field-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unknown-field"
-       (validate/validate! {:component :test/leaf :amount 5.0 :bogus 1}))))
+       (validate! {:component :test/leaf :amount 5.0 :bogus 1}))))
 
 (deftest type-mismatch-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"type-mismatch"
-       (validate/validate! {:component :test/leaf :amount "not-a-number"}))))
+       (validate! {:component :test/leaf :amount "not-a-number"}))))
 
 (deftest deferred-value-skips-type-check-test
-  (is (nil? (validate/validate! {:component :test/leaf :amount {:ref [:local :x]}}))))
+  (is (nil? (validate! {:component :test/leaf :amount {:ref [:local :x]}}))))
 
 (deftest unknown-component-throws-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"unknown-component"
-       (validate/validate! {:component :test/does-not-exist}))))
+       (validate! {:component :test/does-not-exist}))))
 
 (deftest recurses-into-children-and-callback-inputs-test
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"missing-required-field"
-       (validate/validate! {:component :test/wrapper :child {:component :test/leaf}})))
+       (validate! {:component :test/wrapper :child {:component :test/leaf}})))
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo #"missing-required-field"
-       (validate/validate! {:component :test/with-callback :on-each {:component :test/leaf}}))))
+       (validate! {:component :test/with-callback :on-each {:component :test/leaf}}))))
 

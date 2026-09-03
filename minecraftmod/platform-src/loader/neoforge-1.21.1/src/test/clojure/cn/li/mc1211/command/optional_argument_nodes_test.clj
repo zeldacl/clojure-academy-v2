@@ -6,7 +6,7 @@
   alone, which silently made every declared-optional argument mandatory: the
   DSL accepted :optional? true and the command then refused to run without it."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc1211.command.brigadier-tree :as tree]))
+            [cn.li.mcbase.command.brigadier-tree :as tree]))
 
 (def ^:private noop-executor (fn [_ctx] nil))
 

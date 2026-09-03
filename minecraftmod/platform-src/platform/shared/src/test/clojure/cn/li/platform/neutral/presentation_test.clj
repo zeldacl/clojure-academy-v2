@@ -37,3 +37,18 @@
     (is (= 1 (count (:ops line-plan))))
     (is (= :quad (:kind (first (:ops marker-plan)))))
     (is (= 1 (count (:ops marker-plan))))))
+(deftest direct-host-bypasses-lifecycle-map-on-render-path
+  (let [lifecycle-lookups (atom 0)
+        api {:frame! (fn [_frame-id _delta _width _height] :frame)}]
+    (presentation/reset-host-for-test!)
+    (try
+      (presentation/install-host! api)
+      (with-redefs [cn.li.mcbase.presentation.host-lifecycle/host-api
+                    (fn [& _] (swap! lifecycle-lookups inc))]
+        (is (= :frame (presentation/frame! 1 0.05 800 600)))
+        (is (= {:host-id :presentation :stage :hud :frame :frame}
+               (presentation/dispatch-stage-with-context!
+                :hud 1 0.05 800 600 nil)))
+        (is (zero? @lifecycle-lookups)))
+      (finally
+        (presentation/reset-host-for-test!)))))

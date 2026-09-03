@@ -2,7 +2,7 @@
   "Forge implementation of IDamageInterception protocol.
 
   Intercepts LivingHurtEvent to allow runtime effects to modify incoming damage."
-  (:require [cn.li.mc1201.runtime.damage-interception-core :as core]
+  (:require [cn.li.mcbase.runtime.damage-interception-core :as core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]

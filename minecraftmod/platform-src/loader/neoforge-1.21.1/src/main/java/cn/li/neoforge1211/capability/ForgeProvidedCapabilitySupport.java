@@ -74,12 +74,4 @@ public final class ForgeProvidedCapabilitySupport {
         return null;
     }
 
-    /**
-     * @deprecated Prefer {@link #blockCapabilityForType(Class)}.
-     */
-    @Deprecated
-    @Nullable
-    public static BlockCapability<?, Direction> forgeProvidedCapabilityForType(Class<?> capabilityType) {
-        return blockCapabilityForType(capabilityType);
-    }
 }

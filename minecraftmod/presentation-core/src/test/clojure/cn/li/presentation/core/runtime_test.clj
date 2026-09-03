@@ -1,21 +1,22 @@
 (ns cn.li.presentation.core.runtime-test
-  (:require [clojure.string :as str]
-            [clojure.test :refer :all]
+  (:require [clojure.test :refer :all]
             [cn.li.presentation.core.runtime :as runtime]
-            [cn.li.presentation.core.paint :as paint])
-  (:import [cn.li.presentation.core HostGeometry]))
+            [cn.li.presentation.core.nodetable :as nodetable]
+            [cn.li.presentation.core.test-artifact :as ta])
+  (:import [cn.li.presentation.core HostGeometry]
+           [cn.li.mcmod.runtime.ui UiOp]))
 
-(def sample-artifact
-  {:magic :pui3 :schema 3 :view-id :academy/test/runtime
-   :semantics {:role :generic :label "test"}})
+(use-fixtures :each
+  (fn [f] (nodetable/clear-tables-for-test!) (f)))
 
 (deftest runtime-commits-state-before-effects
   (let [effects (atom [])
         rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/runtime {:key :root})
         mount (runtime/mount!
                 rt {:host {:stage :screen}
                     :view-id :academy/test/runtime
-                    :artifact sample-artifact
+                    :artifact artifact
                     :state {:value 0}
                     :reduce (fn [state action payload]
                               (if (= action :increment)
@@ -23,398 +24,344 @@
                                  :effects [{:type :record :value (+ (:value state) payload)}]
                                  :event-result :consume}
                                 {:state state :effects [] :event-result :pass}))
-                    :run-effect! #(swap! effects conj %)} )]
+                    :run-effect! #(swap! effects conj %)})]
     (is (= :consume (runtime/dispatch! rt mount {:action :increment :payload 2})))
     (is (= [{:type :record :value 2}] @effects))
-    (is (= {:role :generic :label "test"} (runtime/semantics rt mount)))
     (runtime/update-host! rt mount (HostGeometry. 10.0 20.0 320 240 1.0))
-    (is (= mount (-> (runtime/extract-stage! rt :screen {:time-nanos 1}) :mounts first :handle)))))
+    (is (= mount (-> (runtime/extract-stage! rt :screen {:time-nanos 1 :width 320 :height 240}) :mounts first :handle)))))
 
 (deftest runtime-requires-owner-thread
   (let [foreign-thread (Thread.)
         rt (runtime/create-runtime {:owner-thread foreign-thread})]
     (is (thrown? IllegalStateException (runtime/unmount-all! rt)))))
-(deftest runtime-extracts-new-ui-render-ir
-  (let [rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/paint
-                  :nodes {:id :root :type :rect :layout {}
-                          :style {:rgba (unchecked-int 0xFF00FF00)}}}
-        mount (runtime/mount!
-                rt {:host {:stage :screen}
-                    :view-id :academy/test/paint
-                    :artifact artifact
-                    :state {}
-                    :paint-fn paint/paint-view})
-        packet (runtime/extract-stage! rt :screen {:time-nanos 2})
-        command (-> packet :mounts first :commands first)]
-    (is (= 1 (count (:mounts packet))))
-    (is (instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))
-    (is (= 1 (count (.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch command))))
-    (runtime/unmount! rt mount)))
-(deftest painter-uses-button-binding-label
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/button
-                  :nodes {:id :root :type :button :layout {:width 80 :height 20}
-                          :bind {:text [:state :button]}
-                          :semantics {:role :button}}}
-        commands (paint/paint-view artifact {:button {:label "Save"}}
-                                    {:viewport-width 100 :viewport-height 40})
-        label-command (second commands)]
-    (is (instance? cn.li.mcmod.runtime.RenderCommand$UiText label-command))
-    (is (= "Save" (.text ^cn.li.mcmod.runtime.RenderCommand$UiText label-command)))))
-(deftest painter-expands-collection-and-input-nodes
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/collection
-                  :nodes {:id :root :type :column :layout {}
-                          :children [{:type :scroll :bind {:items [:state :lines]}}
-                                     {:type :text-input :bind {:text [:state :query]}}]}}
-        commands (paint/paint-view artifact {:lines [{:label "One"} {:label "Two"}]
-                                               :query "search"}
-                                    {:viewport-width 120 :viewport-height 80})
-        texts (->> commands
-                   (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiText %))
-                   (map #(.text ^cn.li.mcmod.runtime.RenderCommand$UiText %))
-                   vec)]
-    (is (= ["One" "Two" "search"] texts))))
 
-(deftest painter-accepts-boolean-progress-values
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/progress
-                  :nodes {:id :root :type :progress :layout {:width 20 :height 4}
-                          :bind {:value [:state :loading?]}}}
-        commands (paint/paint-view artifact {:loading? true}
-                                    {:viewport-width 20 :viewport-height 4})]
-    (is (= 1 (count commands)))
-    (is (instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch (first commands)))))
-(deftest runtime-routes-pointer-to-button-action
+(defn- extracted-commands [rt mount stage width height]
+  (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 width height 1.0))
+  (-> (runtime/extract-stage! rt stage {:width width :height height})
+      :mounts first :commands))
+
+(deftest extract-stage-produces-a-run-batched-draw-list
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/paint
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :rgba (unchecked-int 0xFF00FF00)})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/paint
+                                  :artifact artifact :state {}})
+        dl (extracted-commands rt mount :screen 100 100)]
+    (is (= 1 (.count dl)))
+    (is (= UiOp/RECT (aget (.op dl) 0)))
+    (is (= (unchecked-int 0xFF00FF00) (aget (.rgba dl) 0)))))
+
+(deftest clean-frame-reuses-the-same-draw-list-object
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/memo
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :bind {:rgba [:state :color]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/memo
+                                  :artifact artifact :state {:color (unchecked-int 0xFF00FF00)}})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        dl2 (extracted-commands rt mount :screen 100 100)]
+    (is (identical? dl1 dl2))))
+
+(deftest changed-binding-invalidates-the-cached-draw-list
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/memo-change
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :bind {:rgba [:state :color]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/memo-change
+                                  :artifact artifact :state {:color (unchecked-int 0xFF00FF00)}})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        ;; CmdBuf hands out its live backing arrays uncopied (by design, see
+        ;; its docstring) on the promise that a UiDrawList is fully consumed
+        ;; before the next frame's paint overwrites them -- so read dl1's
+        ;; values out to plain locals now, before triggering dl2.
+        dl1-rgba (aget (.rgba dl1) 0)
+        dl1-identity dl1]
+    (runtime/update-view! rt mount (fn [state] (assoc state :color (unchecked-int 0xFFFF0000))))
+    (let [dl2 (extracted-commands rt mount :screen 100 100)]
+      (is (not (identical? dl1-identity dl2)))
+      (is (= (unchecked-int 0xFF00FF00) dl1-rgba))
+      (is (= (unchecked-int 0xFFFF0000) (aget (.rgba dl2) 0))))))
+
+(deftest resize-invalidates-the-cached-draw-list-even-with-unchanged-state
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/memo-resize
+                           {:key :root :op UiOp/RECT :width [:fill 1.0] :height [:fill 1.0]})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/memo-resize
+                                  :artifact artifact :state {}})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        ;; Read dl1's geometry now -- see changed-binding-invalidates-... for
+        ;; why this must happen before the next extraction call.
+        dl1-identity dl1
+        dl1-w (double (aget (.geom dl1) 2))
+        dl1-h (double (aget (.geom dl1) 3))
+        dl2 (extracted-commands rt mount :screen 200 200)]
+    (is (not (identical? dl1-identity dl2)))
+    (is (= 100.0 dl1-w))
+    (is (= 100.0 dl1-h))
+    (is (= 200.0 (double (aget (.geom dl2) 2))))
+    (is (= 200.0 (double (aget (.geom dl2) 3))))))
+
+(deftest a-no-op-dispatch-does-not-invalidate-a-clean-paint
+  ;; dispatch! and extract-stage! share the same layout-freshness stamp
+  ;; (ensure-layout-current!) but must NOT share paint freshness the same
+  ;; way -- a pointer move that changes nothing must leave the next
+  ;; extract-stage! free to keep reusing the already-painted UiDrawList.
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/dispatch-paint-share
+                           {:key :root :op UiOp/RECT :width [:fixed 20.0] :height [:fixed 10.0]
+                            :bind {:rgba [:state :color]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:color (unchecked-int 0xFF00FF00)}})
+        dl1 (extracted-commands rt mount :screen 100 100)]
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 5.0 :y 5.0})
+    (let [dl2 (-> (runtime/extract-stage! rt :screen {:width 100 :height 100}) :mounts first :commands)]
+      (is (identical? dl1 dl2)))))
+
+(deftest dispatch-triggered-state-change-invalidates-the-next-extract
+  ;; The hazard this guards against: dispatch! updates the layout stamp
+  ;; (it needed a current arena for hit-testing) but the reducer's state
+  ;; change happens AFTER that hit-test, via present!, which never touches
+  ;; the layout/paint stamps at all. The next extract-stage! must still
+  ;; detect the binding change and repaint -- not be fooled by dispatch!
+  ;; having already "seen" a matching stamp for the pre-toggle state.
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/dispatch-invalidate
+                           {:key :root :flags #{:hit-testable} :width [:fixed 20.0] :height [:fixed 10.0]
+                            :on {:activate :demo/toggle}
+                            :children [{:op UiOp/RECT :width [:fill 1.0] :height [:fill 1.0]
+                                       :bind {:rgba [:state :color]}}]})
+        mount (runtime/mount!
+               rt {:host {:stage :screen} :artifact artifact
+                   :state {:color (unchecked-int 0xFF00FF00)}
+                   :reduce (fn [state action _payload]
+                             (if (= action :demo/toggle)
+                               {:state (assoc state :color (unchecked-int 0xFFFF0000)) :event-result :consume}
+                               {:state state :event-result :pass}))})
+        dl1 (extracted-commands rt mount :screen 100 100)
+        dl1-rgba (aget (.rgba dl1) 0)]
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5.0 :y 5.0 :button 0})
+    (let [dl2 (-> (runtime/extract-stage! rt :screen {:width 100 :height 100}) :mounts first :commands)]
+      (is (= (unchecked-int 0xFF00FF00) dl1-rgba))
+      (is (= (unchecked-int 0xFFFF0000) (aget (.rgba dl2) 0))))))
+
+(deftest bound-text-resolves-through-item-label-coercion
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/button
+                           {:key :root :flags #{:hit-testable} :width [:fixed 80.0] :height [:fixed 20.0]
+                            :children [{:op UiOp/RECT :width [:fill 1.0] :height [:fill 1.0]}
+                                      {:op UiOp/TEXT :bind {:text [:state :button]}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/button
+                                  :artifact artifact :state {:button {:label "Save"}}})
+        dl (extracted-commands rt mount :screen 100 40)]
+    (is (= 2 (.count dl)))
+    (is (= "Save" (aget (.aux dl) 1)))))
+
+(deftest collection-expands-once-per-item-and-resolves-item-scoped-bindings
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/collection
+                           {:key :root :direction :column
+                            :flags #{:is-collection :has-direction}
+                            :bind {:items [:state :lines]}
+                            :children [{:op UiOp/TEXT :height [:fixed 10.0] :bind {:text [:item :label]}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/collection
+                                  :artifact artifact
+                                  :state {:lines [{:label "One"} {:label "Two"}]}})
+        dl (extracted-commands rt mount :screen 100 40)]
+    (is (= 2 (.count dl)))
+    (is (= ["One" "Two"] (vec (take 2 (.aux dl)))))))
+
+(deftest progress-bar-accepts-a-boolean-value
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/progress
+                           {:key :root :op UiOp/PROGRESS :width [:fixed 20.0] :height [:fixed 4.0]
+                            :bind {:value [:state :loading?]}})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/progress
+                                  :artifact artifact :state {:loading? true}})
+        dl (extracted-commands rt mount :screen 20 4)]
+    (is (= 2 (.count dl))) ; track + fill
+    (is (= 20.0 (aget (.geom dl) (+ (* 1 4) 2)))))) ; fill width = track width * 1.0
+
+(deftest pointer-down-on-a-hit-testable-node-fires-its-activate-action
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/input
-                  :nodes {:id :root :type :row :layout {}
-                          :children [{:type :button :key :left :layout {:height 20}
-                                      :on {:activate :demo/left}}
-                                     {:type :button :key :right :layout {:height 20}
-                                      :on {:activate :demo/right}}]}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {}
+        artifact (ta/build :academy/test/input
+                           {:key :root :direction :row :flags #{:has-direction}
+                            :children [{:key :left :flags #{:hit-testable} :width [:fixed 50.0] :height [:fixed 20.0]
+                                       :on {:activate :demo/left}}
+                                      {:key :right :flags #{:hit-testable} :width [:fixed 50.0] :height [:fixed 20.0]
+                                       :on {:activate :demo/right}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state {}
                                   :reduce (fn [state action payload]
                                             (reset! seen [action payload])
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
-    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
-                                                  :x 75 :y 10 :button 0})))
-    (is (= [:demo/right {:target :right :button-id 1}] @seen))))
-(deftest runtime-routes-repeater-button-with-item-context
+    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 75 :y 10 :button 0})))
+    (is (= [:demo/right {:target :right}] @seen))))
+
+(deftest pointer-coordinates-are-offset-by-a-nonzero-host-origin
+  ;; A HUD overlay mounted at a nonzero screen origin gets mount-local
+  ;; pointer coordinates; hit-testing must add the geometry's origin back
+  ;; in before comparing against the arranged (absolute) rect.
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/repeater-input
-                  :nodes {:id :root :type :scroll :layout {:width 100 :height 40}
-                          :bind {:items [:state :items]}
-                          :children [{:type :button :key :row/action
-                                      :layout {:height 20}
-                                      :bind {:text [:item :label]}
-                                      :on {:activate :demo/item}}]}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
+        artifact (ta/build :academy/test/origin
+                           {:key :root
+                            :children [{:key :btn :flags #{:hit-testable} :width [:fixed 20.0] :height [:fixed 20.0]
+                                       :on {:activate :demo/go}}]})
+        mount (runtime/mount! rt {:host {:stage :hud} :artifact artifact :state {}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 50.0 60.0 100 100 1.0))
+    ;; mount-local (5,5) + origin (50,60) = absolute (55,65), inside the 50,60..70,80 button rect.
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
+    (is (= [:demo/go {:target :btn}] @seen))))
+
+(deftest viewport-space-pointer-events-skip-the-origin-offset
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/viewport-space
+                           {:key :root
+                            :children [{:key :btn :flags #{:hit-testable} :width [:fixed 20.0] :height [:fixed 20.0]
+                                       :on {:activate :demo/go}}]})
+        mount (runtime/mount! rt {:host {:stage :hud} :artifact artifact :state {}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action payload])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 50.0 60.0 100 100 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0 :space :viewport})
+    (is (= :input/pointer (first @seen)) "a viewport-space click at (5,5) misses the button, which is at absolute (50,60)")
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 55 :y 65 :button 0 :space :viewport})
+    (is (= [:demo/go {:target :btn}] @seen))))
+
+(deftest pointer-down-in-a-repeater-carries-item-and-index
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/repeater-input
+                           {:key :root :direction :column :flags #{:is-collection :has-direction}
+                            :width [:fixed 100.0] :height [:fixed 40.0]
+                            :bind {:items [:state :items]}
+                            :children [{:key :row/action :flags #{:hit-testable}
+                                       :width [:fill 1.0] :height [:fixed 20.0]
+                                       :bind {:text [:item :label]} :on {:activate :demo/item}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
                                   :state {:items [{:label "One"} {:label "Two"}]}
                                   :reduce (fn [state action payload]
                                             (reset! seen [action payload])
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
-    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
-                                                  :x 10 :y 30 :button 0})))
-    (is (= [:demo/item {:target :row/action
-                        :item {:label "Two"}
-                        :index 1}] @seen))))
-(deftest runtime-routes-text-input
+    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 30 :button 0})))
+    (is (= [:demo/item {:target :row/action :item {:label "Two"} :index 1}] @seen))))
+
+(deftest text-input-focuses-on-click-and-accepts-typed-characters
   (let [seen (atom [])
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/text-input
-                  :nodes {:id :root :type :text-input :layout {:width 100 :height 20}
-                          :bind {:text [:state :query]}
-                          :on {:change :edit/change :submit :edit/submit}
-                          :semantics {:role :textbox :field :query}}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {:query ""}
-                                  :reduce (fn [state action payload]
-                                            (swap! seen conj [action state payload])
-                                            {:state state :event-result :consume})})]
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
-    (runtime/dispatch! rt mount {:type :character :text "a"})
-    (is (= :edit/change (first (last @seen))))
-    (is (= "a" (get-in (second (last @seen)) [:query])))
-    (runtime/dispatch! rt mount {:type :key :key-code 259 :pressed? true})
-    (is (= "" (get-in (second (last @seen)) [:query])))))
-(deftest runtime-reuses-paint-for-clean-frame
-  (let [paints (atom 0)
-        rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/cache
-                  :nodes {:type :rect :layout {}}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {:value 1}
-                                  :paint-fn (fn [_ _ _]
-                                               (swap! paints inc)
-                                               [:paint])})]
-    (runtime/extract-stage! rt :screen {})
-    (runtime/extract-stage! rt :screen {})
-    (is (= 1 @paints))
-    (runtime/present! rt mount {:value 2})
-    (runtime/extract-stage! rt :screen {})
-    (is (= 2 @paints))))
-(deftest runtime-routes-hover-enter-and-leave
-  (let [seen (atom [])
-        rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/hover
-                  :nodes {:type :row :layout {:width 100 :height 20}
-                          :children [{:type :button :key :tag
-                                      :layout {:width 50 :height 20}
-                                      :on {:hover :demo/hover}}]}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {}
+        artifact (ta/build :academy/test/text-input
+                           {:key :root :flags #{:hit-testable :focusable}
+                            :width [:fixed 100.0] :height [:fixed 20.0]
+                            :bind {:text [:state :query]}
+                            :on {:change :edit/change :submit :edit/submit}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state {:query ""}
                                   :reduce (fn [state action payload]
                                             (swap! seen conj [action payload])
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 10})
-    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 90 :y 10})
-    (is (= :demo/hover (ffirst @seen)))
-    (is (= :enter (get-in @seen [0 1 :hover-event])))
-    (is (= true (get-in @seen [0 1 :hover?])))
-    (is (= :leave (get-in @seen [1 1 :hover-event])))
-    (is (= false (get-in @seen [1 1 :hover?])))))
-(deftest runtime-routes-scroll-and-paints-clipped-offsets
-  (let [seen (atom nil)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/scroll
-                  :nodes {:type :scroll :key :list :layout {:width 100 :height 20}
-                          :bind {:items [:state :items]}
-                          :children [{:type :text :layout {:height 10}
-                                      :bind {:text [:item :label]}}]}}
-        state {:items (mapv (fn [n] {:label (str n)}) (range 4))}
-        commands (paint/paint-view artifact
-                                    (assoc state :presentation/scroll-offsets {:list 10.0})
-                                    {:viewport-width 100 :viewport-height 20}
-                                    )
-        rt (runtime/create-runtime)
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state state
-                                  :reduce (fn [s action payload]
-                                            (reset! seen [action payload])
-                                            {:state s :event-result :consume})})]
-    (is (instance? cn.li.mcmod.runtime.RenderCommand$PushClip (first commands)))
-    (is (= -10.0 (double (.y ^cn.li.mcmod.runtime.RenderCommand$UiText
-                              (second commands)))))
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
-    (is (= :consume (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})))
-    (is (= :input/scroll (first @seen)))
-    (is (= :list (get-in @seen [1 :target])))
-    (is (= 12.0 (double (get-in @seen [1 :scroll-offset]))))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :drag :x 5 :y 10 :drag-y -5.0})
-    (is (= true (get-in @seen [1 :drag?])))
-    (is (= 17.0 (double (get-in @seen [1 :scroll-offset]))))))
-(deftest runtime-applies-frame-host-geometry
-  (let [rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/fill
-                  :nodes {:type :rect :layout {:width :fill :height :fill}}}
-        mount (runtime/mount! rt {:host {:stage :hud}
-                                  :artifact artifact
-                                  :paint-fn (fn [_ _ geometry] [geometry])})
-        packet (runtime/extract-stage! rt :hud {:width 320 :height 180})
-        geometry (-> packet :mounts first :commands first)]
-    (is (= 320 (.viewportWidth ^HostGeometry geometry)))
-    (is (= 180 (.viewportHeight ^HostGeometry geometry)))
-    (runtime/unmount! rt mount)))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (runtime/dispatch! rt mount {:type :character :text "h"})
+    (runtime/dispatch! rt mount {:type :character :text "i"})
+    (is (= "hi" (get-in (runtime/instance! rt mount) [:view-state :query])))))
 
-(deftest runtime-routes-progress-input
+(deftest progress-drag-reports-a-clamped-ratio
   (let [seen (atom nil)
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/progress-input
-                  :nodes {:type :progress :key :seek :layout {:width 100 :height 10}
-                          :on {:change :media/seek}}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {}
+        artifact (ta/build :academy/test/progress-input
+                           {:key :root :op UiOp/PROGRESS :flags #{:hit-testable}
+                            :width [:fixed 20.0] :height [:fixed 4.0]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state {}
                                   :reduce (fn [state action payload]
                                             (reset! seen [action payload])
                                             {:state state :event-result :consume})})]
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 10 1.0))
-    (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down
-                                                  :x 25 :y 5 :button 0})))
-    (is (= :media/seek (first @seen)))
-    (is (= 0.25 (double (get-in @seen [1 :value]))))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :drag
-                                  :x 75 :y 5 :drag-x 50})
-    (is (= 0.75 (double (get-in @seen [1 :value]))))))
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 20 4 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 15 :y 2 :button 0})
+    (is (= :input/progress (first @seen)))
+    (is (= 0.75 (double (:value (second @seen)))))))
 
-(deftest runtime-ignores-hidden-and-clipped-interaction-nodes
+(deftest scroll-wheel-over-a-scroll-container-advances-its-offset
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/scroll
+                           {:key :list :flags #{:has-clip :is-scroll :is-collection :has-direction}
+                            :direction :column :width [:fixed 100.0] :height [:fixed 20.0]
+                            :bind {:items [:state :items]}
+                            :children [{:height [:fixed 10.0] :bind {:text [:item :label]}}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:items (mapv (fn [n] {:label (str n)}) (range 4))}})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    ;; dispatch!'s return value is the *reducer's* :event-result (:pass, since
+    ;; no custom :reduce was supplied) -- the scroll action's effect is
+    ;; observable via :scroll-offsets, which is what actually matters here.
+    (runtime/dispatch! rt mount {:type :scroll :x 5 :y 10 :delta -1})
+    (is (= 12.0 (double (get (:scroll-offsets (runtime/instance! rt mount)) :list))))))
+
+(deftest hover-target-tracks-across-pointer-moves
+  ;; One :input/hover dispatch per move (matching the pre-rewrite runtime's
+  ;; single combined action per move rather than a separate leave+enter
+  ;; pair) -- the payload's :hover-event/:previous-hover distinguish moving
+  ;; onto vs off of a target.
   (let [seen (atom [])
         rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/visibility
-                  :nodes {:type :column :layout {:width 100 :height 60}
-                          :children [{:type :button :key :hidden :layout {:height 20}
-                                      :bind {:visible [:state :hidden?]}
-                                      :on {:activate :demo/hidden :hover :demo/hidden-hover}}
-                                     {:type :scroll :key :list :layout {:height 20}
-                                      :bind {:items [:state :items]}
-                                      :children [{:type :button :layout {:height 10}
-                                                  :on {:activate :demo/item :hover :demo/item-hover}}]}]}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {:hidden? false :items [{:id 1} {:id 2} {:id 3}]}
+        artifact (ta/build :academy/test/hover
+                           {:key :root :direction :row :flags #{:has-direction}
+                            :children [{:key :left :flags #{:hit-testable} :width [:fixed 50.0] :height [:fixed 20.0]}
+                                      {:key :right :flags #{:hit-testable} :width [:fixed 50.0] :height [:fixed 20.0]}]})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state {}
                                   :reduce (fn [state action payload]
                                             (swap! seen conj [action payload])
-                                            {:state state :event-result :consume})})]
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 60 1.0))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 10})
-    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
-    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 55 :button 0})
-    (is (not-any? #(#{:demo/hidden :demo/hidden-hover :demo/item :demo/item-hover} (first %)) @seen))))
-(deftest runtime-treats-blank-visibility-as-hidden
-  (let [rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/blank-visibility
-                  :nodes {:type :button :key :hint :layout {:width 80 :height 20}
-                          :bind {:visible [:state :hint] :text [:state :hint]}
-                          :on {:activate :demo/hint}}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {:hint ""}
-                                  :reduce (fn [state _action _payload]
                                             {:state state :event-result :pass})})]
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
-    (is (empty? (:commands (first (:mounts (runtime/extract-stage! rt :screen {:width 100 :height 40}))))))
-    (is (= :pass (runtime/dispatch! rt mount {:type :pointer :event-type :down
-                                               :x 10 :y 10 :button 0})))))
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 10 :y 10})
+    (is (= :left (:key (:hover-target (runtime/instance! rt mount)))))
+    (is (= [:input/hover {:target :left :hover? true :hover-event :enter :previous-hover nil}]
+           (first @seen)))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 90 :y 10})
+    (is (= :right (:key (:hover-target (runtime/instance! rt mount)))))
+    (is (= [:input/hover {:target :right :hover? true :hover-event :enter :previous-hover :left}]
+           (second @seen)))))
 
+(deftest resource-index-for-uses-explicit-namespace-over-default
+  (let [resource-index-for #'runtime/resource-index-for]
+    (is (= 3 (resource-index-for {["bc" "icon"] 3 ["academy" "icon"] 9}
+                                 "academy" {:namespace "bc" :path "icon"})))))
 
-(deftest painter-packs-row-children-by-declared-width
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/pack-row
-                  :host {:kind :screen :design-width 100 :design-height 20 :scale-policy :fit}
-                  :nodes {:type :row :layout {:width 100 :height 20}
-                          :children [{:type :rect :key :a :layout {:width 20 :height 20}
-                                      :style {:rgba (unchecked-int 0xFF0000FF)}}
-                                     {:type :rect :key :b :layout {:width 50 :height 20}
-                                      :style {:rgba (unchecked-int 0xFF00FF00)}}
-                                     {:type :rect :key :c :layout {:width 30 :height 20}
-                                      :style {:rgba (unchecked-int 0xFFFF0000)}}]}}
-        commands (paint/paint-view artifact {} {:viewport-width 100 :viewport-height 20})
-        quads (->> commands
-                   (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiQuadBatch %))
-                   (mapcat #(.quads ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch %))
-                   vec)]
-    (is (= 3 (count quads)))
-    (is (= 0.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 0)))))
-    (is (= 20.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 0)))))
-    (is (= 20.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 1)))))
-    (is (= 50.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 1)))))
-    (is (= 70.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 2)))))
-    (is (= 30.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad (nth quads 2)))))))
+(deftest resource-index-for-falls-back-to-default-namespace-not-a-hardcoded-one
+  ;; Regression for presentation-core hardcoding "academy" as the implicit
+  ;; namespace for every unqualified resource ref, regardless of which
+  ;; content module's view was asking (a real architectural leak this
+  ;; refactor exists to close -- a BC view with an unqualified :src would
+  ;; have silently resolved into AC's resource table, or missed entirely).
+  ;; default-namespace is now the caller's own namespace, not a literal.
+  (let [resource-index-for #'runtime/resource-index-for
+        index {["academy" "icon"] 1 ["bc" "icon"] 2}]
+    (is (= 1 (resource-index-for index "academy" {:path "icon"})))
+    (is (= 2 (resource-index-for index "bc" {:path "icon"})))
+    ;; A string src with its own "ns:path" prefix always wins over
+    ;; default-namespace, map or string form alike.
+    (is (= 1 (resource-index-for index "bc" "academy:icon")))
+    (is (= 2 (resource-index-for index "academy" "bc:icon")))))
 
-(deftest painter-centers-design-box-with-fit-policy
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/fit
-                  :host {:kind :screen :design-width 40 :design-height 20 :scale-policy :fit}
-                  :nodes {:type :rect :layout {:width 40 :height 20}
-                          :style {:rgba (unchecked-int 0xFFFFFFFF)}}}
-        commands (paint/paint-view artifact {} {:viewport-width 100 :viewport-height 60})
-        quad (-> ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch (first commands)
-                 (.quads) first)]
-    (is (= 30.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
-    (is (= 20.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
-    (is (= 40.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
-    (is (= 20.0 (float (.height ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))))
+(deftest resource-index-for-misses-cleanly-with-no-namespace-anywhere
+  ;; No explicit :namespace and no default-namespace (e.g. an unnamespaced
+  ;; view-id): must miss (-1), not fabricate a "nil" string lookup key that
+  ;; could accidentally collide with a real entry.
+  (let [resource-index-for #'runtime/resource-index-for]
+    (is (= -1 (resource-index-for {[nil "icon"] 5} nil {:path "icon"})))
+    (is (= -1 (resource-index-for {} nil "icon")))))
 
-(deftest painter-applies-absolute-child-offsets
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/absolute
-                  :nodes {:type :absolute :layout {:width 100 :height 80}
-                          :children [{:type :rect :layout {:x 10 :y 15 :width 20 :height 12}
-                                      :style {:rgba (unchecked-int 0xFFFFFFFF)}}]}}
-        commands (paint/paint-view artifact {} {:viewport-width 100 :viewport-height 80})
-        quad (-> ^cn.li.mcmod.runtime.RenderCommand$UiQuadBatch (first commands)
-                 (.quads) first)]
-    (is (= 10.0 (float (.x ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
-    (is (= 15.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
-    (is (= 20.0 (float (.width ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))
-    (is (= 12.0 (float (.height ^cn.li.mcmod.runtime.RenderCommand$UiQuad quad))))))
-
-(deftest runtime-hits-packed-row-and-centered-design
-  (let [seen (atom nil)
-        rt (runtime/create-runtime)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/hit-fit
-                  :host {:kind :screen :design-width 100 :design-height 20 :scale-policy :fit}
-                  :nodes {:type :row :layout {:width 100 :height 20}
-                          :children [{:type :button :key :left :layout {:width 40 :height 20}
-                                      :on {:activate :demo/left}}
-                                     {:type :button :key :right :layout {:width 60 :height 20}
-                                      :on {:activate :demo/right}}]}}
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state {}
-                                  :reduce (fn [state action payload]
-                                            (reset! seen [action payload])
-                                            {:state state :event-result :consume})})]
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 200 40 1.0))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 60 :y 20 :button 0})
-    (is (= :demo/left (first @seen)))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 120 :y 20 :button 0})
-    (is (= :demo/right (first @seen)))))
-
-(deftest runtime-scrollbar-tracks-content-offset
-  (let [seen (atom nil)
-        artifact {:magic :pui3 :schema 3 :view-id :academy/test/scrollbar
-                  :nodes {:type :absolute :layout {:width 120 :height 40}
-                          :children [{:type :scroll :key :content
-                                      :layout {:x 0 :y 0 :width 100 :height 20}
-                                      :bind {:items [:state :items]}
-                                      :children [{:type :text :layout {:height 10}
-                                                  :bind {:text [:item :label]}}]}
-                                     {:type :image :key :track
-                                      :layout {:x 110 :y 0 :width 10 :height 40}
-                                      :style {:resource {:namespace "academy" :path "t.png"}
-                                              :scrollbar {:for :content :min-y 0.0 :max-y 20.0}}}
-                                     {:type :image :key :thumb
-                                      :layout {:x 110 :y 0 :width 10 :height 10}
-                                      :style {:resource {:namespace "academy" :path "t.png"}
-                                              :scrollbar {:for :content :min-y 0.0 :max-y 20.0 :thumb? true}}}]}}
-        state {:items (mapv (fn [n] {:label (str n)}) (range 4))}
-        rt (runtime/create-runtime)
-        mount (runtime/mount! rt {:host {:stage :screen}
-                                  :artifact artifact
-                                  :state state
-                                  :reduce (fn [s action payload]
-                                            (reset! seen [action payload])
-                                            {:state s :event-result :consume})})
-        painted (paint/paint-view artifact
-                                   (assoc state :presentation/scroll-offsets {:content 10.0})
-                                   {:viewport-width 120 :viewport-height 40})
-        thumb (->> painted
-                   (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiImageBatch %))
-                   last)
-        imgs (.images ^cn.li.mcmod.runtime.RenderCommand$UiImageBatch thumb)]
-    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 120 40 1.0))
-    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 115 :y 20 :button 0})
-    (is (= :input/scroll (first @seen)))
-    (is (= :content (get-in @seen [1 :target])))
-    (is (= 20.0 (double (get-in @seen [1 :scroll-offset]))))
-    (is (= 1 (count imgs)))
-    (is (= 10.0 (float (.y ^cn.li.mcmod.runtime.RenderCommand$UiImage (first imgs)))))))
-
-(deftest paint-glow-line-emits-textured-segments
-  (let [artifact {:magic :pui3 :schema 3 :view-id :academy/test/glow
-                  :nodes {:type :glow-line :layout {:x 100 :y 50 :width 0 :height 0}
-                          :bind {:x0 [:state :x0] :x1 [:state :x1]
-                                 :line-y [:state :line-y]
-                                 :line-w [:state :line-w]
-                                 :glow-sz [:state :glow-sz]}}}
-        commands (paint/paint-view artifact
-                                   {:x0 10.0 :x1 40.0 :line-y 2.0 :line-w 2.0 :glow-sz 2.0}
-                                   {:viewport-width 200 :viewport-height 100})
-        batches (filter #(instance? cn.li.mcmod.runtime.RenderCommand$UiImageBatch %) commands)
-        paths (mapv (fn [^cn.li.mcmod.runtime.RenderCommand$UiImageBatch b]
-                      (.path (.resource b)))
-                    batches)]
-    ;; 8 glow segments + center line
-    (is (= 9 (count batches)))
-    (is (some #(str/includes? % "glow_lu") paths))
-    (is (some #(str/includes? % "line.png") paths))))
-
+(deftest item-label-no-longer-falls-back-to-skill-id
+  ;; Regression: presentation-core's generic item-label coercion used to
+  ;; read a :skill-id field -- domain (AC) knowledge with no business being
+  ;; in a neutral rendering helper. A bare :skill-id-only item must not
+  ;; resolve to a label anymore.
+  (let [item-label #'runtime/item-label]
+    (is (= "" (item-label {:skill-id :railgun})))
+    (is (= "explicit" (item-label {:skill-id :railgun :label "explicit"})))))

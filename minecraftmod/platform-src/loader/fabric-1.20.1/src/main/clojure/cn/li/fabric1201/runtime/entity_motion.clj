@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.runtime.entity-motion
   "Fabric implementation of IEntityMotion protocol."
   (:require [cn.li.fabric1201.adapter.server-context :as server-context]
-            [cn.li.mc1201.runtime.entity-motion-core :as core])
+            [cn.li.mcbase.runtime.entity-motion-core :as core])
   (:import [net.minecraft.server MinecraftServer]))
 
 (defn- get-server ^MinecraftServer []

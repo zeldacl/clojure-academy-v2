@@ -1,7 +1,7 @@
 package cn.li.fabric1211.block.entity;
 
 import cn.li.mc1211.block.entity.AbstractScriptedBlockEntity;
-import cn.li.mc1211.block.entity.BlockEntityRegistry;
+import cn.li.mcbase.block.entity.BlockEntityRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntityType;

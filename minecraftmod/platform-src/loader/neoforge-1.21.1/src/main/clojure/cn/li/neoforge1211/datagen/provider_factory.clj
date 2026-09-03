@@ -3,12 +3,12 @@
 
   This namespace is the NeoForge-specific shell between the shared provider manifest
   and NeoForge/Minecraft DataGenerator APIs."
-  (:require [cn.li.mc1211.datagen.advancement-provider-shell :as adv]
+  (:require [cn.li.mcbase.datagen.advancement-provider-shell :as adv]
             [cn.li.neoforge1211.datagen.item-model-provider :as imp]
-            [cn.li.mc1211.datagen.lang-provider-shell :as lang]
+            [cn.li.mcbase.datagen.lang-provider-shell :as lang]
             [cn.li.neoforge1211.datagen.recipe-provider :as rp]
-            [cn.li.mc1211.datagen.worldgen-provider-shell :as worldgen]
-            [cn.li.mc1211.datagen.blockstate-provider-shell :as blockstate-shell]
+            [cn.li.mcbase.datagen.worldgen-provider-shell :as worldgen]
+            [cn.li.mcbase.datagen.blockstate-provider-shell :as blockstate-shell]
             [cn.li.mc1211.datagen.block-loot-provider-shell :as block-loot]
             [cn.li.mc1211.datagen.block-tag-provider-shell :as block-tags])
   (:import [java.util.concurrent CompletableFuture]

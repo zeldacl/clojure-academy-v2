@@ -1,56 +1,27 @@
 package cn.li.mcmod.runtime;
 
-import java.util.List;
-
 /**
- * Single neutral Render IR shared by the Presentation frame pipeline and
- * VFX Core. Sealed so every version backend's dispatch is exhaustive at
+ * Neutral world/VFX Render IR consumed by the Presentation frame pipeline
+ * and VFX Core. Sealed so every version backend's dispatch is exhaustive at
  * compile time; behaviour stays in Clojure backends.
+ *
+ * UI draw primitives (rect/image/text/nine-slice/progress/item/model/
+ * gradient/composite) no longer live here — they are cn.li.mcmod.runtime.ui
+ * .UiDrawList, a run-batched struct-of-arrays produced by presentation-
+ * core's PaintKernel, carried on FramePacket.uiByStage(). This interface
+ * now covers only the world-space/effect vocabulary vfx-core and the world
+ * renderer actually share; no consumer here ever needed the UI variants
+ * (see the refactor plan's course correction for why the union type was
+ * wrong even though the shared RenderStage vocabulary and single frame
+ * envelope were right).
  */
 public sealed interface RenderCommand
-        permits RenderCommand.UiQuadBatch, RenderCommand.UiImageBatch, RenderCommand.UiText,
-                RenderCommand.UiItemPreview, RenderCommand.UiModelPreview,
-                RenderCommand.PushClip, RenderCommand.PopClip, RenderCommand.Transform, RenderCommand.Mask, RenderCommand.Layer,
+        permits RenderCommand.Layer,
                 RenderCommand.Mesh, RenderCommand.Billboard, RenderCommand.ParticleBatch,
                 RenderCommand.Ribbon, RenderCommand.Beam,
                 RenderCommand.CameraContribution, RenderCommand.PostProcess,
                 RenderCommand.AudioContribution,
                 RenderCommand.OrderBarrier, RenderCommand.Batch {
-    record UiQuad(float x, float y, float width, float height, int rgba) {}
-    record UiQuadBatch(List<UiQuad> quads) implements RenderCommand {
-        public UiQuadBatch { quads = List.copyOf(quads == null ? List.of() : quads); }
-    }
-    record UiImage(float x, float y, float width, float height, int rgba) {}
-    record UiImageBatch(UiResourceRef resource, List<UiImage> images) implements RenderCommand {
-        public UiImageBatch {
-            if (resource == null) throw new NullPointerException("resource");
-            images = List.copyOf(images == null ? List.of() : images);
-        }
-    }
-    record UiText(int fontId, String text, float x, float y, int rgba, float fontSize) implements RenderCommand {
-        public UiText {
-            text = text == null ? "" : text;
-            if (fontSize <= 0.0f) fontSize = 8.0f;
-        }
-        /** Backward-compatible ctor; default MSDF size matches tutorial markdown. */
-        public UiText(int fontId, String text, float x, float y, int rgba) {
-            this(fontId, text, x, y, rgba, 8.0f);
-        }
-    }
-    record UiItemPreview(int itemId, float x, float y, float scale) implements RenderCommand {}
-    record UiModelPreview(String modelId, float x, float y, float width, float height) implements RenderCommand {
-        public UiModelPreview { modelId = modelId == null ? "" : modelId; }
-    }
-    record PushClip(float x, float y, float width, float height) implements RenderCommand {}
-    record PopClip() implements RenderCommand {}
-    /** Projective/affine transform payload interpreted by the version backend. */
-    record Transform(String transformId, Object payload) implements RenderCommand {
-        public Transform { transformId = transformId == null ? "identity" : transformId; }
-    }
-    /** Declarative mask payload; backend owns stencil/alpha implementation. */
-    record Mask(String maskId, Object payload) implements RenderCommand {
-        public Mask { maskId = maskId == null ? "none" : maskId; }
-    }
     record Layer(int id) implements RenderCommand {}
     /**
      * Version-neutral mesh submission. The optional payload is immutable

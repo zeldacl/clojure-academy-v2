@@ -1,10 +1,10 @@
 (ns cn.li.fabric262.commands
   "Brigadier command registration for Fabric 26.2.
 
-  Delegates tree-building to the shared cn.li.mc262.command.brigadier-tree
+  Delegates tree-building to the shared cn.li.mcbase.command.brigadier-tree
   namespace; this file only contains the Fabric-specific command registration
   entry point wired via ServerLifecycleEvents."
-  (:require [cn.li.mc262.command.executor-core]
+  (:require [cn.li.mcbase.command.executor-core]
             [cn.li.mcbase.command.brigadier-registry :as brig-reg])
   (:import [com.mojang.brigadier CommandDispatcher]))
 

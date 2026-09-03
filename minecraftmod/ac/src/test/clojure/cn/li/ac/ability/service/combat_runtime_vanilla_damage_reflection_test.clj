@@ -38,11 +38,21 @@
                           :cost-per-damage 0.1
                           :minimum 0.1
                           :max-depth 1
-                          :exp-scale 0.0}}]})
+                          :cost-resource :cp
+                          :progression-scale 0.0}}]})
 
 (use-fixtures :each
   (fn [f]
     (combat-catalog/initialize!)
+    ;; final-runtime/production-runtime is a JVM-lifetime singleton normally
+    ;; warmed lazily by combat-runtime/dispatch-intent! on its first call --
+    ;; this file never calls dispatch-intent!, only process-damage-request!/
+    ;; apply-attack-precheck! (which read production-runtime directly, with
+    ;; no lazy-install fallback of their own), so without this it depends on
+    ;; some unrelated, alphabetically-earlier test namespace happening to
+    ;; have warmed the singleton first.
+    (combat-runtime/install-ac-host-capabilities!)
+    (combat-runtime/initialize-final-runtime!)
     (player-state-support/clean-player-states-fixture
      (fn []
        (combat-runtime/reset-for-test!)
@@ -57,11 +67,12 @@
     (try
       (capabilities/register-action!
        :entity/damage
-       (fn [request] (swap! seen conj request) {:status :applied}))
+       (fn [request] (swap! seen conj request) {:status :applied})
+       {:allow-overwrite? true})
       (f seen)
       (finally
         (when previous
-          (capabilities/register-action! :entity/damage previous))))))
+          (capabilities/register-action! :entity/damage previous {:allow-overwrite? true}))))))
 
 (defn- with-synthetic-reflect-ability
   "Replace the whole compiled :abilities table with just the synthetic

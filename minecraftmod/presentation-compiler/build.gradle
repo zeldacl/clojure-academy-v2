@@ -28,3 +28,8 @@ tasks.register("runCompilerClojureTests", JavaExec) {
     mainClass = "clojure.main"
     args "-m", "cn.li.presentation.compiler.test-runner"
 }
+
+// cn.li.test-support.pure-auto-test-runner has no mcmod.framework dependency
+// -- presentation-compiler is a build-only, host-free compiler with no
+// global registry state that fixture exists to isolate.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/pure/clojure')

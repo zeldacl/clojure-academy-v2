@@ -18,11 +18,11 @@
   [^LevelExtractionContext context]
   (when-let [^Minecraft mc (Minecraft/getInstance)]
     (vfx/observe-resource-manager!
-     (try (some-> (clojure.lang.Reflector/invokeInstanceMethod mc "getResourceManager" (object-array 0))
+     (try (some-> (.getResourceManager mc)
                   System/identityHashCode)
           (catch Throwable _ nil)))
     (when-let [^LocalPlayer player (.player mc)]
-      (let [^Vec3 camera-pos (.getPosition (.camera context))
+      (let [^Vec3 camera-pos (.position (.camera context))
           tick (.getGameTime (.level player))
           camera-map {:x (.x camera-pos) :y (.y camera-pos) :z (.z camera-pos)}]
         (reset! extracted-context*

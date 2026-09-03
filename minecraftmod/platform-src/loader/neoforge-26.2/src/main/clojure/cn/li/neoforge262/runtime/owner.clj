@@ -2,7 +2,7 @@
   "Canonical runtime owner helpers for Forge event boundaries."
   (:require [cn.li.platform.neutral.hooks :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as runtime-owner])
-  (:import [cn.li.mc262.bridge McAccess] [net.minecraft.server.level ServerPlayer]
+  (:import [cn.li.mcver McAccess] [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity.player Player]))
 
 (def ^:private client-session-id-fn

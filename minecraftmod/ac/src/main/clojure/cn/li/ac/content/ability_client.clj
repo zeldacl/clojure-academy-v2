@@ -7,7 +7,7 @@
   This namespace must ONLY be required from client-side code paths
   (e.g. platform client entry points), never from dedicated-server code."
   (:require [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.client.effect-controller :as vfx]
+            [cn.li.ability.client-vfx :as vfx]
             [cn.li.ac.client.combat-vfx-adapter :as combat-vfx]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.runtime.install :as install]

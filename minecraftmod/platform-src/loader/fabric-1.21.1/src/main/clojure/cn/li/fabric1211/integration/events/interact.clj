@@ -9,7 +9,7 @@
   (:require [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.event-runtime :as interaction-result]
-            [cn.li.mc1211.integration.event-handlers :as event-handlers]
+            [cn.li.mcbase.integration.event-handlers :as event-handlers]
             [cn.li.fabric1211.adapter.gui-registry :as gui-registry-impl])
   (:import [net.minecraft.core BlockPos]
            [net.minecraft.world InteractionHand InteractionResult]

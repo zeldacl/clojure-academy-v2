@@ -34,8 +34,7 @@
         camera-pos (camera-position-map evt)
         extracted (when player
                     (vfx/observe-resource-manager!
-                     (try (some-> (clojure.lang.Reflector/invokeInstanceMethod
-                                   minecraft "getResourceManager" (object-array 0))
+                     (try (some-> (.getResourceManager minecraft)
                                   System/identityHashCode)
                           (catch Throwable _ nil)))
                     {:player player

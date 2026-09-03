@@ -3,7 +3,7 @@ package cn.li.forge1201.block.entity;
 import cn.li.forge1201.capability.ForgeCapabilityHandler;
 import cn.li.mcbase.block.IScriptedBlock;
 import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
-import cn.li.mc1201.block.entity.BlockEntityRegistry;
+import cn.li.mcbase.block.entity.BlockEntityRegistry;
 import cn.li.mcbase.block.logic.ITileContainerLogic;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

@@ -8,7 +8,7 @@
   (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.fabric262.datagen.provider-factory :as provider-factory]
             [cn.li.mcbase.datagen.provider-registration :as provider-registration]
-            [cn.li.mc262.datagen.setup-common :as setup-common]
+            [cn.li.mcbase.datagen.setup-common :as setup-common]
             [cn.li.platform.target :as target]))
 
 ;; One :lang entry — lang-provider-shell emits all merged language files.

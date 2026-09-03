@@ -16,9 +16,7 @@
   (try
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (vfx/observe-resource-manager!
-       (try (some-> (clojure.lang.Reflector/invokeInstanceMethod mc "getResourceManager" (object-array 0))
-                    System/identityHashCode)
-            (catch Throwable _ nil)))
+       (System/identityHashCode (.getResourceManager mc)))
       (when-let [^LocalPlayer player (.player mc)]
         (let [camera (.camera ctx)
               cam-vec (.getPosition camera)

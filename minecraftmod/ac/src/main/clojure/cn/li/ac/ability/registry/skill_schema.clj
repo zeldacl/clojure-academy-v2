@@ -9,27 +9,11 @@
 ;; Constants
 ;; ============================================================================
 
-(def supported-patterns
-  #{:instant :hold-charge-release :hold-channel
-    :toggle :release-cast :charge-window :passive})
-
-(def allowed-action-keys
-  #{:perform! :down! :tick! :up! :abort! :cost-fail! :activate! :deactivate!})
-
 (def allowed-fx-keys
   #{:start :update :perform :end})
 
 (def allowed-cost-stages
   #{:down :tick :up})
-
-(def ^:private required-action-keys
-  {:instant             #{:perform!}
-   :hold-charge-release #{:perform!}
-   :hold-channel        #{}
-   :toggle              #{:activate! :deactivate!}
-   :release-cast        #{}
-   :charge-window       #{}
-   :passive             #{}})
 
 ;; ============================================================================
 ;; Individual validators (each throws ExceptionInfo on failure)
@@ -52,34 +36,6 @@
     (assert! (not (contains? spec k))
              {:message "Declarative :ops / :on-* vectors are not executed; use :actions"
               :skill-id id :dead-key k})))
-
-(defn validate-pattern!
-  [{:keys [id pattern] :as _spec}]
-  (assert! (keyword? pattern)
-           {:message "Skill :pattern is required and must be a keyword" :skill-id id})
-  (assert! (contains? supported-patterns pattern)
-           {:message "Unknown skill :pattern"
-            :skill-id id :pattern pattern :valid-patterns supported-patterns}))
-
-(defn validate-actions!
-  [{:keys [id pattern actions perform] :as _spec}]
-  (when (some? actions)
-    (assert! (map? actions)
-             {:message "Skill :actions must be a map" :skill-id id}))
-  (doseq [[k _] actions]
-    (assert! (contains? allowed-action-keys k)
-             {:message "Unsupported action key in :actions"
-              :skill-id id :action-key k}))
-  ;; Check required action keys for the given pattern
-  (let [required     (get required-action-keys pattern #{})
-        has-perform? (fn [action-key]
-                       (and (= action-key :perform!) (seq perform)))
-        missing      (seq (remove #(or (contains? (or actions {}) %)
-                                       (has-perform? %))
-                                  required))]
-    (when missing
-      (throw (ex-info "Missing required actions for pattern"
-                      {:skill-id id :pattern pattern :missing missing})))))
 
 (defn validate-cooldown!
   [{:keys [id cooldown] :as _spec}]
@@ -148,8 +104,6 @@
   [spec]
   (validate-no-legacy-callbacks! spec)
   (validate-no-dead-op-vectors! spec)
-  (validate-pattern! spec)
-  (validate-actions! spec)
   (validate-cooldown! spec)
   (validate-cost! spec)
   (validate-fx! spec)

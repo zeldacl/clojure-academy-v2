@@ -1,6 +1,6 @@
 (ns cn.li.neoforge262.adapter.network-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.mc262.runtime.network-core :as network]
+            [cn.li.mcbase.runtime.network-core :as network]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.hooks.messages :as messages]))
 

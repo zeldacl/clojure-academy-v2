@@ -72,23 +72,7 @@ public final class ModEntities {
             @Override
             public ScriptedBlockBodySpec getScriptedBlockBodySpec(EntityType<?> entityType) {
                 return ModEntities.getScriptedBlockBodySpec(entityType);
-            }
-
-            @Override
-            public boolean registerScriptedEffectHookClass(String hookId, String className) {
-                return ScriptedEffectHooks.registerByClassName(hookId, className);
-            }
-
-            @Override
-            public boolean registerScriptedRayHookClass(String hookId, String className) {
-                return ScriptedRayHooks.registerByClassName(hookId, className);
-            }
-
-            @Override
-            public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-                return ScriptedMarkerHooks.registerByClassName(hookId, className);
-            }
-        });
+            }        });
     }
 
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
@@ -353,19 +337,6 @@ public final class ModEntities {
     public static Set<String> getScriptedBlockBodyRegistryNames() {
         return Collections.unmodifiableSet(SCRIPTED_BLOCK_BODY_SPECS.keySet());
     }
-
-    public static boolean registerScriptedEffectHookClass(String hookId, String className) {
-        return ScriptedEffectHooks.registerByClassName(hookId, className);
-    }
-
-    public static boolean registerScriptedRayHookClass(String hookId, String className) {
-        return ScriptedRayHooks.registerByClassName(hookId, className);
-    }
-
-    public static boolean registerScriptedMarkerHookClass(String hookId, String className) {
-        return ScriptedMarkerHooks.registerByClassName(hookId, className);
-    }
-
     public static void register(IEventBus modBus) {
         ENTITY_TYPES.register(modBus);
     }

@@ -1,7 +1,7 @@
 (ns cn.li.combat.actions
   "Generic bounded action coordinators. Platform mutation is supplied as an
   injected atomic handler; this namespace owns only budget and ordering rules."
-  (:require [cn.li.mcmod.runtime.seeded-rng :as seeded-rng]))
+  (:require [cn.li.node.rng :as rng]))
 
 (defn commit-block-break-budget!
   [request atomic-break!]
@@ -21,12 +21,12 @@
               [x y z] (if (vector? point) point
                           [(:x point) (:y point) (:z point)])
               hardness (double (or (:hardness block) 0.0))
-              rng (seeded-rng/next-long (unchecked-add seed index))
+              draw-seed (rng/next-seed (unchecked-add seed index))
               result (when (and atomic-break! (>= hardness 0.0)
                                (<= hardness remaining))
                        (atomic-break! {:owner owner :world-id world-id
                                        :position [x y z]
-                                       :drop? (< (seeded-rng/unit-double rng)
+                                       :drop? (< (rng/unit-double draw-seed)
                                                  drop-chance)}))
               applied? (= :applied (:status result))]
           (recur (next xs) (inc index)

@@ -6,7 +6,7 @@
   (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.fabric1211.init :as init]
             [cn.li.platform.bootstrap :as platform-bootstrap]
-            [cn.li.mc1211.block.blockstate-properties :as bsp]
+            [cn.li.mcbase.block.blockstate-properties :as bsp]
             [cn.li.fabric1211.setup.lifecycle-init :as lifecycle-init]
             [cn.li.fabric1211.setup.content-registration :as content-registration]
             [cn.li.fabric1211.setup.runtime-setup :as runtime-setup]

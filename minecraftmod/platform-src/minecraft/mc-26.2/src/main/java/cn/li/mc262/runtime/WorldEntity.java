@@ -1,7 +1,9 @@
 package cn.li.mc262.runtime;
 
-import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -19,18 +21,10 @@ import net.minecraft.world.phys.AABB;
  * EntityType.create now requires {@link EntitySpawnReason}.
  */
 public final class WorldEntity {
-    private static final Field LARGE_FIREBALL_EXPLOSION_POWER;
-
-    static {
-        Field field;
-        try {
-            field = LargeFireball.class.getDeclaredField("explosionPower");
-            field.setAccessible(true);
-        } catch (ReflectiveOperationException e) {
-            field = null;
-        }
-        LARGE_FIREBALL_EXPLOSION_POWER = field;
-    }
+    /* 26.2 removed the public accessor. Keep only values explicitly supplied by
+       Academy at runtime; weak keys avoid retaining discarded projectiles. */
+    private static final Map<LargeFireball, Integer> LARGE_FIREBALL_EXPLOSION_POWER =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private WorldEntity() {
     }
@@ -92,28 +86,20 @@ public final class WorldEntity {
 
     /**
      * LargeFireball.explosionPower is private with no public setter on 26.2;
-     * CompoundTag save/load was replaced by ValueIO. Reflect for the call surface.
+     * retain Academy-supplied values in a weak side table instead of reflection.
      */
     public static Integer getLargeFireballExplosionPower(Entity entity) {
-        if (!(entity instanceof LargeFireball) || LARGE_FIREBALL_EXPLOSION_POWER == null) {
+        if (!(entity instanceof LargeFireball fireball)) {
             return null;
         }
-        try {
-            return LARGE_FIREBALL_EXPLOSION_POWER.getInt(entity);
-        } catch (IllegalAccessException e) {
-            return null;
-        }
+        return LARGE_FIREBALL_EXPLOSION_POWER.get(fireball);
     }
 
     public static boolean setLargeFireballExplosionPower(Entity entity, int power) {
-        if (!(entity instanceof LargeFireball) || LARGE_FIREBALL_EXPLOSION_POWER == null) {
+        if (!(entity instanceof LargeFireball fireball)) {
             return false;
         }
-        try {
-            LARGE_FIREBALL_EXPLOSION_POWER.setInt(entity, power);
-            return true;
-        } catch (IllegalAccessException e) {
-            return false;
-        }
+        LARGE_FIREBALL_EXPLOSION_POWER.put(fireball, power);
+        return true;
     }
 }

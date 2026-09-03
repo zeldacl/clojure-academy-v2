@@ -85,26 +85,20 @@
       (obj/render-baked-all! main-model pose-stack vc-main packed-light packed-overlay))
 
     (when (and fan-installed? no-obstacle?)
-      (pose/push-pose pose-stack)
-      (try
+      (pose/with-pose pose-stack
         (pose/translate pose-stack 0.0 0.5 0.82)
         (pose/apply-z-rotation pose-stack (- (double (update-fan-rotation! tile (if complete? 60.0 0.0)))))
         (let [vc-fan (rb/get-solid-buffer buffer-source fan-tex)]
-          (obj/render-baked-all! fan-model pose-stack vc-fan packed-light packed-overlay))
-        (finally
-          (pose/pop-pose pose-stack))))))
+          (obj/render-baked-all! fan-model pose-stack vc-fan packed-light packed-overlay))))))
 
 (defn- render-pillar-at-origin
   [_tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (let [{:keys [pillar-model pillar-tex]} (wind-resources)
         vc (rb/get-solid-buffer buffer-source pillar-tex)]
-    (pose/push-pose pose-stack)
-    (try
+    (pose/with-pose pose-stack
       ;; Single-block TESR origin is block corner; move OBJ to block center.
       (pose/translate pose-stack 0.5 0.0 0.5)
-      (obj/render-baked-all! pillar-model pose-stack vc packed-light packed-overlay)
-      (finally
-        (pose/pop-pose pose-stack)))))
+      (obj/render-baked-all! pillar-model pose-stack vc packed-light packed-overlay))))
 
 (defn register!
   []

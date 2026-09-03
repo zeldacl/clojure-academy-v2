@@ -32,9 +32,7 @@
   (when (render-stage-eligible? evt)
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (vfx/observe-resource-manager!
-       (try (some-> (clojure.lang.Reflector/invokeInstanceMethod mc "getResourceManager" (object-array 0))
-                    System/identityHashCode)
-            (catch Throwable _ nil)))
+       (System/identityHashCode (.getResourceManager mc)))
       (when-let [^LocalPlayer player (.player mc)]
         (let [camera (.getMainCamera (.gameRenderer mc))
               cam-vec (.getPosition camera)

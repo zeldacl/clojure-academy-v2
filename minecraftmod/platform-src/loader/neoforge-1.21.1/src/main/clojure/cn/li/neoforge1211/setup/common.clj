@@ -6,7 +6,7 @@
             [cn.li.neoforge1211.registry.content-registration :as content-registration]
             [cn.li.neoforge1211.runtime.lifecycle :as runtime-lifecycle]
             [cn.li.neoforge1211.integration.forge-energy :as forge-energy]
-            [cn.li.neoforgebase.integration.ic2-energy :as ic2-energy]
+            [cn.li.platform.optional.ic2-energy :as ic2-energy]
             [cn.li.neoforge1211.runtime.item-handler :as runtime-item-handler]
             [cn.li.neoforge1211.integration.tutorial-events :as tutorial-events]
             [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch]

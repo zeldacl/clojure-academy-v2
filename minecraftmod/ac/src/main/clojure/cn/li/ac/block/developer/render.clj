@@ -65,8 +65,7 @@
 
 (defn- render-obj-at-origin!
   [model-fn tex-fn _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
-  (pose/push-pose pose-stack)
-  (try
+  (pose/with-pose pose-stack
     (let [{:keys [baked anchor-offset]} (model-fn)
           tex (tex-fn)
           [ax miny az] anchor-offset
@@ -77,9 +76,7 @@
       ;; Block-space lift after scale (matches matrix: small Y in block units).
       (obj-tesr/translate-obj-y-lift! pose-stack)
       (let [vc (obj-tesr/get-solid-vc buffer-source tex)]
-        (obj-tesr/render-obj-parts! baked (sort (keys (:parts baked))) pose-stack vc packed-light packed-overlay)))
-    (finally
-      (pose/pop-pose pose-stack))))
+        (obj-tesr/render-obj-parts! baked (sort (keys (:parts baked))) pose-stack vc packed-light packed-overlay)))))
 
 (defn- make-multiblock-renderer [model-fn tex-fn]
   {:render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]

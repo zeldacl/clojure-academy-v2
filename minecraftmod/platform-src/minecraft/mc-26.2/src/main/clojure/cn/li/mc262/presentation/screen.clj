@@ -1,6 +1,7 @@
 (ns cn.li.mc262.presentation.screen
   "Minecraft 26.2 Screen boundary for the Presentation Runtime."
-  (:require [cn.li.platform.neutral.presentation :as presentation])
+  (:require [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.mc262.presentation.preview :as preview])
   (:import [cn.li.mc262.shim DelegatingScreen]
            [net.minecraft.client Minecraft]
            [net.minecraft.network.chat Component]
@@ -18,7 +19,8 @@
                                            (int mouse-x) (int mouse-y) (float partial-tick))
                         (presentation/submit-current-frame!
                           :screen (float partial-tick) (.-width ^DelegatingScreen s)
-                          (.-height ^DelegatingScreen s) graphics))
+                          (.-height ^DelegatingScreen s)
+                          (merge {:graphics graphics} (preview/backend-context))))
                       (fn [s key _scan-code _modifiers]
                         (if (= 256 (int key))
                           (do (.onClose ^DelegatingScreen s) true)

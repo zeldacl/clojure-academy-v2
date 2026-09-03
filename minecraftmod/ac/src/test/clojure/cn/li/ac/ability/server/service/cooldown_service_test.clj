@@ -28,19 +28,16 @@
   (testing "an undeclared cooldown is effectively none"
     (is (= 1 (svc/resolve-ticks {} ctx)))))
 
-(deftest fn-declarations-work-in-both-authored-shapes-test
-  ;; Skills author both (fn [player-id skill-id exp]) and (fn [{:keys [exp]}]).
-  ;; The old context-state path called (int spec) on these and would have thrown.
-  (is (= 60 (svc/resolve-ticks {:cooldown-ticks (fn [_ _ exp] (* 120 (- 1.0 exp)))} ctx)))
+(deftest fn-declarations-receive-context-map-test
+  ;; All declarations receive one context map; this is the only runtime shape.
   (is (= 60 (svc/resolve-ticks {:cooldown-ticks (fn [{:keys [exp]}] (* 120 (- 1.0 exp)))} ctx)))
   (testing "fractional ticks round rather than truncate"
-    (is (= 61 (svc/resolve-ticks {:cooldown-ticks (fn [_ _ _] 60.6)} ctx)))))
-
+    (is (= 61 (svc/resolve-ticks {:cooldown-ticks (fn [_] 60.6)} ctx)))))
 (deftest hud-estimate-resolves-to-the-applied-duration-test
   ;; build-skill-slot-shape carries the declaration, patch-skill-slot-cooldown
   ;; resolves it — both through the same rule the apply paths use, so an idle
   ;; slot's estimate equals what a cast would actually set.
-  (let [spec {:cooldown-policy {:ticks (fn [_ _ exp] (* 120 (- 1.0 exp)))}}]
+  (let [spec {:cooldown-policy {:ticks (fn [{:keys [exp]}] (* 120 (- 1.0 exp)))}}]
     (is (= (svc/resolve-ticks spec ctx)
            (svc/resolve-ticks-value (svc/ticks-spec spec) ctx))))
   (testing "and the HUD keeps that same value on the slot"

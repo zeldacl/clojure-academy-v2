@@ -14,34 +14,6 @@
             [cn.li.ac.gui.presentation :as presentation])
 )
 
-(def binding-ids
-  {:cp-ratio 0
-   :overload-ratio 1
-   :skills 2
-   :selected-skill 3
-   :cooldowns 4
-   :crosshair 5
-   :screen-flash-alpha 6
-   :background-mask 7
-   :cp-full-glow 8
-   :movement-hints 9
-   :activation-indicator 10
-   :preset-indicators 11
-   :numbers-texts 12
-   :vm-waves 13
-   :charging 14
-   :charging-arcs 15
-   :coin-qte 16
-   :toasts 17
-   :tutorial-notification 18
-   :debug-lines 19
-   :overload-pulse 20
-   :interfered 21})
-
-(def action-ids
-  {0 :combat/select-skill
-   1 :combat/toggle-skill-wheel})
-
 ;; ---------------------------------------------------------------------------
 ;; Color packing — reactive-hud/hud.clj builders use two conventions
 ;; (0.0-1.0 doubles for background-mask, 0-255 ints/vectors everywhere else).
@@ -303,33 +275,6 @@
   (when (:interfered? snapshot)
     [{:kind :quad :x 4 :y 34 :w 6 :h 6 :rgba (unchecked-int 0xFFDD3333)}
      {:kind :text :text "interfered" :x 14 :y 34 :rgba (unchecked-int 0xFFFF6666)}]))
-
-(defn- binding-value [snapshot id]
-  (case (int id)
-    0 (get-in snapshot [:cp-bar :percent] 0.0)
-    1 (get-in snapshot [:overload-bar :percent] 0.0)
-    2 (:skill-slots snapshot [])
-    3 (:selected-skill snapshot)
-    4 (mapv #(select-keys % [:skill-id :cooldown-remaining :cooldown-total])
-            (:skill-slots snapshot []))
-    5 (:crosshair snapshot)
-    6 (screen-flash-rect snapshot)
-    7 (background-mask-rect snapshot)
-    8 (cp-full-glow-items snapshot)
-    9 (when-let [hints (:movement-hints snapshot)] (movement-hints-items hints))
-    10 (when-let [indicator (:activation-indicator snapshot)] (activation-indicator-items indicator))
-    11 (preset-indicators-items (:preset-indicators snapshot []))
-    12 (numbers-texts-items (:numbers-texts snapshot []))
-    13 (vm-wave-items (:vm-waves snapshot []))
-    14 (charging-rect snapshot)
-    15 (charging-arc-items (:charging-arcs snapshot []))
-    16 (when-let [coin (:coin-qte snapshot)] (coin-qte-items coin))
-    17 (toast-items (:toasts snapshot []))
-    18 (when-let [notif (:tutorial-notification snapshot)] (tutorial-notification-items notif))
-    19 (debug-line-items (:debug-lines snapshot []))
-    20 (overload-pulse-items snapshot)
-    21 (interfered-items snapshot)
-    nil))
 
 (defn- composite-items
   "Flatten every dynamic HUD projection into shared Presentation composite nodes."

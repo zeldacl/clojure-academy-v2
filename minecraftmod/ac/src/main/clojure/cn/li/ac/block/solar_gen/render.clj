@@ -18,16 +18,13 @@
 
 (defn render-at-origin
   [_tile pose-stack buffer-source packed-light packed-overlay]
-  (pose/push-pose pose-stack)
-  (try
+  (pose/with-pose pose-stack
     (let [{:keys [model texture]} (solar-resources)
           _ (pose/translate pose-stack (double 0.5) (double 0.02) (double 0.5))
           _ (pose/apply-y-rotation pose-stack 90.0)
           _ (pose/scale pose-stack (float 0.014) (float 0.014) (float 0.014))
           vc (rb/get-solid-buffer buffer-source texture)]
-      (obj/render-baked-all! model pose-stack vc packed-light packed-overlay))
-    (finally
-      (pose/pop-pose pose-stack))))
+      (obj/render-baked-all! model pose-stack vc packed-light packed-overlay))))
 
 (defn register!
   []

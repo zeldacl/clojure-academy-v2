@@ -94,23 +94,7 @@ public final class FabricScriptedEntityAccess {
             @Override
             public ScriptedBlockBodySpec getScriptedBlockBodySpec(EntityType<?> entityType) {
                 return getWithKindFallback(SCRIPTED_BLOCK_BODY_SPECS, registryName(entityType), BLOCK_BODY_KIND_KEY);
-            }
-
-            @Override
-            public boolean registerScriptedEffectHookClass(String hookId, String className) {
-                return ScriptedEffectHooks.registerByClassName(hookId, className);
-            }
-
-            @Override
-            public boolean registerScriptedRayHookClass(String hookId, String className) {
-                return ScriptedRayHooks.registerByClassName(hookId, className);
-            }
-
-            @Override
-            public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-                return ScriptedMarkerHooks.registerByClassName(hookId, className);
-            }
-        });
+            }        });
     }
 
     public static void registerEntityType(String registryName, EntityType<?> entityType) {
