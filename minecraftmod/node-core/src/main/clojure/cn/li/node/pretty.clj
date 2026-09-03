@@ -63,6 +63,7 @@
         :get (list (:key instr) (reconstruct ir pidx let-names (:src instr)))
         :tun (sigil-sym "$" (:key instr))
         :cap (sigil-sym "?" (:key instr))
+        :state-read (sigil-sym "%" (:key instr))
         (:copy :convert) (reconstruct ir pidx let-names (:src instr))
         (throw (ex-info "cannot reconstruct expression for this register"
                         {:reg reg :instr instr}))))))
@@ -94,6 +95,11 @@
                   (swap! let-names* assoc (:dst instr) sym)
                   (list 'let sym form))
           :action (call-form ir pidx @let-names* (:node instr) (:args instr))
+          :state-write (list 'state! (:key instr) (reconstruct ir pidx @let-names* (:src instr)))
+          :event (list 'event!
+                       (into {:type (:event-type instr)}
+                             (map (fn [[k r]] [k (reconstruct ir pidx @let-names* r)]))
+                             (:args instr)))
           nil)))
     instrs)))
 
@@ -174,5 +180,9 @@
                              (let [let-names* (atom {}) counter (atom 0)]
                                [phase (vec (unparse-from ir pidx let-names* counter blocks-by-id block-id))])))
                       (:entries ir))
-        tunables (into {} (map (fn [[k t]] [k {:type t}])) (:tunable-types ir))]
-    {:kind :ability :id (:id ir) :tunables tunables :entries entries}))
+        ;; ir's :tunable-types/:state-types are already the full {k {:type
+        ;; t :default v}} doc-level spec (cn.li.node.compile persists them
+        ;; verbatim so :default round-trips too) -- no reshaping needed.
+        tunables (or (:tunable-types ir) {})
+        state (or (:state-types ir) {})]
+    {:kind :ability :id (:id ir) :tunables tunables :state state :entries entries}))

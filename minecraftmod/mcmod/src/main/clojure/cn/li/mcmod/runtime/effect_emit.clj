@@ -147,6 +147,10 @@
     (let [argf (compile-args (:args instr) consts) nid (:nid instr)]
       (fn [^ExecutionFrame fr] (.add (.-vfx fr) (assoc (argf fr) :nid nid)) -1))
 
+    :event
+    (let [argf (compile-args (:args instr) consts) event-type (:event-type instr) nid (:nid instr)]
+      (fn [^ExecutionFrame fr] (.add (.-events fr) (assoc (argf fr) :type event-type :nid nid)) -1))
+
     :branch
     (let [test (compile-reader (:test instr) consts) th (int (:then instr)) el (int (:else instr))]
       (fn [^ExecutionFrame fr] (if (test fr) th el)))

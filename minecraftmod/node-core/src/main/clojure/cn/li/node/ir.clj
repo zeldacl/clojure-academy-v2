@@ -29,7 +29,7 @@
        (nat-int? (nth v 2))))
 
 (def instr-ops
-  #{:pure :get :tun :cap :query :action :vfx :state-read :state-write
+  #{:pure :get :tun :cap :query :action :vfx :event :state-read :state-write
     :copy :convert :branch :jump :finish})
 
 (def terminator-ops #{:branch :jump :finish})

@@ -66,10 +66,11 @@
 ;; are NOT part of env -- they are lexically scoped, threaded as plain
 ;; function arguments/return values instead (see compile-stmt).
 
-(defn- new-env [{:keys [vocab capabilities tunable-types fns mode]}]
+(defn- new-env [{:keys [vocab capabilities tunable-types state-types fns mode]}]
   {:vocab (or vocab {})
    :capabilities (or capabilities {})
    :tunable-types (or tunable-types {})
+   :state-types (or state-types {})
    :fns (or fns {})
    :mode mode
    :reg-counters (atom {:doubles 0 :longs 0 :booleans 0 :objects 0})
@@ -311,6 +312,22 @@
             (append! env block-id {:op :cap :nid (nid! env) :dst dst :key k})
             {:reg dst :block-id block-id})))
 
+      ;; %mode reads session state key :mode (cn.li.node.surface's :state
+      ;; sigil) -- a third read-only reference kind alongside $tunable/
+      ;; ?capability, all three sharing the same "declared in :tunables/
+      ;; :state, typed, read via one IR op" shape. Writing state is a
+      ;; statement, not an expression -- see compile-stmt's `state!` case.
+      (str/starts-with? s "%")
+      (let [k (surface/str->keyword (subs s 1)) t (get (:state-types env) k)]
+        (if (nil? t)
+          {:reg (do (report! env {:code :unknown-state-key :form form
+                                 :message (str "undeclared state key %" (name k))})
+                   (dummy-register! env :any))
+           :block-id block-id}
+          (let [dst (alloc-reg! env (types/bank t) t)]
+            (append! env block-id {:op :state-read :nid (nid! env) :dst dst :key k})
+            {:reg dst :block-id block-id})))
+
       :else
       (if-let [{:keys [reg]} (get locals form)]
         {:reg reg :block-id block-id}
@@ -443,6 +460,44 @@
             :end-ability? (boolean (:end-ability? fields))})
   {:locals nil :block-id block-id :terminated? true})
 
+(defn- compile-state-write [env locals block-id depth [_ key-form value-form]]
+  (if-not (keyword? key-form)
+    (do (report! env {:code :invalid-state-key :form key-form
+                      :message "state! key must be a literal keyword"})
+        {:locals locals :block-id block-id})
+    (let [want (get (:state-types env) key-form)]
+      (if (nil? want)
+        (do (report! env {:code :unknown-state-key :form key-form
+                          :message (str "undeclared state key " key-form)})
+            {:locals locals :block-id block-id})
+        (let [{:keys [reg block-id]} (compile-form env locals block-id depth value-form false)
+              got (type-of env reg)]
+          (when-not (types/assignable? got want)
+            (report! env {:code :type-mismatch :form value-form :want want
+                         :message (str "state! " key-form " wants " want " got " got)}))
+          (append! env block-id {:op :state-write :nid (nid! env) :key key-form
+                                 :src (coerce! env block-id reg got want)})
+          {:locals locals :block-id block-id})))))
+
+(defn- compile-event
+  "event! is deliberately untyped against any vocab (:type's payload shape
+   varies per event, unlike a node call's fixed :params) -- every field
+   other than :type compiles as an ordinary pure expression and is passed
+   through as-is; there is nothing here for cn.li.node.types to check
+   against."
+  [env locals block-id depth [_ fields]]
+  (if-not (keyword? (:type fields))
+    (do (report! env {:code :invalid-event-type :form fields
+                      :message "event! requires a literal :type keyword"})
+        {:locals locals :block-id block-id})
+    (let [[resolved block-id]
+          (reduce (fn [[acc block-id] [k v-form]]
+                    (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
+                      [(assoc acc k reg) block-id]))
+                  [{} block-id] (dissoc fields :type))]
+      (append! env block-id {:op :event :nid (nid! env) :event-type (:type fields) :args resolved})
+      {:locals locals :block-id block-id})))
+
 (defn compile-stmt [env locals block-id depth stmt]
   (when-not (and (seq? stmt) (symbol? (first stmt)))
     (throw (ex-info "a DSL statement must be a list headed by a symbol" {:stmt stmt})))
@@ -452,6 +507,8 @@
     when (compile-when env locals block-id depth stmt)
     each (compile-each env locals block-id depth stmt)
     finish (compile-finish env block-id stmt)
+    state! (compile-state-write env locals block-id depth stmt)
+    event! (compile-event env locals block-id depth stmt)
     (let [{:keys [block-id]} (compile-call env locals block-id depth stmt true)]
       {:locals locals :block-id block-id})))
 
@@ -502,16 +559,23 @@
   (when-not (= :ability (:kind doc))
     (throw (ex-info "compile-program expects a normalized :ability doc" {:doc doc})))
   (let [env (new-env (assoc opts :mode mode
-                           :tunable-types (into {} (map (fn [[k v]] [k (:type v)])) (:tunables doc))))
+                           :tunable-types (into {} (map (fn [[k v]] [k (:type v)])) (:tunables doc))
+                           :state-types (into {} (map (fn [[k v]] [k (:type v)])) (:state doc))))
         entries (into {} (map (fn [[phase stmts]] [phase (compile-entry! env stmts)])) (:entries doc))
         ir {:ir/version 1
             :id (:id doc)
             ;; Not consumed by cn.li.node.ir/validate! or the emitter -- kept
             ;; on the IR purely so cn.li.node.pretty can reconstruct a
-            ;; recompilable :tunables block. Tunable types are otherwise only
-            ;; known to the transient compile-time env, never to the IR
-            ;; itself, since :tun instructions only carry the tunable's :key.
-            :tunable-types (:tunable-types env)
+            ;; recompilable :tunables/:state block, :default included (the
+            ;; env's OWN :tunable-types/:state-types above are deliberately
+            ;; just {k type}, the fast shape every $tunable/%state-key
+            ;; type-check actually needs -- these two fields are the richer
+            ;; round-trip-only shape, built separately rather than widening
+            ;; the hot-path maps to carry a :default nothing at compile time
+            ;; reads). :tun/:state-read instructions only carry the key, not
+            ;; a default, so this is the IR's only record of either.
+            :tunable-types (:tunables doc)
+            :state-types (:state doc)
             ;; How many slots per bank a fresh ExecutionFrame needs to run
             ;; this program (cn.li.mcmod.runtime.effect-emit sizes its
             ;; register arrays from this) -- known here for free, since

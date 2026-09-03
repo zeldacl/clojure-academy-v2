@@ -62,16 +62,19 @@
 
 (defn sigil
   "Classify a DSL symbol: [:tunable kw] for $x, [:capability kw] for ?x,
-   [:local sym] for everything else. Uses (str sym), NOT (name sym): for a
-   namespaced symbol like ?caster/eye, (name ...) strips the namespace and
-   returns just \"eye\" -- the leading sigil only ever appears in the
-   namespace segment, so name-based detection silently misses every
-   namespaced capability/tunable reference."
+   [:state kw] for %x (session-state read; writing state is the `state!`
+   statement, not an expression), [:local sym] for everything else. Uses
+   (str sym), NOT (name sym): for a namespaced symbol like ?caster/eye,
+   (name ...) strips the namespace and returns just \"eye\" -- the leading
+   sigil only ever appears in the namespace segment, so name-based
+   detection silently misses every namespaced capability/tunable/state
+   reference."
   [sym]
   (let [s (str sym)]
     (cond
       (str/starts-with? s "$") [:tunable (str->keyword (subs s 1))]
       (str/starts-with? s "?") [:capability (str->keyword (subs s 1))]
+      (str/starts-with? s "%") [:state (str->keyword (subs s 1))]
       :else [:local sym])))
 
 (defn- entries-of [doc]
@@ -110,6 +113,10 @@
      :id (:ability doc)
      :activation (:activation doc)
      :tunables (into {} (map (fn [[k spec]] [k {:type (:type spec)}])) (:tunables doc))
+     ;; :default is carried through for a future session-init step (not
+     ;; consumed by cn.li.node.compile itself, which only needs :type to
+     ;; check %key reads/state! writes -- see :state-types in compile.clj).
+     :state (into {} (map (fn [[k spec]] [k {:type (:type spec) :default (:default spec)}])) (:state doc))
      :entries (into {} (map (fn [[k stmts]] [k (vec stmts)])) (entries-of doc))
      :meta (meta doc)}
 
