@@ -1,0 +1,14 @@
+;; Port of the old :target/raycast-destination composite: raycast, then
+;; resolve the neutral landing point from the hit. Both :hit and
+;; :destination are exposed (the old composite's two-output shape) bundled
+;; into one map-literal, since a :defn has exactly one return local.
+{:defn :target/raycast-destination
+ :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name distance :type :double}
+          {:name policy :type :any} {:name include-entities? :type :boolean}
+          {:name include-blocks? :type :boolean}]
+ :do [(let hit (target/raycast {:origin origin :direction direction :distance distance
+                                :include-entities? include-entities? :include-blocks? include-blocks?}))
+      (let destination (target/resolve-destination {:hit hit :origin origin :direction direction
+                                                     :distance distance :policy policy}))
+      (let result {:hit hit :destination destination})]
+ :returns result}

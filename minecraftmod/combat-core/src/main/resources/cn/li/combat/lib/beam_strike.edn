@@ -1,0 +1,42 @@
+;; Port of the old :combat/beam-strike composite (rev 2): trace a bounded
+;; beam via the kernel/trace-beam host primitive, then apply direct or
+;; reflection damage per hit entity depending on that entity's own
+;; :reflection-accepted? field. Field access never type-checks its source
+;; (cn.li.node.compile/compile-get has no per-field schema -- see
+;; cn.li.node.types' :any docstring), so reading :reflection-accepted? /
+;; :reflection-target / etc off each :any-typed loop element is fine even
+;; though kernel/trace-beam's own :returns is untyped :any. Uses two-armed
+;; if/else, not two separate whens, since the two branches are mutually
+;; exclusive by construction (matching the old :flow/branch :then/:else).
+;;
+;; A real limitation, not yet hit by a real call site but worth flagging:
+;; the old :inputs' {:default nil} on :trace-origin/:visual-length/
+;; :query-radius/:step meant "field genuinely absent -> host applies its
+;; own fallback". :defn params are always positional and mandatory --
+;; there is no way to omit one -- so a caller with no real value MUST pass
+;; a real value here (reusing :origin/:length/:radius is one reasonable
+;; choice), never a literal nil: kernel/trace-beam declares these :vec3/
+;; :double, and the compiler's :any->:double runtime :convert (compile-
+;; args-map!'s coerce!) has no null-double representation to fall back to
+;; -- it throws NullPointerException at dispatch time, not compile time,
+;; since a nil literal's static type is :any (bidirectionally assignable
+;; to everything -- cn.li.node.types/assignable?'s documented escape
+;; hatch). Caught by combat-core/lib_test.clj's beam-strike-test.
+{:defn :combat/beam-strike
+ :params [{:name origin :type :vec3} {:name trace-origin :type :any} {:name direction :type :vec3}
+          {:name length :type :double} {:name visual-length :type :any} {:name radius :type :double}
+          {:name query-radius :type :any} {:name entity-limit :type :long} {:name damage :type :double}
+          {:name damage-type :type :keyword} {:name block-limit :type :long}
+          {:name reflection-policy :type :any} {:name step :type :any}]
+ :do [(let beam (kernel/trace-beam {:origin origin :trace-origin trace-origin :direction direction
+                                    :length length :visual-length visual-length :radius radius
+                                    :query-radius query-radius :entity-limit entity-limit
+                                    :damage damage :damage-type damage-type :block-limit block-limit
+                                    :reflection-policy reflection-policy :step step}))
+      (each target (:entities beam)
+        (if (:reflection-accepted? target)
+          [(combat/damage {:target (:reflection-target target) :amount (:reflection-damage target)
+                           :damage-type (:damage-type target)})]
+          [(combat/damage {:target (:id target) :amount (:damage target)
+                           :damage-type (:damage-type target)})]))]
+ :returns beam}

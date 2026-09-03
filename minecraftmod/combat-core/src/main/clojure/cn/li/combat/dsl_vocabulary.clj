@@ -139,8 +139,18 @@
            :policy (opt :any nil)}
           :any #{:world-read} :raycast 2)
 
+    ;; :direction here is NOT a spatial vector despite the field-name
+    ;; heuristic this whole table otherwise follows (see this namespace's
+    ;; own docstring: ":direction -> :vec3") -- it is the old composite's
+    ;; neutral movement-direction ENUM (:forward/:back/:left/:right
+    ;; relative to :look), a real exception the mechanical derivation
+    ;; missed. Caught by combat-core/lib_test.clj's directional-destination-
+    ;; test failing at compile time (type-mismatch, wants :vec3 got
+    ;; :keyword) when porting cn.li.combat.lib's target/directional-
+    ;; destination composite -- no ability had exercised this node end to
+    ;; end before that.
     :target/directional-destination-query
-    (node {:look (p* :vec3) :eye-y (p* :double) :origin (p* :vec3) :direction (p* :vec3)
+    (node {:look (p* :vec3) :eye-y (p* :double) :origin (p* :vec3) :direction (p* :keyword)
            :distance (p* :double) :policy (opt :any nil)}
           :any #{:world-read} :raycast 2)
 

@@ -1,0 +1,19 @@
+;; Port of the old :target/hold-destination composite: fold a linear
+;; hold-range growth, a hard cap, and a resource ceiling into one ray
+;; distance, then delegate to target/raycast-destination (a nested :defn
+;; call -- cn.li.node.compile/compile-fn-call inlines arbitrarily deep,
+;; bounded by max-inline-depth). Positional args must match
+;; target/raycast-destination's own :params order exactly.
+{:defn :target/hold-destination
+ :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name hold-ticks :type :double}
+          {:name range-per-hold-tick :type :double} {:name maximum-range :type :double}
+          {:name available-resource :type :double} {:name resource-per-distance :type :double}
+          {:name policy :type :any} {:name include-entities? :type :boolean}
+          {:name include-blocks? :type :boolean}]
+ :do [(let grown (math/mul range-per-hold-tick (math/add hold-ticks 1.0)))
+      (let capped (math/min grown maximum-range))
+      (let resource-limited (math/div available-resource resource-per-distance))
+      (let hold-distance (math/min capped resource-limited))
+      (let result (target/raycast-destination origin direction hold-distance policy
+                                               include-entities? include-blocks?))]
+ :returns result}
