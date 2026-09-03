@@ -352,6 +352,69 @@
       (is (some #(= [:command :cooldown/start {:name :main :ticks 52}] %) @calls)))
     (is (= :performed (:outcome (.-result frame))))))
 
+(deftest vec-deviation-start-writes-overload-floor-test
+  (let [doc (read-skill "vec_deviation.edn")
+        host {:query! (fn [_cap _args _fr] true) :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:activation-overload 5.0}
+               :capabilities {:budget/activate {:overload 5.0} :context/resources {:overload 20.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= [{:key :overload-floor :value 15.0}] (vec (.-stateWrites frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest vec-deviation-pulse-routes-each-projectile-type-test
+  (let [doc (read-skill "vec_deviation.edn")
+        calls (atom [])
+        p1 {:id "large1" :type "large_fireball" :item? false :living? false :mob? false
+           :multipart? false :difficulty 1.0 :explosion-power 0.0 :position {:x 1.0 :y 0.0 :z 0.0}}
+        p2 {:id "small1" :type "small_fireball" :item? false :living? false :mob? false
+           :multipart? false :difficulty 1.0 :position {:x 2.0 :y 0.0 :z 0.0}}
+        p3 {:id "normal1" :type "arrow" :item? false :living? false :mob? false :multipart? false
+           :difficulty 1.0 :position {:x 3.0 :y 0.0 :z 0.0} :velocity {:x 0.0 :y 0.0 :z 1.0}}
+        p4 {:id "living1" :type "zombie" :item? false :living? true :mob? true :multipart? false
+           :difficulty 1.0}
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true :entity/select [p1 p2 p3 p4]))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:target-radius 10.0 :affected-entity-difficulty [] :excluded-entity-ids []
+                          :excluded-tags [] :large-fireball-ids ["large_fireball"]
+                          :small-fireball-ids ["small_fireball"] :fireball-explosion-radius 3.0}
+               :capabilities {:caster/body {:x 0.0 :y 0.0 :z 0.0} :world/id "overworld"
+                              :invariant/overload-floor 2.0 :budget/scan {:cp 1.0}
+                              :budget/deflect {:cp 0.5} :budget/normal-tick {:cp 1.0 :overload 1.0}
+                              :progression/deflect 1.0}
+               :state {}}
+        frame (run/dispatch! program :pulse input)]
+    (testing "the living/mob projectile (p4) never got deflect-checked at all"
+      (is (= 5 (count (filter #(= :cost/spend (second %)) @calls)))
+          "scan + 3 deflects + normal-tick, not 6"))
+    (testing "large fireball: discarded and exploded with its own explosion-power ignored (0.0), falling back to the tunable radius"
+      (is (some #(= [:command :entity/discard {:entity p1 :world-id "overworld"}] %) @calls))
+      (is (some #(= [:command :world/explosion
+                    {:world-id "overworld" :position {:x 1.0 :y 0.0 :z 0.0} :radius 3.0 :fire? true}]
+                    %)
+                @calls)))
+    (testing "small fireball: discarded, no explosion"
+      (is (some #(= [:command :entity/discard {:entity p2 :world-id "overworld"}] %) @calls))
+      (is (not (some #(and (= :world/explosion (second %))
+                          (= {:x 2.0 :y 0.0 :z 0.0} (:position (nth % 2))))
+                     @calls))))
+    (testing "normal projectile: velocity zeroed and tagged, not discarded"
+      (is (some #(= [:command :entity/configure
+                    {:world-id "overworld" :entity p3 :velocity {:vec3 [0.0 0.0 0.0]}
+                     :projectile-damage 0.0 :add-tags ["ac_vm_deviated"]}]
+                    %)
+                @calls))
+      (is (not (some #(= [:command :entity/discard {:entity p3 :world-id "overworld"}] %) @calls)))
+      (is (some #(= :ring-fade-audio (:effect-id %)) (.-vfx frame))))
+    (testing "living/mob projectile: no discard, no configure, no explosion at all"
+      (is (not (some #(= p4 (:entity (nth % 2))) (filter #(= :command (first %)) @calls)))))
+    (is (= :continue (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

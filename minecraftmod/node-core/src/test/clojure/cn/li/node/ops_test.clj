@@ -30,6 +30,11 @@
   (is (= 40 (ops/invoke :math/floor-long [40.9])))
   (is (integer? (ops/invoke :math/floor-long [40.9]))))
 
+(deftest collection-contains-checks-membership-test
+  (is (true? (ops/invoke :collection/contains? [["a" "b"] "a"])))
+  (is (false? (ops/invoke :collection/contains? [["a" "b"] "c"])))
+  (is (false? (ops/invoke :collection/contains? [nil "a"]))))
+
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))
 

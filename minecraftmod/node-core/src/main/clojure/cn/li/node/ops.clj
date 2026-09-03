@@ -67,6 +67,11 @@
    :pair/first     {:params [:any]                    :returns :double}
    :pair/second    {:params [:any]                    :returns :double}
    :value/eq       {:params [:any :any]               :returns :boolean}
+   ;; cn.li.node.expr already implements this (a projectile-type
+   ;; allowlist/blocklist check, S6's vec_deviation.edn); exposing it here
+   ;; is the same "wire an existing-but-unreachable expr opcode into
+   ;; ops/table" fix :math/select needed earlier.
+   :collection/contains? {:params [:any :any]         :returns :boolean}
    :bool/and       {:params [:boolean :boolean]       :returns :boolean}
    :bool/or        {:params [:boolean :boolean]       :returns :boolean}
    :bool/not       {:params [:boolean]                :returns :boolean}
