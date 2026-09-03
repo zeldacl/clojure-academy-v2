@@ -108,33 +108,42 @@
 (defn- resource-location ^ResourceLocation [^UiResourceRef ref]
   (ResourceLocations/of (.namespace ref) (.path ref)))
 
+(defn- apply-scissor-clip!
+  [^GuiGraphics gg ^floats clip-rects cur-clip clip]
+  (when (not= clip cur-clip)
+    (when (>= cur-clip 0)
+      (.disableScissor gg))
+    (when (>= clip 0)
+      (let [b (* clip 4)]
+        (.enableScissor gg (int (aget clip-rects b)) (int (aget clip-rects (unchecked-inc-int b)))
+                        (int (+ (aget clip-rects b) (aget clip-rects (+ b 2))))
+                        (int (+ (aget clip-rects (unchecked-inc-int b)) (aget clip-rects (+ b 3))))))))
+  clip)
+
 (defn- draw-ui-draw-list! [^GuiGraphics gg context stage ^UiDrawList dl]
   (let [^ints run-op (.runOp dl) ^ints run-res (.runRes dl) ^ints run-clip (.runClip dl)
         ^ints run-start (.runStart dl) ^ints run-end (.runEnd dl)
         ^floats clip-rects (.clipRects dl)
         ^objects resources (.resources dl)
-        n (.runCount dl)]
-    (loop [r (int 0) cur-clip (int -2)]
-      (when (< r n)
-        (let [clip (aget run-clip r)]
-          (when (not= clip cur-clip)
-            (if (neg? clip)
-              (.disableScissor gg)
-              (let [b (* clip 4)]
-                (.enableScissor gg (int (aget clip-rects b)) (int (aget clip-rects (unchecked-inc-int b)))
-                                (int (+ (aget clip-rects b) (aget clip-rects (+ b 2))))
-                                (int (+ (aget clip-rects (unchecked-inc-int b)) (aget clip-rects (+ b 3))))))))
-          (let [s (aget run-start r) e (aget run-end r) op (aget run-op r)]
-            (cond
-              (= op UiOp/RECT) (draw-rect-run! gg dl s e)
-              (or (= op UiOp/IMAGE) (= op UiOp/NINE))
-              (draw-image-run! gg dl s e (resource-location (aget resources (aget run-res r))))
-              (= op UiOp/TEXT) (draw-text-run! gg dl s e)
-              (= op UiOp/ITEM) (draw-item-run! gg context stage dl s e)
-              (= op UiOp/MODEL) (draw-model-run! gg context stage dl s e)
-              :else nil))
-          (recur (unchecked-inc-int r) clip))))
-    (.disableScissor gg)))
+        n (.runCount dl)
+        final-clip
+        (loop [r (int 0) cur-clip (int -1)]
+          (if (< r n)
+            (let [clip (aget run-clip r)
+                  cur-clip' (apply-scissor-clip! gg clip-rects cur-clip clip)
+                  s (aget run-start r) e (aget run-end r) op (aget run-op r)]
+              (cond
+                (= op UiOp/RECT) (draw-rect-run! gg dl s e)
+                (or (= op UiOp/IMAGE) (= op UiOp/NINE))
+                (draw-image-run! gg dl s e (resource-location (aget resources (aget run-res r))))
+                (= op UiOp/TEXT) (draw-text-run! gg dl s e)
+                (= op UiOp/ITEM) (draw-item-run! gg context stage dl s e)
+                (= op UiOp/MODEL) (draw-model-run! gg context stage dl s e)
+                :else nil)
+              (recur (unchecked-inc-int r) cur-clip'))
+            cur-clip))]
+    (when (>= final-clip 0)
+      (.disableScissor gg))))
 
 ;; ============================== world/VFX commands ==============================
 

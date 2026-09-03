@@ -76,19 +76,33 @@
 (defn- core-host-api []
   (presentation-host/api (presentation-runtime)))
 
+(def ^:private core-host-keys
+  [:mount! :sync! :mount-view! :present-view! :update-view! :update-host!
+   :dispatch-input! :begin-frame! :extract-stage! :semantics! :unmount!
+   :unmount-all! :invalidate-render-resources!])
+
+(defn- core-host-fn
+  "Defer Runtime creation until the first real host call.
+
+  install-bridge! runs during Forge/FML mod construction on a worker thread,
+  while frame extraction and input run on the client Render thread. Eagerly
+  building core-host-api during install pinned owner-thread to the loader
+  thread and made every render-stage submission fail."
+  [k]
+  (fn [& args] (apply (get (core-host-api) k) args)))
+
+(defn- lazy-core-host-map []
+  (into {} (map (fn [k] [k (core-host-fn k)]) core-host-keys)))
+
 (defn- install-presentation-boundary!
   "Install the opaque Runtime API behind mcmod's version-neutral bridge.
    Minecraft/loader code can call the bridge; it never reaches Presentation
    implementation maps directly." 
   []
-  (let [api (core-host-api)]
-    (presentation-bridge/install-host!
-     {:mount! (:mount! api)
-      :sync! (:sync! api)
-      :dispatch-input! (:dispatch-input! api)
-      :begin-frame! (:begin-frame! api)
-      :extract-stage! (:extract-stage! api)
-      :unmount! (:unmount! api)})))
+  (let [api (select-keys (lazy-core-host-map)
+                         [:mount! :sync! :dispatch-input! :begin-frame!
+                          :extract-stage! :unmount!])]
+    (presentation-bridge/install-host! api)))
 
 (def ^:private stage->render-stage
   {:world-before-translucent RenderStage/WORLD_BEFORE_TRANSLUCENT
@@ -146,59 +160,58 @@
   "Single AC host contract. All view mounts and frame extraction use Runtime;
    only normalized artifact IDs and neutral runtime maps cross the bridge."
   []
-  (let [runtime (presentation-runtime)
-        core-api (core-host-api)]
-    ;; Merge core Runtime keys (:mount-view! :extract-stage! …) so AC adapters
-    ;; and the platform neutral seam can reach them through one host map.
-    (merge
-     core-api
-     {:mount! (fn [owner host-kind view-id model]
-                (presentation/mount-view!
-                 {:view-id (or view-id :academy.app/application)
-                  :host-kind host-kind
-                  :state (if (map? model) model {})
-                  :dispatch-action! (fn [_ _ current] current)
-                  :on-close nil}))
-      :frame! (fn [frame-id _delta-seconds width height]
-                (refresh-stage-state! :screen width height)
-                ;; Raw FramePacket — dispatch-runtime-stage! wraps {:stage :frame}.
-                (frame-packet frame-id :screen {:width width :height height}))
-      :frame-with-context! (fn [stage frame-id delta-seconds width height _vfx-context]
-                             (refresh-stage-state! stage width height)
-                             (let [ui-packet (frame-packet frame-id stage
-                                                           {:width width :height height})
-                                   vfx (sampled-vfx-frame! frame-id delta-seconds)
-                                   packet (ability-compose/merge-vfx-into-frame ui-packet vfx)]
-                               ;; Same envelope as dispatch-runtime-stage!: the
-                               ;; neutral seam submits (:stage result)/(:frame result).
-                               (when packet
-                                 {:stage stage :frame packet})))
-      :mount-combat-hud! (fn [player-uuid width height]
-                           (:mount (ensure-combat-hud! runtime player-uuid width height)))
-      :mount-terminal! (fn [owner dispatch-action!]
-                         (:mount (ensure-terminal! runtime owner dispatch-action!)))
-      :mount-application! (fn [owner title snapshot dispatch-action! on-close]
-                            (:mount (presentation-application/mount!
-                                     owner title snapshot dispatch-action! on-close)))
-      :mount-container! (fn [menu-bridge snapshot-fn dispatch-action!]
-                          (:mount (presentation-container/mount-container!
-                                   runtime menu-bridge snapshot-fn dispatch-action!)))
-      :unmount! (fn [mount]
-                  ((:unmount! core-api) mount)
-                  (when (= mount (:mount @combat-hud*))
-                    (reset! combat-hud* nil))
-                  (when (= mount (:mount @terminal*))
-                    (reset! terminal* nil)))
-      :reload-resources! (fn [_generation]
-                           ((:invalidate-render-resources! core-api)))
-      :dispatch! (fn [mount event]
-                   ((:dispatch-input! core-api) mount event))
-      :dispatch-input! (fn [mount event]
-                         ((:dispatch-input! core-api) mount event))
-      :unmount-all! (fn []
-                      (reset! combat-hud* nil)
-                      (reset! terminal* nil)
-                      ((:unmount-all! core-api)))})))
+  (merge
+   (lazy-core-host-map)
+   {:mount! (fn [owner host-kind view-id model]
+              (presentation/mount-view!
+               {:view-id (or view-id :academy.app/application)
+                :host-kind host-kind
+                :state (if (map? model) model {})
+                :dispatch-action! (fn [_ _ current] current)
+                :on-close nil}))
+    :frame! (fn [frame-id _delta-seconds width height]
+              (refresh-stage-state! :screen width height)
+              ;; Raw FramePacket — dispatch-runtime-stage! wraps {:stage :frame}.
+              (frame-packet frame-id :screen {:width width :height height}))
+    :frame-with-context! (fn [stage frame-id delta-seconds width height _vfx-context]
+                           (refresh-stage-state! stage width height)
+                           (let [ui-packet (frame-packet frame-id stage
+                                                         {:width width :height height})
+                                 vfx (sampled-vfx-frame! frame-id delta-seconds)
+                                 packet (ability-compose/merge-vfx-into-frame ui-packet vfx)]
+                             ;; Same envelope as dispatch-runtime-stage!: the
+                             ;; neutral seam submits (:stage result)/(:frame result).
+                             (when packet
+                               {:stage stage :frame packet})))
+    :mount-combat-hud! (fn [player-uuid width height]
+                         (:mount (ensure-combat-hud! (presentation-runtime)
+                                                     player-uuid width height)))
+    :mount-terminal! (fn [owner dispatch-action!]
+                       (:mount (ensure-terminal! (presentation-runtime)
+                                               owner dispatch-action!)))
+    :mount-application! (fn [owner title snapshot dispatch-action! on-close]
+                        (:mount (presentation-application/mount!
+                                 owner title snapshot dispatch-action! on-close)))
+    :mount-container! (fn [menu-bridge snapshot-fn dispatch-action!]
+                        (:mount (presentation-container/mount-container!
+                                 (presentation-runtime)
+                                 menu-bridge snapshot-fn dispatch-action!)))
+    :unmount! (fn [mount]
+                ((core-host-fn :unmount!) mount)
+                (when (= mount (:mount @combat-hud*))
+                  (reset! combat-hud* nil))
+                (when (= mount (:mount @terminal*))
+                  (reset! terminal* nil)))
+    :reload-resources! (fn [_generation]
+                        ((core-host-fn :invalidate-render-resources!)))
+    :dispatch! (fn [mount event]
+                  ((core-host-fn :dispatch-input!) mount event))
+    :dispatch-input! (fn [mount event]
+                        ((core-host-fn :dispatch-input!) mount event))
+    :unmount-all! (fn []
+                    (reset! combat-hud* nil)
+                    (reset! terminal* nil)
+                    ((core-host-fn :unmount-all!)))}))
 
 (defn install-bridge!
   "Install the Presentation Runtime host at the client bootstrap boundary."
