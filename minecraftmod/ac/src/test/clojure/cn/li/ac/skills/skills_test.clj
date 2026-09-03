@@ -2165,3 +2165,116 @@
     (is (= 3 (count (.-vfx frame))))
     (is (some #(= [:cooldown/start {:name :main :ticks 40}] %) @calls))
     (is (= :released (:outcome (.-result frame))))))
+
+(deftest body-intensify-start-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :context/resources {:overload 20.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:hold-ticks 0] [:overload-floor 15.0]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= 2 (count (.-vfx frame))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest body-intensify-start-insufficient-resource-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:cost-down-overload 5.0}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :context/resources {:overload 0.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (empty? (.-stateWrites frame)))))
+
+(deftest body-intensify-pulse-charges-and-continues-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-max-ticks 30 :charge-max-tolerant-ticks 40}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}}
+               :state {:overload-floor 5.0 :hold-ticks 4}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= [{:key :hold-ticks :value 5}] (vec (.-stateWrites frame))))
+    (is (some #(= 5 (:charge-ticks (:payload %))) (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest body-intensify-pulse-insufficient-charging-budget-destroys-vfx-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-max-ticks 30 :charge-max-tolerant-ticks 40}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}}
+               :state {:overload-floor 5.0 :hold-ticks 4}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (= 2 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest body-intensify-pulse-past-charge-max-times-out-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-max-ticks 30 :charge-max-tolerant-ticks 35}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}}
+               :state {:overload-floor 5.0 :hold-ticks 34}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= [{:key :hold-ticks :value 35}] (vec (.-stateWrites frame))))
+    (is (= :timeout (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest body-intensify-release-not-ready-when-undercharged-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:charge-min-ticks 5} :capabilities {} :state {:hold-ticks 2}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :not-ready (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest body-intensify-release-rolls-status-effects-and-hunger-test
+  (let [calls (atom [])
+        doc (read-skill "body_intensify.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :random/chance (>= (:probability args) 0.75)
+                         :random/uniform 0.5))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:charge-min-ticks 5 :charge-max-ticks 30
+                          :effect-probability-offset-ticks 2.0 :effect-probability-divisor 12.0
+                          :effect-duration-multiplier 1.0 :effect-hunger-multiplier 0.5
+                          :effect-hunger-amplifier 2 :effect-available-effects ["a:5" "b:2" "c:5"]
+                          :cooldown-endpoints [40.0 100.0] :progression-exp-use 0.1}
+               :capabilities {:caster/id "player-1" :caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                              :progression/mastery 0.5 :progression/use 0.7}
+               :state {:hold-ticks 20}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (testing "probability = (20-2)/12 = 1.5, buff-level = 1; index0 'a' never rolled,
+              index1 'b' prob=clamp(1.5-0)=1.0 -> passes (>=0.75), index2 'c' prob=clamp(1.5-1)=0.5 -> fails"
+      (is (= [[:command :entity/status
+              {:target "player-1" :status-id :b :duration-ticks 30.0 :amplifier 1}]]
+             (filter #(and (= :command (first %)) (= :entity/status (second %))
+                          (not= :hunger (:status-id (nth % 2))))
+                    @calls))))
+    (testing "hunger = floor(20*0.5) = 10"
+      (is (some #(= [:command :entity/status
+                    {:target "player-1" :status-id :hunger :duration-ticks 10.0 :amplifier 2}]
+                    %)
+                @calls)))
+    (is (some #(and (= :score/mark (:type %)) (= 0.7 (:progression %))) (.-events frame)))
+    (testing "cooldown = lerp(40,100, mastery(0.5)+exp-use(0.1)=0.6) = 76"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 76}] %) @calls)))
+    (is (= :performed (:outcome (.-result frame))))))
+
+(deftest body-intensify-abort-test
+  (let [doc (read-skill "body_intensify.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (= 2 (count (.-vfx frame))))
+    (is (every? #(= :destroy (:operation %)) (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))))

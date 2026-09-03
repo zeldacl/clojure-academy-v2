@@ -4,7 +4,8 @@
    -- this is the language layer (see NODE_LANGUAGE.md), not a domain
    vocabulary. Domain-specific opcodes (e.g. combat's ballistic vec3/launch,
    vfx's domain opcodes are supplied through the immutable NodeEnvironment,
-   so node-core itself never needs to know what combat or vfx are for.")
+   so node-core itself never needs to know what combat or vfx are for."
+  (:require [clojure.string :as str]))
 
 (set! *warn-on-reflection* true)
 
@@ -146,6 +147,16 @@
        :pair/third (double (nth (nth args 0) 2))
 
        :value/eq (= (nth args 0) (nth args 1))
+
+       ;; body_intensify.edn's (S6) :effect-available-effects tunable is a
+       ;; list of "name:max-amplifier" strings (e.g. "jump-boost:1"),
+       ;; confirmed by mcmod/runtime/expression-catalog.clj's own worked
+       ;; example -- referenced under :value/* in real content but, like
+       ;; :vec3/launch and :vec3/scatter-end before it, never actually
+       ;; implemented anywhere in the repo. Genuinely pure string parsing
+       ;; (no RNG, no host state), so both accessors are ordinary :pure ops.
+       :value/status-id (keyword (first (str/split (nth args 0) #":")))
+       :value/status-max-amplifier (Long/parseLong (second (str/split (nth args 0) #":")))
 
        :collection/contains? (boolean (some #(= % (nth args 1)) (or (nth args 0) [])))
        :collection/concat (vec (concat (or (nth args 0) []) (or (nth args 1) [])))

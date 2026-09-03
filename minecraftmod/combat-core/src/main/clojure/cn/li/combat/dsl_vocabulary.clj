@@ -120,7 +120,13 @@
     ;; the :random/chance comment this mirrors). S6's ray_barrage.edn
     ;; (a randomized particle-fan count) is the first real caller.
     :random/int
-    (node {:min (p* :long) :max (p* :long)} :long #{} :random/int 0)}
+    (node {:min (p* :long) :max (p* :long)} :long #{} :random/int 0)
+
+    ;; Same reasoning as :random/int/:random/chance above.
+    ;; body_intensify.edn's (S6) status-effect duration jitter
+    ;; ((1 + uniform(0,1)) * effective-ticks) is the first real caller.
+    :random/uniform
+    (node {:min (p* :double) :max (p* :double)} :double #{} :random/uniform 0)}
 
    ;; --- target/* : query, world-read -----------------------------------
    {:target/raycast

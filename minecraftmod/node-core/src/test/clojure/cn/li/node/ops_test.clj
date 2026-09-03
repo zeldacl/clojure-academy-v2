@@ -55,6 +55,12 @@
   (is (= ["a" "b"] (ops/invoke :collection/concat [["a"] ["b"]])))
   (is (= ["b"] (ops/invoke :collection/concat [nil ["b"]]))))
 
+(deftest status-spec-string-parsing-test
+  (testing "body_intensify.edn's (S6) \"name:max-amplifier\" tunable strings"
+    (is (= :jump-boost (ops/invoke :value/status-id ["jump-boost:1"])))
+    (is (= 1 (ops/invoke :value/status-max-amplifier ["jump-boost:1"])))
+    (is (= 3 (ops/invoke :value/status-max-amplifier ["strength:3"])))))
+
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))
 
