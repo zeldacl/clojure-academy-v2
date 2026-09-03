@@ -1430,3 +1430,145 @@
     (testing "item fire-mode spends the tick budget, not the discounted coin budget"
       (is (some #(= [:query :cost/spend {:budget {:cp 2.0 :overload 0.0}}] %) @calls)))
     (is (= :committed (:outcome (.-result frame))))))
+
+(defn- shift-teleport-host
+  "target/raycast and target/block-placement share the SAME :raycast
+   capability (dsl_vocabulary.clj) -- distinguish by the presence of
+   :hit, block-placement's own mandatory param raycast never has."
+  [& {:keys [present? placeable? valid? targets]
+      :or {present? true placeable? true valid? true targets []}}]
+  {:query! (fn [cap args _fr]
+            (case cap
+              :raycast (if (contains? args :hit)
+                        {:valid? valid? :position {:x 1.0 :y 2.0 :z 3.0}
+                         :line-position {:x 1.0 :y 2.5 :z 3.0}}
+                        {:some-hit-result true})
+              :item/held {:present? present? :placeable? placeable? :item-id "minecraft:dirt"}
+              :entity/select targets
+              :cost/spend true))
+   :command! (fn [_cap _args _fr])})
+
+(deftest shift-teleport-start-with-valid-placement-spawns-boxes-test
+  (let [doc (read-skill "shift_teleport.edn")
+        calls (atom [])
+        target {:id "t1" :position {:x 1.0 :y 2.0 :z 3.0} :width 0.6 :height 1.8}
+        host (assoc (shift-teleport-host :targets [target])
+                    :command! (fn [_cap _args _fr]))
+        input {:tunables {:maximum-range 8.0} :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                                                              :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                                                              :caster/aim {:x 0.0 :y 0.0 :z 1.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{:hand-item :trace :targets} (set (map :key (.-stateWrites frame)))))
+    (is (some #(= :target-box-session (:effect-id %)) (.-vfx frame)))
+    (is (some #(and (= [:activation :shift-teleport-target "t1"] (:instance-key %))
+                    (= :spawn (:operation %)))
+              (.-vfx frame)))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest shift-teleport-start-without-item-finishes-no-item-test
+  (let [doc (read-skill "shift_teleport.edn")
+        host (shift-teleport-host :present? false)
+        input {:tunables {:maximum-range 8.0} :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                                                              :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                                                              :caster/aim {:x 0.0 :y 0.0 :z 1.0}}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= :no-item (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest shift-teleport-pulse-clears-stale-boxes-and-continues-test
+  (let [doc (read-skill "shift_teleport.edn")
+        vfx-ops (atom [])
+        target {:id "t2" :position {:x 2.0 :y 2.0 :z 3.0} :width 0.6 :height 1.8}
+        host (shift-teleport-host :targets [target])
+        input {:tunables {:maximum-range 8.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/aim {:x 0.0 :y 0.0 :z 1.0}}
+               :state {:targets [{:id "t1" :position {:x 1.0 :y 2.0 :z 3.0} :width 0.6 :height 1.8}]}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(and (= [:activation :shift-teleport-target "t1"] (:instance-key %))
+                    (= :destroy (:operation %)))
+              (.-vfx frame)))
+    (is (some #(and (= [:activation :shift-teleport-destination] (:instance-key %))
+                    (= :update (:operation %)))
+              (.-vfx frame)))
+    (is (some #(and (= [:activation :shift-teleport-target "t2"] (:instance-key %))
+                    (= :spawn (:operation %)))
+              (.-vfx frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest shift-teleport-pulse-aborts-when-placement-becomes-invalid-test
+  (let [doc (read-skill "shift_teleport.edn")
+        host (shift-teleport-host :valid? false)
+        input {:tunables {:maximum-range 8.0} :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                                                              :caster/body {:x 0.0 :y 1.0 :z 0.0}
+                                                              :caster/aim {:x 0.0 :y 0.0 :z 1.0}}
+               :state {:targets []}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (some #(and (= [:activation :shift-teleport-destination] (:instance-key %))
+                    (= :destroy (:operation %)))
+              (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest shift-teleport-release-performed-places-block-and-damages-line-targets-test
+  (let [calls (atom [])
+        doc (read-skill "shift_teleport.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:damage 6.0 :exp-base 2.0}
+               :capabilities {:caster/creative? false :cooldown/main 100 :budget/release {:cp 3.0}}
+               :state {:hand-item {:present? true :placeable? true}
+                      :trace {:valid? true :position {:x 1.0 :y 2.0 :z 3.0}
+                             :line-position {:x 1.0 :y 2.5 :z 3.0}}
+                      :targets [{:id "t1" :position {:x 1.0 :y 2.0 :z 3.0}}
+                               {:id "t2" :position {:x 1.0 :y 2.0 :z 3.0}}]}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (some #(= [:query :cost/spend {:budget {:cp 3.0} :scale 1.0}] %) @calls))
+    (is (some #(= [:command :inventory/place-or-drop
+                  {:source :main-hand :count 1
+                   :plan {:valid? true :position {:x 1.0 :y 2.0 :z 3.0}
+                         :line-position {:x 1.0 :y 2.5 :z 3.0}}
+                   :creative? false}] %)
+              @calls))
+    (testing "both line targets took magic damage"
+      (is (= 2 (count (filter #(and (= :command (first %)) (= :entity/damage (second %))) @calls)))))
+    (testing "progression = exp-base(2.0) * (1 + hit-count(2)) = 6.0, weight = 1 + 2 = 3.0"
+      (is (some #(and (= :score/mark (:type %)) (= 6.0 (:progression %)) (= 3.0 (:weight %)))
+                (.-events frame))))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 100}] %) @calls))
+    (is (= :performed (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest shift-teleport-release-insufficient-resource-clears-boxes-test
+  (let [doc (read-skill "shift_teleport.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:damage 6.0 :exp-base 2.0}
+               :capabilities {:caster/creative? true :budget/release {:cp 3.0}}
+               :state {:hand-item {:present? true :placeable? true}
+                      :trace {:valid? true :position {:x 1.0 :y 2.0 :z 3.0}}
+                      :targets []}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest shift-teleport-release-without-a-valid-item-finishes-no-item-test
+  (let [doc (read-skill "shift_teleport.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:damage 6.0 :exp-base 2.0} :capabilities {}
+               :state {:hand-item {:present? false :placeable? false} :trace {:valid? false}
+                      :targets []}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :no-item (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest shift-teleport-abort-destroys-all-boxes-test
+  (let [doc (read-skill "shift_teleport.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {} :state {:targets [{:id "t1"}]}}
+        frame (compile-and-dispatch! doc :abort host input)]
+    (is (some #(= [:activation :shift-teleport-destination] (:instance-key %)) (.-vfx frame)))
+    (is (some #(= [:activation :shift-teleport-target "t1"] (:instance-key %)) (.-vfx frame)))
+    (is (= :aborted (:outcome (.-result frame))))))
