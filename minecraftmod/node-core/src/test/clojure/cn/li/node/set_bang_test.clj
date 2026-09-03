@@ -30,6 +30,23 @@
     (testing "the reassignment compiles to a :copy tagged :reassign? true"
       (is (some #(and (= :copy (:op %)) (:reassign? %)) (mapcat :instrs (:blocks ir)))))))
 
+(deftest set-rhs-accepts-a-node-call-test
+  (testing "found converting scatter_bomb.edn (S6): set!'s RHS must accept
+            a query/action call exactly like let's does (e.g. reassigning
+            an each-loop local to a fresh host query result per
+            iteration) -- there is no structural reason it should be more
+            restrictive"
+    (let [doc (surface/parse
+               "{:ability :reassign-from-call :tunables {}
+                 :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/eye
+                                                :distance 10.0}))
+                      (set! hit (target/raycast {:from ?caster/eye :dir ?caster/eye
+                                                 :distance 20.0}))
+                      (cooldown/start {:name :main :ticks 1})
+                      (finish {:outcome :performed})]}")
+          ir (compile/compile! doc fx/opts)]
+      (is (map? (ir/validate! ir))))))
+
 (deftest set-target-must-already-be-bound-test
   (let [doc (surface/parse
              "{:ability :bad :tunables {} :do [(set! nope 1.0) (finish {:outcome :performed})]}")]

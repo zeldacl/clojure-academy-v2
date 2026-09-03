@@ -1162,6 +1162,94 @@
     (is (= :destroy (:operation (first (.-vfx frame)))))
     (is (= {:outcome :no-target :next-phase nil :end-ability? true} (.-result frame)))))
 
+(deftest scatter-bomb-start-test
+  (let [doc (read-skill "scatter_bomb.edn")
+        host {:query! (fn [cap _args _fr] (case cap :cost/spend true))
+              :command! (fn [_cap _args _fr])}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:cost-down-overload 2.0 :spawn-start-tick 5}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :budget/activate {:overload 5.0}
+                              :context/resources {:overload 20.0}}}
+        frame (run/dispatch! program :start input)]
+    (is (= #{[:balls 0] [:ball-ids []] [:overload-floor 18.0] [:next-spawn-tick 5]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest scatter-bomb-pulse-spawns-a-ball-when-due-test
+  (let [doc (read-skill "scatter_bomb.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap :cost/spend true :entity/spawn {:entity-id "ball-1"}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:anti-afk-tick 999 :max-balls 5 :max-hold-ticks 100
+                          :spawn-interval-ticks 4}
+               :capabilities {:charge/ticks 10 :caster/eye {:x 0.0 :y 1.0 :z 0.0}
+                              :caster/id "player-1" :world/id "overworld"
+                              :budget/charging {:cp 0.5}}
+               :state {:overload-floor 5.0 :next-spawn-tick 10 :balls 0 :ball-ids []}}
+        frame (run/dispatch! program :pulse input)]
+    (is (some #(= [:command :resource/enforce-floor {:resource :overload :minimum 5.0}] %) @calls))
+    (is (some #(= [:query :entity/spawn {:world-id "overworld" :entity-type "academy:entity_md_ball"
+                                         :add-tags ["ac_scatter_bomb"] :owner "player-1"
+                                         :position {:x 0.0 :y 1.0 :z 0.0}
+                                         :velocity {:vec3 [0.0 0.0 0.0]} :life-ticks 2333333
+                                         :barrier? true}] %)
+              @calls))
+    (is (= #{[:ball-ids ["ball-1"]] [:balls 1] [:next-spawn-tick 14]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (testing "the display balls count is the correct just-updated value (1), not the old +2 double-add bug"
+      (is (= 1 (:balls (:payload (first (.-vfx frame)))))))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest scatter-bomb-release-routes-auto-aim-and-scatter-balls-test
+  (let [doc (read-skill "scatter_bomb.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :entity/select (if (contains? (:filter args) :entity-types)
+                                         [{:id "ball-1" :position {:x 1.0 :y 1.0 :z 0.0}}
+                                          {:id "ball-2" :position {:x 2.0 :y 1.0 :z 0.0}}]
+                                         [{:id "target-1" :position {:x 5.0 :y 0.0 :z 0.0}
+                                          :eye-height 1.6}])
+                         :data/random-item {:id "target-1" :position {:x 5.0 :y 0.0 :z 0.0}
+                                            :eye-height 1.6}
+                         :kernel/scatter-end {:vec3 [9.0 1.0 0.0]}))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:auto-aim-radius 30.0 :auto-aim-exp-threshold 0.3 :damage 8.0
+                          :scatter-range 10.0 :scatter-angle-degrees 15.0 :max-balls 5}
+               :capabilities {:caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :caster/id "player-1" :world/id "overworld"
+                              :context/skill-exp 0.5 :progression/ball-fired 1.0}
+               :state {:balls 2 :ball-ids ["ball-1" "ball-2"]}}
+        frame (run/dispatch! program :release input)]
+    (testing "auto-aim-limit = floor(balls(2) * skill-exp(0.5)) = 1 -> only ball-index 0 (ball-1) auto-aims"
+      (is (some #(= [:command :entity/discard {:world-id "overworld"
+                                               :entity {:id "ball-1" :position {:x 1.0 :y 1.0 :z 0.0}}}] %)
+                @calls))
+      (is (some #(= [:command :entity/discard {:world-id "overworld"
+                                               :entity {:id "ball-2" :position {:x 2.0 :y 1.0 :z 0.0}}}] %)
+                @calls)))
+    (testing "ball-1 (index 0, within the auto-aim limit) targets the eye-adjusted target position"
+      (is (some #(= {:vec3 [5.0 1.6 0.0]}
+                    (:destination (nth % 2)))
+                (filter #(and (= :command (first %)) (= :projectile/schedule-beam (second %))
+                             (= {:x 1.0 :y 1.0 :z 0.0} (:origin (nth % 2))))
+                       @calls))))
+    (testing "ball-2 (index 1, past the auto-aim limit) uses the scattered endpoint from the host"
+      (is (some #(= {:vec3 [9.0 1.0 0.0]} (:destination (nth % 2)))
+                (filter #(and (= :command (first %)) (= :projectile/schedule-beam (second %))
+                             (= {:x 2.0 :y 1.0 :z 0.0} (:origin (nth % 2))))
+                       @calls))))
+    (is (= 2 (count (filter #(= :beam-fade-audio (:effect-id %)) (.-vfx frame)))))
+    (is (= :released (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

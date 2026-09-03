@@ -51,6 +51,10 @@
   (testing "straight-up direction has no horizontal component to pitch -- magnitude only"
     (is (= {:vec3 [0.0 3.0 0.0]} (ops/invoke :vec3/launch [[0.0 1.0 0.0] 3.0 0.5])))))
 
+(deftest collection-concat-appends-test
+  (is (= ["a" "b"] (ops/invoke :collection/concat [["a"] ["b"]])))
+  (is (= ["b"] (ops/invoke :collection/concat [nil ["b"]]))))
+
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))
 

@@ -474,7 +474,26 @@
     (when (nil? reg)
       (report! env {:code :void-let-rhs :form rhs
                    :message (str "let " sym " bound to a call with no return value")}))
-    {:locals (assoc locals sym {:reg (or reg (dummy-register! env :any))}) :block-id block-id}))
+    (let [reg (or reg (dummy-register! env :any))
+          ;; A literal RHS (compile-literal!'s vec3-literal?/number?/etc
+          ;; branches) allocates a :const-pool reference, not a mutable
+          ;; per-bank slot -- fine for a read-only local, but set! (found
+          ;; necessary porting scatter_bomb.edn, S6: a placeholder vec3
+          ;; predeclared then reassigned in whichever `if` arm runs)
+          ;; needs a real register to write into, and there is no
+          ;; structural reason a let-bound local's later reassignability
+          ;; should depend on the invisible compiler detail of whether its
+          ;; initial value happened to be a literal. Promote unconditionally:
+          ;; copy the const into a fresh mutable register so every local is
+          ;; uniformly set!-able, matching compile-set!'s own docstring
+          ;; ("no structural reason set! should be more restrictive").
+          reg (if (= :const (first reg))
+                (let [t (type-of env reg)
+                      dst (alloc-reg! env (types/bank t) t)]
+                  (append! env block-id {:op :copy :nid (nid! env) :dst dst :src reg})
+                  dst)
+                reg)]
+      {:locals (assoc locals sym {:reg reg}) :block-id block-id})))
 
 (defn- compile-when [env locals block-id depth [_ cond-form & body]]
   (let [{cond-reg :reg block-id :block-id} (compile-form env locals block-id depth cond-form false)]
@@ -544,9 +563,22 @@
    compiler-internal synthetic op names, NOT entries in cn.li.node.ops's
    table -- they are never reachable as a DSL-authored pure-op call (that
    path goes through compile-pure-call, which only recognizes
-   ops/known-op? names), only ever emitted here."
-  [env locals block-id depth [_ sym coll-form & body]]
-  (let [{coll-reg :reg block-id :block-id} (compile-form env locals block-id depth coll-form false)
+   ops/known-op? names), only ever emitted here.
+
+   binding is either a bare item symbol, or a [item index] vector when
+   the body needs its own position within the collection (S6's
+   scatter_bomb.edn: :flow/foreach's old :index-as, used to gate auto-aim
+   to only the first N-by-mastery balls fired). index-reg already exists
+   as this loop's own internal iteration counter regardless -- exposing
+   it as a second bound local is just one more entry in body-locals, read
+   before the SAME register gets incremented at the bottom of the loop,
+   never written to by DSL-authored code (cn.li.node.pretty's unparse-
+   each does not reconstruct the index form yet; round-tripping an
+   indexed each is a known, currently-unexercised gap, not a silent
+   miscompile -- the shape simply is not seen on the way back out)."
+  [env locals block-id depth [_ binding coll-form & body]]
+  (let [[sym index-sym] (if (vector? binding) binding [binding nil])
+        {coll-reg :reg block-id :block-id} (compile-form env locals block-id depth coll-form false)
         coll-type (type-of env coll-reg)
         elem-type (if (types/list-of? coll-type) (second coll-type) :any)
         count-reg (alloc-reg! env :longs :long)
@@ -566,7 +598,8 @@
                               :loop-hint {:header header-id :index index-reg :collection coll-reg}})
       (let [item-reg (alloc-reg! env (types/bank elem-type) elem-type)
             _ (append! env body-id {:op :pure :nid (nid! env) :dst item-reg :fn :collection/nth :args [coll-reg index-reg]})
-            body-locals (assoc locals sym {:reg item-reg})
+            body-locals (cond-> (assoc locals sym {:reg item-reg})
+                          index-sym (assoc index-sym {:reg index-reg}))
             {final-body :block-id terminated? :terminated?} (compile-stmts! env body-locals body-id depth (vec body))]
         ;; after-id is always reachable via the header's OWN :else edge
         ;; (the loop's natural exit), so it is never an unreachable/empty
@@ -633,7 +666,13 @@
   [env locals block-id depth [_ sym value-form]]
   (if-let [{target-reg :reg} (get locals sym)]
     (let [want (type-of env target-reg)
-          {:keys [reg block-id]} (compile-form env locals block-id depth value-form false)
+          ;; allow-calls? true, same as `let`'s own RHS: a reassignment's
+          ;; new value is exactly as entitled to come from a query/action
+          ;; as a fresh binding's is (S6's scatter_bomb.edn needs a
+          ;; kernel/scatter-end call here) -- there is no structural
+          ;; reason set! should be more restrictive than let, this was
+          ;; simply never exercised with a call-based RHS before.
+          {:keys [reg block-id]} (compile-form env locals block-id depth value-form true)
           got (type-of env reg)]
       (when-not (types/assignable? got want)
         (report! env {:code :type-mismatch :form value-form :want want

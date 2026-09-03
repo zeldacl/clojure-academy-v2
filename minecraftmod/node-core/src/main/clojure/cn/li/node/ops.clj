@@ -81,6 +81,10 @@
    ;; optional value, and a nonempty? guard before reading it).
    :collection/first     {:params [:any]               :returns :any}
    :collection/nonempty  {:params [:any]                :returns :boolean}
+   ;; S6's scatter_bomb.edn: append a newly-spawned entity id onto the
+   ;; session-tracked ball-ids list. Same "wire an existing-but-
+   ;; unreachable expr opcode" fix as the others above.
+   :collection/concat    {:params [:any :any]           :returns :any}
    :bool/and       {:params [:boolean :boolean]       :returns :boolean}
    :bool/or        {:params [:boolean :boolean]       :returns :boolean}
    :bool/not       {:params [:boolean]                :returns :boolean}

@@ -118,6 +118,33 @@
       (is (= [:a "b" 3] (:tags (first (.-vfx frame)))))
       (is (= [[:cooldown/start {:name :main :ticks 1}]] @calls)))))
 
+(deftest each-index-binding-is-the-real-per-iteration-position-test
+  (testing "each's optional [item index] binding form -- found converting
+            scatter_bomb.edn (S6): a real dispatch, not just compile,
+            proving the index register's VALUE actually advances per
+            iteration and is not just accepted syntax (the each-loop
+            dispatch bug this whole test file's docstring warns about
+            was caught exactly this way, not by a compile-only check)"
+    (let [ir (run/compile-doc!
+              "{:ability :indexed-mark :activation :instant :tunables {}
+                :do [(let xs (target/entities {:shape {:type :sphere :center ?caster/eye :radius 4.0}
+                                               :limit 8}))
+                     (each [t i] xs
+                       (when (math/lt i 2)
+                         (combat/damage {:target t :amount 1.0})))
+                     (finish {:outcome :performed})]}")
+          calls (atom [])
+          host {:query! (fn [cap _args _fr]
+                         (case cap :entity/select ["e0" "e1" "e2" "e3"]))
+                :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+          program (run/compile-program ir host)
+          input {:tunables {} :capabilities {:caster/eye {:x 0.0 :y 0.0 :z 0.0}}}]
+      (run/dispatch! program :default input)
+      (is (= [[:entity/damage {:target "e0" :amount 1.0}]
+             [:entity/damage {:target "e1" :amount 1.0}]]
+             @calls)
+          "only the first two (index 0 and 1) of four candidates were damaged"))))
+
 (deftest damage-does-not-run-when-raycast-misses-test
   (let [ir (run/compile-doc! thunder-bolt-ish)
         calls (atom [])

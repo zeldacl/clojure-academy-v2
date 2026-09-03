@@ -90,6 +90,20 @@
            :launch-base (p* :double) :launch-span (p* :double) :entity-search-radius (p* :double)}
           :any #{:world-read} :kernel/terrain-wave-plan 4)
 
+    ;; Real content (scatter_bomb.edn, S6) referenced :vec3/scatter-end as
+    ;; a :vec3/* pure op, but a random scatter deviation needs the
+    ;; activation's own RNG cursor -- same reasoning as :random/chance
+    ;; above, so this cannot be a :pure op no matter what its old
+    ;; namespace implied. An exhaustive search of both combat-core and ac
+    ;; found no implementation of the old opcode anywhere (the same class
+    ;; of never-wired-up reference :vec3/launch turned out to be), so this
+    ;; is a new node, not a port: a random point within a cone of
+    ;; :angle-degrees around :direction from :origin, at :range.
+    :kernel/scatter-end
+    (node {:origin (p* :vec3) :direction (p* :vec3) :range (p* :double)
+           :angle-degrees (p* :double)}
+          :vec3 #{} :kernel/scatter-end 1)
+
     ;; A seeded probability roll needs the activation's own RNG cursor,
     ;; which only the host frame carries -- unlike node-core's pure ops
     ;; (cn.li.node.ops), which are deliberately seed-free (see that
