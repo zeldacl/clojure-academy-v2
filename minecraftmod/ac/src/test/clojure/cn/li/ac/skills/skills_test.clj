@@ -1257,3 +1257,176 @@
       (is (= [{:target :max-cp :operation :add :value 1500.0}
              {:target :max-overload :operation :add :value 100.0}]
              (:passive-effects doc))))))
+
+(deftest railgun-start-with-no-coin-and-iron-in-hand-arms-item-charge-test
+  (let [doc (read-skill "railgun.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :entity/select [] :item/held {:item-id "minecraft:iron_ingot"}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                                           :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/id "player-1"}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (is (= #{[:coin-id nil] [:mode :armed] [:hold-ticks 0] [:mode :item-charge]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :started (:outcome (.-result frame))))))
+
+(deftest railgun-start-with-a-coin-candidate-stays-armed-test
+  (let [doc (read-skill "railgun.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :entity/select [{:id "coin-1" :motion-progress 0.5 :owner-id "player-1"}]
+                         :item/held {:item-id "minecraft:iron_ingot"}))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0}
+                                           :caster/aim {:x 0.0 :y 0.0 :z 1.0} :caster/id "player-1"}}
+        frame (compile-and-dispatch! doc :start host input)]
+    (testing "a coin candidate present suppresses item-charge even though iron is held"
+      (is (= #{[:coin-id "coin-1"] [:mode :armed] [:hold-ticks 0]}
+             (set (map (juxt :key :value) (.-stateWrites frame))))))))
+
+(deftest railgun-pulse-charges-item-and-transitions-to-release-when-full-test
+  (let [doc (read-skill "railgun.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {:item-charge-ticks 3} :capabilities {}
+               :state {:mode :item-charge :hold-ticks 2}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (= #{[:hold-ticks 3] [:fire-mode :item]}
+           (set (map (juxt :key :value) (.-stateWrites frame)))))
+    (is (= :charge-ready (:outcome (.-result frame))))
+    (is (= :release (:next-phase (.-result frame)))))
+  (testing "not yet full -> continue, no fire-mode write"
+    (let [doc (read-skill "railgun.edn")
+          host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+          input {:tunables {:item-charge-ticks 5} :capabilities {}
+                 :state {:mode :item-charge :hold-ticks 1}}
+          frame (compile-and-dispatch! doc :pulse host input)]
+      (is (= [{:key :hold-ticks :value 2}] (vec (.-stateWrites frame))))
+      (is (= :continue (:outcome (.-result frame)))))))
+
+(deftest railgun-pulse-armed-mode-is-a-no-op-continue-test
+  (let [doc (read-skill "railgun.edn")
+        host {:query! (fn [_cap _args _fr]) :command! (fn [_cap _args _fr])}
+        input {:tunables {} :capabilities {} :state {:mode :armed :hold-ticks 0}}
+        frame (compile-and-dispatch! doc :pulse host input)]
+    (is (empty? (.-stateWrites frame)))
+    (is (= :continue (:outcome (.-result frame))))))
+
+(deftest railgun-coin-thrown-perform-and-miss-and-ignored-test
+  (let [calls (atom [])
+        doc (read-skill "railgun.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap
+                         :entity/select [{:id "coin-1" :motion-progress 0.9 :owner-id "player-1"}]))
+              :command! (fn [cap args _fr] (swap! calls conj [cap args]))}
+        input {:tunables {:qte-active-threshold 0.7 :qte-perform-threshold 0.8}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/id "player-1"
+                              :world/id "overworld"}
+               :state {:mode :armed}}
+        frame (compile-and-dispatch! doc :coin-thrown host input)]
+    (testing "motion-progress 0.9 clears both thresholds -> perform, discard the coin, go to release"
+      (is (some #(= [:entity/discard {:world-id "overworld" :entity {:id "coin-1"}}] %) @calls))
+      (is (= #{[:coin-id "coin-1"] [:fire-mode :coin]}
+             (set (map (juxt :key :value) (.-stateWrites frame)))))
+      (is (= :qte-perform (:outcome (.-result frame))))
+      (is (= :release (:next-phase (.-result frame))))))
+  (testing "below the perform threshold -> miss, no fire-mode/discard"
+    (let [doc (read-skill "railgun.edn")
+          host {:query! (fn [cap _args _fr]
+                         (case cap
+                           :entity/select [{:id "coin-1" :motion-progress 0.5 :owner-id "player-1"}]))
+                :command! (fn [_cap _args _fr])}
+          input {:tunables {:qte-active-threshold 0.7 :qte-perform-threshold 0.8}
+                 :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/id "player-1"
+                                :world/id "overworld"}
+                 :state {:mode :armed}}
+          frame (compile-and-dispatch! doc :coin-thrown host input)]
+      (is (= :qte-miss (:outcome (.-result frame))))))
+  (testing "not armed (already item-charging) -> ignored, no query even issued"
+    (let [doc (read-skill "railgun.edn")
+          host {:query! (fn [_cap _args _fr] (throw (ex-info "should not be queried" {})))
+                :command! (fn [_cap _args _fr])}
+          input {:tunables {} :capabilities {} :state {:mode :item-charge}}
+          frame (compile-and-dispatch! doc :coin-thrown host input)]
+      (is (= :ignored (:outcome (.-result frame)))))))
+
+(deftest railgun-release-coin-mode-fires-beam-breaks-blocks-and-cools-down-test
+  (let [calls (atom [])
+        doc (read-skill "railgun.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :kernel/trace-beam
+                         {:blocks [{:hardness 1.0 :position {:x 0.0 :y 0.0 :z 0.0}}]
+                          :entities [{:id "e1" :type "minecraft:creeper" :damage 5.0
+                                     :damage-type :skill :reflection-accepted? false}]
+                          :start {:x 0.0 :y 1.5 :z 0.0} :end {:x 0.0 :y 1.5 :z 10.0}}
+                         :cost/spend true
+                         :random/chance false
+                         :block/break nil))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:max-distance 30.0 :beam-visual-distance 30.0 :beam-radius 0.3
+                          :beam-query-radius 1.0 :beam-step 0.5 :beam-damage 6.0
+                          :beam-block-energy 4.0 :reflection-distance 8.0 :reflection-damage 2.0
+                          :cost-down-cp 4.0 :cost-down-overload 0.0 :cost-tick-cp 2.0
+                          :cost-tick-overload 0.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/id "player-1" :world/id "overworld"
+                              :progression/hit 1.0 :cooldown/main 40}
+               :state {:fire-mode :coin}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (testing "coin fire-mode spends the discounted coin budget, not the tick budget"
+      (is (some #(= [:query :cost/spend {:budget {:cp 4.0 :overload 0.0}}] %) @calls)))
+    (testing "the creeper hit fires the achievement event, and a plain score/mark always fires"
+      (is (some #(and (= :achievement/trigger (:type %))
+                      (= "electromaster.attack_creeper" (:id (:payload %))))
+                (.-events frame)))
+      (is (some #(and (= :score/mark (:type %)) (= :hit (:tag %))) (.-events frame))))
+    (testing "the queried block was broken once, within the energy budget"
+      (is (some #(= [:query :block/break {:position {:x 0.0 :y 0.0 :z 0.0} :drop? false}] %) @calls)))
+    (is (some #(= [:command :cooldown/start {:name :main :ticks 40}] %) @calls))
+    (is (= [{:key :reflection-hit? :value false}] (vec (.-stateWrites frame))))
+    (is (= :committed (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest railgun-release-item-mode-insufficient-resource-aborts-test
+  (let [doc (read-skill "railgun.edn")
+        host {:query! (fn [cap _args _fr]
+                       (case cap :item/held {:item-id "minecraft:diamond"} :cost/spend false))
+              :command! (fn [_cap _args _fr])}
+        input {:tunables {:max-distance 30.0 :beam-visual-distance 30.0 :beam-radius 0.3
+                          :beam-query-radius 1.0 :beam-step 0.5 :beam-damage 6.0
+                          :beam-block-energy 4.0 :reflection-distance 8.0 :reflection-damage 2.0
+                          :cost-down-cp 4.0 :cost-down-overload 0.0 :cost-tick-cp 2.0
+                          :cost-tick-overload 0.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/id "player-1" :world/id "overworld"}
+               :state {:fire-mode :item}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (= :insufficient-resource (:outcome (.-result frame))))
+    (is (true? (:end-ability? (.-result frame))))))
+
+(deftest railgun-release-item-mode-consumes-iron-when-held-test
+  (let [calls (atom [])
+        doc (read-skill "railgun.edn")
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :item/held {:item-id "minecraft:iron_block"}
+                         :kernel/trace-beam {:blocks [] :entities []
+                                             :start {:x 0.0 :y 1.5 :z 0.0} :end {:x 0.0 :y 1.5 :z 10.0}}
+                         :cost/spend true))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        input {:tunables {:max-distance 30.0 :beam-visual-distance 30.0 :beam-radius 0.3
+                          :beam-query-radius 1.0 :beam-step 0.5 :beam-damage 6.0
+                          :beam-block-energy 4.0 :reflection-distance 8.0 :reflection-damage 2.0
+                          :cost-down-cp 4.0 :cost-down-overload 0.0 :cost-tick-cp 2.0
+                          :cost-tick-overload 0.0}
+               :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                              :caster/id "player-1" :world/id "overworld"
+                              :progression/hit 1.0 :cooldown/main 40}
+               :state {:fire-mode :item}}
+        frame (compile-and-dispatch! doc :release host input)]
+    (is (some #(= [:command :inventory/consume {:source :main-hand :count 1}] %) @calls))
+    (testing "item fire-mode spends the tick budget, not the discounted coin budget"
+      (is (some #(= [:query :cost/spend {:budget {:cp 2.0 :overload 0.0}}] %) @calls)))
+    (is (= :committed (:outcome (.-result frame))))))
