@@ -95,7 +95,18 @@
     ;; (cn.li.node.ops), which are deliberately seed-free (see that
     ;; namespace's docstring), so this is a :query, not a :pure op.
     :random/chance
-    (node {:probability (p* :double)} :boolean #{} :random/chance 0)}
+    (node {:probability (p* :double)} :boolean #{} :random/chance 0)
+
+    ;; Same reasoning as :random/chance above: cn.li.node.expr's
+    ;; :random/int opcode reads the activation's RNG cursor, so it can
+    ;; only ever be seeded correctly through the host frame -- ops/invoke
+    ;; calls expr/evaluate with a hard-coded seed 0, which would make
+    ;; every roll identical if this were a :pure op instead (a real bug
+    ;; class this table exists to avoid, not a hypothetical one -- see
+    ;; the :random/chance comment this mirrors). S6's ray_barrage.edn
+    ;; (a randomized particle-fan count) is the first real caller.
+    :random/int
+    (node {:min (p* :long) :max (p* :long)} :long #{} :random/int 0)}
 
    ;; --- target/* : query, world-read -----------------------------------
    {:target/raycast

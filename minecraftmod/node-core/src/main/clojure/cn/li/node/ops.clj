@@ -72,6 +72,11 @@
    ;; is the same "wire an existing-but-unreachable expr opcode into
    ;; ops/table" fix :math/select needed earlier.
    :collection/contains? {:params [:any :any]         :returns :boolean}
+   ;; Same "wire an existing-but-unreachable expr opcode" fix, S6's
+   ;; ray_barrage.edn (a single-candidate query result read as an
+   ;; optional value, and a nonempty? guard before reading it).
+   :collection/first     {:params [:any]               :returns :any}
+   :collection/nonempty  {:params [:any]                :returns :boolean}
    :bool/and       {:params [:boolean :boolean]       :returns :boolean}
    :bool/or        {:params [:boolean :boolean]       :returns :boolean}
    :bool/not       {:params [:boolean]                :returns :boolean}

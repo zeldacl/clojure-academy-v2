@@ -415,6 +415,72 @@
       (is (not (some #(= p4 (:entity (nth % 2))) (filter #(= :command (first %)) @calls)))))
     (is (= :continue (:outcome (.-result frame))))))
 
+(deftest ray-barrage-scatters-when-an-unhit-silbarn-is-nearby-test
+  (let [doc (read-skill "ray_barrage.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id "silbarn-e1" :position {:x 5.0 :y 1.0 :z 0.0}}
+                         :entity/select (if (contains? (:filter args) :entity-types)
+                                         [{:id "silbarn-e1" :type "academy:entity_silbarn"
+                                          :position {:x 5.0 :y 1.0 :z 0.0} :behavior-hit? false}]
+                                         [{:id "t1"} {:id "t2"}])
+                         :random/int 2))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:targeting-range 30.0 :scatter-cone-angle 15.0 :plain-damage 8.0
+                          :scattered-damage 3.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :world/id "overworld" :rng/seed 9 :budget/fire {:cp 2.0}
+                              :progression/hit 1.0 :cooldown/main 60}}
+        frame (run/dispatch! program :start input)]
+    (testing "the silbarn's dormant behavior was triggered, not damaged directly"
+      (is (some #(= [:command :entity/trigger-behavior
+                    {:entity {:id "silbarn-e1" :type "academy:entity_silbarn"
+                             :position {:x 5.0 :y 1.0 :z 0.0} :behavior-hit? false}}] %)
+                @calls)))
+    (testing "both scatter targets took scattered-damage and a radiation mark, the primary target did not"
+      (is (= 2 (count (filter #(= :entity/damage (second %)) @calls))))
+      (is (every? #(= {:amount 3.0 :damage-type :magic} (select-keys (nth % 2) [:amount :damage-type]))
+                  (filter #(= :entity/damage (second %)) @calls)))
+      (is (= 2 (count (filter #(= :entity/mark (second %)) @calls)))))
+    (testing "the fan vfx count is 25 + the rolled random/int (2) = 27"
+      (is (= 27 (:count (:payload (some #(when (= :ray-fan-transient (:effect-id %)) %) (.-vfx frame)))))))
+    (testing "cooldown committed the resolved ?cooldown/main value, and the outcome is :performed"
+      (is (some #(= [:command :cooldown/start {:name :main :ticks 60}] %) @calls))
+      (is (= :performed (:outcome (.-result frame)))))))
+
+(deftest ray-barrage-plain-hit-when-no-silbarn-nearby-test
+  (let [doc (read-skill "ray_barrage.edn")
+        calls (atom [])
+        host {:query! (fn [cap args _fr]
+                       (swap! calls conj [:query cap args])
+                       (case cap
+                         :cost/spend true
+                         :raycast {:entity-id "e2" :position {:x 5.0 :y 1.0 :z 0.0}}
+                         :entity/select []))
+              :command! (fn [cap args _fr] (swap! calls conj [:command cap args]))}
+        ir (run/compile-doc! (:program doc) lib/fns)
+        program (run/compile-program ir host)
+        input {:tunables {:targeting-range 30.0 :scatter-cone-angle 15.0 :plain-damage 8.0
+                          :scattered-damage 3.0}
+               :capabilities {:caster/id "player-1" :caster/body {:x 0.0 :y 0.0 :z 0.0}
+                              :caster/eye {:x 0.0 :y 1.0 :z 0.0} :caster/aim {:x 1.0 :y 0.0 :z 0.0}
+                              :world/id "overworld" :rng/seed 9 :budget/fire {:cp 2.0}
+                              :progression/hit 1.0 :cooldown/main 60}}
+        frame (run/dispatch! program :start input)]
+    (testing "no silbarn nearby -> plain damage on the aim target only, no scatter query or random roll"
+      (is (some #(= [:command :entity/damage {:target "e2" :amount 8.0 :damage-type :magic}] %) @calls))
+      (is (not (some #(= :entity/trigger-behavior (second %)) @calls)))
+      (is (not (some #(= :random/int (second %)) @calls)))
+      (is (not (some #(and (= :entity/select (second %)) (contains? (:filter (nth % 2)) :excluded-entity-ids))
+                     @calls))))
+    (is (= :performed (:outcome (.-result frame))))))
+
 (deftest brain-course-advanced-test
   (let [doc (read-skill "brain_course_advanced.edn")]
     (assert-trivial-passive-phases! doc {})

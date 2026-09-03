@@ -35,6 +35,12 @@
   (is (false? (ops/invoke :collection/contains? [["a" "b"] "c"])))
   (is (false? (ops/invoke :collection/contains? [nil "a"]))))
 
+(deftest collection-first-and-nonempty-test
+  (is (= "a" (ops/invoke :collection/first [["a" "b"]])))
+  (is (nil? (ops/invoke :collection/first [[]])))
+  (is (true? (ops/invoke :collection/nonempty [["a"]])))
+  (is (false? (ops/invoke :collection/nonempty [[]]))))
+
 (deftest invoke-throws-on-unknown-op-test
   (is (thrown? clojure.lang.ExceptionInfo (ops/invoke :not-a-real-op [1.0]))))
 
