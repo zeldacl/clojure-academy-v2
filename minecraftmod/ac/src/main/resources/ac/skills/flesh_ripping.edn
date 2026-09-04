@@ -4,6 +4,8 @@
 {:schema-version 2
  :kind :ability
  :id :flesh-ripping
+ :name-key "ability.skill.teleporter.flesh_ripping"
+ :description-key "ability.skill.teleporter.flesh_ripping.desc"
  :revision 2
  :activation :session
  :requires [:caster/id :caster/eye :caster/aim :caster/creative? :world/id :rng/seed]

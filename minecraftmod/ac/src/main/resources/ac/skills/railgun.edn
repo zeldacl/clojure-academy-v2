@@ -49,6 +49,8 @@
 {:schema-version 2
  :kind :ability
  :id :railgun
+ :name-key "ability.skill.electromaster.railgun"
+ :description-key "ability.skill.electromaster.railgun.desc"
  :revision 5
  :activation :session
  :requires [:caster/eye :caster/aim :caster/id :world/id :caster/creative?

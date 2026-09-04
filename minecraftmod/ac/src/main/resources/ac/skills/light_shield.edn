@@ -55,6 +55,8 @@
 {:schema-version 2
  :kind :ability
  :id :light-shield
+ :name-key "ability.skill.meltdowner.light_shield"
+ :description-key "ability.skill.meltdowner.light_shield.desc"
  :revision 3
  :activation :toggle
  :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative? :world/id

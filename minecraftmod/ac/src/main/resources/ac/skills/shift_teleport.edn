@@ -33,6 +33,8 @@
 {:schema-version 2
  :kind :ability
  :id :shift-teleport
+ :name-key "ability.skill.teleporter.shift_teleport"
+ :description-key "ability.skill.teleporter.shift_teleport.desc"
  :revision 2
  :activation :session
  :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :caster/creative? :rng/seed]

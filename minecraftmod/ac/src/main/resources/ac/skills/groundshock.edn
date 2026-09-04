@@ -25,6 +25,8 @@
 {:schema-version 2
  :kind :ability
  :id :groundshock
+ :name-key "ability.skill.vecmanip.groundshock"
+ :description-key "ability.skill.vecmanip.groundshock.desc"
  :revision 2
  :activation :session
  :requires [:caster/body :caster/aim :caster/id :world/id :rng/seed :progression/mastery]

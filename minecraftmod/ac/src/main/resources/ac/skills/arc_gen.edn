@@ -19,6 +19,8 @@
 {:schema-version 2
  :kind :ability
  :id :arc-gen
+ :name-key "ability.skill.electromaster.arc_gen"
+ :description-key "ability.skill.electromaster.arc_gen.desc"
  :revision 2
  :activation :instant
  :requires [:caster/eye :caster/aim :world/id]

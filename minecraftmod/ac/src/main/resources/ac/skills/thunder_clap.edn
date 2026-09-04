@@ -28,6 +28,8 @@
 {:schema-version 2
  :kind :ability
  :id :thunder-clap
+ :name-key "ability.skill.electromaster.thunder_clap"
+ :description-key "ability.skill.electromaster.thunder_clap.desc"
  :revision 2
  :activation :session
  :requires [:caster/eye :caster/aim :world/id :charge/ticks]

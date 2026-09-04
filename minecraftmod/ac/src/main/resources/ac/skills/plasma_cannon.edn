@@ -36,6 +36,8 @@
 {:schema-version 2
  :kind :ability
  :id :plasma-cannon
+ :name-key "ability.skill.vecmanip.plasma_cannon"
+ :description-key "ability.skill.vecmanip.plasma_cannon.desc"
  :revision 1
  :activation :session
  :requires [:caster/eye :caster/body :caster/aim :caster/id :caster/creative? :world/id :charge/ticks]

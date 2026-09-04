@@ -14,6 +14,8 @@
 {:schema-version 2
  :kind :ability
  :id :mark-teleport
+ :name-key "ability.skill.teleporter.mark_teleport"
+ :description-key "ability.skill.teleporter.mark_teleport.desc"
  :revision 2
  :activation :session
  :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]

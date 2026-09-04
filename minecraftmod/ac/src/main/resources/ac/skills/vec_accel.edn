@@ -11,6 +11,8 @@
 {:schema-version 2
  :kind :ability
  :id :vec-accel
+ :name-key "ability.skill.vecmanip.vec_accel"
+ :description-key "ability.skill.vecmanip.vec_accel.desc"
  :revision 2
  :activation :session
  :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :charge/ticks]

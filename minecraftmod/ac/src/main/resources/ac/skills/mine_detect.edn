@@ -20,6 +20,8 @@
 {:schema-version 2
  :kind :ability
  :id :mine-detect
+ :name-key "ability.skill.electromaster.mine_detect"
+ :description-key "ability.skill.electromaster.mine_detect.desc"
  :revision 2
  :activation :instant
  :requires [:caster/id :caster/eye :world/id :progression/mastery :progression/level :rng/seed]

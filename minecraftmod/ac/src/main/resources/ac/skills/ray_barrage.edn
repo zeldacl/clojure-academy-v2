@@ -12,6 +12,8 @@
 {:schema-version 2
  :kind :ability
  :id :ray-barrage
+ :name-key "ability.skill.meltdowner.ray_barrage"
+ :description-key "ability.skill.meltdowner.ray_barrage.desc"
  :revision 1
  :activation :instant
  :requires [:caster/id :caster/body :caster/eye :caster/aim :world/id :rng/seed]

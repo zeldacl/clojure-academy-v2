@@ -54,6 +54,8 @@
 {:schema-version 2
  :kind :ability
  :id :storm-wing
+ :name-key "ability.skill.vecmanip.storm_wing"
+ :description-key "ability.skill.vecmanip.storm_wing.desc"
  :revision 1
  :activation :toggle
  :release-keeps-session? true

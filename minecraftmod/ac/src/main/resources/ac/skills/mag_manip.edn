@@ -34,6 +34,8 @@
 {:schema-version 2
  :kind :ability
  :id :mag-manip
+ :name-key "ability.skill.electromaster.mag_manip"
+ :description-key "ability.skill.electromaster.mag_manip.desc"
  :revision 3
  :activation :session
  :requires [:caster/id :caster/eye :caster/aim :caster/body :caster/creative? :world/id

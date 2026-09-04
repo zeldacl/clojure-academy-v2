@@ -29,6 +29,8 @@
 {:schema-version 2
  :kind :ability
  :id :vec-reflection
+ :name-key "ability.skill.vecmanip.vec_reflection"
+ :description-key "ability.skill.vecmanip.vec_reflection.desc"
  :revision 2
  :activation :toggle
  :requires [:caster/eye :caster/aim]

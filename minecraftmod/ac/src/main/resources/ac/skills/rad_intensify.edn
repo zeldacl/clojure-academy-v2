@@ -25,6 +25,8 @@
 {:schema-version 2
  :kind :ability
  :id :rad-intensify
+ :name-key "ability.skill.meltdowner.rad_intensify"
+ :description-key "ability.skill.meltdowner.rad_intensify.desc"
  :revision 2
  :activation :passive
  :requires [:world/id]

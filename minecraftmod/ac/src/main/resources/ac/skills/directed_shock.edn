@@ -35,6 +35,8 @@
 {:schema-version 2
  :kind :ability
  :id :directed-shock
+ :name-key "ability.skill.vecmanip.directed_shock"
+ :description-key "ability.skill.vecmanip.directed_shock.desc"
  :revision 2
  :activation :session
  :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed :progression/mastery]

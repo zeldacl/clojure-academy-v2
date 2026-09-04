@@ -22,6 +22,8 @@
 {:schema-version 2
  :kind :ability
  :id :directed-blastwave
+ :name-key "ability.skill.vecmanip.directed_blastwave"
+ :description-key "ability.skill.vecmanip.directed_blastwave.desc"
  :revision 2
  :activation :session
  :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed :charge/ticks]

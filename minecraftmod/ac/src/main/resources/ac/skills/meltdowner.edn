@@ -34,6 +34,8 @@
 {:schema-version 2
  :kind :ability
  :id :meltdowner
+ :name-key "ability.skill.meltdowner.meltdowner"
+ :description-key "ability.skill.meltdowner.meltdowner.desc"
  :revision 1
  :activation :session
  :requires [:caster/body :caster/eye :caster/aim :caster/id :caster/creative? :world/id

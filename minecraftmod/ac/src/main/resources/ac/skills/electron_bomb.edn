@@ -13,6 +13,8 @@
 {:schema-version 2
  :kind :ability
  :id :electron-bomb
+ :name-key "ability.skill.meltdowner.electron_bomb"
+ :description-key "ability.skill.meltdowner.electron_bomb.desc"
  :revision 1
  :activation :instant
  :requires [:caster/id :caster/eye :caster/aim :world/id :progression/mastery :rng/seed]

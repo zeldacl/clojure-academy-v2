@@ -12,6 +12,8 @@
 {:schema-version 2
  :kind :ability
  :id :location-teleport
+ :name-key "ability.skill.teleporter.location_teleport"
+ :description-key "ability.skill.teleporter.location_teleport.desc"
  :revision 3
  :activation :instant
  :requires [:caster/id :world/id :caster/creative? :rng/seed :progression/mastery]

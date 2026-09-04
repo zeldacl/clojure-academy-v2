@@ -18,6 +18,8 @@
 {:schema-version 2
  :kind :ability
  :id :threatening-teleport
+ :name-key "ability.skill.teleporter.threatening_teleport"
+ :description-key "ability.skill.teleporter.threatening_teleport.desc"
  :revision 2
  :activation :session
  :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :caster/creative?

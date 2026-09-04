@@ -12,6 +12,8 @@
 {:schema-version 2
  :kind :ability
  :id :blood-retrograde
+ :name-key "ability.skill.vecmanip.blood_retrograde"
+ :description-key "ability.skill.vecmanip.blood_retrograde.desc"
  :revision 2
  :period-ticks 1
  :max-session-ticks 30

@@ -48,6 +48,8 @@
 {:schema-version 2
  :kind :ability
  :id :mag-movement
+ :name-key "ability.skill.electromaster.mag_movement"
+ :description-key "ability.skill.electromaster.mag_movement.desc"
  :revision 3
  :activation :session
  :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative? :world/id

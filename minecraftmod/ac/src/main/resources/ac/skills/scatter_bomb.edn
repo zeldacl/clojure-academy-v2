@@ -42,6 +42,8 @@
 {:schema-version 2
  :kind :ability
  :id :scatter-bomb
+ :name-key "ability.skill.meltdowner.scatter_bomb"
+ :description-key "ability.skill.meltdowner.scatter_bomb.desc"
  :revision 2
  :activation :session
  :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]

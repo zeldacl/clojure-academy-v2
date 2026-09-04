@@ -19,6 +19,8 @@
 {:schema-version 2
  :kind :ability
  :id :penetrate-teleport
+ :name-key "ability.skill.teleporter.penetrate_teleport"
+ :description-key "ability.skill.teleporter.penetrate_teleport.desc"
  :revision 1
  :activation :session
  :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]

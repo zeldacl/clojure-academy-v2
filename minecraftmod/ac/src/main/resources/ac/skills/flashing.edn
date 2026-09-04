@@ -54,6 +54,8 @@
 {:schema-version 2
  :kind :ability
  :id :flashing
+ :name-key "ability.skill.teleporter.flashing"
+ :description-key "ability.skill.teleporter.flashing.desc"
  :revision 2
  :activation :toggle
  :requires [:caster/eye :caster/body :caster/aim :caster/id :caster/creative? :world/id]

@@ -18,6 +18,8 @@
 {:schema-version 2
  :kind :ability
  :id :vec-deviation
+ :name-key "ability.skill.vecmanip.vec_deviation"
+ :description-key "ability.skill.vecmanip.vec_deviation.desc"
  :revision 2
  :activation :toggle
  :requires [:caster/body :world/id]

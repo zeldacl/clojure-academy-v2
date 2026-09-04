@@ -13,6 +13,8 @@
 {:schema-version 2
  :kind :ability
  :id :thunder-bolt
+ :name-key "ability.skill.electromaster.thunder_bolt"
+ :description-key "ability.skill.electromaster.thunder_bolt.desc"
  :revision 1
  :activation :instant
  :requires [:caster/id :caster/eye :caster/aim :world/id :rng/seed]

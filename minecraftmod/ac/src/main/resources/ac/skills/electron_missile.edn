@@ -42,6 +42,8 @@
 {:schema-version 2
  :kind :ability
  :id :electron-missile
+ :name-key "ability.skill.meltdowner.electron_missile"
+ :description-key "ability.skill.meltdowner.electron_missile.desc"
  :revision 2
  :activation :session
  :requires [:caster/body :caster/id :world/id :progression/mastery :rng/seed]

@@ -32,6 +32,8 @@
 {:schema-version 2
  :kind :ability
  :id :body-intensify
+ :name-key "ability.skill.electromaster.body_intensify"
+ :description-key "ability.skill.electromaster.body_intensify.desc"
  :revision 2
  :activation :session
  :requires [:caster/id :caster/eye :caster/creative? :world/id :progression/mastery :rng/seed]
