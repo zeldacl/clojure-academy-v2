@@ -1,9 +1,9 @@
 (ns cn.li.ac.ability.client.screens.node-editor-reactive-test
   "Unit coverage for the node editor screen's PURE logic (document open,
-   render-state shaping, layout nudging, workspace save/reload) --
+   render-state shaping, layout nudging, workspace save/reload/export) --
    everything reachable without a live presentation-runtime mount.
-   open!/export! (the actual mount-view! side) are exercised only by
-   using the screen in-game; see the namespace's own docstring for why."
+   open! (the actual mount-view! side) is exercised only by using the
+   screen in-game; see the namespace's own docstring for why."
   (:require [clojure.test :refer [deftest is]]
             [clojure.java.io :as io]
             [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]))
@@ -70,7 +70,8 @@
     (is (string? (:cost-label rendered)))
     (is (boolean? (:dirty? rendered)))
     (is (= "Reload from disk" (:reload-label rendered)))
-    (is (= "Save to workspace" (:save-label rendered)))))
+    (is (= "Save to workspace" (:save-label rendered)))
+    (is (= "Export to source" (:export-label rendered)))))
 
 (deftest item->hit-classifies-nid-bearing-items-as-node-hits-test
   (is (= {:target :node :nid "n3"} (#'node-editor/item->hit {:kind :quad :role :node-body :nid "n3"})))
@@ -127,3 +128,23 @@
     (is (= {} (:layout @state*))
         "reload discards the unsaved in-memory layout and starts fresh from disk")
     (is (= "Reloaded from disk" (:status @state*)))))
+
+(deftest editor-export-action-overwrites-the-real-source-file-test
+  (let [path (temp-copy-of thunder-bolt-path)
+        state* (atom (node-editor/open-document path :skill))]
+    (#'node-editor/handle-action state* :editor/export nil)
+    (is (= (:file-text (:document @state*)) (slurp path))
+        "export must actually overwrite the file at `path`, not just claim to")
+    (is (.contains ^String (:status @state*) "Exported to"))))
+
+(deftest open-document-prefers-a-saved-workspace-copy-over-the-original-test
+  (let [path (temp-copy-of thunder-bolt-path)
+        ^java.io.File ws (#'node-editor/workspace-path-for path)]
+    (.mkdirs (.getParentFile ws))
+    ;; railgun is multi-phase, thunder_bolt (the file actually at `path`)
+    ;; is single-phase -- an unmistakable signal of which one got read.
+    (io/copy (io/file railgun-path) ws)
+    (let [state (node-editor/open-document path :skill)]
+      (is (> (count (:phases state)) 1)
+          "open-document must read the workspace sidecar, not `path` itself, when one exists")
+      (is (.contains ^String (:status state) "workspace")))))

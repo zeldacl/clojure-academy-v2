@@ -3,7 +3,7 @@
  :state-schema {:title :string :path :string :phase-label :string :phase-tabs :vector
                 :palette :vector :canvas :vector :selected-label :string :diagnostics :vector
                 :diagnostic-count :number :cost-label :string :status :string :dirty? :boolean
-                :reload-label :string :save-label :string}
+                :reload-label :string :save-label :string :export-label :string}
  :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
         :children
         [{:type :text :key :node-editor/title :layout {:height 16}
@@ -43,6 +43,10 @@
                      {:type :button :layout {:width 110 :height 14}
                       :bind {:text [:state :save-label]}
                       :on {:activate :editor/save}
+                      :semantics {:role :button}}
+                     {:type :button :layout {:width 110 :height 14}
+                      :bind {:text [:state :export-label]}
+                      :on {:activate :editor/export}
                       :semantics {:role :button}}]}
          {:type :text :key :node-editor/status :layout {:height 14}
           :bind {:text [:state :status]}}]}}

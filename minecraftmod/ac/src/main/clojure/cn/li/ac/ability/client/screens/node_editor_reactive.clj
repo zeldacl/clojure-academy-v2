@@ -24,12 +24,16 @@
      machinery (drag-from-palette, pin-to-pin connect) whose exact feel
      can only really be tuned by using it in-game, which is explicitly
      what happens after this lands (see the plan's Phase 3 discussion).
-   - open!/export! take an EXPLICIT absolute file path from the caller,
-     not a guessed game-directory/source-tree location: resolving 'where
-     does the mod's source tree live relative to the running game' is
-     itself a runtime detail this environment cannot verify without
-     launching the game, so it is left as a caller-supplied parameter
-     rather than guessed at and shipped unverified.
+   - open! takes an EXPLICIT absolute file path from the caller, not a
+     guessed game-directory/source-tree location: resolving 'where does
+     the mod's source tree live relative to the running game' is itself
+     a runtime detail this environment cannot verify without launching
+     the game, so it is left as a caller-supplied parameter rather than
+     guessed at and shipped unverified. :editor/save writes a workspace
+     sibling and is preferentially reloaded by a later open! of the same
+     path; :editor/export is the separate, explicit action that
+     overwrites the real source file at that path (document/save's own
+     docstring documents this as the intended two-path design).
    - No crosshair live-preview (plan Phase 4 item 3, 'play the effect
      being edited at the player's crosshair, republish on save').
      Investigated, not just skipped: it needs a NEW client-side player
@@ -138,15 +142,24 @@
 
 (defn open-document
   "path (absolute file path), mode (:skill or :scene) -> a fresh editor
-   state. Reads the raw file text directly (not via classpath resource
-   -- see this namespace's own docstring on why open!/export! take an
-   explicit path). wrapper-doc's own :program/:scene text (the field
-   mode-opts selects) is what document/open then parses. Also loads the
-   layout sidecar (node positions from a prior session, if any) and
-   builds the mode's palette once (vocab is static per mode, no need to
-   recompute it on every edit)."
+   state. `path` is always the identity used for the layout/workspace
+   sidecars and for a later :editor/export -- but the CONTENT actually
+   read comes from the workspace sidecar (editor-workspace/<basename>)
+   when one exists, falling back to `path` itself otherwise: a prior
+   :editor/save wrote there, and this is what makes that write actually
+   mean something across screen close/reopen instead of silently
+   reverting to stale source on the next open (document/save's own
+   docstring calls this out as the intended two-path design: workspace
+   write by default, explicit :editor/export publishes to source).
+   wrapper-doc's own :program/:scene text (the field mode-opts selects)
+   is what document/open then parses. Also loads the layout sidecar
+   (node positions from a prior session, if any) and builds the mode's
+   palette once (vocab is static per mode, no need to recompute it on
+   every edit)."
   [path mode]
-  (let [raw (slurp path)
+  (let [^java.io.File ws (workspace-path-for path)
+        source (if (.isFile ws) (.getAbsolutePath ws) path)
+        raw (slurp source)
         wrapper-doc (binding [*read-eval* false] (read-string raw))
         opts (mode-opts mode wrapper-doc)]
     (-> {:path path
@@ -158,7 +171,7 @@
          :selected-nid nil
          :drag hit/idle
          :layout (load-layout path)
-         :status "Loaded"}
+         :status (if (.isFile ws) "Loaded (from workspace)" "Loaded")}
         recompute)))
 
 (defn- selected-node-info [{:keys [graph selected-nid mode]}]
@@ -209,7 +222,8 @@
      :status (or status "")
      :dirty? (boolean (:dirty? document))
      :reload-label "Reload from disk"
-     :save-label "Save to workspace"}))
+     :save-label "Save to workspace"
+     :export-label "Export to source"}))
 
 ;; --- input handling ------------------------------------------------------
 
@@ -303,6 +317,23 @@
                (save-layout! (:path s) (:layout s))
                (recompute (assoc s :document doc :status (str "Saved to " ws))))))
 
+    ;; The other half of document/save's own documented two-path design
+    ;; (see that docstring): overwrites the REAL source-tree file at
+    ;; `:path` -- the one thing :editor/save above deliberately never
+    ;; touches. Previously this existed only as a separate, never-wired,
+    ;; never-tested `export!` function taking a player-uuid and an
+    ;; explicit target-path -- dead code with zero callers anywhere in
+    ;; the tree, not a UI-reachable action. Folded into a plain
+    ;; handle-action case instead, same shape as :editor/save, so it is
+    ;; both reachable from the screen's action row and directly testable
+    ;; the same way.
+    :editor/export
+    (swap! state*
+           (fn [s]
+             (let [doc (document/save (:document s) (fn [form] (pr-str form)))]
+               (spit (:path s) (:file-text doc))
+               (recompute (assoc s :document doc :status (str "Exported to " (:path s)))))))
+
     nil)
   (render-state @state*))
 
@@ -324,14 +355,3 @@
      (swap! active-mounts assoc (str player-uuid) {:mount (:mount vm) :state* state*})
      vm)))
 
-(defn export!
-  "player-uuid, target-path -> writes the current document's :file-text
-   verbatim to target-path (an explicit absolute path -- see namespace
-   docstring). Distinct from the default in-memory save (:editor/save
-   action) which only updates the document atom; this is the action
-   that actually touches disk, and callers should treat it as
-   deliberate (overwriting real source content)."
-  [player-uuid target-path]
-  (when-let [{:keys [state*]} (get @active-mounts (str player-uuid))]
-    (spit target-path (:file-text (:document @state*)))
-    (swap! state* assoc :status (str "Exported to " target-path))))
