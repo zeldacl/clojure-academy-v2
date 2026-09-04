@@ -9,39 +9,50 @@
 > 是那套旧设计，已整篇替换。设计过程记录在
 > `C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
 
-## 0. 当前状态：两套引擎并存，战斗侧已切到新引擎；VFX 侧尚未
+## 0. 当前状态：执行引擎已全部切换；内容目录加载仍部分依赖旧格式
 
-仓库里同时存在两套完整的执行路径。**战斗/技能 dispatch 已经切到新引擎**（S8
-cutover）；**VFX 渲染仍在旧路径上**，两者是独立的开关，不要混为一谈：
+**战斗/技能 dispatch 和 VFX 执行都已经切到新引擎**，且战斗侧的旧执行引擎文件
+（`final_engine.clj`/`final_compiler.clj`/`kernels.clj`）**没有被删除**——不是
+"暂缓清理"，是重新调查后发现它们仍是真正的依赖，见下。VFX 侧的对应文件已经
+删除。这是两件独立的事，容易混淆，分开说：
 
-- **战斗/技能（已切换，新引擎现在是实机路径）**：
-  `cn.li.ac.ability.service.combat-runtime/dispatch-intent-v2!` 是现在唯一真正被
-  真实玩家操作调用的技能 dispatch 入口——`network.clj`（客户端 CombatIntent 包处理）、
-  `server_hooks.clj`（物品触发的技能）、`location_teleport_rpc.clj`（保存点传送
-  RPC）、以及 `combat_runtime.clj` 自己的 `dispatch-trigger!`/`dispatch-event!`/
-  `pulse-active-sessions!` 全部已改为调用它，而不是旧的 `dispatch-intent!`。
-  `dispatch-intent-v2!` 内部走本文其余章节描述的 surface DSL → `node-core` IR →
-  `cn.li.mcmod.runtime.effect-emit` 闭包流水线，读取 `ac/skills/*.edn`（39/39，经
-  `cn.li.ac.ability.skills-catalog` 加载）。
-  旧的 `dispatch-intent!`（`combat-core/final_engine.clj` + `combat-core/
-  vocabulary.clj` 的节点树解释器，读取 `ac/combat/abilities/*.edn`）**故意保留、
-  未删除**——它不再被任何真实调用路径触达，但仍是 `combat_runtime_edn_activation_
-  smoke_test.clj` 等一批既有测试的直接测试对象（这些测试验证的是旧引擎自身的行为，
-  切换后仍然有效，不应该被误改成测新引擎）。伤害反应管线（`final_damage.clj`）与
-  `pulse-active-sessions!` 的会话/tick 调度这两块，两个引擎全程共享同一份实现，切换
-  没有改动它们——见 §8。
-- **VFX（未切换，旧路径仍是实机路径）**：`vfx-core/final_engine.clj` + `vfx-core/
-  vocabulary.clj`，读取 `ac/vfx/effects/*.edn`，仍是唯一渲染路径。`ac/vfx/fx/*.edn`
-  （36/36 特效）已全部转换为 `cn.li.vfx.scene` 的新场景 DSL 并有 `fx_test.clj` 逐个
-  证明"能编译、能针对假 host 正确采样"，但**没有任何渲染调用路径接到它上**——切换
-  VFX 侧是独立、尚未开始的后续工作，不在这次战斗侧 cutover 范围内。
+- **战斗/技能 dispatch（已切换为实机路径）**：
+  `cn.li.ac.ability.service.combat-runtime/dispatch-intent-v2!` 是现在唯一的
+  技能 dispatch 入口——`network.clj`、`server_hooks.clj`、
+  `location_teleport_rpc.clj`、以及 `combat_runtime.clj` 自己的
+  `dispatch-trigger!`/`dispatch-event!`/`pulse-active-sessions!` 全部调用它。
+  它内部走本文其余章节描述的 surface DSL → `node-core` IR → `cn.li.mcmod.
+  runtime.effect-emit` 闭包流水线，读取 `ac/skills/*.edn`（39/39，经
+  `cn.li.ac.ability.skills-catalog` 加载）。旧的 `dispatch-intent!` 连同它专属
+  的测试（`combat_runtime_edn_activation_smoke_test.clj`、
+  `combat_runtime_edn_fixes_test.clj`、`final_runtime_test.clj` 等）**已被删除**
+  ——不是保留，因为它们测的正是要移除的调用路径本身。
+- **VFX 执行（已切换为实机路径，旧引擎已删除）**：`cn.li.vfx.runtime` +
+  `cn.li.vfx.frame` + `cn.li.ability.client-vfx-v2` 是唯一渲染路径，读取
+  `ac/vfx/fx/*.edn`（36/36）。`vfx-core/final_engine.clj`、
+  `vfx-core/final_client.clj`、`ability-runtime/client_vfx.clj` 连同它们各自
+  专属的测试**已被删除**——详见 [VFX_CORE.md](VFX_CORE.md)。
+- **战斗侧的旧执行引擎文件为什么没删**：`final_engine.clj`/`final_compiler.clj`/
+  `kernels.clj` 表面上看不再被任何真实 dispatch 调用，但深挖后发现
+  `cn.li.ac.ability.service.combat-catalog`（真实生产启动时调用，且被测试套件
+  广泛依赖）经由 `cn.li.ac.ability.final-catalog-service` 仍然把它们用作**内容
+  元数据编译器**——跟"哪个引擎执行技能程序"完全无关，是另一条独立的、编译
+  `ac/combat/abilities/*.edn` 供 trigger 索引/mark-policies/bindings 等元数据
+  使用的管线。要删除这三个文件，需要先重写 `combat-catalog.clj` 自己的元数据
+  来源——一个独立、更大的项目，不在本次改动范围内。`final_damage.clj`
+  （伤害反应引擎）和 `node-core/expr.clj`（SplitMix64/vec3-components 的唯一
+  定义点，新引擎的 `ops.clj` 委托给它）同理：两者都是**真正共享、正确工作的
+  基础设施**，不是遗留代码，永久保留。
+- **旧内容目录同理仍在被加载**：`ac/combat/abilities/*.edn`（39 个）、
+  `ac/vfx/effects/*.edn`（36 个）、两侧的 `composites/` 目录，全部仍被
+  `ac/ability/final_catalog.clj` 加载——原因跟上一条完全一样（`combat-catalog.
+  clj` 的元数据依赖），不是遗留清理疏漏。真正执行/渲染的内容只来自
+  `ac/skills/*.edn`/`ac/vfx/fx/*.edn`；旧目录的 `:program`/`:control-graph`
+  字段从未被新引擎读取。
 
-删除旧引擎本身（`final_engine.clj`/`final_damage.clj`/`vocabulary.clj`）、把
-`verifyNodeKernelSingleSource` 之类断言旧内核唯一性的门禁改写，仍然是独立、有意留到
-以后单独做的清理步骤——上面说的"切换"只是把真实调用路径从旧引擎换到新引擎，旧引擎
-的代码和测试都还在，随时可以 `git revert` 切换那次提交单独回退。修改本文档或新增新
-语言内容前，请先确认自己在哪一侧工作，不要把两套系统的概念混着写进同一份技能/特效
-文档。
+修改本文档或新增新语言内容前，请先确认自己在哪一侧工作：**执行引擎**（已经
+只有一套）还是**内容元数据加载**（`combat-catalog.clj` 那条独立管线，仍是
+旧格式），不要把两者的概念混着写进同一份技能/特效文档。
 
 ## 1. Surface DSL：纯 EDN，无 eval
 

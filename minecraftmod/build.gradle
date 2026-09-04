@@ -1374,7 +1374,26 @@ tasks.register("verifyAbilityVfxRegistryCoverage") {
     dependsOn ":vfx-core:checkClojure", ":ac:checkClojure"
 }
 
-tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:checkClojure" }
+tasks.register("verifyVfxSingleTickPath") {
+    group = "verification"
+    description = "Exactly one VFX instance-tick implementation exists. The old engine's own final_client.clj/final_engine.clj (a second, competing tick/sample path) were deleted once the client-vfx-v2 cutover made them dead -- this gate pins that state so a future addition can't silently reintroduce a second path."
+    dependsOn ":vfx-core:checkClojure"
+    doLast {
+        def deletedOldEngine = [
+            file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj"),
+            file("vfx-core/src/main/clojure/cn/li/vfx/final_client.clj")
+        ]
+        def resurrected = deletedOldEngine.findAll { it.file }
+        if (!resurrected.isEmpty()) {
+            throw new GradleException("old VFX engine file(s) back on disk, reintroducing a second tick/sample path: ${resurrected}")
+        }
+        def runtimeSource = file("vfx-core/src/main/clojure/cn/li/vfx/runtime.clj")
+        if (!runtimeSource.file || !(runtimeSource.text =~ /\(defn\s+client-tick!/)) {
+            throw new GradleException("expected the single real VFX tick entry point (cn.li.vfx.runtime/client-tick!) not found")
+        }
+        logger.lifecycle("[verifyVfxSingleTickPath] ok (single tick path: cn.li.vfx.runtime/client-tick!)")
+    }
+}
 
 tasks.register("verifyCombatIntentOnlyNetwork") {
     group = "verification"
@@ -2520,6 +2539,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxJavaBoundary",
+              "verifyVfxPrimitiveVocabulary",
               "verifyVfxAotBoundary",
               "verifyClojureRuntimeRepresentation",
               "verifyDatagenOwnsLanguageFiles",
@@ -2798,6 +2818,37 @@ tasks.register("verifyVfxJavaBoundary") {
             }
         }
         logger.lifecycle("[verifyVfxJavaBoundary] ok")
+    }
+}
+
+tasks.register("verifyVfxPrimitiveVocabulary") {
+    group = "verification"
+    description = "Every VFX primitive string cn.li.vfx.frame's legacy-op can produce must be in every loader's own accepted primitive set -- the exact bug class already fixed once (an int primitiveId re-encoded via (str ...) on the producing side never matched what any consumer actually checked, so no VFX draw batch ever reached a renderer): this pins producer-subset-of-consumer as a real, checked invariant instead of something only caught by noticing nothing renders."
+    doLast {
+        def frameSource = file("vfx-core/src/main/clojure/cn/li/vfx/frame.clj")
+        if (!frameSource.file) throw new GradleException("missing ${frameSource}")
+        def produced = (frameSource.text =~ /:primitive\s+(:[a-zA-Z-]+)/).collect { it[1].substring(1) } as Set
+        if (produced.isEmpty()) throw new GradleException("no :primitive values found in ${frameSource} -- pattern drifted?")
+        def loaderRoots = fileTree("platform-src/loader") {
+            include "**/presentation_world_renderer.clj"
+        }.files
+        if (loaderRoots.isEmpty()) throw new GradleException("no presentation_world_renderer.clj loader files found")
+        def violations = []
+        loaderRoots.each { File loader ->
+            def text = loader.text
+            def acceptedMatch = (text =~ /#\{("(?:line|quad|particle|mesh|[a-z-]+)"(?:\s+"[a-z-]+")*)\}/)
+            if (!acceptedMatch.find()) {
+                violations << "${loader}: no #{\"...\"} primitive set found"
+                return
+            }
+            def accepted = (acceptedMatch.group(1) =~ /"([a-z-]+)"/).collect { it[1] } as Set
+            def missing = produced - accepted
+            if (!missing.isEmpty()) {
+                violations << "${loader}: accepts ${accepted} but cn.li.vfx.frame can produce ${missing}, which this loader would silently drop"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyVfxPrimitiveVocabulary] ok (producer set ${produced} <= every loader's accepted set, ${loaderRoots.size()} loaders)")
     }
 }
 tasks.register("verifyNoGeneratedClojureTypes") {
