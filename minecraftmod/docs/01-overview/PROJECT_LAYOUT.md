@@ -3,8 +3,10 @@
 当前项目使用核心工程 + 单一目标化平台工程的布局：
 能力/战斗/VFX 的生产实现只允许沿 `ability-runtime → combat-core/vfx-core/presentation-core`
 的 final 路径组合；本布局文档中的模块职责不授权恢复旧 VM、recipe、runtime、singleton
-或兼容工程。历史审计/计划文档中的旧名称只能用于追溯，当前实现以各系统维护手册和
-`final_vocabulary`/`final_catalog` 为准。
+或兼容工程。历史审计/计划文档中的旧名称只能用于追溯，当前实现以各系统维护手册
+（[COMBAT_CORE.md](../04-systems/COMBAT_CORE.md)/[VFX_CORE.md](../04-systems/VFX_CORE.md)/
+[NODE_LANGUAGE.md](../04-systems/NODE_LANGUAGE.md)）为准——`final_vocabulary`/
+`final_catalog` 已删除，不再是当前实现的一部分。
 
 ```text
 api/

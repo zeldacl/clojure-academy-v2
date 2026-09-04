@@ -2,9 +2,11 @@
 
 > 语言本体见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md) §7（场景 DSL）——本文只讲
 > vfx-core 如何使用它、模块边界、以及排障。VFX 的**执行**侧（采样/实例生命周期/
-> 渲染）已完成切换，只剩一套引擎；但 VFX 的**内容目录加载**侧（`ac/ability/
-> final_catalog.clj` 的 `load-vfx`）仍然读取旧格式内容，见下方"内容加载仍是旧
-> 格式"一节——这是两个独立的开关，不要混为一谈。
+> 渲染）和**内容元数据加载**侧（`combat-catalog.clj`，读 skill tree UI/trigger
+> 需要的字段）现在都只读 `ac/vfx/fx/*.edn`——旧内容目录
+> （`ac/vfx/effects/*.edn`/`ac/vfx/manifest.edn`）和旧加载器
+> （`ac/ability/final_catalog.clj`、`vfx-core/vocabulary.clj`/
+> `system_compiler.clj`）**已全部删除**，见下方"内容加载侧"一节。
 
 ## 系统职责
 
@@ -29,23 +31,28 @@ Minecraft 渲染状态；真正的渲染由 `platform-src` 的 loader 消费这�
 | 复用单元 | 无（36 个真实效果都不需要跨效果复用；见 NODE_LANGUAGE.md §8） |
 | 粒子模拟 | `cn.li.vfx.compile`（Niagara 模块栈 + SoA 布局）证明了模型，但没有真实内容在用它 |
 
-## 内容加载仍是旧格式（独立的、尚未切换的开关）
+## 内容加载：现在跟执行引擎读同一套内容
 
-`ac/ability/final_catalog.clj` 的 `load-vfx`（被 `cn.li.ac.ability.service.
-combat-catalog` 间接依赖，后者在真实生产启动时被调用，且被测试套件广泛使用）
-仍然读取 `ac/vfx/effects/*.edn` + `ac/vfx/manifest.edn`，通过 `cn.li.vfx.
-vocabulary`（旧词汇表）+ `cn.li.vfx.system-compiler` 做 composite 展开与结构
-校验——这两个文件因此**不是死代码**，不能删除。这条加载路径产出的数据用于
-AC 侧的技能元数据（trigger 索引、mark-policies、bindings/presentation），跟
-上面"执行引擎"读取哪份内容（`ac/vfx/fx/*.edn`）完全独立、互不影响：真正在
-客户端渲染出来的特效，源头是 `ac/vfx/fx/*.edn`；`ac/vfx/effects/*.edn` 仍在
-磁盘上，仍被 `final_catalog.clj` 加载，但从未流向任何渲染调用。要把这一条也
-切换/删除，需要先重写 `combat-catalog.clj` 自己的元数据来源——一个独立、
-更大的项目，不在本次改动范围内。
+`cn.li.ac.ability.service.combat-catalog`（真实生产启动时调用，测试套件广泛
+使用）读的是 `cn.li.ac.ability.skills-catalog/assemble`（`ac/skills/*.edn`）——
+VFX 相关的技能元数据（`:external-triggers` 里带 VFX 触发的字段等）跟战斗技能
+走同一条装配路径，不再有独立的 `load-vfx` 步骤。`ac/ability/final_catalog.clj`
+（旧 `load-combat`/`load-vfx` manifest 加载器）、`vfx-core/vocabulary.clj`（旧
+VFX 词汇表）、`vfx-core/system_compiler.clj`（旧 composite 展开 + 结构校验）
+连同它们读取的旧内容目录（`ac/vfx/effects/*.edn`〔36 个〕、
+`ac/vfx/manifest.edn`）**已全部删除**：`combat-catalog.clj` 切换元数据来源
+后，三者都失去了最后一个真实调用点。真正在客户端渲染出来的特效，源头一直是
+`ac/vfx/fx/*.edn`（执行引擎从未读过 `ac/vfx/effects/*.edn`）。`vfx-core/
+composites/*.edn`（下一节提到的 5 个旧 composite 源文件）未删除——它们此前是
+`load-vfx`/`vfx.vocabulary` 用的，现在两者都不存在了，composite 内容本身留作
+历史存档，不再有任何加载路径读取它们。
 
-## 关键事实：旧引擎里约一半的组件种类从未真正渲染过
+## 历史记录：旧引擎里约一半的组件种类从未真正渲染过（S6 转换决策依据）
 
-`cn.li.vfx.final-engine/sample-node` 的 `case` 分支只覆盖：`:vfx/let :vfx/repeat
+`cn.li.vfx.final-engine`/`final_catalog.clj` 均已删除；本节保留作为
+`ac/vfx/fx/*.edn` 里为什么某些效果的 `:scene` 是诚实的空场景的历史依据，不再
+描述任何仍在运行的代码。`cn.li.vfx.final-engine/sample-node`（已删除）的
+`case` 分支只覆盖：`:vfx/let :vfx/repeat
 :vfx/timeline :vfx/group :vfx/branch :vfx/fade :vfx/ring :vfx/beam :vfx/ray-beam
 :vfx/line :vfx/quad :vfx/emitter :vfx/audio :vfx/audio-one-shot :vfx/audio-loop
 :vfx/camera :vfx/camera-fov :vfx/camera-shake :vfx/post-process`，其余任何
@@ -88,19 +95,23 @@ clj` 的 `load-vfx` 在采样前就把它们展开成真正的子树——`beam-
   `ac/vfx/fx/*.edn` 内容在用；是给未来需要真正 CPU 端逐粒子模拟的内容留的
   能力，不是当前 36 个效果缺的东西。
 
-## 内容加载侧的模块边界（仍在用，不是死代码）
+## 内容加载侧的模块边界
 
-- `vfx-core/src/main/clojure/cn/li/vfx/vocabulary.clj`：旧词汇表
-  （`component-specs`/`vfx-runtime-specs`/`composite-only-ids`），
-  `environment`/`descriptor-specs` 是加载入口——`final_catalog.clj`
-  的 `load-vfx` 还在用，见上一节。
-- `vfx-core/src/main/clojure/cn/li/vfx/system_compiler.clj`：旧 composite
-  展开 + 图校验，同样被 `load-vfx` 使用。
-- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：`load-vfx` 读取
-  `ac/vfx/effects/*.edn` + `ac/vfx/manifest.edn`，展开 composite。
-- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：把 VFX catalog
-  与 Combat、Presentation、NodeEnvironment 组合（消费 `final_catalog.clj` 的
-  输出，跟渲染管线本身无关）。
+- `ac/src/main/clojure/cn/li/ac/vfx/fx_catalog.clj`：`ac/vfx/fx/*.edn` +
+  `ac/vfx/fx/manifest.edn` 的加载器，VFX 执行引擎唯一的内容来源。
+- `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：技能
+  元数据侧读 `ac/skills/*.edn`（见 COMBAT_CORE.md），不单独为 VFX 走第二条
+  加载路径。
+- `vfx-core/src/main/clojure/cn/li/vfx/vocabulary.clj`/`system_compiler.clj`：
+  旧词汇表 + composite 展开/校验，只为已删除的 `final_catalog.clj`/`load-vfx`
+  服务，零真实调用点，**未删除**——处理方式跟 NODE_LANGUAGE.md §0 里
+  `combat.vocabulary`/`node-core` 那批"编辑器工具链预留基础设施"一致：不重新
+  接线，也不删除，删除需要一次独立决策。`vfx-core/composites/*.edn`（5 个旧
+  composite 源文件）同理留存，不再有任何加载路径读取。
+- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：`merge-draw-
+  lists`/`merge-vfx-into-frame` 是真实调用点（`ac/gui/reactive/register.clj`）；
+  `compose-catalog`/`catalog-fingerprint-input`（旧 `final_catalog.clj` 曾经的
+  调用方）已是零调用点，处理方式同上——不删除，也不重新接线。
 
 ## 生命周期与网络
 

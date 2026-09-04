@@ -9,11 +9,11 @@
 > 是那套旧设计，已整篇替换。设计过程记录在
 > `C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
 
-## 0. 当前状态：执行引擎已全部切换并删除；内容目录加载仍是旧格式（独立的、
-   仍需要的一层，不是清理疏漏）
+## 0. 当前状态：执行引擎与内容元数据加载都已切到新格式；旧目录已删除
 
-**战斗/技能 dispatch 和 VFX 执行都已经切到新引擎，两侧的旧执行引擎文件都已
-经删除**（不是"不再调用但留着"，是文件本身不存在了）：
+**战斗/技能 dispatch、VFX 执行、内容元数据加载三条路径现在全部读同一套
+`ac/skills/*.edn`/`ac/vfx/fx/*.edn` 内容**——旧执行引擎、旧内容加载器、旧内容
+目录都已删除（不是"不再调用但留着"，是文件/目录本身不存在了）：
 
 - **战斗/技能 dispatch**：`cn.li.ac.ability.service.combat-runtime/dispatch-
   intent-v2!` 是唯一的技能 dispatch 入口——`network.clj`、`server_hooks.clj`、
@@ -29,43 +29,43 @@
   （36/36）。`vfx-core/final_engine.clj`、`vfx-core/final_client.clj`、
   `ability-runtime/client_vfx.clj` 连同它们各自专属的测试**已删除**——详见
   [VFX_CORE.md](VFX_CORE.md)。
-- **`final_engine.clj`/`final_compiler.clj`/`node-core/kernel.clj` 为什么现在
-  能删了**：早先认为它们被 `cn.li.ac.ability.service.combat-catalog`（真实
-  生产启动时调用，被测试套件广泛依赖）经由 `cn.li.ac.ability.final-catalog-
-  service` 当作内容元数据编译器使用，是真正的依赖。追查后发现这个结论只对了
-  一半：`combat-catalog.clj` 确实读取 `final-catalog-service` 的输出，但**只
-  读注册/来源元数据**（`name-key`/`actions`/`passive-effects`/`mark-policies`/
-  trigger 索引），从来不读 `:compiled`/`:program`——而 `combat-api/execute!`/
-  `create-engine`（真正会跑一份已编译图的函数）在仓库里已经零调用点：自从
-  `dispatch-intent!`/`cn.li.ability.engine` 被删除后，就没有任何东西再执行
-  编译产物了。`final-catalog-service` 自己那步"编译每个注册"因此是纯浪费——
-  已经移除，只保留 `strict-graphs!` 的结构校验（`node.scope`/`node.validate`，
-  跟旧引擎的编译器无关，独立检查图结构合法）。这才真正让 `final_engine.clj`/
-  `final_compiler.clj`（以及只被它们用到的 `node-core/kernel.clj`）失去了
-  最后的调用点，可以删除。
+- **内容元数据加载**：`cn.li.ac.ability.service.combat-catalog`（真实生产启动
+  时调用，被测试套件广泛依赖）现在直接读 `cn.li.ac.ability.skills-catalog/
+  assemble` 的输出（`ac/skills/*.edn` + `ac/skills/manifest.edn`）——跟
+  dispatch 引擎读的是**同一份内容**，只取其中 dispatch 不需要的字段
+  （`name-key`/`icon`/`actions`/`category-id`/`passive-effects`/
+  `external-triggers`/registration `:bindings`）。`ac/ability/
+  final_catalog.clj`/`final_catalog_service.clj`（旧 manifest 加载 +
+  composite 展开 + `strict-graphs!` 结构校验）、旧内容目录（`ac/combat/
+  abilities/*.edn`〔39 个〕、`ac/combat/manifest.edn`、`combat-core/
+  composites/*.edn`〔17 个〕）连同 `vfx-core/vocabulary.clj`/
+  `system_compiler.clj`（同样只为旧 `final_catalog.clj` 的 `load-vfx` 服务）
+  **已全部删除**：`combat-catalog.clj` 曾是它们最后一个真实调用点，切换元数据
+  来源后二者都变成零调用点。
 - **`kernels.clj`/`final_damage.clj`/`node-core/expr.clj` 为什么还留着**：
-  `kernels.clj` 被 `combat-core/vocabulary.clj`（内容加载仍在用的旧词汇表，见
-  下）在**模块顶层直接 require**，不装载 `vocabulary.clj` 就编译不过，跟"编译
-  过没有被执行"无关，是硬编译期依赖。`final_damage.clj`（伤害反应引擎）和
-  `node-core/expr.clj`（SplitMix64/vec3-components 的唯一定义点，新引擎的
-  `ops.clj` 委托给它）是另一类：两者都是**真正共享、正确工作的基础设施**，不
-  是遗留代码，永久保留。
-- **旧内容目录仍在被加载，这是独立的、仍然需要的一层**：`ac/combat/
-  abilities/*.edn`（39 个）、`ac/vfx/effects/*.edn`（36 个）、两侧的
-  `composites/` 目录，全部仍被 `ac/ability/final_catalog.clj` 加载——供
-  `combat-catalog.clj` 的技能元数据表使用。这条加载路径本身（组合展开 +
-  结构校验，`node.composite`/`composite-loader`/`node.scope`/`node.validate`/
-  `node.flow`/`node.descriptor`/`node.environment`）**不依赖被删除的旧引擎**，
-  一直就是纯数据处理，不涉及执行——所以旧内容目录和这几个 node-core 文件不是
-  "还没来得及删"，是这条独立管线本来就需要它们，删除需要先重写
-  `combat-catalog.clj` 自己的元数据来源，一个独立、更大的项目，不在本次改动
-  范围内。真正执行/渲染的内容只来自 `ac/skills/*.edn`/`ac/vfx/fx/*.edn`；旧
-  目录的 `:program`/`:control-graph` 字段从未被新引擎读取。
+  `kernels.clj` 被 `combat-core/vocabulary.clj`（下面单独说明）在**模块顶层
+  直接 require**，跟"编译过没有被执行"无关，是硬编译期依赖。`final_damage.clj`
+  （伤害反应引擎）和 `node-core/expr.clj`（SplitMix64/vec3-components 的唯一
+  定义点，新引擎的 `ops.clj` 委托给它）是另一类：两者都是**真正共享、正确
+  工作的基础设施**，不是遗留代码，永久保留。
+- **`combat.vocabulary`/`combat.kernels`/`vfx.vocabulary`(vfx-core 的这份未删)/
+  `node.composite`/`composite-loader`/`scope`/`validate`/`environment`/
+  `flow`/`descriptor`/`schema-export`/`node-core/api.clj` 为什么还留着，即使
+  已经零真实调用点**：`combat/api.clj` 导出的 `descriptor-specs`/
+  `kernel-descriptors`（来自 `combat.vocabulary`/`combat.kernels`）目前确实
+  没有任何真实调用方——但这是有意为将来的图形化编辑器 UI 预留的 schema-export
+  基础设施（见本文档 §2.11、`node.schema-export` 自己的定位），**不是**待清理
+  的死代码，删除前需要一次关于"这层是否还要保留"的独立决策，不属于本次内容
+  目录清理的范围。`node-core/api.clj` 的 docstring 虽然写着"sized from
+  final_catalog.clj/final_catalog_service.clj 的两个消费点"（两者都已删除），
+  但它转达的 `node.composite`/`composite-loader`/`scope`/`validate`/
+  `environment` 这套结构校验能力本身跟 schema-export 是同一批"编辑器/工具链
+  预留基础设施"，处理方式一致：留着，不重新接线，也不删除。
 
 修改本文档或新增新语言内容前，请先确认自己在哪一侧工作：**执行引擎**（已经
-只有一套，旧引擎文件已删除）还是**内容元数据加载**（`combat-catalog.clj` 那
-条独立管线，仍读旧格式内容，但不涉及任何"引擎"执行），不要把两者的概念混着
-写进同一份技能/特效文档。
+只有一套）还是**内容元数据加载**（`combat-catalog.clj`，现在跟执行引擎读同一
+份内容），两者现在共享同一套 `ac/skills/*.edn`/`ac/vfx/fx/*.edn` 内容，不会
+再有"两个目录、两份真相"的问题。
 
 ## 1. Surface DSL：纯 EDN，无 eval
 
