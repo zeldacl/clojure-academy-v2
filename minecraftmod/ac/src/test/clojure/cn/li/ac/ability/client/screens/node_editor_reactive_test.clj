@@ -137,6 +137,31 @@
         "export must actually overwrite the file at `path`, not just claim to")
     (is (.contains ^String (:status @state*) "Exported to"))))
 
+(deftest pan-canvas-items-shifts-every-item-by-the-viewport-offset-test
+  (is (= [{:x 15.0 :y 24.0 :kind :quad}]
+         (#'node-editor/pan-canvas-items [{:x 5.0 :y 20.0 :kind :quad}] {:x 10.0 :y 4.0}))))
+
+(deftest canvas-drag-on-empty-canvas-pans-the-viewport-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {}})
+    (is (= :panning (:mode (:drag @state*)))
+        "an item with no :nid classifies as a :canvas hit, arming panning")
+    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 10.0 :drag-y 4.0})
+    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 3.0 :drag-y 1.0})
+    (is (= {:x 13.0 :y 5.0} (:viewport @state*))
+        "viewport accumulates per-frame drag deltas the same way node layout does")
+    (#'node-editor/handle-action state* :input/pointer {:event-type :up})
+    (is (= :idle (:mode (:drag @state*))))))
+
+(deftest render-state-canvas-reflects-the-accumulated-viewport-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))
+        before (:x (first (:canvas (#'node-editor/render-state @state*))))]
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {}})
+    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 7.0 :drag-y 2.0})
+    (let [after (:x (first (:canvas (#'node-editor/render-state @state*))))]
+      (is (= (+ before 7.0) after)
+          "panning must actually move what render-state hands the .ui.edn canvas, not just internal state"))))
+
 (deftest open-document-prefers-a-saved-workspace-copy-over-the-original-test
   (let [path (temp-copy-of thunder-bolt-path)
         ^java.io.File ws (#'node-editor/workspace-path-for path)]

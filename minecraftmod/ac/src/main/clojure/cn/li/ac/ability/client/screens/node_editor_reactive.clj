@@ -19,11 +19,17 @@
    the plan's own commit history for why each was drawn where it was):
    - Renders the EXEC statement chain only (cn.li.ability.editor.render's
      own scope note); per-expression sub-node wiring is a follow-up.
-   - Node MOVE (drag) and SELECT are wired; adding a node from the
-     palette or rewiring a pin is not in this pass -- both need UI
-     machinery (drag-from-palette, pin-to-pin connect) whose exact feel
-     can only really be tuned by using it in-game, which is explicitly
-     what happens after this lands (see the plan's Phase 3 discussion).
+   - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
+     cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
+     see pan-canvas-items) are wired; adding a node from the palette or
+     rewiring a pin is not in this pass -- both need UI machinery
+     (drag-from-palette, pin-to-pin connect) whose exact feel can only
+     really be tuned by using it in-game, which is explicitly what
+     happens after this lands (see the plan's Phase 3 discussion). No
+     ZOOM: unlike pan, nothing in presentation-core exposes a scroll-
+     wheel or pinch input primitive to drive it (grepped for one) --
+     there is no gesture to wire a zoom action to yet, not just an
+     unwired mode like pan was.
    - open! takes an EXPLICIT absolute file path from the caller, not a
      guessed game-directory/source-tree location: resolving 'where does
      the mod's source tree live relative to the running game' is itself
@@ -171,6 +177,7 @@
          :selected-nid nil
          :drag hit/idle
          :layout (load-layout path)
+         :viewport {:x 0.0 :y 0.0}
          :status (if (.isFile ws) "Loaded (from workspace)" "Loaded")}
         recompute)))
 
@@ -203,15 +210,28 @@
   [{:keys [id category cost source]}]
   {:label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")")})
 
+(defn- pan-canvas-items
+  "composite-items, viewport ({:x :y}, total accumulated drag amount
+   since open -- see the :panning branch in handle-action's :input/
+   pointer case) -> the same items with every :x/:y shifted by viewport,
+   so dragging empty canvas moves the content WITH the cursor (the
+   conventional 'hand tool' feel). render.clj's own graph->composite-
+   items has no viewport concept -- deliberately: panning is a per-
+   SCREEN camera, not a property of the graph->layout transform itself
+   (cn.li.ability.editor.hit's own docstring frames viewport state as
+   caller-owned) -- so the shift is applied here, once, after layout."
+  [items {:keys [x y]}]
+  (mapv (fn [item] (-> item (update :x + x) (update :y + y))) items))
+
 (defn- render-state [state]
-  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette]} state
+  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport]} state
         selected (selected-node-info state)]
     {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
      :phase-label (str "Phase: " (name (or phase :default)))
      :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
      :palette (mapv palette-item palette)
-     :canvas (render/graph->composite-items graph (:layout state))
+     :canvas (pan-canvas-items (render/graph->composite-items graph (:layout state)) viewport)
      :selected-label (if selected (:text selected) "(nothing selected)")
      :diagnostics (mapv diagnostic-item diagnostics)
      :diagnostic-count (double (count diagnostics))
@@ -276,8 +296,15 @@
     (let [{:keys [event-type drag-x drag-y]} payload
           drag-mode (:mode (:drag @state*))]
       (case event-type
-        :drag (when (= :dragging-node drag-mode)
-                (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0)))
+        :drag (case drag-mode
+                :dragging-node (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0))
+                ;; Empty-canvas press classifies as :panning (hit/on-down)
+                ;; -- previously nothing consumed that mode, so dragging
+                ;; empty canvas was a silent no-op. Same per-frame
+                ;; incremental :drag-x/:drag-y contract as node move.
+                :panning (swap! state* update :viewport
+                                (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
+                nil)
         :up (swap! state* assoc :drag hit/idle)
         nil)
       nil)
