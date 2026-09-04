@@ -422,4 +422,31 @@
     (is (true? (get-in (runtime/instance! rt mount) [:pointer-capture :scrollbar?])))
     ;; :move while captured also advances the thumb (hosts that skip mouseDragged).
     (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 28 :y 18})
-    (is (pos? (double (or (get (:scroll-offsets (runtime/instance! rt mount)) :list) 0.0))))))
+    (is (pos? (double (or (get (:scroll-offsets (runtime/instance! rt mount)) :list) 0.0))))
+    ;; Wheel first, then press where the thumb visually sits after apply-scrollbar-thumbs!.
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 28 :y 18 :button 0})
+    (runtime/dispatch! rt mount {:type :scroll :x 10 :y 10 :delta -3.0})
+    (let [offset-before (double (or (get (:scroll-offsets (runtime/instance! rt mount)) :list) 0.0))
+          ;; max-off≈40, delta -3 → +36; thumb at min-y + 0.9*travel ≈ 18.2
+          thumb-y 20.0]
+      (is (pos? offset-before))
+      (is (= :capture-pointer
+             (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                          :x 28 :y thumb-y :button 0})))
+      ;; Drag must change offset — a prior bug hardcoded :down for every
+      ;; scrollbar :drag, resetting start-py each event so the thumb never moved.
+      (runtime/dispatch! rt mount {:type :pointer :event-type :drag
+                                   :x 28 :y (- thumb-y 10.0) :button 0
+                                   :drag-x 0.0 :drag-y -10.0})
+      (let [offset-after (double (or (get (:scroll-offsets (runtime/instance! rt mount)) :list) 0.0))]
+        (is (not= offset-before offset-after)
+            (str "thumb drag should change scroll offset, before=" offset-before
+                 " after=" offset-after))
+        ;; Capture must survive leaving the thin strip (main DragBar parity).
+        (runtime/dispatch! rt mount {:type :pointer :event-type :drag
+                                     :x 5 :y (- thumb-y 20.0) :button 0
+                                     :drag-x -23.0 :drag-y -10.0})
+        (let [off-strip (double (or (get (:scroll-offsets (runtime/instance! rt mount)) :list) 0.0))]
+          (is (not= offset-after off-strip)
+              (str "captured thumb drag must keep updating off-strip, mid=" offset-after
+                   " after=" off-strip)))))))

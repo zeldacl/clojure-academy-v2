@@ -8,7 +8,15 @@
            [net.minecraft.client.gui GuiGraphics]))
 
 (defn- consumed? [result]
-  (or (= result :consume) (= result :capture-pointer)))
+  (or (= result :consume) (= result :capture-pointer)
+      (= (str result) ":consume") (= (str result) ":capture-pointer")))
+
+(defn- capture-pointer? [result]
+  (or (= result :capture-pointer)
+      (= (str result) ":capture-pointer")))
+
+(defn- as-java-boolean [v]
+  (Boolean/valueOf (boolean v)))
 
 (defn open! [mount title & [on-close]]
   (let [scrollbar-drag? (atom false)
@@ -17,6 +25,11 @@
                       (fn [s ^GuiGraphics graphics mouse-x mouse-y partial-tick]
                         (.renderBackground ^DelegatingScreen s graphics
                                            (int mouse-x) (int mouse-y) (float partial-tick))
+                        (when @scrollbar-drag?
+                          (presentation/dispatch-input!
+                            mount {:type :pointer :event-type :drag
+                                   :x mouse-x :y mouse-y :button 0
+                                   :drag-x 0.0 :drag-y 0.0}))
                         (presentation/submit-current-frame!
                           :screen (float partial-tick) (.-width ^DelegatingScreen s)
                           (.-height ^DelegatingScreen s) (merge {:graphics graphics} (preview/backend-context))))
@@ -35,8 +48,8 @@
                         (let [result (presentation/dispatch-input!
                                        mount {:type :pointer :event-type :down
                                               :x mouse-x :y mouse-y :button button})]
-                          (reset! scrollbar-drag? (= result :capture-pointer))
-                          (consumed? result)))
+                          (reset! scrollbar-drag? (capture-pointer? result))
+                          (as-java-boolean (consumed? result))))
                       (fn [_] nil)
                       (fn [_]
                         (reset! scrollbar-drag? false)
@@ -45,17 +58,20 @@
                 (.withMouseReleased
                   (fn [_ mouse-x mouse-y button]
                     (reset! scrollbar-drag? false)
-                    (consumed?
-                      (presentation/dispatch-input!
-                        mount {:type :pointer :event-type :up
-                               :x mouse-x :y mouse-y :button button}))))
+                    (as-java-boolean
+                      (consumed?
+                        (presentation/dispatch-input!
+                          mount {:type :pointer :event-type :up
+                                 :x mouse-x :y mouse-y :button button})))))
                 (.withMouseDragged
                   (fn [_ mouse-x mouse-y button drag-x drag-y]
-                    (consumed?
-                      (presentation/dispatch-input!
-                        mount {:type :pointer :event-type :drag
-                               :x mouse-x :y mouse-y :button button
-                               :drag-x drag-x :drag-y drag-y}))))
+                    (let [result (presentation/dispatch-input!
+                                   mount {:type :pointer :event-type :drag
+                                          :x mouse-x :y mouse-y :button button
+                                          :drag-x drag-x :drag-y drag-y})]
+                      (when (capture-pointer? result)
+                        (reset! scrollbar-drag? true))
+                      (as-java-boolean (consumed? result)))))
                 (.withMouseMoved
                   (fn [_ mouse-x mouse-y]
                     (when @scrollbar-drag?
@@ -71,6 +87,6 @@
                   (fn [_ mouse-x mouse-y delta]
                     (presentation/dispatch-input!
                       mount {:type :scroll :x mouse-x :y mouse-y :delta delta})
-                    true)))]
+                    (as-java-boolean true))))]
     (.setScreen (Minecraft/getInstance) value)
     value))

@@ -21,10 +21,11 @@ public final class ReactivePreviewPipRenderer
         extends PictureInPictureRenderer<ReactivePreviewRenderState> {
 
     private static final float FOV_DEGREES = 50.0F;
-    private static final float Z_NEAR = 0.1F;
+    private static final float Z_NEAR = 1.0F;
     private static final float Z_FAR = 100.0F;
-    private static final float CAMERA_DISTANCE = 3.2F;
-    private static final float TARGET_MODEL_SIZE = 1.8F;
+    /** Eye distance matching GuiTutorial.showArea's translate(0,0,-4). */
+    private static final float CAMERA_DISTANCE = 4.0F;
+    private static final float TARGET_MODEL_SIZE = 0.75F;
 
     private final Projection perspective = new Projection();
     private final ProjectionMatrixBuffer perspectiveBuffer =
@@ -50,22 +51,21 @@ public final class ReactivePreviewPipRenderer
                 ProjectionType.PERSPECTIVE);
 
         if (state.blockRenderState() != null) {
-            // Real block state (tutorial :block-3d): the model is a unit cube
-            // in block space, so bounds are implicit.
-            AABB bounds = new AABB(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
-            Vec3 center = bounds.getCenter();
+            // Real block state (tutorial :block-3d): unit cube in block space.
             pose.setIdentity();
-            pose.translate(0.0F, -state.yOffset(), -CAMERA_DISTANCE);
+            // showArea outer camera + drawsBlockImpl inner offset (main reactive).
+            pose.translate(0.55F, 0.55F - state.yOffset(), -CAMERA_DISTANCE);
+            pose.scale(0.75F, -0.75F, 0.75F);
             pose.mulPose(new Quaternionf().rotateAxis(
                     (float) Math.toRadians(-20.0),
                     1.0F,
                     0.0F,
                     0.1F));
+            pose.translate(0.15F, 0.1F, -1.0F);
             pose.mulPose(new Quaternionf().rotateY((float) Math.toRadians(state.yawDegrees())));
-            float modelScale = (float) TARGET_MODEL_SIZE
-                    * Math.max(0.001F, state.modelScale());
+            float modelScale = Math.max(0.001F, state.modelScale());
             pose.scale(modelScale, modelScale, modelScale);
-            pose.translate(-center.x, -center.y, -center.z);
+            pose.translate(-0.5F, -0.5F, -0.5F);
             Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
             state.blockRenderState().submit(
                     pose,

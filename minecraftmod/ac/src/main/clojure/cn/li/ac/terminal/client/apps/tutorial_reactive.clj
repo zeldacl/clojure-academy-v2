@@ -25,12 +25,14 @@
 
 ;; Tag tooltip geometry — mirrors tutorial.ui.edn absolute tree + main step/offset.
 ;; right-panel(92,9.75) + show-window(173.5,0) + tag-area(12,120.75); step 17.
+;; (preview pane is at y=-1; tags stay at show-window local y=120.75.)
 (def ^:private tag-abs-x0 277.5)
 (def ^:private tag-abs-y0 130.5)
 (def ^:private tag-step 17.0)
 (def ^:private tag-tooltip-y-offset -8.0)
 
 ;; logo1-anchor scale 0.25 — glow dslots are screen-pixel offsets from logo1 center.
+;; Glow repeater in tutorial.ui.edn is placed at that center; items use offsets only.
 (def ^:private glow-s 0.25)
 (def ^:private glow-ln 500.0)
 (def ^:private glow-ln2 300.0)
@@ -63,6 +65,68 @@
      :glow-y (* s 15.0)
      :glow-line-w (max 1.0 (* s 5.0))
      :glow-sz (max 1.0 (* s 5.0))}))
+
+(def ^:private glow-textures
+  {:lu "academy:textures/guis/glow_lu.png"
+   :ru "academy:textures/guis/glow_ru.png"
+   :ld "academy:textures/guis/glow_ld.png"
+   :rd "academy:textures/guis/glow_rd.png"
+   :l  "academy:textures/guis/glow_left.png"
+   :r  "academy:textures/guis/glow_right.png"
+   :u  "academy:textures/guis/glow_up.png"
+   :d  "academy:textures/guis/glow_down.png"
+   :line "academy:textures/guis/line.png"})
+
+(defn- glow-quad-item [src x0 y0 x1 y1]
+  (let [w (float (- x1 x0))
+        h (float (- y1 y0))]
+    (when (and (> (Math/abs w) 0.01) (> (Math/abs h) 0.01))
+      {:kind :image
+       :src src
+       ;; CompositeSpec offsets are relative to the glow repeater's origin
+       ;; (logo1 center). Normalize inverted rects so w/h stay positive.
+       :x (float (min x0 x1)) :y (float (min y0 y1))
+       :w (float (Math/abs w)) :h (float (Math/abs h))
+       :rgba [1.0 1.0 1.0 1.0]})))
+
+(defn- glow-segment-items
+  "One horizontal glow beam (main render-glow-line! / ACRenderingHelper.drawGlow).
+   Coordinates are offsets from logo1-anchor center (glow repeater origin)."
+  [x0 x1 gy line-w glow-sz]
+  (let [gx0 (float x0)
+        gx1 (float x1)
+        gy (float gy)
+        s (float (max 1.0 glow-sz))
+        hw (float (/ (max 1.0 line-w) 2.0))
+        glx0 (- gx0 s) glx1 (+ gx1 s)
+        gly0 (- gy s) gly1 (+ gy s)
+        gy0 (- gy hw) gy1 (+ gy hw)
+        t glow-textures]
+    (when (> (Math/abs (- gx1 gx0)) 0.5)
+      (vec (keep identity
+                 [(glow-quad-item (:lu t) glx0 gly0 gx0 gy0)
+                  (glow-quad-item (:ru t) gx1 gly0 glx1 gy0)
+                  (glow-quad-item (:ld t) glx0 gy1 gx0 gly1)
+                  (glow-quad-item (:rd t) gx1 gy1 glx1 gly1)
+                  (glow-quad-item (:l t) glx0 gy0 gx0 gy1)
+                  (glow-quad-item (:r t) gx1 gy0 glx1 gy1)
+                  (glow-quad-item (:u t) gx0 gly0 gx1 gy0)
+                  (glow-quad-item (:d t) gx0 gy1 gx1 gly1)
+                  (glow-quad-item (:line t) gx0 gy0 gx1 gy1)])))))
+
+(defn- glow-items
+  "Rasterize both glow beams into composite IMAGE items (glow-line primitive
+   currently lowers to an empty nine-slice — known schema gap).
+   Repeater is anchored at logo1 center (see tutorial.ui.edn)."
+  [geom]
+  (if-not (:glow-visible? geom)
+    []
+    (vec
+     (concat
+      (glow-segment-items (:glow-right-x0 geom) (:glow-right-x1 geom)
+                          (:glow-y geom) (:glow-line-w geom) (:glow-sz geom))
+      (glow-segment-items (:glow-left-x0 geom) (:glow-left-x1 geom)
+                          (:glow-y geom) (:glow-line-w geom) (:glow-sz geom))))))
 
 (defn- glow-geom-at
   "Staged glow growth starting at elapsed 400ms (main attach-first-open-animation!)."
@@ -207,30 +271,41 @@
                 glow-visible? glow-right-x0 glow-right-x1
                 glow-left-x0 glow-left-x1 glow-y glow-line-w glow-sz]} @ctx
         alphas (or logo-alphas {})
-        static (static-glow-geom)]
-    {:phase phase
-     :animating? (contains? #{:first-open :fade-out} phase)
-     :list-visible? (boolean list-visible?)
-     :panels-visible? (boolean panels-visible?)
-     :logos-visible? (boolean logos-visible?)
-     :glow-visible? (boolean (if (nil? glow-visible?)
-                               (:glow-visible? static)
-                               glow-visible?))
-     :glow-right-x0 (float (or glow-right-x0 (:glow-right-x0 static)))
-     :glow-right-x1 (float (or glow-right-x1 (:glow-right-x1 static)))
-     :glow-left-x0 (float (or glow-left-x0 (:glow-left-x0 static)))
-     :glow-left-x1 (float (or glow-left-x1 (:glow-left-x1 static)))
-     :glow-y (float (or glow-y (:glow-y static)))
-     :glow-line-w (float (or glow-line-w (:glow-line-w static)))
-     :glow-sz (float (or glow-sz (:glow-sz static)))
-     :left-bg-rgba (alpha->rgba (or left-bg-alpha 1.0))
-     :logo0-rgba (alpha->rgba (get alphas :logo0 0.0))
-     :logo1-rgba (alpha->rgba (get alphas :logo1 (if (= phase :idle-glow) 1.0 0.0)))
-     :logo2-rgba (alpha->rgba (get alphas :logo2 0.0))
-     :logo3-rgba (alpha->rgba (get alphas :logo3 0.0))
-     :logo3-y (float (+ logo3-layout-y
-                        (- (float (or logo3-y logo3-final-y)) logo3-final-y)))
-     :anim-start-ms anim-start-ms}))
+        static (static-glow-geom)
+        geom {:glow-visible? (boolean (if (nil? glow-visible?)
+                                        (:glow-visible? static)
+                                        glow-visible?))
+              :glow-right-x0 (float (or glow-right-x0 (:glow-right-x0 static)))
+              :glow-right-x1 (float (or glow-right-x1 (:glow-right-x1 static)))
+              :glow-left-x0 (float (or glow-left-x0 (:glow-left-x0 static)))
+              :glow-left-x1 (float (or glow-left-x1 (:glow-left-x1 static)))
+              :glow-y (float (or glow-y (:glow-y static)))
+              :glow-line-w (float (or glow-line-w (:glow-line-w static)))
+              :glow-sz (float (or glow-sz (:glow-sz static)))}]
+    (merge
+     {:phase phase
+      :animating? (contains? #{:first-open :fade-out} phase)
+      :list-visible? (boolean list-visible?)
+      :panels-visible? (boolean panels-visible?)
+      ;; Keep all logo nodes mounted while the brand layer is up; fade via rgba
+      ;; only. Gating visible? on (pos? alpha) hid logo0/2/3 for the whole
+      ;; first-open ramp and on idle-glow (main hides them via visible?=false,
+      ;; but our glow was also missing — looked like the logos never appeared).
+      :logos-visible? (boolean logos-visible?)
+      :logo0-visible? (boolean logos-visible?)
+      :logo1-visible? (boolean logos-visible?)
+      :logo2-visible? (boolean logos-visible?)
+      :logo3-visible? (boolean logos-visible?)
+      :left-bg-rgba (alpha->rgba (or left-bg-alpha 1.0))
+      :logo0-rgba (alpha->rgba (get alphas :logo0 (if (= phase :idle-glow) 1.0 0.0)))
+      :logo1-rgba (alpha->rgba (get alphas :logo1 (if (= phase :idle-glow) 1.0 0.0)))
+      :logo2-rgba (alpha->rgba (get alphas :logo2 (if (= phase :idle-glow) 1.0 0.0)))
+      :logo3-rgba (alpha->rgba (get alphas :logo3 (if (= phase :idle-glow) 1.0 0.0)))
+      :logo3-y (float (+ logo3-layout-y
+                         (- (float (or logo3-y logo3-final-y)) logo3-final-y)))
+      :glow-items (glow-items geom)
+      :anim-start-ms anim-start-ms}
+     geom)))
 
 (defn- snapshot [ctx]
   (let [{:keys [entries player-uuid lang current-tut-id hovered-tut]} @ctx
@@ -288,21 +363,28 @@
             :panels-visible? false})
     (when (and list-visible? (not (:first-open-marked? @ctx)))
       (mark-first-open-done!)
-      ;; Match main setup-static-glow!: only logo1 remains; 0/2/3 hidden.
+      ;; Keep the end-of-animation brand frame (all logos + static glow). Main's
+      ;; setup-static-glow! hid 0/2/3; that read as "logos missing" once glow
+      ;; was also absent on the Presentation path.
       (swap! ctx merge (static-glow-geom)
              {:first-open-marked? true
               :phase :idle-glow
-              :logo-alphas {:logo0 0.0 :logo1 1.0 :logo2 0.0 :logo3 0.0}
+              :logo-alphas {:logo0 1.0 :logo1 1.0 :logo2 1.0 :logo3 1.0}
               :logo3-y logo3-final-y
               :left-bg-alpha 1.0}))))
 
 (defn- tick-fade-out! [ctx elapsed]
-  (let [a (float (max 0.0 (- 1.0 (/ elapsed 300.0))))]
+  (let [start (or (:fade-start-alphas @ctx)
+                  {:logo0 1.0 :logo1 1.0 :logo2 1.0 :logo3 1.0})
+        t (float (max 0.0 (min 1.0 (/ elapsed 300.0))))
+        scale (float (- 1.0 t))
+        alphas (into {} (map (fn [[k v]] [k (float (* (float v) scale))]) start))
+        any? (some (fn [[_ v]] (pos? (float v))) alphas)]
     (swap! ctx assoc
-           :logo-alphas {:logo0 a :logo1 a :logo2 a :logo3 a}
-           :logos-visible? (pos? a)
-           :glow-visible? (pos? a))
-    (when (<= a 0.0)
+           :logo-alphas alphas
+           :logos-visible? (boolean any?)
+           :glow-visible? (boolean any?))
+    (when-not any?
       (swap! ctx assoc :phase :content :logos-visible? false :glow-visible? false))))
 
 (defn- frame-tick! [ctx vm]
@@ -317,6 +399,8 @@
 
 (defn- begin-fade-out! [ctx]
   (swap! ctx assoc :phase :fade-out :anim-start-ms (now-ms)
+         :fade-start-alphas (or (:logo-alphas @ctx)
+                                {:logo0 1.0 :logo1 1.0 :logo2 1.0 :logo3 1.0})
          :panels-visible? true :list-visible? true))
 
 (defn- select-tutorial! [ctx tut-id]
@@ -331,7 +415,11 @@
              :pvs (atom (preview/create-preview-state (:id tut)))))))
 
 (defn- dispatch! [ctx vm action current]
-  (let [selected-item (:selected-item current)]
+  (let [selected-item (:selected-item current)
+        ;; Scroll/pointer noise must NOT rebuild the tutorial snapshot or call
+        ;; present!: every thumb-drag event used to snapshot+present the whole
+        ;; markdown/preview tree, which made the scrollbar feel stuttery.
+        heavy? (not (#{:input/scroll :input/pointer :input/unknown} action))]
     (case action
       :tutorial/select
       (select-tutorial! ctx (:tutorial-id selected-item))
@@ -358,9 +446,11 @@
 
       :input/scroll nil
       nil)
-    (let [snap (snapshot ctx)]
-      (present-ctx! ctx vm)
-      snap)))
+    (if heavy?
+      (let [snap (snapshot ctx)]
+        (present-ctx! ctx vm)
+        snap)
+      current)))
 
 (defn- initial-phase [player-uuid]
   (if (client-state/first-open? player-uuid)
@@ -391,7 +481,7 @@
                           :phase phase
                           :anim-start-ms (now-ms)
                           :logo-alphas (if (= phase :idle-glow)
-                                         {:logo0 0.0 :logo1 1.0 :logo2 0.0 :logo3 0.0}
+                                         {:logo0 1.0 :logo1 1.0 :logo2 1.0 :logo3 1.0}
                                          {:logo0 0.0 :logo1 0.0 :logo2 0.0 :logo3 0.0})
                           :logo3-y logo3-final-y
                           :left-bg-alpha (if (= phase :idle-glow) 1.0 0.0)

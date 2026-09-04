@@ -3,10 +3,13 @@
 {:ui/schema 2 :view/id :academy.app/tutorial
  :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :tutorial-items :vector :tag-items :vector :brief-lines :vector
-                :content-lines :vector :preview-items :vector :tag-tooltip :string
+                :content-lines :vector :preview-items :vector :glow-items :vector
+                :tag-tooltip :string
                 :tag-tooltip-x :number :tag-tooltip-y :number :status :string
                 :button-left :map :button-right :map :selected :number
                 :panels-visible? :boolean :logos-visible? :boolean :list-visible? :boolean
+                :logo0-visible? :boolean :logo1-visible? :boolean
+                :logo2-visible? :boolean :logo3-visible? :boolean
                 :glow-visible? :boolean
                 :glow-right-x0 :number :glow-right-x1 :number
                 :glow-left-x0 :number :glow-left-x1 :number
@@ -44,40 +47,31 @@
      {:type :image :key :tutorial/logo0
       :layout {:x 53.625 :y 9.25 :width 224.75 :height 137.0}
       :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo0.png"}}
-      :bind {:visible [:state :logos-visible?] :rgba [:state :logo0-rgba]}
+      :bind {:visible [:state :logo0-visible?] :rgba [:state :logo0-rgba]}
       :semantics {:role :image}}
      {:type :image :key :tutorial/logo1
       :layout {:x 53.625 :y 139.75 :width 224.75 :height 59.0}
       :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo1.png"}}
-      :bind {:visible [:state :logos-visible?] :rgba [:state :logo1-rgba]}
+      :bind {:visible [:state :logo1-visible?] :rgba [:state :logo1-rgba]}
       :semantics {:role :image}}
      {:type :image :key :tutorial/logo2
       :layout {:x 53.625 :y 139.75 :width 224.75 :height 59.0}
       :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo2.png"}}
-      :bind {:visible [:state :logos-visible?] :rgba [:state :logo2-rgba]}
+      :bind {:visible [:state :logo2-visible?] :rgba [:state :logo2-rgba]}
       :semantics {:role :image}}
      {:type :image :key :tutorial/logo3
       :layout {:x 147.375 :y 55.625 :width 37.25 :height 37.25}
       :style {:resource {:namespace "academy" :path "textures/guis/tutorial/logo3.png"}}
-      :bind {:visible [:state :logos-visible?] :rgba [:state :logo3-rgba] :y [:state :logo3-y]}
+      :bind {:visible [:state :logo3-visible?] :rgba [:state :logo3-rgba] :y [:state :logo3-y]}
       :semantics {:role :image}}
 
-     ;; Glow lines — anchor at logo1 screen center (right-panel local 166,169.25).
-     ;; Geometry offsets (post 0.25 scale) come from anim state.
-     {:type :glow-line :key :tutorial/glow-right
+     ;; Glow beams — repeater origin = logo1 center (main logo1-anchor).
+     ;; Items carry offsets from that center (glow-items in tutorial_reactive).
+     {:type :repeater :key :tutorial/glow
       :layout {:x 166.0 :y 169.25 :width 0.0 :height 0.0}
-      :bind {:visible [:state :glow-visible?]
-             :x0 [:state :glow-right-x0] :x1 [:state :glow-right-x1]
-             :line-y [:state :glow-y] :line-w [:state :glow-line-w]
-             :glow-sz [:state :glow-sz]}
-      :semantics {:role :image}}
-     {:type :glow-line :key :tutorial/glow-left
-      :layout {:x 166.0 :y 169.25 :width 0.0 :height 0.0}
-      :bind {:visible [:state :glow-visible?]
-             :x0 [:state :glow-left-x0] :x1 [:state :glow-left-x1]
-             :line-y [:state :glow-y] :line-w [:state :glow-line-w]
-             :glow-sz [:state :glow-sz]}
-      :semantics {:role :image}}
+      :bind {:items [:state :glow-items] :visible [:state :glow-visible?]}
+      :children [{:type :composite :layout {:width 0.0 :height 0.0}
+                  :bind {:item [:state :item]}}]}
 
      ;; Center markdown — mixed text/image rows via composite.
      {:type :scroll :key :tutorial/content
@@ -89,34 +83,36 @@
         :bind {:item [:state :item] :height [:item :h]}
         :semantics {:role :list-item}}]}
 
-     ;; Scrollbar strip only (do not cover the markdown pane — that stole wheel hits).
-     ;; Container is also a scrollbar hit target so presses near thumb/track arm drag.
+     ;; Scrollbar strip — slightly wider than the 9.5px art for reliable grabs.
      {:type :absolute :key :tutorial/scroll-container
-      :layout {:x 162.5 :y 0.0 :width 9.5 :height 220.5}
+      :layout {:x 160.0 :y 0.0 :width 14.0 :height 220.5}
       :style {:scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0}}
       :bind {:visible [:state :panels-visible?]}
       :semantics {:role :scrollbar}
       :children
       [{:type :image :key :tutorial/scroll-track
-        :layout {:x 0.0 :y 2.0 :width 9.5 :height 216.5}
+        :layout {:x 2.5 :y 2.0 :width 9.5 :height 216.5}
         :style {:resource {:namespace "academy" :path "textures/guis/button/widget_scroll_1.png"}
                 :scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0}}
         :semantics {:role :scrollbar}}
        {:type :image :key :tutorial/scroll-thumb
-        :layout {:x 0.0 :y 2.0 :width 9.5 :height 53.0}
+        :layout {:x 2.5 :y 2.0 :width 9.5 :height 53.0}
         :style {:resource {:namespace "academy" :path "textures/guis/button/widget_scroll_2.png"}
                 :rgba [1.0 1.0 1.0 0.8]
                 :scrollbar {:for :tutorial/content :min-y 2.0 :max-y 165.0 :thumb? true}}
         :semantics {:role :scrollbar}}]}
 
-     ;; Preview window — 158.5×136 align right,top
+     ;; Preview window — 158.5×136 align right,top.
+     ;; preview-area matches main XML: center/center + pos (0,-2) inside
+     ;; show-window → local (12.25, -1) for the 134×134 pane.
      {:type :absolute :key :tutorial/show-window
       :layout {:x 173.5 :y 0.0 :width 158.5 :height 136.0}
       :bind {:visible [:state :panels-visible?]}
       :children
       [;; Items carry absolute local x/y; height-0 rows overlay (column would stack).
+       ;; Items carry absolute local x/y; height-0 rows overlay (column would stack).
        {:type :repeater :key :tutorial/preview
-        :layout {:x 12.25 :y 0.0 :width 134.0 :height 134.0}
+        :layout {:x 12.25 :y -1.0 :width 134.0 :height 134.0}
         :bind {:items [:state :preview-items]}
         :children [{:type :composite :layout {:width 134.0 :height 0.0}
                     :bind {:item [:state :item]}}]}

@@ -8,11 +8,21 @@
            [net.minecraft.client.gui GuiGraphics]))
 
 (defn- consumed? [result]
-  (or (= result :consume) (= result :capture-pointer)))
+  (or (= result :consume) (= result :capture-pointer)
+      (= (str result) ":consume") (= (str result) ":capture-pointer")))
+
+(defn- capture-pointer? [result]
+  (or (= result :capture-pointer)
+      (= (str result) ":capture-pointer")))
+
+(defn- as-java-boolean [v]
+  ;; DelegatingScreen requires java.lang.Boolean; a bare keyword would become false.
+  (Boolean/valueOf (boolean v)))
 
 (defn open! [mount title & [on-close]]
-  ;; Latch only on scrollbar capture (:capture-pointer). General :consume from
-  ;; the app reducer must not turn every click into a drag stream.
+  ;; Latch only on scrollbar capture (:capture-pointer). Drag updates come from
+  ;; mouseDragged alone — do NOT also synthesize drags from render/mouseMoved
+  ;; (that tripled dispatch! per frame and made the thumb stutter).
   (let [scrollbar-drag? (atom false)
         value (doto (DelegatingScreen.
                       (Component/literal (str title))
@@ -36,8 +46,8 @@
                         (let [result (presentation/dispatch-input!
                                        mount {:type :pointer :event-type :down
                                               :x mouse-x :y mouse-y :button button})]
-                          (reset! scrollbar-drag? (= result :capture-pointer))
-                          (consumed? result)))
+                          (reset! scrollbar-drag? (capture-pointer? result))
+                          (as-java-boolean (consumed? result))))
                       (fn [_] nil)
                       (fn [_]
                         (reset! scrollbar-drag? false)
@@ -46,33 +56,33 @@
                 (.withMouseReleased
                   (fn [_ mouse-x mouse-y button]
                     (reset! scrollbar-drag? false)
-                    (consumed?
-                      (presentation/dispatch-input!
-                        mount {:type :pointer :event-type :up
-                               :x mouse-x :y mouse-y :button button}))))
+                    (as-java-boolean
+                      (consumed?
+                        (presentation/dispatch-input!
+                          mount {:type :pointer :event-type :up
+                                 :x mouse-x :y mouse-y :button button})))))
                 (.withMouseDragged
                   (fn [_ mouse-x mouse-y button drag-x drag-y]
-                    (consumed?
-                      (presentation/dispatch-input!
-                        mount {:type :pointer :event-type :drag
-                               :x mouse-x :y mouse-y :button button
-                               :drag-x drag-x :drag-y drag-y}))))
+                    (let [result (presentation/dispatch-input!
+                                   mount {:type :pointer :event-type :drag
+                                          :x mouse-x :y mouse-y :button button
+                                          :drag-x drag-x :drag-y drag-y})]
+                      (when (capture-pointer? result)
+                        (reset! scrollbar-drag? true))
+                      (as-java-boolean (consumed? result)))))
                 (.withMouseMoved
                   (fn [_ mouse-x mouse-y]
-                    ;; Fallback when the host never delivers mouseDragged.
-                    (when @scrollbar-drag?
+                    ;; While the scrollbar thumb is captured, skip hover :move
+                    ;; routing — it only adds work and can fight drag updates.
+                    (when-not @scrollbar-drag?
                       (presentation/dispatch-input!
-                        mount {:type :pointer :event-type :drag
-                               :x mouse-x :y mouse-y :button 0
-                               :drag-x 0.0 :drag-y 0.0}))
-                    (presentation/dispatch-input!
-                      mount {:type :pointer :event-type :move
-                             :x mouse-x :y mouse-y})
+                        mount {:type :pointer :event-type :move
+                               :x mouse-x :y mouse-y}))
                     nil))
                 (.withMouseScrolled
                   (fn [_ mouse-x mouse-y delta]
                     (presentation/dispatch-input!
                       mount {:type :scroll :x mouse-x :y mouse-y :delta delta})
-                    true)))]
+                    (as-java-boolean true))))]
     (.setScreen (Minecraft/getInstance) value)
     value))

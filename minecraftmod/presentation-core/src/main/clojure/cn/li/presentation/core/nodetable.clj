@@ -53,13 +53,18 @@
 (defonce ^:private tables* (atom {}))
 
 (defn table-for
-  "The NodeTable for artifact's view-id, building and caching it on first use."
+  "The NodeTable for artifact's view-id, building and caching it on first use.
+   Cache key includes :source-hash so a rebuilt .uic.edn (e.g. new scrollbar
+   flags) is picked up without requiring a full JVM restart."
   ^NodeTable [artifact]
-  (let [view-id (:view-id artifact)]
-    (or (get @tables* view-id)
-        (let [t (build-node-table artifact)]
-          (swap! tables* assoc view-id t)
-          t))))
+  (let [view-id (:view-id artifact)
+        src-hash (:source-hash artifact)
+        cached (get @tables* view-id)]
+    (if (and cached (= src-hash (:source-hash cached)))
+      (:table cached)
+      (let [t (build-node-table artifact)]
+        (swap! tables* assoc view-id {:table t :source-hash src-hash})
+        t))))
 
 (defn clear-tables-for-test!
   "Test-only: drop the cache so a test's synthetic artifact under a reused

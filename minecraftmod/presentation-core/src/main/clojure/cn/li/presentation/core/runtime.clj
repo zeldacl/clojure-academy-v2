@@ -333,6 +333,8 @@
 
 ;; ============================== layout ==============================
 
+(declare apply-scrollbar-thumbs!)
+
 (defn- geometry-rect [^HostGeometry geometry]
   {:x (float (.originX geometry))
    :y (float (.originY geometry))
@@ -389,7 +391,11 @@
     (when (>= root 0)
       (LayoutKernel/measure table arena ctx root (:width rect) (:height rect)
                              LayoutKernel/EXACTLY LayoutKernel/EXACTLY)
-      (LayoutKernel/arrange table arena ctx root (:x rect) (:y rect) (:width rect) (:height rect) -1))
+      (LayoutKernel/arrange table arena ctx root (:x rect) (:y rect) (:width rect) (:height rect) -1)
+      ;; Thumb Y is paint-time today; hit-testing also reads the arena. Without
+      ;; this, wheel can move the visual thumb while press still tests the
+      ;; layout-default Y=min-y rect — clicks miss the thumb and feel broken.
+      (apply-scrollbar-thumbs! (assoc instance :root-instance root :arena arena)))
     root))
 
 (defn- ensure-layout-current!
@@ -415,9 +421,15 @@
       (.invalidateMetrics memo))
     (let [scroll-rev (long (hash (:scroll-offsets instance)))
           stamp (when (pos? (.-n table)) (MemoKernel/subtreeStamp memo table 0 scroll-rev))
-          fresh? (boolean (and stamp (= stamp (:layout-stamp instance)) geometry-unchanged?))]
+          fresh? (boolean (and stamp (= stamp (:layout-stamp instance)) geometry-unchanged?))
+          root (if fresh? (:root-instance instance) (ensure-layout! instance))]
+      ;; Even on a fresh layout stamp, re-apply thumb Y so hit-testing matches
+      ;; the last painted thumb after wheel-only frames skipped ensure-layout!.
+      (when (and fresh? (>= root 0))
+        (apply-scrollbar-thumbs! (assoc instance :root-instance root
+                                        :arena (:arena instance))))
       {:stamp stamp :geometry geometry :metrics-epoch metrics-epoch :fresh? fresh?
-       :root (if fresh? (:root-instance instance) (ensure-layout! instance))})))
+       :root root})))
 
 (defn- scroll-extent
   "Sum of the scroll node's children's own main-axis extent (the total
@@ -522,40 +534,82 @@
                 (.setRect arena inst (.x arena inst) (float (+ parent-y local-y))
                           (.w arena inst) (.h arena inst))))))))))
 
+(defn- scrollbar-node?
+  "Prefer the SCROLLBAR flag; also accept a compiled :node/scrollbar map so a
+   stale flag bit cannot silently disable drag while wheel (IS_SCROLL) still works."
+  [^NodeTable table scrollbar-maps hit-node]
+  (or (.has table hit-node NodeFlags/SCROLLBAR)
+      (map? (nth scrollbar-maps hit-node nil))))
+
+(defn- find-scrollbar-under
+  "Topmost arranged instance that has a :node/scrollbar map and contains (px,py).
+   Does not require winning HitKernel/topmostAt — a thin thumb must still be
+   draggable when an overlapping non-hit sibling would otherwise steal the hit."
+  [instance ^LayoutArena arena px py]
+  (let [scrollbar-maps (:scrollbar-maps instance)
+        n (int (.-n arena))]
+    (when (seq scrollbar-maps)
+      (loop [i (dec n)]
+        (when (>= i 0)
+          (let [node (aget ^ints (.-nodeOf arena) i)
+                sb (nth scrollbar-maps node nil)]
+            (if (and (map? sb)
+                     (let [x (.x arena i) y (.y arena i)
+                           w (.w arena i) h (.h arena i)]
+                       (and (>= px x) (<= px (+ x w)) (>= py y) (<= py (+ y h)))))
+              {:instance i :node node :sb sb}
+              (recur (dec i)))))))))
+
 (defn- scrollbar-route
-  "Click/drag a SCROLLBAR-flagged node into a scroll-offset update for :for."
-  [instance ^NodeTable table ^LayoutArena arena hit-node hit px py event-type]
-  (let [sb (nth (:scrollbar-maps instance) hit-node nil)
-        target (:for sb)
-        scroll-node (when target (get (:key-index instance) target))
-        scroll-inst (when (some? scroll-node) (find-instance-for-node arena scroll-node))
-        max-off (if (and scroll-inst (>= scroll-inst 0))
-                  (scroll-max-offset table arena scroll-inst)
-                  0.0)
-        current (float (or (get (:scroll-offsets instance) target) 0.0))]
-    (when (and (map? sb) target)
-      (if (= :drag event-type)
-        (let [cap (:pointer-capture instance)]
-          (when (:scrollbar? cap)
-            (let [next-offset (scrollbar/offset-for-drag (:sb cap) (:start-offset cap)
-                                                        (:start-py cap) py (:max-off cap))]
-              {:action :input/scroll
-               :scroll-offsets {(:target cap) next-offset}
-               :pointer-capture cap
-               :payload {:target (:target cap) :scroll-offset next-offset
-                         :progress (scrollbar/progress next-offset (:max-off cap))
-                         :scrollbar? true}})))
-        (let [rect-y (if hit (.y arena (.instance ^HitKernel$Hit hit)) py)
-              next-offset (if (:thumb? sb)
-                            current
-                            (scrollbar/offset-for-pointer sb rect-y py max-off))]
-          {:action :input/scroll
-           :scroll-offsets {target next-offset}
-           :pointer-capture {:scrollbar? true :sb sb :target target
-                             :start-py py :start-offset next-offset :max-off max-off}
-           :payload {:target target :scroll-offset next-offset
-                     :progress (scrollbar/progress next-offset max-off)
-                     :scrollbar? true}})))))
+  "Click/drag a SCROLLBAR-flagged node into a scroll-offset update for :for.
+
+   Captured thumb/track drags must NOT require the pointer to stay over the
+   thin strip — once armed, absolute py (or drag-y deltas) drive the offset
+   even when the cursor leaves the scrollbar hit rect (main DragBar parity)."
+  [instance ^NodeTable table ^LayoutArena arena hit-node hit px py event-type event]
+  (let [cap (:pointer-capture instance)]
+    (if (and (#{:drag :move} event-type) (:scrollbar? cap))
+      (let [next-offset (scrollbar/offset-for-drag (:sb cap) (:start-offset cap)
+                                                  (:start-py cap) py (:max-off cap))]
+        {:action :input/scroll
+         :scroll-offsets {(:target cap) next-offset}
+         :pointer-capture cap
+         :payload {:target (:target cap) :scroll-offset next-offset
+                   :progress (scrollbar/progress next-offset (:max-off cap))
+                   :scrollbar? true}})
+      (let [under (find-scrollbar-under instance arena px py)
+            sb (or (when (some? hit-node)
+                     (let [m (nth (:scrollbar-maps instance) hit-node nil)]
+                       (when (map? m) m)))
+                   (:sb under))
+            target (:for sb)
+            scroll-node (when target (get (:key-index instance) target))
+            scroll-inst (when (some? scroll-node) (find-instance-for-node arena scroll-node))
+            max-off (if (and scroll-inst (>= scroll-inst 0))
+                      (scroll-max-offset table arena scroll-inst)
+                      0.0)
+            current (float (or (get (:scroll-offsets instance) target) 0.0))]
+        (when (and (map? sb) target)
+          ;; Arm capture. If the first event is :drag (mouseClicked missed the
+          ;; thin thumb), recover the press Y via drag-y so the thumb doesn't
+          ;; stick until the second move event.
+          (let [press-py (float (if (and (= :drag event-type) (number? (:drag-y event)))
+                                  (- (double py) (double (:drag-y event)))
+                                  py))
+                rect-y (cond
+                         hit (.y arena (.instance ^HitKernel$Hit hit))
+                         under (.y arena (int (:instance under)))
+                         :else press-py)
+                next-offset (if (:thumb? sb)
+                              current
+                              (scrollbar/offset-for-pointer sb rect-y press-py max-off))]
+            {:action :input/scroll
+             :scroll-offsets {target next-offset}
+             :pointer-capture {:scrollbar? true :sb sb :target target
+                               :start-py press-py :start-offset next-offset :max-off max-off}
+             :payload {:target target :scroll-offset next-offset
+                       :progress (scrollbar/progress next-offset max-off)
+                       :scrollbar? true}}))))))
 
 (defn- routed-event [instance event]
   (if (:action event)
@@ -567,6 +621,7 @@
           root (:root-instance instance)
           bind-maps (:bind-maps instance)
           on-maps (:on-maps instance)
+          scrollbar-maps (:scrollbar-maps instance)
           focus (:focus instance)
           capture (:pointer-capture instance)]
       (case (:type event)
@@ -592,7 +647,7 @@
             ;; mouseDragged is not always delivered (some hosts only get mouseMoved
             ;; while the button is held). Keep scrollbar dragging alive on :move too.
             (and (#{:drag :move} (:event-type event)) (:scrollbar? capture))
-            (or (scrollbar-route instance table arena 0 nil px py :drag)
+            (or (scrollbar-route instance table arena nil nil px py :drag event)
                 {:action :input/pointer :payload event})
 
             (and hit (= UiOp/PROGRESS (aget ^ints (.-op table) hit-node)))
@@ -609,9 +664,12 @@
                     :path (:text (nth bind-maps hit-node nil))
                     :on (nth on-maps hit-node nil)}}
 
-            (and hit (.has table hit-node NodeFlags/SCROLLBAR)
-                 (= :down (:event-type event)))
-            (or (scrollbar-route instance table arena hit-node hit px py :down)
+            ;; Prefer an explicit scrollbar under the pointer even when topmostAt
+            ;; landed on a non-scrollbar sibling (thin thumb next to markdown).
+            (and (#{:down :drag} (:event-type event))
+                 (or (and hit (scrollbar-node? table scrollbar-maps hit-node))
+                     (some? (find-scrollbar-under instance arena px py))))
+            (or (scrollbar-route instance table arena hit-node hit px py (:event-type event) event)
                 {:action :input/pointer :payload event})
 
             hit
