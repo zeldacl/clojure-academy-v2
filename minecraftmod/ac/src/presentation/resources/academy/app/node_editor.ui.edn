@@ -1,7 +1,7 @@
 {:ui/schema 2 :view/id :academy.app/node-editor
  :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
  :state-schema {:title :string :path :string :phase-label :string :phase-tabs :vector
-                :canvas :vector :selected-label :string :diagnostics :vector
+                :palette :vector :canvas :vector :selected-label :string :diagnostics :vector
                 :diagnostic-count :number :cost-label :string :status :string :dirty? :boolean
                 :reload-label :string :save-label :string}
  :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
@@ -16,16 +16,19 @@
                                   :bind {:text [:item :action-label]}
                                   :on {:activate :editor/select-phase}
                                   :semantics {:role :button}}]}]}
-         {:type :absolute :key :node-editor/canvas :layout {:height 180}
+         {:type :scroll :key :node-editor/palette :layout {:height 46}
+          :bind {:items [:state :palette]} :semantics {:role :list}
+          :children [{:type :text :layout {:height 12} :bind {:text [:item :label]}}]}
+         {:type :absolute :key :node-editor/canvas :layout {:height 140}
           :children
-          [{:type :repeater :layout {:width 464 :height 180}
+          [{:type :repeater :layout {:width 464 :height 140}
             :bind {:items [:state :canvas]}
             :children [{:type :composite :bind {:item [:state :item]}
                         :on {:activate :editor/canvas-press}
                         :semantics {:role :button}}]}]}
-         {:type :text :key :node-editor/selected :layout {:height 32}
+         {:type :text :key :node-editor/selected :layout {:height 24}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
-         {:type :scroll :key :node-editor/diagnostics :layout {:height 60}
+         {:type :scroll :key :node-editor/diagnostics :layout {:height 44}
           :bind {:items [:state :diagnostics]} :semantics {:role :list}
           :children [{:type :row :layout {:height 14}
                       :children [{:type :text :layout {:width 90} :bind {:text [:item :code]}}
@@ -33,12 +36,13 @@
          {:type :text :key :node-editor/cost :layout {:height 16}
           :bind {:text [:state :cost-label]}}
          {:type :row :key :node-editor/actions :layout {:height 16}
-          :children [{:type :button :layout {:width 80 :height 14}
+          :children [{:type :button :layout {:width 110 :height 14}
                       :bind {:text [:state :reload-label]}
                       :on {:activate :editor/reload}
                       :semantics {:role :button}}
-                     {:type :button :layout {:width 80 :height 14}
+                     {:type :button :layout {:width 110 :height 14}
                       :bind {:text [:state :save-label]}
                       :on {:activate :editor/save}
                       :semantics {:role :button}}]}
-         {:type :text :key :node-editor/status :bind {:text [:state :status]}}]}}
+         {:type :text :key :node-editor/status :layout {:height 14}
+          :bind {:text [:state :status]}}]}}

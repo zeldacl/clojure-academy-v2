@@ -29,8 +29,22 @@
      does the mod's source tree live relative to the running game' is
      itself a runtime detail this environment cannot verify without
      launching the game, so it is left as a caller-supplied parameter
-     rather than guessed at and shipped unverified."
-  (:require [clojure.string :as str]
+     rather than guessed at and shipped unverified.
+   - No crosshair live-preview (plan Phase 4 item 3, 'play the effect
+     being edited at the player's crosshair, republish on save').
+     Investigated, not just skipped: it needs a NEW client-side player
+     eye-position/look-vector lookup -- grepped this whole client/ tree
+     for one and there is no existing precedent to build on -- plus
+     constructing and publishing a real cn.li.mcmod.runtime.vfx-contract
+     signal (:effect-id/:owner/:event-seq + instance identity for
+     :spawn/:update/...). Unlike the layout sidecar and save/reload work
+     above (pure Clojure/file-I/O, fully testable without the game), this
+     is new Minecraft-client-API surface with no in-repo precedent and no
+     way to visually verify the result lands on the actual crosshair in
+     this environment. Same category as drag-to-connect and glyph items
+     above: deferred with a real reason, not a silent gap."
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.ac.vfx.fx-catalog :as fx-catalog]
             [cn.li.ability.editor.document :as document]
@@ -38,7 +52,9 @@
             [cn.li.ability.editor.check :as check]
             [cn.li.ability.editor.render :as render]
             [cn.li.ability.editor.hit :as hit]
+            [cn.li.ability.editor.palette :as palette]
             [cn.li.combat.api :as combat-api]
+            [cn.li.node.ops :as ops]
             [cn.li.vfx.api :as vfx-api]))
 
 (defonce ^:private active-mounts (atom {}))
@@ -46,17 +62,55 @@
 (defn- mode-opts
   "mode (:skill or :scene), wrapper-doc (the just-opened, un-normalized
    ac/skills or ac/vfx/fx wrapper map, needed for scene mode's per-file
-   capabilities) -> {:vocab :capabilities :fns :field}."
+   capabilities) -> {:vocab :capabilities :fns :field :category-for}."
   [mode wrapper-doc]
   (case mode
     :skill {:vocab combat-api/skill-vocab
             :capabilities combat-api/skill-capability-type
             :fns combat-api/skill-lib-fns
+            :category-for combat-api/skill-vocab-category-for
             :field :program}
     :scene {:vocab vfx-api/scene-vocab
             :capabilities (vfx-api/scene-capabilities-for (get-in wrapper-doc [:inputs :spawn] {}))
             :fns {}
+            :category-for nil
             :field :scene}))
+
+;; --- layout sidecar (ac/skills/layout/<id>.layout.edn, VFX-同构) ---------
+;;
+;; Deliberately a SIBLING file next to the opened document, derived only
+;; from `path` (which the caller already resolved -- see this namespace's
+;; own docstring on why open!/export! never try to resolve a game/source-
+;; tree directory themselves): <dir>/layout/<basename>.layout.edn. Never
+;; read by any runtime dispatch path -- see verifyEditorLayoutSidecarNotLoaded.
+
+(defn- layout-path-for ^java.io.File [^String path]
+  (let [f (io/file path)
+        dir (io/file (.getParentFile f) "layout")]
+    (io/file dir (str (.getName f) ".layout.edn"))))
+
+(defn- load-layout [path]
+  (let [^java.io.File f (layout-path-for path)]
+    (if (.isFile f)
+      (try (binding [*read-eval* false] (read-string (slurp f)))
+           (catch Throwable _ {}))
+      {})))
+
+(defn- save-layout! [path layout]
+  (let [^java.io.File f (layout-path-for path)]
+    (.mkdirs (.getParentFile f))
+    (spit f (pr-str layout))))
+
+;; --- workspace save (an ACTUAL file write, not just an in-memory mutation) -
+;;
+;; A sibling copy next to the opened file, same reasoning as the layout
+;; sidecar above: derived from `path` alone, no game-directory guess.
+;; Explicit "export to source tree" (export! below) is the only action
+;; that ever overwrites the file `path` itself.
+
+(defn- workspace-path-for ^java.io.File [^String path]
+  (let [f (io/file path)]
+    (io/file (.getParentFile f) "editor-workspace" (.getName f))))
 
 ;; --- pure state --------------------------------------------------------
 
@@ -87,7 +141,10 @@
    state. Reads the raw file text directly (not via classpath resource
    -- see this namespace's own docstring on why open!/export! take an
    explicit path). wrapper-doc's own :program/:scene text (the field
-   mode-opts selects) is what document/open then parses."
+   mode-opts selects) is what document/open then parses. Also loads the
+   layout sidecar (node positions from a prior session, if any) and
+   builds the mode's palette once (vocab is static per mode, no need to
+   recompute it on every edit)."
   [path mode]
   (let [raw (slurp path)
         wrapper-doc (binding [*read-eval* false] (read-string raw))
@@ -95,10 +152,12 @@
     (-> {:path path
          :mode mode
          :opts opts
+         :palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
+                                  :category-for (:category-for opts)})
          :document (document/open raw (:field opts))
          :selected-nid nil
          :drag hit/idle
-         :layout {}
+         :layout (load-layout path)
          :status "Loaded"}
         recompute)))
 
@@ -117,13 +176,28 @@
 (defn- diagnostic-item [d]
   {:code (str (:code d)) :message (:message d) :nid (str (:nid d)) :line (str (or (:line d) "-"))})
 
+(defn- palette-item
+  "One cn.li.ability.editor.palette/build entry -> a display row. No
+   drag-to-canvas yet (see this namespace's own scope note) -- this is a
+   real, useful reference panel on its own (browse every node/op/fn this
+   mode's vocab offers, its cost, its category) even before drag-and-drop
+   lands. Category is folded INTO the label text (\"[targeting] target/
+   raycast (cost 2)\") rather than rendered as separate collapsible
+   sections -- there is no section-header widget in this UI schema, and
+   the list is already sorted by (:category :id) (palette/build's own
+   sort), so same-category entries run together; a real grouped/
+   collapsible view is a presentation-layer follow-up, not a data gap."
+  [{:keys [id category cost source]}]
+  {:label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")")})
+
 (defn- render-state [state]
-  (let [{:keys [graph document diagnostics cost-summary phase phases status mode]} state
+  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette]} state
         selected (selected-node-info state)]
     {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
      :phase-label (str "Phase: " (name (or phase :default)))
      :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
+     :palette (mapv palette-item palette)
      :canvas (render/graph->composite-items graph (:layout state))
      :selected-label (if selected (:text selected) "(nothing selected)")
      :diagnostics (mapv diagnostic-item diagnostics)
@@ -134,8 +208,8 @@
                    "(compile errors -- see diagnostics)")
      :status (or status "")
      :dirty? (boolean (:dirty? document))
-     :reload-label "Reload"
-     :save-label "Save"}))
+     :reload-label "Reload from disk"
+     :save-label "Save to workspace"}))
 
 ;; --- input handling ------------------------------------------------------
 
@@ -197,14 +271,37 @@
     :editor/select-phase
     (swap! state* (fn [s] (recompute (assoc s :phase (keyword (:phase payload)) :selected-nid nil))))
 
+    ;; Re-reads `path` from disk and rebuilds the whole editor state,
+    ;; discarding any in-memory edit that was never saved -- an honest
+    ;; "reload from disk", distinct from (and NOT a substitute for)
+    ;; hot-reloading the LIVE running skill catalog. That second thing
+    ;; was investigated and deliberately NOT wired here: the only
+    ;; available mechanism (combat-runtime/reset-final-runtime-v2-for-
+    ;; test!) is a bare (reset! final-runtime-v2* nil) with no regard for
+    ;; in-flight dispatches on a real server -- repurposing a function
+    ;; named -for-test! into a live player-facing button is exactly the
+    ;; kind of unverified-in-this-environment risk this session avoids
+    ;; taking. A real hot-reload button needs a proper quiesce/drain
+    ;; mechanism that does not exist today; the safe alternative (export!
+    ;; to source tree, then a real server restart) already works.
     :editor/reload
-    (swap! state* (fn [s] (recompute (assoc s :status "Reloaded"))))
+    (swap! state* (fn [s] (assoc (open-document (:path s) (:mode s)) :status "Reloaded from disk")))
 
+    ;; Writes the DSL text to a workspace sibling file (editor-workspace/,
+    ;; next to the opened file -- never the file at `path` itself; only
+    ;; export! touches that) AND the current node layout to its sidecar,
+    ;; so both survive closing and reopening this screen. Previously this
+    ;; action only mutated the in-memory atom and claimed "Saved to
+    ;; workspace" without writing anything -- a real, now-fixed bug.
     :editor/save
     (swap! state*
            (fn [s]
-             (let [doc (document/save (:document s) (fn [form] (pr-str form)))]
-               (recompute (assoc s :document doc :status "Saved to workspace")))))
+             (let [doc (document/save (:document s) (fn [form] (pr-str form)))
+                   ^java.io.File ws (workspace-path-for (:path s))]
+               (.mkdirs (.getParentFile ws))
+               (spit ws (:file-text doc))
+               (save-layout! (:path s) (:layout s))
+               (recompute (assoc s :document doc :status (str "Saved to " ws))))))
 
     nil)
   (render-state @state*))

@@ -44,6 +44,18 @@
   [kw]
   (subs (str kw) 1))
 
+;; NOT routed through the mod's i18n/datagen translation system (checked
+;; before writing this: every existing reactive controller's dynamic
+;; :status text -- skill_tree.clj, settings_reactive.clj, about_reactive.
+;; clj, this namespace's own :status assignments elsewhere -- is a
+;; hardcoded English literal; ability-translation-map's datagen path is
+;; for STATIC content Minecraft's own resource system needs a pre-
+;; registered lang key for at build time (item/skill/achievement names),
+;; not for a runtime status string a Clojure atom composes on the fly.
+;; Giving reject reasons a second, inconsistent mechanism here would be
+;; the actual gap, not the fix -- if per-locale dynamic status text is
+;; ever wanted, it needs a mechanism this whole reactive-controller
+;; family adopts together, not a one-off in this file.
 (def ^:private reject-labels
   {:over-complexity "Spell is too complex for your current mastery."
    :forbidden-effect "Spell uses an effect players are not allowed to cast."

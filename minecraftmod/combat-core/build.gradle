@@ -81,6 +81,16 @@ tasks.register("runCombatClojureTests", JavaExec) {
     args "-m", "cn.li.combat.test-runner"
 }
 
+tasks.register("verifyPaletteMetadataCombatCore", JavaExec) {
+    group = "verification"
+    description = "Node-editor plan Phase 0 gate, combat-core half: runs only cn.li.combat.dsl-vocabulary-test (every vocab node has a real :category and :i18n key). See root verifyVocabularyPaletteMetadata."
+    dependsOn "compileTestClojure", "classes"
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    systemProperty "combat-core.test.only", "cn.li.combat.dsl-vocabulary-test"
+    args "-m", "cn.li.combat.test-runner"
+}
+
 dependencies {
     implementation project(":mcmod")
     // Shared node-language kernel (immutable descriptor environment,

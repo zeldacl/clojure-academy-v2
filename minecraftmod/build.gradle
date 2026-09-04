@@ -1478,6 +1478,15 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
     }
 }
 
+tasks.register("verifyVocabularyPaletteMetadata") {
+    group = "verification"
+    description = "Node-editor plan Phase 0: every combat/vfx vocab node, node-core pure op, and combat.lib fn must have a real :category (never :uncategorized) and an :i18n key that actually resolves to a label. Chains the four per-module fast JavaExec checks (verifyPaletteMetadataNodeCore/CombatCore/VfxCore/Ac) rather than re-implementing the check in Groovy -- a Gradle text-regex scan cannot meaningfully assert structural properties of Clojure data (no :uncategorized anywhere in an exported map, an i18n key present in an assembled translation map), so this delegates to the real Clojure tests that can, matching the same pattern verifyCombatSkillCoverage/runAcEdnCoverageTests already establish for identical reasons."
+    dependsOn ":node-core:verifyPaletteMetadataNodeCore",
+              ":combat-core:verifyPaletteMetadataCombatCore",
+              ":vfx-core:verifyPaletteMetadataVfxCore",
+              ":ac:verifyPaletteMetadataAc"
+}
+
 tasks.register("verifyContentEdnNoRawComments") {
     group = "verification"
     description = "ac/skills/*.edn and ac/vfx/fx/*.edn must carry their authoring notes as a :doc data field, not raw ;; EDN comments -- the node editor's save path (cn.li.ability.editor.document/splice-program) only preserves bytes OUTSIDE the :program/:scene string; a raw comment would silently vanish the first time the file is saved through the editor, where a :doc entry survives because it round-trips like any other data. Migrated in the node-editor plan's Phase 1 (all 75 files verified content-identical outside the new :doc key via a git-diff-based check, not just eyeballed); this gate keeps it that way for new content going forward. A ';' inside a :doc string's own prose (an em-dash alternative, etc.) is fine -- only a LINE that starts with ';' (after leading whitespace) is a real EDN comment, which is what this checks."
@@ -1502,17 +1511,19 @@ tasks.register("verifyContentEdnNoRawComments") {
 
 tasks.register("verifyEditorLayoutSidecarNotLoaded") {
     group = "verification"
-    description = "The node editor's layout sidecars (ac/skills/layout/<id>.layout.edn, ac/vfx/fx/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only :program/:scene. This gate asserts no ac source file references a 'skills/layout' or 'vfx/fx/layout' resource path -- vacuously true today (Phase 2/3 have not built the editor that writes these files yet), and stays true once they exist, since a runtime read would be a real layering violation (skill/VFX execution depending on editor-only UI state)."
+    description = "The node editor's layout sidecars (ac/skills/layout/<id>.layout.edn, ac/vfx/fx/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only :program/:scene. This gate asserts no ac DISPATCH source file references a 'skills/layout' or 'vfx/fx/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
     doLast {
         def offenders = []
+        def editorScreensDir = file("ac/src/main/clojure/cn/li/ac/ability/client/screens")
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
+            if (f.canonicalPath.startsWith(editorScreensDir.canonicalPath)) return
             def text = f.text.replaceAll(/;.*$/, "")
             if (text =~ /skills\/layout|vfx\/fx\/layout/) {
                 offenders << f.path
             }
         }
         if (!offenders.isEmpty()) {
-            throw new GradleException("runtime source references the editor-only layout sidecar path:\n" + offenders.join("\n"))
+            throw new GradleException("runtime dispatch source references the editor-only layout sidecar path:\n" + offenders.join("\n"))
         }
         logger.lifecycle("[verifyEditorLayoutSidecarNotLoaded] ok")
     }
@@ -2565,6 +2576,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyContentModuleCoreIsolation",
               "verifyContentEdnNoRawComments",
               "verifyEditorLayoutSidecarNotLoaded",
+              "verifyVocabularyPaletteMetadata",
               "verifyCombatSingleDamagePath",
               "verifyAcNoWorldCapabilities",
               "verifyAbilityVfxRegistryCoverage",
