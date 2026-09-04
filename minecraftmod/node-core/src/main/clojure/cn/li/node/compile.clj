@@ -83,6 +83,26 @@
 
 (defn- nid! [env] (str "n" (swap! (:nid-counter env) inc)))
 
+(defn- nid-for!
+  "The nid for an AUTHOR-VISIBLE instruction (one that corresponds to a
+   real node in the graph editor's view: a node/fn call, a $/?/% sigil
+   read, a field access, a pure-op call, a when/if/each/finish/state!/
+   set!/event!/vfx! statement -- see cn.li.node.compile's own namespace
+   docstring for the statement/expression grammar these are drawn from).
+   Prefers `form`'s own :nid metadata (stamped by cn.li.node.nid/stamp, or
+   hand-written by an author as ^{:nid \"n7\"} (...)) so the SAME
+   instruction keeps the SAME id across edits that insert/reorder other
+   statements -- inserting a statement at the top of a :do block must not
+   shift every later node's identity, which a bare counter (nid!) cannot
+   avoid. Compiler-INTERNAL instructions (bank :convert, each's own
+   index/count bookkeeping, the implicit :jump closing a when/if arm, the
+   synthetic trailing :finish a fall-off-the-end block gets) have no
+   author form and keep using nid! directly -- they have no stable
+   identity to preserve because they are not something an editor would
+   ever let a user select."
+  [env form]
+  (or (:nid (meta form)) (nid! env)))
+
 (defn- pos-of [form]
   (let [m (meta form)]
     (when (:line m) {:line (:line m) :column (:column m)})))
@@ -231,7 +251,7 @@
             returns (:returns spec)
             dst (when returns (alloc-reg! env (types/bank returns) returns))]
         (append! env block-id
-                 (cond-> {:op (if returns :query :action) :nid (nid! env) :node node-id :args args
+                 (cond-> {:op (if returns :query :action) :nid (nid-for! env form) :node node-id :args args
                          ;; Baked in at compile time so the emitter
                          ;; (cn.li.mcmod.runtime.effect-emit) never needs
                          ;; its own node-id -> capability lookup -- it must
@@ -316,7 +336,7 @@
                    (dummy-register! env :double))
            :block-id block-id}
           (let [dst (alloc-reg! env (types/bank t) t)]
-            (append! env block-id {:op :tun :nid (nid! env) :dst dst :key k})
+            (append! env block-id {:op :tun :nid (nid-for! env form) :dst dst :key k})
             {:reg dst :block-id block-id})))
 
       (str/starts-with? s "?")
@@ -334,7 +354,7 @@
                    (dummy-register! env :any))
            :block-id block-id}
           (let [dst (alloc-reg! env (types/bank t) t)]
-            (append! env block-id {:op :cap :nid (nid! env) :dst dst :key k})
+            (append! env block-id {:op :cap :nid (nid-for! env form) :dst dst :key k})
             {:reg dst :block-id block-id})))
 
       ;; %mode reads session state key :mode (cn.li.node.surface's :state
@@ -350,7 +370,7 @@
                    (dummy-register! env :any))
            :block-id block-id}
           (let [dst (alloc-reg! env (types/bank t) t)]
-            (append! env block-id {:op :state-read :nid (nid! env) :dst dst :key k})
+            (append! env block-id {:op :state-read :nid (nid-for! env form) :dst dst :key k})
             {:reg dst :block-id block-id})))
 
       :else
@@ -361,10 +381,10 @@
                  (dummy-register! env :any))
          :block-id block-id}))))
 
-(defn- compile-field-access [env locals block-id depth k sub-form]
+(defn- compile-field-access [env locals block-id depth form k sub-form]
   (let [{:keys [reg block-id]} (compile-form env locals block-id depth sub-form false)
         dst (alloc-reg! env :objects :any)]
-    (append! env block-id {:op :get :nid (nid! env) :dst dst :src reg :key k})
+    (append! env block-id {:op :get :nid (nid-for! env form) :dst dst :src reg :key k})
     {:reg dst :block-id block-id}))
 
 (defn- compile-pure-call [env locals block-id depth form]
@@ -383,7 +403,7 @@
                              (coerce! env block-id reg got want)))
                          (:params sig) args)
           dst (alloc-reg! env (types/bank (:returns sig)) (:returns sig))]
-      (append! env block-id {:op :pure :nid (nid! env) :dst dst :fn op :args arg-regs})
+      (append! env block-id {:op :pure :nid (nid-for! env form) :dst dst :fn op :args arg-regs})
       {:reg dst :block-id block-id})))
 
 (defn- compile-map-literal
@@ -401,7 +421,7 @@
                     [(assoc acc k reg) block-id]))
                 [{} block-id] form)
         dst (alloc-reg! env :objects :any)]
-    (append! env block-id {:op :map-lit :nid (nid! env) :dst dst :args resolved})
+    (append! env block-id {:op :map-lit :nid (nid-for! env form) :dst dst :args resolved})
     {:reg dst :block-id block-id}))
 
 (defn- compile-vec-literal
@@ -426,7 +446,7 @@
                     [(conj acc reg) block-id]))
                 [[] block-id] form)
         dst (alloc-reg! env :objects :any)]
-    (append! env block-id {:op :vec-lit :nid (nid! env) :dst dst :args resolved})
+    (append! env block-id {:op :vec-lit :nid (nid-for! env form) :dst dst :args resolved})
     {:reg dst :block-id block-id}))
 
 (defn compile-form
@@ -447,7 +467,7 @@
     ;; hand-written source.
     (seq? form)
     (cond
-      (keyword? (first form)) (compile-field-access env locals block-id depth (first form) (second form))
+      (keyword? (first form)) (compile-field-access env locals block-id depth form (first form) (second form))
       (symbol? (first form))
       (if (ops/known-op? (call-id (first form)))
         (compile-pure-call env locals block-id depth form)
@@ -495,14 +515,14 @@
                 reg)]
       {:locals (assoc locals sym {:reg reg}) :block-id block-id})))
 
-(defn- compile-when [env locals block-id depth [_ cond-form & body]]
+(defn- compile-when [env locals block-id depth [_ cond-form & body :as stmt]]
   (let [{cond-reg :reg block-id :block-id} (compile-form env locals block-id depth cond-form false)]
     (when-not (types/assignable? (type-of env cond-reg) :boolean)
       (report! env {:code :type-mismatch :form cond-form :want :boolean
                    :message "when condition must be :boolean"}))
     (let [then-id (new-block! env)
           continue-id (new-block! env)]
-      (append! env block-id {:op :branch :nid (nid! env) :test cond-reg :then then-id :else continue-id})
+      (append! env block-id {:op :branch :nid (nid-for! env stmt) :test cond-reg :then then-id :else continue-id})
       ;; continue-id is always reachable via the branch's OWN :else edge
       ;; (the condition-false path), so it is never an empty/unreachable
       ;; block regardless of whether the then-body terminates -- but if it
@@ -529,7 +549,7 @@
    both just a :branch with :then/:else at the IR level. When both arms
    terminate, :continue is nil and the breadcrumb still lets the
    decompiler print the right form instead of guessing."
-  [env locals block-id depth [_ cond-form then-stmts else-stmts]]
+  [env locals block-id depth [_ cond-form then-stmts else-stmts :as stmt]]
   (let [{cond-reg :reg block-id :block-id} (compile-form env locals block-id depth cond-form false)]
     (when-not (types/assignable? (type-of env cond-reg) :boolean)
       (report! env {:code :type-mismatch :form cond-form :want :boolean
@@ -540,7 +560,7 @@
             {else-final :block-id else-terminated? :terminated?}
             (compile-stmts! env locals else-id depth (vec else-stmts))
             continue-id (when-not (and then-terminated? else-terminated?) (new-block! env))]
-        (append! env block-id {:op :branch :nid (nid! env) :test cond-reg :then then-id :else else-id
+        (append! env block-id {:op :branch :nid (nid-for! env stmt) :test cond-reg :then then-id :else else-id
                                :two-armed? true :continue continue-id})
         (when (and continue-id (not then-terminated?))
           (append! env then-final {:op :jump :nid (nid! env) :target continue-id}))
@@ -576,7 +596,7 @@
    each does not reconstruct the index form yet; round-tripping an
    indexed each is a known, currently-unexercised gap, not a silent
    miscompile -- the shape simply is not seen on the way back out)."
-  [env locals block-id depth [_ binding coll-form & body]]
+  [env locals block-id depth [_ binding coll-form & body :as stmt]]
   (let [[sym index-sym] (if (vector? binding) binding [binding nil])
         {coll-reg :reg block-id :block-id} (compile-form env locals block-id depth coll-form false)
         coll-type (type-of env coll-reg)
@@ -594,7 +614,7 @@
           _ (append! env header-id {:op :pure :nid (nid! env) :dst test-reg :fn :math/lt :args [idx-d cnt-d]})
           body-id (new-block! env)
           after-id (new-block! env)]
-      (append! env header-id {:op :branch :nid (nid! env) :test test-reg :then body-id :else after-id
+      (append! env header-id {:op :branch :nid (nid-for! env stmt) :test test-reg :then body-id :else after-id
                               :loop-hint {:header header-id :index index-reg :collection coll-reg}})
       (let [item-reg (alloc-reg! env (types/bank elem-type) elem-type)
             _ (append! env body-id {:op :pure :nid (nid! env) :dst item-reg :fn :collection/nth :args [coll-reg index-reg]})
@@ -622,15 +642,15 @@
     (nil? form) nil
     :else (throw (ex-info "finish fields must be literal keywords/booleans" {:form form}))))
 
-(defn- compile-finish [env block-id [_ fields]]
+(defn- compile-finish [env block-id [_ fields :as stmt]]
   (append! env block-id
-           {:op :finish :nid (nid! env)
+           {:op :finish :nid (nid-for! env stmt)
             :outcome (literal-map-value (:outcome fields))
             :next-phase (some-> (:next-phase fields) literal-map-value)
             :end-ability? (boolean (:end-ability? fields))})
   {:locals nil :block-id block-id :terminated? true})
 
-(defn- compile-state-write [env locals block-id depth [_ key-form value-form]]
+(defn- compile-state-write [env locals block-id depth [_ key-form value-form :as stmt]]
   (if-not (keyword? key-form)
     (do (report! env {:code :invalid-state-key :form key-form
                       :message "state! key must be a literal keyword"})
@@ -645,7 +665,7 @@
           (when-not (types/assignable? got want)
             (report! env {:code :type-mismatch :form value-form :want want
                          :message (str "state! " key-form " wants " want " got " got)}))
-          (append! env block-id {:op :state-write :nid (nid! env) :key key-form
+          (append! env block-id {:op :state-write :nid (nid-for! env stmt) :key key-form
                                  :src (coerce! env block-id reg got want)})
           {:locals locals :block-id block-id})))))
 
@@ -663,7 +683,7 @@
    that namespace's inline-op?/stmts-for-range for why pretty-printing a
    :reassign? copy is a deliberate, safe deferral (throws a clear error)
    rather than attempted here."
-  [env locals block-id depth [_ sym value-form]]
+  [env locals block-id depth [_ sym value-form :as stmt]]
   (if-let [{target-reg :reg} (get locals sym)]
     (let [want (type-of env target-reg)
           ;; allow-calls? true, same as `let`'s own RHS: a reassignment's
@@ -677,7 +697,7 @@
       (when-not (types/assignable? got want)
         (report! env {:code :type-mismatch :form value-form :want want
                      :message (str "set! " sym " wants " want " got " got)}))
-      (append! env block-id {:op :copy :nid (nid! env) :dst target-reg
+      (append! env block-id {:op :copy :nid (nid-for! env stmt) :dst target-reg
                              :src (coerce! env block-id reg got want) :reassign? true})
       {:locals locals :block-id block-id})
     (do (report! env {:code :unbound-local :form sym :message (str "set! target " sym " is not bound")})
@@ -689,7 +709,7 @@
    other than :type compiles as an ordinary pure expression and is passed
    through as-is; there is nothing here for cn.li.node.types to check
    against."
-  [env locals block-id depth [_ fields]]
+  [env locals block-id depth [_ fields :as stmt]]
   (if-not (keyword? (:type fields))
     (do (report! env {:code :invalid-event-type :form fields
                       :message "event! requires a literal :type keyword"})
@@ -699,7 +719,7 @@
                     (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
                       [(assoc acc k reg) block-id]))
                   [{} block-id] (dissoc fields :type))]
-      (append! env block-id {:op :event :nid (nid! env) :event-type (:type fields) :args resolved})
+      (append! env block-id {:op :event :nid (nid-for! env stmt) :event-type (:type fields) :args resolved})
       {:locals locals :block-id block-id})))
 
 (defn- compile-vfx
@@ -711,7 +731,7 @@
    vocab-node :query/:action mechanism). Requires a literal :effect-id;
    every other field, including :operation, compiles as an ordinary pure
    expression and is passed through in :args."
-  [env locals block-id depth [_ fields]]
+  [env locals block-id depth [_ fields :as stmt]]
   (if-not (keyword? (:effect-id fields))
     (do (report! env {:code :invalid-vfx-signal :form fields
                       :message "vfx! requires a literal :effect-id keyword"})
@@ -721,7 +741,7 @@
                     (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
                       [(assoc acc k reg) block-id]))
                   [{} block-id] fields)]
-      (append! env block-id {:op :vfx :nid (nid! env) :args resolved})
+      (append! env block-id {:op :vfx :nid (nid-for! env stmt) :args resolved})
       {:locals locals :block-id block-id})))
 
 (defn compile-stmt [env locals block-id depth stmt]
