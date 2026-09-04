@@ -59,8 +59,17 @@ public final class PaintKernel {
             case UiOp.IMAGE ->
                     out.emit(UiOp.IMAGE, x, y, w, h, rgba, Bindings.resourceIndex(t, resolver, node, item), clip, 0f, null);
 
-            case UiOp.NINE ->
-                    out.emit(UiOp.NINE, x, y, w, h, rgba, Bindings.resourceIndex(t, resolver, node, item), clip, 0f, null);
+            case UiOp.NINE -> {
+                // Border px lives in padL; source tex size in minW (see compiler
+                // :nine-slice lowering). Defaults match main BlendQuad (4 of 48).
+                float border = t.padL(node);
+                float tex = t.minW(node);
+                if (border <= 0f) border = 4f;
+                if (tex <= 0f) tex = 48f;
+                out.emit(UiOp.NINE, x, y, w, h, rgba,
+                        Bindings.resourceIndex(t, resolver, node, item),
+                        clip, border, Float.valueOf(tex));
+            }
 
             case UiOp.TEXT -> {
                 String text = Bindings.text(t, resolver, node, item);

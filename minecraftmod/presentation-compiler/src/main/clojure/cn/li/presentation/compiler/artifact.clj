@@ -252,7 +252,16 @@
        :line (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children [])
        :gradient (assoc physical :phys-op UiOp/GRADIENT :flags #{} :direction :none :children [])
        :image (assoc physical :phys-op UiOp/IMAGE :flags #{} :direction :none :children [])
-       :nine-slice (assoc physical :phys-op UiOp/NINE :flags #{} :direction :none :children [])
+       ;; :style :slice = border px (main BlendQuad margin 4); :tex-size =
+       ;; source texture px (blend_quad.png is 48). Stored in padding/min-w
+       ;; so PaintKernel can emit them on the NINE draw command.
+       :nine-slice
+       (let [st (or (:style source) {})
+             slice (double (or (:slice st) 4.0))
+             tex (double (or (:tex-size st) 48.0))]
+         (assoc physical :phys-op UiOp/NINE :flags #{} :direction :none :children []
+                :padding [slice slice slice slice]
+                :min-w tex))
        :text (assoc physical :phys-op UiOp/TEXT :flags #{} :direction :none :children []
                     :text (:text source))
        (:progress :radial-progress)

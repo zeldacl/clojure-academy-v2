@@ -228,6 +228,34 @@
                                  (:mount vm) "Container" on-close)
     vm))
 
+(def ^:private techui-image-width 290)
+(def ^:private techui-image-height 187)
+
+(defn- player-inventory-anchors
+  "Mirror mcbase `add-player-inventory-slots!` at (6,105): 3×9 main + hotbar.
+   Menu indices follow slot-schema derived-ranges after the tile slots."
+  [tile-slot-count]
+  (let [x0 6.0
+        y0 105.0
+        main (for [row (range 3)
+                   col (range 9)]
+               {:slot-index (+ tile-slot-count (* row 9) col)
+                :x (+ x0 (* col 18.0))
+                :y (+ y0 (* row 18.0))
+                :width 16.0 :height 16.0 :visible? true})
+        hotbar (for [col (range 9)]
+                 {:slot-index (+ tile-slot-count 27 col)
+                  :x (+ x0 (* col 18.0))
+                  :y (+ y0 58.0)
+                  :width 16.0 :height 16.0 :visible? true})]
+    (into [] (concat main hotbar))))
+
+(defn- tile-slot-anchors [layout]
+  (mapv (fn [{:keys [index x y]}]
+          {:slot-index index :x (double x) :y (double y)
+           :width 16.0 :height 16.0 :visible? true})
+        (:slots layout)))
+
 (defn presentation-screen-data
   [container menu player schema-id template-id]
   (let [revision (atom 0)
@@ -240,9 +268,8 @@
                        (when-let [refresh @refresh*] (refresh))))
         layout (or (slot-schema/get-slot-layout schema-id) {:slots []})
         slot-count (count (:slots layout))
-        anchors (mapv (fn [{:keys [index x y]}]
-                        {:slot-index index :x x :y y :width 16 :height 16 :visible? true})
-                      (:slots layout))
+        anchors (into (tile-slot-anchors layout)
+                      (player-inventory-anchors slot-count))
         bridge (menu-bridge/create (or (:container-type container) schema-id)
                                    anchors
                                    #{:container/click-slot :container/quick-move
@@ -304,7 +331,11 @@
                                (dispatch action payload)
                                (when (= action :container/button)
                                  (when-let [button (:button-click-fn container)]
-                                   (button container (:button-id payload) player))))))]    {:type :presentation-container-screen
+                                   (button container (:button-id payload) player))))))]
+    {:type :presentation-container-screen
+     ;; Match TechUI host design so leftPos/topPos align with Presentation :fit.
+     :image-width techui-image-width
+     :image-height techui-image-height
      :template-id template-id
      :container container
      :menu menu

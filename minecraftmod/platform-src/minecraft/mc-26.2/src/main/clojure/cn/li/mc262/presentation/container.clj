@@ -13,10 +13,13 @@
 
 (defn create! [data]
   (let [{:keys [mount on-close]} ((:mount-fn data) data)
+        image-w (int (or (:image-width data) 290))
+        image-h (int (or (:image-height data) 187))
         ^DelegatingCGuiContainerScreen screen
         (DelegatingCGuiContainerScreen.
           (:minecraft-container data) (:player-inventory data)
-          (Component/literal (str (:screen-title data "Container"))))]
+          (Component/literal (str (:screen-title data "Container")))
+          image-w image-h)]
     (doto screen
       (.withRender
         (fn [s ^GuiGraphicsExtractor graphics mouse-x mouse-y partial-tick]

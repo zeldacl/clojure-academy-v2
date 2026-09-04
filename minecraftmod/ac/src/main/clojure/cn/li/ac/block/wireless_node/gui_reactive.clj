@@ -37,10 +37,9 @@
                    (let [value (get container key default)]
                      (if (instance? clojure.lang.IDeref value) @value value)))]
     (assoc container
+           ;; Main node GUI had no Save/Refresh chrome — name/password submit on text-input.
            :presentation-form-state (atom {:node-name (str (value-of :ssid ""))
                                 :password (str (value-of :password ""))})
-           :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145 :width 52 :height 18 :label "Save"}
-                                  {:id :right :button-id 1 :x 70 :y 145 :width 52 :height 18 :label "Refresh"}]
            :presentation-text-fields [{:id :node-name :binding-key :node-name :x 12 :y 82 :width 120 :height 18
                                        :value-fn (fn [_ _] (value-of :ssid ""))}
                                       {:id :password :binding-key :network-password :x 12 :y 105 :width 120 :height 18
@@ -50,14 +49,12 @@
              (let [energy (double (or (value-of :energy 0.0) 0.0))
                    max-energy (max 1.0 (double (or (value-of :max-energy 1.0) 1.0)))
                    load (double (or (value-of :capacity 0.0) 0.0))
-                   max-load (max 1.0 (double (or (value-of :max-capacity 1.0) 1.0)))]
-               {:network-state (if (true? (value-of :enabled false)) "Connected" "Disconnected")
-                :network-owner (str "Owner: " (node-logic/owner-name state))
-                :network-range (str "Range: " (or (value-of :range 0) 0))
-                :network-bandwidth (str "Energy: " (long energy) "/" (long max-energy) " IF")
-                :network-load (max 0.0 (min 1.0 (/ load max-load)))
-                :node-editable? (boolean (node-logic/owner-authorized? state player))
-                :node-readonly? (not (boolean (node-logic/owner-authorized? state player)))
+                   max-load (max 1.0 (double (or (value-of :max-capacity 1.0) 1.0)))
+                   owner? (boolean (node-logic/owner-authorized? state player))]
+               {:node-editable? owner?
+                :node-readonly? (not owner?)
+                :node-name (str (value-of :ssid ""))
+                :network-password (str (value-of :password ""))
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
                               :energy energy
@@ -65,10 +62,11 @@
                               :capacity load
                               :owner (node-logic/owner-name state)
                               :range (or (value-of :range 0) 0)
-                              :bandwidth (long energy)
+                              :ssid (value-of :ssid "")
+                              :password (value-of :password "")
                               :load load
                               :max-capacity max-load}
-                             (node-logic/owner-authorized? state player))}))
+                             owner?)}))
            :presentation-text-change!
            (fn [field value]
              (swap! (:presentation-form-state container) assoc field value))
