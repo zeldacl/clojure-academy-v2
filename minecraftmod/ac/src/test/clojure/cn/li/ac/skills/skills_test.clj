@@ -1368,10 +1368,10 @@
                           :beam-query-radius 1.0 :beam-step 0.5 :beam-damage 6.0
                           :beam-block-energy 4.0 :reflection-distance 8.0 :reflection-damage 2.0
                           :cost-down-cp 4.0 :cost-down-overload 0.0 :cost-tick-cp 2.0
-                          :cost-tick-overload 0.0}
+                          :cost-tick-overload 0.0 :exp-hit 0.5 :exp-reflection-hit 2.0}
                :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
                               :caster/id "player-1" :world/id "overworld"
-                              :progression/hit 1.0 :cooldown/main 40}
+                              :cooldown/main 40}
                :state {:fire-mode :coin}}
         frame (compile-and-dispatch! doc :release host input)]
     (testing "coin fire-mode spends the discounted coin budget, not the tick budget"
@@ -1380,11 +1380,15 @@
       (is (some #(and (= :achievement/trigger (:type %))
                       (= "electromaster.attack_creeper" (:id (:payload %))))
                 (.-events frame)))
-      (is (some #(and (= :score/mark (:type %)) (= :hit (:tag %))) (.-events frame))))
+      (is (some #(and (= :score/mark (:type %)) (= :hit (:tag %)) (= 0.5 (:progression %)))
+                (.-events frame))
+          "no entity had :reflection-accepted? true, so hit-progression is exp-hit (0.5),
+           computed inline from the local this dispatch itself set, not a stale capability"))
     (testing "the queried block was broken once, within the energy budget"
       (is (some #(= [:query :block/break {:position {:x 0.0 :y 0.0 :z 0.0} :drop? false}] %) @calls)))
     (is (some #(= [:command :cooldown/start {:name :main :ticks 40}] %) @calls))
-    (is (= [{:key :reflection-hit? :value false}] (vec (.-stateWrites frame))))
+    (is (empty? (.-stateWrites frame))
+        ":reflection-hit? is no longer session state -- see this ability's own docstring")
     (is (= :committed (:outcome (.-result frame))))
     (is (true? (:end-ability? (.-result frame))))))
 
@@ -1420,10 +1424,10 @@
                           :beam-query-radius 1.0 :beam-step 0.5 :beam-damage 6.0
                           :beam-block-energy 4.0 :reflection-distance 8.0 :reflection-damage 2.0
                           :cost-down-cp 4.0 :cost-down-overload 0.0 :cost-tick-cp 2.0
-                          :cost-tick-overload 0.0}
+                          :cost-tick-overload 0.0 :exp-hit 0.5 :exp-reflection-hit 2.0}
                :capabilities {:caster/eye {:x 0.0 :y 1.5 :z 0.0} :caster/aim {:x 0.0 :y 0.0 :z 1.0}
                               :caster/id "player-1" :world/id "overworld"
-                              :progression/hit 1.0 :cooldown/main 40}
+                              :cooldown/main 40}
                :state {:fire-mode :item}}
         frame (compile-and-dispatch! doc :release host input)]
     (is (some #(= [:command :inventory/consume {:source :main-hand :count 1}] %) @calls))
@@ -1684,12 +1688,13 @@
     (is (= :aborted (:outcome (.-result frame))))))
 
 (defn- light-shield-deactivate-calls-ok?
-  [calls]
-  (and (some #(= [:command :entity/discard {:entity {:id "shield-1"}}] %) calls)
-       (some #(= [:command :entity/status {:target "player-1" :status-id :slowness
-                                           :duration-ticks 100.0 :amplifier 1}] %)
-             calls)
-       (some #(= [:command :cooldown/start {:name :deactivate :ticks 80}] %) calls)))
+  ([calls] (light-shield-deactivate-calls-ok? calls 80))
+  ([calls expected-ticks]
+   (and (some #(= [:command :entity/discard {:entity {:id "shield-1"}}] %) calls)
+        (some #(= [:command :entity/status {:target "player-1" :status-id :slowness
+                                            :duration-ticks 100.0 :amplifier 1}] %)
+              calls)
+        (some #(= [:command :cooldown/start {:name :deactivate :ticks expected-ticks}] %) calls))))
 
 (deftest light-shield-start-test
   (let [calls (atom [])
@@ -1785,10 +1790,12 @@
                           :max-active-ticks 10.0 :slowness-duration-ticks 100.0
                           :slowness-amplifier 1}
                :capabilities {:caster/id "player-1" :progression/touch 0.5 :progression/tick 1.0
-                              :cooldown/deactivate 80}
+                              :progression/mastery 0.5}
                :state {:overload-floor 5.0 :active-ticks 10 :shield-id "shield-1"}}
         frame (compile-and-dispatch! doc :pulse host input)]
-    (is (light-shield-deactivate-calls-ok? @calls))
+    (testing "deactivate cooldown is computed inline from next-active-ticks (11), not a stale
+             pre-dispatch ?cooldown/deactivate capability: floor(11 * (2.0 - 0.5)) = 16"
+      (is (light-shield-deactivate-calls-ok? @calls 16)))
     (testing "3 session-update vfx during the tick, then 3 destroy vfx from the timeout cleanup"
       (is (= 3 (count (filter #(= :destroy (:operation %)) (.-vfx frame))))))
     (is (= :timeout (:outcome (.-result frame))))

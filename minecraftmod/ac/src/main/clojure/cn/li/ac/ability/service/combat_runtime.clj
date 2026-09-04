@@ -673,7 +673,67 @@
                               {:command :consume-resource
                                :overload amount :cp 0.0 :creative? false})]
                  {:status (if (:success? result) :applied :failed)})
-               {:status :rejected :reason :invalid-resource-add})))))))
+               {:status :rejected :reason :invalid-resource-add})))))
+      ;; S8 cutover: the new node-core engine's cost/spend and cooldown/start
+      ;; are ordinary host actions/queries (dsl_vocabulary.clj's
+      ;; :cost/spend :capability :cost/spend, :cooldown/start :capability
+      ;; :cooldown/start), unlike the old engine where both are special-
+      ;; cased nodes mutating an in-graph :txn that a LATER whole-state diff
+      ;; (combat_runtime.clj's commit-final-state!, still used by the old
+      ;; engine only) turns into :consume-resource/:set-cooldown commands.
+      ;; These two registrations are that same net effect, applied
+      ;; immediately instead of diffed-and-committed after the fact -- see
+      ;; the old engine's own spend-budget helper for the ground truth this
+      ;; is a faithful port of (:required/:available/:sufficient?/:partial?
+      ;; logic identical; only the deferred-txn-then-diff mechanics are
+      ;; replaced with an immediate command).
+      ;;
+      ;; :overload's sign convention is the one genuinely non-obvious thing
+      ;; ported here verbatim rather than "fixed": spend-budget treats
+      ;; :budget {:overload N} as spending FROM a pool (available = current
+      ;; overload, gate = current >= N, and its own :txn update SUBTRACTS
+      ;; N) -- but the :txn only ever reaches the real player-state store
+      ;; through commit-final-state!'s diff, which (since :consume-resource
+      ;; :overload always ADDS to real overload, per resource_rules.clj's
+      ;; perform-resource) turns that subtraction into a real ADDITION of N
+      ;; overload. That is the actual live behavior every real ability's
+      ;; :overload cost has always produced, confirmed by reading
+      ;; perform-resource directly, not inferred -- so the real, net
+      ;; command issued below is :consume-resource {:overload N} (an add),
+      ;; even though the SUFFICIENCY CHECK below still gates on "is current
+      ;; overload >= N" (spend-budget's own gate, also ported verbatim).
+      (when-not (contains? (:queries (capabilities/snapshot)) :cost/spend)
+        (capabilities/register-query!
+         :cost/spend
+         (fn [{:keys [owner budget scale partial?]} _frame]
+           (let [resources (or (:resources budget) budget {})
+                 scale (max 0.0 (let [s (double (or scale 1.0))] (if (Double/isFinite s) s 0.0)))
+                 required (into {} (map (fn [[k v]] [k (* scale (double (or v 0.0)))]) resources))
+                 state (owner-state owner)
+                 available (into {} (map (fn [[k _]] [k (max 0.0 (double (or (get-in state [:resources k]) 0.0)))])
+                                        required))
+                 sufficient? (every? (fn [[k amount]] (>= (get available k 0.0) amount)) required)
+                 spend (cond sufficient? required
+                             (true? partial?)
+                             (into {} (map (fn [[k amount]] [k (min amount (get available k 0.0))]) required))
+                             :else {})
+                 cp (double (get spend :cp 0.0)) overload (double (get spend :overload 0.0))]
+             (when (and owner (or (pos? cp) (pos? overload)))
+               (command-runtime/run-command-in-session!
+                (server-session-id) (str owner)
+                {:command :consume-resource :cp cp :overload overload :creative? false}))
+             sufficient?))))
+      (when-not (contains? (:actions (capabilities/snapshot)) :cooldown/start)
+        (capabilities/register-action!
+         :cooldown/start
+         (fn [{:keys [owner ability-id name ticks]}]
+           (when (and owner ability-id name)
+             (let [ticks (long (or ticks 0))]
+               (command-runtime/run-command-in-session!
+                (server-session-id) (str owner)
+                {:command :set-cooldown :ctrl-id ability-id :sub-id name
+                 :ticks ticks :max ticks})))
+           nil)))))
     (catch Throwable _
       ;; A loader may freeze the registry before AC content boots.  Leave the
       ;; registry state authoritative; missing ports surface as :unhandled.

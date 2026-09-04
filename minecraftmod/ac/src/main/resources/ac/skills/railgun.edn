@@ -6,6 +6,27 @@
 ;; composites from ac content (previously exercised only by combat-core's
 ;; own lib_test.clj/run_test.clj fixtures).
 ;;
+;; BUG FIX (S8, found auditing the live cutover): the old :progression
+;; :hit formula reads {:ref [:state :reflection-hit?]} -- a real
+;; formula the OLD engine evaluates lazily at the exact graph node that
+;; reads it, so it correctly sees a :reflection-hit? state write made
+;; moments earlier in the SAME dispatch (inside the each-loop just
+;; above). The NEW engine's ?progression/name capabilities are fixed
+;; values materialized once BEFORE dispatch starts and cannot see that
+;; same-dispatch write -- a plain ?progression/hit read here would
+;; always see the STALE pre-dispatch value (:reflection-hit? is reset
+;; to false at the top of this same phase, so it would always read as
+;; :exp-hit, never :exp-reflection-hit, regardless of what actually
+;; happened). Fixed by replacing the :reflection-hit? session-state
+;; field with a plain local (any-reflection-accepted?, predeclare +
+;; set! across the each-loop, this session's established same-
+;; activation-visibility fix pattern) and computing hit-progression
+;; inline via math/select instead of reading a capability. The
+;; :reflection-hit? field was never read anywhere outside this one
+;; phase (grep-confirmed), so dropping it from :program's own :state
+;; entirely (not just this read site) is a clean removal, not a partial
+;; fix.
+;;
 ;; terrain/apply-break-budget's :drop-chance param has no old-code
 ;; equivalent here -- the old :terrain/apply-break-budget COMPOSITE (not
 ;; the new :defn) declared {:drop-chance {:type :float :default 0.0}},
@@ -69,8 +90,7 @@
  "{:ability :railgun
    :activation :session
    :state {:mode {:type :keyword :default :armed} :hold-ticks {:type :long :default 0}
-           :fire-mode {:type :keyword :default nil} :coin-id {:type :any :default nil}
-           :reflection-hit? {:type :boolean :default false}}
+           :fire-mode {:type :keyword :default nil} :coin-id {:type :any :default nil}}
    :tunables {:beam-damage {:type :double} :beam-radius {:type :double}
               :beam-query-radius {:type :double} :beam-step {:type :double}
               :beam-block-energy {:type :double} :beam-visual-distance {:type :double}
@@ -78,7 +98,8 @@
               :qte-perform-threshold {:type :double} :item-charge-ticks {:type :long}
               :reflection-distance {:type :double} :reflection-damage {:type :double}
               :cost-down-cp {:type :double} :cost-down-overload {:type :double}
-              :cost-tick-cp {:type :double} :cost-tick-overload {:type :double}}
+              :cost-tick-cp {:type :double} :cost-tick-overload {:type :double}
+              :exp-hit {:type :double} :exp-reflection-hit {:type :double}}
    :phases
    {:start
     [(let owner-id ?caster/id)
@@ -127,7 +148,7 @@
      (let eye ?caster/eye)
      (let aim ?caster/aim)
      (let wid ?world/id)
-     (state! :reflection-hit? false)
+     (let any-reflection-accepted? false)
      (vfx! {:effect-id :billboard-session :operation :destroy
            :instance-key [:activation :railgun-charge] :payload {}})
      (let max-distance $max-distance)
@@ -160,8 +181,9 @@
           (when (value/eq (:type hit) \"minecraft:creeper\")
             (event! {:type :achievement/trigger :payload {:id \"electromaster.attack_creeper\"}}))
           (when (:reflection-accepted? hit)
-            (state! :reflection-hit? true)))
-        (let hit-progression ?progression/hit)
+            (set! any-reflection-accepted? true)))
+        (let hit-progression
+          (math/select any-reflection-accepted? $exp-reflection-hit $exp-hit))
         (event! {:type :score/mark :tag :hit :progression hit-progression})
         (let main-cooldown ?cooldown/main)
         (cooldown/start {:name :main :ticks main-cooldown})

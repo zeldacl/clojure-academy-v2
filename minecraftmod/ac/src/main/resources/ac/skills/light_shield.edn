@@ -34,6 +34,24 @@
 ;; spend result, which is behaviorally identical (only this iteration's
 ;; damage/progression/score-mark are skipped; the each loop itself
 ;; always continues to the next target either way).
+;;
+;; BUG FIX (S8, found auditing the live cutover): the old :cooldown
+;; :deactivate formula reads {:ref [:state :active-ticks]} -- a real
+;; formula, not a fixed number, evaluated lazily by the OLD engine at
+;; the exact graph node that reads it. The NEW engine's ?cooldown/name
+;; capabilities are fixed values materialized once BEFORE dispatch
+;; starts and cannot see a :state! write that happens earlier in the
+;; SAME dispatch. :pulse's timeout branch (below) writes :active-ticks
+;; via next-active-ticks, then immediately needs the deactivate cooldown
+;; computed FROM that just-written value -- a plain ?cooldown/deactivate
+;; read there would silently use the STALE pre-dispatch active-ticks
+;; value instead. Fixed by computing the cooldown inline from
+;; next-active-ticks (the local this dispatch already has) instead of
+;; reading the capability, matching this session's established same-
+;; activation-visibility fix pattern. :release/:abort's own
+;; ?cooldown/deactivate reads (no state write earlier in those
+;; dispatches) are genuinely fine as plain capability reads and are
+;; NOT changed.
 {:schema-version 2
  :kind :ability
  :id :light-shield
@@ -166,7 +184,8 @@
            (combat/status {:target owner-id :status-id :slowness
                            :duration-ticks $slowness-duration-ticks
                            :amplifier $slowness-amplifier})
-           (let deactivate-cooldown ?cooldown/deactivate)
+           (let deactivate-cooldown
+             (math/floor-long (math/mul next-active-ticks (math/sub 2.0 ?progression/mastery))))
            (cooldown/start {:name :deactivate :ticks deactivate-cooldown})
            (vfx! {:effect-id :billboard-session :operation :destroy
                  :instance-key [:activation :light-shield-billboard] :payload {}})
