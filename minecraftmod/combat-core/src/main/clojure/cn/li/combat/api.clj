@@ -15,7 +15,9 @@
             [cn.li.combat.platform :as platform]
             [cn.li.combat.beam-settlement :as beam-settlement]
             [cn.li.combat.vocabulary :as vocabulary]
-            [cn.li.combat.kernels :as kernels]))
+            [cn.li.combat.kernels :as kernels]
+            [cn.li.combat.run :as run]
+            [cn.li.combat.lib :as lib]))
 
 ;; ---- final graph compiler + engine ----
 (defn compile-program [environment program] (compiler/compile-program environment program))
@@ -41,3 +43,18 @@
 ;; ---- vocabulary (for a content module's own schema-export/editor tooling) ----
 (def descriptor-specs vocabulary/descriptor-specs)
 (def kernel-descriptors kernels/kernel-specs)
+
+;; ---- S8: new node-core engine (cn.li.combat.run), additive alongside the
+;; old final-engine/final-compiler above -- see cn.li.combat.run's own
+;; namespace docstring and NODE_LANGUAGE.md's own "two engines" section
+;; for which is the live production path today. cn.li.ac.ability.skills-
+;; catalog and cn.li.ability.engine-v2 are this facade's only real
+;; callers, matching the same "content modules touch only this
+;; namespace" convention the functions above already establish for the
+;; old engine. ----
+(def skill-lib-fns lib/fns)
+(defn compile-skill-doc!
+  ([text] (run/compile-doc! text skill-lib-fns))
+  ([text fns] (run/compile-doc! text fns)))
+(defn compile-skill-program [ir host] (run/compile-program ir host))
+(defn dispatch-skill! [program entry input] (run/dispatch! program entry input))
