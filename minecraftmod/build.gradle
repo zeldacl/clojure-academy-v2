@@ -1487,8 +1487,7 @@ tasks.register("verifyContentModuleCoreIsolation") {
             "cn.li.combat.platform", "cn.li.combat.vocabulary",
             "cn.li.node.composite", "cn.li.node.composite-loader", "cn.li.node.digest",
             "cn.li.node.rng", "cn.li.node.schema-export", "cn.li.node.scope", "cn.li.node.validate",
-            "cn.li.presentation.core", "cn.li.presentation.core.artifact", "cn.li.presentation.core.host",
-            "cn.li.vfx.system-compiler", "cn.li.vfx.vocabulary"
+            "cn.li.presentation.core", "cn.li.presentation.core.artifact", "cn.li.presentation.core.host"
         ] as Set
         def offenders = []
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
@@ -1506,20 +1505,13 @@ tasks.register("verifyContentModuleCoreIsolation") {
 
 tasks.register("verifyAbilityCompositionBoundary") {
     group = "verification"
-    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary."
+    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary. Used to also check that the catalog (final_catalog.clj) called ability-runtime's compose-catalog -- that whole assembly path (and its own compose-catalog/catalog-fingerprint-input consumers) is gone: combat-catalog.clj's S8 rewrite reads cn.li.ac.ability.skills-catalog directly, which never went through ability-runtime's cross-core composition (there is only one core -- combat -- in its own catalog, no VFX/Presentation bundle to compose). The presentation/Gradle-edge checks below are still real and still checked."
     dependsOn ":ac:checkClojure"
     doLast {
-        def catalog = file("ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj")
         def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
         def acBuild = file("ac/build.gradle").text
         def abilityBuild = file("ability-runtime/build.gradle").text
         def violations = []
-        if (!catalog.text.contains("cn.li.ability.compose")) {
-            violations << "AC catalog must call ability-runtime composition"
-        }
-        if (!catalog.text.contains("compose-catalog")) {
-            violations << "AC catalog must use compose-catalog"
-        }
         if (!presentation.text.contains("cn.li.ability.compose") ||
             !presentation.text.contains("merge-vfx-into-frame")) {
             violations << "AC Presentation extraction must use ability-runtime merge-vfx-into-frame"
@@ -2902,10 +2894,10 @@ tasks.register("verifyCoreNoSkillKnowledge") {
 
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
-    description = "Require migrated skill EDN to be config-independent declarations."
+    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills and ac/vfx/fx, the S6/S8 live content directories -- ac/combat/abilities and ac/vfx/effects (the old catalog's content, checked here until this session's catalog-source rewrite) are deleted."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/combat/abilities"),
-                     file("ac/src/main/resources/ac/vfx/effects")]
+        def roots = [file("ac/src/main/resources/ac/skills"),
+                     file("ac/src/main/resources/ac/vfx/fx")]
         def violations = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.files.each { source ->

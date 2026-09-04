@@ -1,5 +1,0 @@
-{:kind :composite, :id :combat/area-damage, :revision 1, :layer :composite, :doc "Damage every entity within :radius of :center. Rebuilds :motion/radial-impulse-style bundled query+loop as visible composition: :target/entities finds the entities, :flow/foreach applies :combat/damage to each.", :inputs {:center {:type :vec3}, :radius {:type :float, :min 0.0}, :amount {:type :float, :min 0.0}, :damage-type {:type :resource-id, :default :generic}, :limit {:type :int, :default 128}}, :outputs {}, :body {:component :flow/sequence, :steps [{:component :target/entities, :shape {:type :sphere, :center {:ref [:input :center]}, :radius {:ref [:input :radius]}}, :projection [:id], :limit {:ref [:input :limit]}, :bind {:entities :entities}} {:component :flow/foreach, :items {:ref [:local :entities]}, :as :target, :body {:component :combat/damage, :target {:ref [:local :target :id]}, :amount {:ref [:input :amount]}, :damage-type {:ref [:input :damage-type]}}}]}}
-
-
-
-
