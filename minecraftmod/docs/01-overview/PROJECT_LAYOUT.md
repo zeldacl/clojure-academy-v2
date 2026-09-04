@@ -49,7 +49,7 @@ platform-builds/
 | `:platform` | 唯一平台工程；通过 `scripts/target-gradle.ps1 <target-id>` 选择具体目标 |
 | `:tools:target-launcher` | 目标构建的辅助启动器工程，非运行时代码 |
 
-`combat-core` 与 `vfx-core` 的设计与边界见 [COMBAT_CORE.md](../04-systems/COMBAT_CORE.md)、[VFX_CORE.md](../04-systems/VFX_CORE.md)；Presentation 帧管线见 [PRESENTATION_V3.md](../06-gui/PRESENTATION_V3.md)。
+`combat-core` 与 `vfx-core` 的设计与边界见 [COMBAT_CORE.md](../04-systems/COMBAT_CORE.md)、[VFX_CORE.md](../04-systems/VFX_CORE.md)；节点语言规格见 [NODE_LANGUAGE.md](../04-systems/NODE_LANGUAGE.md)；Presentation 帧管线见 [PRESENTATION_V3.md](../06-gui/PRESENTATION_V3.md)；技能/VFX 图编辑器与玩家法术合成器见 [NODE_EDITOR.md](../06-gui/NODE_EDITOR.md)。
 
 ## 平台源码组件
 
