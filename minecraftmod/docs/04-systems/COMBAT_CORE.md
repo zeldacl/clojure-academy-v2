@@ -3,10 +3,11 @@
 > 语言本体（surface DSL/IR/词汇表/静态代价分析）的完整规格见
 > [NODE_LANGUAGE.md](NODE_LANGUAGE.md)——本文只讲 combat-core 如何使用这套语言、
 > 模块边界、以及排障。**先读 NODE_LANGUAGE.md §0**：新引擎是技能/战斗 dispatch
-> 唯一的实机路径；旧引擎（`final_engine.clj`/`final_compiler.clj`/`kernels.clj`）
-> 仍在代码里，但不再有专属测试直接调用它——它没删除的原因是 `combat-catalog.
-> clj` 仍把它当内容元数据编译器用，跟"哪个引擎执行技能"无关，见 NODE_LANGUAGE.md
-> §0 详细说明。
+> 唯一的实机路径；旧的图执行引擎（`final_engine.clj`/`final_compiler.clj`）**已
+> 删除**——`combat-catalog.clj` 早先经由它们编译内容元数据，但那步编译从没有
+> 真正被执行过（`combat-api/execute!` 零调用点），移除后不影响任何真实功能。
+> `kernels.clj`/`final_damage.clj` 不属于"旧引擎"，是不同原因永久保留的基础
+> 设施，见 NODE_LANGUAGE.md §0 详细说明。
 
 ## 系统职责
 
@@ -16,31 +17,34 @@
 端口 + 已注册的 host capability 完成；AC 只负责组装与自己领域（技能学习/资源/
 成就）的注入。
 
-## 两套引擎共存的真实原因：内容元数据编译，不是 dispatch 安全网
+## 唯一的执行引擎；旧内容目录仍在被加载（跟"引擎"无关的独立一层）
 
-| | 旧（不再被任何 dispatch 调用，只被 `combat-catalog.clj` 当元数据编译器用） | 新（唯一的 dispatch 路径） |
-|---|---|---|
-| 入口 | `cn.li.combat.final-engine`/`final-compiler`，经 `cn.li.ac.ability.
-  final-catalog-service` 被 `combat-catalog.clj` 调用——不再有 `dispatch-intent!`
-  这个函数，也不再有任何测试直接调它 | `cn.li.combat.run`（`combat_runtime.clj` 的
-  `dispatch-intent-v2!`，真实玩家操作、`process-damage-request!`/
-  `apply-attack-precheck!`〔原生近战伤害/反射边界〕全部走这里） |
-| 词汇表 | `cn.li.combat.vocabulary`（`component-specs`，~57 条，`:type :any` 居多） | `cn.li.combat.dsl-vocabulary`（`nodes`，带真实 `:params`/`:returns`/`:effects`/`:capability`/`:cost`） |
-| 内容资源 | `ac/src/main/resources/ac/combat/abilities/*.edn`（旧节点树 EDN，仍被
-  `ac/ability/final_catalog.clj` 的 `load-combat` 加载——供 `combat-catalog.clj`
-  的技能元数据表使用，例如 trigger 索引、mark-policies） | `ac/src/main/resources/ac/skills/*.edn`（`:program` 字段内嵌新 DSL 文本，其余顶层键——`:tunables`/`:costs`/`:cooldown`/`:progression`/`:session-state`/`:mark-policies`/`:damage-policies`——跟旧文件逐字节相同） |
-| 复用单元 | `combat-core/composites/*.edn`（旧宏替换式 composite） | `combat-core/lib/*.edn` + `combat-core/lib.clj`（`:defn`，显式文件名列表加载，见 NODE_LANGUAGE.md §1） |
-| 伤害管线 | `combat-core/final_damage.clj`——**新旧两条 dispatch 路径共用同一份**，
-  永久共享，不属于任何一侧 | 同左 |
-| 玩家法术 | 不存在 | `cn.li.combat.player`（S7，desugar/admit，见 NODE_LANGUAGE.md §6） |
+| | 唯一的 dispatch 路径 |
+|---|---|
+| 入口 | `cn.li.combat.run`（`combat_runtime.clj` 的 `dispatch-intent-v2!`，真实
+  玩家操作、`process-damage-request!`/`apply-attack-precheck!`〔原生近战伤害/
+  反射边界〕全部走这里） |
+| 词汇表 | `cn.li.combat.dsl-vocabulary`（`nodes`，带真实 `:params`/`:returns`/`:effects`/`:capability`/`:cost`） |
+| 内容资源 | `ac/src/main/resources/ac/skills/*.edn`（`:program` 字段内嵌新 DSL 文本，其余顶层键——`:tunables`/`:costs`/`:cooldown`/`:progression`/`:session-state`/`:mark-policies`/`:damage-policies`——跟旧文件逐字节相同） |
+| 复用单元 | `combat-core/lib/*.edn` + `combat-core/lib.clj`（`:defn`，显式文件名列表加载，见 NODE_LANGUAGE.md §1） |
+| 伤害管线 | `combat-core/final_damage.clj`——独立于 dispatch 引擎，永久共享 |
+| 玩家法术 | `cn.li.combat.player`（S7，desugar/admit，见 NODE_LANGUAGE.md §6） |
 
 `combat-source`（`combat_runtime.clj` 内部函数，`final-capabilities-v2`/
-`damage-policy-inputs`/`mark-rate-for` 等共享读取点）现在直接读 `final-runtime-
-v2*` 里的新 catalog（`cn.li.ac.ability.skills-catalog/assemble` 的输出），**不
-再需要旧 catalog 提供元数据**——这是本文档早前版本描述的"故意读旧 catalog 共享
-字段"设计已经被替换掉的地方，不要再假设这条读取路径存在。真正需要旧 catalog
-的只剩 `combat-catalog.clj` 自己的技能元数据表（trigger 索引等），跟 dispatch/
-伤害拦截完全无关。
+`damage-policy-inputs`/`mark-rate-for` 等共享读取点）读 `final-runtime-v2*`
+里的新 catalog（`cn.li.ac.ability.skills-catalog/assemble` 的输出）——不读任何
+旧 catalog，dispatch/伤害拦截这两条真实路径完全不依赖旧内容目录。
+
+**旧内容目录（`ac/combat/abilities/*.edn`、`combat-core/composites/*.edn`）仍在
+被加载**，但原因跟"引擎"无关：`cn.li.ac.ability.final_catalog.clj` 的
+`load-combat` 读取它们，经 `cn.li.ac.ability.final-catalog-service` 供
+`combat-catalog.clj` 的技能元数据表使用（trigger 索引、mark-policies、
+bindings/presentation）——这条链路纯粹是数据加载 + 组合展开 + 结构校验
+（`node.composite`/`node.scope`/`node.validate`），**从未经过任何图执行引擎**，
+早先"combat-catalog.clj 把旧引擎当元数据编译器用"的说法已经过时：那一步真正
+的编译（`combat-api/compile-program`，调用旧引擎）已经删除，因为编译产物从没
+被执行过。要连这条内容加载路径也删掉，需要先重写 `combat-catalog.clj` 自己的
+元数据来源——一个独立、更大的项目，不在本次改动范围内。
 
 ## 新引擎（`cn.li.combat.run`）的模块边界
 
@@ -65,31 +69,33 @@ v2*` 里的新 catalog（`cn.li.ac.ability.skills-catalog/assemble` 的输出）
 - `mcmod/src/main/clojure/cn/li/mcmod/runtime/fixed_channel.clj`：
   `:spell-submit` 包类型，玩家 glyph 向量上行的有界二进制封装。
 
-## 旧引擎（不是 dispatch 路径，是 combat-catalog.clj 的元数据编译器）的模块边界
+## 内容元数据加载侧（独立于任何执行引擎）的模块边界
 
-- `combat-core/src/main/clojure/cn/li/combat/final_engine.clj`：技能图执行器；
-  只处理编译后的节点树，产出中立 actions/events/VFX 信号。已经不存在
-  `dispatch-intent!`/`cn.li.ability.engine`（两者均已删除）这样的调用点了——
-  唯一还在用它的是 `cn.li.ac.ability.final-catalog-service`，经由
-  `combat-api/create-engine`/`execute!`/`compile-program` 把它当元数据编译器，
-  供 `combat-catalog.clj` 使用。
-- `combat-core/src/main/clojure/cn/li/combat/final_compiler.clj`：对应的技能图
-  编译器，状态同上。
+- `combat-core/src/main/clojure/cn/li/combat/vocabulary.clj`：旧词汇表
+  （`component-specs`，~57 条），供 `final_catalog.clj` 构建 NodeEnvironment
+  用——不再有编译器/执行器读它，只有 `strict-graphs!` 的结构校验
+  （`node.scope`/`node.validate`）跟它打交道。顶层直接 require `combat-core/
+  kernels.clj`，这是 `kernels.clj` 没被删除的原因，见 NODE_LANGUAGE.md §0。
 - `combat-core/src/main/clojure/cn/li/combat/final_damage.clj`：统一 DamageEvent
-  收集/确定性 resolve 与 mcmod DamageBoundary 结果——**新旧两条 dispatch 路径
-  永久共用同一份**，不属于"旧引擎"范畴，只是刚好也叫 final_*。
+  收集/确定性 resolve 与 mcmod DamageBoundary 结果——**独立于 dispatch 引擎，
+  永久共享**，不属于内容加载或执行引擎中的任何一侧，只是刚好也叫 final_*。
 - `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host
   query/action capability 表，新引擎通过这份注册表在真实游戏里 dispatch。
 - `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：唯一同时组合
   node/combat/vfx/presentation 值的中立边界。
 - `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：AC 侧内容元数据
   加载器，读取旧 manifest（`ac/combat/manifest.edn`/`ac/combat/composites/
-  manifest.edn`）并展开旧 composite——`cn.li.ac.ability.service.combat-catalog`
-  依赖它，后者被真实生产启动（`core/init.clj`）和测试套件广泛使用，所以这整条
-  链路都不是死代码。
+  manifest.edn`）并展开旧 composite（`node.composite`/`composite-loader`，
+  纯数据处理，不涉及执行）——`cn.li.ac.ability.service.combat-catalog` 依赖
+  它，后者被真实生产启动（`core/init.clj`）和测试套件广泛使用。
+- `ac/src/main/clojure/cn/li/ac/ability/final_catalog_service.clj`：在
+  `final_catalog.clj` 的输出上跑 `strict-graphs!`（结构校验，供
+  `combat-catalog.clj` 用）——**不再编译任何图**（曾经调用
+  `combat-api/compile-program`，即旧引擎的编译器；因为编译产物从未被执行，
+  这一步已删除，见其自己的 docstring）。
 - `ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj`：AC
   composition root，`dispatch-intent-v2!`/`process-damage-request!`/
-  `apply-attack-precheck!` 都在这里；不再引用 `cn.li.ability.engine`（已删除）。
+  `apply-attack-precheck!` 都在这里。
 
 ## 运行时流程（当前实机行为）
 
@@ -114,9 +120,10 @@ v2*` 里的新 catalog（`cn.li.ac.ability.skills-catalog/assemble` 的输出）
 
 旧引擎自己曾经的运行流程（`final_catalog/initialize!` → 具体化 tunable →
 composite 展开 → `final_compiler/compile-program` → `final_engine/execute!`）
-不再被任何测试或 dispatch 路径驱动——`combat-catalog.clj` 只调用它的编译步骤
-产出元数据，从不调用 `final_engine/execute!`。这条完整的旧执行流程代码还在，
-但已经没有任何调用点会真的走完它。
+**已经不存在**：`final_compiler.clj`/`final_engine.clj` 已删除。
+`combat-catalog.clj` 走的是一条从未包含它们的独立路径——`final_catalog/
+initialize!` → composite 展开 → `strict-graphs!` 结构校验，producing 纯元数据，
+不产出、也从不需要一份"已编译"的可执行图。
 
 ## 排障手册
 
