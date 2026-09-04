@@ -1,46 +1,58 @@
+;; Skill tree — back texture + graph composite + detail column (~400×240).
 {:ui/schema 2 :view/id :academy.app/skill-tree
- :host {:kind :screen :design-width 420 :design-height 260 :scale-policy :fit}
+ :host {:kind :screen :design-width 400 :design-height 240 :scale-policy :fit}
  :state-schema {:title :string :category :string :level :string :items :vector
                 :selected :number :selected-skill :string :detail :map
                 :composite-list :vector :status :string :button-left :string :button-right :string}
- :root {:type :column :key :skill-tree/root :layout {:x 8 :y 8 :width 404 :height 244}
-        :children [{:type :text :key :skill-tree/title :layout {:height 18}
-                    :bind {:text [:state :title]} :semantics {:role :heading}}
-                   {:type :row :key :skill-tree/summary :layout {:height 18}
-                    :children [{:type :text :layout {:width 260} :bind {:text [:state :category]}}
-                               {:type :text :bind {:text [:state :level]}}]}
-                   {:type :repeater :key :skill-tree/graph :layout {:height 112}
-                    :bind {:items [:state :composite-list]}
-                    :children [{:type :composite :bind {:item [:state :item]}}]}
-                   {:type :scroll :key :skill-tree/items :layout {:height 46}
-                    :bind {:items [:state :items]} :semantics {:role :list}
-                    :children [{:type :row :layout {:height 18}
-                                :children [{:type :text :layout {:width 320}
-                                            :bind {:text [:item :label]}}
-                                           {:type :button :layout {:width 72 :height 16}
-                                            :bind {:text [:item :action-label]}
-                                            :on {:activate :skill-tree/learn}
-                                            :semantics {:role :button}}]}]}
-                   {:type :text :key :skill-tree/detail-title :bind {:text [:state :detail :title]}}
-                   {:type :text :key :skill-tree/detail-level :bind {:text [:state :detail :level]}}
-                   {:type :text :key :skill-tree/detail-description :layout {:height 18}
-                    :bind {:text [:state :detail :description]}}
-                   {:type :text :key :skill-tree/detail-conditions-label :layout {:height 16}
-                    :bind {:text [:state :detail :condition-label]}}
-                   {:type :grid :key :skill-tree/detail-conditions :layout {:height 18}
-                    :bind {:items [:state :detail :condition-items]}
-                    :children [{:type :composite :layout {:height 18}
-                                :bind {:item [:state :item]}
-                                :on {:hover :skill-tree/condition-hover}}]}
-                   {:type :text :key :skill-tree/detail-condition-hint :layout {:height 16}
-                    :bind {:text [:state :detail :condition-hint]}}
-                   {:type :row :key :skill-tree/actions :layout {:height 18}
-                    :children [{:type :button :layout {:width 72 :height 16}
-                                :bind {:text [:state :button-left]}
-                                :on {:activate :skill-tree/refresh}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 72 :height 16}
-                                :bind {:text [:state :detail :learn-label]}
-                                :on {:activate :skill-tree/learn}
-                                :semantics {:role :button}}]}
-                   {:type :text :key :skill-tree/status :bind {:text [:state :status]}}]}}
+ :root
+ {:type :absolute :key :skill-tree/root :layout {:width 400 :height 240}
+  :children
+  [{:type :image :key :skill-tree/back
+    :layout {:x 0.0 :y 0.0 :width 400.0 :height 240.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/skill_tree/back.png"}}
+    :semantics {:role :image}}
+
+   {:type :text :key :skill-tree/title
+    :layout {:x 12.0 :y 8.0 :width 240.0 :height 14.0}
+    :style {:font-size 12.0}
+    :bind {:text [:state :title]}
+    :semantics {:role :heading}}
+   {:type :text :key :skill-tree/category
+    :layout {:x 12.0 :y 24.0 :width 200.0 :height 12.0}
+    :style {:font-size 9.0}
+    :bind {:text [:state :category]}}
+   {:type :text :key :skill-tree/level
+    :layout {:x 220.0 :y 24.0 :width 160.0 :height 12.0}
+    :style {:font-size 9.0}
+    :bind {:text [:state :level]}}
+
+   ;; Graph area — nodes via composite (positions from controller)
+   {:type :repeater :key :skill-tree/graph
+    :layout {:x 0.0 :y 40.0 :width 400.0 :height 140.0 :direction :none}
+    :bind {:items [:state :composite-list]}
+    :children [{:type :composite :layout {:width 0.0 :height 0.0}
+                :bind {:item [:state :item]
+                       :x [:item :layout-x] :y [:item :layout-y]
+                       :width [:item :w] :height [:item :h]}
+                :on {:activate :skill-tree/learn}}]}
+
+   ;; Detail strip
+   {:type :column :key :skill-tree/detail
+    :layout {:x 12.0 :y 184.0 :width 376.0 :height 52.0}
+    :children
+    [{:type :text :layout {:height 12.0} :style {:font-size 10.0}
+      :bind {:text [:state :detail :title]}}
+     {:type :text :layout {:height 10.0} :style {:font-size 8.0}
+      :bind {:text [:state :detail :description]}}
+     {:type :row :layout {:height 16.0}
+      :children
+      [{:type :button :layout {:width 72.0 :height 14.0}
+        :bind {:text [:state :button-left]}
+        :on {:activate :skill-tree/refresh}
+        :semantics {:role :button}}
+       {:type :button :layout {:width 72.0 :height 14.0}
+        :bind {:text [:state :detail :learn-label]}
+        :on {:activate :skill-tree/learn}
+        :semantics {:role :button}}
+       {:type :text :layout {:width 200.0} :style {:font-size 8.0}
+        :bind {:text [:state :status]}}]}]}]}}

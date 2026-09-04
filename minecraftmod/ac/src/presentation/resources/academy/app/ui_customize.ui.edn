@@ -1,30 +1,70 @@
+;; UI customize — main ui_edit.xml: left window + coordinate edit + HUD previews.
 {:ui/schema 2 :view/id :academy.app/ui-customize
- :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
- :state-schema {:title :string :items :vector :selected :number :edit-x :string :edit-y :string :status :string}
- :root {:type :column :key :customize/root :layout {:x 16 :y 16 :width 288 :height 208}
-        :children [{:type :text :key :customize/title :layout {:height 18}
-                    :bind {:text [:state :title]} :semantics {:role :heading}}
-                   {:type :scroll :key :customize/items :layout {:height 90}
-                    :bind {:items [:state :items]} :semantics {:role :list}
-                    :children [{:type :row :layout {:height 20}
-                                :children [{:type :text :layout {:width 220}
-                                            :bind {:text [:item :label]}}
-                                           {:type :button :layout {:width 52 :height 18}
-                                            :bind {:text [:item :action-label]}
-                                            :on {:activate :customize/select}
-                                            :semantics {:role :button}}]}]}
-                   {:type :row :key :customize/coordinates :layout {:height 22}
-                    :children [{:type :text-input :layout {:width 120 :height 20}
-                                :bind {:text [:state :edit-x]}
-                                :on {:change :customize/x-change :submit :customize/x-submit}
-                                :semantics {:role :textbox :field :x}}
-                               {:type :text-input :layout {:width 120 :height 20}
-                                :bind {:text [:state :edit-y]}
-                                :on {:change :customize/y-change :submit :customize/y-submit}
-                                :semantics {:role :textbox :field :y}}]}
-                   {:type :row :key :customize/actions :layout {:height 20}
-                    :children [{:type :button :layout {:width 112 :height 18}
-                                :bind {:text [:state :reset-label]}
-                                :on {:activate :customize/reset}
-                                :semantics {:role :button}}
-                               {:type :text :bind {:text [:state :status]}}]}]}}
+ :host {:kind :screen :design-width 427 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :items :vector :selected :number :edit-x :string :edit-y :string
+                :status :string :reset-label :string :editbox-visible? :boolean
+                :preview-composite :vector}
+ :root
+ {:type :absolute :key :customize/root :layout {:width 427 :height 240}
+  :children
+  [;; Main window — XML (94,104) 144×203 @0.5 → 72×101.5 at same origin feel
+   {:type :absolute :key :customize/main
+    :layout {:x 47.0 :y 52.0 :width 72.0 :height 101.5}
+    :children
+    [{:type :image :layout {:width 72.0 :height 101.5}
+      :style {:resource {:namespace "academy" :path "textures/guis/window_ui_resize.png"}}
+      :semantics {:role :image}}
+     {:type :text :layout {:x 4.0 :y 4.0 :width 64.0 :height 12.0}
+      :style {:font-size 8.0 :rgba [1.0 1.0 1.0 0.73]}
+      :bind {:text [:state :title]}
+      :semantics {:role :heading}}
+     {:type :scroll :layout {:x 4.0 :y 18.0 :width 64.0 :height 78.0}
+      :bind {:items [:state :items]}
+      :semantics {:role :list}
+      :children
+      [{:type :row :layout {:height 12.0}
+        :children
+        [{:type :text :layout {:width 44.0 :height 12.0} :style {:font-size 7.0}
+          :bind {:text [:item :label]}
+          :on {:activate :customize/select}
+          :semantics {:role :button}}
+         {:type :button :layout {:width 18.0 :height 10.0}
+          :bind {:text [:item :action-label]}
+          :on {:activate :customize/select}
+          :semantics {:role :button}}]}]}]}
+
+   ;; Coordinate edit box
+   {:type :absolute :key :customize/editbox
+    :layout {:x 120.0 :y 60.0 :width 90.0 :height 16.0}
+    :bind {:visible [:state :editbox-visible?]}
+    :children
+    [{:type :rect :layout {:width 90.0 :height 16.0}
+      :style {:rgba [0.13 0.13 0.13 0.73]}}
+     {:type :text :layout {:x 2.0 :y 3.0 :width 10.0 :height 10.0}
+      :style {:font-size 8.0} :text "X"}
+     {:type :text-input :layout {:x 12.0 :y 3.0 :width 30.0 :height 10.0}
+      :bind {:text [:state :edit-x]}
+      :on {:change :customize/x-change :submit :customize/x-submit}
+      :semantics {:role :textbox :field :x}}
+     {:type :text :layout {:x 44.0 :y 3.0 :width 10.0 :height 10.0}
+      :style {:font-size 8.0} :text "Y"}
+     {:type :text-input :layout {:x 54.0 :y 3.0 :width 30.0 :height 10.0}
+      :bind {:text [:state :edit-y]}
+      :on {:change :customize/y-change :submit :customize/y-submit}
+      :semantics {:role :textbox :field :y}}]}
+
+   {:type :repeater :key :customize/previews
+    :layout {:x 0.0 :y 0.0 :width 427.0 :height 240.0}
+    :bind {:items [:state :preview-composite]}
+    :children [{:type :composite :layout {:width 0.0 :height 0.0}
+                :bind {:item [:state :item]}}]}
+
+   {:type :button :key :customize/reset
+    :layout {:x 47.0 :y 160.0 :width 72.0 :height 14.0}
+    :bind {:text [:state :reset-label]}
+    :on {:activate :customize/reset}
+    :semantics {:role :button}}
+   {:type :text :key :customize/status
+    :layout {:x 47.0 :y 176.0 :width 200.0 :height 10.0}
+    :style {:font-size 8.0}
+    :bind {:text [:state :status]}}]}}

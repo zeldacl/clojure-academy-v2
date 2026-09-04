@@ -217,11 +217,16 @@
                         selected? (= skill-id selected)
                         color (if selected? 0xFF68B5FF (if learned 0xFF65D58A 0xFF626A78))]
                     (vec (remove nil?
-                           [{:kind :quad :x px :y py :w 18 :h 18 :rgba color}
-                            (when skill-icon {:kind :image :src (skill-icon-src skill-icon) :x (+ px 2) :y (+ py 2) :w 14 :h 14})
+                           [{:kind :quad :layout-x px :layout-y py :x 0.0 :y 0.0 :w 18 :h 18
+                             :rgba color :skill-id skill-id}
+                            (when skill-icon
+                              {:kind :image :src (skill-icon-src skill-icon)
+                               :layout-x (+ px 2) :layout-y (+ py 2) :x 0.0 :y 0.0 :w 14 :h 14
+                               :skill-id skill-id})
                             {:kind :text :text (str (or skill-name (name skill-id)) " "
                                                     (format "%.0f%%" (* 100.0 (double (or exp 0.0)))))
-                             :x (+ px 21) :y (+ py 4) :rgba 0xFFFFFFFF}]))))
+                             :layout-x (+ px 21) :layout-y (+ py 4) :x 0.0 :y 0.0 :w 80 :h 12
+                             :rgba 0xFFFFFFFF :skill-id skill-id}]))))
                 nodes)
         connection-items
         (mapcat (fn [{:keys [from-x from-y to-x to-y]}]
@@ -232,9 +237,11 @@
                         x (min x1 x2) y (min y1 y2)
                         w (max 1.0 (Math/abs (- x2 x1)))
                         h (max 1.0 (Math/abs (- y2 y1)))]
-                    [{:kind :quad :x x :y y :w w :h h :rgba 0x6688AACC}]))
+                    [{:kind :quad :layout-x x :layout-y y :x 0.0 :y 0.0 :w w :h h
+                      :rgba 0x6688AACC}]))
                 connections)]
-    (vec (concat [{:kind :quad :x 4 :y 4 :w 300 :h 108 :rgba 0xAA10151F}]
+    (vec (concat [{:kind :quad :layout-x 4 :layout-y 4 :x 0.0 :y 0.0 :w 300 :h 108
+                   :rgba 0xAA10151F}]
                  connection-items node-items))))
 
 (defn- selected-node [nodes selected]
@@ -326,23 +333,34 @@
                 (fn [action payload _current]
                   (let [item (:item payload)
                         selected (:selected-skill (screen-state-snapshot owner))
-                        sid (or (:skill-id item) selected)
+                        ;; Graph bg/edges have no :skill-id — ignore those hits.
+                        ;; Detail Learn button has no :item — fall back to selected.
+                        sid (or (:skill-id item)
+                                (when (nil? item) selected))
                         refresh #(present! @mount* owner)]
                     (case action
                       :skill-tree/select
-                      (do (on-skill-click owner sid) (presentation-state owner))
+                      (do (when sid (on-skill-click owner sid))
+                          (presentation-state owner))
                       :skill-tree/learn
-                      (if (= :level-up (:kind item))
+                      (cond
+                        (= :level-up (:kind item))
                         (do (api/req-level-up! owner (fn [_] (refresh)))
                             (presentation-state owner))
-                        (do (when sid
-                            (if (= sid selected)
-                              (let [node (some #(when (= sid (:skill-id %)) %)
-                                               (:skill-nodes (or (build-screen-render-data owner) {})))]
-                                (when (:can-learn node)
-                                  (request-learn! owner sid (fn [_] (refresh)))))
-                              (on-skill-click owner sid)))
-                          (presentation-state owner)))
+
+                        (nil? sid)
+                        (presentation-state owner)
+
+                        (= sid selected)
+                        (let [node (some #(when (= sid (:skill-id %)) %)
+                                         (:skill-nodes (or (build-screen-render-data owner) {})))]
+                          (when (:can-learn node)
+                            (request-learn! owner sid (fn [_] (refresh))))
+                          (presentation-state owner))
+
+                        :else
+                        (do (on-skill-click owner sid)
+                            (presentation-state owner)))
                       :skill-tree/refresh
                       (presentation-state owner)
                       :skill-tree/condition-hover

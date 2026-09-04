@@ -1,32 +1,36 @@
+;; Settings — main settings.xml 742×923 @0.2 → design ~148×185.
 {:ui/schema 2 :view/id :academy.app/settings
- :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :host {:kind :screen :design-width 148 :design-height 185 :scale-policy :fit}
  :state-schema {:title :string :lines :vector :items :vector :status :string :selected :number
                 :button-left :map :button-right :map}
- :root {:type :column
-        :layout {:x 16 :y 16 :width 288 :height 208}
-        :children [{:type :text :layout {:height 18}
-                    :bind {:text [:state :title]}
-                    :semantics {:role :heading}}
-                   {:type :scroll :key :settings/items :layout {:height 140}
-                    :bind {:items [:state :items]}
-                    :semantics {:role :list}
-                    :children [{:type :row :layout {:height 18}
-                                :children [{:type :text :layout {:width 242}
-                                            :bind {:text [:item :label]}}
-                                           {:type :button :layout {:width 38 :height 16}
-                                            :bind {:text [:item :action-label]}
-                                            :on {:activate :settings/activate}
-                                            :semantics {:role :button}}]}]}
-                   {:type :text :key :settings/status
-                    :bind {:text [:state :status]}}
-                   {:type :row :key :settings/navigation
-                    :children [{:type :button :key :settings/left
-                                :layout {:width 96 :height 20}
-                                :bind {:text [:state :button-left]}
-                                :on {:activate :application/left}
-                                :semantics {:role :button}}
-                               {:type :button :key :settings/right
-                                :layout {:width 96 :height 20}
-                                :bind {:text [:state :button-right]}
-                                :on {:activate :application/right}
-                                :semantics {:role :button}}]}]}}
+ :root
+ {:type :absolute :key :settings/root :layout {:width 148 :height 185}
+  :children
+  [{:type :image :key :settings/back
+    :layout {:x 0.0 :y 0.0 :width 148.0 :height 185.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/settings.png"}}
+    :semantics {:role :image}}
+
+   {:type :scroll :key :settings/items
+    :layout {:x 12.0 :y 24.0 :width 123.0 :height 144.0}
+    :bind {:items [:state :items]}
+    :semantics {:role :list}
+    :children
+    [{:type :row :layout {:height 12.0}
+      :children
+      [{:type :text :layout {:width 92.0 :height 12.0}
+        :style {:font-size 8.0 :rgba [1.0 1.0 1.0 1.0]}
+        :bind {:text [:item :label]}
+        :on {:activate :settings/activate}
+        :semantics {:role :button}}
+       {:type :button :layout {:width 28.0 :height 10.0}
+        :style {:font-size 7.0}
+        :bind {:text [:item :action-label]}
+        :on {:activate :settings/activate}
+        :semantics {:role :button}}]}]}
+
+   {:type :text :key :settings/status
+    :layout {:x 12.0 :y 170.0 :width 123.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.8 0.8 0.8 0.8]}
+    :bind {:text [:state :status]}
+    :semantics {:role :generic}}]}}

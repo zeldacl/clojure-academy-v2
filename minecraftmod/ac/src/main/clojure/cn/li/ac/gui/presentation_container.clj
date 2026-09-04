@@ -114,6 +114,34 @@
                             :ratio (max 0.0 (min 1.0 (/ value maximum)))
                             :value (format "%.0f mB" value)})))
      :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
+(def ^:private page-texture-by-type
+  "Keys must match each GUI's `:container-type` (see create-schema-container callers)."
+  {;; wireless family (dedicated artifacts also hardcode these; kept for page-composite)
+   :matrix "textures/guis/ui/ui_matrix.png"
+   :node "textures/guis/ui/ui_node.png"
+   :wireless-matrix "textures/guis/ui/ui_matrix.png"
+   :wireless-node "textures/guis/ui/ui_node.png"
+   ;; machine_container surfaces
+   :imag-fusor "textures/guis/ui/ui_imagfusor.png"
+   :metal-former "textures/guis/ui/ui_metalformer.png"
+   :phase-gen "textures/guis/ui/ui_phasegen.png"
+   :phase-generator "textures/guis/ui/ui_phasegen.png"
+   :wind-gen-main "textures/guis/ui/ui_windmain.png"
+   :wind-gen-base "textures/guis/ui/ui_windbase.png"
+   :ability-interferer "textures/guis/ui/ui_interfere.png"
+   :energy-converter "textures/guis/ui/ui_node.png"
+   ;; main page_solar.xml overlays ui_windbase.png (not phasegen).
+   :solar "textures/guis/ui/ui_windbase.png"
+   :solar-generator "textures/guis/ui/ui_windbase.png"
+   :solar-gen "textures/guis/ui/ui_windbase.png"})
+
+(defn- page-composite-for [container]
+  (when-let [path (get page-texture-by-type (:container-type container))]
+    [{:kind :image
+      :src (str "academy:" path)
+      :x 0.0 :y 0.0 :w 176.0 :h 187.0
+      :rgba (unchecked-int 0xFFFFFFFF)}]))
+
 (defn- snapshot-for [container revision slot-count]
   (let [network (wireless-state container)
         linked (:linked network)
@@ -137,6 +165,7 @@
                                  (value-of (:mode container))
                                  "IDLE")
               :info-area (generic-info-area container progress)
+              :page-composite (or (page-composite-for container) [])
               :network-visible (boolean (wireless-config container))
               :network-state (if linked "Connected" "Not connected")
               :network-owner (str "Node: " (or (:node-name linked) "-"))

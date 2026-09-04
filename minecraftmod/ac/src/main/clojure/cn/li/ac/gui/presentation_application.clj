@@ -1,7 +1,8 @@
 (ns cn.li.ac.gui.presentation-application
   "Application surface controller backed exclusively by Presentation Runtime.
-   Application modules own state and action semantics; this namespace only
-   adapts their map callbacks to the compiled application artifact."
+   Application modules own state and action semantics; this namespace adapts
+   their map callbacks to a compiled view artifact (default
+   :academy.app/application; callers may pass about/freq/install/media/…)."
   (:require [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 

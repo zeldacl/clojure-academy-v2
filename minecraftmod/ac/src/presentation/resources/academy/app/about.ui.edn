@@ -1,0 +1,45 @@
+;; About — main about.xml 742×923 @0.25 → design ~186×231.
+{:ui/schema 2 :view/id :academy.app/about
+ :host {:kind :screen :design-width 186 :design-height 231 :scale-policy :fit}
+ :state-schema {:title :string :lines :vector :items :vector :status :string :scroll :number
+                :button-left :map :button-right :map :tab :keyword}
+ :root
+ {:type :absolute :key :about/root :layout {:width 186 :height 231}
+  :children
+  [{:type :image :key :about/back
+    :layout {:x 0.0 :y 0.0 :width 186.0 :height 231.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/about/bg.png"}}
+    :semantics {:role :image}}
+
+   ;; Tab strip — area (53,266)×(630,605) @0.25 → (13.25,66.5)×(157.5,151.25)
+   {:type :button :key :about/credits
+    :layout {:x 13.25 :y 66.5 :width 78.75 :height 14.5}
+    :style {:font-size 9.0 :rgba [1.0 1.0 1.0 1.0]}
+    :text "Credits"
+    :bind {:text [:state :button-left]}
+    :on {:activate :application/left}
+    :semantics {:role :button}}
+   {:type :button :key :about/donate
+    :layout {:x 92.0 :y 66.5 :width 78.75 :height 14.5}
+    :style {:font-size 9.0 :rgba [1.0 1.0 1.0 1.0]}
+    :text "Donate"
+    :bind {:text [:state :button-right]}
+    :on {:activate :application/right}
+    :semantics {:role :button}}
+
+   {:type :scroll :key :about/content
+    :layout {:x 13.25 :y 81.0 :width 155.0 :height 135.0}
+    :bind {:items [:state :lines]}
+    :semantics {:role :list}
+    :children
+    [{:type :text :layout {:width :fill :height 11.0}
+      :style {:font-size 8.0 :rgba [1.0 1.0 1.0 0.9]}
+      :bind {:text [:item :label]}
+      :on {:activate :application/activate}
+      :semantics {:role :list-item}}]}
+
+   {:type :text :key :about/status
+    :layout {:x 13.25 :y 218.0 :width 155.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.8 0.8 0.8 0.7]}
+    :bind {:text [:state :status]}
+    :semantics {:role :generic}}]}}

@@ -1,36 +1,87 @@
+;; Location teleport â€?main loctele.xml three panels (inspect / add / action).
+;; Only cancel.png ships in assets; panel frames use rects for partition fidelity.
 {:ui/schema 2 :view/id :academy.app/location-teleport
- :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
+ :host {:kind :screen :design-width 320 :design-height 200 :scale-policy :fit}
  :state-schema {:title :string :status :string :exp :number :current-label :string
                 :locations :vector :visible-locations :vector :input :string
-                :selected-label :string :add-label :string :offset :number :max-offset :number}
- :root {:type :column :key :location/root :layout {:x 12 :y 12 :width 456 :height 336}
-        :children [{:type :text :key :location/title :bind {:text [:state :title]}
-                    :semantics {:role :heading}}
-                   {:type :text :key :location/status :bind {:text [:state :status]}}
-                   {:type :text :key :location/current :bind {:text [:state :current-label]}}
-                   {:type :scroll :key :location/list :layout {:height 240}
-                    :bind {:items [:state :visible-locations]}
-                    :semantics {:role :list}
-                    :children [{:type :row :key :location/row :layout {:height 30}
-                                :children [{:type :text :key :location/name
-                                            :layout {:width 250 :height 24}
-                                            :bind {:text [:item :name]}}
-                                           {:type :button :key :location/teleport
-                                            :layout {:width 90 :height 24}
-                                            :bind {:text [:item :teleport-label]}
-                                            :on {:activate :location/teleport}
-                                            :semantics {:role :button}}
-                                           {:type :button :key :location/delete
-                                            :layout {:width 90 :height 24}
-                                            :bind {:text [:item :delete-label]}
-                                            :on {:activate :location/delete}
-                                            :semantics {:role :button}}]}]}
-                   {:type :text-input :key :location/input :layout {:height 24}
-                    :bind {:text [:state :input]}
-                    :on {:submit :location/add}
-                    :semantics {:role :textbox :field :location-name}}
-                   {:type :button :key :location/add :layout {:height 24}
-                    :bind {:text [:state :add-label]}
-                    :on {:activate :location/add}
-                    :semantics {:role :button}}
-                   {:type :text :key :location/selected :bind {:text [:state :selected-label]}}]}}
+                :selected-label :string :add-label :string :offset :number :max-offset :number
+                :distance-label :string :dim-label :string :coord-label :string
+                :teleport-label :string :warn-label :string}
+ :root
+ {:type :absolute :key :location/root :layout {:width 320 :height 200}
+  :children
+  [;; Inspect list panel â€?baked ~120Ã—168 from 100Ã—140 @1.2
+   {:type :absolute :key :location/inspect
+    :layout {:x 20.0 :y 16.0 :width 120.0 :height 168.0}
+    :children
+    [{:type :rect :layout {:width 120.0 :height 168.0}
+      :style {:rgba [0.08 0.1 0.14 0.72]}
+      :semantics {:role :generic}}
+     {:type :text :layout {:x 12.0 :y 8.0 :width 95.0 :height 14.0}
+      :style {:font-size 9.0}
+      :bind {:text [:state :title]}
+      :semantics {:role :heading}}
+     {:type :scroll :layout {:x 10.0 :y 28.0 :width 100.0 :height 130.0}
+      :bind {:items [:state :visible-locations]}
+      :semantics {:role :list}
+      :children
+      [{:type :row :layout {:height 13.0}
+        :children
+        [{:type :text :layout {:width 82.0 :height 13.0} :style {:font-size 8.0}
+          :bind {:text [:item :name]}
+          :on {:activate :location/select}
+          :semantics {:role :button}}
+         {:type :image :layout {:width 8.0 :height 8.0}
+          :style {:resource {:namespace "academy"
+                             :path "textures/guis/location_teleport/cancel.png"}
+                  :rgba [1.0 1.0 1.0 0.7]}
+          :on {:activate :location/delete}
+          :semantics {:role :button}}]}]}]}
+
+   ;; Add panel â€?baked ~143Ã—66
+   {:type :absolute :key :location/add
+    :layout {:x 160.0 :y 100.0 :width 143.0 :height 66.0}
+    :children
+    [{:type :rect :layout {:width 143.0 :height 66.0}
+      :style {:rgba [0.08 0.1 0.14 0.72]}
+      :semantics {:role :generic}}
+     {:type :text :layout {:x 4.0 :y 4.0 :width 60.0 :height 12.0}
+      :style {:font-size 8.0} :text "Name:"}
+     {:type :text-input :layout {:x 30.0 :y 4.0 :width 100.0 :height 12.0}
+      :bind {:text [:state :input]}
+      :on {:submit :location/add}
+      :semantics {:role :textbox :field :location-name}}
+     {:type :text :layout {:x 4.0 :y 22.0 :width 130.0 :height 12.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :coord-label]}}
+     {:type :text :layout {:x 4.0 :y 36.0 :width 130.0 :height 12.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :status]}}
+     {:type :button :layout {:x 55.0 :y 50.0 :width 32.0 :height 12.0}
+      :bind {:text [:state :add-label]}
+      :on {:activate :location/add}
+      :semantics {:role :button}}]}
+
+   ;; Action / teleport panel â€?baked ~127Ã—67
+   {:type :absolute :key :location/action
+    :layout {:x 160.0 :y 20.0 :width 127.0 :height 67.0}
+    :children
+    [{:type :rect :layout {:width 127.0 :height 67.0}
+      :style {:rgba [0.08 0.1 0.14 0.72]}
+      :semantics {:role :generic}}
+     {:type :text :layout {:x 6.0 :y 4.0 :width 115.0 :height 10.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :selected-label]}}
+     {:type :text :layout {:x 6.0 :y 14.0 :width 115.0 :height 10.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :distance-label]}}
+     {:type :text :layout {:x 6.0 :y 24.0 :width 115.0 :height 10.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :dim-label]}}
+     {:type :text :layout {:x 6.0 :y 35.0 :width 115.0 :height 10.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :warn-label]}}
+     {:type :button :layout {:x 40.0 :y 48.0 :width 48.0 :height 12.0}
+      :bind {:text [:state :teleport-label]}
+      :on {:activate :location/teleport}
+      :semantics {:role :button}}]}]}}

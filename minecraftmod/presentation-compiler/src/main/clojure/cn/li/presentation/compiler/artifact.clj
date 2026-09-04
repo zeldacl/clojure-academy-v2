@@ -115,7 +115,7 @@
    :min-w 0.0 :min-h 0.0 :max-w 0.0 :max-h 0.0
    :width [:auto 0.0] :height [:auto 0.0] :gap 0.0 :aspect 0.0
    :x 0.0 :y 0.0 :justify :start :align-items :start :align-self :inherit
-   :font-size 8.0 :rgba 0xFFFFFFFF :resource nil :scrollbar nil
+   :font-size 8.0 :rgba 0xFFFFFFFF :resource nil :scrollbar nil :transform nil
    :bind {} :on {} :key nil :text nil :children []})
 
 (defn- base-fields [source]
@@ -124,7 +124,8 @@
         style (or (:style source) {})
         bind (or (:bind source) {})
         on (or (:on source) {})
-        scrollbar (let [sb (:scrollbar style)] (when (map? sb) sb))]
+        scrollbar (let [sb (:scrollbar style)] (when (map? sb) sb))
+        transform (let [xf (:transform style)] (when (map? xf) xf))]
     (when-not (map? bind) (fail "node.bind" "must be a map"))
     (when-not (map? on) (fail "node.on" "must be a map"))
     (merge default-physical
@@ -147,6 +148,7 @@
             :rgba (parse-static-rgba (:rgba style))
             :resource (:resource style)
             :scrollbar scrollbar
+            :transform transform
             :bind (into {} (map (fn [[k v]] [(normalize-attr-key k) v])) bind)
             :on on
             :key (:key source)
@@ -260,7 +262,7 @@
        :composite (assoc physical :phys-op UiOp/COMPOSITE :flags #{} :direction :none :children [])
        :slot-anchor (assoc physical :phys-op UiOp/RECT :flags #{} :direction :none :children []
                            :rgba 0x22000000)
-       :transform (lower-container physical :none #{})
+       :transform (lower-container physical :none #{:has-transform})
 
        :button (lower-button physical)
        :text-input (lower-text-input physical)
@@ -383,7 +385,12 @@
   (let [text-values (mapv :text rows)
         [text-idx string-table] (dedup-table text-values)
         resource-values (mapv :resource rows)
-        [res-idx resources] (dedup-table resource-values)]
+        [res-idx resources] (dedup-table resource-values)
+        style-values (mapv (fn [row]
+                             (when (map? (:transform row))
+                               {:transform (:transform row)}))
+                           rows)
+        [style-idx style-table] (dedup-table style-values)]
     {:node/op (mapv #(int (or (:phys-op %) -1)) rows)
      :node/flags (mapv #(flags->int (:flags %)) rows)
      :node/box (vec (mapcat (fn [{:keys [margin padding min-w min-h max-w max-h]}]
@@ -405,8 +412,10 @@
      :node/rgba (mapv :rgba rows)
      :node/text-index (vec text-idx)
      :node/res (vec res-idx)
+     :node/style (vec style-idx)
      :string-table (vec string-table)
      :resources (vec resources)
+     :style-table (vec style-table)
      :node/key (mapv :key rows)
      :node/bind-map (mapv :bind rows)
      :node/on-map (mapv :on rows)
@@ -479,7 +488,6 @@
              :bindings bindings
              :actions actions
              :node/action-ids own-action-ids
-             :style-table []
              :focus-order []
              :semantics (or (:semantics source) {})
              :capabilities (or (:capabilities source) (:requires-capabilities source) #{})}))))

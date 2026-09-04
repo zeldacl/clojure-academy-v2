@@ -10,8 +10,8 @@
 (def application-surfaces
   [{:id :combat-hud :artifact :academy.app/combat-hud :controller 'cn.li.ac.ability.client.presentation-hud/mount-combat-hud!}
    {:id :terminal :artifact :academy.app/terminal :controller 'cn.li.ac.terminal.client.presentation-terminal/mount-terminal!}
-   {:id :about :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.about-reactive/open!}
-   {:id :freq-transmitter-scan :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.apps.freq-transmitter-reactive/open!}
+   {:id :about :artifact :academy.app/about :controller 'cn.li.ac.terminal.client.apps.about-reactive/open!}
+   {:id :freq-transmitter-scan :artifact :academy.app/freq-transmitter :controller 'cn.li.ac.terminal.client.apps.freq-transmitter-reactive/open!}
    {:id :media-player :artifact :academy.app/media :controller 'cn.li.ac.terminal.client.apps.media-reactive/open!}
    {:id :settings :artifact :academy.app/settings :controller 'cn.li.ac.terminal.client.apps.settings-reactive/open!}
    {:id :tutorial :artifact :academy.app/tutorial :controller 'cn.li.ac.terminal.client.apps.tutorial-reactive/open!}
@@ -19,8 +19,8 @@
    {:id :skill-tree :artifact :academy.app/skill-tree :controller 'cn.li.ac.terminal.client.apps.skill-tree/open!}
    {:id :preset-editor :artifact :academy.app/preset-editor :controller 'cn.li.ac.ability.client.screens.preset-editor-reactive/open!}
    {:id :portable-developer :artifact :academy.app/developer :controller 'cn.li.ac.item.developer-portable-reactive/open!}
-   {:id :install-effect :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.install-effect-reactive/open!'} 
-   {:id :location-teleport :artifact :academy.app/location-teleport :controller 'cn.li.ac.content.ability.teleporter.location-teleport-presentation/open!'}])
+   {:id :install-effect :artifact :academy.app/install-effect :controller 'cn.li.ac.terminal.client.install-effect-reactive/open!}
+   {:id :location-teleport :artifact :academy.app/location-teleport :controller 'cn.li.ac.content.ability.teleporter.location-teleport-presentation/open!}])
 
 (defn- container-surface
   [[gui-key definition]]

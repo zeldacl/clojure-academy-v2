@@ -18,6 +18,7 @@
    view repaints that whole view, not just the affected subtree."
   (:require [cn.li.presentation.core.nodetable :as nodetable]
             [cn.li.presentation.core.scrollbar :as scrollbar]
+            [cn.li.presentation.core.transform :as transform]
             [cn.li.mcmod.runtime.presentation-bridge :as presentation-bridge]
             [clojure.string :as string])
   (:import [cn.li.presentation.core HostGeometry MountHandle]
@@ -482,14 +483,28 @@
 
 (defn- event-point
   "Version hosts normally provide mount-local coordinates. Explicit
-   :viewport coordinates are accepted for overlays whose origin is nonzero."
-  [event geometry]
+   :viewport coordinates are accepted for overlays whose origin is nonzero.
+   When the view has an affine :transform, screen coords are inverted back
+   into logical layout space before HitKernel runs."
+  [event geometry content-rect view-transform]
   (let [rect (geometry-rect geometry)
         x (float (:x event 0.0))
-        y (float (:y event 0.0))]
-    (if (= :viewport (:space event))
-      [x y]
-      [(+ x (:x rect)) (+ y (:y rect))])))
+        y (float (:y event 0.0))
+        [sx sy] (if (= :viewport (:space event))
+                  [x y]
+                  [(+ x (:x rect)) (+ y (:y rect))])]
+    (if (map? view-transform)
+      (let [[lx ly] (transform/inverse-point view-transform (or content-rect rect) sx sy)]
+        [(float lx) (float ly)])
+      [sx sy])))
+
+(defn- view-transform-of [instance]
+  (or (:view-transform instance)
+      (transform/find-in-table (:table instance))))
+
+(defn- content-rect-of [instance]
+  (or (:content-rect instance)
+      (content-rect (:artifact instance) (:geometry instance))))
 
 ;; ============================== dispatch ==============================
 
@@ -626,7 +641,8 @@
           capture (:pointer-capture instance)]
       (case (:type event)
         :pointer
-        (let [[px py] (event-point event (:geometry instance))
+        (let [[px py] (event-point event (:geometry instance)
+                                   (content-rect-of instance) (view-transform-of instance))
               px (float px) py (float py)
               event (assoc event :x px :y py)
               ^HitKernel$Hit hit (when (and (>= root 0) (#{:down :drag} (:event-type event)))
@@ -716,7 +732,8 @@
         :character {:action (or (get-in focus [:on :change]) :input/character) :payload event}
 
         :scroll
-        (let [[px py] (event-point event (:geometry instance))
+        (let [[px py] (event-point event (:geometry instance)
+                                   (content-rect-of instance) (view-transform-of instance))
               px (float px) py (float py)
               scroll-inst (when (>= root 0) (HitKernel/enclosingScrollAt table arena resolver root px py))]
           (if (and scroll-inst (>= scroll-inst 0))
@@ -844,20 +861,29 @@
                                resolver (build-resolver (:bind-maps instance) (:resource-index instance)
                                         (some-> instance :view-id namespace) (:view-state instance))
                                ctx (LayoutContext. resolver nil nil)
+                               crect (content-rect (:artifact instance) (:geometry instance))
+                               xf (or (transform/find-in-table table)
+                                      (:view-transform instance))
                                _ (apply-scrollbar-thumbs! (assoc instance :root-instance root
                                                                  :arena arena))
                                _ (.reset cmdbuf)
                                _ (when (>= root 0) (PaintKernel/paint table arena ctx cmdbuf root))
+                               _ (when (map? xf)
+                                   (transform/apply-to-cmdbuf! cmdbuf xf crect))
                                resources (or (finish-resources (:resource-index instance))
                                              (.-resources table))
                                commands (.finish cmdbuf 0 (.-clipRects arena) resources)
                                result (assoc (select-keys instance [:handle :view-id :geometry])
-                                             :commands commands)]
+                                             :commands commands
+                                             :view-transform xf
+                                             :content-rect crect)]
                            (vswap! (:state runtime)
                                    (fn [snapshot]
                                      (-> snapshot
                                          (assoc-in [:mounts (:handle instance) :commands] commands)
                                          (assoc-in [:mounts (:handle instance) :paint-stamp] stamp)
+                                         (assoc-in [:mounts (:handle instance) :view-transform] xf)
+                                         (assoc-in [:mounts (:handle instance) :content-rect] crect)
                                          (assoc-in [:mounts (:handle instance) :last-result] result))))
                            result))))
                    instances)}))

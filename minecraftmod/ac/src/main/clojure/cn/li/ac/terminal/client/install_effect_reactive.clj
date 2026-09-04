@@ -8,7 +8,9 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
+
 (def ^:private installation-ms 4700)
+(def ^:private tick-ms 100)
 
 (defn- current-terminal-key-name []
   (or (bridge/call-adapter :keybind-get-key-name :content/toggle-terminal)
@@ -26,23 +28,37 @@
 (defn show! [player]
   (let [done? (atom false)
         owner (str "application/install/" (or (bridge/call-adapter :client-session-id)
-                                               "local"))]
-    (application/mount!
-      owner
-      "Installing..."
-      {:lines [{:label (or (i18n/translate "gui.academycraft.terminal.installing")
-                           "Installing terminal...")}]
-       :status "Please wait..."
-       :scroll 0.0}
-      (fn [_action _state] nil)
-      #(reset! done? true))
-    ;; The installation notification is a finite presentation; gameplay
-    ;; remains Clojure-owned and the old XML runtime is not involved.
+                                               "local"))
+        vm (application/mount!
+             owner
+             "Installing..."
+             {:progress 0.0
+              :tag "INST"
+              :status (or (i18n/translate "gui.academycraft.terminal.installing")
+                          "Installing terminal...")
+              :lines [{:label (or (i18n/translate "gui.academycraft.terminal.installing")
+                                  "Installing terminal...")}]}
+             (fn [_action _state] nil)
+             #(reset! done? true)
+             :hud
+             :academy.app/install-effect)
+        refresh! (:refresh! vm)
+        steps (max 1 (long (/ installation-ms tick-ms)))]
     (future
-      (Thread/sleep (long installation-ms))
+      (doseq [i (range steps)
+              :while (not @done?)]
+        (Thread/sleep (long tick-ms))
+        (when refresh!
+          (refresh! {:progress (min 1.0 (/ (double (inc i)) (double steps)))})))
       (when (compare-and-set! done? false true)
+        (application/unmount! vm)
         (finish! player)))
-    nil))
+    vm))
+
+(defn open!
+  "Surface-manifest entry; same as show!."
+  ([] (show! (bridge/get-client-player)))
+  ([player] (show! player)))
 
 (defn install-push-handler! []
   (install/framework-once! ::install-effect-reactive-push-handler-installed?

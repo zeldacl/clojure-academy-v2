@@ -1,9 +1,20 @@
+;; Combat HUD — full-screen host; CP/slots/overlays are screen-space composites
+;; from presentation_hud (not a centered 427×240 design box).
 {:ui/schema 2 :view/id :academy.app/combat-hud
- :host {:kind :hud :design-width 320 :design-height 180 :scale-policy :fit}
- :state-schema {:cp-ratio :number :overload-ratio :number :charging? :boolean :selected-skill :keyword
-                :skills :vector :background-mask :map :composite-list :vector}
- :root {:type :stack :key :combat/root :layout {:width :fill :height :fill}
-        :children [{:type :rect :key :combat/background :layout {:width :fill :height :fill} :bind {:alpha [:state :background-mask]}}
-                   {:type :progress :key :combat/cp :layout {:width 120 :height 8} :bind {:value [:state :cp-ratio]} :semantics {:role :progress}}
-                   {:type :progress :key :combat/overload :layout {:width 120 :height 8} :bind {:value [:state :overload-ratio]} :semantics {:role :progress}}
-                   {:type :repeater :key :combat/composite :bind {:items [:state :composite-list]} :children [{:type :composite :bind {:item [:state :item]}}]}]}}
+ :host {:kind :hud}
+ :state-schema {:cp-ratio :number :overload-ratio :number :charging? :boolean
+                :selected-skill :keyword :skills :vector :background-mask :map
+                :composite-list :vector}
+ :root
+ {:type :stack :key :combat/root :layout {:width :fill :height :fill}
+  :children
+  [{:type :rect :key :combat/background
+    :layout {:width :fill :height :fill}
+    :bind {:alpha [:state :background-mask]}
+    :semantics {:role :generic}}
+   {:type :repeater :key :combat/composite
+    :layout {:width :fill :height :fill}
+    :bind {:items [:state :composite-list]}
+    :children
+    [{:type :composite :layout {:width 0.0 :height 0.0}
+      :bind {:item [:state :item]}}]}]}}

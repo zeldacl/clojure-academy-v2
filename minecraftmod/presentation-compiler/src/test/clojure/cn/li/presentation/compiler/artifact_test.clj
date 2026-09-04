@@ -93,6 +93,19 @@
         wrapper-flags (nth (:node/flags compiled) 0)]
     (is (= (bit-or 8 64) (bit-and wrapper-flags (bit-or 8 64)))))) ; HIT_TESTABLE | FOCUSABLE
 
+(deftest transform-retains-style-and-has-transform-flag
+  (let [compiled (compile* {:type :transform
+                            :layout {:width 100 :height 80}
+                            :style {:transform {:panel-scale 0.5 :tilt-degrees 5.0
+                                                :fov 50.0 :near 1.0 :far 100.0}}
+                            :children [{:type :rect :layout {:width 40 :height 40}}]})
+        flags (nth (:node/flags compiled) 0)
+        style-idx (nth (:node/style compiled) 0)]
+    (is (pos? (bit-and flags 2048)) "HAS_TRANSFORM")
+    (is (>= style-idx 0))
+    (is (= {:panel-scale 0.5 :tilt-degrees 5.0 :fov 50.0 :near 1.0 :far 100.0}
+           (get-in (:style-table compiled) [style-idx :transform])))))
+
 (deftest scroll-defaults-to-column-direction-with-clip-and-collection-flags
   (let [compiled (compile* {:type :scroll :bind {:items [:state :lines]}
                             :children [{:type :text}]})

@@ -34,6 +34,22 @@
              :element element}))
         elements))
 
+(defn- preview-composite
+  "HUD element markers at configured positions (main ui_edit preview parity)."
+  []
+  (vec
+   (mapcat
+    (fn [{:keys [id] :as element}]
+      (let [[x y] (position element)
+            x (double x)
+            y (double y)
+            label (name id)]
+        [{:kind :quad :x x :y y :w 56.0 :h 14.0
+          :rgba (unchecked-int 0x88315A78)}
+         {:kind :text :text label :x (+ x 2.0) :y (+ y 2.0) :w 52.0 :h 10.0
+          :font-size 8.0 :rgba (unchecked-int 0xFFFFFFFF)}]))
+    elements)))
+
 (defn- parse-coordinate [value]
   (try
     (let [n (Double/parseDouble (str value))]
@@ -49,6 +65,8 @@
      :selected idx
      :edit-x (or (:edit-x current) (str x))
      :edit-y (or (:edit-y current) (str y))
+     :editbox-visible? true
+     :preview-composite (preview-composite)
      :reset-label "Reset position"
      :status (str "Selected " (name (:id element)))}))
 
@@ -56,7 +74,10 @@
   (let [ctx (atom {:selected 0})
         [x y] (position (first elements))
         initial {:title "Customize UI" :items (items) :selected 0
-                 :edit-x (str x) :edit-y (str y) :reset-label "Reset position"
+                 :edit-x (str x) :edit-y (str y)
+                 :editbox-visible? true
+                 :preview-composite (preview-composite)
+                 :reset-label "Reset position"
                  :status "Select an element and edit X/Y"}]
     (application/mount!
       "application/ui-customize"
@@ -76,6 +97,8 @@
                 (let [[sx sy] (position selected)]
                   {:title "Customize UI" :items (items) :selected item-index
                    :edit-x (str sx) :edit-y (str sy)
+                   :editbox-visible? true
+                   :preview-composite (preview-composite)
                    :reset-label "Reset position"
                    :status (str "Selected " (name (:id selected)))}))
 

@@ -233,7 +233,9 @@
                                                  "Description updated")
                               (if track (str "Selected " (:name track)) "No media available"))]
                  (refresh! next-idx status)))
-             #(stop-playback!))]
+             #(stop-playback!)
+             :screen
+             :academy.app/media)]
     (reset! vm* vm)
     (fetch-granted! state #(refresh! 0 "Media catalogue updated"))
     vm))

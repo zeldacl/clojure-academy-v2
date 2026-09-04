@@ -1,50 +1,111 @@
+;; TechUI machine shell — left 176×187 inventory stack + right info ~100×177 @ x~179.
+;; Page overlay via composite (machine-specific ui_*.png).
 {:ui/schema 2 :view/id :academy.app/machine-container
- :host {:kind :container :design-width 176 :design-height 200 :scale-policy :fit}
- :state-schema {:slots :vector :machine-state :string :energy-ratio :number :progress-ratio :number
-                :info-area :map :network-visible :boolean :network-state :string
-                :network-owner :string :network-range :string :network-bandwidth :string
-                :network-load :number :network-nodes :vector :network-password :string :network-disconnect :map :network-available-label :map
+ :host {:kind :container :design-width 290 :design-height 187 :scale-policy :fit}
+ :state-schema {:slots :vector :slot-anchors :vector :machine-state :string
+                :energy-ratio :number :progress-ratio :number
+                :info-area :map :page-composite :vector :network-visible :boolean
+                :network-state :string :network-owner :string :network-range :string
+                :network-bandwidth :string :network-load :number :network-nodes :vector
+                :network-password :string :network-disconnect :map :network-available-label :map
                 :button-left :map :button-right :map}
- :root {:type :column :key :container/root :layout {:x 8 :y 8 :width 160 :height 184}
-        :children [{:type :scroll :key :container/slots :layout {:height 52} :bind {:items [:state :slots]} :semantics {:role :list}}
-                   {:type :repeater :key :container/slot-anchors :bind {:items [:state :slot-anchors]} :children [{:type :slot-anchor :bind {:item [:state :item]}}]}
-                   {:type :text :key :container/state :bind {:text [:state :machine-state]}}
-                   {:type :progress :key :container/energy :layout {:height 6} :bind {:value [:state :energy-ratio]} :semantics {:role :progress}}
-                   {:type :progress :key :container/progress :layout {:height 6} :bind {:value [:state :progress-ratio]} :semantics {:role :progress}}
-                   {:type :row :key :container/buttons
-                    :children [{:type :button :key :container/button-left :layout {:width 72 :height 20} :bind {:text [:state :button-left]} :on {:activate :container/button} :semantics {:role :button}}
-                               {:type :button :key :container/button-right :layout {:width 72 :height 20} :bind {:text [:state :button-right]} :on {:activate :container/button} :semantics {:role :button}}]}
-                   {:type :column :key :container/network :bind {:visible [:state :network-visible]} :layout {:height 58}
-                    :children [{:type :text :key :container/network-state :bind {:text [:state :network-state]}}
-                               {:type :text :key :container/network-owner :bind {:text [:state :network-owner]}}
-                               {:type :text :key :container/network-range :bind {:text [:state :network-range]}}
-                               {:type :text :key :container/network-bandwidth :bind {:text [:state :network-bandwidth]}}
-                               {:type :progress :key :container/network-load :layout {:height 5} :bind {:value [:state :network-load]} :semantics {:role :progress}}
-                               {:type :text-input :key :container/network-password :layout {:height 18}
-                                :bind {:text [:state :network-password]}
-                                :on {:change :container/wireless-password :submit :container/wireless-password}
-                                :semantics {:role :textbox :field :wireless-password}}
-                               {:type :row :key :container/network-actions
-                                :children [{:type :button :layout {:width 72 :height 18} :bind {:text [:state :network-disconnect]} :on {:activate :container/wireless-disconnect} :semantics {:role :button}}
-                                           {:type :text :layout {:width 72 :height 18} :bind {:text [:state :network-available-label]}}]}
-                               {:type :scroll :key :container/network-nodes :layout {:height 42}
-                                :bind {:items [:state :network-nodes]} :semantics {:role :list}
-                                :children [{:type :row :layout {:height 18}
-                                            :children [{:type :text :layout {:width 104} :bind {:text [:item :label]}}
-                                                       {:type :button :layout {:width 48 :height 16} :bind {:text [:item :action-label]}
-                                                        :on {:activate :container/wireless-connect} :semantics {:role :button}}]}]}]}
-                   {:type :column :key :container/info-area :layout {:height 60}
-                    :children [{:type :text :key :container/info-title :bind {:text [:state :info-area :title]}}
-                               {:type :repeater :key :container/info-histograms :layout {:height 24}
-                                :bind {:items [:state :info-area :histograms]} :semantics {:role :list}
-                                :children [{:type :row :layout {:height 12}
-                                            :children [{:type :text :layout {:width 64 :height 12} :bind {:text [:item :label]}}
-                                                       {:type :progress :layout {:width 64 :height 6} :bind {:value [:item :ratio]} :semantics {:role :progress}}
-                                                       {:type :text :layout {:width 40 :height 12} :bind {:text [:item :value]}}]}]}
-                               {:type :scroll :key :container/info-fields :layout {:height 36}
-                                :bind {:items [:state :info-area :fields]} :semantics {:role :list}
-                                :children [{:type :row :layout {:height 18}
-                                            :children [{:type :text :layout {:width 72 :height 16} :bind {:text [:item :label]}}
-                                                       {:type :text :layout {:width 88 :height 16} :bind {:text [:item :value]}}]}]}
-                               {:type :progress :key :container/info-load :layout {:height 5}
-                                :bind {:value [:state :info-area :load-ratio]} :semantics {:role :progress}}]}]}}
+ :root
+ {:type :absolute :key :container/root :layout {:width 290 :height 187}
+  :children
+  [;; Left inventory stack
+   {:type :absolute :key :container/left :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
+    :children
+    [{:type :image :key :container/parent-bg
+      :layout {:width 176.0 :height 187.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/parent/parent_background.png"}}
+      :semantics {:role :image}}
+     {:type :image :key :container/ui-inv
+      :layout {:width 176.0 :height 187.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_inventory.png"}}
+      :semantics {:role :image}}
+     {:type :repeater :key :container/page
+      :layout {:width 176.0 :height 187.0}
+      :bind {:items [:state :page-composite]}
+      :children [{:type :composite :layout {:width 176.0 :height 187.0}
+                  :bind {:item [:state :item]}}]}
+     {:type :repeater :key :container/slot-anchors
+      :layout {:width 176.0 :height 187.0}
+      :bind {:items [:state :slot-anchors]}
+      :children [{:type :slot-anchor :bind {:item [:state :item]}}]}
+     {:type :text :key :container/state
+      :layout {:x 8.0 :y 4.0 :width 160.0 :height 10.0}
+      :style {:font-size 8.0}
+      :bind {:text [:state :machine-state]}
+      :semantics {:role :heading}}
+     {:type :progress :key :container/energy
+      :layout {:x 8.0 :y 168.0 :width 70.0 :height 5.0}
+      :bind {:value [:state :energy-ratio]}
+      :semantics {:role :progress}}
+     {:type :progress :key :container/progress
+      :layout {:x 90.0 :y 168.0 :width 70.0 :height 5.0}
+      :bind {:value [:state :progress-ratio]}
+      :semantics {:role :progress}}
+     {:type :row :key :container/buttons
+      :layout {:x 8.0 :y 174.0 :width 160.0 :height 12.0}
+      :children
+      [{:type :button :layout {:width 72.0 :height 12.0}
+        :bind {:text [:state :button-left]}
+        :on {:activate :container/button}
+        :semantics {:role :button}}
+       {:type :button :layout {:width 72.0 :height 12.0}
+        :bind {:text [:state :button-right]}
+        :on {:activate :container/button}
+        :semantics {:role :button}}]}]}
+
+   ;; Right info panel — main TechUI info at (179,5) 100×177
+   {:type :absolute :key :container/info
+    :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
+    :children
+    [{:type :image :key :container/info-bg
+      :layout {:width 100.0 :height 177.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_info.png"}}
+      :semantics {:role :image}}
+     {:type :text :key :container/info-title
+      :layout {:x 4.0 :y 6.0 :width 92.0 :height 12.0}
+      :style {:font-size 9.0}
+      :bind {:text [:state :info-area :title]}
+      :semantics {:role :heading}}
+     {:type :repeater :key :container/info-histograms
+      :layout {:x 4.0 :y 22.0 :width 92.0 :height 48.0}
+      :bind {:items [:state :info-area :histograms]}
+      :semantics {:role :list}
+      :children
+      [{:type :column :layout {:height 16.0}
+        :children
+        [{:type :text :layout {:height 8.0} :style {:font-size 7.0}
+          :bind {:text [:item :label]}}
+         {:type :row :layout {:height 8.0}
+          :children
+          [{:type :progress :layout {:width 56.0 :height 5.0}
+            :bind {:value [:item :ratio]} :semantics {:role :progress}}
+           {:type :text :layout {:width 36.0 :height 8.0} :style {:font-size 6.0}
+            :bind {:text [:item :value]}}]}]}]}
+     {:type :scroll :key :container/info-fields
+      :layout {:x 4.0 :y 74.0 :width 92.0 :height 70.0}
+      :bind {:items [:state :info-area :fields]}
+      :semantics {:role :list}
+      :children
+      [{:type :row :layout {:height 12.0}
+        :children
+        [{:type :text :layout {:width 40.0 :height 12.0} :style {:font-size 7.0}
+          :bind {:text [:item :label]}}
+         {:type :text :layout {:width 52.0 :height 12.0} :style {:font-size 7.0}
+          :bind {:text [:item :value]}}]}]}
+     {:type :progress :key :container/info-load
+      :layout {:x 4.0 :y 150.0 :width 92.0 :height 5.0}
+      :bind {:value [:state :info-area :load-ratio]}
+      :semantics {:role :progress}}
+     {:type :column :key :container/network
+      :layout {:x 4.0 :y 158.0 :width 92.0 :height 18.0}
+      :bind {:visible [:state :network-visible]}
+      :children
+      [{:type :text :style {:font-size 7.0} :bind {:text [:state :network-state]}}
+       {:type :text-input :layout {:height 10.0}
+        :bind {:text [:state :network-password]}
+        :on {:change :container/wireless-password :submit :container/wireless-password}
+        :semantics {:role :textbox :field :wireless-password}}]}]}]}}

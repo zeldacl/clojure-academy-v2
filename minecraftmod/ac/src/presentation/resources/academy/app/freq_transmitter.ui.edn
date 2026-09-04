@@ -1,0 +1,52 @@
+;; Frequency transmitter — main freq_transmitter.xml 380×220 box.
+{:ui/schema 2 :view/id :academy.app/freq-transmitter
+ :host {:kind :screen :design-width 380 :design-height 220 :scale-policy :fit}
+ :state-schema {:title :string :lines :vector :status :string :input :string
+                :button-left :map :button-right :map :password :string}
+ :root
+ {:type :absolute :key :freq/root :layout {:width 380 :height 220}
+  :children
+  [{:type :rect :key :freq/bg
+    :layout {:x 0.0 :y 0.0 :width 380.0 :height 220.0}
+    :style {:rgba [0.15 0.15 0.15 0.47]}
+    :semantics {:role :generic}}
+
+   {:type :image :key :freq/icon
+    :layout {:x 8.0 :y 8.0 :width 18.0 :height 18.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/apps/freq_transmitter/icon.png"}}
+    :semantics {:role :image}}
+
+   {:type :text :key :freq/title
+    :layout {:x 32.0 :y 10.0 :width 330.0 :height 18.0}
+    :style {:font-size 10.0 :rgba [1.0 1.0 1.0 1.0]}
+    :text "Frequency Transmitter"
+    :bind {:text [:state :title]}
+    :semantics {:role :heading}}
+
+   {:type :scroll :key :freq/lines
+    :layout {:x 10.0 :y 34.0 :width 360.0 :height 120.0}
+    :bind {:items [:state :lines]}
+    :semantics {:role :list}
+    :children
+    [{:type :text :layout {:width :fill :height 16.0}
+      :style {:font-size 10.0}
+      :bind {:text [:item :label]}
+      :semantics {:role :list-item}}]}
+
+   {:type :text-input :key :freq/input
+    :layout {:x 10.0 :y 158.0 :width 360.0 :height 20.0}
+    :bind {:text [:state :input]}
+    :on {:change :application/input :submit :application/activate}
+    :semantics {:role :textbox :field :password}}
+
+   {:type :row :key :freq/actions
+    :layout {:x 10.0 :y 186.0 :width 360.0 :height 24.0}
+    :children
+    [{:type :button :key :freq/primary :layout {:width 120.0 :height 22.0}
+      :bind {:text [:state :button-left]}
+      :on {:activate :application/activate}
+      :semantics {:role :button}}
+     {:type :text :layout {:width 220.0 :height 22.0}
+      :style {:font-size 9.0}
+      :bind {:text [:state :status]}
+      :semantics {:role :generic}}]}]}}

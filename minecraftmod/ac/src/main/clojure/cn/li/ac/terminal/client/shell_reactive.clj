@@ -5,11 +5,12 @@
    Minecraft Screen boundary only receives an opaque mount token."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.util.uuid :as player-uuid]
+            [cn.li.ac.terminal.catalog :as catalog]
+            [cn.li.ac.terminal.client.apps :as client-apps]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.terminal.client.runtime :as term-rt]
             [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
@@ -27,10 +28,32 @@
                (when callback (callback response)))
            (log/warn "[AC-Terminal] ignored stale state response")))))))
 
-(defn- presentation-action-dispatch! [owner action payload]
+(defn- current-page [owner]
+  (int (or (:page (term-rt/state-snapshot owner)) 0)))
+
+(defn- page-count [owner]
+  (let [installed (:installed-apps (term-rt/state-snapshot owner))
+        n (count (catalog/installed-apps-in-display-order installed))]
+    (max 1 (int (Math/ceil (/ (double n) 9.0))))))
+
+(defn- presentation-action-dispatch! [owner player action payload]
   (cond
     (= action :terminal/set-page)
     (term-rt/dispatch-event! owner :terminal/set-page payload)
+
+    (= action :terminal/page-up)
+    (term-rt/dispatch-event! owner :terminal/set-page
+                             {:page (max 0 (dec (current-page owner)))})
+
+    (= action :terminal/page-down)
+    (term-rt/dispatch-event! owner :terminal/set-page
+                             {:page (min (dec (page-count owner))
+                                         (inc (current-page owner)))})
+
+    (= action :terminal/open-app)
+    (when-let [app-id (or (:app-id payload)
+                          (get-in payload [:item :app-id]))]
+      (client-apps/launch! (keyword app-id) player))
 
     (= action :terminal/query)
     (query-terminal-state! owner nil)
@@ -62,7 +85,7 @@
                    (term-rt/clear-state! owner)
                    (bridge/terminal-cursor-show!))]
     (presentation-terminal/open-screen!
-      owner (partial presentation-action-dispatch! owner) on-close)
+      owner (partial presentation-action-dispatch! owner player) on-close)
     (term-rt/mark-ui-open! true)
     (bridge/terminal-cursor-hide!)
     owner))

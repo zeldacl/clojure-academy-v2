@@ -82,7 +82,8 @@
               :button-left {:label "Link" :visible? true}}
              (fn [_action _current] nil)
              #(finish-interaction! puuid)
-             :hud)]
+             :hud
+             :academy.app/freq-transmitter)]
     (swap! interaction-sessions assoc key
            (assoc @link-state
                   :state link-state
@@ -167,7 +168,9 @@
                   [:link :application/activate] (link-target! state puuid (fn [_] (refresh-ui!)))
                   nil)
                 {:lines (state-lines state) :status (name (:phase @state))})
-              #(bridge/close-screen!))]
+              #(bridge/close-screen!)
+              :screen
+              :academy.app/freq-transmitter)]
      (reset! refresh-fn* (:refresh! vm))
      vm))
   ([] (open! nil)))

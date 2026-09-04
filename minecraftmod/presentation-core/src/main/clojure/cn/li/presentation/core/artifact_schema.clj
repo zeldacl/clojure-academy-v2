@@ -18,7 +18,8 @@
 (def flag-bits
   {:has-clip 1 :is-scroll 2 :is-collection 4 :hit-testable 8
    :has-visible-bind 16 :wrap 32 :focusable 64 :animated 128
-   :opaque 256 :scrollbar 512 :has-direction 1024})
+   :opaque 256 :scrollbar 512 :has-direction 1024
+   :has-transform 2048})
 
 (defn flags->int [flag-set]
   (reduce (fn [acc f] (bit-or acc (long (get flag-bits f 0)))) 0 flag-set))

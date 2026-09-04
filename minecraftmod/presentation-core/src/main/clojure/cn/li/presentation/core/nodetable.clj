@@ -22,9 +22,21 @@
    Called once per view-id; see table-for for the memoized entry point."
   ^NodeTable [artifact]
   (let [n (int (:node-count artifact))
-        ints (fn ^ints [k] (int-array (get artifact k)))
-        floats (fn ^floats [k] (float-array (get artifact k)))
-        longs (fn ^longs [k] (long-array (get artifact k)))
+        ints (fn ^ints [k]
+               (let [v (get artifact k)]
+                 (if (sequential? v)
+                   (int-array v)
+                   (int-array n (int -1)))))
+        floats (fn ^floats [k]
+                 (let [v (get artifact k)]
+                   (if (sequential? v)
+                     (float-array v)
+                     (float-array (* n (if (= k :node/box) 12 1))))))
+        longs (fn ^longs [k]
+                (let [v (get artifact k)]
+                  (if (sequential? v)
+                    (long-array v)
+                    (long-array n))))
         style-table (object-array (or (:style-table artifact) []))
         string-table (into-array String (or (:string-table artifact) []))
         resources (into-array UiResourceRef (mapv resource-ref (or (:resources artifact) [])))

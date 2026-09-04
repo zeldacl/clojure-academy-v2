@@ -1,70 +1,79 @@
+;; Media player — main media_player.xml 650×504 @0.32 → design ~208×161.
 {:ui/schema 2 :view/id :academy.app/media
- :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :host {:kind :screen :design-width 208 :design-height 161 :scale-policy :fit}
  :state-schema {:title :string :items :vector :selected :number :status :string
                 :current-track :string :progress :number :elapsed :string :duration :string
-                :volume :string :volume-ratio :number :editing-external :boolean :edit-name :string :edit-desc :string}
- :root {:type :column :key :media/root :layout {:x 12 :y 12 :width 296 :height 216}
-        :children [{:type :text :key :media/title :layout {:height 18}
-                    :bind {:text [:state :title]} :semantics {:role :heading}}
-                   {:type :scroll :key :media/tracks :layout {:height 100}
-                    :bind {:items [:state :items]} :semantics {:role :list}
-                    :children [{:type :row :layout {:height 18}
-                                :children [{:type :text :layout {:width 232}
-                                            :bind {:text [:item :label]} :on {:activate :media/play}}
-                                           {:type :button :layout {:width 56 :height 16}
-                                            :bind {:text [:item :action-label]}
-                                            :on {:activate :media/play}
-                                            :semantics {:role :button}}]}]}
-                   {:type :text :key :media/current :bind {:text [:state :current-track]}}
-                   {:type :progress :key :media/progress :layout {:height 6}
-                    :bind {:value [:state :progress]} :on {:change :media/seek} :semantics {:role :progress}}
-                   {:type :text :key :media/time
-                    :bind {:text [:state :elapsed]}}
-                   {:type :progress :key :media/volume-control :layout {:height 6}
-                    :bind {:value [:state :volume-ratio]} :on {:change :media/volume-set} :semantics {:role :progress}}
-                   {:type :text :key :media/volume
-                    :bind {:text [:state :volume]}}
-                   {:type :row :key :media/editing :bind {:visible [:state :editing-external]}
-                    :children [{:type :text-input :key :media/edit-name :layout {:width 140 :height 18}
-                                :bind {:text [:state :edit-name]}
-                                :on {:change :media/edit-name :submit :media/edit-name}
-                                :semantics {:role :textbox :field :media-name}}
-                               {:type :text-input :key :media/edit-desc :layout {:width 140 :height 18}
-                                :bind {:text [:state :edit-desc]}
-                                :on {:change :media/edit-desc :submit :media/edit-desc}
-                                :semantics {:role :textbox :field :media-desc}}]}
-                   {:type :row :key :media/actions :layout {:height 20}
-                    :children [{:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :button-left]}
-                                :on {:activate :media/previous}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :button-right]}
-                                :on {:activate :media/next}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :play-pause]}
-                                :on {:activate :media/toggle}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :stop]}
-                                :on {:activate :media/stop}
-                                :semantics {:role :button}}]}
-                   {:type :row :key :media/seek-volume :layout {:height 20}
-                    :children [{:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :seek-back]}
-                                :on {:activate :media/seek-back}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :seek-forward]}
-                                :on {:activate :media/seek-forward}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :volume-down]}
-                                :on {:activate :media/volume-down}
-                                :semantics {:role :button}}
-                               {:type :button :layout {:width 64 :height 18}
-                                :bind {:text [:state :volume-up]}
-                                :on {:activate :media/volume-up}
-                                :semantics {:role :button}}]}
-                   {:type :text :key :media/status :bind {:text [:state :status]}}]}}
+                :volume :string :volume-ratio :number :editing-external :boolean
+                :edit-name :string :edit-desc :string
+                :button-left :map :button-right :map :play-pause :map :stop :map
+                :seek-back :map :seek-forward :map :volume-down :map :volume-up :map}
+ :root
+ {:type :absolute :key :media/root :layout {:width 208 :height 161}
+  :children
+  [{:type :image :key :media/back
+    :layout {:x 0.0 :y 0.0 :width 208.0 :height 161.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/apps/media_player/back.png"}}
+    :semantics {:role :image}}
+
+   {:type :text :key :media/title
+    :layout {:x 48.0 :y 25.0 :width 88.0 :height 12.0}
+    :style {:font-size 9.0 :rgba [1.0 1.0 1.0 0.6]}
+    :bind {:text [:state :current-track]}
+    :semantics {:role :heading}}
+
+   {:type :text :key :media/play-time
+    :layout {:x 129.0 :y 40.0 :width 64.0 :height 10.0}
+    :style {:font-size 8.0 :rgba [1.0 1.0 1.0 0.85]}
+    :bind {:text [:state :elapsed]}
+    :semantics {:role :generic}}
+
+   ;; Play / stop — baked from XML (51.9,71.8)/(114.8,71.8) ×0.32
+   {:type :image :key :media/play
+    :layout {:x 16.6 :y 23.0 :width 16.0 :height 13.4}
+    :style {:resource {:namespace "academy" :path "textures/guis/apps/media_player/play.png"}
+            :rgba [1.0 1.0 1.0 0.78]}
+    :on {:activate :media/toggle}
+    :semantics {:role :button}}
+   {:type :image :key :media/stop
+    :layout {:x 36.7 :y 23.0 :width 16.0 :height 13.4}
+    :style {:resource {:namespace "academy" :path "textures/guis/apps/media_player/stop.png"}
+            :rgba [1.0 1.0 1.0 0.78]}
+    :on {:activate :media/stop}
+    :semantics {:role :button}}
+
+   {:type :progress :key :media/progress
+    :layout {:x 16.6 :y 38.4 :width 177.0 :height 4.0}
+    :bind {:value [:state :progress]}
+    :on {:change :media/seek}
+    :semantics {:role :progress}}
+
+   {:type :scroll :key :media/tracks
+    :layout {:x 16.0 :y 54.0 :width 177.0 :height 97.0}
+    :bind {:items [:state :items]}
+    :semantics {:role :list}
+    :children
+    [{:type :row :layout {:height 19.0}
+      :children
+      [{:type :text :layout {:width 140.0 :height 18.0}
+        :style {:font-size 8.0}
+        :bind {:text [:item :label]}
+        :on {:activate :media/play}
+        :semantics {:role :button}}
+       {:type :button :layout {:width 32.0 :height 14.0}
+        :style {:font-size 7.0}
+        :bind {:text [:item :action-label]}
+        :on {:activate :media/play}
+        :semantics {:role :button}}]}]}
+
+   {:type :row :key :media/editing
+    :layout {:x 16.0 :y 148.0 :width 177.0 :height 12.0}
+    :bind {:visible [:state :editing-external]}
+    :children
+    [{:type :text-input :key :media/edit-name :layout {:width 86.0 :height 12.0}
+      :bind {:text [:state :edit-name]}
+      :on {:change :media/edit-name :submit :media/edit-name}
+      :semantics {:role :textbox :field :media-name}}
+     {:type :text-input :key :media/edit-desc :layout {:width 86.0 :height 12.0}
+      :bind {:text [:state :edit-desc]}
+      :on {:change :media/edit-desc :submit :media/edit-desc}
+      :semantics {:role :textbox :field :media-desc}}]}]}}

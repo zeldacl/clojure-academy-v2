@@ -15,5 +15,11 @@ public interface NodeFlags {
     int SCROLLBAR = 1 << 9;
     /** Node declares an explicit flow direction (row/column groups); see {@link Direction}. */
     int HAS_DIRECTION = 1 << 10;
+    /**
+     * Node is a {@code :transform} container. Subtree layouts in logical pixels;
+     * runtime applies an affine panel-scale/tilt when painting and inverts the
+     * same transform for hit-testing. See {@code cn.li.presentation.core.transform}.
+     */
+    int HAS_TRANSFORM = 1 << 11;
 }
 

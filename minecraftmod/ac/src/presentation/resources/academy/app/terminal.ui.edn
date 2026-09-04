@@ -1,12 +1,92 @@
+;; Terminal shell — logical 640×785 matching main terminal.xml.
+;; Affine :transform (panel-scale ~0.36) substitutes main's 3D 1/310 camera
+;; so the pad fits the screen without platform perspective code.
 {:ui/schema 2 :view/id :academy.app/terminal
- :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
- :state-schema {:apps :vector :page :string :query :string :modal :map :loading? :boolean}
- :root {:type :transform :key :terminal/perspective :layout {:x 8 :y 8 :width 304 :height 224}
-        :style {:transform-id "terminal-perspective"
-                :transform {:fov 50.0 :near 1.0 :far 100.0 :tilt-degrees 0.0}}
-        :children [{:type :column :key :terminal/root :layout {:width :fill :height :fill}
-                    :children [{:type :scroll :key :terminal/apps :layout {:height 150} :bind {:items [:state :apps]} :semantics {:role :list}}
-                               {:type :text :key :terminal/page :bind {:text [:state :page]}}
-                               {:type :text-input :key :terminal/query-input :layout {:height 20} :bind {:text [:state :query]} :on {:change :terminal/set-query :submit :terminal/submit-query} :semantics {:role :textbox}}
-                               {:type :portal :key :terminal/modal :bind {:visible [:state :modal]} :semantics {:role :dialog}}
-                               {:type :progress :key :terminal/loading :layout {:height 6} :bind {:value [:state :loading?]} :semantics {:role :progress}}]}]}}
+ :host {:kind :screen :design-width 640 :design-height 785 :scale-policy :fit}
+ :state-schema {:username :string :appcount :string :apps-composite :vector
+                :page :string :query :string :modal :map :loading? :boolean
+                :loading-label :string}
+ :root
+ {:type :transform :key :terminal/perspective
+  :layout {:width 640 :height 785}
+  :style {:transform {:panel-scale 0.36 :tilt-degrees -2.0
+                      :fov 50.0 :near 1.0 :far 100.0}}
+  :children
+  [{:type :absolute :key :terminal/root :layout {:width 640 :height 785}
+    :children
+    [{:type :image :key :terminal/back
+      :layout {:x 0.0 :y 0.0 :width 640.0 :height 785.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/data_terminal/back.png"}}
+      :semantics {:role :image}}
+
+     {:type :image :key :terminal/logo
+      :layout {:x 40.0 :y 50.0 :width 50.0 :height 50.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/data_terminal/logo.png"}}
+      :semantics {:role :image}}
+
+     {:type :text :key :terminal/data-label
+      :layout {:x 98.0 :y 42.0 :width 100.0 :height 30.0}
+      :style {:font-size 18.0 :rgba [0.67 0.67 0.67 1.0]}
+      :text "DATA"
+      :semantics {:role :heading}}
+
+     {:type :text :key :terminal/terminal-label
+      :layout {:x 98.0 :y 74.0 :width 160.0 :height 30.0}
+      :style {:font-size 18.0 :rgba [0.67 0.67 0.67 1.0]}
+      :text "TERMINAL"
+      :semantics {:role :heading}}
+
+     {:type :text :key :terminal/username
+      :layout {:x 400.0 :y 42.0 :width 200.0 :height 30.0}
+      :style {:font-size 16.0 :rgba [0.8 0.8 0.8 0.8]}
+      :bind {:text [:state :username]}
+      :semantics {:role :generic}}
+
+     {:type :text :key :terminal/appcount
+      :layout {:x 300.0 :y 84.0 :width 300.0 :height 30.0}
+      :style {:font-size 12.0 :rgba [0.6 0.6 0.6 0.6]}
+      :bind {:text [:state :appcount]}
+      :semantics {:role :generic}}
+
+     ;; App tiles — free-placed composites (x/y/w/h from item) so hit matches paint.
+     {:type :repeater :key :terminal/apps
+      :layout {:x 0.0 :y 0.0 :width 640.0 :height 785.0 :direction :none}
+      :bind {:items [:state :apps-composite]}
+      :semantics {:role :list}
+      :children
+      [{:type :composite
+        :layout {:width 0.0 :height 0.0}
+        :bind {:item [:state :item]
+               :x [:item :layout-x] :y [:item :layout-y]
+               :width [:item :w] :height [:item :h]}
+        :on {:activate :terminal/open-app}
+        :semantics {:role :button}}]}
+
+     {:type :image :key :terminal/arrow-up
+      :layout {:x 270.0 :y 133.0 :width 80.0 :height 20.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/data_terminal/arrow_up.png"}}
+      :on {:activate :terminal/page-up}
+      :semantics {:role :button}}
+
+     {:type :image :key :terminal/arrow-down
+      :layout {:x 270.0 :y 720.0 :width 80.0 :height 20.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/data_terminal/arrow_down.png"}}
+      :on {:activate :terminal/page-down}
+      :semantics {:role :button}}
+
+     {:type :image :key :terminal/loading-icon
+      :layout {:x 25.0 :y 754.0 :width 48.0 :height 48.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/data_terminal/loading.png"}
+              :rgba [0.75 0.75 0.75 0.75]}
+      :bind {:visible [:state :loading?]}
+      :semantics {:role :image}}
+
+     {:type :text :key :terminal/loading-text
+      :layout {:x 80.0 :y 762.0 :width 120.0 :height 30.0}
+      :style {:font-size 14.0 :rgba [0.67 0.67 0.67 0.67]}
+      :bind {:text [:state :loading-label] :visible [:state :loading?]}
+      :semantics {:role :generic}}
+
+     {:type :portal :key :terminal/modal
+      :bind {:visible [:state :modal]}
+      :semantics {:role :dialog}}]}]}}

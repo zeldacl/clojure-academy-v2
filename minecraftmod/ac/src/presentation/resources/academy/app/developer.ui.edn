@@ -1,86 +1,129 @@
+;; Developer — main page_developer.xml dual panel ~400×187.
 {:ui/schema 2 :view/id :academy.app/developer
- :host {:kind :container :design-width 400 :design-height 230 :scale-policy :fit}
+ :host {:kind :container :design-width 400 :design-height 187 :scale-policy :fit}
  :state-schema {:title :string :mode :string :ability-name :string :level-label :string
                 :exp-label :string :energy-ratio :number :sync-rate :number
                 :skills :vector :selected-skill :string :console-lines :vector
-                :console-input :string :wireless-visible :boolean :wireless-state :string :wireless-owner :string :wireless-range :string :wireless-bandwidth :string :wireless-load :number :wireless-nodes :vector :wireless-password :string :wireless-disconnect :map :wireless-available-label :map :status :string :button-upgrade :map
-                :button-reset :map :button-wireless :map :selected-detail :map}
- :root {:type :column :key :developer/root :layout {:x 8 :y 8 :width 384 :height 171}
-        :children [{:type :text :key :developer/title :layout {:height 18}
-                    :bind {:text [:state :title]} :semantics {:role :heading}}
-                   {:type :row :key :developer/summary :layout {:height 34}
-                    :children [{:type :column :key :developer/ability :layout {:width 180}
-                                :children [{:type :text :bind {:text [:state :ability-name]}}
-                                           {:type :text :bind {:text [:state :level-label]}}
-                                           {:type :text :bind {:text [:state :exp-label]}}]}
-                               {:type :column :key :developer/energy :layout {:width 180}
-                                :children [{:type :progress :layout {:height 6}
-                                            :bind {:value [:state :energy-ratio]}}
-                                           {:type :progress :layout {:height 6}
-                                            :bind {:value [:state :sync-rate]}}
-                                           {:type :text :bind {:text [:state :mode]}}]}]}
-                   {:type :row :key :developer/actions :layout {:height 22}
-                    :children [{:type :button :key :developer/upgrade :layout {:width 96 :height 20}
-                                :bind {:text [:state :button-upgrade]} :on {:activate :developer/level-up}
-                                :semantics {:role :button}}
-                               {:type :button :key :developer/reset :layout {:width 96 :height 20}
-                                :bind {:text [:state :button-reset]} :on {:activate :developer/reset}
-                                :semantics {:role :button}}
-                               {:type :button :key :developer/wireless :layout {:width 96 :height 20}
-                                :bind {:text [:state :button-wireless]} :on {:activate :developer/wireless}
-                                :semantics {:role :button}}]}
-                   {:type :column :key :developer/wireless :layout {:height 52}
-                    :bind {:visible [:state :wireless-visible]}
-                    :children [{:type :row :layout {:height 16}
-                                :children [{:type :text :layout {:width 130} :bind {:text [:state :wireless-state]}}
-                                           {:type :text :layout {:width 125} :bind {:text [:state :wireless-owner]}}
-                                           {:type :button :layout {:width 96 :height 16} :bind {:text [:state :wireless-disconnect]} :on {:activate :developer/wireless-disconnect} :semantics {:role :button}}]}
-                               {:type :row :layout {:height 18}
-                                :children [{:type :text-input :layout {:width 160 :height 18} :bind {:text [:state :wireless-password]} :on {:change :developer/wireless-password :submit :developer/wireless-password} :semantics {:role :textbox :field :wireless-password}}
-                                           {:type :text :layout {:width 120} :bind {:text [:state :wireless-range]}}
-                                           {:type :button :layout {:width 96 :height 16} :bind {:text [:state :button-wireless]} :on {:activate :developer/wireless} :semantics {:role :button}}]}
-                               {:type :scroll :layout {:height 18} :bind {:items [:state :wireless-nodes]} :semantics {:role :list}
-                                :children [{:type :row :layout {:height 18}
-                                            :children [{:type :text :layout {:width 300} :bind {:text [:item :label]}}
-                                                       {:type :button :layout {:width 80 :height 16} :bind {:text [:item :action-label]} :on {:activate :developer/wireless-connect} :semantics {:role :button}}]}]}]}                   {:type :text :key :developer/selected :layout {:height 18}
-                    :bind {:text [:state :selected-skill]}}
-                   {:type :text :key :developer/detail-title :layout {:height 16}
-                    :bind {:text [:state :selected-detail :title]}}
-                   {:type :text :key :developer/detail-level :layout {:height 16}
-                    :bind {:text [:state :selected-detail :level]}}
-                   {:type :text :key :developer/detail-description :layout {:height 18}
-                    :bind {:text [:state :selected-detail :description]}}
-                   {:type :text :key :developer/detail-conditions-label :layout {:height 16}
-                    :bind {:text [:state :selected-detail :condition-label]}}
-                   {:type :grid :key :developer/detail-conditions :layout {:height 18}
-                    :bind {:items [:state :selected-detail :condition-items]}
-                    :children [{:type :composite :layout {:height 18}
-                                :bind {:item [:state :item]}
-                                :on {:hover :developer/condition-hover}}]}
-                   {:type :text :key :developer/detail-condition-hint :layout {:height 16}
-                    :bind {:text [:state :selected-detail :condition-hint]}}
-                   {:type :progress :key :developer/detail-progress :layout {:height 6 :width 180}
-                    :bind {:value [:state :selected-detail :development-progress]}}
-                   {:type :text :key :developer/detail-development-label :layout {:height 16}
-                    :bind {:text [:state :selected-detail :development-label]}}
-                   {:type :button :key :developer/detail-learn :layout {:height 18 :width 84}
-                    :bind {:text [:state :selected-detail :learn-label] :visible [:state :selected-detail :can-learn?]}
-                    :on {:activate :developer/learn-skill}
-                    :semantics {:role :button}}
-                   {:type :scroll :key :developer/skills :layout {:height 42}
-                    :bind {:items [:state :skills]} :semantics {:role :list}
-                    :children [{:type :row :layout {:height 18}
-                                :children [{:type :text :layout {:width 250}
-                                            :bind {:text [:item :label]}}
-                                           {:type :button :layout {:width 80 :height 16}
-                                            :bind {:text [:item :select-label]}
-                                            :on {:activate :developer/select-skill}
-                                            :semantics {:role :button}}]}]}
-                   {:type :scroll :key :developer/console :layout {:height 26}
-                    :bind {:items [:state :console-lines]} :semantics {:role :list}
-                    :children [{:type :text :bind {:text [:item :label]}}]}
-                   {:type :text-input :key :developer/input :layout {:height 20}
-                    :bind {:text [:state :console-input]}
-                    :on {:change :developer/console-input :submit :developer/console-submit}
-                    :semantics {:role :textbox :field :developer-console}}
-                   {:type :text :key :developer/status :bind {:text [:state :status]}}]}}
+                :console-input :string :wireless-visible :boolean :wireless-state :string
+                :wireless-owner :string :wireless-range :string :wireless-bandwidth :string
+                :wireless-load :number :wireless-nodes :vector :wireless-password :string
+                :wireless-disconnect :map :wireless-available-label :map :status :string
+                :button-upgrade :map :button-reset :map :button-wireless :map
+                :selected-detail :map :machine-panel-visible? :boolean}
+ :root
+ {:type :absolute :key :developer/root :layout {:width 400 :height 187}
+  :children
+  [;; Left panel — 108.5×187 at x~4
+   {:type :absolute :key :developer/left
+    :layout {:x 4.0 :y 0.0 :width 108.5 :height 187.0}
+    :children
+    [{:type :image :layout {:width 108.5 :height 187.0}
+      :style {:resource {:namespace "academy"
+                         :path "textures/guis/parent/parent_background_developerleft.png"}}
+      :semantics {:role :image}}
+     {:type :image :layout {:width 108.5 :height 187.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_developerleft.png"}}
+      :semantics {:role :image}}
+
+     ;; Ability summary
+     {:type :absolute :key :developer/ability
+      :layout {:x 2.0 :y 70.0 :width 104.0 :height 40.0}
+      :children
+      [{:type :image :layout {:x 0.0 :y 4.0 :width 32.0 :height 32.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_nocategory.png"}}
+        :semantics {:role :image}}
+       {:type :text :layout {:x 34.0 :y 2.0 :width 70.0 :height 12.0}
+        :style {:font-size 10.0}
+        :bind {:text [:state :ability-name]}}
+       {:type :text :layout {:x 34.0 :y 14.0 :width 42.0 :height 10.0}
+        :style {:font-size 8.0}
+        :bind {:text [:state :level-label]}}
+       {:type :text :layout {:x 34.0 :y 26.0 :width 42.0 :height 10.0}
+        :style {:font-size 7.0}
+        :bind {:text [:state :exp-label]}}
+       {:type :button :layout {:x 60.0 :y 22.0 :width 40.0 :height 14.0}
+        :bind {:text [:state :button-upgrade]}
+        :on {:activate :developer/level-up}
+        :semantics {:role :button}}]}
+
+     ;; Machine / wireless panel
+     {:type :absolute :key :developer/machine
+      :layout {:x 0.0 :y 0.0 :width 108.5 :height 70.0}
+      :children
+      [{:type :image :layout {:width 108.5 :height 70.0}
+        :style {:resource {:namespace "academy"
+                           :path "textures/guis/parent/parent_background_developermachine.png"}}
+        :bind {:visible [:state :wireless-visible]}
+        :semantics {:role :image}}
+       {:type :text :layout {:x 4.0 :y 8.0 :width 100.0 :height 10.0}
+        :style {:font-size 8.0}
+        :bind {:text [:state :wireless-state] :visible [:state :wireless-visible]}}
+       {:type :button :layout {:x 4.0 :y 20.0 :width 100.0 :height 14.0}
+        :bind {:text [:state :button-wireless] :visible [:state :wireless-visible]}
+        :on {:activate :developer/wireless}
+        :semantics {:role :button}}
+       {:type :text :layout {:x 4.0 :y 38.0 :width 100.0 :height 10.0}
+        :style {:font-size 8.0}
+        :text "Power"
+        :bind {:visible [:state :wireless-visible]}}
+       {:type :progress :layout {:x 6.0 :y 48.0 :width 97.0 :height 6.0}
+        :bind {:value [:state :energy-ratio] :visible [:state :wireless-visible]}
+        :semantics {:role :progress}}
+       {:type :progress :layout {:x 6.0 :y 58.0 :width 97.0 :height 6.0}
+        :bind {:value [:state :sync-rate] :visible [:state :wireless-visible]}
+        :semantics {:role :progress}}]}]}
+
+   ;; Right panel — 278×187 at x~118 (400-278-4)
+   {:type :absolute :key :developer/right
+    :layout {:x 118.0 :y 0.0 :width 278.0 :height 187.0}
+    :children
+    [{:type :image :layout {:width 278.0 :height 187.0}
+      :style {:resource {:namespace "academy"
+                         :path "textures/guis/parent/parent_background_developerright.png"}}
+      :semantics {:role :image}}
+     {:type :image :layout {:width 278.0 :height 187.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_developerright.png"}}
+      :semantics {:role :image}}
+
+     {:type :column :key :developer/detail
+      :layout {:x 10.0 :y 18.0 :width 257.0 :height 139.0}
+      :children
+      [{:type :text :layout {:height 12.0} :style {:font-size 10.0}
+        :bind {:text [:state :selected-detail :title]}}
+       {:type :text :layout {:height 10.0} :style {:font-size 8.0}
+        :bind {:text [:state :selected-detail :level]}}
+       {:type :text :layout {:height 20.0} :style {:font-size 8.0}
+        :bind {:text [:state :selected-detail :description]}}
+       {:type :text :layout {:height 10.0} :style {:font-size 8.0}
+        :bind {:text [:state :selected-detail :condition-label]}}
+       {:type :grid :layout {:height 18.0}
+        :bind {:items [:state :selected-detail :condition-items]}
+        :children
+        [{:type :composite :layout {:height 18.0}
+          :bind {:item [:state :item]}
+          :on {:hover :developer/condition-hover}}]}
+       {:type :progress :layout {:height 6.0 :width 180.0}
+        :bind {:value [:state :selected-detail :development-progress]}
+        :semantics {:role :progress}}
+       {:type :button :layout {:height 14.0 :width 84.0}
+        :bind {:text [:state :selected-detail :learn-label]
+               :visible [:state :selected-detail :can-learn?]}
+        :on {:activate :developer/learn-skill}
+        :semantics {:role :button}}
+       {:type :scroll :layout {:height 40.0}
+        :bind {:items [:state :skills]}
+        :semantics {:role :list}
+        :children
+        [{:type :row :layout {:height 14.0}
+          :children
+          [{:type :text :layout {:width 170.0} :style {:font-size 8.0}
+            :bind {:text [:item :label]}}
+           {:type :button :layout {:width 70.0 :height 12.0}
+            :bind {:text [:item :select-label]}
+            :on {:activate :developer/select-skill}
+            :semantics {:role :button}}]}]}]}
+
+     {:type :text-input :layout {:x 10.0 :y 162.0 :width 257.0 :height 16.0}
+      :bind {:text [:state :console-input]}
+      :on {:change :developer/console-input :submit :developer/console-submit}
+      :semantics {:role :textbox :field :developer-console}}]}]}}

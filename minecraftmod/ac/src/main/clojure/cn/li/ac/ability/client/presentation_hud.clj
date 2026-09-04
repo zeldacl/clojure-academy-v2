@@ -77,10 +77,13 @@
       {:rgba (argb01 mask)})))
 
 (defn- cp-full-glow-items [snapshot]
-  (let [cp-bar (:cp-bar snapshot)]
+  (let [cp-bar (:cp-bar snapshot)
+        screen-w (double (or (:screen-w snapshot) 427.0))
+        bar-w 193.0
+        bar-h 29.0
+        x (- screen-w bar-w 8.0)]
     (when (:full-glow? cp-bar)
-      [{:kind :quad :x (:x cp-bar 8) :y (:y cp-bar 8)
-        :w (:width cp-bar 100) :h (:height cp-bar 10)
+      [{:kind :quad :x x :y 8.0 :w bar-w :h bar-h
         :rgba (unchecked-int 0x66FFFFFF)}])))
 
 (defn- skill-slot-items
@@ -276,6 +279,38 @@
     [{:kind :quad :x 4 :y 34 :w 6 :h 6 :rgba (unchecked-int 0xFFDD3333)}
      {:kind :text :text "interfered" :x 14 :y 34 :rgba (unchecked-int 0xFFFF6666)}]))
 
+(defn- cp-bar-items [snapshot]
+  (let [cp (:cp-bar snapshot)
+        overload (:overload-bar snapshot)
+        screen-w (double (or (:screen-w snapshot) 427.0))
+        ;; Top-right CP cluster (~193×29 ≈ 0.2×964 upstream art).
+        bar-w 193.0
+        bar-h 29.0
+        x (- screen-w bar-w 8.0)
+        y 8.0
+        cp-pct (double (or (:percent cp) (:cp-ratio snapshot) 0.0))
+        ol-pct (double (or (:percent overload) (:overload-ratio snapshot) 0.0))]
+    (cond-> []
+      cp
+      (into [{:kind :image
+              :src (or (:bg-texture cp) "academy:textures/guis/cpbar/back_normal.png")
+              :x x :y y :w bar-w :h bar-h
+              :rgba (unchecked-int 0xFFFFFFFF)}
+             {:kind :image
+              :src (or (:fg-texture cp) "academy:textures/guis/cpbar/cp.png")
+              :x x :y y :w (* bar-w (max 0.0 (min 1.0 cp-pct))) :h bar-h
+              :rgba (unchecked-int 0xFFFFFFFF)}])
+      overload
+      (into [{:kind :image
+              :src (or (:bg-texture overload) "academy:textures/guis/cpbar/back_normal.png")
+              :x x :y (+ y bar-h 4.0) :w bar-w :h (* bar-h 0.55)
+              :rgba (unchecked-int 0xFFFFFFFF)}
+             {:kind :image
+              :src (or (:fg-texture overload) "academy:textures/guis/cpbar/front_overload.png")
+              :x x :y (+ y bar-h 4.0)
+              :w (* bar-w (max 0.0 (min 1.0 ol-pct))) :h (* bar-h 0.55)
+              :rgba (unchecked-int 0xFFFFFFFF)}]))))
+
 (defn- composite-items
   "Flatten every dynamic HUD projection into shared Presentation composite nodes."
   [snapshot]
@@ -287,6 +322,7 @@
                 (sequential? value) value
                 :else []))
             [(background-mask-rect snapshot)
+             (cp-bar-items snapshot)
              (skill-slot-items (:skill-slots snapshot []))
              (when-let [crosshair (:crosshair snapshot)] (crosshair-items crosshair))
              (cp-full-glow-items snapshot)
@@ -315,13 +351,14 @@
    builder details such as :cp-bar and :skill-slots stay on the controller
    side of the boundary."
   [snapshot]
-  (merge snapshot
-         {:cp-ratio (double (or (get-in snapshot [:cp-bar :percent]) 0.0))
-          :overload-ratio (double (or (get-in snapshot [:overload-bar :percent]) 0.0))
-          :charging? (boolean (get-in snapshot [:charging :mask-alpha]))
-          :skills (vec (or (:skill-slots snapshot) []))
-          :toasts (vec (or (:toasts snapshot) []))
-          :composite-list (composite-items snapshot)}))
+  (let [snap (assoc snapshot :screen-w (double (or (:screen-w snapshot) 427.0)))]
+    (merge snap
+           {:cp-ratio (double (or (get-in snap [:cp-bar :percent]) 0.0))
+            :overload-ratio (double (or (get-in snap [:overload-bar :percent]) 0.0))
+            :charging? (boolean (get-in snap [:charging :mask-alpha]))
+            :skills (vec (or (:skill-slots snap) []))
+            :toasts (vec (or (:toasts snap) []))
+            :composite-list (composite-items snap)})))
 
 (defn combat-view-model
   [player-uuid dispatch-action!]

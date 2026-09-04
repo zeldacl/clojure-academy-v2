@@ -1,0 +1,33 @@
+;; Terminal install HUD — main terminal_installing.xml ~150×9 progress bar.
+{:ui/schema 2 :view/id :academy.app/install-effect
+ :host {:kind :hud :design-width 150 :design-height 20 :scale-policy :fit}
+ :state-schema {:progress :number :status :string :tag :string :lines :vector}
+ :root
+ {:type :absolute :key :install/root :layout {:width 150 :height 20}
+  :children
+  [{:type :rect :key :install/tag-bg
+    :layout {:x 0.0 :y 0.0 :width 40.0 :height 8.0}
+    :style {:rgba [0.24 0.24 0.24 0.47]}
+    :semantics {:role :generic}}
+   {:type :text :key :install/tag
+    :layout {:x 0.0 :y 0.0 :width 40.0 :height 8.0}
+    :style {:font-size 7.0 :rgba [1.0 1.0 1.0 1.0]}
+    :bind {:text [:state :tag]}
+    :semantics {:role :generic}}
+
+   {:type :rect :key :install/bar-bg
+    :layout {:x 0.0 :y 10.0 :width 150.0 :height 9.0}
+    :style {:rgba [0.24 0.24 0.24 0.47]}
+    :semantics {:role :generic}}
+   {:type :rect :key :install/outline
+    :layout {:x 1.5 :y 11.5 :width 147.0 :height 6.0}
+    :style {:rgba [1.0 1.0 1.0 0.59]}
+    :semantics {:role :generic}}
+   {:type :rect :key :install/cover
+    :layout {:x 2.0 :y 12.0 :width 146.0 :height 5.0}
+    :style {:rgba [0.12 0.12 0.12 0.78]}
+    :semantics {:role :generic}}
+   {:type :progress :key :install/progbar
+    :layout {:x 2.5 :y 12.5 :width 145.0 :height 4.0}
+    :bind {:value [:state :progress]}
+    :semantics {:role :progress}}]}}

@@ -47,6 +47,16 @@ public final class CmdBuf {
         n = 0;
     }
 
+    /** Package access for {@link TransformGeom} — do not use from outside the engine. */
+    float[] geomForTransform() {
+        return geom;
+    }
+
+    /** Package access for {@link TransformGeom} — do not use from outside the engine. */
+    int[] clipForTransform() {
+        return clip;
+    }
+
     public void ensure(int need) {
         if (need <= cap) return;
         int c = cap;

@@ -22,27 +22,33 @@
       {:credits {:header [] :staff [] :donators []}
        :donation {:links [] :text []}})))
 
+(defn- as-line [v]
+  (cond
+    (map? v) (update v :label #(or % (str (:text v))))
+    (string? v) {:label v}
+    :else {:label (str v)}))
+
 (defn- credit-lines [{:keys [header staff donators]}]
-  (vec
-    (concat
-      (map str header)
-      ["" "Staff"]
-      (mapcat (fn [[job names]]
-                (cons (str job ":") (map #(str "  " %) names))) staff)
-      ["" "Donators"]
-      (map str (shuffle donators))
-      [""
-       (or (i18n/translate (str "about." modid/MOD-ID ".donators_info"))
-           "In no particular order")
-       "Thank you for playing!"])))
+  (mapv as-line
+        (concat
+          (map str header)
+          ["" "Staff"]
+          (mapcat (fn [[job names]]
+                    (cons (str job ":") (map #(str "  " %) names))) staff)
+          ["" "Donators"]
+          (map str (shuffle donators))
+          [""
+           (or (i18n/translate (str "about." modid/MOD-ID ".donators_info"))
+               "In no particular order")
+           "Thank you for playing!"])))
 
 (defn- donation-lines [{:keys [text links]}]
-  (vec
-    (concat
-      (map str (take link-slot text))
-      (map (fn [{:keys [text url]}]
-             {:label text :url url}) links)
-      (map str (drop link-slot text)))))
+  (mapv as-line
+        (concat
+          (map str (take link-slot text))
+          (map (fn [{:keys [text url]}]
+                 {:label text :url url}) links)
+          (map str (drop link-slot text)))))
 
 (defn- initial-state []
   (let [data (load-about-data)]
@@ -92,4 +98,6 @@
       (dissoc state :about-data)
       (fn [action current]
         (dispatch-action data action current))
-      nil)))
+      nil
+      :screen
+      :academy.app/about)))

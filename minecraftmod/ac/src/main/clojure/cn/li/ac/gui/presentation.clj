@@ -43,6 +43,9 @@
       "academy:combat_hud" :academy.app/combat-hud
       "academy:terminal" :academy.app/terminal
       "academy:application" :academy.app/application
+      "academy:about" :academy.app/about
+      "academy:freq_transmitter" :academy.app/freq-transmitter
+      "academy:install_effect" :academy.app/install-effect
       "academy:skill_tree" :academy.app/skill-tree
       "academy:preset_editor" :academy.app/preset-editor
       "academy:tutorial" :academy.app/tutorial
@@ -54,6 +57,7 @@
       "academy:ability_interferer" :academy.app/ability-interferer
       "academy:wireless_matrix" :academy.app/wireless-matrix
       "academy:wireless_node" :academy.app/wireless-node
+      "academy:location_teleport" :academy.app/location-teleport
       (keyword (str/replace view-id ":" "/")))
     :else view-id))
 
