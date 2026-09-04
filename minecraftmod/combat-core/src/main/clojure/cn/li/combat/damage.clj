@@ -1,9 +1,12 @@
 (ns cn.li.combat.damage
-  "Damage resolution, additive alongside the old cn.li.combat.final-damage
-   (unchanged, still live via cn.li.combat.api -- see the redesign plan's
-   staging notes).
+  "Damage resolution -- the live implementation behind cn.li.combat.api's
+   resolve-damage/materialize-vfx. Cut over from the old cn.li.combat.
+   final-damage (deleted; this namespace's own aggregation math was staged
+   alongside it, verified equivalent via combat_runtime_vanilla_damage_
+   reflection_test.clj's real end-to-end coverage, then cut over once
+   confirmed).
 
-   final_damage.clj's resolve-event is NOT a sequential program that fits
+   final_damage.clj's resolve-event was NOT a sequential program that fits
    cn.li.node.compile's execution model: it is an AGGREGATION over every
    policy matching one damage event, combining their contributions
    (multiply/reduce/absorb/critical-roll/reflect) with resource-cost
