@@ -1339,7 +1339,14 @@
   [result]
   (boolean
      (some (fn [reflection]
-             (let [event (:event reflection)
+             ;; resolve-event's own :reflections entries (final_damage.clj)
+             ;; are the reflected event maps directly (assoc'd off the
+             ;; original event with a swapped :source/:target, new :base,
+             ;; :depth, :metadata) -- not wrapped in an {:event ...} map.
+             ;; Reading (:event reflection) silently produced an all-nil
+             ;; claim tuple and all-nil damage-fn args every time, so this
+             ;; never actually landed a reflected hit through the platform.
+             (let [event reflection
                    claim [(:world-id event) (:source event) (:target event)
                           (:seed event) (:depth event)]
                    claimed? (atom false)]
@@ -1590,6 +1597,17 @@
 
 (defn reset-for-test! []
   (reset! last-known-tick* 0)
+  ;; reflection-claims*/finalized-damage-claims* are per-JVM-lifetime dedup
+  ;; atoms (see their own defonce docstrings) that, like a stale
+  ;; final-runtime-v2* capability snapshot, silently make a test's damage
+  ;; event look "already handled" if any earlier test in the same suite run
+  ;; produced an identical [world-id source target seed (depth)] claim --
+  ;; entirely plausible when tests default :seed to @last-known-tick* (just
+  ;; reset to 0 above) and reuse short literal ids across test namespaces.
+  ;; Reset alongside the tick counter so every test starts with a clean
+  ;; dedup slate, matching reset-for-test!'s own purpose.
+  (reset! reflection-claims* {})
+  (reset! finalized-damage-claims* {})
   nil)
 
 (defn reset-final-runtime-v2-for-test!

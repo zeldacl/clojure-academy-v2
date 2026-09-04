@@ -22,24 +22,38 @@
    itself stays deterministic while everything else -- catalog lookup,
    state read/write, patch commit -- is the real production path."
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.mcmod.runtime.capabilities :as capabilities]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.ac.test.support.player-state :as player-state-support]))
 
-(def ^:private reflect-ability
-  {:id :reflect-passive
-   :activation :passive
-   :reactions [{:on :combat/damage
-                :priority 1
-                :program {:component :damage/reflect
-                          :multiplier 0.5
-                          :cost-per-damage 0.1
-                          :minimum 0.1
-                          :max-depth 1
-                          :cost-resource :cp
-                          :progression-scale 0.0}}]})
+;; A raw catalog source's :damage-policies entry (the shape every real
+;; ac/skills/*.edn source carries directly, e.g. vec_reflection.edn's own
+;; :damage-policies -- see final-damage-policies-v2's own docstring in
+;; combat_runtime.clj) rather than the old catalog's pre-lowering
+;; :reactions wrapper, which nothing compiles into :damage-policies any
+;; more now that the old engine's assembly pipeline is gone.
+;; :when gates on having CP available, the same declarative-precondition
+;; pattern real content uses (e.g. vec_reflection.edn's own :when checks
+;; :context :enabled?) -- :damage/reflect itself has no built-in
+;; affordability gate (unlike :damage/absorb's :requires-payment, its
+;; :cost-per-damage is charged best-effort after the fact, see
+;; final_damage.clj's reflection-costs), so a reaction that must not fire
+;; without resources needs to say so explicitly.
+(def ^:private reflect-source
+  {:damage-policies [{:on :combat/damage
+                       :priority 1
+                       :when {:expr :math/gt
+                              :args [{:ref [:input :context :resources :cp]} 0.0]}
+                       :program {:component :damage/reflect
+                                 :multiplier 0.5
+                                 :cost-per-damage 0.1
+                                 :minimum 0.1
+                                 :max-depth 1
+                                 :cost-resource :cp
+                                 :progression-scale 0.0}}]})
 
 (use-fixtures :each
   (fn [f]
@@ -59,31 +73,55 @@
          (finally
            (combat-runtime/reset-for-test!)))))))
 
-(defn- with-fake-entity-damage-handler [f]
-  (let [previous (get (:actions (capabilities/snapshot)) :entity/damage)
+(defn- with-fake-entity-damage-handler
+  "apply-reflections-once! (combat_runtime.clj) calls a hardcoded damage-fn
+   bound once at bootstrap directly to cn.li.combat.platform/damage!, which
+   in turn calls cn.li.mcmod.platform.entity-damage/apply-direct-damage! --
+   a separate platform SPI table ([:platform :entity-damage] in the
+   Framework atom), deliberately resolved outside the generic capabilities
+   registry for performance (install-runtime-adapters!'s own docstring).
+   Faking cn.li.mcmod.runtime.capabilities' :entity/damage action (as this
+   used to) can never be observed by that call. Install a fake directly
+   into the real SPI instead, matching the shape a real platform loader's
+   entity-damage/install-entity-damage! installs (see mcbase's
+   create-entity-damage :apply-direct-damage! for the positional-args
+   contract this mirrors)."
+  [f]
+  (let [fw-atom (fw/fw-atom)
+        previous (platform/get-adapter fw-atom :entity-damage)
         seen (atom [])]
     (try
-      (capabilities/register-action!
-       :entity/damage
-       (fn [request] (swap! seen conj request) {:status :applied})
-       {:allow-overwrite? true})
+      (platform/install-adapter!
+       fw-atom :entity-damage
+       {:apply-direct-damage!
+        (fn [world-id entity-uuid damage source-type opts]
+          (swap! seen conj {:world-id world-id :target entity-uuid :amount damage
+                             :damage-type source-type :owner (:attacker-uuid opts)})
+          true)})
       (f seen)
       (finally
-        (when previous
-          (capabilities/register-action! :entity/damage previous {:allow-overwrite? true}))))))
+        (platform/install-adapter! fw-atom :entity-damage previous)))))
 
 (defn- with-synthetic-reflect-ability
-  "Replace the whole compiled :abilities table with just the synthetic
-   reflect ability -- not merged alongside the real catalog. intercept-
-   damage! evaluates every catalog ability's :tunables-fn/:when for every
-   incoming hit regardless of which one ultimately matches, so mixing in
-   the real EDN abilities here would make this test's outcome depend on
-   their skill-config tunable curves too, exactly the coupling the
-   synthetic ability exists to avoid."
+  "Replace the whole new-engine catalog's :sources table with just the
+   synthetic reflect source -- not merged alongside the real catalog.
+   final-damage-policies-v2/damage-policy-inputs (combat_runtime.clj) read
+   damage policies from (:sources (:catalog (final-runtime-v2))), not from
+   combat-catalog/catalog -- that function is a separate, EDN-metadata-only
+   projection (skill tree UI, item triggers, passive effects) with no
+   bearing on damage dispatch since the old engine's assembly pipeline
+   (which used to lower :reactions into :damage-policies at load time) was
+   deleted. Redefining final-runtime-v2 here, not combat-catalog/catalog,
+   is what actually reaches the reflect pipeline. intercept-damage!
+   evaluates every catalog ability's :tunables-fn/:when for every incoming
+   hit regardless of which one ultimately matches, so mixing in the real
+   EDN abilities here would make this test's outcome depend on their
+   skill-config tunable curves too, exactly the coupling the synthetic
+   source exists to avoid."
   [f]
-  (let [real-catalog (combat-catalog/catalog)
-        isolated (assoc-in real-catalog [:combat :abilities] {:reflect-passive reflect-ability})]
-    (with-redefs [combat-catalog/catalog (fn [] isolated)]
+  (let [real-runtime (combat-runtime/final-runtime-v2)
+        isolated (assoc-in real-runtime [:catalog :sources] {:reflect-passive reflect-source})]
+    (with-redefs [combat-runtime/final-runtime-v2 (fn [] isolated)]
       (f))))
 
 (defn- seed-cp!
@@ -114,7 +152,11 @@
             (is (= {:target "attacker-mob" :amount 5.0
                     :damage-type :mob :owner "target-player"}
                    (dissoc (first @seen) :world-id)))
-            (is (= 99.0
+            ;; resolve-event's own reflection-costs formula (final_damage.clj)
+            ;; is amount-before-reflect * ratio * cost-per-damage = 10.0 *
+            ;; 0.5 * 0.1 = 0.5 -- cost-per-damage is charged per point of
+            ;; the REFLECTED damage, not the original incoming damage.
+            (is (= 99.5
                    (get-in (runtime-store/get-player-state
                             player-state-support/test-session-id "target-player")
                            [:resource-data :cur-cp]))
@@ -144,7 +186,11 @@
                 (str "the reflected hit must land through the capability during the SAME "
                      "precheck call -- process-damage-request! never runs afterwards for "
                      "an attack the precheck cancelled"))
-            (is (= 99.0
+            ;; resolve-event's own reflection-costs formula (final_damage.clj)
+            ;; is amount-before-reflect * ratio * cost-per-damage = 10.0 *
+            ;; 0.5 * 0.1 = 0.5 -- cost-per-damage is charged per point of
+            ;; the REFLECTED damage, not the original incoming damage.
+            (is (= 99.5
                    (get-in (runtime-store/get-player-state
                             player-state-support/test-session-id "target-player-2")
                            [:resource-data :cur-cp]))
@@ -155,10 +201,10 @@
     (fn []
       (with-fake-entity-damage-handler
         (fn [seen]
-          ;; No CP at all: the reflect's cost-per-damage can never be paid,
-          ;; so the reaction must not fire and the vanilla hit must land
-          ;; exactly as reported -- no phantom damage transformation for a
-          ;; player with no active abilities' reactions eligible.
+          ;; No CP at all: reflect-source's own :when (:context :resources
+          ;; :cp > 0.0) fails to match, so the reaction must not fire and
+          ;; the vanilla hit must land exactly as reported -- no phantom
+          ;; damage transformation for a player with no eligible reactions.
           (seed-cp! "target-player-3" 0.0)
           (let [residual (combat-runtime/process-damage-request!
                           "target-player-3" "attacker-mob-3" 10.0
