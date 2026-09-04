@@ -52,11 +52,15 @@
 
 (defn- clear-client-vfx-world!
   "Drop VFX state for a world as it unloads without loading client code on a
-  dedicated server."
+  dedicated server.
+
+  VFX cutover: resolves the new engine's own clear-world! -- the old
+  engine is no longer installed as the real dispatch path, so clearing
+  its state here would be a no-op against dead state."
   [world]
   (when-let [clear! (try
                       (requiring-resolve
-                       'cn.li.ability.client-vfx/clear-world!)
+                       'cn.li.ability.client-vfx-v2/clear-world!)
                       (catch Throwable _ nil))]
     (try
       (clear! (world-owner-key/world-id world))

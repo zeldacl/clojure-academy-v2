@@ -284,20 +284,23 @@
     (is (= {:x 1.0 :y 0.0 :z 0.0} (:position (first t2-ops)))
         "particle_trail_audio_transient plays audio at :sound-position")))
 
-;; Coverage floor: there is no manifest for ac/vfx/fx (unlike ac/skills'
-;; manifest.edn) -- individual deftests above exercise named files by
+;; Coverage floor: individual deftests above exercise named effect files by
 ;; hand, so a new file dropped in without a matching deftest would compile
 ;; (checkClojure never reads resources) but never actually get proven.
 ;; Scans the real source directory rather than the classpath because a
 ;; classpath resource URL cannot be listed as a directory once packaged.
+;; manifest.edn (added for the VFX cutover's own fx-catalog loader) lives
+;; in this same directory but is not an effect doc -- excluded by name,
+;; not just by extension, since it is also *.edn.
 (deftest every-fx-resource-compiles-test
   (let [dir (io/file "src/main/resources/ac/vfx/fx")
         files (->> (.listFiles dir)
                    (filter #(.isFile ^java.io.File %))
                    (map #(.getName ^java.io.File %))
                    (filter #(str/ends-with? % ".edn"))
+                   (remove #(= "manifest.edn" %))
                    sort)]
-    (is (= 36 (count files)) "ac/vfx/fx/*.edn file count drifted -- update this test's expectation deliberately, not by accident")
+    (is (= 36 (count files)) "ac/vfx/fx/*.edn effect file count drifted -- update this test's expectation deliberately, not by accident")
     (doseq [filename files]
       (testing filename
         (let [doc (read-fx filename)

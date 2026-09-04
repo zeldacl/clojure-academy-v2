@@ -1446,8 +1446,14 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
             throw new GradleException("combat VFX adapter is not a neutral VFX Core boundary")
         }
         def clientBootstrap = file("ac/src/main/clojure/cn/li/ac/content/ability_client.clj").text
-        if (!clientBootstrap.contains("vfx/freeze!") || clientBootstrap.contains("fx-registry/freeze")) {
-            throw new GradleException("client VFX bootstrap is not frozen by VFX Core")
+        // VFX cutover: the new engine's registry is immutable-by-construction
+        // (built once from a full catalog at install-production! time -- see
+        // cn.li.ability.client-vfx-v2's own docstring for why the old engine's
+        // incremental register!+freeze! contract has no equivalent here), so
+        // the invariant this gate enforces is now "bootstrap installs a real,
+        // fully-assembled runtime" rather than "bootstrap calls freeze!".
+        if (!clientBootstrap.contains("install-production!") || clientBootstrap.contains("fx-registry/freeze")) {
+            throw new GradleException("client VFX bootstrap does not install a real VFX Core runtime")
         }
         logger.lifecycle("[verifyCombatLegacyRuntimeRemoval] ok")
     }

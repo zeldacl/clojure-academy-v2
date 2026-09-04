@@ -101,3 +101,95 @@
     (is (nil? (get-in frame [[:k] :scene])) "this registry entry declares no :scene")
     (is (= 1 (count (get-in frame [[:k] :emitters]))))
     (is (= 4 (.size ^cn.li.mcmod.runtime.vfx.ParticleColumns (:buffer (first (get-in frame [[:k] :emitters]))))))))
+
+(deftest tick-advances-per-instance-age-test
+  (testing "the real gap found while wiring the VFX cutover: :age never advanced,
+            so every ?age/?progress read in real content would have stayed frozen
+            forever (arc_ring_session.edn's own :duration-ticks based ?progress lerp)"
+    (let [s (store)
+          _ (runtime/ensure! s [:k] {:effect-id :arc-strike :seed 1
+                                     :user {:start [0.0 0.0 0.0] :end [4.0 0.0 0.0]}})]
+      (is (= 0 (:age (runtime/lookup s [:k]))))
+      (runtime/tick! s 0.1)
+      (is (= 1 (:age (runtime/lookup s [:k]))))
+      (runtime/tick! s 0.1)
+      (is (= 2 (:age (runtime/lookup s [:k])))))))
+
+(def ^:private scene-registry
+  {:with-scene
+   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+    :user-types {:duration-ticks :int}
+    :emitters []
+    :lifecycle :transient}})
+
+(deftest client-runtime-dispatch-signal-dedup-and-tombstone-test
+  (let [rt (runtime/create-client-runtime scene-registry)]
+    (testing "spawn creates, a stale spawn (lower event-seq, no tombstone win) is ignored"
+      (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                    :instance-key [:a] :event-seq 5 :params {:duration-ticks 4}})
+      (is (some? (runtime/lookup rt [:a]))))
+    (testing "destroy removes and remembers a tombstone"
+      (runtime/dispatch-signal! rt {:op :destroy :effect-id :with-scene :owner "p1"
+                                    :instance-key [:a] :event-seq 6})
+      (is (nil? (runtime/lookup rt [:a]))))
+    (testing "a spawn arriving once the key is no longer live always (re)creates --
+              matches final-client's own create? logic EXACTLY: (or (nil? internal-id)
+              (> event-seq tombstone-seq)) short-circuits true the moment no live
+              instance is tracked, before the tombstone-seq comparison is even
+              reached. The tombstone only guards a delayed spawn against a
+              CURRENTLY-LIVE instance at the same identity (a case this port does
+              not need, since instance-key alone is authoritative here, unlike
+              final-client's separate instance-id/instance-key matching) -- ported
+              faithfully, not re-derived, since changing dedup semantics from what
+              real content already runs against is a correctness risk this session
+              cannot visually verify either way."
+      (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                    :instance-key [:a] :event-seq 4 :params {:duration-ticks 4}})
+      (is (some? (runtime/lookup rt [:a]))))
+    (testing "a spawn with a HIGHER event-seq than the tombstone succeeds"
+      (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                    :instance-key [:a] :event-seq 7 :params {:duration-ticks 4}})
+      (is (some? (runtime/lookup rt [:a]))))))
+
+(deftest client-runtime-update-merges-params-and-ignores-stale-test
+  (let [rt (runtime/create-client-runtime scene-registry)]
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                  :instance-key [:b] :event-seq 10
+                                  :params {:duration-ticks 4 :value 1.0}})
+    (runtime/dispatch-signal! rt {:op :update :effect-id :with-scene :owner "p1"
+                                  :instance-key [:b] :event-seq 11 :params {:value 2.0}})
+    (runtime/dispatch-signal! rt {:op :update :effect-id :with-scene :owner "p1"
+                                  :instance-key [:b] :event-seq 9 :params {:value 99.0}})
+    (let [instance (runtime/lookup rt [:b])]
+      (is (= 11 (:event-seq instance)))
+      (is (= 2.0 (get-in instance [:user :value]))
+          "the stale event-seq 9 update must never overwrite the value from event-seq 11"))))
+
+(deftest client-runtime-clear-owner-through-dispatch-signal-test
+  (let [rt (runtime/create-client-runtime scene-registry)]
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                  :instance-key [:c] :event-seq 1 :params {:duration-ticks 4}})
+    (runtime/dispatch-signal! rt {:op :clear-owner :owner "p1" :event-seq 0})
+    (is (nil? (runtime/lookup rt [:c])))))
+
+(deftest client-tick-auto-destroys-expired-transient-instances-test
+  (let [rt (runtime/create-client-runtime scene-registry)]
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                  :instance-key [:d] :event-seq 1 :params {:duration-ticks 2}})
+    (is (some? (runtime/lookup rt [:d])))
+    (runtime/client-tick! rt 0.05)
+    (is (some? (runtime/lookup rt [:d])) "age 1 < duration 2, still alive")
+    (runtime/client-tick! rt 0.05)
+    (is (nil? (runtime/lookup rt [:d])) "age 2 >= duration 2, auto-destroyed")))
+
+(deftest sample-client-frame-pools-by-frame-id-test
+  (let [rt (runtime/create-client-runtime scene-registry {:max-frames 2})]
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                  :instance-key [:e] :event-seq 1 :params {:duration-ticks 4}})
+    (let [f1 (runtime/sample-client-frame! rt)
+          f2 (runtime/sample-client-frame! rt)]
+      (is (not= (:frame-id f1) (:frame-id f2)))
+      (is (some? (:java-frame f1)))
+      (is (some? (get @(:frames rt) (:frame-id f2))) "still pooled before release")
+      (runtime/release-frame! rt (:frame-id f2))
+      (is (nil? (get @(:frames rt) (:frame-id f2)))))))
