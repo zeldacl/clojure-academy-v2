@@ -18,6 +18,7 @@
             [cn.li.combat.beam-settlement :as beam-settlement]
             [cn.li.combat.vocabulary :as vocabulary]
             [cn.li.combat.kernels :as kernels]
+            [cn.li.combat.dsl-vocabulary :as dsl-vocabulary]
             [cn.li.combat.run :as run]
             [cn.li.combat.lib :as lib]
             [cn.li.combat.player :as player]))
@@ -50,6 +51,13 @@
 ;; ---- vocabulary (for a content module's own schema-export/editor tooling) ----
 (def descriptor-specs vocabulary/descriptor-specs)
 (def kernel-descriptors kernels/kernel-specs)
+
+;; ---- surface-DSL vocabulary + fn library (for the node editor's palette,
+;; ability-runtime/editor/palette.clj -- these are the :vocab/:fns/
+;; category-for the editor's "skill mode" is configured with; see the
+;; node-editor plan's §2.2 injection table) ----
+(def skill-vocab dsl-vocabulary/nodes)
+(def skill-vocab-category-for dsl-vocabulary/category-for)
 
 ;; ---- S8 cutover: the new node-core engine (cn.li.combat.run) is now the
 ;; live production dispatch path for real player actions -- see

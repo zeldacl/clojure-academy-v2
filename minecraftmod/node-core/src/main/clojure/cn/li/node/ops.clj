@@ -115,6 +115,27 @@
   [op-name]
   (get table op-name))
 
+;; --- editor palette presentation (:category), attached in schema-export ---
+;;
+;; A separate lookup rather than a field on every `table` entry: `table`
+;; is the hot-path signature lookup (known-op?/signature/invoke all read
+;; it), and category is presentation data with nothing to do with
+;; compilation -- keeping it out of `table` keeps that map's shape
+;; exactly what cn.li.node.compile has always expected. Derived from each
+;; op's own namespace, same technique as cn.li.combat.dsl-vocabulary's
+;; category-by-namespace, for the same reason (one exhaustive table beats
+;; scattering a presentation field across 54 entries).
+(def ^:private category-by-namespace
+  {"vec3" :vec3 "math" :math "pair" :math "value" :flow
+   "collection" :collection "bool" :flow "long" :math})
+
+(defn category-for
+  "Editor palette grouping for op-name, :uncategorized if its namespace
+   is not in category-by-namespace (schema-export_test.clj asserts this
+   never happens for any op actually in `table`)."
+  [op-name]
+  (get category-by-namespace (namespace op-name) :uncategorized))
+
 ;; cn.li.node.compile/compile-each emits :pure instructions naming these
 ;; three ops directly (see that function's own docstring), but they are
 ;; deliberately absent from `table`/known-op?/signature: compile-pure-call
