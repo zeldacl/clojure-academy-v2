@@ -124,6 +124,24 @@
                            (finish {:outcome :performed})]}")]
     (is (= stmts back))))
 
+(deftest stmt-text-matches-what-graph-form-would-print-test
+  (let [g (graph/form->graph (:do (surface/read-doc
+                                    "{:ability :t :do [(cooldown/start {:name :main :ticks 40}) (finish {:outcome :performed})]}")))
+        first-nid (first (:order g))]
+    (is (= (pr-str (first (graph/graph->form g))) (graph/stmt-text (:nodes g) first-nid)))))
+
+(deftest exec-flatten-walks-nested-bodies-with-increasing-depth-test
+  (let [g (graph/form->graph (:do (surface/read-doc
+                                    "{:ability :t :do
+                                       [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
+                                        (when (:entity-id hit)
+                                          (each t (target/entities {:center ?caster/eye :radius $aoe :limit 24})
+                                            (combat/damage {:target t :amount $damage})))
+                                        (finish {:outcome :performed})]}")))
+        flat (graph/exec-flatten g)]
+    (is (= 5 (count flat)))
+    (is (= [0 0 1 2 0] (mapv :depth flat)))))
+
 (deftest stamped-nid-survives-a-round-trip-test
   (let [doc (surface/read-doc
              "{:ability :t :do [^{:nid \"n7\"} (finish {:outcome :performed})]}")

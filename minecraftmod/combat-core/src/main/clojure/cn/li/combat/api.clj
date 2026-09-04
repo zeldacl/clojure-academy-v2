@@ -58,6 +58,12 @@
 ;; node-editor plan's §2.2 injection table) ----
 (def skill-vocab dsl-vocabulary/nodes)
 (def skill-vocab-category-for dsl-vocabulary/category-for)
+;; capability-type is a FUNCTION (?budget/*, ?cooldown/* etc are typed by
+;; NAMESPACE, not enumerated one name at a time -- see run.clj's own
+;; docstring), the exact :capabilities value cn.li.node.compile's env
+;; expects for the editor's check.clj to compile-check a skill doc the
+;; same way real dispatch does.
+(def skill-capability-type run/capability-type)
 
 ;; ---- S8 cutover: the new node-core engine (cn.li.combat.run) is now the
 ;; live production dispatch path for real player actions -- see

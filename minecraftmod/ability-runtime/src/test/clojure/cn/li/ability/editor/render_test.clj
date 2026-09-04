@@ -1,6 +1,8 @@
 (ns cn.li.ability.editor.render-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.ability.editor.render :as render]))
+            [cn.li.ability.editor.render :as render]
+            [cn.li.ability.editor.graph :as graph]
+            [cn.li.node.surface :as surface]))
 
 (deftest wire-quads-are-all-axis-aligned-test
   (let [quads (render/wire-quads 10.0 20.0 200.0 80.0 2.0 0xFFFFFFFF)]
@@ -31,3 +33,44 @@
   (let [nids ["n1" "n2" "n3"]
         resolved (render/resolve-layout {} nids)]
     (is (= 3 (count resolved)))))
+
+(defn- sample-graph []
+  (graph/form->graph (:do (surface/read-doc
+                            "{:ability :t :do
+                               [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
+                                (when (:entity-id hit)
+                                  (combat/damage {:target (:entity-id hit) :amount $damage}))
+                                (finish {:outcome :performed})]}"))))
+
+(deftest exec-default-layout-indents-nested-statements-test
+  (let [flat (graph/exec-flatten (sample-graph))
+        layout (render/exec-default-layout flat)
+        depths (into {} (map (fn [{:keys [nid depth]}] [nid depth])) flat)]
+    (doseq [[nid pos] layout]
+      (is (= (* 18.0 (double (get depths nid))) (:x pos))))))
+
+(deftest graph->composite-items-produces-one-body-and-label-per-exec-node-test
+  (let [g (sample-graph)
+        items (render/graph->composite-items g {})
+        bodies (filter #(= :node-body (:role %)) items)
+        labels (filter #(= :node-label (:role %)) items)]
+    (is (= (count (graph/exec-flatten g)) (count bodies) (count labels)))
+    (is (every? :nid bodies))
+    (is (every? string? (map :text labels)))))
+
+(deftest graph->composite-items-includes-wires-between-statements-test
+  (let [g (sample-graph)
+        flat (graph/exec-flatten g)
+        items (render/graph->composite-items g {})
+        wires (filter #(and (= :quad (:kind %)) (not (:role %))) items)]
+    ;; N flattened exec entries (let/when/nested-damage/finish = 4) ->
+    ;; N-1 consecutive pairs -> 3 quads (wire-quads) each.
+    (is (= (* 3 (dec (count flat))) (count wires)))))
+
+(deftest graph->composite-items-respects-stored-layout-override-test
+  (let [g (sample-graph)
+        first-nid (:nid (first (graph/exec-flatten g)))
+        items (render/graph->composite-items g {first-nid {:x 500.0 :y 500.0}})
+        body (first (filter #(and (= :node-body (:role %)) (= first-nid (:nid %))) items))]
+    (is (= 500.0 (:x body)))
+    (is (= 500.0 (:y body)))))

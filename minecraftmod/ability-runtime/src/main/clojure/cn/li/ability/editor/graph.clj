@@ -278,3 +278,39 @@
    never leaves the surface AST, so nothing here is a guess)."
   [{:keys [nodes order]}]
   (mapv #(node->stmt-form nodes %) order))
+
+;; --- read-only accessors for render.clj -------------------------------
+
+(defn stmt-text
+  "nodes, nid -> a one-line, human-readable rendering of the statement at
+   nid, reusing node->stmt-form + pr-str rather than a second ad hoc
+   text formatter -- this IS the exact form graph->form would print for
+   that node, so a canvas label can never show something structurally
+   different from what saving would actually write."
+  [nodes nid]
+  (pr-str (node->stmt-form nodes nid)))
+
+(defn expr-text
+  "nodes, nid -> the same idea as stmt-text, for an expression-position
+   node (used for e.g. showing a `when`/`if`'s condition as a label)."
+  [nodes nid]
+  (pr-str (node->expr-form nodes nid)))
+
+(defn exec-flatten
+  "graph -> [{:nid :depth} ...] in program order, walking into
+   when/each/if bodies (nested one :depth deeper each level). Purely the
+   EXEC statement chain, in the same order graph->form would print it --
+   the natural default top-to-bottom reading order for a canvas that has
+   no stored layout yet (see cn.li.ability.editor.render/resolve-layout,
+   which this feeds)."
+  [{:keys [nodes order]}]
+  (letfn [(walk [nid depth]
+            (let [node (get nodes nid)]
+              (into [{:nid nid :depth depth}]
+                    (case (:stmt node)
+                      :when (mapcat #(walk % (inc depth)) (:body-order node))
+                      :each (mapcat #(walk % (inc depth)) (:body-order node))
+                      :if (concat (mapcat #(walk % (inc depth)) (:then-order node))
+                                  (mapcat #(walk % (inc depth)) (:else-order node)))
+                      []))))]
+    (vec (mapcat #(walk % 0) order))))
