@@ -551,6 +551,119 @@
                            :skill-exp skill-exp}
                           e)))))))
 
+;; S8: materializing :costs/:cooldown/:progression/:invariants for the NEW
+;; engine. The old engine leaves these as raw {:ref ...}/{:expr ...}
+;; formula trees in :input and resolves them lazily, per-node, at the
+;; exact graph node that reads them (see the old engine's own source-
+;; value/spend-budget helpers) -- the new engine's ?budget/?cooldown/
+;; ?progression/?invariant capabilities are plain fixed values read once
+;; before dispatch starts (the player-spell admission layer establishes
+;; the same fixed-before-dispatch contract for player spells), so this
+;; namespace must do that resolution itself, once, up front.
+;; resolve-final-formula-v2 below is NOT a general port of the old
+;; resolver -- it covers exactly the
+;; {:ref [:input :tunables k]} / {:ref [:input :context k]} / {:ref
+;; [:state k]} / {:expr :math/mul|:math/sub|:math/select :args [...]}
+;; shapes every real ac/skills/*.edn :costs/:cooldown/:progression/
+;; :invariants declaration actually uses (grep-confirmed across all 39
+;; files before writing this, not assumed complete).
+(defn- resolve-final-formula-v2
+  [value scope]
+  (cond
+    (and (map? value) (contains? value :ref))
+    (let [[root a b] (:ref value)]
+      (case root
+        :input (case a
+                 :tunables (get-in scope [:tunables b])
+                 :context (get-in scope [:context b])
+                 (throw (ex-info "unsupported S8 final formula :input ref"
+                                 {:ref (:ref value)})))
+        :state (get-in scope [:state a])
+        (throw (ex-info "unsupported S8 final formula ref root" {:ref (:ref value)}))))
+    (and (map? value) (contains? value :expr))
+    (let [args (mapv #(resolve-final-formula-v2 % scope) (:args value))]
+      (case (:expr value)
+        :math/mul (reduce * (map double args))
+        :math/sub (apply - (map double args))
+        :math/select (if (first args) (second args) (nth args 2))
+        (throw (ex-info "unsupported S8 final formula expr" {:expr (:expr value)}))))
+    (map? value) (into {} (map (fn [[k v]] [k (resolve-final-formula-v2 v scope)])) value)
+    (vector? value) (mapv #(resolve-final-formula-v2 % scope) value)
+    :else value))
+
+(defn- materialize-final-map-v2
+  "Per-entry resolution failures are OMITTED, not propagated: a handful of
+   real :progression declarations (vec_reflection.edn's own :damaged, for
+   one) reference {:ref [:input :params ...]} -- damage-REACTION snapshot
+   params, a completely different input shape belonging to the damage-
+   reaction pipeline (final_damage.clj's own reaction resolution, already
+   engine-agnostic and unaffected by S8), not this ability's own dispatch-
+   time capabilities. Confirmed by grep: no real ac/skills/*.edn :program
+   ever reads ?progression/damaged (or any other :params-backed entry) as
+   a plain capability sigil -- if a name is never read that way, silently
+   NOT materializing it as a capability is correct, not a gap; throwing
+   here would break every ability with an unrelated reaction-only
+   progression entry."
+  [declarations scope]
+  (if-not (map? declarations)
+    {}
+    (into {}
+          (keep (fn [[k v]]
+                 (try [k (resolve-final-formula-v2 v scope)]
+                      (catch clojure.lang.ExceptionInfo _ nil))))
+          declarations)))
+
+(defn final-capabilities-v2
+  "owner, ability-id, intent, seed, source (an ac/skills/*.edn raw doc,
+   cn.li.ac.ability.skills-catalog's own :sources entry shape -- every
+   top-level key besides :program byte-for-byte identical to the old
+   engine's own source doc, so :costs/:cooldown/:progression/:invariants/
+   :tunables read exactly like combat-source's already-established
+   fields) -> the full ?capability -> value map the new engine's own
+   dispatch expects as :capabilities, merging caster-facade's own
+   caster/world/movement/progression-mastery capabilities with this
+   ability's own materialized budget/cooldown/progression/invariant
+   values. session-state is the CURRENT persisted session state (before
+   this dispatch), matching :ability-state-provider's own contract --
+   callers must supply it, this function has no session store
+   dependency of its own.
+
+   Deliberately reads `combat-source` (the OLD catalog's own source doc)
+   rather than a separate new-catalog lookup: every ac/skills/*.edn
+   file's non-:program top-level key is byte-for-byte identical to its
+   ac/combat/abilities/*.edn counterpart (an S6 design decision made
+   specifically so this kind of reuse would be safe later), so
+   :costs/:cooldown/:progression/:invariants/:tunables read the exact
+   same declarative data either way -- and the old catalog is already
+   loaded and populated by the time any dispatch happens, so this avoids
+   standing up a second parallel catalog atom just for this one read."
+  [owner ability-id intent seed session-state]
+  (let [context (activation-context owner ability-id intent seed)
+        tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
+        scope {:tunables tunables :context context :state (or session-state {})}
+        source (combat-source ability-id)
+        budgets (materialize-final-map-v2 (:costs source) scope)
+        cooldowns (materialize-final-map-v2 (:cooldown source) scope)
+        progressions (materialize-final-map-v2 (:progression source) scope)
+        invariants (materialize-final-map-v2 (:invariants source) scope)]
+    (merge (caster-facade owner context)
+           (into {} (map (fn [[k v]] [(keyword "budget" (name k)) v])) budgets)
+           (into {} (map (fn [[k v]] [(keyword "cooldown" (name k)) (long (or (:ticks v) 0))])) cooldowns)
+           (into {} (map (fn [[k v]] [(keyword "progression" (name k)) (double (or (:per-mark v) 0.0))]))
+                progressions)
+           (into {} (map (fn [[k v]] [(keyword "invariant" (name k)) (double (or v 0.0))])) invariants)
+           ;; S8: run.clj's own fixed-capabilities table names these
+           ;; :caster/normal-metal-blocks/:caster/weak-metal-blocks/
+           ;; :caster/metal-entities (mag_movement.edn's own S6
+           ;; docstring), but caster-facade -- built independently,
+           ;; earlier this session, before that table existed -- calls
+           ;; the SAME three fields :targeting/*. Aliased here rather
+           ;; than renaming either established, already-shipped
+           ;; convention.
+           {:caster/normal-metal-blocks (:targeting/normal-metal-blocks (caster-facade owner context))
+            :caster/weak-metal-blocks (:targeting/weak-metal-blocks (caster-facade owner context))
+            :caster/metal-entities (:targeting/metal-entities (caster-facade owner context))})))
+
 (defn- final-input [owner ability-id intent seed]
   (let [context (activation-context owner ability-id intent seed)
         source (combat-source ability-id)]
