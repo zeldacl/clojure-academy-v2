@@ -1,9 +1,19 @@
 (ns cn.li.ac.ability.client.screens.node-editor-reactive
-  "Presentation Runtime controller for the node editor's skill mode
-   (node-editor plan Phase 3). Follows preset-editor-reactive's simpler
-   self-contained pattern (an active-mounts atom keyed by player-uuid),
-   not skill-tree's managed-screens/read-model machinery -- this is a
-   standalone dev tool, not tied to persistent per-player gameplay state.
+  "Presentation Runtime controller for the node editor -- BOTH the skill
+   mode (Phase 3) and the scene/VFX mode (Phase 4). Follows preset-
+   editor-reactive's simpler self-contained pattern (an active-mounts
+   atom keyed by player-uuid), not skill-tree's managed-screens/
+   read-model machinery -- this is a standalone dev tool, not tied to
+   persistent per-player gameplay state.
+
+   The skill/scene difference is entirely in mode-opts below: a small
+   table of {:vocab :capabilities :fns :field}. Everything else in this
+   namespace (graph rendering, drag, save, diagnostics) is mode-agnostic
+   -- Phase 4's real deliverable is proving that claim, not new plumbing.
+   Scene mode's :capabilities is PER-FILE (an effect's own :inputs :spawn
+   declaration merged with vfx-core's universal :age/:progress -- see
+   vfx-api's scene-capabilities-for), unlike skill mode's fixed table, so
+   mode-opts takes the just-opened wrapper doc as an argument.
 
    SCOPE (real, deliberate boundaries for this first iteration -- see
    the plan's own commit history for why each was drawn where it was):
@@ -20,20 +30,33 @@
      itself a runtime detail this environment cannot verify without
      launching the game, so it is left as a caller-supplied parameter
      rather than guessed at and shipped unverified."
-  (:require [cn.li.ac.gui.presentation :as presentation]
+  (:require [clojure.string :as str]
+            [cn.li.ac.gui.presentation :as presentation]
+            [cn.li.ac.vfx.fx-catalog :as fx-catalog]
             [cn.li.ability.editor.document :as document]
             [cn.li.ability.editor.graph :as graph]
             [cn.li.ability.editor.check :as check]
             [cn.li.ability.editor.render :as render]
             [cn.li.ability.editor.hit :as hit]
-            [cn.li.combat.api :as combat-api]))
+            [cn.li.combat.api :as combat-api]
+            [cn.li.vfx.api :as vfx-api]))
 
 (defonce ^:private active-mounts (atom {}))
 
-(def ^:private skill-opts
-  {:vocab combat-api/skill-vocab
-   :capabilities combat-api/skill-capability-type
-   :fns combat-api/skill-lib-fns})
+(defn- mode-opts
+  "mode (:skill or :scene), wrapper-doc (the just-opened, un-normalized
+   ac/skills or ac/vfx/fx wrapper map, needed for scene mode's per-file
+   capabilities) -> {:vocab :capabilities :fns :field}."
+  [mode wrapper-doc]
+  (case mode
+    :skill {:vocab combat-api/skill-vocab
+            :capabilities combat-api/skill-capability-type
+            :fns combat-api/skill-lib-fns
+            :field :program}
+    :scene {:vocab vfx-api/scene-vocab
+            :capabilities (vfx-api/scene-capabilities-for (get-in wrapper-doc [:inputs :spawn] {}))
+            :fns {}
+            :field :scene}))
 
 ;; --- pure state --------------------------------------------------------
 
@@ -47,35 +70,47 @@
   "state -> state with :graph/:diagnostics/:cost-summary refreshed from
    the current document + selected phase. Called after every edit so the
    canvas/inspector never show a stale reading against the actual form."
-  [{:keys [document phase] :as state}]
+  [{:keys [document opts] :as state}]
   (let [entries (entries-of (:form document))
-        phase (or phase (ffirst entries))
+        phase (or (:phase state) (ffirst entries))
         stmts (get entries phase)
         g (graph/form->graph stmts)]
     (assoc state
            :phase phase
            :phases (vec (keys entries))
            :graph g
-           :diagnostics (check/diagnostics (:form document) skill-opts)
-           :cost-summary (check/cost-summary (:form document) skill-opts))))
+           :diagnostics (check/diagnostics (:form document) opts)
+           :cost-summary (check/cost-summary (:form document) opts))))
 
 (defn open-document
-  "path (absolute file path) -> a fresh editor state. Reads the raw file
-   text directly (not via classpath resource -- see this namespace's own
-   docstring on why open!/export! take an explicit path)."
-  [path]
-  (-> {:path path
-       :document (document/open (slurp path) :program)
-       :selected-nid nil
-       :drag hit/idle
-       :layout {}
-       :status "Loaded"}
-      recompute))
+  "path (absolute file path), mode (:skill or :scene) -> a fresh editor
+   state. Reads the raw file text directly (not via classpath resource
+   -- see this namespace's own docstring on why open!/export! take an
+   explicit path). wrapper-doc's own :program/:scene text (the field
+   mode-opts selects) is what document/open then parses."
+  [path mode]
+  (let [raw (slurp path)
+        wrapper-doc (binding [*read-eval* false] (read-string raw))
+        opts (mode-opts mode wrapper-doc)]
+    (-> {:path path
+         :mode mode
+         :opts opts
+         :document (document/open raw (:field opts))
+         :selected-nid nil
+         :drag hit/idle
+         :layout {}
+         :status "Loaded"}
+        recompute)))
 
-(defn- selected-node-info [{:keys [graph selected-nid]}]
+(defn- selected-node-info [{:keys [graph selected-nid mode]}]
   (when (and selected-nid (get (:nodes graph) selected-nid))
-    {:nid selected-nid
-     :text (graph/stmt-text (:nodes graph) selected-nid)}))
+    (let [node (get (:nodes graph) selected-nid)
+          text (graph/stmt-text (:nodes graph) selected-nid)
+          vfx-note (when (and (= :skill mode) (= :vfx! (:stmt node)))
+                     (when-let [unknown (check/unknown-vfx-fields node (fx-catalog/assemble))]
+                       (when (seq unknown)
+                         (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
+      {:nid selected-nid :text (str text vfx-note)})))
 
 ;; --- render-state (map -> what the .ui.edn's :state-schema binds) ------
 
@@ -83,9 +118,9 @@
   {:code (str (:code d)) :message (:message d) :nid (str (:nid d)) :line (str (or (:line d) "-"))})
 
 (defn- render-state [state]
-  (let [{:keys [graph document diagnostics cost-summary phase phases status]} state
+  (let [{:keys [graph document diagnostics cost-summary phase phases status mode]} state
         selected (selected-node-info state)]
-    {:title (str "Node Editor" (when (:dirty? document) " *"))
+    {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
      :phase-label (str "Phase: " (name (or phase :default)))
      :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
@@ -177,19 +212,20 @@
 ;; --- mount ---------------------------------------------------------------
 
 (defn open!
-  "player-uuid, path (absolute .edn file path) -> mounts the node editor
-   screen. See this namespace's docstring for why path is caller-
-   supplied rather than resolved internally."
-  [player-uuid path]
-  (let [state* (atom (open-document path))
-        vm (presentation/mount-view!
-            {:view-id :academy.app/node-editor
-             :host-kind :screen
-             :state (render-state @state*)
-             :dispatch-action! (fn [action payload _current] (handle-action state* action payload))
-             :on-close #(swap! active-mounts dissoc (str player-uuid))})]
-    (swap! active-mounts assoc (str player-uuid) {:mount (:mount vm) :state* state*})
-    vm))
+  "player-uuid, path (absolute .edn file path), mode (:skill or :scene)
+   -> mounts the node editor screen. See this namespace's docstring for
+   why path is caller-supplied rather than resolved internally."
+  ([player-uuid path] (open! player-uuid path :skill))
+  ([player-uuid path mode]
+   (let [state* (atom (open-document path mode))
+         vm (presentation/mount-view!
+             {:view-id :academy.app/node-editor
+              :host-kind :screen
+              :state (render-state @state*)
+              :dispatch-action! (fn [action payload _current] (handle-action state* action payload))
+              :on-close #(swap! active-mounts dissoc (str player-uuid))})]
+     (swap! active-mounts assoc (str player-uuid) {:mount (:mount vm) :state* state*})
+     vm)))
 
 (defn export!
   "player-uuid, target-path -> writes the current document's :file-text

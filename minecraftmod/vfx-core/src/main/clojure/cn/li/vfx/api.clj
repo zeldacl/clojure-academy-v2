@@ -35,3 +35,4 @@
 ;; injection table's :scene mode) ----
 (def scene-vocab dsl-vocabulary/nodes)
 (defn compile-scene-doc! [text user-types] (scene/compile-doc! text user-types))
+(defn scene-capabilities-for [user-types] (scene/capabilities-for user-types))
