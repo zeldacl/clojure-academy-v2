@@ -69,48 +69,38 @@
         (recur (unchecked-inc-int i))))))
 
 (defn- blit-nine-patch!
+  "AcademyCraft BlendQuad / main TechUI :nine-slice (see mc1201 backend)."
   [^GuiGraphicsExtractor gg ^Identifier rl
-   x y w h border tex-size argb]
-  (let [b (min (double border) (* 0.5 (double w)) (* 0.5 (double h)))
-        tex (max 1.0 (double tex-size))
-        ub (/ b tex)
-        x0 (double x) x3 (+ x0 (double w))
-        y0 (double y) y3 (+ y0 (double h))
-        x1 (+ x0 b) x2 (- x3 b)
-        y1 (+ y0 b) y2 (- y3 b)
-        u0 0.0 u1 ub u2 (- 1.0 ub) u3 1.0
-        v0 0.0 v1 ub v2 (- 1.0 ub) v3 1.0]
-    (doseq [[xa xb ya yb ua ub' va vb']
-            [[x0 x1 y0 y1 u0 u1 v0 v1]
-             [x1 x2 y0 y1 u1 u2 v0 v1]
-             [x2 x3 y0 y1 u2 u3 v0 v1]
-             [x0 x1 y1 y2 u0 u1 v1 v2]
-             [x1 x2 y1 y2 u1 u2 v1 v2]
-             [x2 x3 y1 y2 u2 u3 v1 v2]
-             [x0 x1 y2 y3 u0 u1 v2 v3]
-             [x1 x2 y2 y3 u1 u2 v2 v3]
-             [x2 x3 y2 y3 u2 u3 v2 v3]]]
-      (when (and (> (- xb xa) 0.5) (> (- yb ya) 0.5))
-        (GuiGraphicsHelper/blitTintedQuad gg rl
-                                          (int xa) (int ya) (int xb) (int yb)
-                                          ua ub' va vb' (int argb))))))
+   x y w h margin _tex-size argb]
+  (let [m (max 1.0 (double margin))
+        x0 (- (double x) m)  x1 (double x)  x2 (+ (double x) (double w))  x3 (+ (double x) (double w) m)
+        y0 (- (double y) m)  y1 (double y)  y2 (+ (double y) (double h))  y3 (+ (double y) (double h) m)
+        d-xs [x0 x1 x2 x3]
+        d-ys [y0 y1 y2 y3]
+        step (/ 1.0 3.0)
+        ;; black @ 0.5 alpha, matching Colors.monoBlend(0, 0.5)
+        tint (unchecked-int 0x80000000)]
+    (dotimes [i 3]
+      (dotimes [j 3]
+        (let [u0 (* i step) u1 (+ u0 step)
+              v0 (* j step) v1 (+ v0 step)
+              xa (nth d-xs i) xb (nth d-xs (inc i))
+              ya (nth d-ys j) yb (nth d-ys (inc j))]
+          (when (and (> (- xb xa) 0.5) (> (- yb ya) 0.5))
+            (GuiGraphicsHelper/blitTintedQuad gg rl
+                                              (int xa) (int ya) (int xb) (int yb)
+                                              u0 u1 v0 v1 tint)))))))
 
 (defn- draw-nine-run! [^GuiGraphicsExtractor gg ^UiDrawList dl start end ^Identifier rl]
-  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl)
-        ^floats scalar (.scalar dl) ^objects aux (.aux dl)]
+  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl) ^floats scalar (.scalar dl)]
     (loop [i (int start)]
       (when (< i (int end))
         (let [g (* i 4)
               x (aget geom g) y (aget geom (unchecked-inc-int g))
               w (aget geom (+ g 2)) h (aget geom (+ g 3))
-              border (double (aget scalar i))
-              tex (double (or (aget aux i) 48.0))
+              margin (max 1.0 (double (aget scalar i)))
               argb (aget rgba i)]
-          (if (<= border 0.0)
-            (GuiGraphicsHelper/blitTintedQuad gg rl
-                                              (int x) (int y) (int (+ x w)) (int (+ y h))
-                                              0.0 1.0 0.0 1.0 argb)
-            (blit-nine-patch! gg rl x y w h border tex argb)))
+          (blit-nine-patch! gg rl x y w h margin 0.0 argb))
         (recur (unchecked-inc-int i))))))
 
 (defn- draw-text-run! [^GuiGraphicsExtractor gg ^UiDrawList dl start end]

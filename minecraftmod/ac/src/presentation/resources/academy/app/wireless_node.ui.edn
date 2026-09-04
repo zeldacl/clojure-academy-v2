@@ -24,17 +24,18 @@
       :bind {:items [:state :slot-anchors]}
       :children [{:type :slot-anchor :bind {:item [:state :item]}}]}]}
 
-   ;; clip? true on main — keeps the y=-20 histogram pull-up inside the panel.
+   ;; Main: info-area-bg (BlendQuad) is a sibling of the clipped :info-area,
+   ;; so margin can grow 4px outside the 100×177 box without being scissored.
+   {:type :nine-slice :key :node/info-bg
+    :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/blend_quad.png"}
+            :slice 4.0}
+    :semantics {:role :image}}
+
    {:type :clip :key :node/info
     :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
     :children
-    [     ;; Main BlendQuad: blend_quad.png 48×48 nine-sliced with margin 4.
-     {:type :nine-slice :layout {:width 100.0 :height 177.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/blend_quad.png"}
-              :slice 4.0 :tex-size 48.0}
-      :semantics {:role :image}}
-
-     ;; histogram.png frame @ scale 0.4, pulled up 20px like main.
+    [;; histogram.png frame @ scale 0.4, pulled up 20px like main.
      {:type :absolute :layout {:x 8.0 :y -20.0 :width 84.0 :height 84.0}
       :children
       [{:type :image :layout {:width 84.0 :height 84.0}
