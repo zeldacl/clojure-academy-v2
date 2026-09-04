@@ -3,7 +3,6 @@
 
    Combat Core itself never knows about AC, Minecraft or VFX."
   (:require
-            [cn.li.combat.final-damage :as final-damage]
             [cn.li.combat.api :as combat-api]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -594,7 +593,7 @@
    real :progression declarations (vec_reflection.edn's own :damaged, for
    one) reference {:ref [:input :params ...]} -- damage-REACTION snapshot
    params, a completely different input shape belonging to the damage-
-   reaction pipeline (final_damage.clj's own reaction resolution, already
+   reaction pipeline (damage.clj's own reaction resolution, already
    engine-agnostic and unaffected by S8), not this ability's own dispatch-
    time capabilities. Confirmed by grep: no real ac/skills/*.edn :program
    ever reads ?progression/damaged (or any other :params-backed entry) as
@@ -1339,7 +1338,7 @@
   [result]
   (boolean
      (some (fn [reflection]
-             ;; resolve-event's own :reflections entries (final_damage.clj)
+             ;; resolve-event's own :reflections entries (damage.clj)
              ;; are the reflected event maps directly (assoc'd off the
              ;; original event with a swapped :source/:target, new :base,
              ;; :depth, :metadata) -- not wrapped in an {:event ...} map.
@@ -1490,7 +1489,7 @@
         event (:event result)
         damage-vfx (when (and accepted? event)
                      (map (fn [descriptor]
-                            (let [materialized (final-damage/materialize-vfx
+                            (let [materialized (combat-api/materialize-vfx
                                                 descriptor
                                                 (assoc event :metadata
                                                        {:input (:input descriptor)}))]

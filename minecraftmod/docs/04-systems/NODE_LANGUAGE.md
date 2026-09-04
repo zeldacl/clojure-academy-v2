@@ -42,12 +42,14 @@
   `system_compiler.clj`（同样只为旧 `final_catalog.clj` 的 `load-vfx` 服务）
   **已全部删除**：`combat-catalog.clj` 曾是它们最后一个真实调用点，切换元数据
   来源后二者都变成零调用点。
-- **`kernels.clj`/`final_damage.clj`/`node-core/expr.clj` 为什么还留着**：
-  `kernels.clj` 被 `combat-core/vocabulary.clj`（下面单独说明）在**模块顶层
-  直接 require**，跟"编译过没有被执行"无关，是硬编译期依赖。`final_damage.clj`
-  （伤害反应引擎）和 `node-core/expr.clj`（SplitMix64/vec3-components 的唯一
-  定义点，新引擎的 `ops.clj` 委托给它）是另一类：两者都是**真正共享、正确
-  工作的基础设施**，不是遗留代码，永久保留。
+- **`kernels.clj`/`node-core/expr.clj` 为什么还留着**：`kernels.clj` 被
+  `combat-core/vocabulary.clj`（下面单独说明）在**模块顶层直接 require**，跟
+  "编译过没有被执行"无关，是硬编译期依赖。`node-core/expr.clj`（SplitMix64/
+  vec3-components 的唯一定义点，新引擎的 `ops.clj` 委托给它）是另一类：**真正
+  共享、正确工作的基础设施**，不是遗留代码，永久保留。伤害反应引擎
+  （`combat/damage.clj`，取代已删除的 `final_damage.clj`——聚合算法逐字节
+  port，只把线性扫描换成 mark-type+priority 索引查找，见 COMBAT_CORE.md）
+  跟这两者同属一类：真正共享、独立于 dispatch 引擎，永久保留。
 - **`combat.vocabulary`/`combat.kernels`/`vfx.vocabulary`(vfx-core 的这份未删)/
   `node.composite`/`composite-loader`/`scope`/`validate`/`environment`/
   `flow`/`descriptor`/`schema-export`/`node-core/api.clj` 为什么还留着，即使

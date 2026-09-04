@@ -40,7 +40,7 @@
 ;; :context :enabled?) -- :damage/reflect itself has no built-in
 ;; affordability gate (unlike :damage/absorb's :requires-payment, its
 ;; :cost-per-damage is charged best-effort after the fact, see
-;; final_damage.clj's reflection-costs), so a reaction that must not fire
+;; damage.clj's reflection-costs), so a reaction that must not fire
 ;; without resources needs to say so explicitly.
 (def ^:private reflect-source
   {:damage-policies [{:on :combat/damage
@@ -152,7 +152,7 @@
             (is (= {:target "attacker-mob" :amount 5.0
                     :damage-type :mob :owner "target-player"}
                    (dissoc (first @seen) :world-id)))
-            ;; resolve-event's own reflection-costs formula (final_damage.clj)
+            ;; resolve-event's own reflection-costs formula (damage.clj)
             ;; is amount-before-reflect * ratio * cost-per-damage = 10.0 *
             ;; 0.5 * 0.1 = 0.5 -- cost-per-damage is charged per point of
             ;; the REFLECTED damage, not the original incoming damage.
@@ -186,7 +186,7 @@
                 (str "the reflected hit must land through the capability during the SAME "
                      "precheck call -- process-damage-request! never runs afterwards for "
                      "an attack the precheck cancelled"))
-            ;; resolve-event's own reflection-costs formula (final_damage.clj)
+            ;; resolve-event's own reflection-costs formula (damage.clj)
             ;; is amount-before-reflect * ratio * cost-per-damage = 10.0 *
             ;; 0.5 * 0.1 = 0.5 -- cost-per-damage is charged per point of
             ;; the REFLECTED damage, not the original incoming damage.

@@ -1483,7 +1483,7 @@ tasks.register("verifyContentModuleCoreIsolation") {
     description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here."
     doLast {
         def allowed = [
-            "cn.li.combat.api", "cn.li.combat.damage-math", "cn.li.combat.final-damage",
+            "cn.li.combat.api", "cn.li.combat.damage-math",
             "cn.li.combat.platform", "cn.li.combat.vocabulary",
             "cn.li.node.composite", "cn.li.node.composite-loader", "cn.li.node.digest",
             "cn.li.node.rng", "cn.li.node.schema-export", "cn.li.node.scope", "cn.li.node.validate",

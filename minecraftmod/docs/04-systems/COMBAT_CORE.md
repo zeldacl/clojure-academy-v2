@@ -10,8 +10,11 @@
 > `final_catalog_service.clj`、`ac/combat/abilities/*.edn`〔39 个〕、
 > `combat-core/composites/*.edn`〔17 个〕）**也已删除**：`combat-catalog.clj`
 > 自己的元数据来源已重写为直接读 `ac/skills/*.edn`（`skills-catalog.clj`），
-> 见下方"内容元数据加载侧"一节。`kernels.clj`/`final_damage.clj` 不属于"旧
-> 引擎"，是不同原因永久保留的基础设施，见 NODE_LANGUAGE.md §0 详细说明。
+> 见下方"内容元数据加载侧"一节。`kernels.clj` 不属于"旧引擎"，是永久保留的
+> 基础设施，见 NODE_LANGUAGE.md §0 详细说明。`final_damage.clj` 自己也已删除
+> ——聚合运算逐字节 port 进 `combat/damage.clj`（同一份算法，只是分派层从
+> `final_damage.clj` 的 O(n) 线性扫描换成 `damage.clj` 的 mark-type+priority
+> 索引查找，见下方"伤害管线"一行），`combat-api/resolve-damage` 现在指向它。
 
 ## 系统职责
 
@@ -31,7 +34,7 @@
 | 词汇表 | `cn.li.combat.dsl-vocabulary`（`nodes`，带真实 `:params`/`:returns`/`:effects`/`:capability`/`:cost`） |
 | 内容资源 | `ac/src/main/resources/ac/skills/*.edn`（`:program` 字段内嵌新 DSL 文本，其余顶层键——`:tunables`/`:costs`/`:cooldown`/`:progression`/`:session-state`/`:mark-policies`/`:damage-policies`——跟旧文件逐字节相同） |
 | 复用单元 | `combat-core/lib/*.edn` + `combat-core/lib.clj`（`:defn`，显式文件名列表加载，见 NODE_LANGUAGE.md §1） |
-| 伤害管线 | `combat-core/final_damage.clj`——独立于 dispatch 引擎，永久共享 |
+| 伤害管线 | `combat-core/damage.clj`（`combat-api/resolve-damage`/`materialize-vfx`）——独立于 dispatch 引擎，永久共享 |
 | 玩家法术 | `cn.li.combat.player`（S7，desugar/admit，见 NODE_LANGUAGE.md §6） |
 
 `combat-source`（`combat_runtime.clj` 内部函数，`final-capabilities-v2`/
@@ -91,9 +94,18 @@ export 基础设施，不是待清理的死代码），composite 内容跟着它
   测试套件广泛依赖它。`:category-id`/`:level`/`:controllable?` 优先取
   `skill-config/skill-definitions-by-id`（该表的文档字符串自称是这三个字段的
   single source of truth），EDN 内容里的同名字段只是未配置技能的兜底。
-- `combat-core/src/main/clojure/cn/li/combat/final_damage.clj`：统一 DamageEvent
-  收集/确定性 resolve 与 mcmod DamageBoundary 结果——**独立于 dispatch 引擎，
-  永久共享**，不属于内容加载或执行引擎中的任何一侧，只是刚好也叫 final_*。
+- `combat-core/src/main/clojure/cn/li/combat/damage.clj`：统一 DamageEvent 收集/
+  确定性 resolve 与 mcmod DamageBoundary 结果——**独立于 dispatch 引擎，永久
+  共享**，不属于内容加载或执行引擎中的任何一侧。取代已删除的 `final_damage.
+  clj`：聚合算法（`multiply`/`reduce`/`absorb`/`critical`/`reflect` 的合并、
+  资源代价结算、`max-reflection-depth`）逐字节 port 过来，唯一实质变化是
+  `collect` 的 O(n) 全表线性扫描换成 `build-index`/`candidates-for` 的
+  mark-type+priority 索引查找（O(k)，k = 该事件 mark-type 相关的 policy
+  数）。`combat/api.clj` 的 `resolve-damage` 在内部对每次调用的 policies 列表
+  现建现查一次索引（不跨事件缓存——沿用 `combat_runtime.clj` 自己
+  `final-damage-policies-v2` 一贯的"伤害不是逐帧热路径，不为它引入需要跟
+  `final-runtime-v2*` 保持同步的第二份可变状态"判断，如果之后 profiling
+  证明这里确实是瓶颈，跨事件缓存索引是一个独立、更晚的优化）。
 - `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host
   query/action capability 表，新引擎通过这份注册表在真实游戏里 dispatch。
 - `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：`merge-draw-
@@ -126,7 +138,7 @@ export 基础设施，不是待清理的死代码），composite 内容跟着它
 4. `combat_runtime.clj`（AC）把 `:actions` 里的 patch 提交进玩家存档；
    `:vfx-signals` 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播——这一步
    与切换前完全相同，两个引擎产出的中立结果计划形状一致，下游消费代码未改动。
-5. 任意入站伤害都进入 `final_damage.clj` 的统一 DamageEvent 收集/resolve 边界，
+5. 任意入站伤害都进入 `damage.clj` 的统一 DamageEvent 收集/resolve 边界，
    与哪个引擎负责 dispatch 无关（见上表）。
 
 旧引擎自己曾经的运行流程（`final_catalog/initialize!` → 具体化 tunable →

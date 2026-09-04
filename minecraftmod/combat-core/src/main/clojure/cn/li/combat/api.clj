@@ -13,7 +13,7 @@
    registrations through the old engine once nothing executed the result
    any more (see that namespace's own docstring) -- final_engine.clj/
    final_compiler.clj themselves are deleted, not just unreferenced here."
-  (:require [cn.li.combat.final-damage :as damage]
+  (:require [cn.li.combat.damage :as damage]
             [cn.li.combat.platform :as platform]
             [cn.li.combat.beam-settlement :as beam-settlement]
             [cn.li.combat.vocabulary :as vocabulary]
@@ -23,7 +23,17 @@
             [cn.li.combat.player :as player]))
 
 ;; ---- damage ----
-(defn resolve-damage [reactions raw-event] (damage/resolve-event reactions raw-event))
+;; Cut over from cn.li.combat.final-damage (deleted) to cn.li.combat.damage:
+;; same aggregation arithmetic, ported verbatim (see that namespace's own
+;; docstring) -- only the dispatch layer changed, an O(n) linear scan over
+;; every registered policy per damage event replaced by an O(k) mark-type+
+;; priority indexed lookup. resolve-damage still takes a flat policies list
+;; (combat_runtime.clj's own call site is unchanged) and builds the index
+;; fresh per call, matching combat_runtime.clj's own final-damage-policies-v2
+;; "not a per-frame hot path, don't add cached mutable state for this"
+;; reasoning -- a real cross-event cache is a separate, later optimization
+;; if profiling ever shows this matters.
+(defn resolve-damage [reactions raw-event] (damage/resolve-event (damage/build-index reactions) raw-event))
 (defn materialize-vfx [descriptor event] (damage/materialize-vfx descriptor event))
 ;; install-boundary! (mcmod begin/complete SPI hookup) is not included here:
 ;; it has zero real callers anywhere in the repo today (unlike the other

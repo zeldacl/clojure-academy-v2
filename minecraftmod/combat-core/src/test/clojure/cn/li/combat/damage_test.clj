@@ -7,7 +7,8 @@
    ones. New coverage (not in final_damage_test.clj) is the mark-type
    index itself: build-index/candidates-for."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.combat.damage :as damage]))
+            [cn.li.combat.damage :as damage]
+            [cn.li.mcmod.runtime.damage-boundary :as boundary]))
 
 (deftest fixed-order-damage-resolution-test
   (let [index (damage/build-index [{:ability-id :a :reaction-id :m :priority 1 :match {:types #{:skill}}
@@ -62,6 +63,90 @@
     (is (= 7.0 (:amount applied)))
     (is (= [{:path [:last-absorb-tick] :mode :assign :value 25}] (:session-patches applied)))
     (is (empty? (:session-patches blocked)))))
+
+(deftest reduce-without-cost-resource-throws-when-cost-is-positive-test
+  (let [index (damage/build-index
+               [{:ability-id :deviation :reaction-id :reduce :priority 1
+                 :on :combat/damage
+                 :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 99.0}}])]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"cost-resource"
+          (damage/resolve-event index {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})))))
+
+(deftest reduce-is-resource-agnostic-test
+  (let [index (damage/build-index
+               [{:ability-id :bc-ritual :reaction-id :reduce :priority 1
+                 :on :combat/damage
+                 :program {:component :damage/reduce :rate 0.5 :max-cost 99.0 :ignore-threshold 99.0
+                           :cost-resource :mana}}])
+        result (damage/resolve-event index {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})]
+    (is (= 2.0 (get-in result [:resource-costs :mana])))
+    (is (nil? (get-in result [:resource-costs :cp])))))
+
+(deftest boundary-commits-only-after-actual-apply-test
+  (let [committed (atom nil)]
+    (damage/install-boundary! {:reactions [] :commit-state! #(reset! committed %)})
+    (let [resolution (boundary/begin! {:world-id "w" :source :a :target :b :base 2 :type :skill})]
+      (boundary/complete! resolution false 0.0)
+      (is (nil? @committed))
+      (boundary/complete! resolution true 2.0)
+      (is (= 2.0 (:amount @committed))))
+    (boundary/clear!)))
+
+(deftest absorb-exp-tag-emits-progression-even-when-payment-fails-test
+  (let [index (damage/build-index
+               [{:ability-id :light-shield :reaction-id :absorb :priority 10
+                 :on :combat/damage
+                 :program {:component :damage/absorb :cap 3.0
+                           :cost {:cp 10.0}
+                           :progression-tag :attacked
+                           :progression-scale 0.25}}])
+        result (damage/resolve-event index
+                                     {:world-id "w" :source :a :target :b
+                                      :base 10.0 :type :skill :seed 4
+                                      :metadata {:input {:context {:resources {:cp 0.0
+                                                                               :overload 0.0}}}}})]
+    (is (= 10.0 (:amount result)))
+    (is (= [{:type :score/mark :tag :attacked :progression 0.25
+             :owner nil :ability-id :light-shield}]
+           (:side-events result)))))
+
+(deftest absorb-front-cone-is-enforced-test
+  (let [index (damage/build-index
+               [{:ability-id :shield :reaction-id :absorb :priority 10
+                 :on :combat/damage
+                 :program {:component :damage/absorb :cap 3.0 :front? false}}])
+        result (damage/resolve-event index
+                                     {:world-id "w" :source :a :target :b :base 10
+                                      :type :skill :seed 4
+                                      :metadata {:input {:context {:resources {:cp 100.0
+                                                                               :overload 100.0}}}}})]
+    (is (= 10.0 (:amount result)))
+    (is (empty? (:session-patches result)))))
+
+(deftest reduce-exp-tag-emits-only-for-eligible-damage-test
+  (let [index (damage/build-index
+               [{:ability-id :vec-deviation :reaction-id :reduce :priority 1
+                 :on :combat/damage
+                 :program {:component :damage/reduce :rate 0.5 :max-cost 99.0
+                           :ignore-threshold 5.0 :cost-resource :cp
+                           :progression-tag :damaged :progression-scale 0.1}}])
+        eligible (damage/resolve-event index {:world-id "w" :source :a :target :b :base 4.0 :type :skill :seed 1})
+        ignored (damage/resolve-event index {:world-id "w" :source :a :target :b :base 6.0 :type :skill :seed 1})]
+    (is (= [{:type :score/mark :tag :damaged :progression 0.1
+             :owner nil :ability-id :vec-deviation}] (:side-events eligible)))
+    (is (empty? (:side-events ignored)))))
+
+(deftest reflect-exp-tag-emits-on-eligible-reflection-test
+  (let [index (damage/build-index
+               [{:ability-id :vec-reflection :reaction-id :reflect :priority 1
+                 :on :combat/damage
+                 :program {:component :damage/reflect :multiplier 0.5 :minimum 0.0
+                           :max-depth 5 :cost-per-damage 0.0
+                           :progression-tag :damaged :progression-scale 0.2}}])
+        result (damage/resolve-event index {:world-id "w" :source :a :target :b :base 10.0 :type :skill :seed 1})]
+    (is (= [{:type :score/mark :tag :damaged :progression 0.2
+             :owner nil :ability-id :vec-reflection}] (:side-events result)))
+    (is (= 1 (count (:reflections result))))))
 
 ;; --- new coverage: the mark-type + priority index itself --------------------
 
