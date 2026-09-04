@@ -68,7 +68,7 @@
   (service/initialize!)
   (let [report (service/catalog-report)]
     (is (= 50 (:total report)))
-    (is (= 50 (:compiled report)))
+    (is (= 50 (:graphed report)))
     (is (= 50 (count (:entries report))))
-    (is (every? #(contains? % :compiled) (:entries report)))))
+    (is (every? #(contains? % :graph) (:entries report)))))
 

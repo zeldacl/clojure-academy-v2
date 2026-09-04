@@ -14,11 +14,11 @@
     (is (every? #(map? (:graph %))
                 (get-in assembled [:combat :registrations])))))
 
-(deftest final-service-compiles-every-registration-test
+(deftest final-service-validates-every-registration-test
   (let [result (service/initialize!)]
     (is (= :ready (:status result)))
     (is (= 50 (count (get-in result [:combat :registrations]))))
-    (is (every? #(map? (:compiled %))
+    (is (every? #(map? (:graph %))
                 (get-in result [:combat :registrations])))))
 
 

@@ -1,14 +1,25 @@
 (ns cn.li.ac.ability.final-catalog-service
   "Runtime-owned view of the final AC catalog.
 
-   The catalog is assembled once and every registration must compile into the
-   final graph IR. A non-executable registration aborts startup; there is no
-   legacy evaluator or pending fallback."
+   The catalog is assembled once and every registration's raw graph is
+   validated structurally (scope/type-shape, against the vocabulary
+   environment) at startup; a malformed registration still aborts startup.
+
+   No longer compiles each registration through combat-api/compile-program
+   (the old engine's own compiler): nothing has executed a :compiled graph
+   produced here since the old engine's own real dispatch entry point was
+   deleted -- this service's only remaining real consumer, cn.li.ac.
+   ability.service.combat-catalog, only ever reads registration/source
+   metadata (name-key, actions, passive-effects, trigger index), never
+   :compiled or :program. Compiling a graph nothing runs was pure wasted
+   work standing between real content changes and the old compiler staying
+   a hard dependency for no benefit -- strict-graphs!'s own validate!/
+   check-in-environment! already catch structurally invalid content
+   without it."
   (:require [cn.li.node.schema-export :as schema]
             [cn.li.node.scope :as scope]
             [cn.li.node.validate :as validate]
-            [cn.li.ac.ability.final-catalog :as final-catalog]
-            [cn.li.combat.api :as combat-api]))
+            [cn.li.ac.ability.final-catalog :as final-catalog]))
 
 (defonce ^:private catalog-state (atom {:status :cold}))
 
@@ -54,24 +65,13 @@
     {:descriptor-count (count (schema/export-environment environment))
      :schema (schema/export-environment environment)}))
 
-(defn- compile-registration [environment registration]
-  (try
-    (assoc registration
-           :compiled (combat-api/compile-program environment (:graph registration)))
-    (catch clojure.lang.ExceptionInfo error
-      (throw (ex-info "final catalog graph compilation failed"
-                      (merge {:reason :final-graph-compile-failed
-                              :id (:id registration)}
-                             (ex-data error)))))))
-
 (defn initialize!
-  "Load and index the immutable final catalog."
+  "Load, structurally validate, and index the immutable final catalog."
   ([] (initialize! {}))
   ([assemble-options]
    (let [assembled (final-catalog/assemble assemble-options)
          node-schema (strict-graphs! assembled)
-         registrations (mapv #(compile-registration (:node-environment assembled) %)
-                             (get-in assembled [:combat :registrations]))
+         registrations (get-in assembled [:combat :registrations])
          by-id (into {} (map (juxt :id identity) registrations))
          result (assoc assembled
                        :combat (assoc (:combat assembled)
@@ -90,9 +90,6 @@
 (defn available? [id]
   (some? (registration id)))
 
-(defn program [id]
-  (:compiled (registration id)))
-
 (defn vfx-catalog []
   (get-in @catalog-state [:vfx :effects]))
 
@@ -103,11 +100,13 @@
   (select-keys @catalog-state [:status :content-hash]))
 
 (defn catalog-report
-  "Return a deterministic audit of every compiled registration."
+  "Return a deterministic audit of every registration's raw graph presence
+   (post strict-graphs! validation -- see initialize!'s own docstring for
+   why this no longer reports a :compiled count)."
   []
   (let [registrations (get-in @catalog-state [:combat :registrations])]
     {:total (count registrations)
-     :compiled (count (filter :compiled registrations))
+     :graphed (count (filter :graph registrations))
      :entries (mapv (fn [entry]
-                      (select-keys entry [:id :source-id :compiled]))
+                      (select-keys entry [:id :source-id :graph]))
                     (sort-by (comp str :id) registrations))}))

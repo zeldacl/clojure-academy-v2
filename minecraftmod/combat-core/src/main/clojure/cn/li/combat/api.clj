@@ -3,15 +3,17 @@
    and ability-runtime should require only this namespace, never combat-
    core's internal namespaces directly -- delegation only, no logic here.
 
-   Sized from combat-core's actual external consumers (ac's core/init.clj,
-   final_catalog_service.clj, final_runtime.clj, combat_runtime.clj,
-   server_hooks.clj; ability-runtime's combat.clj), not speculative
-   coverage. Replaces four ac call sites that dynamically resolved
-   combat-core internals at runtime only because this facade didn't exist
-   yet."
-  (:require [cn.li.combat.final-engine :as engine]
-            [cn.li.combat.final-compiler :as compiler]
-            [cn.li.combat.final-damage :as damage]
+   Sized from combat-core's actual external consumers, not speculative
+   coverage.
+
+   The old graph compiler/engine facade (compile-program/create-engine/
+   execute!/capability-matrix, delegating to final-compiler/final-engine)
+   was removed once it had zero real callers left: cn.li.ac.ability.
+   final-catalog-service was the last one, and it stopped compiling
+   registrations through the old engine once nothing executed the result
+   any more (see that namespace's own docstring) -- final_engine.clj/
+   final_compiler.clj themselves are deleted, not just unreferenced here."
+  (:require [cn.li.combat.final-damage :as damage]
             [cn.li.combat.platform :as platform]
             [cn.li.combat.beam-settlement :as beam-settlement]
             [cn.li.combat.vocabulary :as vocabulary]
@@ -19,12 +21,6 @@
             [cn.li.combat.run :as run]
             [cn.li.combat.lib :as lib]
             [cn.li.combat.player :as player]))
-
-;; ---- final graph compiler + engine ----
-(defn compile-program [environment program] (compiler/compile-program environment program))
-(defn create-engine [opts] (engine/create-engine opts))
-(defn execute! [engine compiled frame] (engine/execute! engine compiled frame))
-(def capability-matrix engine/capability-matrix)
 
 ;; ---- damage ----
 (defn resolve-damage [reactions raw-event] (damage/resolve-event reactions raw-event))
