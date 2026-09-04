@@ -69,6 +69,29 @@
 
 (defonce ^:private active-mounts (atom {}))
 
+(defn default-sample-skill-resource-path
+  "A classpath-relative content resource (e.g. \"ac/skills/thunder_bolt.
+   edn\") -> its absolute on-disk path, or nil. Public because there is
+   no in-game file-picker UI yet (a real follow-up, not part of this
+   screen's own scope) -- both the G keybind (cn.li.ac.input-ids) and
+   the editor_dev_tool item share this to pick a fixed default file to
+   open, rather than each guessing its own.
+
+   Every other content reader in this mod (cn.li.ac.ability.skills-
+   catalog's own load-resource) goes through (io/resource ...) + slurp
+   precisely because slurp reads equally well from a dev-run's on-disk
+   resources or a packaged jar's zip entries -- but this screen needs to
+   WRITE sibling files (editor-workspace/, layout/) next to the opened
+   file, which only makes sense against a real file:// resource, not a
+   jar entry. Returns nil rather than guessing at a working directory
+   (see this namespace's own docstring on why open! never does that
+   itself) when the resource is not on disk, so the caller can report a
+   clear reason instead of failing deep inside io/file."
+  [resource]
+  (when-let [^java.net.URL url (io/resource resource)]
+    (when (= "file" (.getProtocol url))
+      (.getAbsolutePath (io/as-file url)))))
+
 (defn- mode-opts
   "mode (:skill or :scene), wrapper-doc (the just-opened, un-normalized
    ac/skills or ac/vfx/fx wrapper map, needed for scene mode's per-file

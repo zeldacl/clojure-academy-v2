@@ -8,6 +8,25 @@
 语言层规格见 [NODE_LANGUAGE.md](../04-systems/NODE_LANGUAGE.md)（尤其是其中
 `:nid` 稳定性契约那一节）——本文档只描述编辑器本身。
 
+## 游戏内入口
+
+两个屏幕原本都没有任何触发方式（`open!` 只在自己的源文件和
+`presentation_surface_manifest.clj` 清单里出现过）——`/aim` 这类命令是服务端
+Brigadier 命令，而这两个屏幕的 `open!` 挂载的是客户端 Presentation 视图，中间
+没有现成桥（也没打算建，属于新平台面、这个环境验证不了，见上面几节同类判断的
+一贯标准）。现有入口都是纯客户端事件，照抄 `preset-editor` 绑 `N` 键的先例：
+
+- **G 键**——打开节点编辑器（技能模式，固定加载 `ac/skills/thunder_bolt.edn`
+  作为示例文件；目前没有文件选择 UI，是后续增量，不是这次遗漏）。
+- **K 键**——打开玩家法术合成器（不需要文件参数）。
+- **`editor_dev_tool` 道具**——右键效果同 G 键；图标复用 `developer_portable`
+  已有贴图（`developer_portable_full.png`），不含能量/3D 模型那套逻辑；没有
+  合成表，只能创造模式获取。
+
+以上均在 `cn.li.ac.input-ids`（键位注册，走 `:alternative` scheme，平台侧
+`register-all-keybindings-from-ac!` 是数据驱动的通用循环，不需要逐平台改
+Java）与 `cn.li.ac.item.editor-dev-tool`（道具注册）里。
+
 ## 模块落点
 
 ```
