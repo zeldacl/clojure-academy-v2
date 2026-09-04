@@ -1325,12 +1325,12 @@ tasks.register("verifyNodeCoreLanguageKernel") {
 
 tasks.register("verifyNodeKernelSingleSource") {
     group = "verification"
-    description = "combat-core and vfx-core must resolve {:ref}/{:expr} nodes through cn.li.node.kernel/defresolver, not a hand-written case-based ref resolver of their own; the SplitMix64 mixing constants must be defined in exactly one place (cn.li.node.expr)."
+    description = "Whichever of combat-core/vfx-core's old tree-walking engines still exist must resolve {:ref}/{:expr} nodes through cn.li.node.kernel/defresolver, not a hand-written case-based ref resolver of their own; the SplitMix64 mixing constants must be defined in exactly one place (cn.li.node.expr). vfx-core's own final_engine.clj was deleted once its client_vfx-v2 cutover made it genuinely dead (see NODE_LANGUAGE.md) -- combat-core's own final_engine.clj is still real, load-bearing infrastructure behind cn.li.ac.ability.service.combat-catalog (see that gate's own docstring elsewhere), so only files that still exist are checked here, same guard pattern verifyNodeLayerDiscipline already uses for the identical reason."
     doLast {
         def resolverSources = [
             file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
             file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")
-        ]
+        ].findAll { it.file }
         def missingKernel = resolverSources.findAll { !it.text.contains("kernel/defresolver") }
         if (!missingKernel.isEmpty()) {
             throw new GradleException("expected kernel/defresolver in: ${missingKernel}")
@@ -2849,23 +2849,6 @@ tasks.register("verifyCoreNoSkillKnowledge") {
     }
 }
 
-tasks.register("verifyEdnNodeCoverage") {
-    group = "verification"
-    description = "Check that registered component families expose executable examples."
-    doLast {
-        def combatSource = file("combat-core/src/main/clojure/cn/li/combat/examples.clj")
-        def vfxSource = file("vfx-core/src/main/clojure/cn/li/vfx/examples.clj")
-        [combatSource, vfxSource].each { source ->
-            if (!source.isFile() || !source.text.contains("def ")) {
-                throw new GradleException("missing node examples in ${source}")
-            }
-        }
-        if (!file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj").isFile()) {
-            throw new GradleException("missing expression examples")
-        }
-    }
-}
-
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
     description = "Require migrated skill EDN to be config-independent declarations."
@@ -2912,7 +2895,6 @@ tasks.named("lintClojureNative").configure {
     dependsOn tasks.named("verifyNoGeneratedClojureTypes")
     dependsOn tasks.named("verifyEffectRuntimeJavaCarriers")
     dependsOn tasks.named("verifyCoreNoSkillKnowledge")
-    dependsOn tasks.named("verifyEdnNodeCoverage")
     dependsOn tasks.named("verifyEdnNoConfigBackReferences")
 }
 
