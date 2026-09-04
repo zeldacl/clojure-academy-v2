@@ -2417,15 +2417,15 @@ tasks.register("verifyPresentationSurfaceCoverage") {
         def applicationControllerCount = (applicationBlock =~ /:controller\s+/).count
         def containerControllerCount = (guiText =~ /:screen-factory-fn-kw\s+:create-/).count
         def controllerCount = applicationControllerCount + containerControllerCount
-        if (applicationCount != 14 || containerCount != 11 || controllerCount != 25) {
+        if (applicationCount != 15 || containerCount != 11 || controllerCount != 26) {
             throw new GradleException("Presentation surface coverage mismatch: applications=" +
                     applicationCount + ", containers=" + containerCount +
                     ", controllers=" + controllerCount)
         }
-        if (applicationCount + containerCount != 25) {
-            throw new GradleException("Expected 25 active Presentation surfaces")
+        if (applicationCount + containerCount != 26) {
+            throw new GradleException("Expected 26 active Presentation surfaces")
         }
-        logger.lifecycle("[verifyPresentationSurfaceCoverage] ok (25/25 surfaces, 11/11 containers, 25/25 controllers)")
+        logger.lifecycle("[verifyPresentationSurfaceCoverage] ok (26/26 surfaces, 11/11 containers, 26/26 controllers)")
     }
 }
 

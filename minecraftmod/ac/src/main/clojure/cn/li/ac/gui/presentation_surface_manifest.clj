@@ -18,6 +18,7 @@
    {:id :ui-customize :artifact :academy.app/ui-customize :controller 'cn.li.ac.terminal.client.apps.ui-customize-reactive/open!}
    {:id :skill-tree :artifact :academy.app/skill-tree :controller 'cn.li.ac.terminal.client.apps.skill-tree/open!}
    {:id :node-editor :artifact :academy.app/node-editor :controller 'cn.li.ac.ability.client.screens.node-editor-reactive/open!}
+   {:id :spell-composer :artifact :academy.app/spell-composer :controller 'cn.li.ac.ability.client.screens.spell-composer-reactive/open!}
    {:id :preset-editor :artifact :academy.app/preset-editor :controller 'cn.li.ac.ability.client.screens.preset-editor-reactive/open!}
    {:id :portable-developer :artifact :academy.app/developer :controller 'cn.li.ac.item.developer-portable-reactive/open!}
    {:id :install-effect :artifact :academy.app/application :controller 'cn.li.ac.terminal.client.install-effect-reactive/open!'} 

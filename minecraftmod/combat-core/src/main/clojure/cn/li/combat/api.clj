@@ -88,3 +88,12 @@
    something dispatchable."
   [glyphs complexity-cap]
   (player/compile-and-admit glyphs complexity-cap))
+
+(defn player-glyph-catalog
+  "-> [{:glyph :kind :effects :cost :admissible?} ...] for every known
+   glyph -- see cn.li.combat.player/glyph-catalog's own docstring. The
+   player spell composer's palette should filter on :admissible?, which
+   reads the identical allowlist compile-and-admit-player-spell's own
+   admit check enforces."
+  []
+  (player/glyph-catalog))
