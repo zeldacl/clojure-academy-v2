@@ -2,7 +2,9 @@
   "The canvas drag state machine: pointer events (:down/:move/:up) plus
    an abstract HIT RESULT (what the pointer landed on -- a node body, a
    pin, or empty canvas) drive transitions between idle/dragging-node/
-   dragging-wire/panning/box-selecting. Deliberately decoupled from
+   dragging-wire/panning (on-down's own :canvas branch -- there is no
+   separate box-select mode; empty canvas always starts a pan).
+   Deliberately decoupled from
    actual pixel hit-testing: cn.li.presentation.core.runtime's own
    HitKernel (see the node-editor plan's §1.4) is what computes the
    real hit result once Phase 3 wires this into a screen; this namespace
