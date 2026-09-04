@@ -8,6 +8,7 @@
    never had a cn.li.vfx.final-engine/sample-node case either -- confirmed
    dead, not a regression)."
   (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [cn.li.vfx.scene :as scene]))
 
@@ -282,3 +283,23 @@
     (is (= [:audio-one-shot] (mapv :kind t2-ops)))
     (is (= {:x 1.0 :y 0.0 :z 0.0} (:position (first t2-ops)))
         "particle_trail_audio_transient plays audio at :sound-position")))
+
+;; Coverage floor: there is no manifest for ac/vfx/fx (unlike ac/skills'
+;; manifest.edn) -- individual deftests above exercise named files by
+;; hand, so a new file dropped in without a matching deftest would compile
+;; (checkClojure never reads resources) but never actually get proven.
+;; Scans the real source directory rather than the classpath because a
+;; classpath resource URL cannot be listed as a directory once packaged.
+(deftest every-fx-resource-compiles-test
+  (let [dir (io/file "src/main/resources/ac/vfx/fx")
+        files (->> (.listFiles dir)
+                   (filter #(.isFile ^java.io.File %))
+                   (map #(.getName ^java.io.File %))
+                   (filter #(str/ends-with? % ".edn"))
+                   sort)]
+    (is (= 36 (count files)) "ac/vfx/fx/*.edn file count drifted -- update this test's expectation deliberately, not by accident")
+    (doseq [filename files]
+      (testing filename
+        (let [doc (read-fx filename)
+              ir (scene/compile-doc! (:scene doc) (input-types doc))]
+          (is (some? (scene/compile-program ir)) (str filename " compiles to a runnable program")))))))

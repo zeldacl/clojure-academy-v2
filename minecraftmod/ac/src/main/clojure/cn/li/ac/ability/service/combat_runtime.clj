@@ -4,6 +4,7 @@
    Combat Core itself never knows about AC, Minecraft or VFX."
   (:require
             [cn.li.combat.final-damage :as final-damage]
+            [cn.li.combat.api :as combat-api]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -1132,6 +1133,52 @@
                                       (boolean active-session))
             (combat-sessions/start! content-id (str owner) ability-id prepared))
           result)))))
+
+(def ^:private player-spell-complexity-cap
+  "S7: no player-spell-specific progression stat exists yet (unlike
+   skill-exp, which every catalog ability already has) to derive a
+   scaling cap from, so this is a fixed, conservative constant instead
+   of a formula -- enough for a real [form effect augment*] cast (a
+   handful of :pure/:query/:action instructions) but far below what
+   :costs/:cooldown/:progression-declaring catalog abilities can reach.
+   Linking this to a real player-progression stat is separate future
+   work, not part of wiring the admit mechanism itself."
+  20)
+
+(defn dispatch-player-spell!
+  "owner, glyphs ([{:glyph kw :params {...}} ...], the desugar-ready
+   input shape combat-api/compile-and-admit-player-spell's own docstring
+   documents) -> a translated result map (same shape dispatch-intent-v2!/
+   finalize-result! already produce for catalog abilities -- callers
+   should finalize-result! a :status :accepted result exactly like
+   handle-combat-intent-request does for catalog dispatch). Every
+   player-composed spell goes through combat-api/compile-and-admit-
+   player-spell (server-authoritative: desugar -> the SAME compiler
+   every hand-authored ability uses -> a static cost/effect/budget gate)
+   BEFORE final-runtime-v2/dispatch-compiled! ever sees it -- see that
+   combat-api function's own docstring for why a rejected verdict can
+   never reach dispatch.
+
+   :player/spell is a pseudo ability-id, never present in either
+   catalog: activation-context/caster-facade both accept an unknown
+   ability-id gracefully (no skill-exp, no registration bindings), which
+   is exactly what a player spell -- with no :costs/:cooldown/
+   :progression declarations of its own -- needs."
+  [owner glyphs]
+  (when-not (final-runtime-v2)
+    (install-ac-host-capabilities!)
+    (initialize-final-runtime-v2!))
+  (let [verdict (combat-api/compile-and-admit-player-spell glyphs player-spell-complexity-cap)]
+    (if-not (:ok verdict)
+      {:status :rejected :reason (:reject verdict) :detail (dissoc verdict :ok :reject)
+       :schema-version 1 :ability-id :player/spell}
+      (let [seed (generate-activation-seed owner :player/spell (long @last-known-tick*))
+            context (activation-context owner :player/spell {} seed)
+            input {:tunables {} :capabilities (caster-facade owner context) :state {}}
+            result (final-runtime-v2/dispatch-compiled! (final-runtime-v2) owner :player/spell
+                                                         (:ir verdict) :default input)]
+        (assoc result :schema-version 1 :ability-id :player/spell)))))
+
 (defn dispatch-trigger!
   "Dispatch a server-resolved external trigger from the EDN trigger index.
 
@@ -1691,6 +1738,20 @@
   (reset! catalog* nil)
   (reset! last-known-tick* 0)
   nil)
+
+(defn reset-final-runtime-v2-for-test!
+  "Forces the NEXT dispatch-player-spell!/dispatch-intent-v2! lazy-install
+   guard to rebuild final-runtime-v2*'s registry-host snapshot from
+   scratch. Needed because cn.li.ability.engine-v2/registry-host snapshots
+   the capability registry ONCE at creation time (unlike the old engine,
+   which resolves capabilities fresh on every dispatch, so combat-runtime-
+   vanilla-damage-reflection-test's own fake-handler save/restore pattern
+   works unmodified against it) -- a test that registers its own fake
+   action/query capability and needs the NEW engine to see it must call
+   this BEFORE its first v2 dispatch, or the fake never reaches an
+   already-cached snapshot left behind by an earlier, unrelated test."
+  []
+  (reset! final-runtime-v2* nil))
 
 
 

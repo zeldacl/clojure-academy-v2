@@ -28,7 +28,8 @@
    :req-saved-pos-query "ability:req/location-teleport/query"
    :req-saved-pos-add "ability:req/location-teleport/add"
    :req-saved-pos-remove "ability:req/location-teleport/remove"
-   :req-saved-pos-perform "ability:req/location-teleport/perform"})
+   :req-saved-pos-perform "ability:req/location-teleport/perform"
+   :req-spell-submit "ability:req/spell-submit"})
 
 (def MSG-CTX-BEGIN-LINK (:ctx-begin-link message-ids))
 (def MSG-CTX-ESTABLISH (:ctx-establish message-ids))
@@ -54,6 +55,7 @@
 (def MSG-REQ-SAVED-POS-ADD (:req-saved-pos-add message-ids))
 (def MSG-REQ-SAVED-POS-REMOVE (:req-saved-pos-remove message-ids))
 (def MSG-REQ-SAVED-POS-PERFORM (:req-saved-pos-perform message-ids))
+(def MSG-REQ-SPELL-SUBMIT (:req-spell-submit message-ids))
 
 (def all-messages
   (set (vals message-ids)))

@@ -34,6 +34,12 @@
 (defn- wire-payload? [value]
   (bytes? value))
 
+(defn- decode-player-spell-payload [payload]
+  (when (wire-payload? (:wire payload))
+    (try
+      (fixed-channel/decode-player-spell-submit (:wire payload))
+      (catch Throwable _ nil))))
+
 (defn- decode-combat-payload [payload]
   (when (wire-payload? (:wire payload))
     (try
@@ -268,6 +274,32 @@
       (log/debug "Combat intent rejected" {:owner owner :feedback (:feedback result)}))
     result))
 
+(defn- handle-spell-submit-request
+  "S7: a player-composed [form effect augment* ...] glyph vector, never a
+  client-compiled program (see combat-runtime/dispatch-player-spell!'s
+  own docstring for why) -- the server is the only place that ever
+  desugars/compiles/admits it. Same catalog-handshake gate as handle-
+  combat-intent-request above; a player casting a composed spell has
+  necessarily already handshaken to get this far in the client UI."
+  [raw-payload player]
+  (let [glyphs (decode-player-spell-payload raw-payload)
+        owner (uuid/player-uuid player)
+        result (cond
+                 (not glyphs)
+                 {:status :rejected :feedback [{:type :invalid-spell-wire}]}
+
+                 (not (catalog-handshake-accepted? owner))
+                 {:status :rejected :feedback [{:type :catalog-handshake-required}]}
+
+                 :else
+                 (combat-runtime/dispatch-player-spell! owner glyphs))
+        result (if (= :accepted (:status result))
+                 (combat-runtime/finalize-result! owner result)
+                 result)]
+    (when (= :rejected (:status result))
+      (log/debug "Player spell submit rejected" {:owner owner :reason (:reason result)}))
+    result))
+
 (defn register-handlers! []
   (net-srv/register-handler catalog/MSG-CATALOG-ACK
                             handle-catalog-ack-request
@@ -280,5 +312,8 @@
   (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  activation-handler/handle-set-activated-request ability-handler-contract)
   (net-srv/register-handler catalog/MSG-COMBAT-INTENT
                             handle-combat-intent-request
+                            ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-REQ-SPELL-SUBMIT
+                            handle-spell-submit-request
                             ability-handler-contract)
   (log/info "Ability network handlers registered"))

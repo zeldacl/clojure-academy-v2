@@ -1290,8 +1290,37 @@ tasks.register("verifyCombatResourceAgnostic") {
 
 tasks.register("verifyNodeCoreLanguageKernel") {
     group = "verification"
-    description = "Verify node-core's load boundary (immutable descriptor environment, expression evaluator, scope checker, composite expansion, structural validation, schema export)."
+    description = "Verify node-core's new surface-DSL language kernel (types/ops/surface/ir/compile/cost/pretty/schema-export) is present and exposes its documented public entry points. checkClojure already forces every file here to compile; this gate additionally pins the specific functions other modules (combat-core/vfx-core/mcmod) are wired to call, so a rename/removal fails loudly here instead of surfacing later as a missing-symbol error at the call site."
     dependsOn ":node-core:checkClojure"
+    doLast {
+        def kernelNs = [
+            "types"        : [file: "node-core/src/main/clojure/cn/li/node/types.clj", defs: ["assignable?", "bank", "width", "integral?"]],
+            "ops"          : [file: "node-core/src/main/clojure/cn/li/node/ops.clj", defs: []],
+            "surface"      : [file: "node-core/src/main/clojure/cn/li/node/surface.clj", defs: []],
+            "ir"           : [file: "node-core/src/main/clojure/cn/li/node/ir.clj", defs: []],
+            "compile"      : [file: "node-core/src/main/clojure/cn/li/node/compile.clj", defs: ["compile!", "diagnostics"]],
+            "cost"         : [file: "node-core/src/main/clojure/cn/li/node/cost.clj", defs: ["analyze"]],
+            "pretty"       : [file: "node-core/src/main/clojure/cn/li/node/pretty.clj", defs: []],
+            "schema-export": [file: "node-core/src/main/clojure/cn/li/node/schema_export.clj", defs: []],
+        ]
+        def violations = []
+        kernelNs.each { name, spec ->
+            def source = file(spec.file)
+            if (!source.exists()) {
+                violations << "missing node-core kernel namespace file: ${spec.file}"
+                return
+            }
+            def text = source.text
+            spec.defs.each { fn ->
+                def escaped = java.util.regex.Pattern.quote(fn)
+                if (!(text =~ /\(defn-?\s+${escaped}[\s)]/)) {
+                    violations << "${spec.file}: expected public entry point (defn ${fn} ...) not found"
+                }
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyNodeCoreLanguageKernel] ok (${kernelNs.size()} kernel namespaces)")
+    }
 }
 
 tasks.register("verifyNodeKernelSingleSource") {
@@ -2758,7 +2787,7 @@ tasks.register("verifyVfxJavaBoundary") {
         def javaRoot = file("mcmod/src/main/java/cn/li/mcmod/runtime/vfx")
         if (!javaRoot.directory) throw new GradleException("missing Java VFX ABI directory")
         fileTree(javaRoot) { include "**/*.java" }.files.each { source ->
-            if (source.text =~ /net\\.minecraft|net\\.minecraftforge|net\\.fabricmc|net\\.neoforged/) {
+            if (source.text =~ /net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged/) {
                 throw new GradleException("platform API leaked into neutral Java VFX ABI: ${source}")
             }
         }

@@ -191,6 +191,29 @@
           ((:remove-ability-state! runtime) owner))
         result))))
 
+(defn dispatch-compiled!
+  "Like dispatch! but for a program that is NOT in the catalog -- a
+   player-composed spell, compiled ad-hoc per-request by cn.li.combat.
+   player/compile-and-admit against THIS runtime's own :host (the same
+   shared capability registry every catalog ability already dispatches
+   through). owner/ability-id here are just labels threaded into the
+   translated result (:owner seeds :vfx-signals' default audience owner;
+   :ability-id tags :events) -- unlike dispatch! above, neither needs (or
+   gets looked up against) a catalog registration, so a caller building a
+   pseudo ability-id like :player/spell for this purely to satisfy
+   activation-context/caster-facade's own signatures elsewhere is fine.
+   No :ability-state-patches commit here (unlike dispatch!): a player
+   spell is :activation :instant by construction (cn.li.combat.player/
+   desugar never emits :phases), so it never has session state to
+   persist -- the caller can still read :ability-state-patches off the
+   returned map if that ever changes, this function just doesn't commit
+   it on the caller's behalf."
+  [runtime owner ability-id ir entry input]
+  (let [program (combat-api/compile-skill-program ir (:host runtime))
+        full-input (assoc input :ability-id ability-id)
+        ^ExecutionFrame frame (combat-api/dispatch-skill! program entry full-input)]
+    (translate-frame frame owner ability-id)))
+
 (defn tick!
   "The new engine has no scheduled-continuation mechanism of its own (no
    converted ability uses one -- every :pulse re-dispatch goes through
