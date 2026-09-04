@@ -13,8 +13,6 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
-            [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
-            [cn.li.ability.engine :as final-runtime]
             [cn.li.ability.engine-v2 :as final-runtime-v2]
             [cn.li.ac.ability.skills-catalog :as skills-catalog]
             [cn.li.ability.session :as combat-sessions]
@@ -49,19 +47,11 @@
 
 ;; engine* (a bare defonce atom) was write-only outside reset-for-test! --
 ;; nothing ever `reset!` it to a non-nil value and nothing read it. Deleted
-;; rather than migrated.
-(defonce ^:private catalog* (atom nil))
-(defonce ^:private final-runtime* (atom nil))
-;; S8 cutover: this IS the live production runtime now. All real intent-
-;; handling call sites (network.clj, server_hooks.clj,
-;; location_teleport_rpc.clj, and this namespace's own dispatch-trigger!/
-;; dispatch-event!/pulse-active-sessions!) call dispatch-intent-v2! below,
-;; which installs this atom via its own lazy-install guard. final-runtime*
-;; above stays populated too (dispatch-intent-v2! warms it for
-;; final-capabilities-v2's shared-metadata read -- see that function's own
-;; docstring) but dispatch-intent! itself is now only called directly by
-;; the old engine's own dedicated test suite, not by any real call site --
-;; see NODE_LANGUAGE.md §0.
+;; rather than migrated. catalog*/final-runtime* (the old engine's own
+;; installed-runtime atom) were deleted the same way once the old engine
+;; itself was: combat-source/damage-policy-inputs/final-damage-policies-v2
+;; now read the new engine's own catalog (final-runtime-v2*'s :catalog)
+;; directly -- see combat-source's own docstring.
 (defonce ^:private final-runtime-v2* (atom nil))
 ;; edn-host-capabilities-installed? (a bare defonce atom) previously guarded
 ;; install-ac-host-capabilities! below. Replaced by
@@ -86,8 +76,8 @@
 (defonce ^:private combat-marks* (atom {}))
 (def ^:private find-nearby-player-uuids-fn nil)
 (def ^:private damage-fn nil)
-(declare owner-state resolve-slot finalize-result! initialize-final-runtime!
-         dispatch-domain-event! mark-rate-for)
+(declare owner-state resolve-slot finalize-result! final-runtime-v2
+         initialize-final-runtime-v2! dispatch-domain-event! mark-rate-for)
 
 (defn- no-nearby-player-uuids
   [_source-player-uuid _radius]
@@ -230,15 +220,6 @@
                              :block-id block-id})))
                        (catch Throwable _ nil)))}))
 
-(defn initialize!
-  ([] (initialize! {}))
-  ([_options]
-   (initialize-final-runtime!)
-   @final-runtime*))
-
-(defn engine [] (:engine (or @final-runtime* (initialize!))))
-(defn catalog [] (or @catalog* (some-> @final-runtime* :catalog deref)))
-(defn content-hash [] (:content-hash @catalog*))
 (defn domain-state [] {})
 (defn register-provider! [provider]
   (throw (ex-info "final combat runtime has no dynamic providers" {:provider provider})))
@@ -321,64 +302,34 @@
 
    Most abilities use the same id for the source and registration.  Shared
    documents (for example mine-ray's basic/expert/luck registrations) carry a
-   distinct :source-id, so looking only in :combat/:sources by the public id
+   distinct :source-id, so looking only in :sources by the public id
    silently drops their tunables and policy data.  Keep this indirection in
-   one place so every dispatch path observes the same registration ABI."
+   one place so every dispatch path observes the same registration ABI.
+
+   Post-deletion cleanup: reads the new engine's own catalog (its
+   :sources/:by-id, no :combat nesting) instead of the deleted old
+   engine's catalog atom -- every non-:program top-level key (:tunables/
+   :costs/:cooldown/:progression/:invariants/:damage-policies/:mark-
+   policies) is the same data either way, an S6 content-conversion
+   guarantee, so this indirection logic itself is unchanged."
   [ability-id]
-  (let [catalog @catalog*
-        sources (get-in catalog [:combat :sources])
-        registration (get-in catalog [:combat :by-id ability-id])
+  (let [catalog (:catalog (final-runtime-v2))
+        sources (:sources catalog)
+        registration (get (:by-id catalog) ability-id)
         source-id (or (:source-id registration) ability-id)]
     (get sources source-id)))
 
-(defn initialize-final-runtime!
-  "Install AC's production final runtime against mcmod neutral capability
-   handlers. This is the only runtime used after the final dispatch cutover.
-
-   Gated by framework-once! (keyed ::final-runtime-installed?) instead of
-   the old bare (or @final-runtime* ...) nil-guard: that guard treated a
-   non-nil atom as proof initialization already ran, but the atom is
-   JVM-lifetime while the guard's intent is Framework-lifetime -- a second
-   real world load in the same JVM would have kept serving the FIRST
-   world's stale runtime/catalog forever, never rebuilding. framework-once!
-   correctly re-runs this once per fresh Framework injection; final-runtime*/
-   catalog* still hold the memoized value for cheap reads in between (this
-   is a per-tick-adjacent hot path -- see `engine`/`catalog` below)."
-  []
-  (install/framework-once!
-   ::final-runtime-installed?
-   (fn []
-     (install-runtime-adapters!)
-     (let [runtime (final-runtime/install-production!
-                    {:state-provider (fn [owner] {:revision 0 :state (owner-state owner)})
-                     :commit-state! commit-final-state!
-                     :catalog-compile final-catalog-service/initialize!
-                     :ability-state-provider (fn [owner]
-                                         (or (combat-sessions/session content-id (str owner)) {}))
-                     :commit-ability-state! (fn [owner patches]
-                                        (when (seq patches)
-                                          (combat-sessions/apply-actions!
-                                           content-id (str owner)
-                                           [{:type :session-patch :entries patches}])))
-                     :remove-ability-state! (fn [owner]
-                                        (combat-sessions/remove! content-id (str owner)))})]
-       (reset! final-runtime* runtime)
-       (reset! catalog* @(:catalog runtime)))))
-  @final-runtime*)
-
-(defn final-runtime [] @final-runtime*)
-
 (defn initialize-final-runtime-v2!
-  "S8 cutover: install the new engine's own production runtime. This is
-   now the runtime real player actions execute against -- installed by
-   dispatch-intent-v2!'s own lazy-install guard, which every real
-   intent-handling call site (network.clj, server_hooks.clj,
-   location_teleport_rpc.clj, dispatch-trigger!/dispatch-event!/
-   pulse-active-sessions! below) reaches. initialize-final-runtime! above
-   is still warmed alongside it (see that guard's own comment for why),
-   but the old engine it installs is no longer invoked by any real call
-   site. No :state-provider/:commit-state! (cn.li.ability.engine-v2's own
-   create-runtime docstring explains why the new engine doesn't need
+  "Install the new engine's own production runtime -- the only combat
+   runtime that exists now. Installed by dispatch-intent-v2!'s own
+   lazy-install guard, which every real intent-handling call site
+   (network.clj, server_hooks.clj, location_teleport_rpc.clj,
+   dispatch-trigger!/dispatch-event!/pulse-active-sessions! below)
+   reaches, and also by final-damage-request's own guard (the native-hit
+   damage/reflection boundary, which never went through dispatch-intent-
+   v2! at all). No :state-provider/:commit-state! (cn.li.ability.engine-
+   v2's own create-runtime docstring explains why the new engine doesn't
+   need
    them): install-runtime-adapters!'s own :cost/spend/:cooldown/start
    handlers already commit their effect immediately, as ordinary host
    actions, the moment a graph reaches them."
@@ -662,28 +613,18 @@
 
 (defn final-capabilities-v2
   "owner, ability-id, intent, seed, source (an ac/skills/*.edn raw doc,
-   cn.li.ac.ability.skills-catalog's own :sources entry shape -- every
-   top-level key besides :program byte-for-byte identical to the old
-   engine's own source doc, so :costs/:cooldown/:progression/:invariants/
-   :tunables read exactly like combat-source's already-established
-   fields) -> the full ?capability -> value map the new engine's own
-   dispatch expects as :capabilities, merging caster-facade's own
-   caster/world/movement/progression-mastery capabilities with this
-   ability's own materialized budget/cooldown/progression/invariant
-   values. session-state is the CURRENT persisted session state (before
-   this dispatch), matching :ability-state-provider's own contract --
-   callers must supply it, this function has no session store
-   dependency of its own.
+   cn.li.ac.ability.skills-catalog's own :sources entry shape) -> the
+   full ?capability -> value map the new engine's own dispatch expects
+   as :capabilities, merging caster-facade's own caster/world/movement/
+   progression-mastery capabilities with this ability's own materialized
+   budget/cooldown/progression/invariant values. session-state is the
+   CURRENT persisted session state (before this dispatch), matching
+   :ability-state-provider's own contract -- callers must supply it,
+   this function has no session store dependency of its own.
 
-   Deliberately reads `combat-source` (the OLD catalog's own source doc)
-   rather than a separate new-catalog lookup: every ac/skills/*.edn
-   file's non-:program top-level key is byte-for-byte identical to its
-   ac/combat/abilities/*.edn counterpart (an S6 design decision made
-   specifically so this kind of reuse would be safe later), so
-   :costs/:cooldown/:progression/:invariants/:tunables read the exact
-   same declarative data either way -- and the old catalog is already
-   loaded and populated by the time any dispatch happens, so this avoids
-   standing up a second parallel catalog atom just for this one read."
+   Reads `combat-source`, which resolves against the new engine's own
+   installed catalog (final-runtime-v2*'s :catalog) -- see that
+   function's own docstring."
   [owner ability-id intent seed session-state]
   (let [context (activation-context owner ability-id intent seed)
         tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
@@ -718,9 +659,8 @@
    EXTRA key the new engine's DSL never reads directly (harmless, same
    as any other declared-but-unused capability elsewhere this session),
    kept only so dispatch-intent-v2!'s own combat-sessions/start! call
-   (which reads (:context intent) off whatever this function returns,
-   exactly like the old engine's own final-input/start! pairing) keeps
-   threading the SAME accumulated activation-context snapshot forward
+   (which reads (:context intent) off whatever this function returns)
+   keeps threading the SAME accumulated activation-context snapshot forward
    across a session's :start -> :pulse -> :release lifetime -- see
    activation-context's own (:context intent) merge, which is what makes
    a charge ability's aim/eye stay locked to :start time instead of
@@ -740,18 +680,6 @@
         tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
         capabilities (final-capabilities-v2 owner ability-id intent seed session-state)]
     {:tunables tunables :capabilities capabilities :state session-state :context context}))
-
-(defn- final-input [owner ability-id intent seed]
-  (let [context (activation-context owner ability-id intent seed)
-        source (combat-source ability-id)]
-    (merge intent
-           {:context context
-            :capabilities (caster-facade owner context)
-            :tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
-            :budgets (:costs source)
-            :cooldowns (:cooldown source)
-            :progression (:progression source)
-            :invariants (:invariants source)})))
 
 (defn install-ac-host-capabilities!
   "Link AC's own domain capabilities (resource/progression/energy/mark) to
@@ -966,130 +894,22 @@
        (contains? #{:session :toggle} activation)
        (not finish-ability?) (not already-active?)))
 
-(defn dispatch-intent! [owner intent]
-  ;; S8 cutover: this function itself is deliberately left untouched --
-  ;; several existing tests call it directly and assert old-engine-
-  ;; specific behavior -- but no real intent-handling call site invokes
-  ;; it anymore; they all call dispatch-intent-v2! below instead. Within
-  ;; the old engine's own graphs, pending source Final graphs return an
-  ;; explicit execution status; there is no alternate evaluator or
-  ;; catalog fallback at this boundary.
-  ;;
-  ;; Lazily install/warm the final runtime BEFORE combat-source/final-input
-  ;; read catalog* below: on the very first dispatch of a JVM's (or, in unit
-  ;; tests, a Framework's) lifetime, catalog* is still nil until this runs,
-  ;; so combat-source would silently return nil -- :activation, :budgets,
-  ;; :cooldowns, :progression and :invariants would all resolve as if the
-  ;; ability did not exist, without throwing (should-open-session? just
-  ;; never opens a session; cost/cooldown/progression nodes just no-op).
-  ;; This used to go undetected because some earlier-registered production
-  ;; call path always happened to warm the runtime first in practice.
-  (when-not (final-runtime/production-runtime)
-    (install-ac-host-capabilities!)
-    (initialize-final-runtime!))
-  (let [ability-id (edn-ability-id owner intent)
-        source (combat-source ability-id)
-        active-session (combat-sessions/session content-id (str owner))
-        intent (if (toggle-close-edge? (:op intent) (:activation source)
-                                       (:ability-id active-session) ability-id)
-                 (assoc intent :op :abort)
-                 intent)
-        ;; Key-up release packets do not carry a client hold counter.  Derive
-        ;; the elapsed duration from the owner-scoped server session so every
-        ;; charge graph observes the same authoritative value as :pulse.
-        intent (if (and active-session
-                        (#{:pulse :release} (:op intent))
-                        (not (contains? intent :hold-ticks)))
-                 (assoc intent :hold-ticks
-                        (inc (max 0 (- (long @last-known-tick*)
-                                       (long (or (:start-tick active-session)
-                                                 @last-known-tick*))))))
-                 intent)
-        ;; Phase translation: :op is the client/session-resolved wire
-        ;; vocabulary (:start/:pulse/:release/:abort/:event); combat-core's
-        ;; :flow/phases dispatch (final_engine.clj) reads the
-        ;; domain-neutral :phase key instead, so it never has to know AC's
-        ;; wire shape. Computed here, after the toggle/hold-ticks
-        ;; adjustments above have possibly rewritten :op (the toggle
-        ;; close-edge :start->:abort rewrite in particular), so :phase
-        ;; always reflects the final, corrected op. Before this, nothing
-        ;; ever set :phase (or the :action key final_engine.clj used to
-        ;; read instead), so :pulse/:release/:abort never reached their
-        ;; :flow/phases branch in production -- every non-event intent
-        ;; silently ran the :start branch regardless of :op.
-        intent (assoc intent :phase (:op intent))
-        seed (long (or (:activation-seed intent)
-                       (generate-activation-seed owner ability-id
-                                                 (long (or (:server-tick intent)
-                                                           @last-known-tick*)))))
-        prepared (final-input owner ability-id (assoc intent :activation-seed seed) seed)]
-    (if (and (= :slot-wheel (:event intent))
-             (not (and active-session
-                       (= ability-id (:ability-id active-session)))))
-      {:status :rejected :reason :no-active-session
-       :schema-version 1 :ability-id ability-id
-       :feedback [{:type :combat-input-rejected :reason :no-active-session}]}
-      (if (and (= :start (:op intent))
-               (cooldown-active? owner ability-id))
-        {:status :rejected :reason :cooldown
-         :schema-version 1 :ability-id ability-id
-         :feedback [{:type :cooldown-active :ability-id ability-id}]}
-        (let [result (assoc (final-runtime/dispatch-production! owner ability-id prepared)
-                            :schema-version 1 :ability-id ability-id)]
-          ;; already-active? must reflect session state as of BEFORE this
-          ;; dispatch (active-session, captured above), not after: execute!
-          ;; already ran by this point, and its commit-ability-state! callback
-          ;; (cn.li.ability.session/apply-actions!) uses update-in, which
-          ;; auto-vivifies a session entry containing only {:state {...}} the
-          ;; moment the graph's first :state/write patch lands -- for a brand
-          ;; new :start, that phantom entry exists (with no :activation-seed)
-          ;; well before start! would ever run. Re-querying combat-sessions/
-          ;; active? here would see that phantom entry, wrongly conclude a
-          ;; session is "already" active, and skip start! forever, so the
-          ;; session never gets its :activation-seed/:owner/:tick fields.
-          (when (should-open-session? (:status result) (:op intent) (:activation source)
-                                      (:finish-ability? result)
-                                      (boolean active-session))
-            (combat-sessions/start! content-id (str owner) ability-id prepared))
-          result)))))
-
 (defn dispatch-intent-v2!
-  "S8: the new engine's own dispatch-intent!, parallel to dispatch-
-   intent! above -- same pre-dispatch orchestration (toggle close-edge
-   detection, hold-ticks derivation, :slot-wheel/cooldown pre-checks,
-   session-open detection), all of it reused via the SAME private
+  "The combat/ability dispatch entry point -- pre-dispatch orchestration
+   (toggle close-edge detection, hold-ticks derivation, :slot-wheel/
+   cooldown pre-checks, session-open detection) via a set of private
    helpers (toggle-close-edge?/should-open-session?/cooldown-active?/
-   generate-activation-seed/edn-ability-id/combat-source are pure
-   functions of owner/ability-id/session data, not old-engine-specific
-   -- confirmed by reading each one before reusing it here, not
-   assumed). The two real differences from dispatch-intent! are: (1)
-   final-input-v2 instead of final-input (the new engine's :input shape
-   is {:tunables :capabilities :state}, not a flat merged map), and (2)
-   :entry instead of :phase -- the new engine's compiled :entries map is
-   keyed DIRECTLY by :start/:pulse/:release/:abort/an :event's own name
-   (e.g. :movement/right-press), the same :op-or-event value the old
-   engine's :phase/:event resolution computes, just under a different
-   key name (cn.li.ability.engine-v2/dispatch! takes :entry directly,
-   not a :phase/:event pair to re-derive).
+   generate-activation-seed/edn-ability-id/combat-source) that are pure
+   functions of owner/ability-id/session data, engine-agnostic by
+   construction. :entry (not :phase): the engine's compiled :entries map
+   is keyed DIRECTLY by :start/:pulse/:release/:abort/an :event's own
+   name (e.g. :movement/right-press).
 
-   S8 cutover: this is now the live production dispatch path. Every real
-   intent-handling call site (network.clj's CombatIntent packet handler,
-   server_hooks.clj's item-triggered abilities, location_teleport_rpc.clj,
-   and this namespace's own dispatch-trigger!/dispatch-event!/
-   pulse-active-sessions!) calls this function, not dispatch-intent!
-   above. dispatch-intent! itself is deliberately left untouched -- see
-   its own callers for why (several existing tests call it directly and
-   assert old-engine-specific behavior) -- so it remains a fully working,
-   separately-tested path, just no longer a real one."
+   Every real intent-handling call site (network.clj's CombatIntent
+   packet handler, server_hooks.clj's item-triggered abilities,
+   location_teleport_rpc.clj, and this namespace's own dispatch-trigger!/
+   dispatch-event!/pulse-active-sessions!) calls this function."
   [owner intent]
-  ;; final-capabilities-v2/combat-source both read the OLD catalog atom
-  ;; (catalog*, populated only by initialize-final-runtime!) -- see final-
-  ;; capabilities-v2's own docstring for why reading it is deliberate,
-  ;; not a bug. Ensure it is warm too, exactly like dispatch-intent!'s
-  ;; own lazy-install guard does for itself.
-  (when-not (final-runtime)
-    (install-ac-host-capabilities!)
-    (initialize-final-runtime!))
   (when-not (final-runtime-v2)
     (install-ac-host-capabilities!)
     (initialize-final-runtime-v2!))
@@ -1185,10 +1005,7 @@
   The trigger map is produced by `combat-catalog/resolve-trigger`; clients never
   provide ability/event mappings.
 
-  S8 cutover: routes through dispatch-intent-v2! (the new engine) -- see
-  dispatch-intent-v2!'s own docstring. dispatch-intent! itself is left
-  untouched, still the sole production path old-engine-specific tests
-  exercise directly."
+  Routes through dispatch-intent-v2! -- see that function's own docstring."
   [owner trigger context]
   (when (and (map? trigger) (:ability trigger) (:event trigger))
     (dispatch-intent-v2! owner
@@ -1464,9 +1281,10 @@
         source-data (:ability-data source-state)
         target-session (combat-sessions/session content-id (str target-id))
         world-id (or (:world-id damage-source) (:world-id target-state) "minecraft:overworld")
-        sources (get-in @catalog* [:combat :sources])]
+        sources (:sources (:catalog (final-runtime-v2)))]
     (into {}
-          (map (fn [[ability-id source]]
+          (keep (fn [[ability-id source]]
+               (try
                  (let [source-learned? (boolean (and source-data
                                                       (ability-model/is-learned? source-data ability-id)))
                        exp-data (if source-learned? source-data target-data)
@@ -1504,8 +1322,17 @@
                               :session session
                               :budgets (:costs source)
                               :invariants (:invariants source)}]
-                   [ability-id input]))
-               sources))))
+                   [ability-id input])
+                 ;; A single ability's config/tunable materialization
+                 ;; failure (e.g. a skill-config entry never registered
+                 ;; in a minimal test fixture, or a genuinely malformed
+                 ;; source doc) must not take down damage processing for
+                 ;; every OTHER ability on this same event -- omit just
+                 ;; this one, matching materialize-final-map-v2's own
+                 ;; per-entry "resolution failure = omit, not throw"
+                 ;; precedent.
+                 (catch Throwable _ nil)))
+             sources))))
 (defonce ^:private reflection-claims* (atom {}))
 
 (defn- apply-reflections-once!
@@ -1535,10 +1362,29 @@
                                              :reflected? true})))
                    (catch Throwable _ false)))))
            (:reflections result))))
+(defn- final-damage-policies-v2
+  "Every registered ability's own :damage-policies, flattened with
+   :ability-id attached -- the exact computation cn.li.ability.engine's
+   own initialize! did for the old catalog (get-in assembled [:combat
+   :sources]), against the new catalog's :sources instead. :damage-
+   policies is a non-:program top-level key, byte-identical (as data,
+   modulo pretty-printing whitespace) between an ac/combat/abilities/
+   *.edn source and its ac/skills/*.edn counterpart -- the same S6
+   guarantee combat-source's own docstring already relies on. Computed
+   fresh per call rather than cached: a damage event is not a per-frame
+   hot path, and this avoids a second piece of mutable state to keep in
+   sync with final-runtime-v2*."
+  []
+  (vec (mapcat (fn [[ability-id source]]
+                (map #(assoc % :ability-id ability-id) (:damage-policies source)))
+              (:sources (:catalog (final-runtime-v2))))))
+
 (defn- final-damage-request
   [player-id attacker-id original-damage damage-source precheck?]
-  (let [runtime (final-runtime/production-runtime)
-        inputs (damage-policy-inputs player-id attacker-id (or damage-source {}))
+  (when-not (final-runtime-v2)
+    (install-ac-host-capabilities!)
+    (initialize-final-runtime-v2!))
+  (let [inputs (damage-policy-inputs player-id attacker-id (or damage-source {}))
         event {:world-id (or (:world-id damage-source)
                                (:world-id (owner-state player-id))
                                "minecraft:overworld")
@@ -1548,7 +1394,8 @@
                :type (or (:damage-type damage-source) :generic)
                :seed (long (or (:seed damage-source) @last-known-tick*))
                :metadata {:inputs inputs}}
-        result (final-runtime/resolve-damage! runtime event)
+        result (assoc (combat-api/resolve-damage (final-damage-policies-v2) event)
+                     :status :accepted)
         reflection-applied? (apply-reflections-once! result)
         reflection-cancel? (boolean (some (fn [reflection]
                                             (>= (double (or (:base reflection) 0.0))
@@ -1718,24 +1565,30 @@
               (when (= :accepted (:status release-result))
                 (finalize-result! owner release-result)))))))))
 (defn tick!
-  "Advance scheduled final graph work and return its neutral result."
+  "Advance session/mark bookkeeping and return its neutral result.
+
+   Post-deletion cleanup: previously nested pulse-active-sessions! (the
+   real, still-live session :pulse/:release driver -- see its own
+   docstring, it dispatches through dispatch-intent-v2!) inside a check
+   for the OLD engine's own installed runtime, purely because both used
+   to live in the same if-let. pulse-active-sessions! has never had
+   anything to do with that check; the old engine's own scheduled-graph
+   tick! (cn.li.ability.engine's :scheduled bucket, used for beam-
+   settlement-style delayed continuations) is deleted along with it --
+   cn.li.ability.engine-v2's own tick! docstring already establishes no
+   converted ability uses one."
   [tick]
   (reset! last-known-tick* (long tick))
   (expire-marks! (long tick))
-  (if-let [runtime (final-runtime/production-runtime)]
-    (do
-      (pulse-active-sessions! (long tick))
-      (final-runtime/tick! runtime tick))
-    {:status :rejected :reason :final-runtime-not-installed :tick tick}))
+  (pulse-active-sessions! (long tick))
+  {:status :accepted :tick tick})
 (defn abort-owner! [owner]
-  (if-let [runtime (final-runtime/production-runtime)]
-    (final-runtime/abort-owner! runtime owner)
-    {:status :rejected :reason :final-runtime-not-installed :owner owner}))
+  (combat-sessions/remove! content-id (str owner))
+  {:status :aborted :owner owner})
 (defn snapshot-owner [owner]
   {:combat-session (combat-sessions/session content-id owner)})
 
 (defn reset-for-test! []
-  (reset! catalog* nil)
   (reset! last-known-tick* 0)
   nil)
 

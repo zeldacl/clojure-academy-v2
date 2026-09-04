@@ -44,15 +44,13 @@
 (use-fixtures :each
   (fn [f]
     (combat-catalog/initialize!)
-    ;; final-runtime/production-runtime is a JVM-lifetime singleton normally
-    ;; warmed lazily by combat-runtime/dispatch-intent! on its first call --
-    ;; this file never calls dispatch-intent!, only process-damage-request!/
-    ;; apply-attack-precheck! (which read production-runtime directly, with
-    ;; no lazy-install fallback of their own), so without this it depends on
-    ;; some unrelated, alphabetically-earlier test namespace happening to
-    ;; have warmed the singleton first.
+    ;; final-runtime-v2* is a JVM-lifetime singleton, normally warmed
+    ;; lazily by final-damage-request's own guard on its first call --
+    ;; explicit here so this fixture doesn't depend on some unrelated,
+    ;; alphabetically-earlier test namespace happening to have warmed the
+    ;; singleton first.
     (combat-runtime/install-ac-host-capabilities!)
-    (combat-runtime/initialize-final-runtime!)
+    (combat-runtime/initialize-final-runtime-v2!)
     (player-state-support/clean-player-states-fixture
      (fn []
        (combat-runtime/reset-for-test!)

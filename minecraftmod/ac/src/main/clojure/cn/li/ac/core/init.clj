@@ -73,7 +73,7 @@
   (combat-platform/install!
    {:schedule-beam! ability-combat/schedule-installed!})
   (combat-runtime/install-ac-host-capabilities!)
-  (combat-runtime/initialize-final-runtime!)
+  (combat-runtime/initialize-final-runtime-v2!)
   ;; The final EDN catalog is authoritative.  Catalog initialization fails
   ;; closed if any source is not a compiled final program.
   (combat-catalog/initialize!)

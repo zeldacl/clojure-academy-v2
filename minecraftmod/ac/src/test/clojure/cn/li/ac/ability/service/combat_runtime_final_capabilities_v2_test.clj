@@ -16,15 +16,15 @@
 (use-fixtures :each
   (fn [f]
     (combat-catalog/initialize!)
-    ;; combat-catalog/initialize! and combat-runtime's own final-runtime*
+    ;; combat-catalog/initialize! and combat-runtime's own final-runtime-v2*
     ;; (what combat-source actually reads) are two DIFFERENT catalog atoms
-    ;; -- final-runtime* is normally populated lazily, on the first real
-    ;; dispatch-intent! call, which this test file never makes (it only
+    ;; -- final-runtime-v2* is normally populated lazily, on the first real
+    ;; dispatch-intent-v2! call, which this test file never makes (it only
     ;; ever calls final-capabilities-v2 directly). Trigger the same
-    ;; install path dispatch-intent!'s own lazy-install guard uses.
-    (when-not (combat-runtime/final-runtime)
+    ;; install path dispatch-intent-v2!'s own lazy-install guard uses.
+    (when-not (combat-runtime/final-runtime-v2)
       (combat-runtime/install-ac-host-capabilities!)
-      (combat-runtime/initialize-final-runtime!))
+      (combat-runtime/initialize-final-runtime-v2!))
     (player-state-support/clean-player-states-fixture
      (fn []
        (runtime-store/create-session! player-state-support/test-session-id)
