@@ -129,15 +129,23 @@
 ;; --- runtime lifecycle ----------------------------------------------------
 
 (defn create-runtime
-  "options: {:ability-state-provider :commit-ability-state! :remove-
-   ability-state! :catalog-compile}. :catalog-compile is a zero-arg fn
-   returning cn.li.ac.ability.skills-catalog/assemble's own shape
-   ({:sources :registrations :by-id ...}) -- this namespace never
-   requires cn.li.ac.* directly, matching cn.li.ability.engine's own
-   \"never knows AC's EDN layout\" contract; a future BC/CC pack supplies
-   its own."
-  [{:keys [ability-state-provider commit-ability-state! remove-ability-state!
-           catalog-compile] :as options}]
+  "options: {:commit-ability-state! :remove-ability-state! :catalog-
+   compile}. :catalog-compile is a zero-arg fn returning cn.li.ac.
+   ability.skills-catalog/assemble's own shape ({:sources :registrations
+   :by-id ...}) -- this namespace never requires cn.li.ac.* directly,
+   matching cn.li.ability.engine's own \"never knows AC's EDN layout\"
+   contract; a future BC/CC pack supplies its own.
+
+   No :ability-state-provider (unlike cn.li.ability.engine's own
+   create-runtime): dispatch! never reads session state itself, it takes
+   an already-built :input (:tunables/:capabilities/:state) from its
+   caller -- the caller is the one place that already knows how to read
+   a session (cn.li.ac.ability.service.combat-runtime's own combat-
+   sessions/session), so reading it a second time here would just be
+   dead code with no real caller. Keeping the option here unused (\"maybe
+   someone needs it later\") is exactly the kind of speculative field
+   this session's own established discipline avoids."
+  [{:keys [commit-ability-state! remove-ability-state! catalog-compile] :as options}]
   (when-not (ifn? catalog-compile)
     (throw (ex-info "engine-v2 requires catalog-compile" {})))
   (when-not (ifn? commit-ability-state!)
@@ -151,7 +159,6 @@
         by-id (into {} (map (juxt :id identity)) registrations)]
     {:options options
      :host host
-     :ability-state-provider (or ability-state-provider (fn [_] {}))
      :commit-ability-state! commit-ability-state!
      :remove-ability-state! remove-ability-state!
      :catalog (assoc assembled :registrations registrations :by-id by-id)}))

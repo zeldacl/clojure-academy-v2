@@ -14,6 +14,8 @@
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.final-catalog-service :as final-catalog-service]
             [cn.li.ability.engine :as final-runtime]
+            [cn.li.ability.engine-v2 :as final-runtime-v2]
+            [cn.li.ac.ability.skills-catalog :as skills-catalog]
             [cn.li.ability.session :as combat-sessions]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.registry.event :as ability-event]
@@ -49,6 +51,14 @@
 ;; rather than migrated.
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private final-runtime* (atom nil))
+;; S8: NOT installed by anything yet -- initialize-final-runtime-v2!/
+;; dispatch-intent-v2! below exist and are fully tested, but no real call
+;; site invokes either one. Flipping the actual switch (installing this
+;; runtime instead of/alongside final-runtime* above, and redirecting a
+;; real intent-handling call site to dispatch-intent-v2!) is a separate,
+;; deliberately held-back step -- see NODE_LANGUAGE.md's own "two
+;; engines" section.
+(defonce ^:private final-runtime-v2* (atom nil))
 ;; edn-host-capabilities-installed? (a bare defonce atom) previously guarded
 ;; install-ac-host-capabilities! below. Replaced by
 ;; cn.li.mcmod.runtime.install/framework-once!, keyed
@@ -353,6 +363,35 @@
   @final-runtime*)
 
 (defn final-runtime [] @final-runtime*)
+
+(defn initialize-final-runtime-v2!
+  "S8: install the new engine's own production runtime, parallel to
+   initialize-final-runtime! above (which stays the one actually
+   installed by dispatch-intent!'s own lazy-install guard -- this
+   function has no caller yet). No :state-provider/:commit-state!
+   (cn.li.ability.engine-v2's own create-runtime docstring explains why
+   the new engine doesn't need them): install-runtime-adapters!'s own
+   :cost/spend/:cooldown/start handlers already commit their effect
+   immediately, as ordinary host actions, the moment a graph reaches
+   them."
+  []
+  (install/framework-once!
+   ::final-runtime-v2-installed?
+   (fn []
+     (install-runtime-adapters!)
+     (let [runtime (final-runtime-v2/install-production!
+                    {:catalog-compile skills-catalog/assemble
+                     :commit-ability-state! (fn [owner patches]
+                                        (when (seq patches)
+                                          (combat-sessions/apply-actions!
+                                           content-id (str owner)
+                                           [{:type :session-patch :entries patches}])))
+                     :remove-ability-state! (fn [owner]
+                                        (combat-sessions/remove! content-id (str owner)))})]
+       (reset! final-runtime-v2* runtime))))
+  @final-runtime-v2*)
+
+(defn final-runtime-v2 [] @final-runtime-v2*)
 
 (defn resolve-slot
   "Resolve a client slot only against the server-authoritative preset." 
@@ -664,6 +703,36 @@
             :caster/weak-metal-blocks (:targeting/weak-metal-blocks (caster-facade owner context))
             :caster/metal-entities (:targeting/metal-entities (caster-facade owner context))})))
 
+(defn- final-input-v2
+  "owner, ability-id, intent, seed -> {:tunables :capabilities :state
+   :context}. :tunables/:capabilities/:state are the exact shape cn.li.
+   ability.engine-v2/dispatch! expects as its own :input; :context is an
+   EXTRA key the new engine's DSL never reads directly (harmless, same
+   as any other declared-but-unused capability elsewhere this session),
+   kept only so dispatch-intent-v2!'s own combat-sessions/start! call
+   (which reads (:context intent) off whatever this function returns,
+   exactly like the old engine's own final-input/start! pairing) keeps
+   threading the SAME accumulated activation-context snapshot forward
+   across a session's :start -> :pulse -> :release lifetime -- see
+   activation-context's own (:context intent) merge, which is what makes
+   a charge ability's aim/eye stay locked to :start time instead of
+   drifting every :pulse. Wraps final-capabilities-v2 (the real budget/
+   cooldown/progression/invariant materialization work) with the two
+   remaining pieces: this ability's own materialized tunables
+   (recomputed here via the same materialize-final-tunables final-
+   capabilities-v2 already calls internally -- a small, cheap, pure
+   recomputation from already-in-memory data, not a second real query)
+   and the owner's CURRENT session state (read once, before this
+   dispatch -- session state written during a PRIOR, separate dispatch
+   is exactly what a fresh read here is supposed to see; this function
+   is never called mid-dispatch)."
+  [owner ability-id intent seed]
+  (let [session-state (:state (or (combat-sessions/session content-id (str owner)) {}))
+        context (activation-context owner ability-id intent seed)
+        tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
+        capabilities (final-capabilities-v2 owner ability-id intent seed session-state)]
+    {:tunables tunables :capabilities capabilities :state session-state :context context}))
+
 (defn- final-input [owner ability-id intent seed]
   (let [context (activation-context owner ability-id intent seed)
         source (combat-source ability-id)]
@@ -966,6 +1035,81 @@
           ;; active? here would see that phantom entry, wrongly conclude a
           ;; session is "already" active, and skip start! forever, so the
           ;; session never gets its :activation-seed/:owner/:tick fields.
+          (when (should-open-session? (:status result) (:op intent) (:activation source)
+                                      (:finish-ability? result)
+                                      (boolean active-session))
+            (combat-sessions/start! content-id (str owner) ability-id prepared))
+          result)))))
+
+(defn dispatch-intent-v2!
+  "S8: the new engine's own dispatch-intent!, parallel to dispatch-
+   intent! above -- same pre-dispatch orchestration (toggle close-edge
+   detection, hold-ticks derivation, :slot-wheel/cooldown pre-checks,
+   session-open detection), all of it reused via the SAME private
+   helpers (toggle-close-edge?/should-open-session?/cooldown-active?/
+   generate-activation-seed/edn-ability-id/combat-source are pure
+   functions of owner/ability-id/session data, not old-engine-specific
+   -- confirmed by reading each one before reusing it here, not
+   assumed). The two real differences from dispatch-intent! are: (1)
+   final-input-v2 instead of final-input (the new engine's :input shape
+   is {:tunables :capabilities :state}, not a flat merged map), and (2)
+   :entry instead of :phase -- the new engine's compiled :entries map is
+   keyed DIRECTLY by :start/:pulse/:release/:abort/an :event's own name
+   (e.g. :movement/right-press), the same :op-or-event value the old
+   engine's :phase/:event resolution computes, just under a different
+   key name (cn.li.ability.engine-v2/dispatch! takes :entry directly,
+   not a :phase/:event pair to re-derive).
+
+   No real caller yet -- see final-runtime-v2*'s own docstring for why
+   installing/redirecting to this function is a deliberately separate,
+   held-back step."
+  [owner intent]
+  ;; final-capabilities-v2/combat-source both read the OLD catalog atom
+  ;; (catalog*, populated only by initialize-final-runtime!) -- see final-
+  ;; capabilities-v2's own docstring for why reading it is deliberate,
+  ;; not a bug. Ensure it is warm too, exactly like dispatch-intent!'s
+  ;; own lazy-install guard does for itself.
+  (when-not (final-runtime)
+    (install-ac-host-capabilities!)
+    (initialize-final-runtime!))
+  (when-not (final-runtime-v2)
+    (install-ac-host-capabilities!)
+    (initialize-final-runtime-v2!))
+  (let [ability-id (edn-ability-id owner intent)
+        source (combat-source ability-id)
+        active-session (combat-sessions/session content-id (str owner))
+        intent (if (toggle-close-edge? (:op intent) (:activation source)
+                                       (:ability-id active-session) ability-id)
+                 (assoc intent :op :abort)
+                 intent)
+        intent (if (and active-session
+                        (#{:pulse :release} (:op intent))
+                        (not (contains? intent :hold-ticks)))
+                 (assoc intent :hold-ticks
+                        (inc (max 0 (- (long @last-known-tick*)
+                                       (long (or (:start-tick active-session)
+                                                 @last-known-tick*))))))
+                 intent)
+        entry (or (:event intent) (:op intent))
+        seed (long (or (:activation-seed intent)
+                       (generate-activation-seed owner ability-id
+                                                 (long (or (:server-tick intent)
+                                                           @last-known-tick*)))))
+        prepared (final-input-v2 owner ability-id (assoc intent :activation-seed seed) seed)]
+    (if (and (= :slot-wheel (:event intent))
+             (not (and active-session
+                       (= ability-id (:ability-id active-session)))))
+      {:status :rejected :reason :no-active-session
+       :schema-version 1 :ability-id ability-id
+       :feedback [{:type :combat-input-rejected :reason :no-active-session}]}
+      (if (and (= :start (:op intent))
+               (cooldown-active? owner ability-id))
+        {:status :rejected :reason :cooldown
+         :schema-version 1 :ability-id ability-id
+         :feedback [{:type :cooldown-active :ability-id ability-id}]}
+        (let [result (assoc (final-runtime-v2/dispatch-production! owner ability-id
+                                                                    {:entry entry :input prepared})
+                            :schema-version 1 :ability-id ability-id)]
           (when (should-open-session? (:status result) (:op intent) (:activation source)
                                       (:finish-ability? result)
                                       (boolean active-session))
