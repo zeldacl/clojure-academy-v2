@@ -1,0 +1,128 @@
+;; New-DSL conversion of ac/combat/abilities/vec_accel.edn (S6). Session
+;; ability (charge on :pulse, act on :release), the first real use of
+;; :vec3/launch -- see node-core's expr.clj/ops.clj for that op's own
+;; from-scratch implementation, since the old system referenced this
+;; opcode but never actually provided one anywhere (confirmed by an
+;; exhaustive search; it would have thrown at the one call site that used
+;; it). :session-state stays as separate, unchanged legacy metadata
+;; (still possibly consumed by a network-sync schema this pass does not
+;; touch); the :program's own :state block is what node-core actually
+;; compiles against.
+{:schema-version 2
+ :kind :ability
+ :id :vec-accel
+ :name-key "ability.skill.vecmanip.vec_accel"
+ :description-key "ability.skill.vecmanip.vec_accel.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :charge/ticks]
+ :prerequisites [{:skill-id :directed-shock :min-exp 0.0}]
+ :tunables {:max-charge-ticks {:curve :const :type :int}
+            :max-velocity {:curve :const}
+            :speed-progress {:curve :pair}
+            :pitch-offset-radians {:curve :const}
+            :ground-check-distance {:curve :const}
+            :groundless-exp-threshold {:curve :const}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-use {:curve :const}}
+ :progression {:launch {:per-mark {:ref [:input :tunables :exp-use]}}}
+ :session-state {:charge-ticks {:type :int :default 0}
+                 :can-perform? {:type :bool :default true}
+                 :look-dir {:type :vec3}
+                 :init-vel {:type :vec3}}
+ :program
+ "{:ability :vec-accel
+   :activation :session
+   :state {:charge-ticks {:type :long :default 0} :can-perform? {:type :boolean :default true}
+           :look-dir {:type :vec3} :init-vel {:type :vec3}}
+   :tunables {:max-charge-ticks {:type :long} :max-velocity {:type :double}
+              :speed-progress {:type :any} :pitch-offset-radians {:type :double}
+              :ground-check-distance {:type :double} :groundless-exp-threshold {:type :double}
+              :release-cp {:type :double} :release-overload {:type :double}
+              :cooldown-ticks {:type :long}}
+   :phases
+   {:start
+    [(let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (state! :charge-ticks 0)
+     (state! :can-perform? true)
+     (state! :look-dir aim)
+     (state! :init-vel [0.0 0.0 0.0])
+     (vfx! {:effect-id :trajectory-ribbon-session :operation :spawn
+           :instance-key [:activation :vec-accel-trajectory] :audience {:type :owner}
+           :payload {:lateral-offset 0.08 :look-dir aim :can-perform? false :dt 0.02
+                    :vertical-offset -0.06 :width 0.02 :segments 100 :gravity 1.9
+                    :forward-offset 0.12
+                    :style {:ready-color [255 255 255 255] :blocked-color [255 51 51 255]
+                           :height 0.02}
+                    :init-vel [0.0 0.0 0.0] :origin eye :drag 0.98}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let body ?caster/body)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let mastery ?progression/mastery)
+     (let ground-hit (target/raycast {:origin body :direction [0.0 -1.0 0.0]
+                                      :distance $ground-check-distance
+                                      :include-entities? false :include-blocks? true}))
+     (let charge-ticks-cur %charge-ticks)
+     (let charge-ticks-next (long/add charge-ticks-cur 1))
+     (state! :charge-ticks charge-ticks-next)
+     (let can-perform?
+       (bool/or (math/gte mastery $groundless-exp-threshold) (collection/nonempty ground-hit)))
+     (state! :can-perform? can-perform?)
+     (state! :look-dir aim)
+     (let charge-progress (math/clamp (math/div charge-ticks-next $max-charge-ticks) 0.0 1.0))
+     (let speed
+       (math/mul (math/sin (math/lerp (pair/first $speed-progress) (pair/second $speed-progress)
+                                      charge-progress))
+                 $max-velocity))
+     (let init-vel (vec3/launch aim speed $pitch-offset-radians))
+     (state! :init-vel init-vel)
+     (vfx! {:effect-id :trajectory-ribbon-session :operation :update
+           :instance-key [:activation :vec-accel-trajectory] :audience {:type :owner}
+           :payload {:lateral-offset 0.08 :look-dir aim :can-perform? can-perform? :dt 0.02
+                    :vertical-offset -0.06 :width 0.02 :segments 100 :gravity 1.9
+                    :forward-offset 0.12
+                    :style {:ready-color [255 255 255 255] :blocked-color [255 51 51 255]
+                           :height 0.02}
+                    :init-vel init-vel :origin eye :drag 0.98}})
+     (finish {:outcome :charging})]
+
+    :release
+    [(let eye ?caster/eye)
+     (let can-perform? %can-perform?)
+     (let init-vel %init-vel)
+     (let should-launch? (bool/and can-perform? (math/gt (vec3/length init-vel) 0.0)))
+     (if should-launch?
+       [(let sufficient?
+          (cost/spend {:budget {:cp $release-cp :overload $release-overload}}))
+        (if sufficient?
+          [(let launch-progression ?progression/launch)
+           (motion/velocity {:velocity init-vel :dismount? true :reset-fall-damage? true})
+           (event! {:type :score/mark :progression launch-progression})
+           (cooldown/start {:name :main :ticks $cooldown-ticks})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn :audience {:type :owner}
+                 :payload {:position eye :sound-id \"academy:vecmanip.vec_accel\" :volume 0.35
+                          :pitch 1.0}})
+           (vfx! {:effect-id :trajectory-ribbon-session :operation :destroy
+                 :instance-key [:activation :vec-accel-trajectory] :payload {}})
+           (finish {:outcome :launched})]
+          [(vfx! {:effect-id :trajectory-ribbon-session :operation :destroy
+                 :instance-key [:activation :vec-accel-trajectory] :payload {}})
+           (finish {:outcome :insufficient-resource})])]
+       [(vfx! {:effect-id :trajectory-ribbon-session :operation :destroy
+              :instance-key [:activation :vec-accel-trajectory] :payload {}})
+        (finish {:outcome :not-performable})])]
+
+    :abort
+    [(vfx! {:effect-id :trajectory-ribbon-session :operation :destroy
+           :instance-key [:activation :vec-accel-trajectory] :payload {}})
+     (finish {:outcome :aborted})]}}"
+ :costs nil
+ :cooldown nil
+ :invariants nil
+ :mark-policies nil}

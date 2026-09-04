@@ -1,0 +1,179 @@
+;; New-DSL conversion of ac/combat/abilities/directed_blastwave.edn (S6).
+;; Session ability (multi-punch combo: a successful :release does NOT end
+;; the ability, matching the old content's own lack of :finish-ability?
+;; on that outcome -- :pulse's own punch-ticks/punch-animation-ticks
+;; timeout is what eventually ends it via :performed).
+;;
+;; Confirms and reuses the pattern already established converting
+;; groundshock.edn: the old engine's {:ref [:state key]} reads (distinct
+;; from {:ref [:local key]}) see writes made EARLIER IN THE SAME
+;; activation (final_engine.clj's bind-state! mutates :ability-state in
+;; the threaded context immediately, not just at dispatch end) -- the new
+;; engine's %key sigil deliberately does NOT (state-read always reads the
+;; frame's original :input, :state-write only appends to a return list;
+;; state persists forward only across SEPARATE dispatches). Translating
+;; every same-activation {:ref [:state key]} read as the already-computed
+;; LOCAL value (not a %key re-read) reproduces the old live-visibility
+;; behavior faithfully.
+;;
+;; One more real content inconsistency found and handled: :hardness-caps
+;; is declared {:curve :pair} but real usage indexes THREE elements --
+;; see node-core's expr.clj/ops.clj for the new :pair/third accessor.
+{:schema-version 2
+ :kind :ability
+ :id :directed-blastwave
+ :name-key "ability.skill.vecmanip.directed_blastwave"
+ :description-key "ability.skill.vecmanip.directed_blastwave.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/body :caster/eye :caster/aim :caster/id :world/id :rng/seed :charge/ticks]
+ :prerequisites [{:skill-id :groundshock :min-exp 0.0}]
+ :tunables {:charge-min-ticks {:curve :const :type :int}
+            :charge-max-accepted-ticks {:curve :const :type :int}
+            :charge-max-tolerant-ticks {:curve :const :type :int}
+            :punch-animation-ticks {:curve :const :type :int}
+            :targeting-distance {:curve :const}
+            :aoe-radius {:curve :const}
+            :damage {:curve :mastery-lerp}
+            :knockback-scale {:curve :const}
+            :hardness-low-threshold {:curve :const}
+            :hardness-mid-threshold {:curve :const}
+            :hardness-caps {:curve :pair}
+            :break-probability {:curve :mastery-lerp}
+            :drop-probability {:curve :mastery-lerp}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-hit {:curve :const}
+            :exp-miss {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}
+               :miss {:per-mark {:ref [:input :tunables :exp-miss]}}}
+ :program
+ "{:ability :directed-blastwave
+   :activation :session
+   :state {:charge-ticks {:type :long :default 0} :punched? {:type :boolean :default false}
+           :punch-ticks {:type :long :default 0}}
+   :tunables {:charge-max-accepted-ticks {:type :long} :charge-max-tolerant-ticks {:type :long}
+              :charge-min-ticks {:type :long} :punch-animation-ticks {:type :long}
+              :targeting-distance {:type :double} :aoe-radius {:type :double}
+              :damage {:type :double} :knockback-scale {:type :double}
+              :hardness-low-threshold {:type :double} :hardness-mid-threshold {:type :double}
+              :hardness-caps {:type :any} :break-probability {:type :any}
+              :drop-probability {:type :any}}
+   :phases
+   {:start
+    [(state! :charge-ticks 0)
+     (state! :punched? false)
+     (state! :punch-ticks 0)
+     (vfx! {:effect-id :directed-blastwave-charge :operation :spawn
+           :instance-key [:activation :directed-blastwave-charge] :audience {:type :owner}
+           :payload {:center ?caster/eye :charge-ticks 0
+                    :max-charge-ticks $charge-max-accepted-ticks :punched? false}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let charge-ticks-cur %charge-ticks)
+     (let charge-ticks-next (long/add charge-ticks-cur 1))
+     (state! :charge-ticks charge-ticks-next)
+     (let punch-ticks-cur %punch-ticks)
+     (let punched? %punched?)
+     (let punch-increment (math/select punched? 1 0))
+     (let punch-ticks-next (long/add punch-ticks-cur punch-increment))
+     (state! :punch-ticks punch-ticks-next)
+     (vfx! {:effect-id :directed-blastwave-charge :operation :update
+           :instance-key [:activation :directed-blastwave-charge] :audience {:type :owner}
+           :payload {:center ?caster/eye :charge-ticks charge-ticks-next
+                    :max-charge-ticks $charge-max-accepted-ticks :punched? punched?}})
+     (let timed-out? (math/gte charge-ticks-next $charge-max-tolerant-ticks))
+     (if timed-out?
+       [(vfx! {:effect-id :directed-blastwave-charge :operation :destroy
+              :instance-key [:activation :directed-blastwave-charge] :payload {}})
+        (finish {:outcome :aborted :end-ability? true})]
+       [(let punch-done? (bool/and punched? (math/gt punch-ticks-next $punch-animation-ticks)))
+        (if punch-done?
+          [(vfx! {:effect-id :directed-blastwave-charge :operation :destroy
+                 :instance-key [:activation :directed-blastwave-charge] :payload {}})
+           (finish {:outcome :performed :end-ability? true})]
+          [(finish {:outcome :charging})])])]
+
+    :release
+    [(let charge-ticks %charge-ticks)
+     (let releasable?
+       (bool/and (math/gt charge-ticks $charge-min-ticks)
+                (math/lt charge-ticks $charge-max-accepted-ticks)))
+     (if releasable?
+       [(let release-budget ?budget/release)
+        (let sufficient? (cost/spend {:budget release-budget}))
+        (if sufficient?
+          [(let eye ?caster/eye)
+           (let aim ?caster/aim)
+           (let body ?caster/body)
+           (let owner-id ?caster/id)
+           (let mastery ?progression/mastery)
+           (let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-distance
+                                         :include-entities? true :include-blocks? true}))
+           (let targets
+             (target/entities {:shape {:type :sphere :center (:position aim-hit)
+                                       :radius $aoe-radius}
+                               :filter {:excluded-entity-ids [owner-id]} :limit 256}))
+           (each target targets
+             (let target-id (:id target))
+             (combat/damage {:target target-id :amount $damage :damage-type :skill
+                             :damage-pipeline :skill})
+             (let lift-position (vec3/add (:position target) [0.0 0.1 0.0]))
+             (let away (vec3/sub lift-position body))
+             (let direction (vec3/normalize away))
+             (let knockback-magnitude (math/mul 0.2 (math/abs $knockback-scale)))
+             (combat/impulse {:target target :vector (vec3/scale direction knockback-magnitude)}))
+           (let hardness-max
+             (math/select (math/lt mastery $hardness-low-threshold) (pair/first $hardness-caps)
+               (math/select (math/lt mastery $hardness-mid-threshold)
+                            (pair/second $hardness-caps) (pair/third $hardness-caps))))
+           (let break-chance
+             (math/lerp (pair/first $break-probability) (pair/second $break-probability)
+                        mastery))
+           (let mastery-is-max? (math/eq mastery 1.0))
+           (let drop-chance
+             (math/select mastery-is-max?
+                          (math/lerp (pair/first $drop-probability) (pair/second $drop-probability)
+                                    mastery)
+                          0.0))
+           (terrain/break-area (:position aim-hit) 3.0 hardness-max break-chance drop-chance 128)
+           (let has-targets? (collection/nonempty targets))
+           (if has-targets?
+             [(let hit-progression ?progression/hit)
+              (event! {:type :score/mark :tag :hit :progression hit-progression})]
+             [(let miss-progression ?progression/miss)
+              (event! {:type :score/mark :tag :miss :progression miss-progression})])
+           (let main-cooldown ?cooldown/main)
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (vfx! {:effect-id :directed-blastwave-charge :operation :destroy
+                 :instance-key [:activation :directed-blastwave-charge] :payload {}})
+           (let seed ?rng/seed)
+           (vfx! {:effect-id :directed-blastwave-wave :operation :spawn
+                 :audience {:type :nearby :radius 32.0}
+                 :payload {:position (:position aim-hit) :direction aim :seed seed}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn
+                 :audience {:type :nearby :radius 32.0}
+                 :payload {:position (:position aim-hit)
+                          :sound-id \"academy:vecmanip.directed_blast\" :volume 0.5
+                          :pitch 1.0}})
+           (state! :punched? true)
+           (state! :punch-ticks 0)
+           (finish {:outcome :punched})]
+          [(vfx! {:effect-id :directed-blastwave-charge :operation :destroy
+                 :instance-key [:activation :directed-blastwave-charge] :payload {}})
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :directed-blastwave-charge :operation :destroy
+              :instance-key [:activation :directed-blastwave-charge] :payload {}})
+        (finish {:outcome :undercharged :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :directed-blastwave-charge :operation :destroy
+           :instance-key [:activation :directed-blastwave-charge] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}

@@ -1,0 +1,126 @@
+;; New-DSL conversion of ac/combat/abilities/ray_barrage.edn (S6). See
+;; earlier skills/*.edn docstrings for the general pattern.
+;;
+;; Two more cn.li.node.expr opcodes that existed but were never wired
+;; into ops/table -- same fix :math/select/:collection/contains? needed
+;; earlier: :collection/first (read a single-candidate query result as an
+;; optional value) and :collection/nonempty (guard reading it). Also adds
+;; :random/int to combat-core's vocabulary as a :query node, NOT a
+;; ops/table :pure op -- same reasoning as :random/chance (seeded, so it
+;; can only be correctly seeded through the host frame; ops/invoke always
+;; calls expr/evaluate with a hard-coded seed 0).
+{:schema-version 2
+ :kind :ability
+ :id :ray-barrage
+ :name-key "ability.skill.meltdowner.ray_barrage"
+ :description-key "ability.skill.meltdowner.ray_barrage.desc"
+ :revision 1
+ :activation :instant
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :world/id :rng/seed]
+ :prerequisites [{:skill-id :meltdowner :min-exp 0.5}]
+ :tunables {:plain-damage {:curve :mastery-lerp}
+            :scattered-damage {:curve :mastery-lerp}
+            :targeting-range {:curve :const}
+            :scatter-cone-angle {:curve :const}
+            :cost-down-cp {:curve :mastery-lerp}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-hit {:curve :const}}
+ :costs {:fire {:resources {:cp {:ref [:input :tunables :cost-down-cp]}
+                            :overload {:ref [:input :tunables :cost-down-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}}
+ :program
+ "{:ability :ray-barrage
+   :activation :instant
+   :tunables {:targeting-range {:type :double} :scatter-cone-angle {:type :double}
+              :plain-damage {:type :double} :scattered-damage {:type :double}}
+   :phases
+   {:start
+    [(let caster-id ?caster/id)
+     (let body ?caster/body)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let seed ?rng/seed)
+     (let fire-budget ?budget/fire)
+     (let hit-progression ?progression/hit)
+     (let main-cooldown ?cooldown/main)
+     (let sufficient? (cost/spend {:budget fire-budget}))
+     (if sufficient?
+       [(let aim-hit (target/raycast {:origin eye :direction aim :distance $targeting-range
+                                      :include-entities? true :include-blocks? true}))
+        (let aim-entity-id (:entity-id aim-hit))
+        (let silbarn-radius (math/select aim-entity-id 1.5 0.0))
+        (let silbarn-candidates
+          (target/entities {:shape {:type :sphere :center (:position aim-hit)
+                                    :radius silbarn-radius}
+                            :filter {:entity-types [\"academy:entity_silbarn\"]
+                                    :entity-ids [aim-entity-id] :owner-id caster-id}
+                            :limit 1}))
+        (let silbarn (collection/first silbarn-candidates))
+        (let should-scatter?
+          (bool/and (collection/nonempty silbarn-candidates) (bool/not (:behavior-hit? silbarn))))
+        (if should-scatter?
+          [(entity/trigger-behavior {:entity silbarn})
+           (vfx! {:effect-id :ray-beam-transient :operation :spawn
+                 :audience {:type :nearby :radius 64.0}
+                 :payload {:start eye :end (:position aim-hit) :life-ticks 50 :grow-ticks 0
+                          :bounds-radius 0.8
+                          :style {:fade-in-ticks 4 :inner-radius 0.045 :glow-width 0.4
+                                 :outer-radius 0.052 :inner-color [216 248 216 230]
+                                 :outer-color [106 242 106 50] :glow-alpha 127
+                                 :fade-out-ticks 8 :texture \"academy:textures/effects/mdray_small\"}}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn :audience {:type :nearby :radius 64.0}
+                 :payload {:position eye :sound-id \"academy:md.ray_small\" :volume 0.8 :pitch 1.0}})
+           (let silbarn-id (:id silbarn))
+           (let scatter-targets
+             (target/entities {:shape {:type :cone :origin body :eye-origin eye :direction aim
+                                       :distance $targeting-range
+                                       :yaw-span-degrees $scatter-cone-angle
+                                       :pitch-span-degrees $scatter-cone-angle
+                                       :pitch-denominator :z-only}
+                               :filter {:excluded-entity-ids [silbarn-id]}
+                               :limit 256}))
+           (each target scatter-targets
+             (let target-id (:id target))
+             (combat/damage {:target target-id :amount $scattered-damage :damage-type :magic})
+             (entity/mark {:target target-id :mark-type :radiation :duration-ticks 60
+                           :requires-ability :rad-intensify}))
+           (let random-extra (random/int {:min 0 :max 5}))
+           (let fan-count (long/add 25 random-extra))
+           (vfx! {:effect-id :ray-fan-transient :operation :spawn
+                 :audience {:type :nearby :radius 64.0}
+                 :payload {:life-ticks 50 :yaw-range-degrees {:min 50.0 :max 60.0}
+                          :pitch-range-degrees {:min -30.0 :max 30.0} :seed seed
+                          :style {:fade-in-ticks 4 :inner-radius 0.03 :glow-width 0.3
+                                 :outer-radius 0.045 :inner-color [216 248 216 230]
+                                 :outer-color [106 242 106 50] :glow-alpha 127
+                                 :fade-out-ticks 8 :texture \"academy:textures/effects/mdray_small\"}
+                          :count fan-count :length 15.0 :grow-ticks 4
+                          :origin (:position aim-hit) :bounds-radius 15.0 :direction aim}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn :audience {:type :nearby :radius 64.0}
+                 :payload {:position (:position aim-hit) :sound-id \"academy:md.ray_small\"
+                          :volume 0.5 :pitch 1.0}})]
+          [(combat/damage {:target aim-entity-id :amount $plain-damage :damage-type :magic})
+           (entity/mark {:target aim-entity-id :mark-type :radiation :duration-ticks 60
+                         :requires-ability :rad-intensify})
+           (vfx! {:effect-id :ray-beam-transient :operation :spawn
+                 :audience {:type :nearby :radius 64.0}
+                 :payload {:start eye :end (:position aim-hit) :life-ticks 30 :grow-ticks 0
+                          :bounds-radius 0.8
+                          :style {:fade-in-ticks 4 :inner-radius 0.045 :glow-width 0.4
+                                 :outer-radius 0.052 :inner-color [216 248 216 230]
+                                 :outer-color [106 242 106 50] :glow-alpha 127
+                                 :fade-out-ticks 8 :texture \"academy:textures/effects/mdray_small\"}}})
+           (vfx! {:effect-id :audio-one-shot :operation :spawn :audience {:type :nearby :radius 64.0}
+                 :payload {:position eye :sound-id \"academy:md.ray_small\" :volume 0.8 :pitch 1.0}})])
+        (cooldown/start {:name :main :ticks main-cooldown})
+        (event! {:type :score/mark :progression hit-progression})
+        (finish {:outcome :performed})]
+       [(finish {:outcome :insufficient-resource})])]
+
+    :pulse [(finish {:outcome :unsupported})]
+    :release [(finish {:outcome :unsupported})]
+    :abort [(finish {:outcome :aborted})]}}"
+ :invariants nil
+ :mark-policies nil}

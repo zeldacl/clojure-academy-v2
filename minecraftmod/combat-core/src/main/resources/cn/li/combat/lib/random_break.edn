@@ -1,0 +1,18 @@
+;; Port of the old :terrain/random-break composite: select bounded random
+;; candidates from a sphere and break each. The old composite queried up
+;; to a fixed :limit (default 256) then separately truncated the foreach
+;; to :attempts; `each` has no partial-iteration primitive, so :attempts is
+;; passed straight in as the query's own :limit instead -- since only the
+;; first :attempts candidates were ever used anyway, this is behaviorally
+;; identical, not a simplification. :seed is dropped: it addressed the old
+;; host's per-call random *candidate selection*, which the new
+;; target/blocks vocab node has no :seed param for -- selection now reads
+;; the activation's own RNG cursor off the frame implicitly, same as
+;; random/chance.
+{:defn :terrain/random-break
+ :params [{:name origin :type :vec3} {:name radius :type :double} {:name attempts :type :long}
+          {:name hardness-max :type :double}]
+ :do [(let blocks (target/blocks {:shape {:type :sphere :center origin :radius radius}
+                                  :projection {:max-hardness hardness-max} :limit attempts}))
+      (each candidate blocks
+        (block/break {:position (:position candidate)}))]}

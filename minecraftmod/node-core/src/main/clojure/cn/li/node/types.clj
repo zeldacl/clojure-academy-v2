@@ -78,3 +78,62 @@
    already-canonical type is a no-op."
   [t]
   (get type-aliases t t))
+
+;; --- register-bank plumbing for the surface-DSL compiler (cn.li.node.compile)
+;; and the mcmod ExecutionFrame emitter it targets. Added alongside the
+;; existing lattice above rather than replacing it: descriptor.clj/validate.clj
+;; still consume known-type?/conforms?/canonical-type as-is until combat-core
+;; and vfx-core are rewritten off the old engine (see verifyNodeCoreDependencyDirection
+;; migration plan) -- these are pure additions.
+
+(defn integral?
+  "True when a value of type `t` belongs in a fixed-width integer register
+   (the :longs/:booleans ExecutionFrame banks) rather than :doubles or
+   boxed :objects."
+  [t]
+  (contains? #{:long :boolean} (canonical-type t)))
+
+(defn numeric? [t] (contains? #{:double :long} (canonical-type t)))
+
+(defn width
+  "Register width for `t`: how many scalar slots one value of this type
+   occupies in a structure-of-arrays layout (vfx-core particle columns,
+   cn.li.vfx.layout). Everything that isn't a literal vector type is a
+   single slot."
+  [t]
+  (case (canonical-type t) :vec3 3 :color 4 1))
+
+(defn bank
+  "Which ExecutionFrame register group a value of type `t` is stored in.
+   :vec3/:color and every opaque handle live in :objects -- only genuine
+   scalars get a primitive-array bank, so :objects is where boxing happens
+   for compound values (see cn.li.mcmod.runtime.effect.emit)."
+  [t]
+  (let [t (canonical-type t)]
+    (cond
+      (= t :double) :doubles
+      (= t :long) :longs
+      (= t :boolean) :booleans
+      :else :objects)))
+
+(defn assignable?
+  "Can a value of static type `from` be passed where `to` is declared?
+   :any is a two-way gradual-typing escape hatch: it accepts everything
+   (declaring a param :any) AND is accepted everywhere (a value whose
+   static type is :any, e.g. a field-access result -- cn.li.node.compile
+   has no per-field type schema, so (:position hit) is only ever known to
+   be :any at compile time; treating :any as assignable to a concrete type
+   is what lets that value flow into a :vec3-typed param, with the real
+   shape check deferred to the host/emitter at the actual use site). :long
+   widens to :double (the reverse does not hold -- a graph author writing a
+   fractional literal where an :long parameter is declared is a real
+   authoring bug, not implicit narrowing); every other pair requires an
+   exact match. Used by cn.li.node.compile for compile-time parameter
+   type-checking (Psi-style: reported at the DSL source position, not
+   discovered at runtime)."
+  [from to]
+  (let [from (canonical-type from) to (canonical-type to)]
+    (or (= to :any)
+        (= from :any)
+        (= from to)
+        (and (= from :long) (= to :double)))))

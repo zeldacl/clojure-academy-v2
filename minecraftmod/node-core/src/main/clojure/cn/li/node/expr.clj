@@ -4,7 +4,8 @@
    -- this is the language layer (see NODE_LANGUAGE.md), not a domain
    vocabulary. Domain-specific opcodes (e.g. combat's ballistic vec3/launch,
    vfx's domain opcodes are supplied through the immutable NodeEnvironment,
-   so node-core itself never needs to know what combat or vfx are for.")
+   so node-core itself never needs to know what combat or vfx are for."
+  (:require [clojure.string :as str]))
 
 (set! *warn-on-reflection* true)
 
@@ -87,6 +88,17 @@
        :math/max (double (max (double (nth args 0)) (double (nth args 1))))
        :math/abs (double (Math/abs (double (nth args 0))))
        :math/floor (double (Math/floor (double (nth args 0))))
+       ;; A curve-evaluated tick count (math/lerp -> math/floor, mine_detect
+       ;; .edn's :cooldown-ticks-next, S6) is a :double by construction
+       ;; (every :math/* op is), but :cooldown/start's :ticks param is
+       ;; :long -- and cn.li.node.types/assignable? deliberately disallows
+       ;; :double -> :long narrowing (a real authoring-bug guard, not
+       ;; something to route around with a general unsafe cast). This is
+       ;; the one legitimate "I know this is a whole number" case: floor
+       ;; and truncate to :long in a single named op, not a generic
+       ;; double->long escape hatch that could paper over a real bug
+       ;; elsewhere.
+       :math/floor-long (long (Math/floor (double (nth args 0))))
        :math/sqrt (double (Math/sqrt (double (nth args 0))))
        :math/pow (double (Math/pow (double (nth args 0)) (double (nth args 1))))
        :math/sin (double (Math/sin (double (nth args 0))))
@@ -102,7 +114,77 @@
        :math/gt (> (double (nth args 0)) (double (nth args 1)))
        :math/select (if (boolean (nth args 0)) (nth args 1) (nth args 2))
 
+       ;; :long/* -- a real ability's tick-count arithmetic (delay-ticks =
+       ;; some-tick-count - 2, S6's electron_bomb.edn) cannot go through
+       ;; :math/* : those are hard-coded to double, and cn.li.node.types/
+       ;; assignable? deliberately disallows :double -> :long narrowing
+       ;; (a fractional literal into a :long param is a real authoring
+       ;; bug, not implicit narrowing -- see that function's own
+       ;; docstring), so a :math/sub result could never satisfy a :long-
+       ;; typed param like :projectile/schedule-beam's :delay-ticks. Long-
+       ;; typed values need their own arithmetic family, not a cast.
+       :long/add (+ (long (nth args 0)) (long (nth args 1)))
+       :long/sub (- (long (nth args 0)) (long (nth args 1)))
+       :long/mul (* (long (nth args 0)) (long (nth args 1)))
+       :long/min (min (long (nth args 0)) (long (nth args 1)))
+       :long/max (max (long (nth args 0)) (long (nth args 1)))
+
+       ;; A {:curve :pair} tunable's runtime value is a 2-element vector
+       ;; [lo hi] (mine_detect.edn's :cooldown-endpoints, S6) -- the only
+       ;; existing index-into-a-vector op is :collection/nth, which is
+       ;; deliberately hidden from DSL authors (compiler-internal, only
+       ;; for `each`'s own desugaring -- see cn.li.node.ops's docstring).
+       ;; A small dedicated pair accessor keeps that boundary intact
+       ;; instead of exposing the general nth escape hatch to authors.
+       :pair/first (double (nth (nth args 0) 0))
+       :pair/second (double (nth (nth args 0) 1))
+       ;; A real content inconsistency, not a new curve shape: directed_
+       ;; blastwave.edn's :hardness-caps tunable is declared {:curve
+       ;; :pair} but real usage indexes a THIRD element (S6) -- rather
+       ;; than generalize to an author-facing nth (the same escape hatch
+       ;; :pair/first,second were added specifically to avoid exposing),
+       ;; one more named accessor for this one documented case.
+       :pair/third (double (nth (nth args 0) 2))
+
        :value/eq (= (nth args 0) (nth args 1))
+
+       ;; body_intensify.edn's (S6) :effect-available-effects tunable is a
+       ;; list of "name:max-amplifier" strings (e.g. "jump-boost:1"),
+       ;; confirmed by mcmod/runtime/expression-catalog.clj's own worked
+       ;; example -- referenced under :value/* in real content but, like
+       ;; :vec3/launch and :vec3/scatter-end before it, never actually
+       ;; implemented anywhere in the repo. Genuinely pure string parsing
+       ;; (no RNG, no host state), so both accessors are ordinary :pure ops.
+       :value/status-id (keyword (first (str/split (nth args 0) #":")))
+       :value/status-max-amplifier (Long/parseLong (second (str/split (nth args 0) #":")))
+
+       ;; mag_movement.edn's (S6) block/entity-type ids, comparing a
+       ;; raycast hit's raw :block-id/:entity-type against a magnetic-
+       ;; material allowlist. mcmod/runtime/expression-catalog.clj's own
+       ;; worked example ("block.minecraft.iron_block") is a Minecraft
+       ;; translation key, not the "minecraft:iron_block" namespaced-id
+       ;; shape an allowlist actually contains -- drop the leading
+       ;; type-prefix segment (the part before the first '.') and turn
+       ;; the next '.' into the real ':' separator. A string with no '.'
+       ;; at all (already namespaced) passes through unchanged, so this
+       ;; is safe regardless of which shape the host actually hands back.
+       ;; Same never-wired-up-reference class already established this
+       ;; session (:vec3/launch, :value/status-id). nil-safe: node-core's
+       ;; IR has no short-circuiting -- every :pure op's args are
+       ;; computed as separate instructions before the op combines them
+       ;; (found via mag_manip.edn, S6: (bool/and present? (collection/
+       ;; contains? ... (value/normalize-id block-id))) evaluates the
+       ;; normalize-id call regardless of present?, so an absent held
+       ;; item's nil :block-id reaches here even on the branch that
+       ;; never uses the result).
+       :value/normalize-id
+       (if (nil? (nth args 0))
+         nil
+         (let [s (nth args 0) dot1 (.indexOf ^String s ".")]
+           (if (neg? dot1)
+             s
+             (let [tail (subs s (inc dot1)) dot2 (.indexOf ^String tail ".")]
+               (if (neg? dot2) tail (str (subs tail 0 dot2) ":" (subs tail (inc dot2))))))))
 
        :collection/contains? (boolean (some #(= % (nth args 1)) (or (nth args 0) [])))
        :collection/concat (vec (concat (or (nth args 0) []) (or (nth args 1) [])))
@@ -164,6 +246,34 @@
        (let [[fx fy fz] (vec3-components (nth args 0)) [tx ty tz] (vec3-components (nth args 1))
              step (Math/abs (double (nth args 2)))]
          {:vec3 [(approach-component fx tx step) (approach-component fy ty step) (approach-component fz tz step)]})
+       ;; A ballistic launch vector: `direction` pitched up/down by
+       ;; `pitch-offset` radians (rotated about the horizontal axis
+       ;; perpendicular to `direction`, keeping its yaw), then scaled to
+       ;; `speed`. This opcode was REFERENCED by real content
+       ;; (vec_accel.edn, S6) under the old system but never actually
+       ;; implemented anywhere -- this docstring once called it out as
+       ;; "domain-specific, supplied through the NodeEnvironment", but an
+       ;; exhaustive search of both combat-core and ac turned up no
+       ;; :extra-ops map that ever registered it, so it would have thrown
+       ;; "unsupported expression opcode" the one time it was actually
+       ;; invoked. Since it is genuinely pure (no RNG, no host state), it
+       ;; belongs in the core vec3 family rather than behind a NodeEnvironment
+       ;; extension point that nothing else has ever needed -- this is a
+       ;; new, from-scratch implementation, not a port of a working one.
+       :vec3/launch
+       (let [[dx dy dz] (vec3-components (nth args 0))
+             speed (double (nth args 1))
+             pitch-offset (double (nth args 2))
+             horiz (Math/sqrt (+ (* dx dx) (* dz dz)))]
+         (if (zero? horiz)
+           ;; Straight up/down: yaw is undefined, so pitch-offset only
+           ;; ever changes magnitude along the existing (vertical) axis.
+           {:vec3 [0.0 (* speed (Math/signum (double dy))) 0.0]}
+           (let [pitch (Math/atan2 dy horiz)
+                 pitch' (+ pitch pitch-offset)
+                 yaw-x (/ dx horiz) yaw-z (/ dz horiz)
+                 cos-p (Math/cos pitch')]
+             {:vec3 [(* speed cos-p yaw-x) (* speed (Math/sin pitch')) (* speed cos-p yaw-z)]})))
 
        :random/uniform (uniform seed (double (nth args 0)) (double (nth args 1)))
        :random/int (bounded-int seed (long (nth args 0)) (long (nth args 1)))

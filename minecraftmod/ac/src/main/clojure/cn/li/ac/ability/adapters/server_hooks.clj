@@ -416,7 +416,10 @@
            ;; Final external events may request a next phase. Continue through
            ;; the same owner-scoped runtime boundary; no skill callback path.
            (when-let [next-phase (:next-phase result)]
-             (let [release (combat-runtime/dispatch-intent!
+             ;; S8 cutover: routes through the new engine, matching
+             ;; dispatch-trigger! above (already S8-routed) -- see its
+             ;; own docstring.
+             (let [release (combat-runtime/dispatch-intent-v2!
                             player-uuid
                             {:op next-phase
                              :ability-id (:ability trigger)

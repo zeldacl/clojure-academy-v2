@@ -1,0 +1,37 @@
+;; New-DSL conversion of ac/vfx/effects/ring_fade_audio.edn (S6). Same
+;; :vfx/fade -> local-alpha-into-:alpha translation as beam_fade_audio.edn
+;; (this file's fade uses fixed :from-alpha 1.0 :to-alpha 0.0 and reuses
+;; :fade-at as both the timeline gate and the fade window's own
+;; :from-tick, matching the old content exactly). Same :radius {:from
+;; :to} -> (math/lerp from to ?progress) translation as
+;; ring_particle_field.edn.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :ring-fade-audio
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:position :vec3 :duration-ticks :int :ring-from :float
+          :ring-to :float :ring-segments :int :ring-color :any
+          :fade-at :int :fade-to-tick :int :fade-ring-from :float
+          :fade-ring-to :float :fade-segments :int :fade-color :any
+          :sound-id :string :sound-volume :float :sound-pitch :float}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :ring-fade-audio
+   :do [(ring {:center ?position :radius (math/lerp ?ring-from ?ring-to ?progress)
+              :segments ?ring-segments :color ?ring-color})
+        (audio-one-shot {:sound-id ?sound-id :volume ?sound-volume :pitch ?sound-pitch
+                         :position ?position})
+        (when (math/gte ?age ?fade-at)
+          (let fade-p (math/clamp
+                       (math/div (math/sub ?age ?fade-at)
+                                (math/max 1.0 (math/sub ?fade-to-tick ?fade-at)))
+                       0.0 1.0))
+          (let fade-alpha (math/lerp 1.0 0.0 fade-p))
+          (ring {:center ?position
+                :radius (math/lerp ?fade-ring-from ?fade-ring-to ?progress)
+                :segments ?fade-segments :color ?fade-color :alpha fade-alpha}))
+        (finish {:outcome :performed})]}"}

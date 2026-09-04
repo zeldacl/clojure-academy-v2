@@ -1,0 +1,69 @@
+;; New-DSL conversion of ac/combat/abilities/rad_intensify.edn (S6). ONLY
+;; :program changes -- from the old {:component :flow/phases ...} tree to a
+;; string of new surface-DSL text, parsed via cn.li.node.surface/parse and
+;; compiled via cn.li.combat.run/compile-doc! (see ac/src/test/clojure/cn/
+;; li/ac/skills/skills_test.clj for the real compile+dispatch proof).
+;;
+;; Everything else here is verbatim from the old file, UNCHANGED: this
+;; ability's :mark-policies and :damage-policies are not node-core DSL at
+;; all -- they are consumed by cn.li.combat.damage (a verbatim port of the
+;; old aggregation algorithm's :ref/:expr tree interpreter, per this
+;; session's explicit scoping decision to only rebuild the dispatch layer,
+;; not re-derive the aggregation math through the new VM) and by the
+;; not-yet-rewritten mark-application path. Converting THOSE to the new DSL
+;; is out of scope for this pass; only the ability's own :do/:phases body
+;; (what runs when the ability activates) moves to the new pipeline.
+;;
+;; rad-intensify is passive: all four phases are a bare finish, and it has
+;; no :do logic of its own -- its entire real behavior lives in
+;; :damage-policies (multiply damage while the :radiation mark is active).
+;; Picked as the FIRST S6 conversion specifically because it is close to a
+;; no-op on the :program side, letting the file-shape/loader-adjacent
+;; questions (does :program become string DSL text or nested data? does
+;; :mark-policies/:damage-policies move too?) get settled on the simplest
+;; possible case before tackling a real :do body.
+{:schema-version 2
+ :kind :ability
+ :id :rad-intensify
+ :name-key "ability.skill.meltdowner.rad_intensify"
+ :description-key "ability.skill.meltdowner.rad_intensify.desc"
+ :revision 2
+ :activation :passive
+ :requires [:world/id]
+ :prerequisites [{:skill-id :electron-bomb :min-exp 0.5}]
+ :mark-policies
+ [{:mark-type :radiation
+   :requires-ability :rad-intensify
+   :duration-ticks {:ref [:input :tunables :mark-duration-ticks]}
+   :vfx {:effect-id :target-mark-session
+         :operation :spawn
+         :audience {:type :nearby :radius 32.0}
+         :offset {:vec3 [0.0 0.8 0.0]}
+         :payload {:position {:ref [:mark :target-position]}
+                   :ttl-ticks {:ref [:input :tunables :mark-duration-ticks]}
+                   :seed {:ref [:input :context :activation-seed]}
+                   :count 3 :radius 0.35 :color [236 170 93 180]}}}]
+ :tunables {:damage-rate {:curve :pair}
+            :mark-duration-ticks {:curve :const :type :int}
+            :mastery-denominator {:curve :const}}
+ :program
+ "{:ability :rad-intensify
+   :activation :passive
+   :tunables {:damage-rate {:type :double} :mark-duration-ticks {:type :long}
+              :mastery-denominator {:type :double}}
+   :phases {:start [(finish {:outcome :passive})]
+            :pulse [(finish {:outcome :passive})]
+            :release [(finish {:outcome :passive})]
+            :abort [(finish {:outcome :passive})]}}"
+ :damage-policies
+ [{:on :combat/damage
+   :priority 100
+   :mark-type :radiation
+   :when {:expr :bool/and
+          :args [{:ref [:input :context :mark?]}
+                 {:expr :math/gt :args [{:ref [:input :request :base]} 0.0]}]}
+   :program {:component :damage/multiply :multiplier {:ref [:input :context :mark :rate]}}}]
+ :costs nil
+ :cooldown nil
+ :progression nil
+ :invariants nil}

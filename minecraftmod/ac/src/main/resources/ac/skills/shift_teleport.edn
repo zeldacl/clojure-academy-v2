@@ -1,0 +1,190 @@
+;; New-DSL conversion of ac/combat/abilities/shift_teleport.edn (S6).
+;; Session ability -- despite the name, :release never teleports the
+;; caster: it places the held block at the traced destination
+;; (inventory/place-or-drop) and damages every entity standing in the
+;; line between the caster's body and that destination. :start/:pulse
+;; are near-identical (recompute hand-item/trace/targets every tick,
+;; same three-way validity check) -- kept duplicated rather than
+;; factored into a shared :defn, matching the old content's OWN choice
+;; to duplicate this block rather than share it (the same duplication
+;; class thunder_bolt.edn's docstring already flagged and left as-is).
+;;
+;; :score/mark's old component embedded a full {:per-mark {:expr ...}}
+;; descriptor directly at the call site instead of going through an
+;; ability-level :progression capability (this ability's OWN top-level
+;; :progression is nil -- there is no :progression/<name> to read).
+;; Every other converted ability's :progression value has been a plain
+;; already-resolved number read via ?progression/name; event!'s :type
+;; :score/mark is untyped against any vocab (compiles every field but
+;; :type as an ordinary pure expression, per node-core/compile.clj's own
+;; compile-event docstring), so the fix is to compute the same formula
+;; inline as a pure expression and pass the resulting number directly,
+;; which is exactly what the old {:per-mark ...} descriptor would have
+;; resolved to at the same call site.
+;;
+;; :release's :else (insufficient-resource) branch re-read :targets from
+;; state a second time under the exact same name with no intervening
+;; write -- the already-bound `targets` local is the identical value,
+;; so the duplicate read is dropped. :release's trailing
+;; {:component :flow/finish :outcome :released ...} after a branch whose
+;; every arm already finishes is the same dead-code-after-branch shape
+;; mark_teleport.edn's own conversion already established a precedent
+;; for dropping.
+{:schema-version 2
+ :kind :ability
+ :id :shift-teleport
+ :name-key "ability.skill.teleporter.shift_teleport"
+ :description-key "ability.skill.teleporter.shift_teleport.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :caster/creative? :rng/seed]
+ :prerequisites [{:skill-id :location-teleport :min-exp 0.5}]
+ :tunables {:maximum-range {:curve :mastery-lerp}
+            :damage {:curve :mastery-lerp}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-base {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:hand-item {:type :any :default nil}
+                 :trace {:type :any :default nil}
+                 :targets {:type [:list-of :any] :default []}}
+ :program
+ "{:ability :shift-teleport
+   :activation :session
+   :state {:hand-item {:type :any :default nil} :trace {:type :any :default nil}
+           :targets {:type :any :default []}}
+   :tunables {:maximum-range {:type :double} :damage {:type :double} :exp-base {:type :double}}
+   :phases
+   {:start
+    [(let eye ?caster/eye)
+     (let body ?caster/body)
+     (let aim ?caster/aim)
+     (let maximum-range $maximum-range)
+     (let hand-item (target/item-held {:source :main-hand}))
+     (let block-hit (target/raycast {:origin eye :direction aim :distance maximum-range
+                                     :include-entities? false :include-blocks? true}))
+     (let trace (target/block-placement {:hit block-hit :origin eye :direction aim
+                                         :distance maximum-range :policy {:block-placement? true}}))
+     (let line-end (vec3/add (:position trace) [0.0 0.5 0.0]))
+     (let targets (target/entities {:shape {:type :line :start body :end line-end}
+                                    :projection [:id :position :width :height] :limit 256}))
+     (state! :hand-item hand-item)
+     (state! :trace trace)
+     (state! :targets targets)
+     (if (bool/and (:present? hand-item) (bool/and (:placeable? hand-item) (:valid? trace)))
+       [(vfx! {:effect-id :target-box-session :operation :spawn
+              :instance-key [:activation :shift-teleport-destination]
+              :audience {:type :nearby :radius 64.0}
+              :payload {:position (:position trace) :width 1.2 :height 1.2
+                       :color [139 139 139 180]}})
+        (each target targets
+          (vfx! {:effect-id :target-box-session :operation :spawn
+                :instance-key [:activation :shift-teleport-target (:id target)]
+                :audience {:type :nearby :radius 64.0}
+                :payload {:position (:position target) :width (:width target)
+                         :height (:height target) :color [235 81 81 180]}}))]
+       [(finish {:outcome :no-item :end-ability? true})])
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let targets-to-clear %targets)
+     (each target targets-to-clear
+       (vfx! {:effect-id :target-box-session :operation :destroy
+             :instance-key [:activation :shift-teleport-target (:id target)] :payload {}}))
+     (let eye ?caster/eye)
+     (let body ?caster/body)
+     (let aim ?caster/aim)
+     (let maximum-range $maximum-range)
+     (let hand-item (target/item-held {:source :main-hand}))
+     (let block-hit (target/raycast {:origin eye :direction aim :distance maximum-range
+                                     :include-entities? false :include-blocks? true}))
+     (let trace (target/block-placement {:hit block-hit :origin eye :direction aim
+                                         :distance maximum-range :policy {:block-placement? true}}))
+     (let line-end (vec3/add (:position trace) [0.0 0.5 0.0]))
+     (let targets (target/entities {:shape {:type :line :start body :end line-end}
+                                    :projection [:id :position :width :height] :limit 256}))
+     (state! :hand-item hand-item)
+     (state! :trace trace)
+     (state! :targets targets)
+     (if (bool/and (:present? hand-item) (bool/and (:placeable? hand-item) (:valid? trace)))
+       [(vfx! {:effect-id :target-box-session :operation :update
+              :instance-key [:activation :shift-teleport-destination]
+              :audience {:type :nearby :radius 64.0}
+              :payload {:position (:position trace) :width 1.2 :height 1.2
+                       :color [139 139 139 180]}})
+        (each target targets
+          (vfx! {:effect-id :target-box-session :operation :spawn
+                :instance-key [:activation :shift-teleport-target (:id target)]
+                :audience {:type :nearby :radius 64.0}
+                :payload {:position (:position target) :width (:width target)
+                         :height (:height target) :color [235 81 81 180]}}))
+        (finish {:outcome :continue})]
+       [(vfx! {:effect-id :target-box-session :operation :destroy
+              :instance-key [:activation :shift-teleport-destination] :payload {}})
+        (finish {:outcome :aborted :end-ability? true})])]
+
+    :release
+    [(let hand-item %hand-item)
+     (let trace %trace)
+     (let targets %targets)
+     (if (bool/and (:present? hand-item) (bool/and (:placeable? hand-item) (:valid? trace)))
+       [(let release-budget ?budget/release)
+        (let creative? ?caster/creative?)
+        (let sufficient?
+          (cost/spend {:budget release-budget :scale (math/select creative? 0.0 1.0)}))
+        (if sufficient?
+          [(let damage $damage)
+           (let main-cooldown ?cooldown/main)
+           (inventory/place-or-drop {:source :main-hand :count 1 :plan trace :creative? creative?})
+           (let hit-count 0.0)
+           (each target targets
+             (combat/damage {:target (:id target) :amount damage :damage-type :magic})
+             (set! hit-count (math/add hit-count 1.0)))
+           (let progression-value (math/mul $exp-base (math/add 1.0 hit-count)))
+           (let weight-value (math/add 1.0 hit-count))
+           (event! {:type :score/mark :progression progression-value :weight weight-value})
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (vfx! {:effect-id :target-box-session :operation :destroy
+                 :instance-key [:activation :shift-teleport-destination] :payload {}})
+           (vfx! {:effect-id :particle-trail-audio-transient :operation :spawn
+                 :audience {:type :nearby :radius 64.0}
+                 :payload {:sound-position (:line-position trace) :count-limit 128
+                          :sound-pitch 1.0 :life-ticks 20 :sound-volume 0.5 :fade-out 20
+                          :start (vec3/sub (:line-position trace) [0.0 0.5 0.0])
+                          :radius {:min 0.1 :max 0.2} :size [0.1 2.0]
+                          :sound-id \"academy:tp.tp_shift\" :alpha [153 204]
+                          :end (vec3/add (:position trace) [0.0 0.5 0.0])
+                          :velocity {:x [-0.05 0.05] :y [-0.02 0.05] :z [-0.05 0.05]}
+                          :texture \"academy:textures/effects/tp_particle.png\"
+                          :spacing {:min 0.6 :max 1.0} :fade-in 5}})
+           (each target targets
+             (vfx! {:effect-id :target-box-session :operation :destroy
+                   :instance-key [:activation :shift-teleport-target (:id target)] :payload {}}))
+           (finish {:outcome :performed :end-ability? true})]
+          [(vfx! {:effect-id :target-box-session :operation :destroy
+                 :instance-key [:activation :shift-teleport-destination] :payload {}})
+           (each target targets
+             (vfx! {:effect-id :target-box-session :operation :destroy
+                   :instance-key [:activation :shift-teleport-target (:id target)] :payload {}}))
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :target-box-session :operation :destroy
+              :instance-key [:activation :shift-teleport-destination] :payload {}})
+        (each target targets
+          (vfx! {:effect-id :target-box-session :operation :destroy
+                :instance-key [:activation :shift-teleport-target (:id target)] :payload {}}))
+        (finish {:outcome :no-item :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :target-box-session :operation :destroy
+           :instance-key [:activation :shift-teleport-destination] :payload {}})
+     (let targets-to-clear %targets)
+     (each target targets-to-clear
+       (vfx! {:effect-id :target-box-session :operation :destroy
+             :instance-key [:activation :shift-teleport-target (:id target)] :payload {}}))
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :progression nil
+ :invariants nil
+ :mark-policies nil}

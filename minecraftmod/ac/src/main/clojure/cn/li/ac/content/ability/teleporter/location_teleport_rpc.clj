@@ -129,7 +129,10 @@
   (let [name* (norm-name value)]
     (if (str/blank? name*)
       {:success? false :error :invalid-name}
-      (let [result (combat-runtime/dispatch-intent!
+      ;; S8 cutover: routes through the new engine -- see
+      ;; cn.li.ac.ability.service.combat-runtime/dispatch-trigger!'s own
+      ;; docstring.
+      (let [result (combat-runtime/dispatch-intent-v2!
                     (str owner)
                     {:ability-id skill-id
                      :op :start

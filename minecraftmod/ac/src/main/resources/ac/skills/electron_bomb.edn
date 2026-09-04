@@ -1,0 +1,71 @@
+;; New-DSL conversion of ac/combat/abilities/electron_bomb.edn (S6). First
+;; real (non-passive) conversion: spawns a marker entity, schedules a
+;; delayed beam off it, commits progression and cooldown. See
+;; rad_intensify.edn's docstring for the general file-shape pattern
+;; (:program moves; everything else stays byte-for-byte old-format).
+;;
+;; :score/mark (old system: an emitted EVENT, not a host command -- see
+;; final_engine.clj's :score/mark case) is `event!`, not a vocab node call.
+;; :ability/progression / :ability/cooldown (capability reads of the
+;; already-resolved cast progression / main cooldown ticks) fold into the
+;; ?progression/cast / ?cooldown/main sigils, per cn.li.combat.dsl-
+;; vocabulary's own docstring.
+{:schema-version 2
+ :kind :ability
+ :id :electron-bomb
+ :name-key "ability.skill.meltdowner.electron_bomb"
+ :description-key "ability.skill.meltdowner.electron_bomb.desc"
+ :revision 1
+ :activation :instant
+ :requires [:caster/id :caster/eye :caster/aim :world/id :progression/mastery :rng/seed]
+ :tunables {:damage {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :exp-hit {:curve :const}
+            :settle-ticks {:curve :const :type :int}
+            :settle-ticks-improved {:curve :const :type :int}
+            :improved-exp-threshold {:curve :const}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-hit]}}}
+ :program
+ "{:ability :electron-bomb
+   :activation :instant
+   :tunables {:damage {:type :double} :cooldown-ticks {:type :double} :exp-hit {:type :double}
+              :settle-ticks {:type :long} :settle-ticks-improved {:type :long}
+              :improved-exp-threshold {:type :double}}
+   :do
+   [(let owner-id ?caster/id)
+    (let eye ?caster/eye)
+    (let aim ?caster/aim)
+    (let wid ?world/id)
+    (let mastery ?progression/mastery)
+    (let seed ?rng/seed)
+    (let cast-progression ?progression/cast)
+    (let main-cooldown ?cooldown/main)
+    (let ball-life-ticks (math/select (math/gt mastery $improved-exp-threshold)
+                                      $settle-ticks-improved $settle-ticks))
+    (let spawn-result (entity/spawn {:world-id wid :entity-type \"academy:entity_md_ball\"
+                                     :add-tags [\"ac_electron_bomb\"] :owner owner-id :position eye
+                                     :velocity [0.0 0.0 0.0] :life-ticks ball-life-ticks
+                                     :barrier? true}))
+    (let ball-id (:entity-id spawn-result))
+    (let destination (vec3/add eye (vec3/scale aim 15.0)))
+    (projectile/schedule-beam
+     {:world-id wid :destination-selector {:mode :owner-raycast :distance 15.0}
+      :instance-key [:activation :electron-bomb-ray] :seed seed :damage $damage
+      :damage-type :magic
+      :origin-selector {:entity-type \"academy:entity_md_ball\" :required-tags [\"ac_electron_bomb\"]
+                        :entity-id ball-id :owner-id owner-id :radius 3.5}
+      :delay-ticks (long/sub ball-life-ticks 2)
+      :origin eye
+      :settlement-vfx {:effect-id :arc-strike-transient :operation :spawn
+                       :audience {:type :nearby :radius 64.0}
+                       :payload {:hand-origin? false :sound-position eye :sound-pitch 1.0
+                                :sound-volume 0.0 :sound-id nil :arc-life-ticks 10 :aoe-points []
+                                :aoe-origin eye :bounds-radius 0.8 :pattern :weak}}
+      :destination destination :owner owner-id :exclude-owner? true})
+    (event! {:type :score/mark :owner owner-id :progression cast-progression})
+    (cooldown/start {:name :main :ticks main-cooldown})
+    (finish {:outcome :performed})]}"
+ :costs nil
+ :invariants nil
+ :mark-policies nil}

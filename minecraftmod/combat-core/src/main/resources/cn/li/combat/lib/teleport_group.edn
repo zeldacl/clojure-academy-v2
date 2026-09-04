@@ -1,0 +1,8 @@
+;; Port of the old :combat/teleport-group composite: teleport every entity
+;; within :radius of :position to :position. Same target/entities shape as
+;; area_damage.edn -- each loop element is already an entity-ref.
+{:defn :combat/teleport-group
+ :params [{:name position :type :vec3} {:name radius :type :double} {:name limit :type :long}]
+ :do [(let entities (target/entities {:shape {:type :sphere :center position :radius radius} :limit limit}))
+      (each target entities
+        (entity/teleport {:target target :position position}))]}

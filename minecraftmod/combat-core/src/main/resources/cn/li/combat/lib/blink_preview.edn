@@ -1,0 +1,28 @@
+;; New composite (S6), not a port of a pre-existing old composite:
+;; ac/combat/abilities/flashing.edn's :events map has 8 movement events
+;; (right/back/left/forward, each with a -press and a -tick variant)
+;; whose bodies are byte-identical except for the :direction keyword
+;; passed to target/directional-destination and whether the resulting
+;; teleport-marker vfx :operation is :spawn (press) or :update (tick) --
+;; both differences are ordinary :defn params, not anything requiring
+;; per-call-site duplication. Computes and previews the blink
+;; destination (writes :destination session state so a later -release
+;; event can read it) without spending anything or actually moving the
+;; caster.
+{:defn :combat/blink-preview
+ :params [{:name owner-id :type :entity-ref} {:name body :type :vec3} {:name aim :type :vec3}
+          {:name eye-y :type :double} {:name direction :type :keyword}
+          {:name blink-distance :type :double} {:name blink-cp :type :double}
+          {:name creative? :type :boolean} {:name marker-operation :type :keyword}]
+ :do [(let destination
+        (target/directional-destination body aim eye-y direction blink-distance {}))
+      (state! :destination destination)
+      (let context-resources ?context/resources)
+      (let required-cp (math/select creative? 0.0 blink-cp))
+      (if (math/gte (:cp context-resources) required-cp)
+        [(vfx! {:effect-id :teleport-marker :operation marker-operation
+               :instance-key [:activation :teleport-marker] :audience {:type :nearby :radius 64.0}
+               :payload {:owner owner-id :position (:position destination) :color [188 252 238 255]
+                        :particle-chance 0.0}})]
+        [(vfx! {:effect-id :teleport-marker :operation :destroy
+               :instance-key [:activation :teleport-marker] :payload {}})])]}

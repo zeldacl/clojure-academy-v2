@@ -1,0 +1,21 @@
+;; New-DSL conversion of ac/vfx/effects/particle_burst.edn (S6). Old
+;; :vfx/timeline (:duration-ticks 1, single :at 0 child) always ran its
+;; child from the very first sample (age is never negative), so the
+;; timeline gate itself carries no real conditional behavior here -- the
+;; new :scene is a flat, always-run emitter call, not a simplification of
+;; live branching logic.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :particle-burst
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:position :vec3 :rate-per-tick :int :limit :int :particle :any}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :particle-burst
+   :do [(emitter {:anchor ?position :rate-per-tick ?rate-per-tick :limit ?limit
+                  :particle ?particle})
+        (finish {:outcome :performed})]}"}

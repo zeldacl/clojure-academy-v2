@@ -1,0 +1,151 @@
+;; New-DSL conversion of ac/combat/abilities/vec_deviation.edn (S6). See
+;; vec_reflection.edn's docstring for the inlined combat/projectile-
+;; reflection-scan pattern and the :flow/once dedup translation this
+;; reuses verbatim. New here:
+;;
+;; - :state/write in :start, writing a state key derived from the
+;;   caster's CURRENT resource amount at activation time (not a tunable):
+;;   ?context/resources reads the whole resources map (the generic
+;;   ?context/name capability, :any-typed), then plain field access reads
+;;   :overload off it -- no new capability shape needed.
+;; - :collection/contains? (a projectile-type allowlist/blocklist check),
+;;   another cn.li.node.expr opcode that existed but was never wired into
+;;   ops/table -- same fix :math/select needed earlier.
+;; - cost/spend {:partial? true} with no :on-insufficient handler at all:
+;;   the deflect spend always partially succeeds and the ability
+;;   continues regardless, so its boolean result is simply discarded
+;;   (called as a bare statement, not bound).
+{:schema-version 2
+ :kind :ability
+ :id :vec-deviation
+ :name-key "ability.skill.vecmanip.vec_deviation"
+ :description-key "ability.skill.vecmanip.vec_deviation.desc"
+ :revision 2
+ :activation :toggle
+ :requires [:caster/body :world/id]
+ :prerequisites [{:skill-id :vec-accel :min-exp 0.0}]
+ :tunables {:tick-cp {:curve :mastery-lerp}
+            :normal-tick-cp {:curve :mastery-lerp}
+            :normal-tick-overload {:curve :mastery-lerp}
+            :target-radius {:curve :const}
+            :affected-entity-difficulty {:curve :const :type :string-list}
+            :excluded-entity-ids {:curve :const :type :string-list}
+            :excluded-tags {:curve :const :type :string-list}
+            :large-fireball-ids {:curve :const :type :string-list}
+            :small-fireball-ids {:curve :const :type :string-list}
+            :deflect-cp {:curve :mastery-lerp}
+            :activation-overload {:curve :mastery-lerp}
+            :fireball-explosion-radius {:curve :const}
+            :damage-ignore-threshold {:curve :const}
+            :damage-reduction {:curve :mastery-lerp}
+            :damage-cp {:curve :mastery-lerp}
+            :exp-deflect-scale {:curve :const}
+            :exp-damage-scale {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :activation-overload]}}}
+         :scan {:resources {:cp {:ref [:input :tunables :tick-cp]}}}
+         :normal-tick {:resources {:cp {:ref [:input :tunables :normal-tick-cp]}
+                                   :overload {:ref [:input :tunables :normal-tick-overload]}}}
+         :deflect {:resources {:cp {:ref [:input :tunables :deflect-cp]}}}}
+ :invariants {:overload-floor {:ref [:state :overload-floor]}}
+ :progression {:deflect {:per-mark {:ref [:input :tunables :exp-deflect-scale]}}
+               :damaged {:per-mark {:ref [:input :tunables :exp-damage-scale]}}}
+ :program
+ "{:ability :vec-deviation
+   :activation :toggle
+   :state {:overload-floor {:type :double} :visited-projectiles {:type :any}}
+   :tunables {:activation-overload {:type :double} :target-radius {:type :double}
+              :affected-entity-difficulty {:type :any} :excluded-entity-ids {:type :any}
+              :excluded-tags {:type :any} :large-fireball-ids {:type :any}
+              :small-fireball-ids {:type :any} :fireball-explosion-radius {:type :double}}
+   :phases
+   {:start
+    [(let activate-budget ?budget/activate)
+     (let sufficient? (cost/spend {:budget activate-budget}))
+     (if sufficient?
+       [(let resources ?context/resources)
+        (let current-overload (:overload resources))
+        (state! :overload-floor (math/sub current-overload $activation-overload))
+        (finish {:outcome :started})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let scan-budget ?budget/scan)
+     (let scan-sufficient? (cost/spend {:budget scan-budget}))
+     (if scan-sufficient?
+       [(let overload-floor ?invariant/overload-floor)
+        (resource/enforce-floor {:resource :overload :minimum overload-floor})
+        (let body ?caster/body)
+        (let wid ?world/id)
+        (let projectiles
+          (target/entities {:shape {:type :sphere :center body :radius $target-radius}
+                            :filter {:difficulty-entries $affected-entity-difficulty
+                                    :excluded-entity-ids $excluded-entity-ids
+                                    :excluded-tags $excluded-tags}
+                            :limit 64}))
+        (each projectile projectiles
+          (let projectile-id (:id projectile))
+          (let visited %visited-projectiles)
+          (let first? (bool/not (value/eq visited projectile-id)))
+          (when first?
+            (state! :visited-projectiles projectile-id)
+            (when (bool/and (bool/not (:item? projectile))
+                            (bool/and (bool/not (:living? projectile))
+                                     (bool/and (bool/not (:mob? projectile))
+                                              (bool/and (bool/not (:multipart? projectile))
+                                                       (math/gt (:difficulty projectile) 0.0)))))
+              (let deflect-budget ?budget/deflect)
+              (cost/spend {:budget deflect-budget :partial? true})
+              (let is-large-fireball? (collection/contains? $large-fireball-ids (:type projectile)))
+              (if is-large-fireball?
+                [(entity/discard {:entity projectile :world-id wid})
+                 (let explosion-power (:explosion-power projectile))
+                 (let explosion-radius
+                   (math/select (math/gt explosion-power 0.0) explosion-power
+                                $fireball-explosion-radius))
+                 (world/explosion {:world-id wid :position (:position projectile)
+                                   :radius explosion-radius :fire? true})]
+                [(let is-small-fireball?
+                   (collection/contains? $small-fireball-ids (:type projectile)))
+                 (if is-small-fireball?
+                   [(entity/discard {:entity projectile :world-id wid})]
+                   [(entity/configure {:world-id wid :entity projectile :velocity [0.0 0.0 0.0]
+                                       :projectile-damage 0.0 :add-tags [\"ac_vm_deviated\"]})
+                    (vfx! {:effect-id :ring-fade-audio :operation :spawn
+                          :instance-key [:projectile projectile-id]
+                          :audience {:type :nearby :radius 32.0}
+                          :payload {:fade-at 8 :sound-pitch 1.0 :duration-ticks 15
+                                   :fade-ring-from 0.6 :sound-volume 0.5 :fade-ring-to 0.8
+                                   :sound-id \"academy:vecmanip.vec_deviation\" :ring-to 0.6
+                                   :fade-to-tick 15 :fade-color [255 255 255 120]
+                                   :fade-segments 12 :position (:position projectile)
+                                   :ring-from 0.15 :ring-color [255 255 255 180]
+                                   :ring-segments 12}})])])
+              (let deflect-progression ?progression/deflect)
+              (event! {:type :score/mark :tag :deflect :progression deflect-progression
+                      :weight (:difficulty projectile)}))))
+        (let normal-tick-budget ?budget/normal-tick)
+        (let normal-sufficient? (cost/spend {:budget normal-tick-budget}))
+        (if normal-sufficient?
+          [(finish {:outcome :continue})]
+          [(finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :release [(finish {:outcome :released :end-ability? true})]
+    :abort [(finish {:outcome :aborted :end-ability? true})]}}"
+ :damage-policies
+ [{:on :combat/damage
+   :priority 70
+   :when {:expr :bool/and
+          :args [{:ref [:input :context :enabled?]}
+                 {:expr :math/gte :args [{:ref [:input :request :base]} 0.0]}]}
+   :program {:component :damage/reduce
+             :rate {:ref [:input :tunables :damage-reduction]}
+             :max-cost {:ref [:input :tunables :damage-cp]}
+             :ignore-threshold {:ref [:input :tunables :damage-ignore-threshold]}
+             :cost-resource :cp
+             :progression-tag :damaged
+             :progression-scale {:ref [:input :tunables :exp-damage-scale]}
+             :vfx {:effect-id :audio-one-shot :sound-id "academy:vecmanip.vec_deviation"
+                  :volume 0.5 :pitch 1.0}}}]
+ :cooldown nil
+ :mark-policies nil}

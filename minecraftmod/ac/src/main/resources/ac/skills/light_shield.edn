@@ -1,0 +1,260 @@
+;; New-DSL conversion of ac/combat/abilities/light_shield.edn (S6).
+;; Toggle-activation ability (first :toggle conversion this session --
+;; :activation is passed through untyped/unchecked by both the old and
+;; new engines, so :toggle needed no special handling beyond keeping the
+;; same value on both the outer wrapper and the inner :program). Spawns
+;; a shield entity on :start, melee-touches a front cone of nearby
+;; entities each :pulse, and shares its :last-absorb-tick/:overload-floor
+;; session-state fields with the OLD damage-policy interpreter
+;; (:damage-policies below is left completely untouched, on the same
+;; still-old :mark-policies/:damage-policies path every other converted
+;; ability's docstring already references -- this ability just happens
+;; to be the first with a REAL damage-policy body, not a nil one).
+;;
+;; The shared four-step deactivate sequence (discard the shield entity,
+;; apply the caster's own post-shield slowness, start the :deactivate
+;; cooldown, destroy the three session VFX) appears four times in the
+;; old content (:pulse's insufficient-budget branch, :pulse's timeout
+;; branch, :release, :abort) -- kept duplicated rather than factored
+;; into a shared :defn, the same choice already established for
+;; thunder_bolt.edn/shift_teleport.edn's own repeated blocks.
+;;
+;; cooldown/start's old component omitted :ticks entirely (a shorthand
+;; the old engine supported: resolve the ticks value from the ability's
+;; own declared :cooldown map by :name when absent). The new vocab's
+;; cooldown/start always requires an explicit :ticks value, matching
+;; every other converted ability's own pattern (?cooldown/name read
+;; first, then passed through) -- not a new gap, just the same
+;; already-established shape this old component happened to shorthand.
+;;
+;; The touch loop's :flow/control :skip-item (skip the rest of THIS
+;; iteration's body when the touch budget is insufficient, but keep
+;; looping) has no direct equivalent statement in this DSL -- restructured
+;; as the remaining per-target steps nested inside a `when` on the same
+;; spend result, which is behaviorally identical (only this iteration's
+;; damage/progression/score-mark are skipped; the each loop itself
+;; always continues to the next target either way).
+;;
+;; BUG FIX (S8, found auditing the live cutover): the old :cooldown
+;; :deactivate formula reads {:ref [:state :active-ticks]} -- a real
+;; formula, not a fixed number, evaluated lazily by the OLD engine at
+;; the exact graph node that reads it. The NEW engine's ?cooldown/name
+;; capabilities are fixed values materialized once BEFORE dispatch
+;; starts and cannot see a :state! write that happens earlier in the
+;; SAME dispatch. :pulse's timeout branch (below) writes :active-ticks
+;; via next-active-ticks, then immediately needs the deactivate cooldown
+;; computed FROM that just-written value -- a plain ?cooldown/deactivate
+;; read there would silently use the STALE pre-dispatch active-ticks
+;; value instead. Fixed by computing the cooldown inline from
+;; next-active-ticks (the local this dispatch already has) instead of
+;; reading the capability, matching this session's established same-
+;; activation-visibility fix pattern. :release/:abort's own
+;; ?cooldown/deactivate reads (no state write earlier in those
+;; dispatches) are genuinely fine as plain capability reads and are
+;; NOT changed.
+{:schema-version 2
+ :kind :ability
+ :id :light-shield
+ :name-key "ability.skill.meltdowner.light_shield"
+ :description-key "ability.skill.meltdowner.light_shield.desc"
+ :revision 3
+ :activation :toggle
+ :requires [:caster/id :caster/body :caster/eye :caster/aim :caster/creative? :world/id
+            :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :electron-bomb :min-exp 1.0}]
+ :tunables {:touch-damage {:curve :mastery-lerp}
+            :touch-radius {:curve :const}
+            :absorb-damage {:curve :mastery-lerp}
+            :absorb-interval-ticks {:curve :const :type :int}
+            :front-cone-degrees {:curve :const}
+            :max-active-ticks {:curve :mastery-lerp}
+            :slowness-duration-ticks {:curve :const :type :int}
+            :slowness-amplifier {:curve :const :type :int}
+            :activate-overload {:curve :mastery-lerp}
+            :tick-cp {:curve :mastery-lerp}
+            :touch-cp {:curve :mastery-lerp}
+            :touch-overload {:curve :mastery-lerp}
+            :absorb-cp {:curve :mastery-lerp}
+            :absorb-overload {:curve :mastery-lerp}
+            :exp-tick {:curve :const}
+            :exp-touch {:curve :const}
+            :exp-attacked {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :activate-overload]}}}
+         :tick {:resources {:cp {:ref [:input :tunables :tick-cp]}}}
+         :touch {:resources {:cp {:ref [:input :tunables :touch-cp]}
+                             :overload {:ref [:input :tunables :touch-overload]}}}}
+ :cooldown {:deactivate {:ticks {:expr :math/mul
+                                :args [{:ref [:state :active-ticks]}
+                                       {:expr :math/sub :args [2.0 {:ref [:input :context :skill-exp]}]}]}}}
+ :progression {:tick {:per-mark {:ref [:input :tunables :exp-tick]}}
+              :touch {:per-mark {:ref [:input :tunables :exp-touch]}}
+              :attacked {:per-mark {:ref [:input :tunables :exp-attacked]}}}
+ :session-state {:shield-id {:type :any :default nil}}
+ :program
+ "{:ability :light-shield
+   :activation :toggle
+   :state {:active-ticks {:type :long :default 0} :last-absorb-tick {:type :long :default -1}
+           :overload-floor {:type :double :default 0.0} :shield-id {:type :any :default nil}}
+   :tunables {:activate-overload {:type :double} :max-active-ticks {:type :double}
+              :touch-radius {:type :double} :front-cone-degrees {:type :double}
+              :touch-damage {:type :double} :slowness-duration-ticks {:type :double}
+              :slowness-amplifier {:type :long}}
+   :phases
+   {:start
+    [(let activate-budget ?budget/activate)
+     (let sufficient? (cost/spend {:budget activate-budget}))
+     (if sufficient?
+       [(state! :active-ticks 0)
+        (state! :last-absorb-tick -1)
+        (let context-resources ?context/resources)
+        (state! :overload-floor
+               (math/max 0.0 (math/sub (:overload context-resources) $activate-overload)))
+        (let owner-id ?caster/id)
+        (let body ?caster/body)
+        (let eye ?caster/eye)
+        (let life-ticks (math/floor-long (math/add $max-active-ticks 20.0)))
+        (let spawn-result
+          (entity/spawn {:entity-type \"academy:entity_md_shield\" :owner owner-id :position body
+                        :velocity [0.0 0.0 0.0] :life-ticks life-ticks :barrier? true}))
+        (state! :shield-id (:entity-id spawn-result))
+        (vfx! {:effect-id :audio-one-shot :operation :spawn
+              :instance-key [:activation :light-shield-startup] :audience {:type :owner}
+              :payload {:position eye :sound-id \"academy:md.shield_startup\" :volume 0.5
+                       :pitch 1.0}})
+        (vfx! {:effect-id :billboard-session :operation :spawn
+              :instance-key [:activation :light-shield-billboard]
+              :audience {:type :nearby :radius 32.0}
+              :payload {:anchor eye :duration-ticks 4096
+                       :texture-pattern \"academy:textures/effects/mdshield.png\"
+                       :frame-count 1 :frame-duration-ms 40 :half-size 1.15}})
+        (vfx! {:effect-id :particle-session :operation :spawn
+              :instance-key [:activation :light-shield-particles]
+              :audience {:type :nearby :radius 32.0}
+              :payload {:position eye :rate-per-tick 1 :limit 4096
+                       :particle {:material :additive :life-ticks 12 :speed 1.0
+                                 :color [165 230 255 190] :spread {:x 0.5 :y 0.5 :z 0.5}
+                                 :velocity {:x 0.02 :y 0.02 :z 0.02}}}})
+        (vfx! {:effect-id :audio-loop-session :operation :spawn
+              :instance-key [:activation :light-shield-audio] :audience {:type :owner}
+              :payload {:position eye :sound-id \"academy:md.shield_loop\" :volume 1.0
+                       :pitch 1.0}})
+        (finish {:outcome :started})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let overload-floor %overload-floor)
+     (resource/enforce-floor {:resource :overload :minimum overload-floor})
+     (let tick-budget ?budget/tick)
+     (let tick-sufficient? (cost/spend {:budget tick-budget}))
+     (if tick-sufficient?
+       [(let shield-id %shield-id)
+        (let owner-id ?caster/id)
+        (let owner-now (owner/snapshot {:projection [:position :eye-position :look]}))
+        (let active-ticks %active-ticks)
+        (let next-active-ticks (long/add active-ticks 1))
+        (state! :active-ticks next-active-ticks)
+        (let front-cone-degrees $front-cone-degrees)
+        (let touch-targets
+          (target/entities {:shape {:type :cone :origin (:position owner-now)
+                                    :eye-origin (:position owner-now) :direction (:look owner-now)
+                                    :distance $touch-radius
+                                    :yaw-span-degrees (math/mul 2.0 front-cone-degrees)
+                                    :pitch-span-degrees 180.0}
+                            :filter {:excluded-entity-ids [owner-id]}
+                            :projection [:id :position :invulnerable-time] :limit 64}))
+        (each target touch-targets
+          (when (math/lte (:invulnerable-time target) 0.0)
+            (let touch-budget ?budget/touch)
+            (let touch-sufficient? (cost/spend {:budget touch-budget}))
+            (when touch-sufficient?
+              (combat/damage {:target (:id target) :amount $touch-damage :damage-type :magic})
+              (let touch-progression ?progression/touch)
+              (event! {:type :score/mark :tag :touch :progression touch-progression}))))
+        (let tick-progression ?progression/tick)
+        (event! {:type :score/mark :tag :tick :progression tick-progression})
+        (vfx! {:effect-id :billboard-session :operation :update
+              :instance-key [:activation :light-shield-billboard]
+              :payload {:anchor (:eye-position owner-now)}})
+        (vfx! {:effect-id :particle-session :operation :update
+              :instance-key [:activation :light-shield-particles]
+              :payload {:position (:eye-position owner-now)}})
+        (vfx! {:effect-id :audio-loop-session :operation :update
+              :instance-key [:activation :light-shield-audio]
+              :payload {:position (:eye-position owner-now)}})
+        (if (math/gt next-active-ticks $max-active-ticks)
+          [(entity/discard {:entity {:id shield-id}})
+           (combat/status {:target owner-id :status-id :slowness
+                           :duration-ticks $slowness-duration-ticks
+                           :amplifier $slowness-amplifier})
+           (let deactivate-cooldown
+             (math/floor-long (math/mul next-active-ticks (math/sub 2.0 ?progression/mastery))))
+           (cooldown/start {:name :deactivate :ticks deactivate-cooldown})
+           (vfx! {:effect-id :billboard-session :operation :destroy
+                 :instance-key [:activation :light-shield-billboard] :payload {}})
+           (vfx! {:effect-id :particle-session :operation :destroy
+                 :instance-key [:activation :light-shield-particles] :payload {}})
+           (vfx! {:effect-id :audio-loop-session :operation :destroy
+                 :instance-key [:activation :light-shield-audio] :payload {:fade-ticks 0}})
+           (finish {:outcome :timeout :end-ability? true})]
+          [(finish {:outcome :continue})])]
+       [(let shield-id %shield-id)
+        (let owner-id ?caster/id)
+        (entity/discard {:entity {:id shield-id}})
+        (combat/status {:target owner-id :status-id :slowness
+                        :duration-ticks $slowness-duration-ticks :amplifier $slowness-amplifier})
+        (let deactivate-cooldown ?cooldown/deactivate)
+        (cooldown/start {:name :deactivate :ticks deactivate-cooldown})
+        (vfx! {:effect-id :billboard-session :operation :destroy
+              :instance-key [:activation :light-shield-billboard] :payload {}})
+        (vfx! {:effect-id :particle-session :operation :destroy
+              :instance-key [:activation :light-shield-particles] :payload {}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :light-shield-audio] :payload {:fade-ticks 0}})
+        (finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :release
+    [(let shield-id %shield-id)
+     (let owner-id ?caster/id)
+     (entity/discard {:entity {:id shield-id}})
+     (combat/status {:target owner-id :status-id :slowness :duration-ticks $slowness-duration-ticks
+                     :amplifier $slowness-amplifier})
+     (let deactivate-cooldown ?cooldown/deactivate)
+     (cooldown/start {:name :deactivate :ticks deactivate-cooldown})
+     (vfx! {:effect-id :billboard-session :operation :destroy
+           :instance-key [:activation :light-shield-billboard] :payload {}})
+     (vfx! {:effect-id :particle-session :operation :destroy
+           :instance-key [:activation :light-shield-particles] :payload {}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :light-shield-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :released :end-ability? true})]
+
+    :abort
+    [(let shield-id %shield-id)
+     (let owner-id ?caster/id)
+     (entity/discard {:entity {:id shield-id}})
+     (combat/status {:target owner-id :status-id :slowness :duration-ticks $slowness-duration-ticks
+                     :amplifier $slowness-amplifier})
+     (let deactivate-cooldown ?cooldown/deactivate)
+     (cooldown/start {:name :deactivate :ticks deactivate-cooldown})
+     (vfx! {:effect-id :billboard-session :operation :destroy
+           :instance-key [:activation :light-shield-billboard] :payload {}})
+     (vfx! {:effect-id :particle-session :operation :destroy
+           :instance-key [:activation :light-shield-particles] :payload {}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :light-shield-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :damage-policies [{:on :combat/damage :priority 80
+                    :when {:expr :bool/and
+                          :args [{:expr :value/eq :args [{:ref [:input :context :ability-id]} :light-shield]}
+                                 {:ref [:input :context :enabled?]}
+                                 {:expr :math/gt :args [{:ref [:input :request :base]} 0.0]}]}
+                    :program {:component :damage/absorb :cap {:ref [:input :tunables :absorb-damage]}
+                             :interval-ticks {:ref [:input :tunables :absorb-interval-ticks]}
+                             :last-tick-path [:last-absorb-tick]
+                             :front? {:ref [:input :context :front?]}
+                             :cost {:cp {:ref [:input :tunables :absorb-overload]}
+                                   :overload {:ref [:input :tunables :absorb-cp]}}
+                             :progression-tag :attacked
+                             :progression-scale {:ref [:input :tunables :exp-attacked]}}}]
+ :invariants nil
+ :mark-policies nil}

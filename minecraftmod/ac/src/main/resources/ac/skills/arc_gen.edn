@@ -1,0 +1,110 @@
+;; New-DSL conversion of ac/combat/abilities/arc_gen.edn (S6). See earlier
+;; skills/*.edn docstrings for the general pattern.
+;;
+;; combat/impact-strike (the 2nd of the 3 callback-typed old composites
+;; always meant to be inlined rather than ported as a first-class
+;; higher-order :defn -- see vec_reflection.edn's docstring for the
+;; first) is inlined directly: combat/damage, then the :on-impact body
+;; spliced in verbatim (its own :scope was already empty in the old
+;; composite -- \"sees nothing beyond its own enclosing ability scope\" --
+;; so inlining changes nothing about what it can reference).
+;;
+;; One deliberate behavior refinement made inlining the on-impact body:
+;; the old :bool/and's :args are both tree-walked unconditionally (no
+;; short-circuit), so random/chance for the creeper-charge roll ran on
+;; EVERY hit, creeper or not, just to be ANDed away for non-creepers.
+;; Nesting it inside `when is-creeper?` only rolls it for an actual
+;; creeper hit -- the only difference is one fewer RNG cursor advance on
+;; a non-creeper hit, not a gameplay change.
+{:schema-version 2
+ :kind :ability
+ :id :arc-gen
+ :name-key "ability.skill.electromaster.arc_gen"
+ :description-key "ability.skill.electromaster.arc_gen.desc"
+ :revision 2
+ :activation :instant
+ :requires [:caster/eye :caster/aim :world/id]
+ :tunables {:damage {:curve :mastery-lerp}
+            :max-distance {:curve :mastery-lerp}
+            :ignite-probability {:curve :mastery-lerp}
+            :fishing-probability {:curve :const}
+            :fishing-exp-threshold {:curve :const}
+            :creeper-charge-chance {:curve :const}
+            :cost-cp {:curve :mastery-lerp}
+            :cost-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :cooldown-endpoints {:curve :pair}
+            :exp-entity {:curve :affine}
+            :exp-block {:curve :affine}}
+ :costs {:activate {:resources {:cp {:ref [:input :tunables :cost-cp]}
+                                :overload {:ref [:input :tunables :cost-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit-entity {:per-mark {:ref [:input :tunables :exp-entity]}}
+               :hit-block {:per-mark {:ref [:input :tunables :exp-block]}}}
+ :program
+ "{:ability :arc-gen
+   :activation :instant
+   :tunables {:damage {:type :double} :max-distance {:type :double}
+              :ignite-probability {:type :double} :fishing-probability {:type :double}
+              :fishing-exp-threshold {:type :double} :creeper-charge-chance {:type :double}
+              :cooldown-endpoints {:type :any} :exp-entity {:type :double} :exp-block {:type :double}}
+   :do
+   [(let eye ?caster/eye)
+    (let aim ?caster/aim)
+    (let wid ?world/id)
+    (let mastery ?progression/mastery)
+    (let seed ?rng/seed)
+    (let activate-budget ?budget/activate)
+    (let sufficient? (cost/spend {:budget activate-budget}))
+    (if sufficient?
+      [(let aim-hit (target/raycast {:origin eye :direction aim :distance $max-distance
+                                     :include-entities? true :include-blocks? true
+                                     :policy {:block-policy :collidable-or-water}}))
+       (vfx! {:effect-id :beam-arc-fade :operation :spawn :instance-key [:activation :arc-fired]
+             :audience {:type :nearby :radius 32.0}
+             :payload {:fade-at 3 :duration-ticks 10 :arc-at 0 :arc-count-limit 32 :beam-at 0
+                      :arc-radius {:min 0.06 :max 0.14} :start eye
+                      :ring-radius {:from 0.12 :to 0.28} :arc-life-ticks 8 :fade-to-tick 10
+                      :arc-spacing {:min 1.0 :max 2.0} :fade-from-alpha 1.0
+                      :layers [{:shape :tube :radius 0.08 :color [236 170 93 60]}
+                              {:shape :tube :radius 0.05 :color [241 240 222 200]}
+                              {:shape :line :width 0.015 :color [165 230 255 160]}]
+                      :grow-ticks 2 :fade-to-alpha 0.0 :end (:position aim-hit)
+                      :fade-from-tick 3 :ring-color [188 252 238 180] :ring-segments 10}})
+       (let target-entity-id (:entity-id aim-hit))
+       (if target-entity-id
+         [(combat/damage {:target target-entity-id :amount $damage :damage-type :skill})
+          (let entity-type (:entity-type aim-hit))
+          (let is-creeper?
+            (bool/or (value/eq entity-type \"minecraft:creeper\")
+                     (value/eq entity-type \"entity.minecraft.creeper\")))
+          (when is-creeper?
+            (let charged? (random/chance {:probability $creeper-charge-chance}))
+            (when charged?
+              (combat/status {:target target-entity-id :status-id :powered-creeper
+                              :duration-ticks 1 :amplifier 0})))
+          (let hit-entity-progression ?progression/hit-entity)
+          (event! {:type :score/mark :progression hit-entity-progression})
+          (let cooldown-exp-next (math/add mastery $exp-entity))
+          (let cooldown-ticks-next
+            (math/floor-long (math/lerp (pair/first $cooldown-endpoints)
+                                        (pair/second $cooldown-endpoints) cooldown-exp-next)))
+          (cooldown/start {:name :main :ticks cooldown-ticks-next})
+          (event! {:type :achievement/trigger :payload {:id \"electromaster.arc_gen\"}})]
+         [(event! {:type :world/block-impact
+                   :payload {:world-id wid :block-position (:block-position aim-hit)
+                            :fishing-exp-threshold $fishing-exp-threshold :seed seed
+                            :ignite-probability $ignite-probability :position (:position aim-hit)
+                            :water? (:water? aim-hit) :skill-exp mastery
+                            :fishing-probability $fishing-probability}})
+          (let hit-block-progression ?progression/hit-block)
+          (event! {:type :score/mark :progression hit-block-progression})
+          (let cooldown-exp-next (math/add mastery $exp-block))
+          (let cooldown-ticks-next
+            (math/floor-long (math/lerp (pair/first $cooldown-endpoints)
+                                        (pair/second $cooldown-endpoints) cooldown-exp-next)))
+          (cooldown/start {:name :main :ticks cooldown-ticks-next})])
+       (finish {:outcome :performed})]
+      [(finish {:outcome :insufficient-resource})])]}"
+ :invariants nil
+ :mark-policies nil}

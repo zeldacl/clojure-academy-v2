@@ -1,14 +1,32 @@
 (ns cn.li.ac.ability.service.combat-catalog
-  "Read-only projection of the single final catalog.
-   This service contains no migration status, evaluator fallback or skill-specific
-   suffix logic; all behavior and passive effects come from the compiled EDN."
-  (:require [cn.li.ac.ability.final-catalog-service :as catalog-service]))
+  "Read-only metadata projection for the pieces the new engine's own
+   dispatch path (cn.li.ac.ability.skills-catalog + engine-v2, wired
+   through combat-runtime's final-runtime-v2) never covers: skill tree UI
+   (skill-specs), item-trigger resolution (resolve-trigger), passive skill
+   effects (apply-passive-resource-modifiers) and per-registration
+   bindings consumed by activation-context. This was pure metadata even
+   before the S8 cutover -- see final-catalog-service's own docstring --
+   so switching its source from cn.li.ac.ability.final-catalog-service
+   (old catalog, ac/combat/abilities/*.edn) to cn.li.ac.ability.
+   skills-catalog (new catalog, ac/skills/*.edn) changes nothing about
+   dispatch, only where this metadata is read from. S6 kept every
+   ac/skills/*.edn file's non-:program top-level key byte-for-byte
+   identical to its ac/combat/abilities/*.edn counterpart, and
+   ac/skills/manifest.edn is an exact copy of ac/combat/manifest.edn
+   (only :resource paths repointed), so every :bindings/:metadata/
+   :name-key/:icon/:actions/:controllable?/:external-triggers/
+   :passive-effects/:translations value this namespace reads is
+   unchanged."
+  (:require [cn.li.ac.ability.skills-catalog :as skills-catalog]
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.node.digest :as digest]))
 
 (defonce ^:private state* (atom {:status :cold}))
 
-(defn- source-map [assembled] (get-in assembled [:combat :sources] {}))
-(defn- registration-map [assembled]
-  (into {} (map (juxt :id identity)) (get-in assembled [:combat :registrations])))
+(def ^:const schema-version 1)
+
+(defn- source-map [assembled] (:sources assembled {}))
+(defn- registration-map [assembled] (:by-id assembled {}))
 
 (defn- ability-map [assembled]
   (into {}
@@ -21,11 +39,23 @@
                              :source-id (:source-id entry)
                              :bindings bindings
                              :presentation (:presentation bindings)
-                             :program (:compiled entry)})])))
+                             :program (:ir entry)})])))
         (registration-map assembled)))
 
+(defn- content-hash
+  "Deterministic, cross-process identity over the shipped content only
+   (source docs + registration bindings) -- not the compiled :ir, which
+   digest/canonical is not obliged to render safely and which two
+   independently-launched processes reading the same resources will
+   always recompile identically anyway. Mirrors the old catalog's own
+   per-domain content-hash (final-catalog.clj's load-combat)."
+  [assembled]
+  (digest/content-hash
+   {:sources (source-map assembled)
+    :registrations (mapv #(dissoc % :ir) (:registrations assembled))}))
+
 (defn initialize! []
-  (let [assembled (catalog-service/initialize!)
+  (let [assembled (skills-catalog/assemble)
         abilities (ability-map assembled)
         trigger-index (reduce (fn [index source]
                                 (reduce (fn [result trigger]
@@ -34,12 +64,16 @@
                                             result))
                                         index (:external-triggers source)))
                               {} (vals (source-map assembled)))
-        combat (assoc (:combat assembled)
-                      :abilities abilities
-                      :by-id (registration-map assembled)
-                      :trigger-index trigger-index
-                      :errors {})
-        value (assoc assembled :status :ready :combat combat)]
+        combat {:sources (source-map assembled)
+                :registrations (:registrations assembled)
+                :abilities abilities
+                :by-id (registration-map assembled)
+                :trigger-index trigger-index
+                :errors {}}
+        value {:status :ready
+               :schema-version schema-version
+               :content-hash (content-hash assembled)
+               :combat combat}]
     (reset! state* value)
     value))
 
@@ -94,13 +128,28 @@
 
 (defn skill-specs []
   (mapv (fn [[ability-id ability]]
-          {:id ability-id :category-id (or (:category-id ability) :generic)
-           :level (or (:level ability) 1) :controllable? (:controllable? ability)
-           :name-key (:name-key ability) :description-key (:description-key ability)
-           :icon (:icon ability) :ctrl-id (or (:ctrl-id ability) ability-id)
-           :actions (or (:actions ability) {})
-           :translations (normalize-translations (:translations ability))
-           :cooldown {:mode :default} :execution :final})
+          ;; skill-config/skill-definitions is the documented single source
+          ;; of truth for :category-id/:level/:controllable? (see
+          ;; skill-config.common's own namespace docstring) -- registry/
+          ;; skill.clj's inject-configured-fields only applies it for
+          ;; defskill-declared skills (those that omit :level entirely);
+          ;; EDN-catalog skills always carry a :level here (defaulted to 1
+          ;; below when absent), which skipped that injection and left every
+          ;; EDN-driven skill showing the :generic placeholder regardless of
+          ;; its real category. Prefer the skill-config entry when one
+          ;; exists, matching the same precedence defskill skills already get.
+          (let [config-def (get skill-config/skill-definitions-by-id ability-id)]
+            {:id ability-id
+             :category-id (or (:category-id config-def) (:category-id ability) :generic)
+             :level (or (:level config-def) (:level ability) 1)
+             :controllable? (if (contains? config-def :controllable?)
+                              (:controllable? config-def)
+                              (:controllable? ability))
+             :name-key (:name-key ability) :description-key (:description-key ability)
+             :icon (:icon ability) :ctrl-id (or (:ctrl-id ability) ability-id)
+             :actions (or (:actions ability) {})
+             :translations (normalize-translations (:translations ability))
+             :cooldown {:mode :default} :execution :final}))
         (sort-by first (get-in @state* [:combat :abilities]))))
 
 

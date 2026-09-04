@@ -1,0 +1,360 @@
+;; New-DSL conversion of ac/combat/abilities/storm_wing.edn (S6). Toggle
+;; flight ability (:release-keeps-session? true -- releasing the toggle
+;; button does not end flight, only :abort does) with an integer
+;; :phase state field (0 = charging, 1 = flying), ported as :long with
+;; math/eq, matching plasma_cannon.edn's same choice.
+;;
+;; :terrain/random-break turned out to already exist as a :defn
+;; composite (combat-core/lib/random_break.edn, ported earlier this
+;; session before any real ac content exercised it) -- this is its
+;; first real ac call site, confirming the composite's own signature
+;; [origin radius attempts hardness-max] and its documented dropped
+;; :seed param (the new engine reads the activation's RNG cursor
+;; implicitly, same as random/chance). Initially misdiagnosed as an
+;; unwired vocab gap and given a duplicate :terrain/random-break vocab
+;; node before catching the mistake; that duplicate was reverted, not
+;; kept, since compile-call checks :fns (composites) before :vocab and
+;; would have shadowed it as dead code either way.
+;;
+;; combat-core/run.clj's capability-type had a speculative
+;; \"movement\" :boolean case with no real content behind it. This
+;; ability is the first real usage of ?movement/*, and every one it
+;; reads (forward/right/back/left) is a direction VECTOR -- consumed
+;; both as motion/flight's :direction and as vfx orientation fields,
+;; never a boolean. Fixed to :vec3, the same class of \"first real
+;; usage reveals the original guess was wrong\" fix already applied to
+;; :target/raycast-fan's :yaw-range-degrees and :entity/spawn's
+;; :entity-type.
+;;
+;; {:ref [:frame :seed]} (the old engine's per-dispatch RNG source,
+;; used to decorrelate the four vortex columns' particle patterns) maps
+;; to the same activation seed capability every other conversion this
+;; session already reads as ?rng/seed -- no new engine concept needed,
+;; just a different old-engine spelling for the same thing (mirroring
+;; plasma_cannon.edn's ability/caster :seed bind, which needed the
+;; identical translation).
+;;
+;; No top-level :session-state key at all (verified by grep -- genuinely
+;; absent), same as meltdowner.edn/mine_ray.edn's own already-documented
+;; cases; the new :program's own :state declaration is self-contained
+;; regardless.
+;;
+;; The vortex-column vfx update block (four columns + particle + audio,
+;; identical structure) is repeated twice in the old :pulse (once right
+;; after the charge-time transition into phase 1, once every tick while
+;; already in phase 1) -- kept duplicated rather than factored into a
+;; shared :defn, the same choice already established for this session's
+;; other same-ability repeated blocks. Each update's own :alpha formula
+;; (select on phase==0) is always-false at BOTH of these call sites
+;; (phase is guaranteed already 1 by the time either block runs) but is
+;; ported as the full formula verbatim rather than simplified to the
+;; constant it always evaluates to -- this is ordinary logic that always
+;; takes one branch at runtime, not the syntactically-dead/unreferenced
+;; kind of code this migration's other conversions have dropped.
+{:schema-version 2
+ :kind :ability
+ :id :storm-wing
+ :name-key "ability.skill.vecmanip.storm_wing"
+ :description-key "ability.skill.vecmanip.storm_wing.desc"
+ :revision 1
+ :activation :toggle
+ :release-keeps-session? true
+ :requires [:caster/body :caster/id :world/id :charge/ticks]
+ :tunables {:charge-time {:curve :mastery-lerp :type :int}
+            :movement-acceleration {:curve :const}
+            :movement-speed-exp-threshold {:curve :const}
+            :movement-speed-multipliers {:curve :pair}
+            :movement-speed-scale {:curve :pair}
+            :hover-near-ground-velocity {:curve :const}
+            :hover-air-velocity {:curve :const}
+            :near-ground-distance {:curve :const}
+            :near-ground-eye-height {:curve :const}
+            :low-exp-threshold {:curve :const}
+            :soft-block-tries {:curve :const :type :int}
+            :soft-block-search-radius {:curve :const}
+            :soft-hardness-max {:curve :const}
+            :mastery-knockback-radius {:curve :const}
+            :mastery-knockback-speed {:curve :pair}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :cost-tick-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-tick {:curve :const}}
+ :costs {:flight {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}
+                              :overload {:ref [:input :tunables :cost-tick-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:flight-tick {:per-mark {:ref [:input :tunables :exp-tick]}}}
+ :program
+ "{:ability :storm-wing
+   :activation :toggle
+   :state {:phase {:type :long :default 0} :charge-ticks {:type :long :default 0}
+           :previous-can-fly? {:type :boolean :default false}
+           :move-direction {:type :vec3 :default nil}}
+   :tunables {:low-exp-threshold {:type :double} :soft-block-tries {:type :long}
+              :soft-block-search-radius {:type :double} :soft-hardness-max {:type :double}
+              :movement-speed-exp-threshold {:type :double}
+              :movement-speed-multipliers {:type :any} :movement-speed-scale {:type :any}
+              :near-ground-distance {:type :double} :near-ground-eye-height {:type :double}
+              :hover-near-ground-velocity {:type :double} :hover-air-velocity {:type :double}
+              :movement-acceleration {:type :double} :charge-time {:type :long}
+              :mastery-knockback-radius {:type :double}
+              :mastery-knockback-speed {:type :any}}
+   :phases
+   {:start
+    [(let owner-snapshot (owner/snapshot {:projection [:can-fly?]}))
+     (state! :phase 0)
+     (state! :charge-ticks 0)
+     (state! :previous-can-fly? (:can-fly? owner-snapshot))
+     (owner/can-fly {:enabled? true})
+     (let body ?caster/body)
+     (let forward ?movement/forward)
+     (let right ?movement/right)
+     (let seed ?rng/seed)
+     (vfx! {:effect-id :vortex-column-session :operation :spawn
+           :instance-key [:activation :storm-wing-vortex-0] :audience {:type :nearby :radius 64.0}
+           :payload {:count-limit 64 :life-ticks 30
+                    :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                 :local-offset [-0.1 -0.3 0.1] :forward forward
+                                 :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                 :separation-z-degrees 45.0 :pre-translation [0.0 0.2 -0.5]
+                                 :right right :separation-y-degrees 45.0}
+                    :radius {:min 0.1 :max 0.16} :seed seed :alpha 0.0 :base body
+                    :axis [0.0 1.0 0.0] :height 2.0 :spacing {:min 0.18 :max 0.32}}})
+     (vfx! {:effect-id :vortex-column-session :operation :spawn
+           :instance-key [:activation :storm-wing-vortex-1] :audience {:type :nearby :radius 64.0}
+           :payload {:count-limit 64 :life-ticks 30
+                    :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                 :local-offset [0.1 -0.3 0.1] :forward forward
+                                 :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                 :separation-z-degrees -45.0 :pre-translation [0.0 0.2 -0.5]
+                                 :right right :separation-y-degrees -45.0}
+                    :radius {:min 0.1 :max 0.16} :seed (long/add seed 1) :alpha 0.0 :base body
+                    :axis [0.0 1.0 0.0] :height 2.0 :spacing {:min 0.18 :max 0.32}}})
+     (vfx! {:effect-id :vortex-column-session :operation :spawn
+           :instance-key [:activation :storm-wing-vortex-2] :audience {:type :nearby :radius 64.0}
+           :payload {:count-limit 64 :life-ticks 30
+                    :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                 :local-offset [-0.1 -0.5 -0.1] :forward forward
+                                 :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                 :separation-z-degrees 45.0 :pre-translation [0.0 0.2 -0.5]
+                                 :right right :separation-y-degrees -45.0}
+                    :radius {:min 0.1 :max 0.16} :seed (long/add seed 2) :alpha 0.0 :base body
+                    :axis [0.0 1.0 0.0] :height 2.0 :spacing {:min 0.18 :max 0.32}}})
+     (vfx! {:effect-id :vortex-column-session :operation :spawn
+           :instance-key [:activation :storm-wing-vortex-3] :audience {:type :nearby :radius 64.0}
+           :payload {:count-limit 64 :life-ticks 30
+                    :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                 :local-offset [0.1 -0.5 -0.1] :forward forward
+                                 :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                 :separation-z-degrees -45.0 :pre-translation [0.0 0.2 -0.5]
+                                 :right right :separation-y-degrees 45.0}
+                    :radius {:min 0.1 :max 0.16} :seed (long/add seed 3) :alpha 0.0 :base body
+                    :axis [0.0 1.0 0.0] :height 2.0 :spacing {:min 0.18 :max 0.32}}})
+     (vfx! {:effect-id :particle-session :operation :spawn
+           :instance-key [:activation :storm-wing-particles] :audience {:type :nearby :radius 64.0}
+           :payload {:position body :rate-per-tick 12 :limit 256
+                    :particle {:material :block-crack :block-id \"minecraft:dirt\" :life-ticks 12
+                              :speed 1.0 :spawn-region {:type :sphere-shell :radius {:min 3.0 :max 8.0}}
+                              :velocity {:type :tangent-swirl :axis [0.0 1.0 0.0] :radial-scale 0.7
+                                        :vertical-jitter 0.06}
+                              :spread {:x 8.0 :y 8.0 :z 8.0}}}})
+     (vfx! {:effect-id :audio-loop-session :operation :spawn
+           :instance-key [:activation :storm-wing-audio] :audience {:type :nearby :radius 64.0}
+           :payload {:position body :sound-id \"academy:vecmanip.storm_wing\" :volume 0.5
+                    :pitch 1.0}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let phase-before %phase)
+     (let mastery ?progression/mastery)
+     (let body ?caster/body)
+     (let forward ?movement/forward)
+     (let right ?movement/right)
+     (let world-id ?world/id)
+     (let move-direction %move-direction)
+     (when (math/lt mastery $low-exp-threshold)
+       (terrain/random-break body $soft-block-search-radius $soft-block-tries $soft-hardness-max))
+     (let speed-multiplier
+       (math/select (math/lt mastery $movement-speed-exp-threshold)
+                    (pair/first $movement-speed-multipliers) (pair/second $movement-speed-multipliers)))
+     (let speed-scale
+       (math/lerp (pair/first $movement-speed-scale) (pair/second $movement-speed-scale) mastery))
+     (motion/flight {:direction move-direction :speed (math/mul speed-multiplier speed-scale)
+                     :reset-fall-damage? true :world-id world-id
+                     :near-ground-distance $near-ground-distance
+                     :near-ground-eye-height $near-ground-eye-height
+                     :hover-near-ground-velocity $hover-near-ground-velocity
+                     :hover-air-velocity $hover-air-velocity :acceleration $movement-acceleration})
+     (if (math/eq phase-before 0)
+       [(let charge-ticks-cur %charge-ticks)
+        (let charge-ticks-next (long/add charge-ticks-cur 1))
+        (state! :charge-ticks charge-ticks-next)
+        (when (math/gt charge-ticks-next $charge-time)
+          (state! :phase 1)
+          (state! :charge-ticks 0)
+          (when (math/gte mastery 1.0)
+            (motion/radial-impulse body $mastery-knockback-radius
+                                  (math/lerp (pair/first $mastery-knockback-speed)
+                                            (pair/second $mastery-knockback-speed) mastery)
+                                  128))
+          (let current-phase 1)
+          (let alpha
+            (math/select (math/eq current-phase 0)
+                         (math/mul 0.7 (math/clamp (math/div 0 $charge-time) 0.0 1.0)) 0.7))
+          (vfx! {:effect-id :vortex-column-session :operation :update
+                :instance-key [:activation :storm-wing-vortex-0]
+                :payload {:base body :alpha alpha
+                         :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                      :local-offset [-0.1 -0.3 0.1] :forward forward
+                                      :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                      :separation-z-degrees 45.0 :pre-translation [0.0 0.2 -0.5]
+                                      :right right :separation-y-degrees 45.0}}})
+          (vfx! {:effect-id :vortex-column-session :operation :update
+                :instance-key [:activation :storm-wing-vortex-1]
+                :payload {:base body :alpha alpha
+                         :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                      :local-offset [0.1 -0.3 0.1] :forward forward
+                                      :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                      :separation-z-degrees -45.0 :pre-translation [0.0 0.2 -0.5]
+                                      :right right :separation-y-degrees -45.0}}})
+          (vfx! {:effect-id :vortex-column-session :operation :update
+                :instance-key [:activation :storm-wing-vortex-2]
+                :payload {:base body :alpha alpha
+                         :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                      :local-offset [-0.1 -0.5 -0.1] :forward forward
+                                      :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                      :separation-z-degrees 45.0 :pre-translation [0.0 0.2 -0.5]
+                                      :right right :separation-y-degrees -45.0}}})
+          (vfx! {:effect-id :vortex-column-session :operation :update
+                :instance-key [:activation :storm-wing-vortex-3]
+                :payload {:base body :alpha alpha
+                         :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                      :local-offset [0.1 -0.5 -0.1] :forward forward
+                                      :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                      :separation-z-degrees -45.0 :pre-translation [0.0 0.2 -0.5]
+                                      :right right :separation-y-degrees 45.0}}})
+          (vfx! {:effect-id :particle-session :operation :update
+                :instance-key [:activation :storm-wing-particles] :payload {:position body}})
+          (vfx! {:effect-id :audio-loop-session :operation :update
+                :instance-key [:activation :storm-wing-audio] :payload {:position body}}))]
+       [(let flight-tick-progression ?progression/flight-tick)
+        (event! {:type :score/mark :tag :flight-tick :progression flight-tick-progression})
+        (let charge-ticks-now %charge-ticks)
+        (let alpha2
+          (math/select (math/eq phase-before 0)
+                       (math/mul 0.7 (math/clamp (math/div charge-ticks-now $charge-time) 0.0 1.0))
+                       0.7))
+        (vfx! {:effect-id :vortex-column-session :operation :update
+              :instance-key [:activation :storm-wing-vortex-0]
+              :payload {:base body :alpha alpha2
+                       :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                    :local-offset [-0.1 -0.3 0.1] :forward forward
+                                    :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                    :separation-z-degrees 45.0 :pre-translation [0.0 0.2 -0.5]
+                                    :right right :separation-y-degrees 45.0}}})
+        (vfx! {:effect-id :vortex-column-session :operation :update
+              :instance-key [:activation :storm-wing-vortex-1]
+              :payload {:base body :alpha alpha2
+                       :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                    :local-offset [0.1 -0.3 0.1] :forward forward
+                                    :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                    :separation-z-degrees -45.0 :pre-translation [0.0 0.2 -0.5]
+                                    :right right :separation-y-degrees -45.0}}})
+        (vfx! {:effect-id :vortex-column-session :operation :update
+              :instance-key [:activation :storm-wing-vortex-2]
+              :payload {:base body :alpha alpha2
+                       :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                    :local-offset [-0.1 -0.5 -0.1] :forward forward
+                                    :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                    :separation-z-degrees 45.0 :pre-translation [0.0 0.2 -0.5]
+                                    :right right :separation-y-degrees -45.0}}})
+        (vfx! {:effect-id :vortex-column-session :operation :update
+              :instance-key [:activation :storm-wing-vortex-3]
+              :payload {:base body :alpha alpha2
+                       :orientation {:anchor-offset [0.0 1.6 0.0] :pitch-scale 0.2
+                                    :local-offset [0.1 -0.5 -0.1] :forward forward
+                                    :back-tilt-degrees 70.0 :source :owner-body :up [0.0 1.0 0.0]
+                                    :separation-z-degrees -45.0 :pre-translation [0.0 0.2 -0.5]
+                                    :right right :separation-y-degrees 45.0}}})
+        (vfx! {:effect-id :particle-session :operation :update
+              :instance-key [:activation :storm-wing-particles] :payload {:position body}})
+        (vfx! {:effect-id :audio-loop-session :operation :update
+              :instance-key [:activation :storm-wing-audio] :payload {:position body}})
+        (let flight-budget ?budget/flight)
+        (let scale (math/select (math/eq phase-before 1) 1.0 0.0))
+        (let sufficient? (cost/spend {:budget flight-budget :scale scale}))
+        (when (bool/not sufficient?)
+          (let previous-can-fly? %previous-can-fly?)
+          (owner/can-fly {:enabled? previous-can-fly?})
+          (let main-cooldown ?cooldown/main)
+          (cooldown/start {:name :main :ticks main-cooldown})
+          (vfx! {:effect-id :vortex-column-session :operation :destroy
+                :instance-key [:activation :storm-wing-vortex-0] :payload {:fade-ticks 15}})
+          (vfx! {:effect-id :vortex-column-session :operation :destroy
+                :instance-key [:activation :storm-wing-vortex-1] :payload {:fade-ticks 15}})
+          (vfx! {:effect-id :vortex-column-session :operation :destroy
+                :instance-key [:activation :storm-wing-vortex-2] :payload {:fade-ticks 15}})
+          (vfx! {:effect-id :vortex-column-session :operation :destroy
+                :instance-key [:activation :storm-wing-vortex-3] :payload {:fade-ticks 15}})
+          (vfx! {:effect-id :particle-session :operation :destroy
+                :instance-key [:activation :storm-wing-particles] :payload {}})
+          (vfx! {:effect-id :audio-loop-session :operation :destroy
+                :instance-key [:activation :storm-wing-audio] :payload {:fade-ticks 0}})
+          (finish {:outcome :insufficient-resource :end-ability? true}))])
+     (finish {:outcome :continue})]
+
+    :release
+    [(finish {:outcome :continue})]
+
+    :abort
+    [(let previous-can-fly? %previous-can-fly?)
+     (owner/can-fly {:enabled? previous-can-fly?})
+     (let main-cooldown ?cooldown/main)
+     (cooldown/start {:name :main :ticks main-cooldown})
+     (vfx! {:effect-id :vortex-column-session :operation :destroy
+           :instance-key [:activation :storm-wing-vortex-0] :payload {:fade-ticks 15}})
+     (vfx! {:effect-id :vortex-column-session :operation :destroy
+           :instance-key [:activation :storm-wing-vortex-1] :payload {:fade-ticks 15}})
+     (vfx! {:effect-id :vortex-column-session :operation :destroy
+           :instance-key [:activation :storm-wing-vortex-2] :payload {:fade-ticks 15}})
+     (vfx! {:effect-id :vortex-column-session :operation :destroy
+           :instance-key [:activation :storm-wing-vortex-3] :payload {:fade-ticks 15}})
+     (vfx! {:effect-id :particle-session :operation :destroy
+           :instance-key [:activation :storm-wing-particles] :payload {}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :storm-wing-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :aborted :end-ability? true})]
+
+    :movement/right-press
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/right) (state! :move-direction dir))]
+    :movement/right-tick
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/right) (state! :move-direction dir))]
+    :movement/right-release
+    [(state! :move-direction nil)]
+    :movement/left-press
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/left) (state! :move-direction dir))]
+    :movement/left-tick
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/left) (state! :move-direction dir))]
+    :movement/left-release
+    [(state! :move-direction nil)]
+    :movement/forward-press
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/forward) (state! :move-direction dir))]
+    :movement/forward-tick
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/forward) (state! :move-direction dir))]
+    :movement/forward-release
+    [(state! :move-direction nil)]
+    :movement/back-press
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/back) (state! :move-direction dir))]
+    :movement/back-tick
+    [(let phase %phase)
+     (when (math/eq phase 1) (let dir ?movement/back) (state! :move-direction dir))]
+    :movement/back-release
+    [(state! :move-direction nil)]}}"
+ :invariants nil
+ :mark-policies nil}

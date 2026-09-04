@@ -1,6 +1,0 @@
-{:kind :composite, :id :terrain/break-area, :revision 1, :layer :composite, :doc "Break every block within :radius of :origin whose hardness is at most :hardness-max.", :inputs {:origin {:type :vec3}, :radius {:type :float, :min 0.0}, :hardness-max {:type :float}, :break-chance {:type :float, :default 1.0}, :drop-chance {:type :float, :default 0.0}, :limit {:type :int, :default 128}}, :outputs {}, :body {:component :flow/sequence, :steps [{:component :target/blocks, :shape {:type :sphere, :center {:ref [:input :origin]}, :radius {:ref [:input :radius]}}, :projection {:max-hardness {:ref [:input :hardness-max]}}, :limit {:ref [:input :limit]}, :bind {:blocks :blocks}} {:component :flow/foreach, :items {:ref [:local :blocks]}, :as :block, :body {:component :flow/branch, :when {:expr :random/chance, :args [{:ref [:input :break-chance]}]}, :then {:component :block/break, :position {:ref [:local :block :position]}, :drop? {:expr :random/chance, :args [{:ref [:input :drop-chance]}]}}, :else nil}}]}}
-
-
-
-
-

@@ -1,0 +1,25 @@
+;; Port of the old :terrain/wave-plan composite: a trivial single-call
+;; wrapper around kernel/terrain-wave-plan. The old composite unbundled
+;; the kernel call's return map into five separately-bound outputs
+;; (:affected-blocks/:transforms/:broken-blocks/:mastery-breaks/:entities);
+;; since the kernel call's result already IS that same map, callers just
+;; field-access it directly (e.g. (:affected-blocks plan)) -- no
+;; map-literal repackaging needed.
+{:defn :terrain/wave-plan
+ :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name initial-energy :type :double}
+          {:name max-iterations :type :long} {:name seed :type :long} {:name spread :type :any}
+          {:name energy-cost :type :any} {:name block-transforms :type :any} {:name mastery :type :double}
+          {:name mastery-threshold :type :double} {:name mastery-radius :type :long}
+          {:name mastery-hardness-cap :type :double} {:name ground-break-probability :type :double}
+          {:name drop-probability :type :double} {:name launch-base :type :double}
+          {:name launch-span :type :double} {:name entity-search-radius :type :double}]
+ :do [(let plan (kernel/terrain-wave-plan
+                 {:origin origin :direction direction :initial-energy initial-energy
+                  :max-iterations max-iterations :seed seed :spread spread :energy-cost energy-cost
+                  :block-transforms block-transforms :mastery mastery
+                  :mastery-threshold mastery-threshold :mastery-radius mastery-radius
+                  :mastery-hardness-cap mastery-hardness-cap
+                  :ground-break-probability ground-break-probability
+                  :drop-probability drop-probability :launch-base launch-base :launch-span launch-span
+                  :entity-search-radius entity-search-radius}))]
+ :returns plan}

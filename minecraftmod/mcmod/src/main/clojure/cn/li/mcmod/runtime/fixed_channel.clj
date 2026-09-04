@@ -11,7 +11,14 @@
 (def ^:const protocol-version 1)
 ;; VFX catalog negotiation and the physical channel advertise one bound.
 (def ^:const max-vfx-frame-bytes 32768)
-(def packet-types {:catalog-hello 1 :catalog-ack 2 :input-edge 3 :input-ack 4 :combat-feedback 5 :vfx-trigger 6 :vfx-spawn 7 :vfx-update 8 :vfx-destroy 9 :vfx-clear-owner 10 :vfx-snapshot 11 :vfx-release 12})
+;; S7 player spell submission (cn.li.combat.player/desugar's raw glyph
+;; vector, client -> server). Matches node-core's own contracts/budgets
+;; :max-normal-packet-bytes -- mcmod cannot require node-core to share
+;; that constant directly (mcmod is the repo's OTHER intentionally zero-
+;; project-dependency Clojure module, same as node-core itself), so the
+;; number is duplicated here with this comment as the cross-reference.
+(def ^:const max-player-spell-bytes 4096)
+(def packet-types {:catalog-hello 1 :catalog-ack 2 :input-edge 3 :input-ack 4 :combat-feedback 5 :vfx-trigger 6 :vfx-spawn 7 :vfx-update 8 :vfx-destroy 9 :vfx-clear-owner 10 :vfx-snapshot 11 :vfx-release 12 :spell-submit 13})
 (def reverse-packet-types (into {} (map (fn [[k v]] [v k]) packet-types)))
 (def ^:private vfx-ops #{:trigger :spawn :update :destroy :release :clear-owner :snapshot})
 (def ^:private vfx-op->packet-type
@@ -262,3 +269,37 @@
         (throw (ex-info "decoded combat feedback has invalid feedback list"
                         {:feedback (:feedback value)})))
       (assoc value :type :combat-feedback))))
+
+(defn encode-player-spell-submit
+  "Encode a player's raw glyph vector ([{:glyph kw :params {...}} ...],
+  cn.li.combat.player/desugar's own input shape) for the server-
+  authoritative desugar/compile/admit path. The client-submitted bytes
+  are never trusted as anything more than opaque glyph data -- see
+  cn.li.combat.player's own docstring for why the server re-derives
+  everything from this vector instead of accepting a client-compiled
+  program."
+  ^bytes [glyphs]
+  (when-not (vector? glyphs)
+    (throw (ex-info "player spell glyphs must be a vector" {:glyphs glyphs})))
+  (let [^bytes packet (frame :spell-submit (binary-codec/encode glyphs))]
+    (when (> (alength packet) max-player-spell-bytes)
+      (throw (ex-info "player spell submit exceeds protocol bound"
+                      {:max max-player-spell-bytes :actual (alength packet)})))
+    packet))
+
+(defn decode-player-spell-submit
+  "Decode and validate a fixed player-spell-submit packet from the mcmod
+  bridge. Returns the raw glyph vector -- callers must still run it
+  through cn.li.combat.player/compile-and-admit before treating it as
+  anything executable."
+  [^bytes packet]
+  (when (> (alength packet) max-player-spell-bytes)
+    (throw (ex-info "player spell submit exceeds protocol bound"
+                    {:max max-player-spell-bytes :actual (alength packet)})))
+  (let [{:keys [packet-type payload]} (decode-frame packet)]
+    (when-not (= :spell-submit packet-type)
+      (throw (ex-info "packet is not a player spell submit" {:packet-type packet-type})))
+    (let [glyphs (binary-codec/decode payload)]
+      (when-not (vector? glyphs)
+        (throw (ex-info "decoded player spell submit is not a vector" {:value glyphs})))
+      glyphs)))

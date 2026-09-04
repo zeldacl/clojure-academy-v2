@@ -1,0 +1,22 @@
+;; Port of the old :motion/radial-impulse composite: push every entity in a
+;; sphere directly away from :center. The old composite got each entity's
+;; :position bundled onto the same :target/entities query via
+;; :projection [:id :position]; the new target/entities vocab node's
+;; :returns is fixed at [:list-of :entity-ref] (plain refs, no bundled
+;; fields -- see area_damage.edn's docstring), so position now needs one
+;; target/entity-snapshot query per entity. A real N-extra-queries cost
+;; versus the old bundled-projection shape, and a deliberate one: it is
+;; the only way to get per-entity position honestly typed against this
+;; vocabulary rather than field-accessing past the declared :entity-ref
+;; type (which would work at runtime -- compile-get never checks its
+;; source type -- but would be silently relying on a projection contract
+;; this vocab does not document).
+{:defn :motion/radial-impulse
+ :params [{:name center :type :vec3} {:name radius :type :double} {:name speed :type :double}
+          {:name limit :type :long}]
+ :do [(let entities (target/entities {:shape {:type :sphere :center center :radius radius} :limit limit}))
+      (each target entities
+        (let snapshot (target/entity-snapshot {:entity-id target}))
+        (let direction (vec3/normalize (vec3/sub (:position snapshot) center)))
+        (let push (vec3/scale direction speed))
+        (combat/impulse {:target target :vector push}))]}

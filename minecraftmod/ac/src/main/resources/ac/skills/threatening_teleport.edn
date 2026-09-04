@@ -1,0 +1,151 @@
+;; New-DSL conversion of ac/combat/abilities/threatening_teleport.edn (S6).
+;; Session ability. New wrinkle: the old :pulse/:release branch conditions
+;; test the RAW raycast result ({:ref [:local :trace]}, a plain truthy
+;; check for \"did the raycast even run\"), not one of its fields. Every
+;; earlier conversion that needed a truthy check always branched on a
+;; FIELD read off a hit-result (:any-typed by construction, so directly
+;; usable as a condition via cn.li.node.types/assignable?'s :any escape
+;; hatch); target/raycast's own :returns is the concrete opaque type
+;; :hit-result, which is NOT bidirectionally assignable to :boolean, so
+;; branching on `trace` itself would be a real type-mismatch compile
+;; error. (bool/not (value/eq trace nil)) sidesteps it cleanly: value/eq's
+;; params are :any on both sides, so it accepts any concrete type without
+;; a cast, and nil vs a real map is exactly the \"did this exist\" check
+;; the old raw truthy read meant.
+;;
+;; Also drops the same dead trailing-finish-after-an-already-exhaustive-
+;; branch pattern mark_teleport.edn's docstring already covers.
+{:schema-version 2
+ :kind :ability
+ :id :threatening-teleport
+ :name-key "ability.skill.teleporter.threatening_teleport"
+ :description-key "ability.skill.teleporter.threatening_teleport.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/eye :caster/body :caster/aim :caster/id :world/id :caster/creative?
+           :charge/ticks :rng/seed]
+ :tunables {:maximum-range {:curve :mastery-lerp}
+            :damage {:curve :mastery-lerp}
+            :needle-damage-multiplier {:curve :const}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-base {:curve :const}
+            :exp-hit-factor {:curve :const}
+            :exp-miss-factor {:curve :const}
+            :drop-prob-hit {:curve :const}
+            :drop-prob-miss {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :progression {:hit {:per-mark {:expr :math/mul :args [{:ref [:input :tunables :exp-base]}
+                                                        {:ref [:input :tunables :exp-hit-factor]}]}}
+               :miss {:per-mark {:expr :math/mul :args [{:ref [:input :tunables :exp-base]}
+                                                         {:ref [:input :tunables :exp-miss-factor]}]}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:hand-item {:type :any :default nil} :trace {:type :any :default nil}}
+ :program
+ "{:ability :threatening-teleport
+   :activation :session
+   :state {:hand-item {:type :any :default nil} :trace {:type :any :default nil}}
+   :tunables {:maximum-range {:type :double} :damage {:type :double}
+              :needle-damage-multiplier {:type :double} :drop-prob-hit {:type :double}
+              :drop-prob-miss {:type :double}}
+   :phases
+   {:start
+    [(let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let hand-item (target/item-held {:source :main-hand}))
+     (let trace (target/raycast {:origin eye :direction aim :distance $maximum-range
+                                 :include-entities? true :include-blocks? true
+                                 :living-only? true}))
+     (state! :hand-item hand-item)
+     (state! :trace trace)
+     (if (:present? hand-item)
+       [(vfx! {:effect-id :target-box-session :operation :spawn
+              :instance-key [:activation :threatening-teleport-marker]
+              :payload {:position (:position trace) :width (:target-width trace)
+                       :height (math/select (:attacked? trace) (:target-height trace) 0.5)
+                       :color (math/select (:attacked? trace) [186 178 35 42]
+                                           [186 186 186 186])}
+              :audience {:type :nearby :radius 64.0}})
+        (finish {:outcome :started})]
+       [(finish {:outcome :no-item :end-ability? true})])]
+
+    :pulse
+    [(let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let hand-item (target/item-held {:source :main-hand}))
+     (let trace (target/raycast {:origin eye :direction aim :distance $maximum-range
+                                 :include-entities? true :include-blocks? true
+                                 :living-only? true}))
+     (state! :hand-item hand-item)
+     (state! :trace trace)
+     (let trace-exists? (bool/not (value/eq trace nil)))
+     (let ok? (bool/and (:present? hand-item) trace-exists?))
+     (if ok?
+       [(vfx! {:effect-id :target-box-session :operation :update
+              :instance-key [:activation :threatening-teleport-marker]
+              :payload {:position (:position trace) :width (:target-width trace)
+                       :height (math/select (:attacked? trace) (:target-height trace) 0.5)
+                       :color (math/select (:attacked? trace) [186 178 35 42]
+                                           [186 186 186 186])}
+              :audience {:type :nearby :radius 64.0}})
+        (finish {:outcome :continue})]
+       [(vfx! {:effect-id :target-box-session :operation :destroy
+              :instance-key [:activation :threatening-teleport-marker] :payload {}})
+        (finish {:outcome :aborted :end-ability? true})])]
+
+    :release
+    [(let body ?caster/body)
+     (let creative? ?caster/creative?)
+     (let hand-item (target/item-held {:source :main-hand}))
+     (let trace %trace)
+     (state! :hand-item hand-item)
+     (state! :trace trace)
+     (let trace-exists? (bool/not (value/eq trace nil)))
+     (let ok? (bool/and (:present? hand-item) trace-exists?))
+     (if ok?
+       [(let hit? (:attacked? trace))
+        (let needle? (value/eq (:item-id hand-item) \"academy:needle\"))
+        (let hit-damage (math/mul $damage (math/select needle? $needle-damage-multiplier 1.0)))
+        (let drop-probability (math/select hit? $drop-prob-hit $drop-prob-miss))
+        (let drop? (random/chance {:probability drop-probability}))
+        (let release-budget ?budget/release)
+        (let spend-scale (math/select creative? 0.0 1.0))
+        (let sufficient? (cost/spend {:budget release-budget :scale spend-scale}))
+        (if sufficient?
+          [(inventory/settle {:source :main-hand :count 1 :position (:drop-position trace)
+                              :drop? drop? :creative? creative?})
+           (when hit?
+             (combat/damage {:target (:target-id trace) :amount hit-damage
+                             :damage-type :magic}))
+           (if hit?
+             [(let hit-progression ?progression/hit)
+              (event! {:type :score/mark :progression hit-progression})]
+             [(let miss-progression ?progression/miss)
+              (event! {:type :score/mark :progression miss-progression})])
+           (let main-cooldown ?cooldown/main)
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (event! {:type :achievement/trigger :payload {:id \"teleporter.threatening_teleport\"}})
+           (vfx! {:effect-id :target-box-session :operation :destroy
+                 :instance-key [:activation :threatening-teleport-marker] :payload {}})
+           (when hit?
+             (vfx! {:effect-id :teleport-trail-transient :operation :spawn
+                   :payload {:start (vec3/sub body [0.0 0.5 0.0])
+                            :end (vec3/add (:drop-position trace) [0.5 0.5 0.5])
+                            :sound-id \"academy:tp.tp\" :sound-volume 0.5 :sound-pitch 1.0}
+                   :audience {:type :nearby :radius 64.0}}))
+           (finish {:outcome :performed :end-ability? true})]
+          [(vfx! {:effect-id :target-box-session :operation :destroy
+                 :instance-key [:activation :threatening-teleport-marker] :payload {}})
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :target-box-session :operation :destroy
+              :instance-key [:activation :threatening-teleport-marker] :payload {}})
+        (finish {:outcome :no-item :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :target-box-session :operation :destroy
+           :instance-key [:activation :threatening-teleport-marker] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}

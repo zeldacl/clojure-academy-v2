@@ -1,81 +1,191 @@
 # Combat Core 维护手册
 
-> 语言本体（描述符/表达式/作用域/composite 展开）的完整规格见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md)——本文只讲 combat-core 如何使用这套语言、模块边界、以及排障。
-
-## 当前架构锁定（2026-08-28）
-
-本文是当前实现规范。技能唯一执行路径为 `final catalog → final compiler → final engine`，
-经 `ability-runtime` 输出 continuation/result，再由 AC adapter 调用 mcmod host；不得恢复
-旧 VM、旧 recipe/runtime/composite loader、旧 EDN 字段或任何兼容/双轨实现。`recipe.clj`
-若被保留，只能服务非技能文档读取，绝不是技能执行入口或迁移参考。
-
-禁止重新引入的入口/大 primitive：`block/area-break`、`block/random-break`、
-`block/break-budget`、`entity/radial-impulse`、`terrain/propagate`、
-`host/beam-trace`、`target/beam-trace`。查询、循环、预算和提交必须由当前 composite
-拆分并通过 hidden kernel 完成；`kernel/*`、`instance-key`、event sequence、owner/world
-和 continuation 句柄不属于可视技能节点输入输出。
+> 语言本体（surface DSL/IR/词汇表/静态代价分析）的完整规格见
+> [NODE_LANGUAGE.md](NODE_LANGUAGE.md)——本文只讲 combat-core 如何使用这套语言、
+> 模块边界、以及排障。**先读 NODE_LANGUAGE.md §0**：新引擎是技能/战斗 dispatch
+> 唯一的实机路径；旧的图执行引擎（`final_engine.clj`/`final_compiler.clj`）**已
+> 删除**——`combat-catalog.clj` 早先经由它们编译内容元数据，但那步编译从没有
+> 真正被执行过（`combat-api/execute!` 零调用点），移除后不影响任何真实功能。
+> 旧的**内容元数据加载侧**（`ac/ability/final_catalog.clj`/
+> `final_catalog_service.clj`、`ac/combat/abilities/*.edn`〔39 个〕、
+> `combat-core/composites/*.edn`〔17 个〕）**也已删除**：`combat-catalog.clj`
+> 自己的元数据来源已重写为直接读 `ac/skills/*.edn`（`skills-catalog.clj`），
+> 见下方"内容元数据加载侧"一节。`kernels.clj` 不属于"旧引擎"，是永久保留的
+> 基础设施，见 NODE_LANGUAGE.md §0 详细说明。`final_damage.clj` 自己也已删除
+> ——聚合运算逐字节 port 进 `combat/damage.clj`（同一份算法，只是分派层从
+> `final_damage.clj` 的 O(n) 线性扫描换成 `damage.clj` 的 mark-type+priority
+> 索引查找，见下方"伤害管线"一行），`combat-api/resolve-damage` 现在指向它。
 
 ## 系统职责
 
-`combat-core` 加载 `node-core` 语言之上的**战斗词汇表**（原语 + 组合层 composite），执行全部技能。它是纯数据驱动、平台中立的执行引擎：技能是编译期校验过的 EDN 节点树，由树遍历解释器执行，只产出中立的结果计划（`:actions`/`:events`/`:vfx-signals`/`:query-results`）——从不直接改动 Minecraft 状态；真正落地世界效果、伤害、位移是通过 `mcmod` 端口 + 已注册的 host capability 完成的，AC 只负责组装与自己领域（技能学习/资源/成就）的注入。
+`combat-core` 是战斗侧的执行引擎：加载词汇表（原语 + `:defn` 组合），把技能/
+法术编译并执行成中立的结果计划（`.-actions`/`.-events`/`.-vfx`/`.-stateWrites`/
+`.-result`）——从不直接改动 Minecraft 状态。真正落地世界效果、伤害、位移由 mcmod
+端口 + 已注册的 host capability 完成；AC 只负责组装与自己领域（技能学习/资源/
+成就）的注入。
 
-## 模块边界
+## 唯一的执行引擎；内容元数据加载侧现在也读同一套内容
 
-- `node-core/**`：语言本体，不依赖 Minecraft，也不依赖 combat-core/vfx-core/ac。
-- `combat-core/src/main/clojure/cn/li/combat/final_engine.clj`：唯一 final graph 执行器；只处理编译后的节点树，产出中立 actions/events/VFX 信号。
-- `combat-core/src/main/clojure/cn/li/combat/final_compiler.clj`：唯一 final graph 编译器；展开后的 composite 必须通过 descriptor、作用域和引用检查。
-- 历史 `combat/recipe.clj`：不属于当前模块；若在旧审计或构建缓存中出现，仅可作为非技能文档证据，绝不能成为技能执行入口或迁移参考。
-- `combat-core/src/main/clojure/cn/li/combat/final_damage.clj`：统一 DamageEvent 收集/确定性 resolve 与 `mcmod` DamageBoundary 结果。
-- `combat-core/src/main/clojure/cn/li/combat/beam_settlement.clj`：beam settlement 的中立结算数据；延迟 continuation 不在此模块持有。
-- `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host query/action capability 表。
-- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：唯一同时组合 node/combat/vfx/presentation 值的中立边界；AC、BC、CC 都通过它组装 catalog、result 和 frame。
-- `ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj`：AC 侧内容加载器，读取 AC manifest 并将 combat/vfx/node 值交给 ability-runtime 组合。
-- `ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj`：AC composition root，注入 AC 自己领域的端口（resource/progression/achievement/saved-location 等），提交 combat-core 产出的 `:owner-patch`/`:session-patch`。
+| | 唯一的 dispatch 路径 |
+|---|---|
+| 入口 | `cn.li.combat.run`（`combat_runtime.clj` 的 `dispatch-intent-v2!`，真实
+  玩家操作、`process-damage-request!`/`apply-attack-precheck!`〔原生近战伤害/
+  反射边界〕全部走这里） |
+| 词汇表 | `cn.li.combat.dsl-vocabulary`（`nodes`，带真实 `:params`/`:returns`/`:effects`/`:capability`/`:cost`） |
+| 内容资源 | `ac/src/main/resources/ac/skills/*.edn`（`:program` 字段内嵌新 DSL 文本，其余顶层键——`:tunables`/`:costs`/`:cooldown`/`:progression`/`:session-state`/`:mark-policies`/`:damage-policies`——跟旧文件逐字节相同） |
+| 复用单元 | `combat-core/lib/*.edn` + `combat-core/lib.clj`（`:defn`，显式文件名列表加载，见 NODE_LANGUAGE.md §1） |
+| 伤害管线 | `combat-core/damage.clj`（`combat-api/resolve-damage`/`materialize-vfx`）——独立于 dispatch 引擎，永久共享 |
+| 玩家法术 | `cn.li.combat.player`（S7，desugar/admit，见 NODE_LANGUAGE.md §6） |
 
-## 词汇表分层（详见 NODE_LANGUAGE.md §1）
+`combat-source`（`combat_runtime.clj` 内部函数，`final-capabilities-v2`/
+`damage-policy-inputs`/`mark-rate-for` 等共享读取点）读 `final-runtime-v2*`
+里的新 catalog（`cn.li.ac.ability.skills-catalog/assemble` 的输出）——不读任何
+旧 catalog，dispatch/伤害拦截这两条真实路径完全不依赖旧内容目录。
 
-```
-:layer :primitive   Clojure 函数，可调 mcmod        components.clj 的 register-primitive!
-:layer :composite          纯 EDN composite                ac/src/main/resources/ac/combat/composites/*.edn
-:layer :ability       纯 EDN 技能文档                  ac/src/main/resources/ac/combat/abilities/*.edn
-```
+`combat-catalog.clj` 的技能元数据表（skill tree UI、trigger 索引、
+passive-effects、activation-context 的 bindings/presentation）现在直接读
+`cn.li.ac.ability.skills-catalog/assemble`（`ac/skills/*.edn` +
+`ac/skills/manifest.edn`），与 dispatch/伤害拦截读的是**同一套内容**——不再有
+第二条内容加载路径。`ac/ability/final_catalog.clj`/`final_catalog_service.clj`
+（旧 manifest 加载 + composite 展开 + `strict-graphs!` 结构校验）连同它们读取的
+旧内容目录（`ac/combat/abilities/*.edn`〔39 个〕、`ac/combat/manifest.edn`、
+`combat-core/composites/*.edn`〔17 个〕）**已全部删除**：`combat-catalog.clj`
+自己曾是它们最后一个真实调用点，切换元数据来源后二者都变成零调用点，随其一并
+删除。`vfx-core/vocabulary.clj`/`system_compiler.clj`（同样只为旧
+`final_catalog.clj` 的 `load-vfx` 服务）也一并删除，见 VFX_CORE.md。
+`vfx-core/composites/*.edn`（旧 VFX composite 源文件）**未删除**：`vfx.
+vocabulary.clj` 本身仍在（保留原因见 NODE_LANGUAGE.md §0 对旧词汇表/
+`node.environment`/`node.flow` 等的说明——它们是留给未来编辑器 UI 的 schema-
+export 基础设施，不是待清理的死代码），composite 内容跟着它一起留下。
 
-一个组件是否该是原语，判定标准：**一个原语只做一件事且必须触碰宿主**；一旦它内部组合了"查询 → 循环 → 施加"这类多步骤，就必须是 composite。当前词汇表里哪些属于哪一层、审计依据，见迁移计划 R2 章节（`docs/04-systems/NODE_LANGUAGE.md` §12 有旧→新的概念映射）。
+## 新引擎（`cn.li.combat.run`）的模块边界
 
-## 运行时流程
+- `node-core/**`：语言本体，不依赖 Minecraft/combat-core/vfx-core/ac/mcmod。
+- `mcmod/src/main/java/cn/li/mcmod/runtime/{ExecutionFrame,CompiledProgram,
+  HostTable}.java`：运行时载体，分型寄存器组（doubles/longs/booleans/objects）。
+  受 `verifyEffectRuntimeJavaCarriers` 约束——不得出现 `if|else|switch|for|while|
+  do|.invoke(|execute`，一切逻辑在 Clojure 侧。
+- `mcmod/src/main/clojure/cn/li/mcmod/runtime/effect_emit.clj`：IR → 闭包链，
+  `compile-program`/`dispatch!`/`new-frame`。
+- `combat-core/src/main/clojure/cn/li/combat/run.clj`：把 node-core 编译器接上
+  combat 自己的词汇表（`dsl_vocabulary.clj`）和 capability 类型表
+  （`capability-type`），`compile-doc!`/`compile-program`/`dispatch!` 是三个组合
+  好的入口，测试和真正的组装点都只应该调这三个函数。
+- `combat-core/src/main/clojure/cn/li/combat/dsl_vocabulary.clj`：新词汇表本体，
+  `:effects` 字段是 `cn.li.node.cost/analyze` 与 `cn.li.combat.player` 的唯一
+  数据来源。
+- `combat-core/src/main/clojure/cn/li/combat/lib.clj` + `lib/*.edn`：跨技能/跨
+  event 复用的 `:defn` 组合库。
+- `combat-core/src/main/clojure/cn/li/combat/player.clj`：玩家法术
+  desugar/admit（S7，见 NODE_LANGUAGE.md §6）。
+- `mcmod/src/main/clojure/cn/li/mcmod/runtime/fixed_channel.clj`：
+  `:spell-submit` 包类型，玩家 glyph 向量上行的有界二进制封装。
 
-1. `combat_catalog/initialize!` 加载四份 manifest（`combat/manifest.edn`、`combat/composites.edn`、`vfx/manifest.edn`、`vfx/composites.edn`），逐文档编译，失败的文档进 `:errors`、不影响其余文档启动。
-2. 客户端 CombatIntent 驱动 AC final runtime：具体化 tunable → composite 展开 → `final_compiler/compile-program` → `final_engine/execute!`，产出中立 `{:actions :events :vfx-signals :feedback :query-results ...}`；AC 只做结果提交与协议投影。
-3. `combat_runtime.clj`（AC）把 `:actions` 里的 `:owner-patch`/`:session-patch` 提交进玩家存档；`:vfx-signals` 作为中立 Intent 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播。
-4. 任意入站伤害（技能命中或 vanilla 击中）都进入 `final_damage.clj` 的统一 DamageEvent 收集/resolve 边界；platform 事实通过已注册 capability 提供，结果只返回给调用方提交，不在中途落地。伤害反应使用 node-core 同一套 descriptor/composite 规则，不存在第二个 reactions 解释器。
+## 内容元数据加载侧（独立于执行引擎，但现在共享同一套内容）的模块边界
 
-## 扩展点
+- `ac/src/main/clojure/cn/li/ac/ability/skills_catalog.clj`：`assemble` 读
+  `ac/skills/manifest.edn`，逐 `:sources`/`:registrations` 装配，`:program`
+  编译成 IR（`combat-api/compile-skill-doc!`）供新引擎 dispatch 用——纯数据
+  组装，不做结构校验。
+- `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：在
+  `skills_catalog/assemble` 的输出上投影出 skill tree UI（`skill-specs`）、
+  item-trigger 索引（`resolve-trigger`）、passive-effects
+  （`apply-passive-resource-modifiers`）——真实生产启动（`core/init.clj`）和
+  测试套件广泛依赖它。`:category-id`/`:level`/`:controllable?` 优先取
+  `skill-config/skill-definitions-by-id`（该表的文档字符串自称是这三个字段的
+  single source of truth），EDN 内容里的同名字段只是未配置技能的兜底。
+- `combat-core/src/main/clojure/cn/li/combat/damage.clj`：统一 DamageEvent 收集/
+  确定性 resolve 与 mcmod DamageBoundary 结果——**独立于 dispatch 引擎，永久
+  共享**，不属于内容加载或执行引擎中的任何一侧。取代已删除的 `final_damage.
+  clj`：聚合算法（`multiply`/`reduce`/`absorb`/`critical`/`reflect` 的合并、
+  资源代价结算、`max-reflection-depth`）逐字节 port 过来，唯一实质变化是
+  `collect` 的 O(n) 全表线性扫描换成 `build-index`/`candidates-for` 的
+  mark-type+priority 索引查找（O(k)，k = 该事件 mark-type 相关的 policy
+  数）。`combat/api.clj` 的 `resolve-damage` 在内部对每次调用的 policies 列表
+  现建现查一次索引（不跨事件缓存——沿用 `combat_runtime.clj` 自己
+  `final-damage-policies-v2` 一贯的"伤害不是逐帧热路径，不为它引入需要跟
+  `final-runtime-v2*` 保持同步的第二份可变状态"判断，如果之后 profiling
+  证明这里确实是瓶颈，跨事件缓存索引是一个独立、更晚的优化）。
+- `combat-core/src/main/clojure/cn/li/combat/platform.clj`：向 mcmod 注册的 host
+  query/action capability 表，新引擎通过这份注册表在真实游戏里 dispatch。
+- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：`merge-draw-
+  lists`/`merge-vfx-into-frame` 仍是 `ac/gui/reactive/register.clj` 的真实调用
+  点；`compose-catalog`/`catalog-fingerprint-input`（旧 `final_catalog.clj` 曾经
+  唯一的调用方，跨核心捆绑 combat+vfx+node-environment 做内容指纹）随
+  `final_catalog.clj` 一起变成零调用点，未删除但已是死代码——若你需要跨进程内容
+  身份校验，`combat-catalog.clj` 自己已有一份更简单的等价物（对
+  `:sources`/`:registrations` 直接 `cn.li.node.digest/content-hash`），不要
+  重新接上这两个旧函数。
+- `ac/src/main/clojure/cn/li/ac/ability/service/combat_runtime.clj`：AC
+  composition root，`dispatch-intent-v2!`/`process-damage-request!`/
+  `apply-attack-precheck!` 都在这里。
 
-- 新增底层原语：在 `components.clj` 用 `register-primitive!` 登记完整 v3 描述符（`:inputs`/`:outputs`/`:effects`/`:impl`），先确认它确实"只做一件事且必须触碰宿主"——否则应该是新增组合层 composite 而不是新增原语。
-- 新增组合层语义：在 `ac/src/main/resources/ac/combat/composites/*.edn` 加一个 `:layer :composite` composite 文档，登记进 `composites.edn`。**禁止**给它写任何 Clojure 实现。
-- 新增技能：在 `ac/src/main/resources/ac/combat/abilities/*.edn` 加文档，登记进 `manifest.edn`。技能文档顶层可以用 source 节点（`:ability/caster`/`:ability/tunable`/…，见 NODE_LANGUAGE.md §5）读取环境；组合层/底层节点内部不可以。
+## 运行时流程（当前实机行为）
+
+1. `ac.ability.skills-catalog/assemble` 读 `ac/skills/manifest.edn`，逐文档编译
+   `:program`（经 `combat-api/compile-skill-doc!` → `cn.li.combat.run`），失败的
+   文档进 `:errors`，不影响其余文档启动。
+2. 客户端 CombatIntent 包（`network.clj`）、物品触发（`server_hooks.clj`）、传送
+   RPC（`location_teleport_rpc.clj`）三个真实入口，以及 `combat_runtime.clj` 自己
+   的 `dispatch-trigger!`/`dispatch-event!`/`pulse-active-sessions!`，全部调用
+   `combat_runtime.clj` 的 `dispatch-intent-v2!`。
+3. `dispatch-intent-v2!` 的懒加载守卫只初始化新引擎自己的 catalog
+   （`initialize-final-runtime-v2!`）——`combat-source`/`final-capabilities-v2`
+   现在直接读这份新 catalog，不再需要旧 catalog 提供任何元数据。随后走
+   `final-capabilities-v2`/`final-input-v2` 具体化 tunable/capability，交给
+   `cn.li.combat.run` 的 `dispatch!` 执行，产出中立
+   `{:actions :events :vfx-signals :feedback :query-results ...}`。
+4. `combat_runtime.clj`（AC）把 `:actions` 里的 patch 提交进玩家存档；
+   `:vfx-signals` 交给 ability-runtime 路由，再由 AC 的 VFX adapter 广播——这一步
+   与切换前完全相同，两个引擎产出的中立结果计划形状一致，下游消费代码未改动。
+5. 任意入站伤害都进入 `damage.clj` 的统一 DamageEvent 收集/resolve 边界，
+   与哪个引擎负责 dispatch 无关（见上表）。
+
+旧引擎自己曾经的运行流程（`final_catalog/initialize!` → 具体化 tunable →
+composite 展开 → `final_compiler/compile-program` → `final_engine/execute!`）
+**已经不存在**：`final_engine.clj`/`final_compiler.clj`/`final_catalog.clj`/
+`final_catalog_service.clj` 全部已删除，`combat-catalog.clj` 不再有第二条内容
+加载路径可比较——它现在读的就是步骤 1 里 `skills-catalog/assemble` 装配的同一份
+`ac/skills/*.edn` 内容，只是取其中 dispatch 不需要的字段（`:name-key`/
+`:actions`/`:external-triggers`/`:passive-effects` 等）。
 
 ## 排障手册
 
-- 技能施放无效果 → 先看该技能的编译 `:errors`（`combat_catalog/initialize!` 的返回值），确认文档本身编译通过。
-- "unknown component" / "component field is missing" → 对照 `components.clj`/对应 composite 文档的 `:inputs` 声明，字段名或类型不对。
-- "read of a local not bound on every reachable path" / 作用域相关错误 → 检查 `:bind` 是否在读取点之前的兄弟节点完成，是否跨了 `:flow/branch`/`:txn/atomic` 的分支边界（分支间绑定不逃逸，见 NODE_LANGUAGE.md §4）。
-- source 节点相关编译错误 → 确认该节点只出现在技能文档顶层，且技能文档确实声明了对应的 `:tunables`/`:costs`/`:progression`/`:cooldown`/`:invariants` 条目。
+- 一份 `ac/skills/*.edn` 编译报 `type-mismatch`/`unknown-node` → 对照
+  `dsl_vocabulary.clj` 对应节点的 `:params` 声明，字段名/类型是否匹配；确认
+  `?capability` 是否已在 `run.clj` 的 `capability-type` 里声明或能按命名空间
+  规则派生。
+- `finish` 之前的 `when`/`if` 分支报 "condition must be :boolean" → 条件表达式
+  的静态类型必须是 `:boolean` 或 `:any`（一个具体的 `:entity-ref`/`:vec3` 之类
+  不行）——常见错法是拿 `?caster/id`（固定 `:entity-ref`）当存在性判断用，应改
+  拿一个 `:any` 类型的字段访问结果（比如 raycast 命中的 `(:entity-id hit)`）。
+- 一个 event/phase 没写 `finish` 但测试断言 `.-result` 是 `nil` → 错的是测试，
+  不是代码：没调用 `finish` 时 `.-result` 是 `{:outcome :ended :next-phase nil
+  :end-ability? false}`，见 NODE_LANGUAGE.md §1。
+- `combat-catalog/initialize!`（或任何依赖它的测试 fixture）报编译错误 → 检查
+  `ac/skills/*.edn` 里某个文件的问题；旧目录 `ac/combat/abilities/*.edn` 已删除，
+  `combat-catalog.clj` 现在只读 `ac/skills/*.edn`，跟 dispatch 引擎读的是同一份
+  内容，不会再有"两个目录、两份真相"的问题。
 
 ## 变更风险
 
-- `combat-core` 只产出计划/直接调用已注册的 mcmod 端口，绝不写 AC 的玩家存档 schema——这条边界由 `verifyAcNoWorldCapabilities`/`verifyCombatSingleDamagePath` 等门禁强制；新增 `:mutate` 原语时确认它落地的是 mcmod 端口而不是绕道 AC。
-- `:layer :composite` 组件不得有 `:impl`，不得出现在任何 `defmethod`/handler 表里——`verifyNodeLayerDiscipline` 强制。
-- 组合层/底层节点不得读取 `{:from …}`/`{:tunable …}`/`{:ref [:context …]}` 等环境形式——`verifyNoImplicitDependency` 强制。
-
-## 兼容性约束
-
-- `combat-core` 只依赖 `node-core` 与 `mcmod`；VFX 信号是中立数据 ABI，不依赖 `vfx-core`。不得依赖 `ac`/`platform`/任何具体 loader 命名空间，由 `verifyCombatDependencyDirection` 强制。
-- `node-core` 不得依赖 `combat-core`/`vfx-core`/`mcmod`/`ac`，由 `verifyNodeCoreDependencyDirection` 强制。
-
-
-
+- `combat-core` 只产出计划/直接调用已注册的 mcmod 端口，绝不写 AC 的玩家存档
+  schema——这条边界由 `verifyAcNoWorldCapabilities`/`verifyCombatSingleDamagePath`
+  等门禁强制。
+- 新增新引擎节点：只在 `dsl_vocabulary.clj` 加一条，`:effects` 字段必须如实
+  反映它真正做什么（`cn.li.combat.player` 的准入白名单直接读这个字段，写错等于
+  开了一个安全漏洞或者堵死了一个本该合法的玩家法术）。
+- 新增新引擎 `:defn` 组合：加进 `combat-core/lib/*.edn`，并把文件名加进
+  `lib.clj` 的显式列表——漏加等于这个组合永远编译不到，且不会有任何错误提示
+  （直到有人尝试调用它，得到 "unknown fn"）。
+- `combat-core` 只依赖 `node-core` 与 `mcmod`；不得依赖 `ac`/`platform`/任何
+  具体 loader 命名空间，由 `verifyCombatDependencyDirection` 强制。
+- `node-core` 不得依赖 `combat-core`/`vfx-core`/`mcmod`/`ac`，由
+  `verifyNodeCoreDependencyDirection` 强制。
 
 ## Deferred ownership
 
-Combat Core owns neutral settlement (`beam-settlement`) only. The instance-local continuation queue belongs to `ability-runtime`; AC/BC/CC install one composition runtime and supply lifecycle/result callbacks. A graph `flow/after` is currently an AC composition-root-only graph construct (none of the 50 migrated skills use it), not a second beam/deferred implementation. If BC/CC later expose graph-level delay, the capability must be promoted into this same `ability-runtime` continuation contract; they must not create an AC-private or content-private queue. No combat module stores a global pending queue.
+Combat Core owns neutral settlement (`beam-settlement`) only. The instance-local
+continuation queue belongs to `ability-runtime`; AC/BC/CC install one composition
+runtime and supply lifecycle/result callbacks. No combat module stores a global
+pending queue.

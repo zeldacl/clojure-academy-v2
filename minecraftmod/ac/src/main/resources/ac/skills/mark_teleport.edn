@@ -1,0 +1,127 @@
+;; New-DSL conversion of ac/combat/abilities/mark_teleport.edn (S6). Session
+;; ability (charge on :start/:pulse, act on :release). First real call
+;; site of cn.li.combat.lib's target/hold-destination composite -- its
+;; bundled {:hit :destination} return means :destination here is
+;; (:destination hold-result), matching how the old composite's own
+;; :bind {:destination :destination} extracted just that sub-value.
+;;
+;; The old :release sequence has a trailing {:component :flow/finish,
+;; :outcome :released, :finish-ability? true} AFTER a flow/branch whose
+;; every arm already ends in its own finish -- dead code under the old
+;; engine (run-sequence halts on the first finish) that this DSL's
+;; :unreachable-code diagnostic would actively reject if ported
+;; literally, so it is dropped rather than translated.
+{:schema-version 2
+ :kind :ability
+ :id :mark-teleport
+ :name-key "ability.skill.teleporter.mark_teleport"
+ :description-key "ability.skill.teleporter.mark_teleport.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]
+ :tunables {:minimum-distance {:curve :const}
+            :maximum-range {:curve :mastery-lerp}
+            :range-per-hold-tick {:curve :const}
+            :cp-per-block {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :exp-per-distance {:curve :const}
+            :entity-eye-height {:curve :const}}
+ :progression {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:destination {:type :any :default nil}}
+ :program
+ "{:ability :mark-teleport
+   :activation :session
+   :state {:destination {:type :any :default nil}}
+   :tunables {:minimum-distance {:type :double} :maximum-range {:type :double}
+              :range-per-hold-tick {:type :double} :cp-per-block {:type :double}
+              :release-overload {:type :double} :entity-eye-height {:type :double}}
+   :phases
+   {:start
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let charge-ticks ?charge/ticks)
+     (let context-resources ?context/resources)
+     (let available-resource (:cp context-resources))
+     (let hold-result
+       (target/hold-destination eye aim charge-ticks $range-per-hold-tick $maximum-range
+                                available-resource $cp-per-block
+                                {:direction aim :entity-eye-height $entity-eye-height
+                                :minimum-distance $minimum-distance :head-clearance? true}
+                                true true))
+     (let destination (:destination hold-result))
+     (state! :destination destination)
+     (when (:valid? destination)
+       (vfx! {:effect-id :teleport-marker :operation :spawn
+             :instance-key [:activation :mark-teleport]
+             :payload {:owner owner-id :position (:position destination)
+                      :color [188 252 238 255] :particle-chance 0.4}
+             :audience {:type :nearby :radius 64.0}}))
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let charge-ticks ?charge/ticks)
+     (let context-resources ?context/resources)
+     (let available-resource (:cp context-resources))
+     (let hold-result
+       (target/hold-destination eye aim charge-ticks $range-per-hold-tick $maximum-range
+                                available-resource $cp-per-block
+                                {:direction aim :entity-eye-height $entity-eye-height
+                                :minimum-distance $minimum-distance :head-clearance? true}
+                                true true))
+     (let destination (:destination hold-result))
+     (state! :destination destination)
+     (when (:valid? destination)
+       (vfx! {:effect-id :teleport-marker :operation :update
+             :instance-key [:activation :mark-teleport]
+             :payload {:position (:position destination) :color [188 252 238 255]
+                      :particle-chance 0.4}
+             :audience {:type :nearby :radius 64.0}}))
+     (finish {:outcome :continue})]
+
+    :release
+    [(let destination %destination)
+     (state! :destination destination)
+     (if (:valid? destination)
+       [(let teleport-progression ?progression/teleport)
+        (let main-cooldown ?cooldown/main)
+        (let distance (:distance destination))
+        (let cp-cost (math/mul distance $cp-per-block))
+        (let sufficient? (cost/spend {:budget {:cp cp-cost :overload $release-overload}}))
+        (if sufficient?
+          [(let owner-id ?caster/id)
+           (entity/teleport {:target owner-id :position (:position destination) :dismount? true
+                             :reset-fall-damage? true})
+           (event! {:type :score/mark :progression teleport-progression :weight distance})
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (vfx! {:effect-id :arc-ring-fade-audio :operation :spawn
+                 :payload {:ring-center (:position destination)
+                          :sound-position (:position destination) :fade-at 8 :sound-pitch 1.0
+                          :duration-ticks 20 :fade-ring-from 1.4 :sound-volume 0.6
+                          :arc-count-limit 32 :arc-radius {:min 0.08 :max 0.18}
+                          :start (:position destination) :fade-ring-to 2.0
+                          :sound-id \"academy:em.teleport\" :arc-life-ticks 12 :ring-to 1.4
+                          :fade-to-tick 20 :arc-spacing {:min 0.6 :max 1.2}
+                          :fade-color [236 170 93 180] :fade-segments 24 :ring-from 0.25
+                          :end (:position destination) :ring-color [188 252 238 220]
+                          :ring-segments 24}
+                 :audience {:type :nearby :radius 64.0}})
+           (vfx! {:effect-id :teleport-marker :operation :destroy
+                 :instance-key [:activation :mark-teleport] :payload {}})
+           (finish {:outcome :teleported :end-ability? true})]
+          [(finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :teleport-marker :operation :destroy
+              :instance-key [:activation :mark-teleport] :payload {}})
+        (finish {:outcome :too-close :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :teleport-marker :operation :destroy
+           :instance-key [:activation :mark-teleport] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :costs nil
+ :invariants nil
+ :mark-policies nil}

@@ -1,0 +1,205 @@
+;; New-DSL conversion of ac/combat/abilities/body_intensify.edn (S6).
+;; Session hold-charge self-buff: charge past a minimum, release to roll
+;; a tiered ladder of status effects (plus a fixed hunger debuff) scaled
+;; by how long the charge was held, and a mastery-scaled cooldown
+;; computed inline in :release rather than read via ?cooldown/main.
+;;
+;; :value/status-id and :value/status-max-amplifier, referenced under
+;; :value/* against the :effect-available-effects tunable (a list of
+;; "name:max-amplifier" strings, e.g. "jump-boost:1" -- confirmed by
+;; mcmod/runtime/expression_catalog.clj's own worked example), were
+;; never actually implemented anywhere despite being referenced -- the
+;; same never-wired-up-reference class :vec3/launch and
+;; :vec3/scatter-end already established this session. Genuinely pure
+;; string parsing (no RNG, no host state), implemented from scratch in
+;; cn.li.node.expr/ops as ordinary :pure ops. :random/uniform already
+;; existed in expr.clj but, like :random/int and :random/chance before
+;; it, had no :query vocab node exposing it to DSL authors -- added
+;; alongside them in combat-core/dsl_vocabulary.clj.
+;;
+;; :pulse's two if-arms (still charging vs. already at charge-max-ticks)
+;; both increment hold-ticks by the exact same amount and by the exact
+;; same formula (hold-ticks-cur + 1) -- hoisted to a single
+;; `hold-ticks-next` local computed ONCE before the branch and reused in
+;; both arms (and in the overcharge check that follows), rather than
+;; recomputed per-arm or re-read from state afterward. This sidesteps
+;; the old engine's own same-activation state re-read
+;; ({:ref [:state :hold-ticks]} after this same :pulse had already
+;; written it -- see groundshock.edn/directed_blastwave.edn's own
+;; docstrings for that general translation rule) even more directly than
+;; usual: since both arms compute the identical value, there is no
+;; branch-specific result to thread through set!/locals at all.
+{:schema-version 2
+ :kind :ability
+ :id :body-intensify
+ :name-key "ability.skill.electromaster.body_intensify"
+ :description-key "ability.skill.electromaster.body_intensify.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/id :caster/eye :caster/creative? :world/id :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :arc-gen :min-exp 1.0} {:skill-id :current-charging :min-exp 1.0}]
+ :tunables {:charge-min-ticks {:curve :const :type :int}
+            :charge-max-ticks {:curve :const :type :int}
+            :charge-max-tolerant-ticks {:curve :const :type :int}
+            :effect-probability-offset-ticks {:curve :const}
+            :effect-probability-divisor {:curve :const}
+            :effect-duration-multiplier {:curve :mastery-lerp}
+            :effect-hunger-multiplier {:curve :const}
+            :effect-hunger-amplifier {:curve :const :type :int}
+            :effect-available-effects {:curve :const :type :string-list}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :cooldown-endpoints {:curve :pair}
+            :progression-exp-use {:curve :const}}
+ :costs {:activate {:resources {:overload {:ref [:input :tunables :cost-down-overload]}}}
+         :charging {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:use {:per-mark {:ref [:input :tunables :progression-exp-use]}}}
+ :session-state {:hold-ticks {:type :int :default 0}
+                 :overload-floor {:type :float :default 0.0}}
+ :program
+ "{:ability :body-intensify
+   :activation :session
+   :state {:hold-ticks {:type :long :default 0} :overload-floor {:type :double :default 0.0}}
+   :tunables {:cost-down-overload {:type :double} :charge-max-ticks {:type :long}
+              :charge-max-tolerant-ticks {:type :long} :charge-min-ticks {:type :long}
+              :effect-probability-offset-ticks {:type :double}
+              :effect-probability-divisor {:type :double}
+              :effect-duration-multiplier {:type :double}
+              :effect-hunger-multiplier {:type :double} :effect-hunger-amplifier {:type :long}
+              :effect-available-effects {:type :any} :cooldown-endpoints {:type :any}
+              :progression-exp-use {:type :double}}
+   :phases
+   {:start
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let activate-budget ?budget/activate)
+     (let cost-down-overload $cost-down-overload)
+     (let context-resources ?context/resources)
+     (let sufficient? (cost/spend {:budget activate-budget}))
+     (if sufficient?
+       [(state! :hold-ticks 0)
+        (let overload-floor (math/max 0.0 (math/sub (:overload context-resources) cost-down-overload)))
+        (state! :overload-floor overload-floor)
+        (vfx! {:effect-id :arc-channel-session :operation :spawn
+              :instance-key [:activation :body-intensify-charge] :audience {:type :owner}
+              :payload {:block-bounds nil :charge-ticks 0 :mode :body-intensify
+                       :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                     :width 0.04 :color [165 230 255 190]}}
+                       :good? true :target (vec3/add eye [0.0 0.8 0.0]) :caster eye
+                       :block-pos nil :visual-max-ticks 100}})
+        (vfx! {:effect-id :audio-loop-session :operation :spawn
+              :instance-key [:activation :body-intensify-audio] :audience {:type :owner}
+              :payload {:position eye :sound-id \"academy:em.intensify_loop\" :volume 1.0
+                       :pitch 1.0}})
+        (finish {:outcome :started})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :pulse
+    [(let eye ?caster/eye)
+     (let overload-floor %overload-floor)
+     (resource/enforce-floor {:resource :overload :minimum overload-floor})
+     (let hold-ticks-cur %hold-ticks)
+     (let charge-max-ticks $charge-max-ticks)
+     (let hold-ticks-next (long/add hold-ticks-cur 1))
+     (if (math/lt hold-ticks-cur charge-max-ticks)
+       [(let charging-budget ?budget/charging)
+        (let sufficient? (cost/spend {:budget charging-budget}))
+        (if (bool/not sufficient?)
+          [(vfx! {:effect-id :arc-channel-session :operation :destroy
+                 :instance-key [:activation :body-intensify-charge] :payload {:fade-ticks 0}})
+           (vfx! {:effect-id :audio-loop-session :operation :destroy
+                 :instance-key [:activation :body-intensify-audio] :payload {:fade-ticks 0}})
+           (finish {:outcome :insufficient-resource :end-ability? true})]
+          [(state! :hold-ticks hold-ticks-next)
+           (vfx! {:effect-id :arc-channel-session :operation :update
+                 :instance-key [:activation :body-intensify-charge]
+                 :payload {:block-bounds nil :charge-ticks hold-ticks-next :mode :body-intensify
+                          :style {:beam {:pattern :thin-continuous :wiggle 0.5 :life-ratio 0.5
+                                        :width 0.04 :color [165 230 255 190]}}
+                          :good? true :target (vec3/add eye [0.0 0.8 0.0]) :caster eye
+                          :block-pos nil :visual-max-ticks 100}})
+           (vfx! {:effect-id :audio-loop-session :operation :update
+                 :instance-key [:activation :body-intensify-audio] :payload {:position eye}})])]
+       [(state! :hold-ticks hold-ticks-next)])
+     (let charge-max-tolerant-ticks $charge-max-tolerant-ticks)
+     (if (math/gte hold-ticks-next charge-max-tolerant-ticks)
+       [(vfx! {:effect-id :arc-channel-session :operation :destroy
+              :instance-key [:activation :body-intensify-charge] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :body-intensify-audio] :payload {:fade-ticks 0}})
+        (finish {:outcome :timeout :end-ability? true})]
+       [(finish {:outcome :continue})])]
+
+    :release
+    [(let hold-ticks %hold-ticks)
+     (let charge-min-ticks $charge-min-ticks)
+     (if (math/gte hold-ticks charge-min-ticks)
+       [(let owner-id ?caster/id)
+        (let eye ?caster/eye)
+        (let mastery ?progression/mastery)
+        (let charge-max-ticks $charge-max-ticks)
+        (let effect-probability-offset-ticks $effect-probability-offset-ticks)
+        (let effect-probability-divisor $effect-probability-divisor)
+        (let effect-duration-multiplier $effect-duration-multiplier)
+        (let effect-hunger-multiplier $effect-hunger-multiplier)
+        (let effect-hunger-amplifier $effect-hunger-amplifier)
+        (let effect-available-effects $effect-available-effects)
+        (let use-progression ?progression/use)
+        (let cooldown-endpoints $cooldown-endpoints)
+        (let progression-exp-use $progression-exp-use)
+        (let cooldown-exp-next (math/add mastery progression-exp-use))
+        (let cooldown-ticks-next
+          (math/lerp (pair/first cooldown-endpoints) (pair/second cooldown-endpoints)
+                    cooldown-exp-next))
+        (let effective-ticks (math/min hold-ticks charge-max-ticks))
+        (let probability
+          (math/div (math/sub effective-ticks effect-probability-offset-ticks)
+                   effect-probability-divisor))
+        (let buff-level (math/floor probability))
+        (each [effect-entry effect-index] effect-available-effects
+          (let should-roll?
+            (random/chance {:probability
+                            (math/clamp (math/sub probability (math/sub effect-index 1)) 0.0 1.0)}))
+          (when (bool/and (math/gte effect-index 1) should-roll?)
+            (let status-id (value/status-id effect-entry))
+            (let max-amp (value/status-max-amplifier effect-entry))
+            (let duration-roll (random/uniform {:min 0.0 :max 1.0}))
+            (let duration-ticks
+              (math/floor (math/mul (math/mul (math/add 1.0 duration-roll) effective-ticks)
+                                    effect-duration-multiplier)))
+            (let amplifier (math/floor-long (math/min buff-level max-amp)))
+            (combat/status {:target owner-id :status-id status-id :duration-ticks duration-ticks
+                            :amplifier amplifier})))
+        (let hunger-duration (math/floor (math/mul effective-ticks effect-hunger-multiplier)))
+        (combat/status {:target owner-id :status-id :hunger :duration-ticks hunger-duration
+                        :amplifier effect-hunger-amplifier})
+        (event! {:type :score/mark :progression use-progression})
+        (cooldown/start {:name :main :ticks (math/floor-long cooldown-ticks-next)})
+        (vfx! {:effect-id :arc-channel-session :operation :destroy
+              :instance-key [:activation :body-intensify-charge] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :body-intensify-audio] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :endpoint-burst :operation :spawn
+              :instance-key [:activation :body-intensify-release]
+              :audience {:type :nearby :radius 32.0}
+              :payload {:sound-pitch 1.0 :limit 128 :duration-ticks 25 :sound-volume 0.5
+                       :sound-id \"academy:em.intensify_activate\"
+                       :particle {:material :additive :life-ticks 20 :speed 0.08}
+                       :from eye :rate-per-tick 8 :to eye}})
+        (finish {:outcome :performed :end-ability? true})]
+       [(vfx! {:effect-id :arc-channel-session :operation :destroy
+              :instance-key [:activation :body-intensify-charge] :payload {:fade-ticks 0}})
+        (vfx! {:effect-id :audio-loop-session :operation :destroy
+              :instance-key [:activation :body-intensify-audio] :payload {:fade-ticks 0}})
+        (finish {:outcome :not-ready :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :arc-channel-session :operation :destroy
+           :instance-key [:activation :body-intensify-charge] :payload {:fade-ticks 0}})
+     (vfx! {:effect-id :audio-loop-session :operation :destroy
+           :instance-key [:activation :body-intensify-audio] :payload {:fade-ticks 0}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}

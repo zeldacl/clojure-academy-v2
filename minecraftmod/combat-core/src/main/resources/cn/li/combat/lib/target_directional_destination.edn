@@ -1,0 +1,11 @@
+;; Port of the old v2/v3 :target/directional-destination composite into the
+;; new surface-DSL :defn shape. Straight one-call wrapper: the composite's
+;; only job was renaming its own :inputs onto :target/directional-destination-
+;; query's :params 1:1, which a plain param list already does.
+{:defn :target/directional-destination
+ :params [{:name origin :type :vec3} {:name look :type :vec3} {:name eye-y :type :double}
+          {:name direction :type :keyword} {:name distance :type :double} {:name policy :type :any}]
+ :do [(let dest (target/directional-destination-query
+                 {:origin origin :look look :eye-y eye-y
+                  :direction direction :distance distance :policy policy}))]
+ :returns dest}

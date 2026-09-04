@@ -1,0 +1,17 @@
+;; Port of the old :terrain/break-area composite: break every block in a
+;; sphere (pre-filtered host-side by :projection {:max-hardness ...}),
+;; each one gated by an independent random/chance roll, with an
+;; independent random/chance roll again for whether it drops. Both rolls
+;; are query calls, so both are bound via `let` before use -- see
+;; apply_break_budget.edn's docstring for why a call cannot appear
+;; directly in expression position.
+{:defn :terrain/break-area
+ :params [{:name origin :type :vec3} {:name radius :type :double} {:name hardness-max :type :double}
+          {:name break-chance :type :double} {:name drop-chance :type :double} {:name limit :type :long}]
+ :do [(let blocks (target/blocks {:shape {:type :sphere :center origin :radius radius}
+                                  :projection {:max-hardness hardness-max} :limit limit}))
+      (each block blocks
+        (let should-break? (random/chance {:probability break-chance}))
+        (when should-break?
+          (let should-drop? (random/chance {:probability drop-chance}))
+          (block/break {:position (:position block) :drop? should-drop?})))]}

@@ -1,0 +1,19 @@
+;; Port of the old :target/penetration-destination composite: cap the ray
+;; distance by a resource budget, then raycast with an inline
+;; {:type :penetration ...} policy map (a nested map-literal inside a node
+;; call's arg map -- compile-map-literal compiles every value with
+;; allow-calls?=false, same as any other node-call argument).
+{:defn :target/penetration-destination
+ :params [{:name origin :type :vec3} {:name direction :type :vec3} {:name distance :type :double}
+          {:name scan-step :type :double} {:name clearance-steps :type :long}
+          {:name available-resource :type :double} {:name resource-per-distance :type :double}
+          {:name marker-offset-y :type :double}]
+ :do [(let safe-resource-per-distance (math/max resource-per-distance 1.0E-6))
+      (let resource-limited (math/div available-resource safe-resource-per-distance))
+      (let effective-distance (math/min distance resource-limited))
+      (let destination (target/raycast {:origin origin :direction direction :distance effective-distance
+                                        :include-entities? false :include-blocks? true
+                                        :policy {:type :penetration :scan-step scan-step
+                                                :clearance-steps clearance-steps
+                                                :marker-offset-y marker-offset-y}}))]
+ :returns destination}

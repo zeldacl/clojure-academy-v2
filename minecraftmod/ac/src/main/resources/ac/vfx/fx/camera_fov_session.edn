@@ -1,0 +1,24 @@
+;; New-DSL conversion of ac/vfx/effects/camera_fov_session.edn (S6). Same
+;; single-child-:at-0-timeline simplification as particle_burst.edn. Old
+;; :operation :fov-offset was a dead literal (final_engine.clj's :vfx/
+;; camera case tacks it onto the output as an unread :camera-operation
+;; key, but the new engine's :camera-fov node has no such field) --
+;; dropped, matching the ability-conversion "drop dead reads" precedent.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :camera-fov-session
+ :revision 1
+ :lifecycle :session
+ ;; Camera FOV is a first-person-only effect; broadcasting it to nearby
+ ;; players would offset THEIR camera, not the caster's.
+ :audience {:scope :self}
+ :inputs {:spawn {:offset :float}
+          :update {:offset :float}
+          :destroy {}}
+ :state-slots {:offset :float}
+ :scene
+ "{:ability :camera-fov-session
+   :do [(camera-fov {:value ?offset :duration-ticks 1})
+        (finish {:outcome :performed})]}"}

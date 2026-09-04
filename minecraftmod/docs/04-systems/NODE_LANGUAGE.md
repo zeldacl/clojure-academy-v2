@@ -1,314 +1,308 @@
-# Node Language 规格（schema v3）
+# Node Language 规格
 
-> 唯一权威来源。`combat-core`/`vfx-core` 的组件注册表、`node-core` 的实现、以及
+> 唯一权威来源。`combat-core`/`vfx-core` 的词汇表、`node-core` 的实现，以及
 > [COMBAT_CORE.md](COMBAT_CORE.md)/[VFX_CORE.md](VFX_CORE.md) 的模块描述都必须与本文一致；
 > 三者出现分歧时，先假设本文档正确，去找代码或另一篇文档的 bug。
 >
-> 背景与设计过程记录在 `C:\Users\lxy\.claude\plans\ac-combat-core-combat-core-vfx-core-ac-mossy-wren.md`
-> （诊断、决策依据、执行阶段）。本文档只记录**最终规格**，不记录过程。
+> 本文档描述的是 2026-09 重写后的语言（surface DSL + 扁平 IR + 分型寄存器），**不是**
+> 旧的"节点树 + `:component`/`:bind`/`{:ref [:local ...]}`"设计——本文早前的版本描述的
+> 是那套旧设计，已整篇替换。设计过程记录在
+> `C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
 
-## 当前 ABI 锁定（2026-08-28）
+## 0. 当前状态：执行引擎与内容元数据加载都已切到新格式；旧目录已删除
 
-本文与 `final_vocabulary.clj`、`node-core` descriptor/schema export 共同构成唯一节点
-ABI。旧 VM、旧 recipe、运行时 composite loader 和迁移字段只可作为历史对照，不能作为
-实现模板或兼容入口。可视编辑器只显示业务 source/primitive/composite 的声明输入输出；
-`session-key`、`instance-key`、event sequence、owner/world 路由、continuation 句柄和
-`kernel/*` 都是隐藏运行时数据。任何包含查询+循环+提交的“大 primitive”必须拆成
-composite + hidden kernel；六个永久禁用 ID 为 `block/area-break`、`block/random-break`、
-`block/break-budget`、`entity/radial-impulse`、`terrain/propagate`、`host/beam-trace`。
+**战斗/技能 dispatch、VFX 执行、内容元数据加载三条路径现在全部读同一套
+`ac/skills/*.edn`/`ac/vfx/fx/*.edn` 内容**——旧执行引擎、旧内容加载器、旧内容
+目录都已删除（不是"不再调用但留着"，是文件/目录本身不存在了）：
 
-## 0. 目标
+- **战斗/技能 dispatch**：`cn.li.ac.ability.service.combat-runtime/dispatch-
+  intent-v2!` 是唯一的技能 dispatch 入口——`network.clj`、`server_hooks.clj`、
+  `location_teleport_rpc.clj`、以及 `combat_runtime.clj` 自己的
+  `dispatch-trigger!`/`dispatch-event!`/`pulse-active-sessions!` 全部调用它，
+  内部走本文其余章节描述的 surface DSL → `node-core` IR → `cn.li.mcmod.
+  runtime.effect-emit` 闭包流水线，读取 `ac/skills/*.edn`（39/39，经
+  `cn.li.ac.ability.skills-catalog` 加载）。旧的 `dispatch-intent!`/`cn.li.
+  ability.engine`、combat-core 的 `final_engine.clj`/`final_compiler.clj`、
+  node-core 的 `kernel.clj`，连同它们各自专属的测试，**已全部删除**。
+- **VFX 执行**：`cn.li.vfx.runtime` + `cn.li.vfx.frame` +
+  `cn.li.ability.client-vfx-v2` 是唯一渲染路径，读取 `ac/vfx/fx/*.edn`
+  （36/36）。`vfx-core/final_engine.clj`、`vfx-core/final_client.clj`、
+  `ability-runtime/client_vfx.clj` 连同它们各自专属的测试**已删除**——详见
+  [VFX_CORE.md](VFX_CORE.md)。
+- **内容元数据加载**：`cn.li.ac.ability.service.combat-catalog`（真实生产启动
+  时调用，被测试套件广泛依赖）现在直接读 `cn.li.ac.ability.skills-catalog/
+  assemble` 的输出（`ac/skills/*.edn` + `ac/skills/manifest.edn`）——跟
+  dispatch 引擎读的是**同一份内容**，只取其中 dispatch 不需要的字段
+  （`name-key`/`icon`/`actions`/`category-id`/`passive-effects`/
+  `external-triggers`/registration `:bindings`）。`ac/ability/
+  final_catalog.clj`/`final_catalog_service.clj`（旧 manifest 加载 +
+  composite 展开 + `strict-graphs!` 结构校验）、旧内容目录（`ac/combat/
+  abilities/*.edn`〔39 个〕、`ac/combat/manifest.edn`、`combat-core/
+  composites/*.edn`〔17 个〕）连同 `vfx-core/vocabulary.clj`/
+  `system_compiler.clj`（同样只为旧 `final_catalog.clj` 的 `load-vfx` 服务）
+  **已全部删除**：`combat-catalog.clj` 曾是它们最后一个真实调用点，切换元数据
+  来源后二者都变成零调用点。
+- **`kernels.clj`/`node-core/expr.clj` 为什么还留着**：`kernels.clj` 被
+  `combat-core/vocabulary.clj`（下面单独说明）在**模块顶层直接 require**，跟
+  "编译过没有被执行"无关，是硬编译期依赖。`node-core/expr.clj`（SplitMix64/
+  vec3-components 的唯一定义点，新引擎的 `ops.clj` 委托给它）是另一类：**真正
+  共享、正确工作的基础设施**，不是遗留代码，永久保留。伤害反应引擎
+  （`combat/damage.clj`，取代已删除的 `final_damage.clj`——聚合算法逐字节
+  port，只把线性扫描换成 mark-type+priority 索引查找，见 COMBAT_CORE.md）
+  跟这两者同属一类：真正共享、独立于 dispatch 引擎，永久保留。
+- **`combat.vocabulary`/`combat.kernels`/`vfx.vocabulary`(vfx-core 的这份未删)/
+  `node.composite`/`composite-loader`/`scope`/`validate`/`environment`/
+  `flow`/`descriptor`/`schema-export`/`node-core/api.clj` 为什么还留着，即使
+  已经零真实调用点**：`combat/api.clj` 导出的 `descriptor-specs`/
+  `kernel-descriptors`（来自 `combat.vocabulary`/`combat.kernels`）目前确实
+  没有任何真实调用方——但这是有意为将来的图形化编辑器 UI 预留的 schema-export
+  基础设施（见本文档 §2.11、`node.schema-export` 自己的定位），**不是**待清理
+  的死代码，删除前需要一次关于"这层是否还要保留"的独立决策，不属于本次内容
+  目录清理的范围。`node-core/api.clj` 的 docstring 虽然写着"sized from
+  final_catalog.clj/final_catalog_service.clj 的两个消费点"（两者都已删除），
+  但它转达的 `node.composite`/`composite-loader`/`scope`/`validate`/
+  `environment` 这套结构校验能力本身跟 schema-export 是同一批"编辑器/工具链
+  预留基础设施"，处理方式一致：留着，不重新接线，也不删除。
 
-技能与特效内容用一棵节点树描述，分四类节点：
+修改本文档或新增新语言内容前，请先确认自己在哪一侧工作：**执行引擎**（已经
+只有一套）还是**内容元数据加载**（`combat-catalog.clj`，现在跟执行引擎读同一
+份内容），两者现在共享同一套 `ac/skills/*.edn`/`ac/vfx/fx/*.edn` 内容，不会
+再有"两个目录、两份真相"的问题。
 
-```
-技能 source 图 (source + primitive/composite, EDN)  ──展开──>  执行图 (primitive, EDN ABI)  ──宿主结算──>  Minecraft adapter
-```
-
-四类节点共用同一套语言（描述符、表达式、作用域、composite 展开），语言本体不依赖
-Minecraft，放在 `node-core` 模块。`combat-core`/`vfx-core` 各自在其上注册词汇表。
-
-设计目标（用户确认的硬约束）：
-1. 节点必须能自由组合——**不允许隐式依赖**：一个节点的行为只由它自己声明的输入决定，不读任何未声明的环境/全局状态，搬到任意位置行为不变。
-2. **只有底层原语可以用函数实现**（因为需要经 mcmod 调 Minecraft API）；**组合层节点必须是纯 EDN**，由底层原语组合而成，不允许有自己的 Clojure 实现。
-3. 语言本身要足够机器可读，能驱动一个类似 Unreal 蓝图的可视化技能编辑器：每个节点的输入/输出要有类型、范围、默认值、文档。
-
-## 1. 四类节点规则
-
-| 层 | `:layer` | 形态 | 可以做什么 | 注册方式 |
-|---|---|---|---|---|
-| 底层原语 | `:primitive` | Clojure 函数 | 可调用 mcmod / Minecraft；**不可调用其它节点** | `register-primitive!`，必须带 `:impl` |
-| 组合层语义 | `:composite` | 纯 EDN（composite 文档） | 只能组合已注册的原语/组合层节点 | `load-composite!`，**禁止** `:impl` |
-| 上层技能 | `:source`/ability 文档 | 纯 EDN（technique 文档） | 组合 composite 与 primitive；唯一允许使用 source 节点的层 | manifest 文档 |
-
-机械强制（见 §7 门禁）：
-- 注册期直接拒绝 `:layer :composite` 且携带 `:impl` 的描述符——语言实现层面不给"组合层用函数抄近路"留出口。
-- 静态扫描：任何 `:layer :composite` 的组件 id，不得出现在任何 `defmethod`/handler-table/capability-table 里——防止有人绕开 `load-composite!` 直接在解释器里为某个"组合层" id 加分支。
-- 原语总数被测试钉死（一个显式的 pin 常量），新增原语必须显式修改这个 pin——防止组合层逻辑在无人注意时悄悄"降级"为一批新原语。
-
-## 2. 描述符 = 完整端口契约
-
-```clojure
-;; 底层原语示例：combat-core 里唯一允许触碰 mcmod 的地方之一
-(node/register-primitive!
- {:id       :target/raycast
-  :revision 3
-  :layer    :primitive
-  :doc      "沿方向投射一条射线，返回第一个命中实体或方块。"
-  :category :targeting
-  :inputs   {:origin    {:type :vec3   :doc "起点（世界坐标）"}
-             :direction {:type :vec3   :doc "方向，需为单位向量"}
-             :distance  {:type :double :min 0.0 :max 256.0 :default 32.0 :doc "最大距离（格）"}}
-  :outputs  {:hit {:type :hit-result :doc "命中结果；未命中为 nil"}}
-  :effects  #{:query}
-  :impl     (fn [{:keys [origin direction distance]} _ctx]
-              {:hit (raycast/cast origin direction distance)})})
-```
-
-字段：
-
-- `:id` — 命名空间关键字，`<domain>/<name>`。
-- `:revision` — 正整数，破坏性变更时递增；旧内容编译期报错而不是静默改变行为。
-- `:layer` — `:primitive` | `:composite` | `:source`（见 §5）。
-- `:doc` — 一句话说明，编辑器节点面板的悬浮提示。
-- `:category` — 编辑器面板分组（`:targeting` `:elemental` `:motion` ...）。
-- `:inputs` — `{key {:type t :min :max :default :doc}}`。**强制**：文档里出现未声明的键是编译错误；声明了 `:default` 的键可省略；类型不匹配是编译错误。
-- `:outputs` — `{key {:type t :doc}}`。多输出端口原生支持（不再是 `:produces` 时代的"实际只支持一个"）。
-- `:children` — 仅结构性节点使用，声明子树位置：`{key {:kind :single|:seq|:case-map :required? bool}}`。
-- `:effects` — `#{:pure :query :mutate :emit}`，纯度标记，供 `guard/*` 类节点与编辑器高亮使用。
-- `:impl` — 仅 `:primitive` 合法。签名 `(fn [inputs ctx] outputs-map)`。调用边界是 `cn.li.node.runtime/invoke-primitive!`：它先把节点已求值字段 `select-keys` 到该描述符 `:inputs` 声明的键集合，再调用 `:impl`——`:impl` 物理上不可能读到一个自己没声明的字段，这是描述符与实现不可能漂移的机械保证（vfx-core 现存的 8 处漂移就是没有这层强制导致的）。
-
-## 3. 类型格
-
-浅结构式，够表达当前内容即可，不追求泛型：
-
-- 标量：`:double :long :boolean :keyword :string`
-- 复合字面量：`:vec3 :color`
-- 不透明句柄（原语间传递、编辑器画成"对象"引脚，不可展开成基础类型）：
-  `:hit-result :destination :entity-ref :entity-list :block-list :owner-snapshot
-   :item-snapshot :terrain-plan :beam-result :energy-target :render-op`
-- 结构：`:node`（子树，见 §6 回调型输入）、`[:list-of t]`、`:map`
-
-## 4. 连线 = 显式端口 + 词法作用域
-
-不存在全局 slot 命名空间。绑定通过 `:bind` 声明局部名，读取通过 `{:ref [:local name & path]}`：
+## 1. Surface DSL：纯 EDN，无 eval
 
 ```clojure
-{:component :flow/sequence
- :steps [{:component :target/raycast
-          :origin {:ref [:local :eye]} :direction {:ref [:local :aim]} :distance 32.0
-          :bind {:hit :aim-hit}}
-         {:component :combat/damage
-          :target {:ref [:local :aim-hit :entity]}
-          :amount 10.0}]}
+{:ability :thunder-bolt
+ :activation :instant
+ :requires [:caster/eye :caster/aim :world/id]
+ :tunables {:range {:type :double} :damage {:type :double}}
+ :do
+ [(let hit (target/raycast {:origin ?caster/eye :direction ?caster/aim
+                            :distance $range :include-entities? true :living-only? true}))
+  (when (:entity-id hit)
+    (combat/damage {:target (:entity-id hit) :amount $damage}))
+  (vfx! {:effect-id :arc-strike-transient :operation :spawn :start ?caster/eye})
+  (cooldown/start {:name :main :ticks 40})
+  (finish {:outcome :performed :end-ability? true})]}
 ```
 
-作用域规则：
+`cn.li.node.surface/parse` 用 `clojure.edn/read`（不是 `clojure.core/read`，不是
+`eval`）读取整份文档；list/symbol 天然就是 EDN 的一部分，`(v+ a b)` 这样的调用形式
+读进来就是普通数据，没有 reader-macro 也没有 eval 面。
 
-- `:flow/sequence` 开一层作用域；`:bind` 只对其后的兄弟节点及其后代可见。
-- `:flow/branch` / `:flow/window` / `:txn/atomic` 每个分支是独立作用域，**绑定不逃逸**——需要跨分支使用的值必须在分支之前绑定，或由分支节点自己声明输出。
-- `:flow/foreach` 体是封闭作用域，循环变量是普通局部名，不外泄。
-- **composite 体是封闭作用域**：只能看见自己声明的 `:inputs`（以及回调型输入注入的 `:scope`，见 §6），只能通过声明的 `:outputs` 导出。
-- 除 `:local` 外没有其它可读作用域——没有 `:slot`、`:from`、`:tunable`、`:context`。环境读取只能通过 §5 的 source 节点，且仅在上层技能文档合法。
+**Sigil**（只在符号上识别）：
 
-`node-core/scope.clj` 做作用域链 + 类型检查（combat-core 现有 `dataflow.clj` 的"扁平集合确定赋值分析"的升级版），错误带 `:path`（节点路径向量），供编辑器直接定位画波浪线。
+- `$x` — 读一个 tunable：`[:tunable :x]`。
+- `?x` — 读一个 capability/系统输入：`[:capability :x]`。
+- 裸符号 — 局部名，必须由 `let`/`each`/`:params` 绑定过才能读。
 
-## 5. Source 节点：唯一允许的环境读取
+**语句形式**（`:do` / `:phases` 的每个 phase / `:events` 的每个 event 都是一个语句
+向量）：
 
-Source 节点是"环境边界"的显式化——环境读取无法被消除，只能被显式化、类型化、可枚举。`:layer :source` 默认只能出现在**上层技能文档顶层**；唯一例外是 composite 声明为 `:node` 的调用点回调，该回调带着调用方词法作用域内联执行，不能成为 composite body 的隐式依赖。普通 `:composite`/`:primitive` body 中出现 source 仍是编译错误。
-
-combat-core 的 source 节点（六个）：
-
-| id | 作用 | 输出 |
-|---|---|---|
-| `:ability/caster` | 施法者位置/朝向快照 | `:eye :aim :body`（均 `:vec3`） |
-| `:ability/tunable` | 读取本技能声明的一个 tunable | `:value` |
-| `:ability/budget` | 读取本技能声明的一个成本预算 | `:budget`（`:map`） |
-| `:ability/progression` | 读取本技能声明的一个进度/经验条目 | `:progression`（`:map`） |
-| `:ability/cooldown` | 读取本技能声明的一个冷却条目 | `:cooldown`（`:map`） |
-| `:ability/invariant` | 读取本技能文档自己的 `:invariants` 常量 | `:value` |
-
-```clojure
-:program
-{:component :flow/sequence
- :steps
- [{:component :ability/caster  :bind {:eye :eye :aim :aim :body :body}}
-  {:component :ability/tunable :name :beam-damage :bind {:value :dmg}}
-  {:component :ability/budget  :name :activate    :bind {:budget :budget}}
-  {:component :fx/lightning-strike                       ; 组合层节点，纯 EDN
-   :position  {:ref [:local :aim]}
-   :power     {:ref [:local :dmg]}
-   :budget    {:ref [:local :budget]}}]}
-```
-
-descriptor 用 `:reads-environment #{:tunables}` 之类的标记声明它读取哪张文档级表；编译期对照该技能文档实际声明的 `:tunables`/`:costs`/`:progression`/`:cooldown`/`:invariants` 校验，缺失即编译失败（不再是过去那种运行期才抛的 `caster facade does not provide this capability`）。
-
-**为什么这满足硬约束 1**：非 source 节点搬到文档任何位置、被任何 composite 调用，行为都不变——这正是"自由组合"要的性质。Source 节点按定义就是唯一的例外，且被限定在文档顶层、类型化、可枚举、编译期校验。
-
-## 6. 回调型输入：带类型作用域的子图参数
-
-取代旧的 `:iterates`/`:expr-per-item`（那套机制靠调用方对齐被调 composite 的**内部循环名**，本身是隐式依赖）。被调方在 `:inputs` 里把某个输入声明为 `:node` 类型并附带 `:scope`：
-
-```clojure
-;; combat-core/components.clj 里 :combat/area-damage 的输入声明
-:inputs {:center {:type :vec3} :radius {:type :double}
-         :on-each-target {:type :node
-                          :scope {:target   {:type :entity-ref}
-                                  :distance {:type :double}}}}
-```
-
-调用方传入的子树在编译期被展开进一个新的封闭作用域，该作用域 = 外层可见的 `:local` 绑定 ∪ 被调方声明的 `:scope`：
-
-```clojure
-{:component :combat/area-damage
- :center {:ref [:local :impact]} :radius 4.0
- :on-each-target {:component :combat/damage
-                  :target {:ref [:local :target]}     ; :scope 提供
-                  :amount {:expr :math/mul :args [8.0 {:ref [:local :distance]}]}}}
-```
-
-`:scope` 里的名字是**被调方的公开契约**，不是内部实现细节——调用方永远知道自己能在回调里看见什么，不需要读被调方源码去猜循环变量叫什么。
-
-## 7. Composite（组合层）文档
-
-```clojure
-;; ac/src/main/resources/ac/combat/composites/target_raycast_destination.edn
-{:kind :composite :id :target/raycast-destination :revision 1 :layer :composite
- :doc "沿方向找一个可放置/命中的落点。"
- :category :targeting
- :inputs  {:origin {:type :vec3} :direction {:type :vec3} :distance {:type :double :default 32.0}}
- :outputs {:destination {:type :destination :from [:local :dest]}}
- :body
- {:component :flow/sequence
-  :steps [{:component :target/raycast
-           :origin {:ref [:input :origin]} :direction {:ref [:input :direction]}
-           :distance {:ref [:input :distance]}
-           :bind {:hit :h}}
-          {:component :target/resolve-destination
-           :hit {:ref [:local :h]} :origin {:ref [:input :origin]}
-           :direction {:ref [:input :direction]} :distance {:ref [:input :distance]}
-           :bind {:destination :dest}}]}}
-```
-
-`:outputs` 的 `:from` 指向 body 作用域内的一个局部名——这是 composite 唯一允许向外暴露的东西。没有声明 `:outputs` 的 composite 只产生副作用（伤害/位移/VFX 等），不返回值，这是完全合法的（例如 §8 的例子）。
-
-`:kind :composite` 文档本身没有 `:layer` 之外的运行时形态——它在编译期被**展开**（宏替换）进调用方的树，不是运行期函数调用。展开器（`node-core/composite.clj`）做深度上限、节点数上限、循环检测，并使用 node-core 统一的 composite expansion budget；`combat-core/recipe.clj` 不是技能执行预算，也不得被复制为运行时路径。
-
-## 8. 完整例子：释放闪电
-
-用户举的例子。这是一个组合层节点，纯 EDN，组合三个已有原语/composite：
-
-```clojure
-;; ac/src/main/resources/ac/combat/composites/lightning_strike.edn
-{:kind :composite :id :fx/lightning-strike :revision 1 :layer :composite
- :doc "在一点召唤闪电：范围伤害 + 闪电视觉 + 冲击特效 + 雷鸣，一次调用。"
- :category :elemental
- :inputs {:position {:type :vec3}
-          :power    {:type :double :min 0.0 :doc "中心伤害"}
-          :radius   {:type :double :default 4.0}
-          :budget   {:type :map :doc "由 :ability/budget 提供的成本预算"}}
- :outputs {}
- :body
- {:component :flow/sequence
-  :steps
-  [{:component :cost/spend :budget {:ref [:input :budget]}
-    :on-insufficient {:component :flow/finish :outcome :insufficient-resource}}
-   {:component :world/lightning :position {:ref [:input :position]}}
-   {:component :combat/area-damage
-    :center {:ref [:input :position]} :radius {:ref [:input :radius]}
-    :on-each-target {:component :combat/damage
-                     :target {:ref [:local :target]}
-                     :amount {:ref [:input :power]}}}
-   {:component :effect/vfx :effect-id :lightning-impact :operation :spawn
-    :audience {:scope :tracking :radius 64.0}
-    :payload  {:position {:ref [:input :position]} :radius {:ref [:input :radius]}}}
-   {:component :effect/vfx :effect-id :thunder-clap-audio :operation :spawn
-    :audience {:scope :tracking :radius 96.0}
-    :payload  {:position {:ref [:input :position]}}}]}}
-```
-
-技能文档只需要一行：
-
-```clojure
-{:component :fx/lightning-strike :position {:ref [:local :aim]} :power {:ref [:local :dmg]} :budget {:ref [:local :budget]}}
-```
-
-## 9. VFX 层的额外规则
-
-vfx-core 词汇表复用 §1-§7 的全部规则，额外约定：
-
-- **渲染 op 契约**：vfx 底层原语的 `:effects` 输出必须是 `platform-src` 渲染器已认识的 op 形状——`{:kind :line|:quad|:plasma-body}` + 材质标志 `:texture :additive? :no-fog? :no-depth-test? :no-depth-write? :translucent?`（见 `presentation_world.clj` 的 `sort-ops`）。这不是新造的契约，是渲染器现有输入契约；vfx 原语的职责就是产出它。
-- 结构原语：`:vfx/timeline :vfx/repeat :vfx/transform :vfx/let :vfx/curve :vfx/branch`。
-- 叶子原语：`:vfx/line :vfx/quad :vfx/plasma-body :vfx/audio :vfx/camera :vfx/post`。
-- 环境传播（旧 `ctx :modifiers` 机制：`:vfx/fade`/`:vfx/scale` 悄悄改后代节点的 alpha/scale）被删除——一律用显式 `:vfx/transform` 包裹 + 显式颜色/alpha 输入。
-- `:state-slots` 是真正的类型化每实例状态（`{:key {:type t}}`），由 `:vfx/let`/`:vfx/curve` 之类的节点读写，不再是死数据。
-- 10 个现存的"语义大节点"（`directional-wave`/`impact-burst`/`arc-strike`/`channel-arc`/`block-scan`/`charge-ring`/`trajectory-ribbon`/`vortex-column`/`block-progress`/`first-person-motion`）全部是 `:layer :composite` 的 composite，不是 Clojure 函数。
-
-## 10. 伤害反应（reactions）并入同一 VM
-
-现行 `combat-core/reactions.clj` 是第二套解释器：自己的表达式求值器、自己的作用域（`:context :request :param :session :state`，没有 `:slot`/`:from`），`:damage/reflect`/`:absorb`/`:critical`/`:reduce` 五个节点只在这里合法。这违反"一套节点模型"。
-
-目标形态：伤害反应在**同一个 node-core VM**、同一套 §4 作用域规则下执行；命中事实由一个新增 source 节点 `:ability/damage-request` 显式提供（而不是隐式挂在 `:context` 里）；`:damage/reflect`/`:absorb`/`:critical`/`:reduce` 从 Clojure 原语降级为 `:layer :composite` 的 EDN composite——它们各自的本质是"算术 + 扣费 + 给经验 + 产伤害"的组合，正是组合层该有的形态，底层只需要 `:combat/damage`、`:resource/*`、`:score/mark` 这些已有原语。
-
-## 11. 错误契约
-
-所有编译期失败是 `ex-info`，`ex-data` 至少含：
-
-```clojure
-{:path [...]        ; 节点路径向量，供编辑器定位
- :component :kw     ; 出错节点的 component id（如适用）
- :reason :keyword}  ; 机器可读原因，如 :unknown-component / :missing-required-field
-                     ; / :type-mismatch / :unbound-local / :scope-escape
-                     ; / :source-node-outside-ability / :composite-layer-has-impl
-```
-
-沿用 combat-core 现行的 fail-closed 策略（Design E）：一份技能/效果文档编译失败只disable它自己，不影响其它文档；错误集中收集，不止进日志（见计划 R6，暴露到 dev 命令/网络）。
-
-## 12. 与旧设计的映射（迁移期间的对照表）
-
-本节仅用于阅读历史 EDN 和审计差异，**不是新代码的实现来源**。映射中的旧名称不得
-重新出现在生产资源、descriptor 或 adapter 中；新节点必须先在 final vocabulary 声明
-完整 inputs/outputs，再由唯一 compiler/engine 使用。
-
-| 旧概念 | 新概念 |
+| 形式 | 含义 |
 |---|---|
-| combat `:slot` 全局命名空间 | `:local` 词法作用域 + `:bind` |
-| `{:from :caster/eye}` | `:ability/caster` source 节点 |
-| `{:tunable :x}` | `:ability/tunable` source 节点 |
-| `{:invariant :x}` | `:ability/invariant` source 节点 |
-| `:cost/spend`/`:score/mark`/`:cooldown/start` 隐式读文档表 | 显式接收 `:budget`/`:progression`/`:cooldown` 输入 |
-| `:owner/patch`/`:session/patch` 裸路径 | `:session/read`/`:session/write` + 文档顶层 `:session-state` 声明 |
-| `:iterates`/`:expr-per-item` | 回调型输入 `{:type :node :scope {...}}` |
-| combat `dataflow.clj`（确定赋值分析） | `node-core/scope.clj`（作用域链 + 类型检查） |
-| combat 26 操作码字节码 VM（`ir.clj`，不可达） | 删除；解释器是树遍历，不再假装有字节码层 |
-| vfx `ctx :modifiers`（`:vfx/fade`/`:vfx/scale` 环境传播） | 显式 `:vfx/transform` + 显式颜色/alpha 输入 |
-| vfx 10 个语义大节点（Clojure 函数） | 同名 `:layer :composite` composite |
-| `reactions.clj` 独立解释器 | 并入同一 node-core VM，`:damage/*` 降级为 composite |
+| `(let name expr)` | 绑定一个局部；`expr` 里出现 host 查询/组合调用必须先 `let` 绑定，不能作为另一个纯表达式的直接子表达式（IR 无短路求值，见 §3）。|
+| `(set! name expr)` | 重新赋值一个已绑定的局部（`let` 绑定的初始值即使是字面量，也一律提升为可写寄存器，见 `compile-let`）。|
+| `(when cond stmt...)` | `cond` 必须是 `:boolean` 或 `:any` 类型；`:any` 按 Clojure 真值语义（`nil`/`false` 假，其余真）判定。|
+| `(if cond [then...] [else...])` | 两臂都是语句向量，不是可变参数体。|
+| `(each item coll stmt...)` / `(each [item index] coll stmt...)` | 遍历，可选取索引绑定。|
+| `(state! :key value)` | 写 session state（跨 tick 保留，见 `:session-state`/`:state`）。|
+| `(event! {...})` / `(vfx! {...})` | 追加一条事件/VFX 信号到本次 dispatch 的 outbox，不查询 host。|
+| `(finish {:outcome kw :end-ability? bool :next-phase kw})` | 设置本次 dispatch 的 `.-result`；不写 `:end-ability?`/`:next-phase` 时默认 `false`/`nil`。一个 phase/event 走到结尾都没调用 `finish` 也不是错误——`.-result` 会是 `{:outcome :ended :next-phase nil :end-ability? false}`（`cn.li.mcmod.runtime.effect-emit` 的隐式收尾），不是 `nil`。|
+| `(fn-name a b c)` | 调用一个词汇表节点或 `:defn` 组合（词法上完全相同，编译期查 `:vocab` 再查 `:fns` 决定是哪一种）。|
 
-## 13. `cn.li.node.kernel/defresolver`：跨域共享解析语义而不共享调用
-
-combat-core 和 vfx-core 都要在自己的热路径上反复解析 `{:ref [...]}` / `{:expr ...}` / 集合递归，且语义本该完全一致（§4）。但 node-core / combat-core / vfx-core / ac 都是 source-first（`compileClojure` 被 `onlyIf { false }` 禁用），没有 direct linking——跨命名空间的 `defn` 调用是一次真实的 `Var.getRawRoot()` + `IFn.invoke()`，且参数会装箱。`resolve-value` 每个技能每 tick 要递归数百次，protocol 引入 vtable、multimethod 更慢、`^:inline` 对递归不适用，**宏是唯一零调用开销的共享手段**。
-
-`cn.li.node.kernel/defresolver` 在调用方命名空间内联展开一个私有 `[value ctx] -> resolved-value` 函数，`:scopes` 里的作用域集合在编译期展开成字面 `case`，不产生任何跨命名空间调用：
+**`:defn` 组合**（跨 ability/跨 event 复用的具名函数，取代旧设计的 composite 宏替换）：
 
 ```clojure
-(kernel/defresolver resolve-value ctx
-  {:scopes {:frame (:frame ctx) :input (get-in ctx [:frame :input])
-            :local (:locals ctx) :state (:ability-state ctx)}
-   :local  :local
-   :seed   (if-let [s (:seed* ctx)] (swap! s rng/next-seed) (long (:seed (:frame ctx))))
-   :extras (get-in ctx [:frame :extra-ops])
-   :coll   #{:map :vector :set}})
+{:defn :target/directional-destination
+ :params [{:name origin :type :vec3} {:name look :type :vec3} {:name eye-y :type :double}
+          {:name direction :type :keyword} {:name distance :type :double} {:name policy :type :any}]
+ :do [(let dest (target/directional-destination-query
+                 {:origin origin :look look :eye-y eye-y :direction direction
+                  :distance distance :policy policy}))]
+ :returns dest}
 ```
 
-combat-core 与 vfx-core 用各自的 `:scopes`/`:extras`/`:coll`/`:lerp?` 调用同一个宏——共享的是"如何解析一个 ref/expr/collection"这条**语义**，不是共享一次调用；两边各自的 `case scope`/`case component` 主派发表仍然独立维护，不会被这个宏吞并。
+- 只能通过 `:params` 声明的形参取值——`$`/`?` sigil 在 `:defn` 体内是编译错误（不像
+  composite 宏替换时代那样意外读到调用方的动态作用域）。
+- `compile-fn-call` 把整个函数体**内联**到调用点，不是运行时函数调用边界——一个
+  `:defn` 体内的 `finish` 会终止调用方自己的 block，就像直接写在调用点一样（见
+  `combat-core/lib/blink_release.edn`，已由 `ac/skills/flashing.edn` 的真实 dispatch
+  测试验证）。
+- 库文件是**显式文件名列表**（`combat-core/lib.clj`/`combat-core/dsl_vocabulary.clj`
+  同级），不是目录扫描——一个文件不在列表里就永远不可达，这是设计选择：12 个文件量级
+  上目录扫描买不来什么，而显式列表在文件名打错时立刻在加载期炸掉，不会悄悄少加载
+  一个函数。
 
-**范围边界**：`defresolver` 只覆盖 ref/expr/collection 解析（对应旧 `node-core/value.clj` 的 `resolve-value`）。combat-core 的 `:flow/foreach` 与 node-core 原 `run-foreach` 已经语义分叉（`:limit` 是原始字段直读、不过 `resolve-value`；缺省值来自 `contracts/budgets` 而非 `(count items)`；循环结束不做 locals 回滚）——这些是真实的行为差异，不是命名重复，折进共享宏前需要先把 `:flow/sequence`/`:flow/branch`/`:flow/foreach`/`:flow/once`/`:flow/phases` 全部分支逐条比对，尚未做，`run-sequence`/`run-branch`/`run-foreach` 三处循环体目前仍在 combat-core 内独立实现。
+## 2. 类型格
 
-## 14. `cn.li.node.rng`：全仓唯一的确定性随机流
+```clojure
+:double :long :boolean :keyword :string :vec3 :any :entity-ref
+[:list-of t]
+```
 
-`cn.li.node.expr` 与曾经的 `mcmod/runtime/seeded_rng.clj` 是**两套不同算法**的 SplitMix64：`expr` 的 `next-seed` 只推进状态、`unit-double` 只在读取时 mix；`seeded-rng` 的 `next-long` 把推进与 mix 合并成一步。同一个 `:seed`，`{:expr :random/chance}` 和一次内核 RNG 调用曾经走两条不一致的随机流——这不是代码重复，是确定性契约分裂。
+`cn.li.node.types/assignable?`：`:any` 双向兼容（声明成 `:any` 的形参接受一切；一个
+静态类型是 `:any` 的值——比如字段访问的结果——也能喂给任何具体类型的形参，真正的
+形状检查留给 host/emitter）；`:long` 单向加宽到 `:double`（反过来——往 `:long` 形参
+喂一个字面量小数——是真实的作者错误，不是隐式收窄）；其余必须精确匹配。寄存器组
+（`bank`）由静态类型推导：`:double` 类型进 doubles 数组、`:long` 进 longs、
+`:boolean` 进 booleans、其余（`:vec3`/`:string`/`:keyword`/`:entity-ref`/`:any`/…）
+进 objects——数值运算全程留在同组数组里就不装箱。
 
-`cn.li.node.rng` 是修复：保留 `expr` 的"显式 `next-seed` 推进 + 无副作用 `unit-double`/`uniform`/`bounded-int` 读取"语义，作为窄接口暴露给不需要求值整个 EDN 表达式、只需要一个随机数的宿主侧内核（地形破坏预算、散射之类）。调用约定：每次独立抽样前先 `next-seed`，再用**当前**种子读值；不经过 `next-seed` 连续读两次同一个种子会返回相同结果。`mcmod/runtime/seeded_rng.clj` 已删除，全仓不再有第二份 SplitMix64 实现。
+## 3. IR：扁平块 + 分型寄存器，块内 SSA
 
+`cn.li.node.compile/compile!` 把 surface 文档编译成：
 
+```clojure
+{:id :thunder-bolt
+ :entries {:default 0}
+ :blocks [{:instrs [{:op :cap :nid "n01" :dst [:objects 0] :key :caster/eye}
+                    {:op :tun :nid "n02" :dst [:doubles 0] :key :range}
+                    {:op :query :nid "n03" :dst [:objects 1] :node :target/raycast
+                     :args {:origin [:objects 0] :distance [:doubles 0] ...}}
+                    {:op :branch :nid "n04" :test [:objects 2] :then 1 :else 2}]}
+          ...]}
+```
+
+不变量：**块内 SSA**（同一块内每个寄存器只写一次）；**跨块**用 `:branch`/`:jump` 的
+目标块号显式连接，循环携带值靠预声明再 `set!`，不是全局"每寄存器恰好写一次"（循环
+归纳变量天然违反那个更强的说法）。
+
+完整 op 集合：`:const :cap :tun :pure :get :query :action :state-read :state-write
+:vfx :branch :jump :phi :finish`——`:query`/`:action` 的 `:node` 字段就是词汇表里的
+DSL 可见节点 id（`:target/raycast`、`:combat/damage`……），`cn.li.node.cost/analyze`
+按这个字段去查词汇表的 `:cost`/`:effects`。
+
+**IR 没有短路求值**：一个 `:pure` op 的每个参数都先各自编译成独立指令，再由 op
+组合——`(bool/and present? (collection/contains? ... (value/normalize-id x)))` 里
+`value/normalize-id` 无论 `present?` 是否为真都会执行。历史上这在 `x` 可能是
+`nil` 时炸过至少一次真实内容（`mag_manip.edn`，修法是让 `value/normalize-id`
+本身对 `nil` 安全，而不是试图在 DSL 层面模拟短路）。
+
+## 4. 词汇表：一张表
+
+```clojure
+;; combat-core/src/main/clojure/cn/li/combat/dsl_vocabulary.clj
+{:target/raycast
+ (node {:origin (p* :vec3) :direction (p* :vec3) :distance (p* :double)
+        :include-entities? (opt :boolean false) :include-blocks? (opt :boolean false)
+        :living-only? (opt :boolean false) :policy (opt :any nil)}
+       :any #{:world-read} :raycast 2)
+ :combat/damage
+ (node {:target (p* :entity-ref) :amount (p* :double) :damage-type (opt :keyword :generic)
+        ...}
+       nil #{:world-write} :entity/damage 3)}
+```
+
+每条目：`{:params {name {:type t :default v?}} :returns t-or-nil :effects #{...}
+:capability kw :cost n}`。`:returns nil` 的节点是 action（走 host 的 `:command!`，
+不产生值）；`:returns` 非 nil 的是 query（走 `:query!`，可以 `let` 绑定其结果）。
+
+`:effects` 是新引擎才有的字段，两个消费者：
+
+1. `cn.li.node.cost/analyze`（静态代价分析：complexity/host-commands/effects/
+   max-iterations 之和/并集，`:max-iterations` 只要有一个循环的静态上界未知就整体
+   poison 成 `nil`，绝不悄悄读成 0——见 §6）。
+2. `cn.li.combat.player`（玩家法术准入的 effects 白名单，见 §6）。
+
+当前实际出现过的 tag：`:world-read` `:world-write` `:owner-read` `:owner-write`
+`:inventory-write` `:damage-context-write`。这张表目前的颗粒度不够细——比如
+`:combat/damage` 和 `:block/break` 都是 `:world-write`，语义上"打一拳"和"炸一个
+坑"没法在 `:effects` 层面分开——加更细的 tag 是自然的后续工作，不是本次重写要
+解决的问题。
+
+## 5. 能力（Capability）：`?x` 读什么
+
+`combat-core/run.clj` 的 `capability-type`：一部分是**固定表**（`?caster/eye`
+`?caster/aim` `?caster/body` `:vec3`，`?caster/id` `:entity-ref`，`?caster/
+creative?` `:boolean`，`?world/id` `:string`，`?rng/seed` `:long`，`?progression/
+mastery` `:double`……每加一个新的固定 capability 都要在这张表和它的注释里同时说明
+"谁是第一个真实用它的内容"），一部分按**命名空间派生**（`?budget/*` 都是 `:any`
+——一个已具体化的多资源预算描述符；`?cooldown/*` 都是 `:long`；`?progression/*`
+都是 `:double`；`?invariant/*` 都是 `:double`；`?context/*`/`?targeting/*` 都是
+`:any`；`?movement/*` 都是 `:vec3`）。这张表历史上出过至少两次"猜错类型"的真实
+bug（`?movement/*` 最初猜成 `:boolean`，`:target/raycast-fan` 的 `:yaw-range-
+degrees` 最初猜成标量而不是 `[min max]` pair）——都是**第一个真正用到它的内容**
+才暴露出来的，不是设计阶段能穷举的，遇到就照这个模式修：改类型、写清楚"第一个
+真实用户是谁"，不要事后猜第二次。
+
+## 6. 静态代价分析与玩家法术准入
+
+```clojure
+;; node-core/src/main/clojure/cn/li/node/cost.clj
+(cost/analyze ir vocab)
+;; => {:complexity n :host-commands n :effects #{...} :max-iterations n-or-nil}
+```
+
+`:complexity` 是每条 `:query`/`:action` 指令的 `:cost` 之和（纯运算恒为 0）；
+`:max-iterations` 只在每个 `each` 循环的产出源头调用点带了**字面量** `:limit`
+参数时才能算出静态上界，否则整个结果 poison 成 `nil`（调用方必须把 `nil` 当拒绝
+处理，不能当成 0）。
+
+`cn.li.combat.player`（S7）是这套分析目前唯一的消费者：玩家用 Ars Nouveau 式的
+线性 `[form effect augment*...]` glyph 向量组合法术（存在物品上的纯 EDN，从不是
+客户端编译好的程序），`desugar` 把 glyph 向量翻译成跟手写技能完全同构的 surface
+DSL 文本（复用同一个编译器，没有第二套玩家专用 VM），`admit` 用 `cost/analyze`
+的结果做三道闸：complexity 上限、`:effects` 白名单（`:inventory-write`/
+`:damage-context-write` 永远拒绝）、host-command 数与 `:max-iterations`（`nil`
+按拒绝处理）。任何玩家提交的法术必须先过 `admit` 再编译成可执行体——`admit` 之前
+拒绝的 IR 永远不会走到 `compile-program`/`dispatch!`。当前 glyph 目录只有
+`:form/self`、`:form/touch`、`:effect/damage`、`:effect/push`、`:augment/amplify`
+五个，目的是证明这条准入机制本身能跑通，不是要交付的内容广度——本次重写不含
+任何编辑器 UI，glyph 目录扩充是后续任务。
+
+## 7. VFX 场景 DSL：跟战斗共享编译器，词汇表不同
+
+`cn.li.vfx.scene` 用完全相同的 `cn.li.node.compile`/`cn.li.node.surface`，只是换了
+一张词汇表（`cn.li.vfx.dsl-vocabulary`）和一个不查询 host、只往 frame 自己的
+`.actions` 里追加构造值的假 host：
+
+```clojure
+{:ability :arc-strike-scene
+ :do [(beam {:start ?start :end ?end :grow-ticks 4})
+      (ring {:center ?start :radius 1.0 :segments 16})
+      (finish {:outcome :performed})]}
+```
+
+VFX 场景词汇表里的每个节点都是 `:action-kind`（`:returns nil`）——采样一帧没有
+host 好查，"调用"就是"往这帧的 outbox 追加一条 draw/audio/camera op"，`:capability`
+名字直接就是构造出来那个 `{:kind cap ...args}` map 的 `:kind`。`?age`/`?progress`
+是每次采样都有的通用 capability，效果自己声明的 `?start`/`?end`/... 由调用方在
+`compile-doc!` 时提供类型。
+
+**没有隐式的 `{:from :to}` 按 `:progress` 插值**（旧引擎的 `kernel/defresolver`
+`:lerp?` 选项有这个糖，新引擎没有）——需要插值的字段一律写成显式的
+`(math/lerp from to ?progress)`。**没有"包一层子树改 alpha"的 `:vfx/fade` 修饰器
+概念**（旧引擎对被包裹子树的每条构造出的 op 做 `assoc-in [:material :alpha]`
+后处理）——新引擎是扁平的 `:do` 序列，没有"包裹并后处理子节点产出"这种结构，需要
+渐隐的场景在本地算出 alpha 值，直接传给叶子节点自己新增的 `:alpha` 字段
+（`:ring`/`:beam` 这两个节点因此各多了一个 `:alpha (opt :double 1.0)`，就是这个
+后处理唯一的真正落点）。
+
+`cn.li.vfx.compile`（Niagara 风格的模块栈 + 粒子 SoA 布局）是另一套独立机制，给
+真正需要 CPU 端逐粒子模拟的**未来**内容用的——36 个已转换的 `ac/vfx/fx/*.edn`
+效果一个都不需要它：旧引擎里"发射器"类效果本质上也只是**每帧一条声明式绘制指令**
+（真正的逐粒子演化在客户端渲染器里做，不在这层图里），跟 `:ring`/`:beam` 这些
+叶子节点是同一类东西，不是需要模块栈的那类内容。
+
+## 8. 迁移状态与已知空缺
+
+- `ac/skills/*.edn`（39/39）、`ac/vfx/fx/*.edn`（36/36）已全部转换并有真实
+  compile+dispatch 测试覆盖，`ac/src/test/clojure/cn/li/ac/skills/skills_test.clj`
+  / `ac/src/test/clojure/cn/li/ac/vfx/fx_test.clj`。
+- 旧引擎里约 17 个 VFX 组件种类（`charge-slow`/`charge-ring`/`directional-wave`/
+  `vortex-column`/`impact-burst`/`mark-sparks`/`particle-trail`/`block-progress`/
+  `channel-arc`/`first-person-motion`/`block-scan`/`billboard-sequence`/
+  `trajectory-ribbon`/`humanoid-marker`/`beam-arc-fade`/`arc-strike`/`ray-fan`/
+  `arc-field`）在 `final_engine.clj` 的 `sample-node` 里根本没有对应分支，落进一个
+  同样画不出来的 `:typed-vfx` 兜底——这些组件今天在游戏里本来就不产生任何真实像素
+  （`:vfx/beam-arc-fade`/`:vfx/humanoid-marker` 是例外：它们是**composite**，会在
+  加载期被展开成真正能画的子树；展开细节见各自 `ac/vfx/fx/*.edn` 文件自己的
+  docstring）。新版本据实转换：确认无渲染的组件对应一个诚实的空 `:scene`，不是
+  发明新的视觉设计。
+- `combat-core/player.clj`（S7）已实现并测试，但没有对应的物品/合成/交互层
+  （"glyph 物品"本身——存法术数据的 Minecraft 物品、右键施法交互——是平台层内容，
+  不在本次重写范围）。
+- 旧路径的删除、`verifyNodeKernelSingleSource` 之类门禁的改写、真正把 `cn.li.
+  combat.api`/AC composition root 切到新引擎上，是独立的、有意留待以后做的一步，
+  §0 已经说明原因。

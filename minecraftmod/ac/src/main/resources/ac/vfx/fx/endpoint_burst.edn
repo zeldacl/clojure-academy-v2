@@ -1,0 +1,26 @@
+;; New-DSL conversion of ac/vfx/effects/endpoint_burst.edn (S6). All
+;; three old timeline children are :at 0 (always run from the first
+;; sample, matching this pass's ring_particle_field.edn/particle_burst.edn
+;; precedent). Old top-level :bounds dropped, see
+;; blood_retrograde_charge.edn's docstring.
+{:schema-version 1
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :endpoint-burst
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:from :vec3 :to :vec3 :duration-ticks :int :rate-per-tick :int
+          :limit :int :particle :any :sound-id :string
+          :sound-volume :float :sound-pitch :float}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :endpoint-burst
+   :do [(emitter {:anchor ?from :rate-per-tick ?rate-per-tick :limit ?limit
+                  :particle ?particle})
+        (emitter {:anchor ?to :rate-per-tick ?rate-per-tick :limit ?limit
+                  :particle ?particle})
+        (audio-one-shot {:sound-id ?sound-id :volume ?sound-volume :pitch ?sound-pitch
+                         :position ?to})
+        (finish {:outcome :performed})]}"}

@@ -1,0 +1,53 @@
+;; New-DSL conversion of ac/vfx/effects/beam_arc_fade.edn (S6). CORRECTED
+;; from an earlier pass in this same session that wrongly treated this
+;; whole file as dead: :vfx/beam-arc-fade is NOT a plain leaf component
+;; (unlike this pass's other "confirmed-dead" files) -- it is a
+;; COMPOSITE (vfx-core/composites/beam_arc_fade.edn), and
+;; final_catalog.clj's load-vfx calls vfx_system_compiler/expand-graph
+;; BEFORE sampling, inlining the composite's real body (a :vfx/beam, a
+;; dead :vfx/arc-field, and a :vfx/fade-wrapped :vfx/ring) in place of
+;; the single :vfx/beam-arc-fade reference. sample-node never sees the
+;; keyword :vfx/beam-arc-fade at all -- it only ever samples the
+;; EXPANDED tree, which does contain real, renderable leaves. (Caught by
+;; re-reading the composite source itself, not just grepping sample-
+;; node's case list for the top-level component id -- the same
+;; discovery is what revealed :vfx/humanoid-marker is STILL dead despite
+;; ALSO being a real, reachable composite: its own only child,
+;; :vfx/model-marker, has no sample-node case either, confirmed via
+;; grep -- see teleport_marker.edn's own docstring, unchanged from this
+;; pass's first draft.)
+;;
+;; :vfx/arc-field (the composite's OWN internal reference, not the
+;; ability-level file's) has no sample-node case -- confirmed-dead class,
+;; dropped along with every field only it read. The composite's fade-
+;; wrapped :vfx/ring uses a plain scalar :ring-radius (not a {:from :to}
+;; map), so no lerp translation is needed here, unlike ring_fade_audio.edn.
+{:schema-version 2
+ :kind :vfx/system
+ :asset/type :vfx/system
+ :asset/version 1
+ :id :beam-arc-fade
+ :revision 1
+ :lifecycle :transient
+ :inputs
+ {:spawn {:start :vec3 :end :vec3
+          :duration-ticks :int :beam-at :int :grow-ticks :int
+          :layers :any :arc-at :int :arc-spacing :any
+          :arc-radius :any :arc-count-limit :int :arc-life-ticks :int
+          :fade-at :int :fade-from-tick :int :fade-to-tick :int
+          :fade-from-alpha :float :fade-to-alpha :float
+          :ring-radius :any :ring-segments :int :ring-color :any}}
+ :state-slots {:age :float :seed :int}
+ :scene
+ "{:ability :beam-arc-fade
+   :do [(when (math/gte ?age ?beam-at)
+          (beam {:start ?start :end ?end :grow-ticks ?grow-ticks :layers ?layers}))
+        (when (math/gte ?age ?fade-at)
+          (let fade-p (math/clamp
+                       (math/div (math/sub ?age ?fade-from-tick)
+                                (math/max 1.0 (math/sub ?fade-to-tick ?fade-from-tick)))
+                       0.0 1.0))
+          (let fade-alpha (math/lerp ?fade-from-alpha ?fade-to-alpha fade-p))
+          (ring {:center ?end :radius ?ring-radius :segments ?ring-segments
+                :color ?ring-color :alpha fade-alpha}))
+        (finish {:outcome :performed})]}"}

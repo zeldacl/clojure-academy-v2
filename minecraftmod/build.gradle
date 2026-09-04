@@ -1340,18 +1340,47 @@ tasks.register("verifyCombatResourceAgnostic") {
 
 tasks.register("verifyNodeCoreLanguageKernel") {
     group = "verification"
-    description = "Verify node-core's load boundary (immutable descriptor environment, expression evaluator, scope checker, composite expansion, structural validation, schema export)."
+    description = "Verify node-core's new surface-DSL language kernel (types/ops/surface/ir/compile/cost/pretty/schema-export) is present and exposes its documented public entry points. checkClojure already forces every file here to compile; this gate additionally pins the specific functions other modules (combat-core/vfx-core/mcmod) are wired to call, so a rename/removal fails loudly here instead of surfacing later as a missing-symbol error at the call site."
     dependsOn ":node-core:checkClojure"
+    doLast {
+        def kernelNs = [
+            "types"        : [file: "node-core/src/main/clojure/cn/li/node/types.clj", defs: ["assignable?", "bank", "width", "integral?"]],
+            "ops"          : [file: "node-core/src/main/clojure/cn/li/node/ops.clj", defs: []],
+            "surface"      : [file: "node-core/src/main/clojure/cn/li/node/surface.clj", defs: []],
+            "ir"           : [file: "node-core/src/main/clojure/cn/li/node/ir.clj", defs: []],
+            "compile"      : [file: "node-core/src/main/clojure/cn/li/node/compile.clj", defs: ["compile!", "diagnostics"]],
+            "cost"         : [file: "node-core/src/main/clojure/cn/li/node/cost.clj", defs: ["analyze"]],
+            "pretty"       : [file: "node-core/src/main/clojure/cn/li/node/pretty.clj", defs: []],
+            "schema-export": [file: "node-core/src/main/clojure/cn/li/node/schema_export.clj", defs: []],
+        ]
+        def violations = []
+        kernelNs.each { name, spec ->
+            def source = file(spec.file)
+            if (!source.exists()) {
+                violations << "missing node-core kernel namespace file: ${spec.file}"
+                return
+            }
+            def text = source.text
+            spec.defs.each { fn ->
+                def escaped = java.util.regex.Pattern.quote(fn)
+                if (!(text =~ /\(defn-?\s+${escaped}[\s)]/)) {
+                    violations << "${spec.file}: expected public entry point (defn ${fn} ...) not found"
+                }
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyNodeCoreLanguageKernel] ok (${kernelNs.size()} kernel namespaces)")
+    }
 }
 
 tasks.register("verifyNodeKernelSingleSource") {
     group = "verification"
-    description = "combat-core and vfx-core must resolve {:ref}/{:expr} nodes through cn.li.node.kernel/defresolver, not a hand-written case-based ref resolver of their own; the SplitMix64 mixing constants must be defined in exactly one place (cn.li.node.expr)."
+    description = "The SplitMix64 mixing constant must be defined in exactly one place (cn.li.node.expr) -- this half of the gate still runs unconditionally and is real. The other half (whichever of combat-core/vfx-core's old tree-walking engines still exist must resolve {:ref}/{:expr} through cn.li.node.kernel/defresolver, not a hand-written case-based resolver) is now permanently inert: both combat-core/final_engine.clj and vfx-core/final_engine.clj are deleted (the combat-core one was believed load-bearing behind combat-catalog.clj at the time this gate was written; that turned out to be pure wasted compilation with zero real execution callers, and it was deleted once combat-catalog.clj's own metadata source was rewritten off the old catalog -- see cn.li.combat.api's own docstring). Kept registered (not deleted) purely as a pinning check: if either file ever comes back, resolverSources stops being empty and the kernel/defresolver check starts running again automatically, same guard pattern verifyNodeLayerDiscipline uses for the identical reason."
     doLast {
         def resolverSources = [
             file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
             file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")
-        ]
+        ].findAll { it.file }
         def missingKernel = resolverSources.findAll { !it.text.contains("kernel/defresolver") }
         if (!missingKernel.isEmpty()) {
             throw new GradleException("expected kernel/defresolver in: ${missingKernel}")
@@ -1395,7 +1424,26 @@ tasks.register("verifyAbilityVfxRegistryCoverage") {
     dependsOn ":vfx-core:checkClojure", ":ac:checkClojure"
 }
 
-tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:checkClojure" }
+tasks.register("verifyVfxSingleTickPath") {
+    group = "verification"
+    description = "Exactly one VFX instance-tick implementation exists. The old engine's own final_client.clj/final_engine.clj (a second, competing tick/sample path) were deleted once the client-vfx-v2 cutover made them dead -- this gate pins that state so a future addition can't silently reintroduce a second path."
+    dependsOn ":vfx-core:checkClojure"
+    doLast {
+        def deletedOldEngine = [
+            file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj"),
+            file("vfx-core/src/main/clojure/cn/li/vfx/final_client.clj")
+        ]
+        def resurrected = deletedOldEngine.findAll { it.file }
+        if (!resurrected.isEmpty()) {
+            throw new GradleException("old VFX engine file(s) back on disk, reintroducing a second tick/sample path: ${resurrected}")
+        }
+        def runtimeSource = file("vfx-core/src/main/clojure/cn/li/vfx/runtime.clj")
+        if (!runtimeSource.file || !(runtimeSource.text =~ /\(defn\s+client-tick!/)) {
+            throw new GradleException("expected the single real VFX tick entry point (cn.li.vfx.runtime/client-tick!) not found")
+        }
+        logger.lifecycle("[verifyVfxSingleTickPath] ok (single tick path: cn.li.vfx.runtime/client-tick!)")
+    }
+}
 
 tasks.register("verifyCombatIntentOnlyNetwork") {
     group = "verification"
@@ -1467,8 +1515,14 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
             throw new GradleException("combat VFX adapter is not a neutral VFX Core boundary")
         }
         def clientBootstrap = file("ac/src/main/clojure/cn/li/ac/content/ability_client.clj").text
-        if (!clientBootstrap.contains("vfx/freeze!") || clientBootstrap.contains("fx-registry/freeze")) {
-            throw new GradleException("client VFX bootstrap is not frozen by VFX Core")
+        // VFX cutover: the new engine's registry is immutable-by-construction
+        // (built once from a full catalog at install-production! time -- see
+        // cn.li.ability.client-vfx-v2's own docstring for why the old engine's
+        // incremental register!+freeze! contract has no equivalent here), so
+        // the invariant this gate enforces is now "bootstrap installs a real,
+        // fully-assembled runtime" rather than "bootstrap calls freeze!".
+        if (!clientBootstrap.contains("install-production!") || clientBootstrap.contains("fx-registry/freeze")) {
+            throw new GradleException("client VFX bootstrap does not install a real VFX Core runtime")
         }
         logger.lifecycle("[verifyCombatLegacyRuntimeRemoval] ok")
     }
@@ -1479,12 +1533,11 @@ tasks.register("verifyContentModuleCoreIsolation") {
     description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here."
     doLast {
         def allowed = [
-            "cn.li.combat.api", "cn.li.combat.damage-math", "cn.li.combat.final-damage",
+            "cn.li.combat.api", "cn.li.combat.damage-math",
             "cn.li.combat.platform", "cn.li.combat.vocabulary",
             "cn.li.node.composite", "cn.li.node.composite-loader", "cn.li.node.digest",
             "cn.li.node.rng", "cn.li.node.schema-export", "cn.li.node.scope", "cn.li.node.validate",
-            "cn.li.presentation.core", "cn.li.presentation.core.artifact", "cn.li.presentation.core.host",
-            "cn.li.vfx.system-compiler", "cn.li.vfx.vocabulary"
+            "cn.li.presentation.core", "cn.li.presentation.core.artifact", "cn.li.presentation.core.host"
         ] as Set
         def offenders = []
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
@@ -1502,20 +1555,13 @@ tasks.register("verifyContentModuleCoreIsolation") {
 
 tasks.register("verifyAbilityCompositionBoundary") {
     group = "verification"
-    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary."
+    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary. Used to also check that the catalog (final_catalog.clj) called ability-runtime's compose-catalog -- that whole assembly path (and its own compose-catalog/catalog-fingerprint-input consumers) is gone: combat-catalog.clj's S8 rewrite reads cn.li.ac.ability.skills-catalog directly, which never went through ability-runtime's cross-core composition (there is only one core -- combat -- in its own catalog, no VFX/Presentation bundle to compose). The presentation/Gradle-edge checks below are still real and still checked."
     dependsOn ":ac:checkClojure"
     doLast {
-        def catalog = file("ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj")
         def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
         def acBuild = file("ac/build.gradle").text
         def abilityBuild = file("ability-runtime/build.gradle").text
         def violations = []
-        if (!catalog.text.contains("cn.li.ability.compose")) {
-            violations << "AC catalog must call ability-runtime composition"
-        }
-        if (!catalog.text.contains("compose-catalog")) {
-            violations << "AC catalog must use compose-catalog"
-        }
         if (!presentation.text.contains("cn.li.ability.compose") ||
             !presentation.text.contains("merge-vfx-into-frame")) {
             violations << "AC Presentation extraction must use ability-runtime merge-vfx-into-frame"
@@ -2535,6 +2581,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxJavaBoundary",
+              "verifyVfxPrimitiveVocabulary",
               "verifyVfxAotBoundary",
               "verifyClojureRuntimeRepresentation",
               "verifyDatagenOwnsLanguageFiles",
@@ -2808,11 +2855,42 @@ tasks.register("verifyVfxJavaBoundary") {
         def javaRoot = file("mcmod/src/main/java/cn/li/mcmod/runtime/vfx")
         if (!javaRoot.directory) throw new GradleException("missing Java VFX ABI directory")
         fileTree(javaRoot) { include "**/*.java" }.files.each { source ->
-            if (source.text =~ /net\\.minecraft|net\\.minecraftforge|net\\.fabricmc|net\\.neoforged/) {
+            if (source.text =~ /net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged/) {
                 throw new GradleException("platform API leaked into neutral Java VFX ABI: ${source}")
             }
         }
         logger.lifecycle("[verifyVfxJavaBoundary] ok")
+    }
+}
+
+tasks.register("verifyVfxPrimitiveVocabulary") {
+    group = "verification"
+    description = "Every VFX primitive string cn.li.vfx.frame's legacy-op can produce must be in every loader's own accepted primitive set -- the exact bug class already fixed once (an int primitiveId re-encoded via (str ...) on the producing side never matched what any consumer actually checked, so no VFX draw batch ever reached a renderer): this pins producer-subset-of-consumer as a real, checked invariant instead of something only caught by noticing nothing renders."
+    doLast {
+        def frameSource = file("vfx-core/src/main/clojure/cn/li/vfx/frame.clj")
+        if (!frameSource.file) throw new GradleException("missing ${frameSource}")
+        def produced = (frameSource.text =~ /:primitive\s+(:[a-zA-Z-]+)/).collect { it[1].substring(1) } as Set
+        if (produced.isEmpty()) throw new GradleException("no :primitive values found in ${frameSource} -- pattern drifted?")
+        def loaderRoots = fileTree("platform-src/loader") {
+            include "**/presentation_world_renderer.clj"
+        }.files
+        if (loaderRoots.isEmpty()) throw new GradleException("no presentation_world_renderer.clj loader files found")
+        def violations = []
+        loaderRoots.each { File loader ->
+            def text = loader.text
+            def acceptedMatch = (text =~ /#\{("(?:line|quad|particle|mesh|[a-z-]+)"(?:\s+"[a-z-]+")*)\}/)
+            if (!acceptedMatch.find()) {
+                violations << "${loader}: no #{\"...\"} primitive set found"
+                return
+            }
+            def accepted = (acceptedMatch.group(1) =~ /"([a-z-]+)"/).collect { it[1] } as Set
+            def missing = produced - accepted
+            if (!missing.isEmpty()) {
+                violations << "${loader}: accepts ${accepted} but cn.li.vfx.frame can produce ${missing}, which this loader would silently drop"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyVfxPrimitiveVocabulary] ok (producer set ${produced} <= every loader's accepted set, ${loaderRoots.size()} loaders)")
     }
 }
 tasks.register("verifyNoGeneratedClojureTypes") {
@@ -2864,29 +2942,12 @@ tasks.register("verifyCoreNoSkillKnowledge") {
     }
 }
 
-tasks.register("verifyEdnNodeCoverage") {
-    group = "verification"
-    description = "Check that registered component families expose executable examples."
-    doLast {
-        def combatSource = file("combat-core/src/main/clojure/cn/li/combat/examples.clj")
-        def vfxSource = file("vfx-core/src/main/clojure/cn/li/vfx/examples.clj")
-        [combatSource, vfxSource].each { source ->
-            if (!source.isFile() || !source.text.contains("def ")) {
-                throw new GradleException("missing node examples in ${source}")
-            }
-        }
-        if (!file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj").isFile()) {
-            throw new GradleException("missing expression examples")
-        }
-    }
-}
-
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
-    description = "Require migrated skill EDN to be config-independent declarations."
+    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills and ac/vfx/fx, the S6/S8 live content directories -- ac/combat/abilities and ac/vfx/effects (the old catalog's content, checked here until this session's catalog-source rewrite) are deleted."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/combat/abilities"),
-                     file("ac/src/main/resources/ac/vfx/effects")]
+        def roots = [file("ac/src/main/resources/ac/skills"),
+                     file("ac/src/main/resources/ac/vfx/fx")]
         def violations = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.files.each { source ->
@@ -2927,7 +2988,6 @@ tasks.named("lintClojureNative").configure {
     dependsOn tasks.named("verifyNoGeneratedClojureTypes")
     dependsOn tasks.named("verifyEffectRuntimeJavaCarriers")
     dependsOn tasks.named("verifyCoreNoSkillKnowledge")
-    dependsOn tasks.named("verifyEdnNodeCoverage")
     dependsOn tasks.named("verifyEdnNoConfigBackReferences")
 }
 

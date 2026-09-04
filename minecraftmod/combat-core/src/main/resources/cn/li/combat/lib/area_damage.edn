@@ -1,0 +1,11 @@
+;; Port of the old :combat/area-damage composite: damage every entity in a
+;; sphere. The old composite queried :target/entities with :projection [:id]
+;; to get {:id ...} maps; the new dsl-vocabulary's target/entities instead
+;; declares :returns [:list-of :entity-ref] directly, so each loop element
+;; already IS the entity ref -- no :id field-access needed.
+{:defn :combat/area-damage
+ :params [{:name center :type :vec3} {:name radius :type :double} {:name amount :type :double}
+          {:name damage-type :type :keyword} {:name limit :type :long}]
+ :do [(let entities (target/entities {:shape {:type :sphere :center center :radius radius} :limit limit}))
+      (each target entities
+        (combat/damage {:target target :amount amount :damage-type damage-type}))]}

@@ -1,0 +1,151 @@
+;; New-DSL conversion of ac/combat/abilities/penetrate_teleport.edn (S6).
+;; Session ability, first real call site of cn.li.combat.lib's
+;; target/penetration-destination composite.
+;;
+;; First real occurrence of the old :program's sibling :events map
+;; ({:slot-wheel {...}}, an externally-triggered entry point distinct
+;; from :start/:pulse/:release/:abort -- a mouse-wheel distance-adjust
+;; event here). This turned out to need NO new compiler machinery at
+;; all: cn.li.node.surface's entries-of already treats every key of the
+;; :phases map as an independent dispatchable entry, with no special
+;; \"phase\" vs \"event\" distinction anywhere in the pipeline -- so
+;; :slot-wheel is simply one more sibling key inside :phases, alongside
+;; :start/:pulse/:release/:abort, dispatched by name exactly like any
+;; other entry (run/dispatch! program :slot-wheel input). The plan's
+;; earlier note that this DSL form was \"deferred\" turned out to be
+;; based on a wrong assumption (that :events would need to nest a
+;; sub-map inside one :phases entry, which really would have needed new
+;; handling); the actual old shape flattens cleanly.
+{:schema-version 2
+ :kind :ability
+ :id :penetrate-teleport
+ :name-key "ability.skill.teleporter.penetrate_teleport"
+ :description-key "ability.skill.teleporter.penetrate_teleport.desc"
+ :revision 1
+ :activation :session
+ :requires [:caster/eye :caster/aim :caster/id :world/id :charge/ticks]
+ :tunables {:max-distance {:curve :mastery-lerp}
+            :cp-per-block {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp}
+            :exp-per-distance {:curve :const}
+            :scan-step {:curve :const}}
+ :progression {:teleport {:per-mark {:ref [:input :tunables :exp-per-distance]}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :session-state {:destination {:type :any :default nil}
+                 :can-teleport? {:type :bool :default false}
+                 :desired-distance {:type :float :default 0.5}}
+ :program
+ "{:ability :penetrate-teleport
+   :activation :session
+   :state {:destination {:type :any :default nil} :can-teleport? {:type :boolean :default false}
+           :desired-distance {:type :double :default 0.5}}
+   :tunables {:max-distance {:type :double} :cp-per-block {:type :double}
+              :release-overload {:type :double} :scan-step {:type :double}}
+   :phases
+   {:start
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (state! :desired-distance $max-distance)
+     (let context-resources ?context/resources)
+     (let available-resource (:cp context-resources))
+     (let destination
+       (target/penetration-destination eye aim $max-distance $scan-step 4 available-resource
+                                       $cp-per-block 1.62))
+     (let can-teleport? (bool/and (:available? destination) (math/gte (:distance destination) 0.5)))
+     (state! :destination destination)
+     (state! :can-teleport? can-teleport?)
+     (if can-teleport?
+       [(vfx! {:effect-id :teleport-marker :operation :spawn
+              :instance-key [:activation :penetrate-teleport]
+              :payload {:owner owner-id :position (:marker-position destination)
+                       :color [255 255 255 255] :particle-chance 0.4}
+              :audience {:type :nearby :radius 64.0}})]
+       [(vfx! {:effect-id :teleport-marker :operation :spawn
+              :instance-key [:activation :penetrate-teleport]
+              :payload {:owner owner-id :position (:marker-position destination)
+                       :color [255 51 51 255] :particle-chance 0.0}
+              :audience {:type :nearby :radius 64.0}})])
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let desired-distance %desired-distance)
+     (let context-resources ?context/resources)
+     (let available-resource (:cp context-resources))
+     (let destination
+       (target/penetration-destination eye aim desired-distance $scan-step 4 available-resource
+                                       $cp-per-block 1.62))
+     (let can-teleport? (bool/and (:available? destination) (math/gte (:distance destination) 0.5)))
+     (state! :destination destination)
+     (state! :can-teleport? can-teleport?)
+     (if can-teleport?
+       [(vfx! {:effect-id :teleport-marker :operation :update
+              :instance-key [:activation :penetrate-teleport]
+              :payload {:owner owner-id :position (:marker-position destination)
+                       :color [255 255 255 255] :particle-chance 0.4}
+              :audience {:type :nearby :radius 64.0}})]
+       [(vfx! {:effect-id :teleport-marker :operation :update
+              :instance-key [:activation :penetrate-teleport]
+              :payload {:owner owner-id :position (:marker-position destination)
+                       :color [255 51 51 255] :particle-chance 0.0}
+              :audience {:type :nearby :radius 64.0}})])
+     (finish {:outcome :continue})]
+
+    :release
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let desired-distance %desired-distance)
+     (let context-resources ?context/resources)
+     (let available-resource (:cp context-resources))
+     (let destination
+       (target/penetration-destination eye aim desired-distance $scan-step 4 available-resource
+                                       $cp-per-block 1.62))
+     (let can-teleport? (bool/and (:available? destination) (math/gte (:distance destination) 0.5)))
+     (state! :destination destination)
+     (state! :can-teleport? can-teleport?)
+     (vfx! {:effect-id :audio-one-shot :operation :spawn
+           :payload {:position (:position destination) :sound-id \"academy:tp.tp\" :volume 0.5
+                    :pitch 1.0}
+           :audience {:type :nearby :radius 64.0}})
+     (if can-teleport?
+       [(let release-budget-cp (math/mul (:distance destination) $cp-per-block))
+        (let sufficient?
+          (cost/spend {:budget {:cp release-budget-cp :overload $release-overload}}))
+        (if sufficient?
+          [(let teleport-progression ?progression/teleport)
+           (let main-cooldown ?cooldown/main)
+           (entity/teleport {:target owner-id :position (:position destination) :dismount? true
+                             :reset-fall-damage? true})
+           (event! {:type :score/mark :progression teleport-progression
+                    :weight (:distance destination)})
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (vfx! {:effect-id :teleport-marker :operation :destroy
+                 :instance-key [:activation :penetrate-teleport] :payload {}})
+           (finish {:outcome :teleported :end-ability? true})]
+          [(vfx! {:effect-id :teleport-marker :operation :destroy
+                 :instance-key [:activation :penetrate-teleport] :payload {}})
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :teleport-marker :operation :destroy
+              :instance-key [:activation :penetrate-teleport] :payload {}})
+        (finish {:outcome :unavailable :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :teleport-marker :operation :destroy
+           :instance-key [:activation :penetrate-teleport] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]
+
+    :slot-wheel
+    [(let desired-distance-current %desired-distance)
+     (let context-delta ?context/delta)
+     (let desired-distance-next
+       (math/clamp (math/add desired-distance-current context-delta) 0.5 $max-distance))
+     (state! :desired-distance desired-distance-next)
+     (finish {:outcome :distance-updated})]}}"
+ :costs nil
+ :invariants nil
+ :mark-policies nil}

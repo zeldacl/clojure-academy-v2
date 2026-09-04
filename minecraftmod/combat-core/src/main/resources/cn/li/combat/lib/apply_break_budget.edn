@@ -1,0 +1,29 @@
+;; Port of cn.li.combat.actions/commit-block-break-budget! (old
+;; :terrain/apply-break-budget composite): break blocks from a pre-queried
+;; list in order, in each fitting one only while its hardness fits the
+;; remaining energy budget. Uses set! to thread the accumulator across
+;; iterations (found necessary porting this exact composite -- see
+;; node-core/set_bang_test.clj's docstring) and the each-loop dispatch path
+;; proven by combat-core/run_test.clj's break-budget-text fixture.
+;;
+;; :limit (the old composite's own foreach cap) is dropped: `each` always
+;; walks its whole collection (no partial-iteration primitive exists), and
+;; both real call sites (railgun.edn, meltdowner.edn) pass exactly the
+;; default 4096 -- the blocks list is already capped upstream by whatever
+;; query produced it (kernel/trace-beam's own :block-limit), so a second
+;; cap here was always redundant in practice.
+;;
+;; A query call (random/chance) cannot appear directly in expression
+;; position (block/break's :drop? arg) -- node/fn calls are pure
+;; expressions in this grammar, never a further call -- so it is bound via
+;; `let` first, same as the hardness-check condition below.
+{:defn :terrain/apply-break-budget
+ :params [{:name blocks :type :any} {:name energy :type :double} {:name drop-chance :type :double}]
+ :do [(let remaining energy)
+      (each candidate blocks
+        (let hardness-ok (bool/and (math/gte (:hardness candidate) 0.0)
+                                   (math/lte (:hardness candidate) remaining)))
+        (when hardness-ok
+          (let should-drop? (random/chance {:probability drop-chance}))
+          (block/break {:position (:position candidate) :drop? should-drop?})
+          (set! remaining (math/sub remaining (:hardness candidate)))))]}

@@ -1,0 +1,178 @@
+;; New-DSL conversion of ac/combat/abilities/groundshock.edn (S6). Session
+;; ability. First real call site of cn.li.combat.lib's terrain/wave-plan
+;; composite. :block-transforms/:energy-cost use string block-id keys
+;; (\"minecraft:stone\" etc), a pre-existing content shape (see
+;; final_catalog.clj's own read-resource docstring) that a nested map
+;; literal accepts as-is -- compile-map-literal never restricts key types.
+;;
+;; A real bug found and fixed while porting: the old :release sequence
+;; calls cost/spend TWICE for the exact same resources -- once with an
+;; inline {:resources {:cp release-cp :overload release-overload}}
+;; literal (bound to a sufficiency check), and then AGAIN with
+;; {:budget {:ref [:input :budgets :release]}} if that check passed, with
+;; no :bind at all on the second call. final_engine.clj's spend-budget
+;; unconditionally commits the deduction on every call it makes (there is
+;; no separate check-only mode), so this would have deducted :release's
+;; cp/overload cost from the player TWICE per activation. Kept only the
+;; second (named-budget) spend, matching every other ability's pattern
+;; and this ability's own :costs {:release ...} declaration -- the first
+;; was dead weight computing the identical amount a second time, not a
+;; second, different charge.
+;;
+;; Also confirms {:ref [:frame :seed]} (an old direct-frame field access,
+;; distinct from {:ref [:input :capabilities ...]}) is the same activation
+;; seed ?rng/seed already reads elsewhere.
+{:schema-version 2
+ :kind :ability
+ :id :groundshock
+ :name-key "ability.skill.vecmanip.groundshock"
+ :description-key "ability.skill.vecmanip.groundshock.desc"
+ :revision 2
+ :activation :session
+ :requires [:caster/body :caster/aim :caster/id :world/id :rng/seed :progression/mastery]
+ :prerequisites [{:skill-id :directed-shock :min-exp 0.0}]
+ :tunables {:charge-min-ticks {:curve :const :type :int}
+            :charge-max-tolerant-ticks {:curve :const :type :int}
+            :initial-energy {:curve :mastery-lerp}
+            :max-iterations {:curve :mastery-lerp :type :int}
+            :entity-search-radius {:curve :const}
+            :damage {:curve :mastery-lerp}
+            :launch-base {:curve :const}
+            :launch-span {:curve :const}
+            :launch-scale {:curve :mastery-lerp}
+            :ground-break-probability {:curve :const}
+            :drop-probability {:curve :mastery-lerp}
+            :energy-cost-stone {:curve :const}
+            :energy-cost-grass {:curve :const}
+            :energy-cost-farmland {:curve :const}
+            :energy-cost-default {:curve :const}
+            :mastery-exp-threshold {:curve :const}
+            :mastery-radius {:curve :const :type :int}
+            :mastery-hardness-cap {:curve :const}
+            :release-cp {:curve :mastery-lerp}
+            :release-overload {:curve :mastery-lerp}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-entity {:curve :const}
+            :exp-use {:curve :const}}
+ :costs {:release {:resources {:cp {:ref [:input :tunables :release-cp]}
+                               :overload {:ref [:input :tunables :release-overload]}}}}
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-entity]}}
+               :use {:per-mark {:ref [:input :tunables :exp-use]}}}
+ :program
+ "{:ability :groundshock
+   :activation :session
+   :state {:charge-ticks {:type :long :default 0}}
+   :tunables {:charge-max-tolerant-ticks {:type :long} :charge-min-ticks {:type :long}
+              :initial-energy {:type :double} :max-iterations {:type :long}
+              :entity-search-radius {:type :double} :damage {:type :double}
+              :launch-base {:type :double} :launch-span {:type :double}
+              :ground-break-probability {:type :double} :drop-probability {:type :double}
+              :energy-cost-stone {:type :double} :energy-cost-grass {:type :double}
+              :energy-cost-farmland {:type :double} :energy-cost-default {:type :double}
+              :mastery-exp-threshold {:type :double} :mastery-radius {:type :long}
+              :mastery-hardness-cap {:type :double}}
+   :phases
+   {:start
+    [(state! :charge-ticks 0)
+     (vfx! {:effect-id :first-person-motion-session :operation :spawn
+           :instance-key [:activation :groundshock-hand] :audience {:type :owner}
+           :payload {:stage :prepare :phase-ticks 0 :duration-ticks 25
+                    :curves {:prepare {:tx [[0.0 0.0] [1.0 -0.02]]
+                                      :ty [[0.0 0.0] [0.5 0.08] [1.0 0.0]]
+                                      :tz [[0.0 0.0] [1.0 -0.04]]
+                                      :rot-x [[0.0 0.0] [1.0 -8.0]]
+                                      :rot-y [[0.0 0.0] [1.0 0.0]]
+                                      :rot-z [[0.0 0.0] [1.0 0.0]]}
+                            :punch {:tx [[0.0 0.0] [0.5 -0.04] [1.0 0.0]]
+                                   :ty [[0.0 0.7] [0.5 0.65] [1.0 0.0]]
+                                   :tz [[0.0 0.0] [0.3 -0.35] [1.0 0.0]]
+                                   :rot-x [[0.0 -35.0] [0.5 -40.0] [1.0 0.0]]
+                                   :rot-y [[0.0 0.0] [0.3 8.0] [1.0 0.0]]
+                                   :rot-z [[0.0 0.0] [1.0 0.0]]}}}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let charge-ticks-cur %charge-ticks)
+     (let charge-ticks-next (long/add charge-ticks-cur 1))
+     (state! :charge-ticks charge-ticks-next)
+     (vfx! {:effect-id :first-person-motion-session :operation :update
+           :instance-key [:activation :groundshock-hand] :audience {:type :owner}
+           :payload {:stage :prepare :phase-ticks charge-ticks-next :duration-ticks 25}})
+     (let timed-out? (math/gte charge-ticks-next $charge-max-tolerant-ticks))
+     (if timed-out?
+       [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+              :instance-key [:activation :groundshock-hand] :payload {}})
+        (finish {:outcome :aborted :end-ability? true})]
+       [(finish {:outcome :charging})])]
+
+    :release
+    [(let owner (owner/snapshot {:projection [:on-ground?]}))
+     (let charge-ticks %charge-ticks)
+     (let ready? (bool/and (math/gte charge-ticks $charge-min-ticks) (:on-ground? owner)))
+     (if ready?
+       [(let release-budget ?budget/release)
+        (let sufficient? (cost/spend {:budget release-budget}))
+        (if sufficient?
+          [(let body ?caster/body)
+           (let aim ?caster/aim)
+           (let mastery ?progression/mastery)
+           (let seed ?rng/seed)
+           (let origin (vec3/sub body [0.0 1.0 0.0]))
+           (let plan
+             (terrain/wave-plan origin aim $initial-energy $max-iterations seed
+                                {:angle-radians 90.0
+                                 :entries [[0.0 1.0] [1.0 0.7] [-1.0 0.7] [2.0 0.3] [-2.0 0.3]]}
+                                {\"minecraft:stone\" $energy-cost-stone
+                                 \"minecraft:grass_block\" $energy-cost-grass
+                                 \"minecraft:farmland\" $energy-cost-farmland
+                                 :default $energy-cost-default}
+                                {\"minecraft:stone\" {:to \"minecraft:cobblestone\"}
+                                 \"minecraft:grass_block\" {:to \"minecraft:dirt\"}}
+                                mastery $mastery-exp-threshold $mastery-radius
+                                $mastery-hardness-cap $ground-break-probability
+                                $drop-probability $launch-base $launch-span
+                                $entity-search-radius))
+           (let terrain-plan (:affected-blocks plan))
+           (each transform (:transforms plan)
+             (block/set {:position (:position transform) :block-id (:block-id transform)
+                        :expected-block-ids (:expected-block-ids transform)}))
+           (each broken (:broken-blocks plan)
+             (block/break {:position (:position broken) :drop? (:drop? broken)}))
+           (each mastery-block (:mastery-breaks plan)
+             (block/break {:position (:position mastery-block) :drop? true}))
+           (each entity (:entities plan)
+             (let entity-id (:id entity))
+             (combat/damage {:target entity-id :amount $damage :damage-type :skill
+                             :damage-pipeline :skill})
+             (let entity-velocity (:velocity entity))
+             (motion/entity-velocity
+              {:target entity-id
+               :velocity [(:x entity-velocity) (:launch-y entity) (:z entity-velocity)]})
+             (let hit-progression ?progression/hit)
+             (event! {:type :score/mark :tag :hit :progression hit-progression}))
+           (let use-progression ?progression/use)
+           (event! {:type :score/mark :tag :use :progression use-progression})
+           (let main-cooldown ?cooldown/main)
+           (cooldown/start {:name :main :ticks main-cooldown})
+           (vfx! {:effect-id :first-person-motion-session :operation :destroy
+                 :instance-key [:activation :groundshock-hand] :payload {}})
+           (vfx! {:effect-id :terrain-shockwave-transient :operation :spawn
+                 :audience {:type :nearby :radius 32.0}
+                 :payload {:origin origin :direction aim :surface-hits terrain-plan :seed seed
+                          :sound-id \"academy:vecmanip.groundshock\" :sound-volume 2.0
+                          :sound-pitch 1.0}})
+           (finish {:outcome :performed :end-ability? true})]
+          [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+                 :instance-key [:activation :groundshock-hand] :payload {}})
+           (finish {:outcome :insufficient-resource :end-ability? true})])]
+       [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+              :instance-key [:activation :groundshock-hand] :payload {}})
+        (finish {:outcome :undercharged :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :first-person-motion-session :operation :destroy
+           :instance-key [:activation :groundshock-hand] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]}}"
+ :invariants nil
+ :mark-policies nil}

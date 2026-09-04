@@ -1,0 +1,235 @@
+;; New-DSL conversion of ac/combat/abilities/railgun.edn (S6). Session
+;; ability with two firing modes (coin QTE via the :coin-thrown external
+;; event, or iron-item hold-charge) that converge on the same :release
+;; beam-strike/break-budget logic. First real call site of BOTH
+;; cn.li.combat.lib's combat/beam-strike and terrain/apply-break-budget
+;; composites from ac content (previously exercised only by combat-core's
+;; own lib_test.clj/run_test.clj fixtures).
+;;
+;; BUG FIX (S8, found auditing the live cutover): the old :progression
+;; :hit formula reads {:ref [:state :reflection-hit?]} -- a real
+;; formula the OLD engine evaluates lazily at the exact graph node that
+;; reads it, so it correctly sees a :reflection-hit? state write made
+;; moments earlier in the SAME dispatch (inside the each-loop just
+;; above). The NEW engine's ?progression/name capabilities are fixed
+;; values materialized once BEFORE dispatch starts and cannot see that
+;; same-dispatch write -- a plain ?progression/hit read here would
+;; always see the STALE pre-dispatch value (:reflection-hit? is reset
+;; to false at the top of this same phase, so it would always read as
+;; :exp-hit, never :exp-reflection-hit, regardless of what actually
+;; happened). Fixed by replacing the :reflection-hit? session-state
+;; field with a plain local (any-reflection-accepted?, predeclare +
+;; set! across the each-loop, this session's established same-
+;; activation-visibility fix pattern) and computing hit-progression
+;; inline via math/select instead of reading a capability. The
+;; :reflection-hit? field was never read anywhere outside this one
+;; phase (grep-confirmed), so dropping it from :program's own :state
+;; entirely (not just this read site) is a clean removal, not a partial
+;; fix.
+;;
+;; terrain/apply-break-budget's :drop-chance param has no old-code
+;; equivalent here -- the old :terrain/apply-break-budget COMPOSITE (not
+;; the new :defn) declared {:drop-chance {:type :float :default 0.0}},
+;; and railgun's :release step omitted the field entirely, so 0.0 is the
+;; faithful port, not a guess (meltdowner.edn's own call passes 0.05
+;; explicitly, confirming the field is real and abilities differ on it).
+;;
+;; :release's leading {:component :state/read :key :mode ...} is dropped:
+;; mode is bound but never read again anywhere later in the old :release
+;; sequence (only :fire-mode drives every branch past that point) --
+;; genuinely dead, the same class of dead-code drop mark_teleport.edn's
+;; own docstring already established for a trailing dead finish.
+;;
+;; The :events sibling map needs no new engine support (established
+;; porting penetrate_teleport.edn, S6): :coin-thrown is just one more key
+;; alongside :start/:pulse/:release/:abort in :phases, dispatched via
+;; run/dispatch! program :coin-thrown input from the item-use external
+;; trigger (kept verbatim below in :external-triggers, still consumed by
+;; the network dispatch layer this conversion does not touch).
+{:schema-version 2
+ :kind :ability
+ :id :railgun
+ :name-key "ability.skill.electromaster.railgun"
+ :description-key "ability.skill.electromaster.railgun.desc"
+ :revision 5
+ :activation :session
+ :requires [:caster/eye :caster/aim :caster/id :world/id :caster/creative?
+            :progression/mastery :rng/seed]
+ :prerequisites [{:skill-id :thunder-bolt :min-exp 0.3} {:skill-id :mag-manip :min-exp 1.0}]
+ :tunables {:beam-damage {:curve :mastery-lerp}
+            :beam-radius {:curve :const}
+            :beam-query-radius {:curve :const}
+            :beam-step {:curve :const}
+            :beam-block-energy {:curve :mastery-lerp}
+            :beam-visual-distance {:curve :const}
+            :max-distance {:curve :const}
+            :qte-active-threshold {:curve :const}
+            :qte-perform-threshold {:curve :const}
+            :item-charge-ticks {:curve :const :type :int}
+            :reflection-distance {:curve :const}
+            :reflection-damage {:curve :const}
+            :cooldown-ticks {:curve :mastery-lerp :type :int}
+            :exp-hit {:curve :const}
+            :exp-reflection-hit {:curve :const}
+            :cost-down-cp {:curve :mastery-lerp}
+            :cost-down-overload {:curve :mastery-lerp}
+            :cost-tick-cp {:curve :mastery-lerp}
+            :cost-tick-overload {:curve :mastery-lerp}}
+ :costs nil
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}}
+ :progression {:hit {:per-mark {:expr :math/select
+                                :args [{:ref [:state :reflection-hit?]}
+                                       {:ref [:input :tunables :exp-reflection-hit]}
+                                       {:ref [:input :tunables :exp-hit]}]}}}
+ :external-triggers [{:source :item/use :filter {:item-ids ["ac:coin" "academy:coin"]}
+                      :dispatch {:ability :railgun :event :coin-thrown}}]
+ :session-state {:mode {:type :resource-id :default :armed}
+                 :hold-ticks {:type :int :default 0}
+                 :fire-mode {:type :resource-id :default nil}
+                 :coin-id {:type :any :default nil}
+                 :reflection-hit? {:type :bool :default false}}
+ :program
+ "{:ability :railgun
+   :activation :session
+   :state {:mode {:type :keyword :default :armed} :hold-ticks {:type :long :default 0}
+           :fire-mode {:type :keyword :default nil} :coin-id {:type :any :default nil}}
+   :tunables {:beam-damage {:type :double} :beam-radius {:type :double}
+              :beam-query-radius {:type :double} :beam-step {:type :double}
+              :beam-block-energy {:type :double} :beam-visual-distance {:type :double}
+              :max-distance {:type :double} :qte-active-threshold {:type :double}
+              :qte-perform-threshold {:type :double} :item-charge-ticks {:type :long}
+              :reflection-distance {:type :double} :reflection-damage {:type :double}
+              :cost-down-cp {:type :double} :cost-down-overload {:type :double}
+              :cost-tick-cp {:type :double} :cost-tick-overload {:type :double}
+              :exp-hit {:type :double} :exp-reflection-hit {:type :double}}
+   :phases
+   {:start
+    [(let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let coins (target/entities {:shape {:type :sphere :center eye :radius 4.0}
+                                  :filter {:entity-types [\"academy:entity_coin_throwing\"]
+                                          :owner-id owner-id}
+                                  :sort [{:by :motion-progress :order :descending}]
+                                  :projection [:id :motion-progress :owner-id] :limit 8}))
+     (let coin (collection/first coins))
+     (state! :coin-id (:id coin))
+     (state! :mode :armed)
+     (state! :hold-ticks 0)
+     (let hand-item (target/item-held {:source :main-hand}))
+     (when (bool/and (bool/not (collection/nonempty coins))
+                     (collection/contains? [\"minecraft:iron_ingot\" \"minecraft:iron_block\"]
+                                           (:item-id hand-item)))
+       (state! :mode :item-charge))
+     (vfx! {:effect-id :billboard-session :operation :spawn
+           :instance-key [:activation :railgun-charge] :audience {:type :nearby :radius 32.0}
+           :payload {:anchor :owner-hand :duration-ticks 64
+                    :texture-pattern \"academy:textures/effects/arc_burst/%d.png\"
+                    :frame-count 40 :frame-duration-ms 40 :half-size 0.4}})
+     (finish {:outcome :started})]
+
+    :pulse
+    [(let mode %mode)
+     (if (value/eq mode :item-charge)
+       [(let hold-ticks %hold-ticks)
+        (let charge-ticks $item-charge-ticks)
+        (let next-hold-ticks (long/add hold-ticks 1))
+        (state! :hold-ticks next-hold-ticks)
+        (vfx! {:effect-id :billboard-session :operation :update
+              :instance-key [:activation :railgun-charge] :audience {:type :nearby :radius 32.0}
+              :payload {:charge-ticks next-hold-ticks}})
+        (if (math/gte next-hold-ticks charge-ticks)
+          [(state! :fire-mode :item)
+           (finish {:outcome :charge-ready :next-phase :release})]
+          [(finish {:outcome :continue})])]
+       [(finish {:outcome :continue})])]
+
+    :release
+    [(let fire-mode %fire-mode)
+     (let owner-id ?caster/id)
+     (let eye ?caster/eye)
+     (let aim ?caster/aim)
+     (let wid ?world/id)
+     (let any-reflection-accepted? false)
+     (vfx! {:effect-id :billboard-session :operation :destroy
+           :instance-key [:activation :railgun-charge] :payload {}})
+     (let max-distance $max-distance)
+     (let beam-visual-distance $beam-visual-distance)
+     (let beam-radius $beam-radius)
+     (let beam-query-radius $beam-query-radius)
+     (let beam-step $beam-step)
+     (let beam-damage $beam-damage)
+     (let beam-block-energy $beam-block-energy)
+     (let reflection-distance $reflection-distance)
+     (let reflection-damage $reflection-damage)
+     (let fire-budget {:cp (math/select (value/eq fire-mode :coin) $cost-down-cp $cost-tick-cp)
+                       :overload (math/select (value/eq fire-mode :coin)
+                                              $cost-down-overload $cost-tick-overload)})
+     (when (value/eq fire-mode :item)
+       (let held-item (target/item-held {:source :main-hand}))
+       (when (collection/contains? [\"minecraft:iron_ingot\" \"minecraft:iron_block\"]
+                                   (:item-id held-item))
+         (inventory/consume {:source :main-hand :count 1})))
+     (let sufficient? (cost/spend {:budget fire-budget}))
+     (if sufficient?
+       [(let reflection-policy {:shot-distance reflection-distance :damage-multiplier 1.0
+                                :reflection-base-damage reflection-damage})
+        (let beam-result
+          (combat/beam-strike eye eye aim max-distance beam-visual-distance beam-radius
+                              beam-query-radius 256 beam-damage :skill 4096
+                              reflection-policy beam-step))
+        (terrain/apply-break-budget (:blocks beam-result) beam-block-energy 0.0)
+        (each hit (:entities beam-result)
+          (when (value/eq (:type hit) \"minecraft:creeper\")
+            (event! {:type :achievement/trigger :payload {:id \"electromaster.attack_creeper\"}}))
+          (when (:reflection-accepted? hit)
+            (set! any-reflection-accepted? true)))
+        (let hit-progression
+          (math/select any-reflection-accepted? $exp-reflection-hit $exp-hit))
+        (event! {:type :score/mark :tag :hit :progression hit-progression})
+        (let main-cooldown ?cooldown/main)
+        (cooldown/start {:name :main :ticks main-cooldown})
+        (vfx! {:effect-id :beam-arc-fade :operation :spawn
+              :audience {:type :nearby :radius 64.0}
+              :payload {:fade-at 30 :duration-ticks 50 :arc-at 3 :arc-count-limit 64 :beam-at 0
+                       :arc-radius {:min 0.1 :max 0.25} :fade-to-tick 50
+                       :layers [{:shape :tube :radius 0.13 :color [236 170 93 60]}
+                               {:shape :tube :radius 0.09 :color [241 240 222 200]}
+                               {:shape :line :width 0.02 :color [165 230 255 160]}]
+                       :grow-ticks 3 :fade-to-alpha 0.0 :fade-from-tick 30 :fade-from-alpha 1.0
+                       :arc-life-ticks 30 :arc-spacing {:min 1.0 :max 2.0} :ring-radius 0.34
+                       :ring-segments 12 :ring-color [188 252 238 180]
+                       :start (:start beam-result) :end (:end beam-result)}})
+        (world/sound {:world-id wid :sound-id \"academy:em.railgun\" :position eye})
+        (finish {:outcome :committed :end-ability? true})]
+       [(finish {:outcome :insufficient-resource :end-ability? true})])]
+
+    :abort
+    [(vfx! {:effect-id :billboard-session :operation :destroy
+           :instance-key [:activation :railgun-charge] :payload {}})
+     (finish {:outcome :aborted :end-ability? true})]
+
+    :coin-thrown
+    [(let mode %mode)
+     (if (value/eq mode :armed)
+       [(let owner-id ?caster/id)
+        (let eye ?caster/eye)
+        (let wid ?world/id)
+        (let coins (target/entities {:shape {:type :sphere :center eye :radius 4.0}
+                                     :filter {:entity-types [\"academy:entity_coin_throwing\"]
+                                             :owner-id owner-id}
+                                     :sort [{:by :motion-progress :order :descending}]
+                                     :projection [:id :motion-progress :owner-id] :limit 8}))
+        (let coin (collection/first coins))
+        (state! :coin-id (:id coin))
+        (let active-threshold $qte-active-threshold)
+        (let perform-threshold $qte-perform-threshold)
+        (if (bool/and (math/gte (:motion-progress coin) active-threshold)
+                      (math/gt (:motion-progress coin) perform-threshold))
+          [(state! :fire-mode :coin)
+           (entity/discard {:world-id wid :entity {:id (:id coin)}})
+           (finish {:outcome :qte-perform :next-phase :release})]
+          [(finish {:outcome :qte-miss})])]
+       [(finish {:outcome :ignored})])]}}"
+ :invariants nil
+ :mark-policies nil}
