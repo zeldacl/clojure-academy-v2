@@ -2,10 +2,14 @@
   "Combat's executable pipeline: surface DSL -> IR (cn.li.node.compile) ->
    CompiledProgram (cn.li.mcmod.runtime.effect-emit) -> dispatch, wired
    together with combat's own vocabulary (cn.li.combat.dsl-vocabulary), a
-   capability TYPE table, and the pure-op table. ADDITIVE alongside the old
-   final_engine.clj -- see the redesign plan's staging notes; nothing here
-   is wired into cn.li.combat.api yet, and none of ac's 39 abilities
-   compile through this path until they are rewritten to the new DSL.
+   capability TYPE table, and the pure-op table. S8 cutover: this is now
+   the live production dispatch path -- wired into cn.li.combat.api
+   (compile-skill-doc!/compile-skill-program/dispatch-skill!) and reached
+   by every real player action via cn.li.ac.ability.service.combat-
+   runtime/dispatch-intent-v2!. The old final_engine.clj is kept alongside
+   it, unchanged, and is still exercised directly by its own dedicated
+   test suite -- see NODE_LANGUAGE.md §0 for the full picture. All 39 of
+   ac's abilities (ac/skills/*.edn) compile through this path.
 
    capability-type is a FUNCTION, not a static map: ?budget/fire,
    ?cooldown/main, ?progression/effective etc are named per-ability by its

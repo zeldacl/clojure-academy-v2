@@ -51,13 +51,16 @@
 ;; rather than migrated.
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private final-runtime* (atom nil))
-;; S8: NOT installed by anything yet -- initialize-final-runtime-v2!/
-;; dispatch-intent-v2! below exist and are fully tested, but no real call
-;; site invokes either one. Flipping the actual switch (installing this
-;; runtime instead of/alongside final-runtime* above, and redirecting a
-;; real intent-handling call site to dispatch-intent-v2!) is a separate,
-;; deliberately held-back step -- see NODE_LANGUAGE.md's own "two
-;; engines" section.
+;; S8 cutover: this IS the live production runtime now. All real intent-
+;; handling call sites (network.clj, server_hooks.clj,
+;; location_teleport_rpc.clj, and this namespace's own dispatch-trigger!/
+;; dispatch-event!/pulse-active-sessions!) call dispatch-intent-v2! below,
+;; which installs this atom via its own lazy-install guard. final-runtime*
+;; above stays populated too (dispatch-intent-v2! warms it for
+;; final-capabilities-v2's shared-metadata read -- see that function's own
+;; docstring) but dispatch-intent! itself is now only called directly by
+;; the old engine's own dedicated test suite, not by any real call site --
+;; see NODE_LANGUAGE.md §0.
 (defonce ^:private final-runtime-v2* (atom nil))
 ;; edn-host-capabilities-installed? (a bare defonce atom) previously guarded
 ;; install-ac-host-capabilities! below. Replaced by
@@ -365,15 +368,19 @@
 (defn final-runtime [] @final-runtime*)
 
 (defn initialize-final-runtime-v2!
-  "S8: install the new engine's own production runtime, parallel to
-   initialize-final-runtime! above (which stays the one actually
-   installed by dispatch-intent!'s own lazy-install guard -- this
-   function has no caller yet). No :state-provider/:commit-state!
-   (cn.li.ability.engine-v2's own create-runtime docstring explains why
-   the new engine doesn't need them): install-runtime-adapters!'s own
-   :cost/spend/:cooldown/start handlers already commit their effect
-   immediately, as ordinary host actions, the moment a graph reaches
-   them."
+  "S8 cutover: install the new engine's own production runtime. This is
+   now the runtime real player actions execute against -- installed by
+   dispatch-intent-v2!'s own lazy-install guard, which every real
+   intent-handling call site (network.clj, server_hooks.clj,
+   location_teleport_rpc.clj, dispatch-trigger!/dispatch-event!/
+   pulse-active-sessions! below) reaches. initialize-final-runtime! above
+   is still warmed alongside it (see that guard's own comment for why),
+   but the old engine it installs is no longer invoked by any real call
+   site. No :state-provider/:commit-state! (cn.li.ability.engine-v2's own
+   create-runtime docstring explains why the new engine doesn't need
+   them): install-runtime-adapters!'s own :cost/spend/:cooldown/start
+   handlers already commit their effect immediately, as ordinary host
+   actions, the moment a graph reaches them."
   []
   (install/framework-once!
    ::final-runtime-v2-installed?
@@ -959,9 +966,13 @@
        (not finish-ability?) (not already-active?)))
 
 (defn dispatch-intent! [owner intent]
-  ;; Final runtime is the sole production dispatch path. Pending source Final
-  ;; graphs return an explicit execution status; there is no alternate
-  ;; evaluator or catalog fallback at this boundary.
+  ;; S8 cutover: this function itself is deliberately left untouched --
+  ;; several existing tests call it directly and assert old-engine-
+  ;; specific behavior -- but no real intent-handling call site invokes
+  ;; it anymore; they all call dispatch-intent-v2! below instead. Within
+  ;; the old engine's own graphs, pending source Final graphs return an
+  ;; explicit execution status; there is no alternate evaluator or
+  ;; catalog fallback at this boundary.
   ;;
   ;; Lazily install/warm the final runtime BEFORE combat-source/final-input
   ;; read catalog* below: on the very first dispatch of a JVM's (or, in unit
@@ -1060,9 +1071,15 @@
    key name (cn.li.ability.engine-v2/dispatch! takes :entry directly,
    not a :phase/:event pair to re-derive).
 
-   No real caller yet -- see final-runtime-v2*'s own docstring for why
-   installing/redirecting to this function is a deliberately separate,
-   held-back step."
+   S8 cutover: this is now the live production dispatch path. Every real
+   intent-handling call site (network.clj's CombatIntent packet handler,
+   server_hooks.clj's item-triggered abilities, location_teleport_rpc.clj,
+   and this namespace's own dispatch-trigger!/dispatch-event!/
+   pulse-active-sessions!) calls this function, not dispatch-intent!
+   above. dispatch-intent! itself is deliberately left untouched -- see
+   its own callers for why (several existing tests call it directly and
+   assert old-engine-specific behavior) -- so it remains a fully working,
+   separately-tested path, just no longer a real one."
   [owner intent]
   ;; final-capabilities-v2/combat-source both read the OLD catalog atom
   ;; (catalog*, populated only by initialize-final-runtime!) -- see final-
@@ -1119,15 +1136,20 @@
   "Dispatch a server-resolved external trigger from the EDN trigger index.
 
   The trigger map is produced by `combat-catalog/resolve-trigger`; clients never
-  provide ability/event mappings." 
+  provide ability/event mappings.
+
+  S8 cutover: routes through dispatch-intent-v2! (the new engine) -- see
+  dispatch-intent-v2!'s own docstring. dispatch-intent! itself is left
+  untouched, still the sole production path old-engine-specific tests
+  exercise directly."
   [owner trigger context]
   (when (and (map? trigger) (:ability trigger) (:event trigger))
-    (dispatch-intent! owner
-                      {:op :event
-                       :ability-id (:ability trigger)
-                       :event (:event trigger)
-                       :server-tick @last-known-tick*
-                       :context context})))
+    (dispatch-intent-v2! owner
+                         {:op :event
+                          :ability-id (:ability trigger)
+                          :event (:event trigger)
+                          :server-tick @last-known-tick*
+                          :context context})))
 (defn- handle-progression-event!
   [event]
   (let [owner (:owner event)
@@ -1599,9 +1621,12 @@
    For neutral platform callbacks that need to route a world event into an
    ability's own EDN program instead of applying an effect directly -- e.g. a
    scripted entity's collision hit reporting {:target-id ...} so the owning
-   ability's :events entry decides the damage, not the platform caller."
+   ability's :events entry decides the damage, not the platform caller.
+
+   S8 cutover: routes through dispatch-intent-v2!, see dispatch-trigger!'s
+   own docstring."
   [owner ability-id event context]
-  (let [result (dispatch-intent! owner
+  (let [result (dispatch-intent-v2! owner
                 {:op :event :action :event :ability-id ability-id
                  :event event :context context})]
     (when (= :accepted (:status result))
@@ -1615,13 +1640,16 @@
   cadence and supplies an elapsed hold count. Iterating the owner-scoped
   session snapshot keeps one player's pulse, resources and VFX independent of
   every other player, while a finished pulse removes its own session through
-  the normal Final runtime boundary."
+  the normal Final runtime boundary.
+
+  S8 cutover: routes through dispatch-intent-v2!, see dispatch-trigger!'s
+  own docstring."
   [tick]
   (doseq [[owner session] (combat-sessions/snapshot content-id)]
     (when (= session (combat-sessions/session content-id owner))
       (let [hold-ticks (inc (max 0 (- (long tick)
                                       (long (or (:start-tick session) tick)))))
-            result (dispatch-intent!
+            result (dispatch-intent-v2!
                     owner
                     {:op :pulse
                      :ability-id (:ability-id session)
@@ -1633,7 +1661,7 @@
           (finalize-result! owner result)
           (when (= :release (:next-phase result))
             (let [release-result
-                  (dispatch-intent!
+                  (dispatch-intent-v2!
                    owner
                    {:op :release
                     :ability-id (:ability-id session)

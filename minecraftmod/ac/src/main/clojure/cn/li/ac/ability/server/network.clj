@@ -255,7 +255,12 @@
                                   :reason (:reason admission)}]}
                      (if (and movement? (not valid-movement?))
                        {:status :rejected :feedback [{:type :invalid-movement}]}
-                       (combat-runtime/dispatch-intent! owner intent)))))
+                       ;; S8 cutover: routes through the new engine -- see
+                     ;; cn.li.ac.ability.service.combat-runtime/dispatch-
+                     ;; trigger!'s own docstring for why dispatch-intent!
+                     ;; itself is left untouched (old-engine-specific
+                     ;; tests still exercise it directly).
+                     (combat-runtime/dispatch-intent-v2! owner intent)))))
         result (if (= :accepted (:status result))
                  (combat-runtime/finalize-result! owner result)
                  result)]
