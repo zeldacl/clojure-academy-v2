@@ -1,21 +1,21 @@
-;; New-DSL conversion of ac/vfx/effects/energy_orb_session.edn (S6). All
-;; five old timeline children are :at 0 (always run from the first
-;; sample, same simplification as particle_burst.edn). Same fade-into-
-;; :alpha and radius-lerp translations as ring_fade_audio.edn; this
-;; file's fade window is a fixed [0,4096] rather than :input-driven, so
-;; no extra (when (math/gte age at) ...) gate is needed -- the fade
-;; formula itself already saturates to 0.0 alpha once age passes 4096,
-;; matching the old sampler's own clamp exactly.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/energy_orb_session.edn (S6). All"
+        "five old timeline children are :at 0 (always run from the first"
+        "sample, same simplification as particle_burst.edn). Same fade-into-"
+        ":alpha and radius-lerp translations as ring_fade_audio.edn; this"
+        "file's fade window is a fixed [0,4096] rather than :input-driven, so"
+        "no extra (when (math/gte age at) ...) gate is needed -- the fade"
+        "formula itself already saturates to 0.0 alpha once age passes 4096,"
+        "matching the old sampler's own clamp exactly."
+        "Generic moving energy body.  The effect deliberately has no skill name:"
+        "a caller supplies geometry, material, palette and lifetime; audio is a"
+        "separate composable effect."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1
  :id :energy-orb-session
  :revision 1
  :lifecycle :session
- ;; Generic moving energy body.  The effect deliberately has no skill name:
- ;; a caller supplies geometry, material, palette and lifetime; audio is a
- ;; separate composable effect.
  :inputs
  {:spawn {:position :vec3
           :radius :float

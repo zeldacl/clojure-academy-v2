@@ -1,17 +1,17 @@
-;; New-DSL conversion of ac/combat/abilities/mark_teleport.edn (S6). Session
-;; ability (charge on :start/:pulse, act on :release). First real call
-;; site of cn.li.combat.lib's target/hold-destination composite -- its
-;; bundled {:hit :destination} return means :destination here is
-;; (:destination hold-result), matching how the old composite's own
-;; :bind {:destination :destination} extracted just that sub-value.
-;;
-;; The old :release sequence has a trailing {:component :flow/finish,
-;; :outcome :released, :finish-ability? true} AFTER a flow/branch whose
-;; every arm already ends in its own finish -- dead code under the old
-;; engine (run-sequence halts on the first finish) that this DSL's
-;; :unreachable-code diagnostic would actively reject if ported
-;; literally, so it is dropped rather than translated.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/mark_teleport.edn (S6). Session"
+        "ability (charge on :start/:pulse, act on :release). First real call"
+        "site of cn.li.combat.lib's target/hold-destination composite -- its"
+        "bundled {:hit :destination} return means :destination here is"
+        "(:destination hold-result), matching how the old composite's own"
+        ":bind {:destination :destination} extracted just that sub-value."
+        ""
+        "The old :release sequence has a trailing {:component :flow/finish,"
+        ":outcome :released, :finish-ability? true} AFTER a flow/branch whose"
+        "every arm already ends in its own finish -- dead code under the old"
+        "engine (run-sequence halts on the first finish) that this DSL's"
+        ":unreachable-code diagnostic would actively reject if ported"
+        "literally, so it is dropped rather than translated."]
+ :schema-version 2
  :kind :ability
  :id :mark-teleport
  :name-key "ability.skill.teleporter.mark_teleport"

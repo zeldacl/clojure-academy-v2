@@ -1,23 +1,23 @@
-;; New-DSL conversion of ac/combat/abilities/mine_detect.edn (S6). See
-;; rad_intensify.edn/electron_bomb.edn's docstrings for the general
-;; pattern. New here: a resource-cost guard (cost/spend) and a
-;; dynamically-computed (not pre-resolved) cooldown value.
-;;
-;; :ability/budget (old: binds the WHOLE resource-cost descriptor, already
-;; materialized to plain :cp/:overload numbers, for later spending) folds
-;; into the ?budget/name sigil, per cn.li.combat.dsl-vocabulary's own
-;; docstring -- ?budget/activate reads exactly the same pre-resolved
-;; descriptor final_engine.clj's :ability/budget source did
-;; ((get-in input [:budgets name])), passed straight through as
-;; cost/spend's :budget arg (originally mis-converted here as a bare
-;; :activate keyword -- fixed alongside cn.li.combat.dsl-vocabulary's own
-;; :budget-param-type fix once location_teleport.edn's ad-hoc {:resources
-;; ...} budget shape exposed the mistake).cost/spend's boolean return
-;; polarity is UNVERIFIED (no real host implements this new vocab node
-;; yet, S6 -- see the session's staged-migration notes): assumed here to
-;; be "true = spend succeeded", the more idiomatic reading, not
-;; "true = insufficient" like the old :insufficient? name.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/mine_detect.edn (S6). See"
+        "rad_intensify.edn/electron_bomb.edn's docstrings for the general"
+        "pattern. New here: a resource-cost guard (cost/spend) and a"
+        "dynamically-computed (not pre-resolved) cooldown value."
+        ""
+        ":ability/budget (old: binds the WHOLE resource-cost descriptor, already"
+        "materialized to plain :cp/:overload numbers, for later spending) folds"
+        "into the ?budget/name sigil, per cn.li.combat.dsl-vocabulary's own"
+        "docstring -- ?budget/activate reads exactly the same pre-resolved"
+        "descriptor final_engine.clj's :ability/budget source did"
+        "((get-in input [:budgets name])), passed straight through as"
+        "cost/spend's :budget arg (originally mis-converted here as a bare"
+        ":activate keyword -- fixed alongside cn.li.combat.dsl-vocabulary's own"
+        ":budget-param-type fix once location_teleport.edn's ad-hoc {:resources"
+        "...} budget shape exposed the mistake).cost/spend's boolean return"
+        "polarity is UNVERIFIED (no real host implements this new vocab node"
+        "yet, S6 -- see the session's staged-migration notes): assumed here to"
+        "be \"true = spend succeeded\", the more idiomatic reading, not"
+        "\"true = insufficient\" like the old :insufficient? name."]
+ :schema-version 2
  :kind :ability
  :id :mine-detect
  :name-key "ability.skill.electromaster.mine_detect"

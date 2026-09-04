@@ -1,10 +1,10 @@
-;; New-DSL conversion of ac/vfx/effects/vortex_column_session.edn (S6).
-;; :vfx/vortex-column has no sample-node case (confirmed-dead class, see
-;; blood_retrograde_charge.edn's docstring); empty :scene is the honest
-;; port. storm_wing.edn's (ability S6) :vortex-column-session vfx! calls
-;; already dispatch against this effect id today with zero visible
-;; regression risk, since it never rendered anything real either way.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/vortex_column_session.edn (S6)."
+        ":vfx/vortex-column has no sample-node case (confirmed-dead class, see"
+        "blood_retrograde_charge.edn's docstring); empty :scene is the honest"
+        "port. storm_wing.edn's (ability S6) :vortex-column-session vfx! calls"
+        "already dispatch against this effect id today with zero visible"
+        "regression risk, since it never rendered anything real either way."]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

@@ -1,11 +1,11 @@
-;; New-DSL conversion of ac/vfx/effects/arc_ring_session.edn (S6).
-;; :vfx/arc-field has no sample-node case (confirmed-dead class, see
-;; blood_retrograde_charge.edn's docstring) -- dropped, only its sibling
-;; :vfx/ring/:vfx/audio-one-shot/:vfx/fade children are real. Same fade-
-;; into-:alpha and radius-lerp translations as ring_fade_audio.edn. Old
-;; top-level :bounds dropped, see blood_retrograde_charge.edn's
-;; docstring.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/arc_ring_session.edn (S6)."
+        ":vfx/arc-field has no sample-node case (confirmed-dead class, see"
+        "blood_retrograde_charge.edn's docstring) -- dropped, only its sibling"
+        ":vfx/ring/:vfx/audio-one-shot/:vfx/fade children are real. Same fade-"
+        "into-:alpha and radius-lerp translations as ring_fade_audio.edn. Old"
+        "top-level :bounds dropped, see blood_retrograde_charge.edn's"
+        "docstring."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

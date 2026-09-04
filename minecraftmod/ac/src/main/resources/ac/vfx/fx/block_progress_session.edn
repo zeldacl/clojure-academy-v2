@@ -1,8 +1,8 @@
-;; New-DSL conversion of ac/vfx/effects/block_progress_session.edn (S6).
-;; :vfx/block-progress has no sample-node case (confirmed-dead class, see
-;; blood_retrograde_charge.edn's docstring); empty :scene is the honest
-;; port.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/block_progress_session.edn (S6)."
+        ":vfx/block-progress has no sample-node case (confirmed-dead class, see"
+        "blood_retrograde_charge.edn's docstring); empty :scene is the honest"
+        "port."]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

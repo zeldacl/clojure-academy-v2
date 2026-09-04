@@ -1,21 +1,21 @@
-;; New-DSL conversion of ac/combat/abilities/vec_deviation.edn (S6). See
-;; vec_reflection.edn's docstring for the inlined combat/projectile-
-;; reflection-scan pattern and the :flow/once dedup translation this
-;; reuses verbatim. New here:
-;;
-;; - :state/write in :start, writing a state key derived from the
-;;   caster's CURRENT resource amount at activation time (not a tunable):
-;;   ?context/resources reads the whole resources map (the generic
-;;   ?context/name capability, :any-typed), then plain field access reads
-;;   :overload off it -- no new capability shape needed.
-;; - :collection/contains? (a projectile-type allowlist/blocklist check),
-;;   another cn.li.node.expr opcode that existed but was never wired into
-;;   ops/table -- same fix :math/select needed earlier.
-;; - cost/spend {:partial? true} with no :on-insufficient handler at all:
-;;   the deflect spend always partially succeeds and the ability
-;;   continues regardless, so its boolean result is simply discarded
-;;   (called as a bare statement, not bound).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/vec_deviation.edn (S6). See"
+        "vec_reflection.edn's docstring for the inlined combat/projectile-"
+        "reflection-scan pattern and the :flow/once dedup translation this"
+        "reuses verbatim. New here:"
+        ""
+        "- :state/write in :start, writing a state key derived from the"
+        "  caster's CURRENT resource amount at activation time (not a tunable):"
+        "  ?context/resources reads the whole resources map (the generic"
+        "  ?context/name capability, :any-typed), then plain field access reads"
+        "  :overload off it -- no new capability shape needed."
+        "- :collection/contains? (a projectile-type allowlist/blocklist check),"
+        "  another cn.li.node.expr opcode that existed but was never wired into"
+        "  ops/table -- same fix :math/select needed earlier."
+        "- cost/spend {:partial? true} with no :on-insufficient handler at all:"
+        "  the deflect spend always partially succeeds and the ability"
+        "  continues regardless, so its boolean result is simply discarded"
+        "  (called as a bare statement, not bound)."]
+ :schema-version 2
  :kind :ability
  :id :vec-deviation
  :name-key "ability.skill.vecmanip.vec_deviation"

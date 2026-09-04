@@ -1,39 +1,39 @@
-;; New-DSL conversion of ac/combat/abilities/plasma_cannon.edn (S6).
-;; Session ability with an integer :mode state field (0 = charging,
-;; 1 = flight) rather than a keyword phase -- ported as :long with
-;; math/eq comparisons, matching the old content's own choice of raw
-;; integers over resource-id/keyword.
-;;
-;; :start's cost/spend uses a literal {:resources {:resources {}}}
-;; budget -- a doubly-nested EMPTY resources descriptor, clearly a
-;; generated artifact (the auto-named local it binds to,
-;; __txn_insufficient_-511703177, is not something a human would write)
-;; rather than hand-authored content. Spending an empty resource set can
-;; never fail, so its :then (insufficient-resource) branch is
-;; functionally dead -- but ported verbatim rather than simplified away,
-;; since there is no confirmed bug here (just a no-op gate), matching
-;; this migration's standing rule to only deviate from old content for
-;; CONFIRMED bugs with clear evidence, not merely unusual shapes.
-;;
-;; :start's ability/caster bind pulls a :seed field that has no
-;; corresponding entry in this ability's own :requires list (:rng/seed
-;; is absent) -- read here via ?rng/seed regardless, since :requires is
-;; declarative metadata a different subsystem consumes, not something
-;; the DSL compiler itself enforces; the top-level :requires array is
-;; kept exactly as the old content had it (an oversight there, not
-;; something this conversion's job is to correct).
-;;
-;; The impact branch's leading {:component :state/read :key :destination}
-;; re-reads state already bound (identically) earlier in the same
-;; :pulse, no intervening write -- dropped as a duplicate, the same
-;; class of simplification already established (shift_teleport.edn).
-;;
-;; [0.0 dynamic-offset 0.0] (the spawn-y-offset vertical nudge) is not a
-;; vec3 literal here (compile.clj's vec3-literal? requires every element
-;; to already be a number at parse time) -- ported via
-;; (vec3/scale [0.0 1.0 0.0] dynamic-offset), the same fix
-;; directed_shock.edn's docstring already established.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/plasma_cannon.edn (S6)."
+        "Session ability with an integer :mode state field (0 = charging,"
+        "1 = flight) rather than a keyword phase -- ported as :long with"
+        "math/eq comparisons, matching the old content's own choice of raw"
+        "integers over resource-id/keyword."
+        ""
+        ":start's cost/spend uses a literal {:resources {:resources {}}}"
+        "budget -- a doubly-nested EMPTY resources descriptor, clearly a"
+        "generated artifact (the auto-named local it binds to,"
+        "__txn_insufficient_-511703177, is not something a human would write)"
+        "rather than hand-authored content. Spending an empty resource set can"
+        "never fail, so its :then (insufficient-resource) branch is"
+        "functionally dead -- but ported verbatim rather than simplified away,"
+        "since there is no confirmed bug here (just a no-op gate), matching"
+        "this migration's standing rule to only deviate from old content for"
+        "CONFIRMED bugs with clear evidence, not merely unusual shapes."
+        ""
+        ":start's ability/caster bind pulls a :seed field that has no"
+        "corresponding entry in this ability's own :requires list (:rng/seed"
+        "is absent) -- read here via ?rng/seed regardless, since :requires is"
+        "declarative metadata a different subsystem consumes, not something"
+        "the DSL compiler itself enforces; the top-level :requires array is"
+        "kept exactly as the old content had it (an oversight there, not"
+        "something this conversion's job is to correct)."
+        ""
+        "The impact branch's leading {:component :state/read :key :destination}"
+        "re-reads state already bound (identically) earlier in the same"
+        ":pulse, no intervening write -- dropped as a duplicate, the same"
+        "class of simplification already established (shift_teleport.edn)."
+        ""
+        "[0.0 dynamic-offset 0.0] (the spawn-y-offset vertical nudge) is not a"
+        "vec3 literal here (compile.clj's vec3-literal? requires every element"
+        "to already be a number at parse time) -- ported via"
+        "(vec3/scale [0.0 1.0 0.0] dynamic-offset), the same fix"
+        "directed_shock.edn's docstring already established."]
+ :schema-version 2
  :kind :ability
  :id :plasma-cannon
  :name-key "ability.skill.vecmanip.plasma_cannon"

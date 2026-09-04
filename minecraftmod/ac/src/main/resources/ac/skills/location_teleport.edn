@@ -1,15 +1,15 @@
-;; New-DSL conversion of ac/combat/abilities/location_teleport.edn (S6).
-;; See rad_intensify.edn/electron_bomb.edn/mine_detect.edn's docstrings for
-;; the general pattern. New here: a truthy (not strictly :boolean) branch
-;; condition (destination, :any-typed, nil when not found -- the emitter's
-;; :branch op is a bare Clojure `if` on the raw value, so nil/false-y
-;; still works exactly like a real boolean, no gap), a dynamically-built
-;; (not pre-resolved) cost/spend budget descriptor, and the first real
-;; call-site of cn.li.combat.lib's own combat/teleport-group composite.
-;;
-;; :ability/context folds into the ?context/name sigil (:context/
-;; location-name here), per cn.li.combat.dsl-vocabulary's own docstring.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/location_teleport.edn (S6)."
+        "See rad_intensify.edn/electron_bomb.edn/mine_detect.edn's docstrings for"
+        "the general pattern. New here: a truthy (not strictly :boolean) branch"
+        "condition (destination, :any-typed, nil when not found -- the emitter's"
+        ":branch op is a bare Clojure `if` on the raw value, so nil/false-y"
+        "still works exactly like a real boolean, no gap), a dynamically-built"
+        "(not pre-resolved) cost/spend budget descriptor, and the first real"
+        "call-site of cn.li.combat.lib's own combat/teleport-group composite."
+        ""
+        ":ability/context folds into the ?context/name sigil (:context/"
+        "location-name here), per cn.li.combat.dsl-vocabulary's own docstring."]
+ :schema-version 2
  :kind :ability
  :id :location-teleport
  :name-key "ability.skill.teleporter.location_teleport"

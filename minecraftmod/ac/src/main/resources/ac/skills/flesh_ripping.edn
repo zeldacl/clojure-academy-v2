@@ -1,7 +1,7 @@
-;; New-DSL conversion of ac/combat/abilities/flesh_ripping.edn (S6). Session
-;; ability. No new language gaps -- every op/node used here was already
-;; added converting earlier abilities.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/flesh_ripping.edn (S6). Session"
+        "ability. No new language gaps -- every op/node used here was already"
+        "added converting earlier abilities."]
+ :schema-version 2
  :kind :ability
  :id :flesh-ripping
  :name-key "ability.skill.teleporter.flesh_ripping"

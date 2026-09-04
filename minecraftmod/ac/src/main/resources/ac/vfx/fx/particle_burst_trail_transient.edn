@@ -1,8 +1,8 @@
-;; New-DSL conversion of ac/vfx/effects/particle_burst_trail_transient.edn
-;; (S6). :vfx/particle-trail has no sample-node case (confirmed-dead
-;; class, see blood_retrograde_charge.edn's docstring); empty :scene is
-;; the honest port. Old top-level :bounds dropped, same reasoning.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/particle_burst_trail_transient.edn"
+        "(S6). :vfx/particle-trail has no sample-node case (confirmed-dead"
+        "class, see blood_retrograde_charge.edn's docstring); empty :scene is"
+        "the honest port. Old top-level :bounds dropped, same reasoning."]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

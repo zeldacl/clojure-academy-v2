@@ -1,6 +1,6 @@
-;; New-DSL conversion of ac/combat/abilities/brain_course_advanced.edn (S6).
-;; Same pattern as brain_course.edn -- passive, :passive-effects only.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/brain_course_advanced.edn (S6)."
+        "Same pattern as brain_course.edn -- passive, :passive-effects only."]
+ :schema-version 2
  :kind :ability
  :id :brain-course-advanced
  :revision 1

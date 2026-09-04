@@ -1,36 +1,36 @@
-;; New-DSL conversion of ac/combat/abilities/shift_teleport.edn (S6).
-;; Session ability -- despite the name, :release never teleports the
-;; caster: it places the held block at the traced destination
-;; (inventory/place-or-drop) and damages every entity standing in the
-;; line between the caster's body and that destination. :start/:pulse
-;; are near-identical (recompute hand-item/trace/targets every tick,
-;; same three-way validity check) -- kept duplicated rather than
-;; factored into a shared :defn, matching the old content's OWN choice
-;; to duplicate this block rather than share it (the same duplication
-;; class thunder_bolt.edn's docstring already flagged and left as-is).
-;;
-;; :score/mark's old component embedded a full {:per-mark {:expr ...}}
-;; descriptor directly at the call site instead of going through an
-;; ability-level :progression capability (this ability's OWN top-level
-;; :progression is nil -- there is no :progression/<name> to read).
-;; Every other converted ability's :progression value has been a plain
-;; already-resolved number read via ?progression/name; event!'s :type
-;; :score/mark is untyped against any vocab (compiles every field but
-;; :type as an ordinary pure expression, per node-core/compile.clj's own
-;; compile-event docstring), so the fix is to compute the same formula
-;; inline as a pure expression and pass the resulting number directly,
-;; which is exactly what the old {:per-mark ...} descriptor would have
-;; resolved to at the same call site.
-;;
-;; :release's :else (insufficient-resource) branch re-read :targets from
-;; state a second time under the exact same name with no intervening
-;; write -- the already-bound `targets` local is the identical value,
-;; so the duplicate read is dropped. :release's trailing
-;; {:component :flow/finish :outcome :released ...} after a branch whose
-;; every arm already finishes is the same dead-code-after-branch shape
-;; mark_teleport.edn's own conversion already established a precedent
-;; for dropping.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/shift_teleport.edn (S6)."
+        "Session ability -- despite the name, :release never teleports the"
+        "caster: it places the held block at the traced destination"
+        "(inventory/place-or-drop) and damages every entity standing in the"
+        "line between the caster's body and that destination. :start/:pulse"
+        "are near-identical (recompute hand-item/trace/targets every tick,"
+        "same three-way validity check) -- kept duplicated rather than"
+        "factored into a shared :defn, matching the old content's OWN choice"
+        "to duplicate this block rather than share it (the same duplication"
+        "class thunder_bolt.edn's docstring already flagged and left as-is)."
+        ""
+        ":score/mark's old component embedded a full {:per-mark {:expr ...}}"
+        "descriptor directly at the call site instead of going through an"
+        "ability-level :progression capability (this ability's OWN top-level"
+        ":progression is nil -- there is no :progression/<name> to read)."
+        "Every other converted ability's :progression value has been a plain"
+        "already-resolved number read via ?progression/name; event!'s :type"
+        ":score/mark is untyped against any vocab (compiles every field but"
+        ":type as an ordinary pure expression, per node-core/compile.clj's own"
+        "compile-event docstring), so the fix is to compute the same formula"
+        "inline as a pure expression and pass the resulting number directly,"
+        "which is exactly what the old {:per-mark ...} descriptor would have"
+        "resolved to at the same call site."
+        ""
+        ":release's :else (insufficient-resource) branch re-read :targets from"
+        "state a second time under the exact same name with no intervening"
+        "write -- the already-bound `targets` local is the identical value,"
+        "so the duplicate read is dropped. :release's trailing"
+        "{:component :flow/finish :outcome :released ...} after a branch whose"
+        "every arm already finishes is the same dead-code-after-branch shape"
+        "mark_teleport.edn's own conversion already established a precedent"
+        "for dropping."]
+ :schema-version 2
  :kind :ability
  :id :shift-teleport
  :name-key "ability.skill.teleporter.shift_teleport"

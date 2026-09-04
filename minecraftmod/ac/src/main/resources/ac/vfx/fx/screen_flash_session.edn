@@ -1,21 +1,21 @@
-;; New-DSL conversion of ac/vfx/effects/screen_flash_session.edn (S6).
-;; The old :control-graph was already an empty :vfx/timeline (:children
-;; []) -- this effect's :inputs (alpha/duration/color) are presentation-
-;; side-channel data consumed directly by the client HUD overlay, never
-;; by the geometry sampler at all, so an empty :scene is an exact port,
-;; not the "confirmed-dead component" case the other empty-:scene files
-;; in this pass are (see blood_retrograde_charge.edn's docstring).
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/screen_flash_session.edn (S6)."
+        "The old :control-graph was already an empty :vfx/timeline (:children"
+        "[]) -- this effect's :inputs (alpha/duration/color) are presentation-"
+        "side-channel data consumed directly by the client HUD overlay, never"
+        "by the geometry sampler at all, so an empty :scene is an exact port,"
+        "not the \"confirmed-dead component\" case the other empty-:scene files"
+        "in this pass are (see blood_retrograde_charge.edn's docstring)."
+        "Generic presentation side channel; intensity, duration and color are"
+        "supplied by the signal and are not tied to any skill. A screen-space"
+        "overlay is inherently first-person-only -- broadcasting it would flash"
+        "nearby players' screens, not the caster's."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1
  :id :screen-flash-session
  :revision 1
  :lifecycle :transient
- ;; Generic presentation side channel; intensity, duration and color are
- ;; supplied by the signal and are not tied to any skill. A screen-space
- ;; overlay is inherently first-person-only -- broadcasting it would flash
- ;; nearby players' screens, not the caster's.
  :audience {:scope :self}
  :inputs {:spawn {:alpha :float :duration-ticks :int :color :any}
           :update {:alpha :float}

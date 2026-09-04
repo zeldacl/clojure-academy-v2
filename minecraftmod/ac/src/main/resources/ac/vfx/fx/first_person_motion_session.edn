@@ -1,9 +1,9 @@
-;; New-DSL conversion of ac/vfx/effects/first_person_motion_session.edn
-;; (S6). :vfx/first-person-motion has no sample-node case (same confirmed-
-;; dead class as blood_retrograde_charge.edn -- see that file's docstring
-;; for the full grep-confirmed case list and reasoning); empty :scene is
-;; the honest port, not an invented replacement.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/first_person_motion_session.edn"
+        "(S6). :vfx/first-person-motion has no sample-node case (same confirmed-"
+        "dead class as blood_retrograde_charge.edn -- see that file's docstring"
+        "for the full grep-confirmed case list and reasoning); empty :scene is"
+        "the honest port, not an invented replacement."]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

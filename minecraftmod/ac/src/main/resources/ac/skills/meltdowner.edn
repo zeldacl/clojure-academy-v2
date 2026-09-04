@@ -1,37 +1,37 @@
-;; New-DSL conversion of ac/combat/abilities/meltdowner.edn (S6). Session
-;; hold-charge beam ability. Second real ac call site of
-;; cn.li.combat.lib's combat/beam-strike (after railgun.edn) -- and this
-;; one exposes a real double-damage bug the old content had: the OLD
-;; :combat/beam-strike COMPOSITE (combat-core/composites/beam_strike.edn,
-;; the direct source combat-core/lib/beam_strike.edn was ported from)
-;; already applies direct-or-reflection combat/damage to every hit
-;; entity internally. meltdowner's old :release then ran its OWN SEPARATE
-;; flow/foreach over the SAME beam-result :entities, calling combat/damage
-;; AGAIN for every hit (both the reflection and direct branches) with the
-;; identical target/amount the composite had just applied -- genuinely
-;; double-inflicted damage, not an intentional second effect. railgun.edn
-;; (the first beam-strike call site) shows what the correctly-scoped
-;; second loop looks like: side-effect bookkeeping only (there,
-;; achievement triggers), never a second combat/damage. Ported here as
-;; the reflection-only VFX spawn the second loop legitimately adds,
-;; with the redundant combat/damage calls dropped -- the same class of
-;; real bug already found and fixed this session (groundshock.edn's
-;; double cost/spend, scatter_bomb.edn's stale +1 vfx display).
-;;
-;; :hold-ticks's :pulse-time overcharge/camera-offset comparisons read
-;; {:ref [:state :hold-ticks]} AFTER this same :pulse already wrote the
-;; freshly-incremented value earlier in the sequence -- the established
-;; same-activation state-visibility gotcha (final_engine.clj's
-;; bind-state! mutates immediately; groundshock.edn/directed_blastwave.edn
-;; already document the fix): translated as the already-computed
-;; `next-hold-ticks` local, never a %hold-ticks re-read.
-;;
-;; The old top-level EDN has no :session-state key at all (verified by
-;; grep -- genuinely absent, not a truncation), even though :start/:pulse
-;; both state/write hold-ticks/time-rate/overload-floor. Kept absent
-;; here too, matching the "preserve every OLD top-level key exactly,
-;; including its absence" rule already established for this migration.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/meltdowner.edn (S6). Session"
+        "hold-charge beam ability. Second real ac call site of"
+        "cn.li.combat.lib's combat/beam-strike (after railgun.edn) -- and this"
+        "one exposes a real double-damage bug the old content had: the OLD"
+        ":combat/beam-strike COMPOSITE (combat-core/composites/beam_strike.edn,"
+        "the direct source combat-core/lib/beam_strike.edn was ported from)"
+        "already applies direct-or-reflection combat/damage to every hit"
+        "entity internally. meltdowner's old :release then ran its OWN SEPARATE"
+        "flow/foreach over the SAME beam-result :entities, calling combat/damage"
+        "AGAIN for every hit (both the reflection and direct branches) with the"
+        "identical target/amount the composite had just applied -- genuinely"
+        "double-inflicted damage, not an intentional second effect. railgun.edn"
+        "(the first beam-strike call site) shows what the correctly-scoped"
+        "second loop looks like: side-effect bookkeeping only (there,"
+        "achievement triggers), never a second combat/damage. Ported here as"
+        "the reflection-only VFX spawn the second loop legitimately adds,"
+        "with the redundant combat/damage calls dropped -- the same class of"
+        "real bug already found and fixed this session (groundshock.edn's"
+        "double cost/spend, scatter_bomb.edn's stale +1 vfx display)."
+        ""
+        ":hold-ticks's :pulse-time overcharge/camera-offset comparisons read"
+        "{:ref [:state :hold-ticks]} AFTER this same :pulse already wrote the"
+        "freshly-incremented value earlier in the sequence -- the established"
+        "same-activation state-visibility gotcha (final_engine.clj's"
+        "bind-state! mutates immediately; groundshock.edn/directed_blastwave.edn"
+        "already document the fix): translated as the already-computed"
+        "`next-hold-ticks` local, never a %hold-ticks re-read."
+        ""
+        "The old top-level EDN has no :session-state key at all (verified by"
+        "grep -- genuinely absent, not a truncation), even though :start/:pulse"
+        "both state/write hold-ticks/time-rate/overload-floor. Kept absent"
+        "here too, matching the \"preserve every OLD top-level key exactly,"
+        "including its absence\" rule already established for this migration."]
+ :schema-version 2
  :kind :ability
  :id :meltdowner
  :name-key "ability.skill.meltdowner.meltdowner"

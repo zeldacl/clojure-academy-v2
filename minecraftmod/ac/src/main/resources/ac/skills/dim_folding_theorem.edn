@@ -1,11 +1,11 @@
-;; New-DSL conversion of ac/combat/abilities/dim_folding_theorem.edn (S6).
-;; Same shape as rad_intensify.edn's own conversion (see that file's
-;; docstring for the general pattern): only :program moves to new-DSL text;
-;; :damage-policies stays verbatim, still consumed by cn.li.combat.damage's
-;; :ref/:expr interpreter, not this ability's own :do/:phases body. Passive,
-;; no :do logic of its own -- real behavior lives entirely in
-;; :damage-policies (a chance-based critical-hit multiplier).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/dim_folding_theorem.edn (S6)."
+        "Same shape as rad_intensify.edn's own conversion (see that file's"
+        "docstring for the general pattern): only :program moves to new-DSL text;"
+        ":damage-policies stays verbatim, still consumed by cn.li.combat.damage's"
+        ":ref/:expr interpreter, not this ability's own :do/:phases body. Passive,"
+        "no :do logic of its own -- real behavior lives entirely in"
+        ":damage-policies (a chance-based critical-hit multiplier)."]
+ :schema-version 2
  :kind :ability
  :id :dim-folding-theorem
  :revision 2

@@ -1,12 +1,12 @@
-;; New-DSL conversion of ac/vfx/effects/teleport_marker.edn (S6). Mixed
-;; file: :vfx/humanoid-marker has no sample-node case (confirmed-dead
-;; class, see blood_retrograde_charge.edn's docstring) and is dropped
-;; along with its own :owner/:texture-pattern/:frame-count/:frame-period-
-;; ticks/:facing fields (:owner is now unused by anything real, matching
-;; the ability-conversion "drop dead reads" precedent) -- only the
-;; sibling :vfx/emitter is real. Old top-level :bounds dropped, see
-;; blood_retrograde_charge.edn's docstring.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/teleport_marker.edn (S6). Mixed"
+        "file: :vfx/humanoid-marker has no sample-node case (confirmed-dead"
+        "class, see blood_retrograde_charge.edn's docstring) and is dropped"
+        "along with its own :owner/:texture-pattern/:frame-count/:frame-period-"
+        "ticks/:facing fields (:owner is now unused by anything real, matching"
+        "the ability-conversion \"drop dead reads\" precedent) -- only the"
+        "sibling :vfx/emitter is real. Old top-level :bounds dropped, see"
+        "blood_retrograde_charge.edn's docstring."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

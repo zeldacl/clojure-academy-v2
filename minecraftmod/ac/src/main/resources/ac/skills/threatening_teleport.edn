@@ -1,21 +1,21 @@
-;; New-DSL conversion of ac/combat/abilities/threatening_teleport.edn (S6).
-;; Session ability. New wrinkle: the old :pulse/:release branch conditions
-;; test the RAW raycast result ({:ref [:local :trace]}, a plain truthy
-;; check for \"did the raycast even run\"), not one of its fields. Every
-;; earlier conversion that needed a truthy check always branched on a
-;; FIELD read off a hit-result (:any-typed by construction, so directly
-;; usable as a condition via cn.li.node.types/assignable?'s :any escape
-;; hatch); target/raycast's own :returns is the concrete opaque type
-;; :hit-result, which is NOT bidirectionally assignable to :boolean, so
-;; branching on `trace` itself would be a real type-mismatch compile
-;; error. (bool/not (value/eq trace nil)) sidesteps it cleanly: value/eq's
-;; params are :any on both sides, so it accepts any concrete type without
-;; a cast, and nil vs a real map is exactly the \"did this exist\" check
-;; the old raw truthy read meant.
-;;
-;; Also drops the same dead trailing-finish-after-an-already-exhaustive-
-;; branch pattern mark_teleport.edn's docstring already covers.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/threatening_teleport.edn (S6)."
+        "Session ability. New wrinkle: the old :pulse/:release branch conditions"
+        "test the RAW raycast result ({:ref [:local :trace]}, a plain truthy"
+        "check for \\\"did the raycast even run\\\"), not one of its fields. Every"
+        "earlier conversion that needed a truthy check always branched on a"
+        "FIELD read off a hit-result (:any-typed by construction, so directly"
+        "usable as a condition via cn.li.node.types/assignable?'s :any escape"
+        "hatch); target/raycast's own :returns is the concrete opaque type"
+        ":hit-result, which is NOT bidirectionally assignable to :boolean, so"
+        "branching on `trace` itself would be a real type-mismatch compile"
+        "error. (bool/not (value/eq trace nil)) sidesteps it cleanly: value/eq's"
+        "params are :any on both sides, so it accepts any concrete type without"
+        "a cast, and nil vs a real map is exactly the \\\"did this exist\\\" check"
+        "the old raw truthy read meant."
+        ""
+        "Also drops the same dead trailing-finish-after-an-already-exhaustive-"
+        "branch pattern mark_teleport.edn's docstring already covers."]
+ :schema-version 2
  :kind :ability
  :id :threatening-teleport
  :name-key "ability.skill.teleporter.threatening_teleport"

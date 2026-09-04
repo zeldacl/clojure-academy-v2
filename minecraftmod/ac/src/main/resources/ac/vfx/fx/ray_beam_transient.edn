@@ -1,7 +1,7 @@
-;; New-DSL conversion of ac/vfx/effects/ray_beam_transient.edn (S6). Same
-;; dead :life-ticks drop as beam_session.edn. Old top-level :bounds
-;; dropped, see blood_retrograde_charge.edn's docstring.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/ray_beam_transient.edn (S6). Same"
+        "dead :life-ticks drop as beam_session.edn. Old top-level :bounds"
+        "dropped, see blood_retrograde_charge.edn's docstring."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

@@ -1,57 +1,57 @@
-;; New-DSL conversion of ac/combat/abilities/storm_wing.edn (S6). Toggle
-;; flight ability (:release-keeps-session? true -- releasing the toggle
-;; button does not end flight, only :abort does) with an integer
-;; :phase state field (0 = charging, 1 = flying), ported as :long with
-;; math/eq, matching plasma_cannon.edn's same choice.
-;;
-;; :terrain/random-break turned out to already exist as a :defn
-;; composite (combat-core/lib/random_break.edn, ported earlier this
-;; session before any real ac content exercised it) -- this is its
-;; first real ac call site, confirming the composite's own signature
-;; [origin radius attempts hardness-max] and its documented dropped
-;; :seed param (the new engine reads the activation's RNG cursor
-;; implicitly, same as random/chance). Initially misdiagnosed as an
-;; unwired vocab gap and given a duplicate :terrain/random-break vocab
-;; node before catching the mistake; that duplicate was reverted, not
-;; kept, since compile-call checks :fns (composites) before :vocab and
-;; would have shadowed it as dead code either way.
-;;
-;; combat-core/run.clj's capability-type had a speculative
-;; \"movement\" :boolean case with no real content behind it. This
-;; ability is the first real usage of ?movement/*, and every one it
-;; reads (forward/right/back/left) is a direction VECTOR -- consumed
-;; both as motion/flight's :direction and as vfx orientation fields,
-;; never a boolean. Fixed to :vec3, the same class of \"first real
-;; usage reveals the original guess was wrong\" fix already applied to
-;; :target/raycast-fan's :yaw-range-degrees and :entity/spawn's
-;; :entity-type.
-;;
-;; {:ref [:frame :seed]} (the old engine's per-dispatch RNG source,
-;; used to decorrelate the four vortex columns' particle patterns) maps
-;; to the same activation seed capability every other conversion this
-;; session already reads as ?rng/seed -- no new engine concept needed,
-;; just a different old-engine spelling for the same thing (mirroring
-;; plasma_cannon.edn's ability/caster :seed bind, which needed the
-;; identical translation).
-;;
-;; No top-level :session-state key at all (verified by grep -- genuinely
-;; absent), same as meltdowner.edn/mine_ray.edn's own already-documented
-;; cases; the new :program's own :state declaration is self-contained
-;; regardless.
-;;
-;; The vortex-column vfx update block (four columns + particle + audio,
-;; identical structure) is repeated twice in the old :pulse (once right
-;; after the charge-time transition into phase 1, once every tick while
-;; already in phase 1) -- kept duplicated rather than factored into a
-;; shared :defn, the same choice already established for this session's
-;; other same-ability repeated blocks. Each update's own :alpha formula
-;; (select on phase==0) is always-false at BOTH of these call sites
-;; (phase is guaranteed already 1 by the time either block runs) but is
-;; ported as the full formula verbatim rather than simplified to the
-;; constant it always evaluates to -- this is ordinary logic that always
-;; takes one branch at runtime, not the syntactically-dead/unreferenced
-;; kind of code this migration's other conversions have dropped.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/storm_wing.edn (S6). Toggle"
+        "flight ability (:release-keeps-session? true -- releasing the toggle"
+        "button does not end flight, only :abort does) with an integer"
+        ":phase state field (0 = charging, 1 = flying), ported as :long with"
+        "math/eq, matching plasma_cannon.edn's same choice."
+        ""
+        ":terrain/random-break turned out to already exist as a :defn"
+        "composite (combat-core/lib/random_break.edn, ported earlier this"
+        "session before any real ac content exercised it) -- this is its"
+        "first real ac call site, confirming the composite's own signature"
+        "[origin radius attempts hardness-max] and its documented dropped"
+        ":seed param (the new engine reads the activation's RNG cursor"
+        "implicitly, same as random/chance). Initially misdiagnosed as an"
+        "unwired vocab gap and given a duplicate :terrain/random-break vocab"
+        "node before catching the mistake; that duplicate was reverted, not"
+        "kept, since compile-call checks :fns (composites) before :vocab and"
+        "would have shadowed it as dead code either way."
+        ""
+        "combat-core/run.clj's capability-type had a speculative"
+        "\\\"movement\\\" :boolean case with no real content behind it. This"
+        "ability is the first real usage of ?movement/*, and every one it"
+        "reads (forward/right/back/left) is a direction VECTOR -- consumed"
+        "both as motion/flight's :direction and as vfx orientation fields,"
+        "never a boolean. Fixed to :vec3, the same class of \\\"first real"
+        "usage reveals the original guess was wrong\\\" fix already applied to"
+        ":target/raycast-fan's :yaw-range-degrees and :entity/spawn's"
+        ":entity-type."
+        ""
+        "{:ref [:frame :seed]} (the old engine's per-dispatch RNG source,"
+        "used to decorrelate the four vortex columns' particle patterns) maps"
+        "to the same activation seed capability every other conversion this"
+        "session already reads as ?rng/seed -- no new engine concept needed,"
+        "just a different old-engine spelling for the same thing (mirroring"
+        "plasma_cannon.edn's ability/caster :seed bind, which needed the"
+        "identical translation)."
+        ""
+        "No top-level :session-state key at all (verified by grep -- genuinely"
+        "absent), same as meltdowner.edn/mine_ray.edn's own already-documented"
+        "cases; the new :program's own :state declaration is self-contained"
+        "regardless."
+        ""
+        "The vortex-column vfx update block (four columns + particle + audio,"
+        "identical structure) is repeated twice in the old :pulse (once right"
+        "after the charge-time transition into phase 1, once every tick while"
+        "already in phase 1) -- kept duplicated rather than factored into a"
+        "shared :defn, the same choice already established for this session's"
+        "other same-ability repeated blocks. Each update's own :alpha formula"
+        "(select on phase==0) is always-false at BOTH of these call sites"
+        "(phase is guaranteed already 1 by the time either block runs) but is"
+        "ported as the full formula verbatim rather than simplified to the"
+        "constant it always evaluates to -- this is ordinary logic that always"
+        "takes one branch at runtime, not the syntactically-dead/unreferenced"
+        "kind of code this migration's other conversions have dropped."]
+ :schema-version 2
  :kind :ability
  :id :storm-wing
  :name-key "ability.skill.vecmanip.storm_wing"

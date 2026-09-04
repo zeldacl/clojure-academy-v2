@@ -1,14 +1,14 @@
-;; New-DSL conversion of ac/combat/abilities/vec_accel.edn (S6). Session
-;; ability (charge on :pulse, act on :release), the first real use of
-;; :vec3/launch -- see node-core's expr.clj/ops.clj for that op's own
-;; from-scratch implementation, since the old system referenced this
-;; opcode but never actually provided one anywhere (confirmed by an
-;; exhaustive search; it would have thrown at the one call site that used
-;; it). :session-state stays as separate, unchanged legacy metadata
-;; (still possibly consumed by a network-sync schema this pass does not
-;; touch); the :program's own :state block is what node-core actually
-;; compiles against.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/vec_accel.edn (S6). Session"
+        "ability (charge on :pulse, act on :release), the first real use of"
+        ":vec3/launch -- see node-core's expr.clj/ops.clj for that op's own"
+        "from-scratch implementation, since the old system referenced this"
+        "opcode but never actually provided one anywhere (confirmed by an"
+        "exhaustive search; it would have thrown at the one call site that used"
+        "it). :session-state stays as separate, unchanged legacy metadata"
+        "(still possibly consumed by a network-sync schema this pass does not"
+        "touch); the :program's own :state block is what node-core actually"
+        "compiles against."]
+ :schema-version 2
  :kind :ability
  :id :vec-accel
  :name-key "ability.skill.vecmanip.vec_accel"

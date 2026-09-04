@@ -1,16 +1,16 @@
-;; New-DSL conversion of ac/combat/abilities/electron_bomb.edn (S6). First
-;; real (non-passive) conversion: spawns a marker entity, schedules a
-;; delayed beam off it, commits progression and cooldown. See
-;; rad_intensify.edn's docstring for the general file-shape pattern
-;; (:program moves; everything else stays byte-for-byte old-format).
-;;
-;; :score/mark (old system: an emitted EVENT, not a host command -- see
-;; final_engine.clj's :score/mark case) is `event!`, not a vocab node call.
-;; :ability/progression / :ability/cooldown (capability reads of the
-;; already-resolved cast progression / main cooldown ticks) fold into the
-;; ?progression/cast / ?cooldown/main sigils, per cn.li.combat.dsl-
-;; vocabulary's own docstring.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/electron_bomb.edn (S6). First"
+        "real (non-passive) conversion: spawns a marker entity, schedules a"
+        "delayed beam off it, commits progression and cooldown. See"
+        "rad_intensify.edn's docstring for the general file-shape pattern"
+        "(:program moves; everything else stays byte-for-byte old-format)."
+        ""
+        ":score/mark (old system: an emitted EVENT, not a host command -- see"
+        "final_engine.clj's :score/mark case) is `event!`, not a vocab node call."
+        ":ability/progression / :ability/cooldown (capability reads of the"
+        "already-resolved cast progression / main cooldown ticks) fold into the"
+        "?progression/cast / ?cooldown/main sigils, per cn.li.combat.dsl-"
+        "vocabulary's own docstring."]
+ :schema-version 2
  :kind :ability
  :id :electron-bomb
  :name-key "ability.skill.meltdowner.electron_bomb"

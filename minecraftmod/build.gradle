@@ -1478,6 +1478,46 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
     }
 }
 
+tasks.register("verifyContentEdnNoRawComments") {
+    group = "verification"
+    description = "ac/skills/*.edn and ac/vfx/fx/*.edn must carry their authoring notes as a :doc data field, not raw ;; EDN comments -- the node editor's save path (cn.li.ability.editor.document/splice-program) only preserves bytes OUTSIDE the :program/:scene string; a raw comment would silently vanish the first time the file is saved through the editor, where a :doc entry survives because it round-trips like any other data. Migrated in the node-editor plan's Phase 1 (all 75 files verified content-identical outside the new :doc key via a git-diff-based check, not just eyeballed); this gate keeps it that way for new content going forward. A ';' inside a :doc string's own prose (an em-dash alternative, etc.) is fine -- only a LINE that starts with ';' (after leading whitespace) is a real EDN comment, which is what this checks."
+    doLast {
+        def roots = [file("ac/src/main/resources/ac/skills"), file("ac/src/main/resources/ac/vfx/fx")]
+        def offenders = []
+        roots.each { root ->
+            fileTree(root).matching { include "*.edn" }.each { f ->
+                f.readLines("UTF-8").eachWithIndex { line, idx ->
+                    if (line.trim().startsWith(";")) {
+                        offenders << "${f.path}:${idx + 1}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("raw ;; EDN comment found in content -- move it into :doc instead:\n" + offenders.join("\n"))
+        }
+        logger.lifecycle("[verifyContentEdnNoRawComments] ok")
+    }
+}
+
+tasks.register("verifyEditorLayoutSidecarNotLoaded") {
+    group = "verification"
+    description = "The node editor's layout sidecars (ac/skills/layout/<id>.layout.edn, ac/vfx/fx/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only :program/:scene. This gate asserts no ac source file references a 'skills/layout' or 'vfx/fx/layout' resource path -- vacuously true today (Phase 2/3 have not built the editor that writes these files yet), and stays true once they exist, since a runtime read would be a real layering violation (skill/VFX execution depending on editor-only UI state)."
+    doLast {
+        def offenders = []
+        fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
+            def text = f.text.replaceAll(/;.*$/, "")
+            if (text =~ /skills\/layout|vfx\/fx\/layout/) {
+                offenders << f.path
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("runtime source references the editor-only layout sidecar path:\n" + offenders.join("\n"))
+        }
+        logger.lifecycle("[verifyEditorLayoutSidecarNotLoaded] ok")
+    }
+}
+
 tasks.register("verifyContentModuleCoreIsolation") {
     group = "verification"
     description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring, and -- added for the node editor's Phase 0 palette-translation datagen -- cn.li.node.ops/cn.li.vfx.api for the pure-op table and the VFX scene vocabulary); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here."
@@ -2523,6 +2563,8 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatLegacyRuntimeRemoval",
               "verifyAbilityCompositionBoundary",
               "verifyContentModuleCoreIsolation",
+              "verifyContentEdnNoRawComments",
+              "verifyEditorLayoutSidecarNotLoaded",
               "verifyCombatSingleDamagePath",
               "verifyAcNoWorldCapabilities",
               "verifyAbilityVfxRegistryCoverage",

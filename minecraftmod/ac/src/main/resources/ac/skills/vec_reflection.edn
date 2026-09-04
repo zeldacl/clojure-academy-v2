@@ -1,32 +1,32 @@
-;; New-DSL conversion of ac/combat/abilities/vec_reflection.edn (S6). See
-;; earlier skills/*.edn docstrings for the general pattern. First :toggle
-;; ability (start/pulse/release/abort, all real logic) and first real call
-;; site of all three previously-deferred pieces:
-;;
-;; - combat/projectile-reflection-scan (one of the 3 callback-typed old
-;;   composites the plan always intended to INLINE at call sites rather
-;;   than port as a first-class higher-order :defn, since :defn params
-;;   cannot themselves be sub-programs) -- inlined directly as
-;;   target/entities + each below, reading straight off
-;;   combat-core/composites/projectile_reflection_scan.edn's own body.
-;; - :flow/once (old: skip an already-processed projectile within one
-;;   pulse's scan, deduped by :last-key -- final_engine.clj's run-once).
-;;   No new DSL form needed: reads down to `(value/eq %state new-key)` --
-;;   nil never equals a real id, so the FIRST time through, the state
-;;   read alone already produces the same \"not present yet\" outcome
-;;   run-once's own :last-key strategy special-cased.
-;; - :flow/control :signal :skip-item (old: abort the rest of THIS
-;;   projectile's processing on an insufficient per-reflect spend, but
-;;   keep scanning the rest). No new DSL form needed either: since the
-;;   remaining per-projectile steps are exactly the reflect-sufficient?
-;;   branch's own body, nesting them inside `when reflect-sufficient?`
-;;   IS the skip -- the outer `each` keeps going regardless either way.
-;;
-;; ?invariant/name (:overload-floor here) is a new capability namespace --
-;; cn.li.combat.run's capability-type had no case for it at all before
-;; this conversion (every :ability/invariant read would have been an
-;; undeclared-capability compile error).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/vec_reflection.edn (S6). See"
+        "earlier skills/*.edn docstrings for the general pattern. First :toggle"
+        "ability (start/pulse/release/abort, all real logic) and first real call"
+        "site of all three previously-deferred pieces:"
+        ""
+        "- combat/projectile-reflection-scan (one of the 3 callback-typed old"
+        "  composites the plan always intended to INLINE at call sites rather"
+        "  than port as a first-class higher-order :defn, since :defn params"
+        "  cannot themselves be sub-programs) -- inlined directly as"
+        "  target/entities + each below, reading straight off"
+        "  combat-core/composites/projectile_reflection_scan.edn's own body."
+        "- :flow/once (old: skip an already-processed projectile within one"
+        "  pulse's scan, deduped by :last-key -- final_engine.clj's run-once)."
+        "  No new DSL form needed: reads down to `(value/eq %state new-key)` --"
+        "  nil never equals a real id, so the FIRST time through, the state"
+        "  read alone already produces the same \\\"not present yet\\\" outcome"
+        "  run-once's own :last-key strategy special-cased."
+        "- :flow/control :signal :skip-item (old: abort the rest of THIS"
+        "  projectile's processing on an insufficient per-reflect spend, but"
+        "  keep scanning the rest). No new DSL form needed either: since the"
+        "  remaining per-projectile steps are exactly the reflect-sufficient?"
+        "  branch's own body, nesting them inside `when reflect-sufficient?`"
+        "  IS the skip -- the outer `each` keeps going regardless either way."
+        ""
+        "?invariant/name (:overload-floor here) is a new capability namespace --"
+        "cn.li.combat.run's capability-type had no case for it at all before"
+        "this conversion (every :ability/invariant read would have been an"
+        "undeclared-capability compile error)."]
+ :schema-version 2
  :kind :ability
  :id :vec-reflection
  :name-key "ability.skill.vecmanip.vec_reflection"
