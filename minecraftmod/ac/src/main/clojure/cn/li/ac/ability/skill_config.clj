@@ -683,9 +683,23 @@
   (or (public-field-definition skill-id field-id)
       (internal-field-definition skill-id field-id)))
 
+(defn- live-registered-skill
+  "Fallback skill-def source for a skill-id with no skill-definitions entry
+   (an ad hoc/third-party skill registered outside the defskill DSL, e.g. a
+   test fixture): cn.li.ac.ability.registry.skill requires this namespace
+   (for apply-skill-overrides), so this can only reach back via
+   requiring-resolve, not a normal :require, to avoid a compile-time
+   circular dependency between the two. Only ever consulted when
+   skill-definitions-by-id has nothing for this id -- every real content
+   skill still resolves its default from the static table below, unchanged."
+  [skill-id]
+  (when-let [raw-skill (requiring-resolve 'cn.li.ac.ability.registry.skill/raw-skill)]
+    (raw-skill skill-id)))
+
 (defn- field-default
   [skill-id field-id]
-  (let [skill-def (get skill-definitions-by-id skill-id)
+  (let [skill-def (or (get skill-definitions-by-id skill-id)
+                       (live-registered-skill skill-id))
         field-def (field-definition skill-id field-id)]
     (skill-field-default skill-def field-def)))
 
