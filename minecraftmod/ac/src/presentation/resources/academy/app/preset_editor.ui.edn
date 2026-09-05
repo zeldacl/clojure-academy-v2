@@ -1,88 +1,130 @@
-;; Preset editor — current preset card + available-skills assign list.
-;; Prev/Next cycles presets (main carousel reduced to one live card for wiring).
+;; Preset editor — main preset_edit.xml + Selector popup.
+;; Screen title at (5,5); pages 116.2×141.5 centered; skill picker is a
+;; mouse-anchored icon grid (SIZE=15, STEP=18, MAX_PER_ROW=4).
 {:ui/schema 2 :view/id :academy.app/preset-editor
- :host {:kind :screen :design-width 500 :design-height 180 :scale-policy :fit}
- :state-schema {:title :string :preset-label :string :active-label :string
-                :preset-tabs :vector :slots :vector :available-skills :vector
-                :selected-slot :number :status :string :button-left :string :button-right :string}
+ :host {:kind :screen :design-width 540 :design-height 280 :scale-policy :fit}
+ :state-schema {:title :string
+                :cards :vector
+                :selector-visible? :boolean
+                :selector-x :number :selector-y :number
+                :selector-w :number :selector-h :number
+                :selector-tip-x :number :selector-tip-y :number
+                :selector-hint :string
+                :selector-hint-w :number
+                :selector-skills :vector}
  :root
- {:type :absolute :key :preset/root :layout {:width 500 :height 180}
+ {:type :absolute :key :preset/root :layout {:width 540 :height 280}
   :children
   [{:type :rect :key :preset/blackout
-    :layout {:x 0.0 :y 0.0 :width 500.0 :height 180.0}
-    :style {:rgba [0.0 0.0 0.0 0.55]}
+    :layout {:width :fill :height :fill}
+    :style {:rgba [0.0 0.0 0.0 0.7]}
     :semantics {:role :generic}}
 
+   ;; Main screen-title: pos 5,5 size 200×18 font 12 left-top
    {:type :text :key :preset/title
-    :layout {:x 5.0 :y 5.0 :width 200.0 :height 14.0}
-    :style {:font-size 11.0 :rgba [1.0 1.0 1.0 1.0]}
+    :layout {:x 5.0 :y 5.0 :width 200.0 :height 18.0}
+    :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
     :bind {:text [:state :title]}
     :semantics {:role :heading}}
 
-   {:type :text :key :preset/active
-    :layout {:x 220.0 :y 5.0 :width 180.0 :height 14.0}
-    :style {:font-size 9.0 :rgba [0.8 0.8 0.8 0.9]}
-    :bind {:text [:state :active-label]}}
-
-   {:type :row :key :preset/nav
-    :layout {:x 150.0 :y 20.0 :width 200.0 :height 16.0}
+   ;; Carousel stage — full design; cards self-center via controller x/y
+   {:type :absolute :key :preset/carousel
+    :layout {:width :fill :height :fill}
     :children
-    [{:type :button :layout {:width 60.0 :height 14.0}
-      :bind {:text [:state :button-left]}
-      :on {:activate :preset/previous}
-      :semantics {:role :button}}
-     {:type :text :layout {:width 80.0 :height 14.0} :style {:font-size 9.0}
-      :bind {:text [:state :preset-label]}}
-     {:type :button :layout {:width 60.0 :height 14.0}
-      :bind {:text [:state :button-right]}
-      :on {:activate :preset/next}
-      :semantics {:role :button}}]}
-
-   ;; Current preset slots
-   {:type :absolute :key :preset/card
-    :layout {:x 8.0 :y 40.0 :width 116.0 :height 130.0}
-    :children
-    [{:type :image :layout {:width 116.0 :height 130.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/preset_settings/back.png"}}
-      :semantics {:role :image}}
-     {:type :scroll :layout {:x 3.0 :y 14.0 :width 110.0 :height 110.0}
-      :bind {:items [:state :slots]}
-      :semantics {:role :list}
+    [{:type :repeater :key :preset/cards
+      :layout {:width :fill :height :fill :direction :none}
+      :bind {:items [:state :cards]}
       :children
-      [{:type :row :layout {:height 27.0}
+      [{:type :absolute
+        :bind {:x [:item :x] :y [:item :y]
+               :width [:item :w] :height [:item :h]}
+        :on {:activate :preset/select-tab}
+        :semantics {:role :button}
         :children
-        [{:type :button :layout {:width 78.0 :height 24.0}
-          :bind {:text [:item :label]}
-          :on {:activate :preset/select-slot}
-          :semantics {:role :button}}
-         {:type :button :layout {:width 28.0 :height 24.0}
-          :bind {:text [:item :remove-label]}
-          :on {:activate :preset/remove-slot}
-          :semantics {:role :button}}]}]}]}
+        [{:type :image
+          :bind {:width [:item :w] :height [:item :h] :rgba [:item :tint]}
+          :style {:resource {:namespace "academy"
+                             :path "textures/guis/preset_settings/back.png"}}
+          :semantics {:role :image}}
 
-   ;; Learned skills to assign into the selected slot
-   {:type :absolute :key :preset/available
-    :layout {:x 132.0 :y 40.0 :width 360.0 :height 130.0}
+         {:type :text
+          :bind {:x [:item :title-x] :y [:item :title-y]
+                 :width [:item :title-w] :height [:item :title-h]
+                 :font-size [:item :font-size]
+                 :text [:item :title] :rgba [:item :tint]}
+          :semantics {:role :generic}}
+
+         {:type :repeater
+          :layout {:width :fill :height :fill :direction :none}
+          :bind {:items [:item :slots]}
+          :children
+          [{:type :absolute
+            :bind {:x [:item :sx] :y [:item :sy]
+                   :width [:item :sw] :height [:item :sh]}
+            :on {:activate :preset/select-slot}
+            :semantics {:role :button}
+            :children
+            [{:type :image
+              :bind {:width [:item :sw] :height [:item :sh]
+                     :visible [:item :selected?] :rgba [:item :tint]}
+              :style {:resource {:namespace "academy"
+                                 :path "textures/guis/preset_settings/selected.png"}}
+              :semantics {:role :image}}
+             {:type :repeater
+              :bind {:x [:item :icon-x] :y [:item :icon-y]
+                     :width [:item :icon-s] :height [:item :icon-s]
+                     :items [:item :icon-items]}
+              :layout {:direction :none}
+              :children
+              [{:type :composite
+                :bind {:width [:item :w] :height [:item :h]}
+                :semantics {:role :image}}]}
+             {:type :text
+              :bind {:x [:item :text-x] :y [:item :text-y]
+                     :width [:item :text-w] :height [:item :text-h]
+                     :font-size [:item :font-size]
+                     :text [:item :skill-name] :rgba [:item :tint]}
+              :semantics {:role :generic}}]}]}]}]}]}
+
+   ;; Selector popup — explicit sizes only (never :fill: an unbound AUTO
+   ;; parent + FILL child expands to the full design width ≈ "huge/wide").
+   {:type :absolute :key :preset/selector
+    :bind {:x [:state :selector-x] :y [:state :selector-y]
+           :width [:state :selector-w] :height [:state :selector-h]
+           :visible [:state :selector-visible?]}
     :children
-    [{:type :rect :layout {:width 360.0 :height 130.0}
-      :style {:rgba [0.08 0.1 0.14 0.72]}
+    [{:type :rect :key :preset/selector-bg
+      :bind {:width [:state :selector-w] :height [:state :selector-h]}
+      :style {:rgba [0.192 0.192 0.192 0.784]}
       :semantics {:role :generic}}
-     {:type :text :layout {:x 6.0 :y 4.0 :width 200.0 :height 12.0}
-      :style {:font-size 9.0} :text "Available skills"}
-     {:type :scroll :layout {:x 4.0 :y 18.0 :width 352.0 :height 108.0}
-      :bind {:items [:state :available-skills]}
+
+     {:type :repeater :key :preset/selector-skills
+      :bind {:width [:state :selector-w] :height [:state :selector-h]
+             :items [:state :selector-skills]}
+      :layout {:direction :none}
       :semantics {:role :list}
       :children
-      [{:type :row :layout {:height 18.0}
-        :children
-        [{:type :text :layout {:width 260.0 :height 16.0} :style {:font-size 8.0}
-          :bind {:text [:item :label]}}
-         {:type :button :layout {:width 72.0 :height 16.0}
-          :bind {:text [:item :action-label]}
-          :on {:activate :preset/assign}
-          :semantics {:role :button}}]}]}]}
+      [{:type :composite
+        :bind {:x [:item :cell-x] :y [:item :cell-y]
+               :width [:item :w] :height [:item :h]}
+        :on {:activate :preset/assign}
+        :semantics {:role :button}}]}]}
 
-   {:type :text :key :preset/status
-    :layout {:x 8.0 :y 172.0 :width 480.0 :height 8.0}
-    :style {:font-size 8.0}
-    :bind {:text [:state :status]}}]}}
+   ;; Compact tip — width capped to the grid (main tip follows text but
+   ;; must not read as a second wide panel).
+   {:type :absolute :key :preset/selector-tip
+    :bind {:x [:state :selector-tip-x] :y [:state :selector-tip-y]
+           :width [:state :selector-hint-w]
+           :visible [:state :selector-visible?]}
+    :layout {:height 11.5}
+    :children
+    [{:type :rect
+      :bind {:width [:state :selector-hint-w]}
+      :layout {:height 11.5}
+      :style {:rgba [0.192 0.192 0.192 0.784]}
+      :semantics {:role :generic}}
+     {:type :text
+      :layout {:x 3.0 :y 1.5 :height 9.0}
+      :bind {:text [:state :selector-hint]}
+      :style {:font-size 9.0 :rgba [0.733 0.733 0.733 1.0]}
+      :semantics {:role :generic}}]}]}}

@@ -13,7 +13,8 @@
    [cn.li.ac.ability.config :as cfg]
    [cn.li.ac.config.modid :as modid]
    [cn.li.mcmod.i18n :as i18n]
-   [cn.li.ac.gui.presentation :as presentation]))
+   [cn.li.ac.gui.presentation :as presentation]
+   [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 ;; Presentation state helpers
 (declare ensure-screen-player-state! swap-screen-state!)
@@ -374,4 +375,9 @@
                       (presentation-state owner))))
                 :on-close #(close-screen! owner)})]
       (reset! mount* vm)
+      ;; Same as preset-editor / presentation_application: mount alone does not
+      ;; open a Minecraft Screen.
+      (client-bridge/call-adapter :presentation-open-screen!
+                                  (:mount vm) "Skill Tree"
+                                  #(close-screen! owner))
       vm)))

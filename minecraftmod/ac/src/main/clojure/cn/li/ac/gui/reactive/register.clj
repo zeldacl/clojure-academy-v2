@@ -9,6 +9,7 @@
             [cn.li.ability.client-vfx-v2 :as effect-controller]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.terminal.client.apps.tutorial-reactive :as tutorial-app]
+            [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-app]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.gui.presentation :as presentation]
@@ -131,7 +132,8 @@
       (media/refresh-active!)
       (when-let [refresh! (:refresh! @terminal*)]
         (refresh!))
-      (tutorial-app/screen-tick!))
+      (tutorial-app/screen-tick!)
+      (preset-editor-app/screen-tick!))
     nil))
 
 (defn- ui-by-stage-array ^objects [^RenderStage wanted-stage draw-list]

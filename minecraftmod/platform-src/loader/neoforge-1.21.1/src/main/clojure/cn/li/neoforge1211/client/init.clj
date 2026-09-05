@@ -199,6 +199,10 @@
      :local-player-look-end runtime-bridge/local-player-look-end
      :local-player-block-aim runtime-bridge/local-player-block-aim
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
+     :set-client-activated-overlay!
+     (fn [owner activated]
+       (when-let [o (or owner (mc-session/current-local-player-owner))]
+         (overlay-state/set-client-activated! o (boolean activated))))
      :client-overlay-activated-override
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]

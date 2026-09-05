@@ -679,15 +679,26 @@
 
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.
-   opts: {:activated-override :showing-numbers? :last-show-value-change-ms :now-ms}"
+   opts: {:activated-override :showing-numbers? :last-show-value-change-ms :now-ms}
+   When :activated-override is absent, prefers the V-key client overlay
+   (bridge/client-overlay-activated-override) over resource-data so the CP bar
+   appears before the server sync round-trip."
   [player-uuid screen-w screen-h opts]
   (let [now-ms (long (or (:now-ms opts) (System/currentTimeMillis)))
         ok (owner-key player-uuid)
         player-state (read-model/get-player-state ok)
         resource-data (:resource-data player-state)
-        activated? (if (some? (:activated-override opts))
+        activated? (cond
+                     ;; Explicit opts win (tests / forced frames).
+                     (contains? opts :activated-override)
                      (boolean (:activated-override opts))
-                     (boolean (:activated resource-data)))
+                     ;; Immediate client feedback from V-key (set before server sync).
+                     :else
+                     (let [overlay (bridge/client-overlay-activated-override
+                                     {:player-uuid player-uuid})]
+                       (if (some? overlay)
+                         (boolean overlay)
+                         (boolean (:activated resource-data)))))
         [contexts hud-model bg-mask skill-slot-shape]
         (cached-frame-inputs ok player-uuid player-state activated? screen-w screen-h)
         cooldown-data (:cooldown-data player-state)

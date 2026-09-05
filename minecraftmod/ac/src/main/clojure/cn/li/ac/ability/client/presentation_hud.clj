@@ -74,7 +74,11 @@
 (defn- background-mask-rect [snapshot]
   (when-let [mask (:background-mask snapshot)]
     (when (pos? (double (:a mask 0.0)))
-      {:rgba (argb01 mask)})))
+      {:kind :quad
+       :x 0.0 :y 0.0
+       :w (double (or (:screen-w snapshot) 427.0))
+       :h (double (or (:screen-h snapshot) 240.0))
+       :rgba (argb01 mask)})))
 
 (defn- cp-full-glow-items [snapshot]
   (let [cp-bar (:cp-bar snapshot)

@@ -841,7 +841,8 @@
             hit
             (let [on-map (nth on-maps hit-node nil)]
               {:action (:activate on-map)
-               :payload (cond-> {:target (node-key table hit-node)}
+               :payload (cond-> {:target (node-key table hit-node)
+                                 :x (double px) :y (double py)}
                           (some? (.item hit))
                           (assoc :item (.item hit) :index (.itemIndex hit)))})
 

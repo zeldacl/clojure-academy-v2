@@ -29,6 +29,7 @@
    opened directly, e.g. from a command, with no physical item
    involved). Deferred as a real, separate content-integration task."
   (:require [cn.li.ac.gui.presentation :as presentation]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.combat.api :as combat-api]))
@@ -145,11 +146,14 @@
 (defn open! [player-uuid]
   (let [owner (owner-for player-uuid)
         state* (atom (initial-state))
+        on-close #(swap! active-mounts dissoc (str player-uuid))
         vm (presentation/mount-view!
             {:view-id :academy.app/spell-composer
              :host-kind :screen
              :state (render-state @state*)
              :dispatch-action! (fn [action payload _current] (handle-action state* owner action payload))
-             :on-close #(swap! active-mounts dissoc (str player-uuid))})]
+             :on-close on-close})]
     (swap! active-mounts assoc (str player-uuid) {:mount (:mount vm) :state* state*})
+    (bridge/call-adapter :presentation-open-screen!
+                         (:mount vm) "Spell Composer" on-close)
     vm))

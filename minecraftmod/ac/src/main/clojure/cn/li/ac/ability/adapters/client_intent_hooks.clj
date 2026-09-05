@@ -292,6 +292,13 @@
    :client-req-set-activated!
    (fn [p active callback]
      (client-api/req-set-activated! (client-owner p) active callback))
+   ;; V-key immediate HUD feedback: write the platform overlay atom that
+   ;; reactive-hud/build-snapshot reads via client-overlay-activated-override.
+   :set-client-overlay-activated!
+   (fn [player-uuid activated]
+     (client-bridge/call-adapter :set-client-activated-overlay!
+                                 {:player-uuid player-uuid}
+                                 (boolean activated)))
    :client-req-set-preset-slot!
    (fn [p preset key category ctrl callback]
      (client-api/req-set-preset-slot! (client-owner p) preset key category ctrl callback))

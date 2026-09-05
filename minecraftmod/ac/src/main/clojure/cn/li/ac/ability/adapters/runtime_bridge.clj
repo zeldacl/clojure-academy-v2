@@ -46,6 +46,7 @@
     :client-req-switch-preset!
     :client-trigger-mode-switch!
     :client-trigger-preset-switch!
+    :set-client-overlay-activated!
     :toggle-debug-overlay-state!})
 
 (def ^:private debug-overlay-hooks

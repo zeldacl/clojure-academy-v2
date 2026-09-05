@@ -56,6 +56,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cn.li.ac.gui.presentation :as presentation]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.vfx.fx-catalog :as fx-catalog]
             [cn.li.ability.editor.document :as document]
             [cn.li.ability.editor.graph :as graph]
@@ -396,12 +397,15 @@
   ([player-uuid path] (open! player-uuid path :skill))
   ([player-uuid path mode]
    (let [state* (atom (open-document path mode))
+         on-close #(swap! active-mounts dissoc (str player-uuid))
          vm (presentation/mount-view!
              {:view-id :academy.app/node-editor
               :host-kind :screen
               :state (render-state @state*)
               :dispatch-action! (fn [action payload _current] (handle-action state* action payload))
-              :on-close #(swap! active-mounts dissoc (str player-uuid))})]
+              :on-close on-close})]
      (swap! active-mounts assoc (str player-uuid) {:mount (:mount vm) :state* state*})
+     (bridge/call-adapter :presentation-open-screen!
+                          (:mount vm) "Node Editor" on-close)
      vm)))
 
