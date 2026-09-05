@@ -8,6 +8,7 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
+            [cn.li.ac.gui.info-area :as info-area]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.block.wireless-matrix.matrix-info-reactive :as matrix-info]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
@@ -85,78 +86,103 @@
         network* (atom {:initialized false :ssid "" :password ""
                         :owner "Unknown" :load 0 :max-capacity 16
                         :range 64 :bandwidth 100})
-        form* (atom {:ssid nil :password nil})
+        ;; Empty map — do not pre-seed :ssid/:password as nil (contains? would
+        ;; be true and gather-info merge could force password "").
+        form* (atom {})
         ;; Self-ref so button/submit handlers can call matrix-info with the
         ;; fully assoc'd container after create-container returns.
         container* (atom nil)
+        refresh-network!
+        (fn [c data]
+          (let [data (into {} data)
+                ;; While still uninitialized, keep local INIT drafts across the
+                ;; async gather-info response so typing is not wiped mid-edit.
+                data (if (:initialized data)
+                       data
+                       (let [f @form*
+                             ssid (info-area/draft-value f :node-name)
+                             password (info-area/draft-value f :network-password)]
+                         (cond-> data
+                           (some? ssid) (assoc :ssid ssid)
+                           (some? password) (assoc :password password))))]
+            (reset! network* data)
+            (when-let [refresh (:presentation-refresh! c)]
+              (refresh))))
+        try-init!
+        (fn [c view-state]
+          ;; INIT is a button click — read live drafts via the shared alias
+          ;; contract (ssid↔node-name, password↔network-password).
+          (let [view (or view-state {})
+                form @form*
+                net @network*
+                ssid (str (or (info-area/draft-value view :node-name)
+                              (info-area/draft-value form :node-name)
+                              (info-area/draft-value net :node-name)
+                              ""))
+                password (str (or (info-area/draft-value view :network-password)
+                                  (info-area/draft-value form :network-password)
+                                  (info-area/draft-value net :network-password)
+                                  ""))]
+            (swap! form* merge (info-area/expand-drafts
+                                 {:node-name ssid :network-password password}))
+            (when (and (seq ssid) (seq password)
+                       (matrix-logic/owner-authorized? state player))
+              (matrix-info/send-init-network
+                c ssid password
+                (fn [success]
+                  (when success
+                    (matrix-info/send-gather-info
+                      c #(refresh-network! c %))))))))
         container
         (assoc base
                :presentation-network network*
                :presentation-form-state form*
-               :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
-                                       :width 52 :height 18 :label "Init/Refresh"}
-                                      {:id :right :button-id 1 :x 70 :y 145
-                                       :width 52 :height 18 :label "Eject"}]
-               :presentation-text-fields [{:id :ssid :binding-key :network-ssid
-                                           :x 12 :y 82 :width 120 :height 18
-                                           :value-fn (fn [c _]
-                                                       (get @(:presentation-network c) :ssid ""))}
-                                          {:id :password :binding-key :network-password
-                                           :x 12 :y 105 :width 120 :height 18
-                                           :value-fn (fn [c _]
-                                                       (get @(:presentation-network c) :password ""))}]
                :presentation-snapshot-fn
                (fn [c _]
                  (let [data @(:presentation-network c)
-                       initialized? (boolean (:initialized data))
                        owner? (boolean (matrix-logic/owner-authorized? state player))
-                       max-capacity (max 1.0 (double (or (:max-capacity data) 1)))]
-                   {:network-input-visible? owner?
-                    :network-editable? (and initialized? owner?)
-                    :network-readonly? (and initialized? (not owner?))
-                    :network-init-form? (and (not initialized?) owner?)
-                    :network-noinit? (and (not initialized?) (not owner?)) :network-init-label "Initialize network" :network-noinit-label "Network unavailable"
-                    :network-state (if (:initialized data) "Initialized" "Not initialized")
-                    :network-owner (str "Owner: " (or (:owner data) "Unknown"))
-                    :network-range (str "Range: " (or (:range data) 0))
-                    :network-bandwidth (str "Bandwidth: " (or (:bandwidth data) 0) " IF/T")
-                    :network-load (max 0.0 (min 1.0 (/ (double (or (:load data) 0)) max-capacity)))
-                    :info-area (matrix-info/info-area-snapshot
-                                 data (matrix-logic/owner-authorized? state player))}))
-               :presentation-text-submit!
-               (fn [field value container]
-                 (swap! form* assoc field value)
-                 (when (and container (:initialized @network*)
-                            (matrix-logic/owner-authorized? state player))
-                   (case field
-                     :ssid (matrix-info/send-change-ssid container value)
-                     :password (matrix-info/send-change-password container value)
-                     nil)))
+                       info (matrix-info/info-area-snapshot data owner?)]
+                   ;; Left page matches main page_matrix.xml (art + slots only).
+                   ;; INIT / noinit chrome lives in the info area.
+                   {:info-area info
+                    :matrix-init-visible? (boolean (:init-visible? info))
+                    :matrix-init-button (or (:init-button info) {:label "INIT"})
+                    :matrix-noinit-visible? (boolean (:noinit-visible? info))
+                    :matrix-noinit-label (str (or (:noinit-label info)
+                                                 "-- Network unavailable --"))}))
                :presentation-text-change!
                (fn [field value]
-                 (swap! form* assoc field value))
+                 (let [field (case field :node-name :ssid field)
+                       drafts (info-area/payload-drafts field value)]
+                   (when drafts
+                     (swap! form* merge drafts)
+                     (when (and (not (:initialized @network*))
+                                (or (contains? drafts :ssid)
+                                    (contains? drafts :password)))
+                       (swap! network* merge (select-keys drafts [:ssid :password]))))))
+               :presentation-text-submit!
+               (fn [field value container]
+                 (let [field (case field :node-name :ssid field)
+                       drafts (info-area/payload-drafts field value)
+                       value (str value)]
+                   (when drafts (swap! form* merge drafts))
+                   (when (and container (:initialized @network*)
+                              (matrix-logic/owner-authorized? state player))
+                     (case field
+                       :ssid (matrix-info/send-change-ssid container value)
+                       :password (matrix-info/send-change-password container value)
+                       nil))))
+               :presentation-on-mount!
+               (fn [c]
+                 ;; presentation-screen-data assoc's :minecraft-container before
+                 ;; mount; keep container* on that live map so C2S actions
+                 ;; resolve menu container-id (wireless-node pattern).
+                 (reset! container* c)
+                 (matrix-info/send-gather-info c #(refresh-network! c %)))
                :presentation-dispatch-action!
-               (fn [action payload]
-                 (when (= action :container/button)
-                   (let [c @container*]
-                     (when c
-                       (case (int (:button-id payload))
-                         0 (if (:initialized @network*)
-                             (matrix-info/send-gather-info
-                               c (fn [data]
-                                   (reset! network* (into {} data))))
-                             (let [{:keys [ssid password]} @form*]
-                               (when (and (seq ssid) (seq password)
-                                          (matrix-logic/owner-authorized? state player))
-                                 (matrix-info/send-init-network
-                                   c ssid password
-                                   (fn [success]
-                                     (when success
-                                       (matrix-info/send-gather-info
-                                         c (fn [data]
-                                             (reset! network* (into {} data))))))))))
-                         1 (handle-button-click! c 1 nil)
-                         nil))))))]
+               (fn [action payload current]
+                 (when (and (= action :matrix/init) @container*)
+                   (try-init! @container* (when (map? current) current)))))]
       (reset! container* container)
       container))
 
@@ -236,14 +262,10 @@
 ;; ============================================================================
 
 (defn create-screen [container menu player]
-  (let [screen (presentation-container/presentation-screen-data
-                 container menu player :wireless-matrix "academy:wireless_matrix")]
-    ;; Network information is a typed snapshot; it is never mirrored from the
-    ;; Menu. The callback refreshes only the fields exposed to Presentation.
-    (matrix-info/send-gather-info
-      container
-      #(reset! (:presentation-network container) (into {} %)))
-    screen))
+  ;; gather-info runs from :presentation-on-mount! once :minecraft-container
+  ;; is bound — calling it here fails action-payload (no menu container-id).
+  (presentation-container/presentation-screen-data
+    container menu player :wireless-matrix "academy:wireless_matrix"))
 
 
 ;; ============================================================================

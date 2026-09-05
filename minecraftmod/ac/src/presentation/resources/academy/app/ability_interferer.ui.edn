@@ -1,4 +1,4 @@
-;; Ability interferer — TechUI shell + ui_interfere + whitelist panel.
+;; Ability interferer â TechUI shell + ui_interfere + whitelist panel.
 {:ui/schema 2 :view/id :academy.app/ability-interferer
  :host {:kind :container :design-width 290 :design-height 187 :scale-policy :fit}
  :state-schema {:slots :vector :machine-state :string :energy-ratio :number
@@ -6,7 +6,7 @@
                 :interferer-range-down :map :interferer-range-up :map :interferer-toggle :map
                 :interferer-whitelist :vector :interferer-input :string :interferer-selected :string
                 :interferer-remove :map :network-visible :boolean :network-state :string
-                :network-password :string}
+                :wireless-connect-password :string}
  :root
  {:type :include :src "academy/shared/tech_ui_shell"
   :slots
@@ -88,6 +88,6 @@
       :children
       [{:type :text :style {:font-size 7.0} :bind {:text [:state :network-state]}}
        {:type :text-input :layout {:height 10.0}
-        :bind {:text [:state :network-password]}
+        :bind {:text [:state :wireless-connect-password]}
         :on {:change :container/wireless-password :submit :container/wireless-password}
         :semantics {:role :textbox :field :wireless-password}}]}]}}}}

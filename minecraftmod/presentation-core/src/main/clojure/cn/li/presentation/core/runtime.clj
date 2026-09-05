@@ -330,11 +330,26 @@
       (throw (ex-info "unknown Presentation mount" {:mount mount}))))
 
 (defn present!
+  "Push a new view-state. When the map actually changes, drop layout/paint
+   stamps and bump MemoState geometry so the next extract-stage! re-expands
+   collections (hist-bars, anim composites, …). Identical/equal states (noop
+   pointer routing) keep the cached draw list — see runtime_test."
   [^UiRuntime runtime mount next-state]
   (owner-thread! runtime)
-  (instance! runtime mount)
-  (vswap! (:state runtime) assoc-in [:mounts mount :view-state] next-state)
-  next-state)
+  (let [inst (instance! runtime mount)
+        prev (:view-state inst)]
+    (if (or (identical? prev next-state) (= prev next-state))
+      (do (vswap! (:state runtime) assoc-in [:mounts mount :view-state] next-state)
+          next-state)
+      (let [^MemoState memo (:memo inst)]
+        (when memo (.invalidateGeometry memo))
+        (vswap! (:state runtime)
+                (fn [snapshot]
+                  (-> snapshot
+                      (assoc-in [:mounts mount :view-state] next-state)
+                      (assoc-in [:mounts mount :layout-stamp] nil)
+                      (assoc-in [:mounts mount :paint-stamp] nil))))
+        next-state))))
 
 (defn clear-focus!
   "Drop text focus (and force a repaint so the caret disappears)."

@@ -59,6 +59,67 @@
       (action-payload/action-payload container {:new-password new-password}) nil)))
 
 (defn info-area-snapshot
-  "Build the declarative AC InfoArea projection from network data and policy."
+  "Presentation projection matching main `rebuild!` (capacity hist + owner/
+   range/bandwidth + ssid/password or INIT / noinit)."
   [data is-owner?]
-  (info-area/snapshot data {:owner? is-owner?}))
+  (let [initialized? (boolean (network-initialized? data))
+        owner? (boolean is-owner?)
+        policy (matrix-info-area-policy initialized? owner?)
+        capacity (double (or (:load data) 0.0))
+        max-capacity (double (or (:max-capacity data) 0.0))
+        load-ratio (info-area/fill-ratio capacity max-capacity)
+        histograms (info-area/project-histograms
+                     [(info-area/capacity-hist capacity max-capacity)])
+        ;; Main order after hist + "-- info --": owner, range, bandwidth.
+        base-fields [(info-area/field-entry
+                       {:id :owner :label "Owner"
+                        :value (str (or (:owner data) "Unknown"))})
+                     (info-area/field-entry
+                       {:id :range :label "Range"
+                        :value (format "%.0f" (double (or (:range data) 0)))})
+                     (info-area/field-entry
+                       {:id :bandwidth :label "Bandwidth"
+                        :value (str (or (:bandwidth data) 0) " IF/T")})]
+        wifi-fields
+        (cond
+          initialized?
+          [(info-area/field-entry
+             {:id :node-name :label "SSID"
+              :value (str (or (:ssid data) ""))
+              :editable? (boolean (:editable-ssid? policy))
+              :draft-key :node-name})
+           (info-area/field-entry
+             {:id :password :label "Password"
+              :value (str (or (:password data) ""))
+              :editable? (boolean (:editable-password? policy))
+              :masked? true
+              :draft-key :network-password})]
+
+          ;; Main init form: editable even though policy editable-* is false.
+          ;; Seed from network* (text-change merges drafts there) so a snapshot
+          ;; rebuild does not blank rows before merge-drafts re-applies.
+          (:show-init? policy)
+          [(info-area/field-entry
+             {:id :node-name :label "SSID"
+              :value (str (or (info-area/draft-value data :node-name) ""))
+              :editable? true :draft-key :node-name})
+           (info-area/field-entry
+             {:id :password :label "Password"
+              :value (str (or (info-area/draft-value data :network-password) ""))
+              :editable? true :masked? true :draft-key :network-password})]
+
+          :else [])
+        fields (into base-fields wifi-fields)]
+    {:title "Info"
+     :sep-label "-- Info --"
+     :sep-visible? true
+     :initialized? initialized?
+     :editable? (and initialized? owner?)
+     :load-ratio load-ratio
+     :histograms histograms
+     :hist-bars (info-area/hist-bars histograms)
+     :fields fields
+     :init-visible? (boolean (:show-init? policy))
+     :init-button {:label "INIT"}
+     :noinit-visible? (boolean (:show-noinit? policy))
+     :noinit-label "-- Network unavailable --"}))

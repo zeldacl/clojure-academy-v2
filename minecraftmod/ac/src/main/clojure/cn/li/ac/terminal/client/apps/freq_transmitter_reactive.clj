@@ -167,7 +167,11 @@
                   [:authorize :application/activate] (authorize! state puuid (fn [_] (refresh-ui!)))
                   [:link :application/activate] (link-target! state puuid (fn [_] (refresh-ui!)))
                   nil)
-                {:lines (state-lines state) :status (name (:phase @state))})
+                {:lines (state-lines state)
+                 :status (name (:phase @state))
+                 ;; Keep the password box in sync — omitting :input used to
+                 ;; clear the field after every glyph/backspace.
+                 :input (str (or (:password @state) (:input current) ""))})
               #(bridge/close-screen!)
               :screen
               :academy.app/freq-transmitter)]

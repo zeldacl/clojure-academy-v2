@@ -3,13 +3,57 @@
    Application modules own state and action semantics; this namespace adapts
    their map callbacks to a compiled view artifact (default
    :academy.app/application; callers may pass about/freq/install/media/…)."
-  (:require [cn.li.ac.gui.presentation :as presentation]
+  (:require [clojure.string :as str]
+            [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def binding-ids {:title 0 :lines 1 :status 2 :scroll 3 :modal 4
                   :button-left 5 :button-right 6 :input 7})
 (def action-ids {0 :application/left 1 :application/right
                  2 :application/activate 3 :application/delete})
+
+(def ^:private text-draft-keys
+  "Top-level view-state keys owned by text-inputs across application surfaces."
+  [:input :edit-x :edit-y :edit-name :edit-desc :console-input])
+
+(defn- live-text-edit?
+  "True for glyph append / backspace / field :change — not submit/activate."
+  [action payload]
+  (or (= action :input/character)
+      (= action :input/backspace)
+      (and (map? payload)
+           (or (true? (:backspace payload))
+               (= 259 (int (or (:key-code payload) -1)))))
+      (and (keyword? action)
+           (let [n (name action)]
+             (or (= n "input")
+                 (= n "text-change")
+                 (str/ends-with? n "change")
+                 (str/ends-with? n "-input")
+                 (str/includes? n "password"))))))
+
+(defn- path-draft-key
+  "Focus bind path [:state :k] / [:k] → :k."
+  [payload]
+  (let [path (:path payload)]
+    (cond
+      (and (vector? path) (= :state (first path)) (keyword? (second path)))
+      (second path)
+      (and (vector? path) (= 1 (count path)) (keyword? (first path)))
+      (first path)
+      :else nil)))
+
+(defn- preserve-text-drafts
+  "Keep runtime-edited text when an app handler returns a partial snapshot
+   that omits the live draft (freq transmitter historically dropped :input)."
+  [result current action payload]
+  (let [result (if (map? result) result current)]
+    (if-not (and (map? result) (map? current) (live-text-edit? action payload))
+      result
+      (let [k (path-draft-key payload)
+            keys (cond-> (set text-draft-keys)
+                   (keyword? k) (conj k))]
+        (merge result (select-keys current keys))))))
 
 (defn mount!
   ([owner title snapshot dispatch-action! on-close]
@@ -30,6 +74,11 @@
                                    (contains? payload :value)
                                    (assoc :value (:value payload)
                                           :progress-value (:value payload))
+                                   (and (contains? payload :value)
+                                        (or (= :input (path-draft-key payload))
+                                            (= action :application/input)))
+                                   (assoc :input (str (or (:value payload)
+                                                          (:input current) "")))
                                    (contains? payload :progress)
                                    (assoc :progress (:progress payload))
                                    (contains? payload :drag?)
@@ -40,7 +89,7 @@
                                           :hover? (:hover? payload)
                                           :previous-hover (:previous-hover payload)))
                          result (dispatch-action! action current)]
-                     (if (map? result) result current)))
+                     (preserve-text-drafts result current action payload)))
          vm (presentation/mount-view! {:view-id view-id
                              :host-kind host-kind
                              :state state
@@ -62,4 +111,3 @@
   (cond
     (map? vm) (presentation/unmount! vm)
     :else nil))
-

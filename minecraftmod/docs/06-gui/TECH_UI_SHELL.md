@@ -74,7 +74,31 @@ On focus of a FOCUSABLE under a collection item:
    - store `:item-index` from the hit
 3. `edit-input-state` writes the draft-key path **and**
    `[:info-area :fields idx :value]` so paint stays live
-4. Container `merge-drafts` / form sync keep mapping `:password` → `:network-password`
+4. Container `merge-drafts` keeps draft keys and calls
+   `info-area/apply-drafts-to-fields` so a page snapshot that rebuilds
+   fields from tile/network data cannot undo backspace/typing
+5. **Draft aliases (unified, all pages):** form/view may use either name —
+   `:ssid` / `:network-ssid` ↔ `:node-name`, `:password` ↔ `:network-password`.
+   Projection lives in `info-area` (`project-form-drafts`, `expand-drafts`,
+   `draft-value`); do not reimplement per container.
+6. **Do not reuse `:network-password` for the wireless-tab connect box.**
+   That key is reserved for info-area password drafts. Wireless connect text
+   binds `:wireless-connect-password` only (see `snapshot-for`).
 
 Top-level draft keys (`:node-name`, `:network-password`, …) remain write
 targets; they are not removed from the runtime contract.
+
+## Histogram live update (unified)
+
+All TechUI pages share one hist contract — do not reimplement per container:
+
+1. **Raw entries** — `info-area/energy-hist`, `capacity-hist`, `liquid-hist`
+   (+ `fill-ratio`). Never coerce a zero max to `1.0` (pins the bar at 100%).
+2. **Geometry** — `project-histograms` → `:histograms` + `hist-bars`; shell
+   fragment `info_area_histogram.edn` paints bars as absolute `rect`s.
+3. **Live rebuild** — `presentation_container/live-sync-fingerprint` always
+   samples `info-area/hist-live-keys` and `:presentation-network` (matrix).
+   `:presentation-anim-fingerprint` is for time-based paint only (anim
+   frames / breathe) — do not put energy/capacity there.
+4. **present!** — when view-state changes, layout/paint stamps clear so
+   hist-bar rects remeasure (see presentation-core `present!`).

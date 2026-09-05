@@ -1,4 +1,4 @@
-;; TechUI machine shell — left inventory stack via tech_ui_shell slots.
+;; TechUI machine shell â left inventory stack via tech_ui_shell slots.
 ;; Page art uses the 172-wide page-anchor (center 176 textures) so Minecraft
 ;; slots at TechUI coords line up with ui_inventory / machine overlays.
 {:ui/schema 2 :view/id :academy.app/machine-container
@@ -6,7 +6,7 @@
  :state-schema {:slots :vector
                 :energy-ratio :number :progress-ratio :number
                 :page-composite :vector :network-visible :boolean
-                :network-state :string :network-password :string
+                :network-state :string :wireless-connect-password :string
                 :button-left :map :button-right :map
                 :inv-bars-visible? :boolean :inv-buttons-visible? :boolean
                 :info-load-visible? :boolean}
@@ -35,7 +35,7 @@
          {:type :repeater :key :container/page
           :layout {:width 176.0 :height 187.0}
           :bind {:items [:state :page-composite]}
-          ;; 0×0 like wireless-node anim: each item paints via local x/y/w/h so
+          ;; 0Ã0 like wireless-node anim: each item paints via local x/y/w/h so
           ;; overlays (ui_windbase + effect_solar) stack instead of column-flow.
           :children [{:type :composite :layout {:width 0.0 :height 0.0}
                       :bind {:item [:state :item]}}]}]}]}
@@ -84,6 +84,6 @@
       :children
       [{:type :text :style {:font-size 7.0} :bind {:text [:state :network-state]}}
        {:type :text-input :layout {:height 10.0}
-        :bind {:text [:state :network-password]}
+        :bind {:text [:state :wireless-connect-password]}
         :on {:change :container/wireless-password :submit :container/wireless-password}
         :semantics {:role :textbox :field :wireless-password}}]}]}}}}

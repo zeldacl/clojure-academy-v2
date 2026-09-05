@@ -87,11 +87,30 @@
                     (fn [t] (or (:node-name t) (:ssid t) "-")))]
     (if linked (str (name-fn linked)) "Not Connected")))
 
-(defn- update-wireless-state! [container response]
-  (when-let [state* (:presentation-wireless-state container)]
-    (swap! state* merge {:linked (:linked response)
-                         :avail (vec (or (:avail response) []))}))
+(defn- update-wireless-state!
+  "Merge list/connect panel state. Only overwrite keys present in the response
+   so a bare {:success true} connect ack cannot wipe :linked/:avail."
+  [container response]
+  (when (and (map? response) (:presentation-wireless-state container))
+    (swap! (:presentation-wireless-state container)
+           (fn [st]
+             (cond-> (or st {:linked nil :avail [] :password ""})
+               (contains? response :linked)
+               (assoc :linked (:linked response))
+               (contains? response :avail)
+               (assoc :avail (vec (or (:avail response) [])))
+               (contains? response :password)
+               (assoc :password (str (:password response)))))))
   nil)
+
+(defn- refresh-wireless-panel!
+  "Re-fetch list+linked (main tab-reactive rebuild!) then present."
+  [container refresh*]
+  (request-wireless-list! container
+    (fn [response]
+      (update-wireless-state! container response)
+      (when-let [refresh @refresh*] (refresh)))))
+
 (defn- generic-info-area [container progress]
   "Project the common code-built InfoArea contract into declarative state."
   (let [tile (:tile-entity container)
@@ -133,26 +152,17 @@
         histograms (info-area/project-histograms
                     (cond-> []
                       (contains? container :energy)
-                      (conj (let [value (double (or (value-of (:energy container)) 0.0))
-                                  maximum (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))]
-                              {:id :energy :label "Energy"
-                               :ratio (max 0.0 (min 1.0 (/ value maximum)))
-                               :value (format "%.0f IF" value)
-                               :color (unchecked-int 0xFF25C4FF)}))
+                      (conj (info-area/energy-hist
+                              (value-of (:energy container))
+                              (value-of (:max-energy container))))
                       (or (contains? container :capacity) (contains? container :max-capacity))
-                      (conj (let [value (double (or (value-of (:capacity container)) 0.0))
-                                  maximum (max 1.0 (double (or (value-of (:max-capacity container)) 1.0)))]
-                              {:id :capacity :label "Capacity"
-                               :ratio (max 0.0 (min 1.0 (/ value maximum)))
-                               :value (format "%.0f/%.0f" value maximum)
-                               :color (unchecked-int 0xFFFF6C00)}))
+                      (conj (info-area/capacity-hist
+                              (value-of (:capacity container))
+                              (value-of (:max-capacity container))))
                       (contains? container :liquid-amount)
-                      (conj (let [value (double (or (value-of (:liquid-amount container)) 0.0))
-                                  maximum (max 1.0 (double (or (value-of (:tank-size container)) 1.0)))]
-                              {:id :liquid :label "Liquid"
-                               :ratio (max 0.0 (min 1.0 (/ value maximum)))
-                               :value (format "%.0f mB" value)
-                               :color (unchecked-int 0xFF4CAF50)}))))]
+                      (conj (info-area/liquid-hist
+                              (value-of (:liquid-amount container))
+                              (value-of (:tank-size container))))))]
     {:title "Machine Info"
      :sep-visible? false
      :fields fields
@@ -237,7 +247,9 @@
                                    capacity (max 1.0 (double (or (:max-capacity linked) 1.0)))]
                                (max 0.0 (min 1.0 (/ load capacity))))
                :network-nodes (wireless-items container)
-               :network-password (str (or (:password network) ""))
+               ;; Wireless-tab connect password only. Never write :network-password
+               ;; here — that key is the info-area password draft (TECH_UI_SHELL);
+               ;; injecting "" every snapshot wiped matrix/node password rows.
                :wireless-connect-password (str (or (:password network) ""))
                :network-disconnect {:label "Disconnect"}
                :network-available-label {:label "Available"}
@@ -259,40 +271,34 @@
            (= "input" (namespace action)))))
 
 (def ^:private draft-state-keys
-  "Text-field drafts that must survive snapshot rebuilds / refresh."
-  [:node-name :network-password :network-ssid])
+  "Text-field drafts that must survive snapshot rebuilds / refresh.
+   Includes canonical info-area keys and form aliases so select-keys never
+   drops a live :ssid while :node-name is what the field binds."
+  (vec (into #{:console-input :interferer-input :wireless-connect-password}
+             (mapcat identity (vals info-area/draft-alias-groups)))))
 
 (defn- merge-drafts
   "Keep in-progress text drafts across snapshot rebuilds.
 
-   Preference (high -> low): payload active field, live view-state drafts,
-   form-backed snapshot. Text-change handlers sync view -> form first so the
-   next state-fn agrees with view; view still wins if form briefly lags."
+   Alias expansion (:ssid ↔ :node-name, :password ↔ :network-password) and
+   info-area field overlay live in info-area — every TechUI page shares them."
   [snapshot current payload]
   (let [field (:field payload)
         value (when (contains? payload :value) (str (:value payload)))
-        from-payload (case field
-                       (:node-name) (when value {:node-name value})
-                       (:password :network-password) (when value {:network-password value})
-                       (:ssid :network-ssid) (when value {:network-ssid value})
-                       nil)]
-    (merge snapshot
-           (select-keys (or current {}) draft-state-keys)
-           from-payload)))
+        from-payload (when (and field (contains? payload :value))
+                       (info-area/payload-drafts field value))
+        current-drafts (when (map? current)
+                         (merge (select-keys current draft-state-keys)
+                                (info-area/expand-drafts
+                                  (info-area/project-form-drafts current))))]
+    (info-area/apply-drafts-to-fields
+      (merge snapshot current-drafts from-payload))))
 
 (defn- sync-view-drafts-into-form!
   "Push live text-input view keys into presentation-form-state before rebuild."
   [form current]
   (when (and form (map? current))
-    (swap! form
-           (fn [m]
-             (cond-> (or m {})
-               (contains? current :node-name)
-               (assoc :node-name (str (:node-name current)))
-               (contains? current :network-password)
-               (assoc :password (str (:network-password current)))
-               (contains? current :network-ssid)
-               (assoc :ssid (str (:network-ssid current))))))))
+    (swap! form #(info-area/sync-view-into-form % current))))
 
 (defn mount-container!
   ([runtime menu-bridge snapshot-fn dispatch-action!]
@@ -369,17 +375,39 @@
    snapshot projection. Compared each client frame; full present! runs
    only when this changes.
 
-   Containers may supply `:presentation-anim-fingerprint` (fn [container] →
-   any value) for time-based paint (sprite frame / quantized breathe). Prefer
-   that over a blanket per-frame rebuild."
+   Hist-driving keys (`info-area/hist-live-keys`) are always sampled so
+   Energy/Capacity/Liquid bars rebuild on every TechUI page — pages must
+   not reimplement this in `:presentation-anim-fingerprint`.
+
+   Containers may still supply `:presentation-anim-fingerprint` for
+   time-based paint (sprite frame / quantized breathe)."
   [container]
   (let [keys (if-let [specs (seq (:data-slot-field-specs container))]
                (mapv :container-key specs)
                live-sync-fallback-keys)
         atoms (mapv (fn [k] (deref-gui-value (get container k))) keys)
+        ;; Always sample hist keys (may overlap DataSlot keys — intentional).
+        hist (mapv (fn [k] (deref-gui-value (get container k)))
+                   info-area/hist-live-keys)
         anim (when-let [f (:presentation-anim-fingerprint container)]
-               (f container))]
-    (if (some? anim) [atoms anim] atoms)))
+               (f container))
+        ;; Matrix network atom is not a DataSlot — capacity hist lives there.
+        network (when-let [n* (:presentation-network container)]
+                  (let [n @n*]
+                    [(:load n) (:max-capacity n) (:energy n)
+                     (:ssid n) (:initialized n)]))
+        ;; Wireless panel (Connected row + avail list) is not a DataSlot —
+        ;; include a cheap signature so list/connect refreshes present even
+        ;; when energy/anim fingerprints are unchanged.
+        wireless (when-let [ws (:presentation-wireless-state container)]
+                   (let [st @ws]
+                     [(some-> st :linked :ssid)
+                      (count (:avail st))
+                      (:password st)]))]
+    (cond-> [atoms hist]
+      (some? anim) (conj anim)
+      (some? network) (conj network)
+      (some? wireless) (conj wireless))))
 
 (defn- player-inventory-anchors
   "Mirror mcbase `add-player-inventory-slots!` at (6,105): 3×9 main + hotbar.
@@ -440,15 +468,17 @@
                                            (or (snapshot! container player) {})
                                            {})
                             form-state (when-let [form (:presentation-form-state container)] @form)
-                            text-values (cond-> {}
-                                          (some? (:ssid form-state)) (assoc :network-ssid (:ssid form-state))
-                                          (some? (:password form-state)) (assoc :network-password (:password form-state))
-                                          (some? (:node-name form-state)) (assoc :node-name (:node-name form-state)))
+                            ;; Unified draft projection (ssid↔node-name, password↔
+                            ;; network-password) — see info-area/project-form-drafts.
+                            text-values (info-area/expand-drafts
+                                          (info-area/project-form-drafts form-state))
                             button-values (into {}
                                            (mapcat (fn [{:keys [button-id label]}]
                                                      (case (int (or button-id -1))
-                                                       0 [[:button-left {:label (str (or label ""))}]]
-                                                       1 [[:button-right {:label (str (or label ""))}]]
+                                                       0 [[:button-left {:label (str (or label ""))
+                                                                         :button-id 0}]]
+                                                       1 [[:button-right {:label (str (or label ""))
+                                                                          :button-id 1}]]
                                                        []))
                                                    (or (:presentation-buttons container) [])))
                             anchors (tech-tabs/mark-slot-anchors container base-anchors)
@@ -511,15 +541,15 @@
                                                 (build {} item password)
                                                 item)]
                                  (send-wireless! container :connect payload*
-                                   (fn [response]
-                                     (update-wireless-state! container response)
-                                     (when-let [refresh @refresh*] (refresh))))))
+                                   (fn [_response]
+                                     ;; Main tab-reactive always rebuilds after
+                                     ;; connect/disconnect (list + Connected row).
+                                     (refresh-wireless-panel! container refresh*)))))
 
                              (= action :container/wireless-disconnect)
                              (send-wireless! container :disconnect {}
-                               (fn [response]
-                                 (update-wireless-state! container response)
-                                 (when-let [refresh @refresh*] (refresh))))
+                               (fn [_response]
+                                 (refresh-wireless-panel! container refresh*)))
 
                              (contains? #{:container/text-change :container/text-submit} action)
                              (do (sync-view-drafts-into-form!
@@ -546,7 +576,10 @@
 
                              :else
                              (if-let [dispatch (:presentation-dispatch-action! container)]
-                               (dispatch action payload)
+                               (try
+                                 (dispatch action payload current)
+                                 (catch clojure.lang.ArityException _
+                                   (dispatch action payload)))
                                (when (= action :container/button)
                                  (when-let [button (:button-click-fn container)]
                                    (button container (:button-id payload) player)))))))]

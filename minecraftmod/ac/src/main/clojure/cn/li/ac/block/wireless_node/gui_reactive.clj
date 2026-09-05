@@ -87,14 +87,33 @@
 
 (defn- msg [action] (msg-registry/msg gui-type action))
 
-(defn- send-link-query! [container menu owner linked*]
+(defn- send-link-query!
+  "Poll server link flag. Keep :linked DTO when still linked; clear it when not.
+   Does not replace a map DTO with a bare boolean (Connected label needs :ssid)."
+  [container menu owner wireless*]
   (let [c (assoc container :minecraft-container menu)]
-    (when (and owner (action-payload/menu-container-id c))
+    (when (and owner wireless* (action-payload/menu-container-id c))
       (net-client/send-to-server owner (msg :query-link)
         (action-payload/action-payload c {})
         (fn [resp]
           (when (and resp (contains? resp :linked))
-            (reset! linked* (boolean (:linked resp)))))))))
+            (let [linked? (boolean (:linked resp))]
+              (swap! wireless*
+                     (fn [st]
+                       (cond
+                         (not linked?)
+                         (assoc st :linked nil)
+                         ;; Still linked but panel never got a DTO — leave as-is;
+                         ;; connect/list refresh supplies the full row.
+                         (map? (:linked st))
+                         st
+                         :else
+                         st))))))))))
+
+(defn- wireless-linked?
+  "True when the wireless panel has a linked network DTO."
+  [container]
+  (some? (some-> (:presentation-wireless-state container) deref :linked)))
 
 (defn create-container [tile player]
   (let [[be state] (resolve-state tile)
@@ -107,17 +126,19 @@
         ;; the pre-assoc container (where :presentation-form-state is nil).
         form-state (atom {:node-name (str (value-of :ssid ""))
                           :password (str (value-of :password ""))})
-        linked* (atom false)
+        wireless* (atom {:linked nil :avail [] :password ""})
         last-poll* (atom -1)
         link-owner (atom nil)]
     (assoc base
            :presentation-form-state form-state
-           ;; Anim paint is dirty-checked via fingerprint (~20 Hz), not every
-           ;; render frame — see presentation-container/live-sync-fingerprint.
-           :presentation-anim-fingerprint (fn [_] (anim-signature @linked*))
+           :presentation-wireless-state wireless*
+           ;; Anim paint only — hist live-sync is unified in presentation_container
+           ;; (info-area/hist-live-keys + presentation-network). Do not re-list
+           ;; energy/capacity here.
+           :presentation-anim-fingerprint
+           (fn [c] (anim-signature (wireless-linked? c)))
            :presentation-tech-tabs? true
            :presentation-wireless {:domain :node :role :node}
-           :presentation-wireless-state (atom {:linked nil :avail [] :password ""})
            :presentation-text-fields [{:id :node-name :binding-key :node-name :x 12 :y 82 :width 120 :height 18
                                        :value-fn (fn [_ _] (value-of :ssid ""))}
                                       {:id :password :binding-key :network-password :x 12 :y 105 :width 120 :height 18
@@ -127,38 +148,52 @@
              (reset! link-owner (or (runtime-hooks/current-player-state-owner)
                                     (runtime-hooks/default-client-owner)))
              (when-let [menu (:minecraft-container container)]
-               (send-link-query! container menu @link-owner linked*)))
+               (send-link-query! container menu @link-owner wireless*)))
            :presentation-frame!
            (fn [container]
              (let [bucket (quot (long (now-ms)) 2000)]
                (when (not= bucket @last-poll*)
                  (reset! last-poll* bucket)
                  (when-let [menu (:minecraft-container container)]
-                   (send-link-query! container menu @link-owner linked*)))))
+                   (send-link-query! container menu @link-owner
+                                     (:presentation-wireless-state container))))))
            :presentation-snapshot-fn
-           (fn [_ _]
-             (let [energy (double (or (value-of :energy 0.0) 0.0))
-                   max-energy (max 1.0 (double (or (value-of :max-energy 1.0) 1.0)))
-                   load (double (or (value-of :capacity 0.0) 0.0))
-                   max-load (max 1.0 (double (or (value-of :max-capacity 1.0) 1.0)))
+           (fn [container _]
+             ;; Read atoms from the live screen container (DataSlot target).
+             (let [live (fn [k default]
+                          (let [x (get container k ::missing)]
+                            (cond
+                              (= x ::missing) default
+                              (instance? clojure.lang.IDeref x) @x
+                              :else x)))
+                   energy (double (or (live :energy 0.0) 0.0))
+                   max-energy-atom (double (or (live :max-energy 0.0) 0.0))
+                   max-energy (if (pos? max-energy-atom)
+                                max-energy-atom
+                                (double (node-logic/node-max-energy
+                                          {:node-type (or (live :node-type :basic)
+                                                         :basic)})))
+                   load (double (or (live :capacity 0.0) 0.0))
+                   max-load (double (or (live :max-capacity 0.0) 0.0))
                    owner? (boolean (node-logic/owner-authorized? state player))
                    form @form-state
+                   linked? (wireless-linked? container)
                    node-name (str (if (contains? form :node-name)
                                     (:node-name form)
-                                    (value-of :ssid "")))
+                                    (live :ssid "")))
                    password (str (if (contains? form :password)
                                    (:password form)
-                                   (value-of :password "")))]
+                                   (live :password "")))]
                {:node-name node-name
                 :network-password password
-                :node-anim (node-anim-items @linked*)
+                :node-anim (node-anim-items linked?)
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
                               :energy energy
                               :max-energy max-energy
                               :capacity load
                               :owner (node-logic/owner-name state)
-                              :range (or (value-of :range 0) 0)
+                              :range (or (live :range 0) 0)
                               :ssid node-name
                               :password password
                               :load load

@@ -3,7 +3,8 @@
 ;; value 40, brackets at value-x-4 / value-x+value-w+2. Content starts at
 ;; y=88 below the shared histogram block (see info_area_histogram.edn).
 ;; Editable rows bind [:item :value]; runtime rewrites focus to :draft-key
-;; (see docs/06-gui/TECH_UI_SHELL.md).
+;; and container merge-drafts re-applies drafts onto fields (see
+;; info-area/apply-drafts-to-fields — shared, not per-page).
 {:fragment/id :academy.shared/info-fields
  :state-schema {:info-area :map}
  :root
