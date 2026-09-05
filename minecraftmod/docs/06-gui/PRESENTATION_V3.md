@@ -231,6 +231,12 @@ CompiledTemplate  UiRt  mount-tree!  reconcile-tree!  layout-tree!  retained-tre
 `.xml` at those roots. Name new code `measure!`/`arrange!`/`extract!`/
 `finish!`/`paint!`/`hit-test` — never `layout-tree!`.
 
+## 8b. TechUI shell composition
+
+Container TechUI views (wireless node / matrix / machine / interferer) compose
+through compile-time `:include` + named `:slot`s. Contract:
+[TECH_UI_SHELL.md](TECH_UI_SHELL.md).
+
 ## 9. Verification without a running game
 
 - **Layout conformance**: `LayoutKernelTest`/`CmdBufTest`/`MemoKernelTest`/

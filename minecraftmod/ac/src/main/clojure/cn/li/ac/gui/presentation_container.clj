@@ -98,29 +98,37 @@
         altitude (when (contains? #{:wind-gen-main :wind-gen-base} (:container-type container))
                    (try (some-> tile pos/block-pos pos/pos-y str)
                         (catch Exception _ nil)))
-        fields (cond-> []
-                 (contains? container :status)
-                 (conj {:label "Status" :value (str (or (value-of (:status container)) "-"))})
-                 (contains? container :mode)
-                 (conj {:label "Mode" :value (str (or (value-of (:mode container)) "-"))})
-                 (contains? container :wireless-mode)
-                 (conj {:label "Wireless" :value (str (or (value-of (:wireless-mode container)) "-"))})
-                 altitude
-                 (conj {:label "Altitude" :value altitude})
-                 (contains? container :fan-installed)
-                 (conj {:label "Fan" :value (if (value-of (:fan-installed container)) "YES" "NO")})
-                 (contains? container :no-obstacle)
-                 (conj {:label "Obstacle" :value (if (value-of (:no-obstacle container)) "CLEAR" "BLOCKED")})
-                 (contains? container :gen-speed)
-                 (conj {:label "Generation" :value (format "%.2f IF/T" (double (or (value-of (:gen-speed container)) 0.0)))})
-                 (contains? container :work-progress)
-                 (conj {:label "Work" :value (str (or (value-of (:work-progress container)) "-"))})
-                 (contains? container :work-counter)
-                 (conj {:label "Work" :value (str (or (value-of (:work-counter container)) "-"))})
-                 (contains? container :current-recipe-liquid)
-                 (conj {:label "Liquid Needed" :value (str (or (value-of (:current-recipe-liquid container)) "-"))})
-                 (contains? container :liquid-amount)
-                 (conj {:label "Liquid" :value (str (or (value-of (:liquid-amount container)) "-"))}))
+        fields (mapv (fn [m]
+                       (let [id (or (:id m) (keyword (str "f-" (hash (:label m)))))]
+                         {:id id
+                          :label (:label m)
+                          :value (:value m)
+                          :editable? false
+                          :readonly? true
+                          :draft-key id}))
+                     (cond-> []
+                       (contains? container :status)
+                       (conj {:id :status :label "Status" :value (str (or (value-of (:status container)) "-"))})
+                       (contains? container :mode)
+                       (conj {:id :mode :label "Mode" :value (str (or (value-of (:mode container)) "-"))})
+                       (contains? container :wireless-mode)
+                       (conj {:id :wireless :label "Wireless" :value (str (or (value-of (:wireless-mode container)) "-"))})
+                       altitude
+                       (conj {:id :altitude :label "Altitude" :value altitude})
+                       (contains? container :fan-installed)
+                       (conj {:id :fan :label "Fan" :value (if (value-of (:fan-installed container)) "YES" "NO")})
+                       (contains? container :no-obstacle)
+                       (conj {:id :obstacle :label "Obstacle" :value (if (value-of (:no-obstacle container)) "CLEAR" "BLOCKED")})
+                       (contains? container :gen-speed)
+                       (conj {:id :generation :label "Generation" :value (format "%.2f IF/T" (double (or (value-of (:gen-speed container)) 0.0)))})
+                       (contains? container :work-progress)
+                       (conj {:id :work :label "Work" :value (str (or (value-of (:work-progress container)) "-"))})
+                       (contains? container :work-counter)
+                       (conj {:id :work :label "Work" :value (str (or (value-of (:work-counter container)) "-"))})
+                       (contains? container :current-recipe-liquid)
+                       (conj {:id :liquid-needed :label "Liquid Needed" :value (str (or (value-of (:current-recipe-liquid container)) "-"))})
+                       (contains? container :liquid-amount)
+                       (conj {:id :liquid :label "Liquid" :value (str (or (value-of (:liquid-amount container)) "-"))})))
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))
         histograms (info-area/project-histograms
                     (cond-> []
@@ -146,6 +154,7 @@
                                :value (format "%.0f mB" value)
                                :color (unchecked-int 0xFF4CAF50)}))))]
     {:title "Machine Info"
+     :sep-visible? false
      :fields fields
      :histograms histograms
      :hist-bars (info-area/hist-bars histograms)

@@ -721,18 +721,43 @@
                                   (when (>= c 0)
                                     (or (:text (nth bind-maps c nil))
                                         (recur (aget ^ints (.-nextSibling table) (int c)))))))
+                  ^HitKernel$Hit h hit
+                  item (.item h)
+                  ;; itemIndex is stamped only on the collection template root;
+                  ;; nested focusable descendants keep itemOf but index -1.
+                  item-index (let [direct (int (.itemIndex h))]
+                               (if (>= direct 0)
+                                 direct
+                                 (loop [inst (int (.instance h))]
+                                   (let [p (aget ^ints (.-parentOf arena) inst)]
+                                     (if (< p 0)
+                                       -1
+                                       (let [idx (aget ^ints (.-itemIndexOf arena) p)]
+                                         (if (>= idx 0) (int idx) (recur p))))))))
+                  draft-key (when (map? item) (:draft-key item))
                   field (or (:field sem)
+                            (when (map? item) (:id item))
                             (when (and (vector? text-path) (seq text-path))
-                              (peek text-path)))]
-              {:focus {:key (node-key table hit-node)
-                       :node (int hit-node)
-                       :path text-path
-                       :on (nth on-maps hit-node nil)
-                       :field field}
+                              (peek text-path)))
+                  ;; Item-scoped text binds cannot be written via assoc-in on
+                  ;; view-state; rewrite to [:state draft-key] when present
+                  ;; (TechUI info-area editable fields — TECH_UI_SHELL.md).
+                  focus-text-path (if (and (vector? text-path)
+                                           (= :item (first text-path))
+                                           (keyword? draft-key))
+                                    [:state draft-key]
+                                    text-path)]
+              {:focus (cond-> {:key (node-key table hit-node)
+                               :node (int hit-node)
+                               :path focus-text-path
+                               :on (nth on-maps hit-node nil)
+                               :field field}
+                        (keyword? draft-key) (assoc :draft-key draft-key)
+                        (>= item-index 0) (assoc :item-index item-index))
                :action :input/focus
                :payload {:target (node-key table hit-node)
                          :field field
-                         :path text-path}})
+                         :path focus-text-path}})
 
             ;; Prefer an explicit scrollbar under the pointer even when topmostAt
             ;; landed on a non-scrollbar sibling (thin thumb next to markdown).
@@ -828,8 +853,14 @@
                             (not (contains? payload :value)))
                        (str current (or (:text payload) ""))
 
-                       :else nil)]
-      (if (some? next-value) (assoc-in state path next-value) state))
+                       :else nil)
+          idx (:item-index focus)]
+      (if (some? next-value)
+        (cond-> (assoc-in state path next-value)
+          ;; Keep repeater paint ([:item :value]) in sync while typing.
+          (and (integer? idx) (>= (int idx) 0))
+          (assoc-in [:info-area :fields (int idx) :value] next-value))
+        state))
     state))
 
 (defn- input-payload [state focus action payload]

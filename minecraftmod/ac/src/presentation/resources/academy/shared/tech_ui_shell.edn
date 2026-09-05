@@ -1,0 +1,26 @@
+;; TechUI container shell: tabs + inv slot + wireless + info chrome/histogram + info-body slot.
+;; Pages supply :slots {:inv … :info-body …}. See docs/06-gui/TECH_UI_SHELL.md.
+{:fragment/id :academy.shared/tech-ui-shell
+ :slots/required [:inv :info-body]
+ :state-schema {:tech-tabs :vector
+                :inv-page-visible? :boolean
+                :wireless-page-visible? :boolean
+                :info-area :map
+                :network-linked-label :string :network-nodes :vector
+                :network-disconnect :map :network-available-label :map
+                :network-logo-composite :vector :network-connected? :boolean
+                :network-disconnected? :boolean
+                :wireless-connect-password :string
+                :slot-anchors :vector}
+ :root
+ {:type :absolute :key :tech/shell :layout {:width 290.0 :height 187.0}
+  :children
+  [{:type :include :src "academy/shared/tech_tabs"}
+   {:type :slot :name :inv}
+   {:type :include :src "academy/shared/wireless_page"}
+   {:type :include :src "academy/shared/info_area_chrome"}
+   {:type :clip :key :tech/info-clip
+    :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
+    :children
+    [{:type :include :src "academy/shared/info_area_histogram"}
+     {:type :slot :name :info-body}]}]}}

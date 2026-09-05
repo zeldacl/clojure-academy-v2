@@ -1,36 +1,17 @@
-;; TechUI machine shell — left 176×187 inventory stack + right info ~100×177 @ x~179.
-;; Shared left inv/wireless tabs when :presentation-tech-tabs? is set.
-;; Wireless page + info chrome/histogram from academy/shared fragments (:include).
+;; TechUI machine shell — left inventory stack via tech_ui_shell slots.
 {:ui/schema 2 :view/id :academy.app/machine-container
  :host {:kind :container :design-width 290 :design-height 187 :scale-policy :fit}
- :state-schema {:slots :vector :slot-anchors :vector :machine-state :string
+ :state-schema {:slots :vector :machine-state :string
                 :energy-ratio :number :progress-ratio :number
-                :info-area :map :page-composite :vector :network-visible :boolean
-                :network-state :string :network-owner :string :network-range :string
-                :network-bandwidth :string :network-load :number :network-nodes :vector
-                :network-password :string :network-disconnect :map :network-available-label :map
-                :network-linked-label :string :network-logo-composite :vector
-                :network-connected? :boolean :network-disconnected? :boolean
-                :wireless-connect-password :string
-                :tech-tabs :vector
-                :inv-page-visible? :boolean :wireless-page-visible? :boolean
+                :page-composite :vector :network-visible :boolean
+                :network-state :string :network-password :string
                 :button-left :map :button-right :map}
  :root
- {:type :absolute :key :container/root :layout {:width 290 :height 187}
-  :children
-  [{:type :repeater :key :container/tech-tabs
-    :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0 :direction :none}
-    :bind {:items [:state :tech-tabs]}
-    :children
-    [{:type :composite :layout {:width 0.0 :height 0.0}
-      :bind {:item [:state :item]
-             :x [:item :layout-x] :y [:item :layout-y]
-             :width [:item :w] :height [:item :h]}
-      :on {:activate :container/set-tab}
-      :semantics {:role :button}}]}
-
-   ;; Inv page
-   {:type :absolute :key :container/left :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
+ {:type :include :src "academy/shared/tech_ui_shell"
+  :slots
+  {:inv
+   {:type :absolute :key :container/left
+    :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
     :bind {:visible [:state :inv-page-visible?]}
     :children
     [{:type :image :key :container/parent-bg
@@ -75,25 +56,11 @@
         :on {:activate :container/button}
         :semantics {:role :button}}]}]}
 
-   {:type :include :src "academy/shared/wireless_page"}
-
-   {:type :include :src "academy/shared/info_area_chrome"}
-
-   {:type :clip :key :container/info
-    :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
+   :info-body
+   {:type :absolute :key :container/info-body
+    :layout {:width 100.0 :height 177.0}
     :children
-    [{:type :include :src "academy/shared/info_area_histogram"}
-     {:type :scroll :key :container/info-fields
-      :layout {:x 4.0 :y 90.0 :width 92.0 :height 54.0}
-      :bind {:items [:state :info-area :fields]}
-      :semantics {:role :list}
-      :children
-      [{:type :row :layout {:height 12.0}
-        :children
-        [{:type :text :layout {:width 40.0 :height 12.0} :style {:font-size 7.0}
-          :bind {:text [:item :label]}}
-         {:type :text :layout {:width 52.0 :height 12.0} :style {:font-size 7.0}
-          :bind {:text [:item :value]}}]}]}
+    [{:type :include :src "academy/shared/info_fields"}
      {:type :progress :key :container/info-load
       :layout {:x 4.0 :y 150.0 :width 92.0 :height 5.0}
       :bind {:value [:state :info-area :load-ratio]}
@@ -106,4 +73,4 @@
        {:type :text-input :layout {:height 10.0}
         :bind {:text [:state :network-password]}
         :on {:change :container/wireless-password :submit :container/wireless-password}
-        :semantics {:role :textbox :field :wireless-password}}]}]}]}}
+        :semantics {:role :textbox :field :wireless-password}}]}]}}}}

@@ -1,0 +1,14 @@
+;; Shared TechUI left tab strip (main tech-ui-tabs: x=-20, y=idx*22, 20×20).
+{:fragment/id :academy.shared/tech-tabs
+ :state-schema {:tech-tabs :vector}
+ :root
+ {:type :repeater :key :tech/tabs
+  :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0 :direction :none}
+  :bind {:items [:state :tech-tabs]}
+  :children
+  [{:type :composite :layout {:width 0.0 :height 0.0}
+    :bind {:item [:state :item]
+           :x [:item :layout-x] :y [:item :layout-y]
+           :width [:item :w] :height [:item :h]}
+    :on {:activate :container/set-tab}
+    :semantics {:role :button}}]}}

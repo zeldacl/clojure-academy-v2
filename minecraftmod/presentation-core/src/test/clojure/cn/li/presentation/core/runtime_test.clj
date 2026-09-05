@@ -315,12 +315,23 @@
     (let [artifact (edn/read-string (slurp art-file))
           rt (runtime/create-runtime)
           seen (atom [])
+          fields [{:id :range :label "Range" :value "0"
+                   :editable? false :readonly? true :draft-key :range}
+                  {:id :owner :label "Owner" :value "me"
+                   :editable? false :readonly? true :draft-key :owner}
+                  {:id :node-name :label "Node Name" :value "ab"
+                   :editable? true :readonly? false :draft-key :node-name}
+                  {:id :password :label "Password" :value ""
+                   :editable? true :readonly? false :draft-key :network-password}]
           mount (runtime/mount!
                   rt {:host {:stage :screen} :artifact artifact
-                      :state {:node-editable? true :node-readonly? false
-                              :node-name "ab" :network-password ""
-                              :info-area {:histograms [] :hist-bars [] :sep-label "-- Info --"
-                                          :fields [{:value "0"} {:value "me"}]}
+                      :state {:node-name "ab" :network-password ""
+                              :tech-tabs []
+                              :inv-page-visible? true
+                              :wireless-page-visible? false
+                              :info-area {:histograms [] :hist-bars []
+                                          :sep-label "-- Info --" :sep-visible? true
+                                          :fields fields}
                               :slot-anchors []}
                       :reduce (fn [state action payload]
                                 (swap! seen conj [action (:field payload) (:value payload)])
@@ -331,7 +342,7 @@
       (let [;; Integer center matches AbstractContainerScreen leftPos/topPos.
             ox (quot (- 800 290) 2)
             oy (quot (- 480 187) 2)
-            ;; Node Name value cell: clip(179,5)+column(6,95)+rows 0..2 → (225,120)
+            ;; Node Name value cell: clip(179,5)+fields(6,95)+row2 → ~(225,120)
             mx (+ ox 225.0 10.0)
             my (+ oy 120.0 5.0)
             ;; Password row is one 10px row below name.
@@ -344,6 +355,7 @@
         (is (= [:state :node-name] (:path (:focus (runtime/instance! rt mount)))))
         (runtime/dispatch! rt mount {:type :character :text "Z"})
         (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))
+        (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :info-area :fields 2 :value])))
         (is (= :node-name (second (last @seen))))
         ;; Focusing password must not wipe the name draft.
         (is (= :consume
@@ -354,6 +366,41 @@
         (runtime/dispatch! rt mount {:type :character :text "p"})
         (is (= "p" (get-in (runtime/instance! rt mount) [:view-state :network-password])))
         (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))))))
+
+(deftest info-field-item-text-rewrites-focus-to-draft-key
+  "Editable info rows bind [:item :value] but must write draft-key + fields[idx]."
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/info-draft
+                           {:key :list :flags #{:is-collection :has-direction}
+                            :direction :column :width [:fixed 100.0] :height [:fixed 40.0]
+                            :bind {:items [:state :info-area :fields]}
+                            :children
+                            [{:key :row :flags #{:hit-testable :focusable}
+                              :width [:fixed 100.0] :height [:fixed 20.0]
+                              :bind {:text [:item :value]}
+                              :on {:change :edit/change}
+                              :children []}]})
+        ;; Inject semantics without static :field so item :id wins.
+        artifact (assoc artifact :node/semantics [nil {:role :textbox}])
+        mount (runtime/mount!
+                rt {:host {:stage :screen} :artifact artifact
+                    :state {:node-name "ab"
+                            :info-area {:fields
+                                        [{:id :node-name :value "ab" :draft-key :node-name
+                                          :editable? true}
+                                         {:id :password :value "" :draft-key :network-password
+                                          :editable? true}]}}
+                    :reduce (fn [state _ _] {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
+    (is (= :consume
+           (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})))
+    (let [focus (:focus (runtime/instance! rt mount))]
+      (is (= :node-name (:field focus)))
+      (is (= [:state :node-name] (:path focus)))
+      (is (= 0 (:item-index focus))))
+    (runtime/dispatch! rt mount {:type :character :text "Z"})
+    (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))
+    (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :info-area :fields 0 :value])))))
 
 (deftest progress-drag-reports-a-clamped-ratio
   (let [seen (atom nil)

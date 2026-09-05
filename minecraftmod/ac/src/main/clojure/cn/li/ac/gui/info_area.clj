@@ -50,6 +50,23 @@
   [histograms]
   (mapv #(select-keys % [:kind :x :y :w :h :rgba]) (or histograms [])))
 
+(defn- field-entry
+  "Normalize one info-area field with draft routing metadata."
+  [{:keys [id label value editable? masked? draft-key] :as m}]
+  (let [id (or id (keyword (str "field-" (hash label))))
+        editable? (boolean editable?)
+        draft-key (or draft-key
+                      (case id
+                        :password :network-password
+                        id))]
+    (cond-> {:id id
+             :label (str label)
+             :value (str (or value ""))
+             :editable? editable?
+             :readonly? (not editable?)
+             :draft-key draft-key}
+      (some? masked?) (assoc :masked? (boolean masked?)))))
+
 (defn snapshot
   [data policy]
   (let [initialized? (boolean (:initialized data))
@@ -74,20 +91,25 @@
         histograms (project-histograms raw-hists)
         ;; Main node order after hist rows + "-- Info --": Range, Owner,
         ;; then optional Node Name / Password (editable when owner).
-        fields (cond-> [{:id :range :label "Range" :value (str (or (:range data) 0))}
-                        {:id :owner :label "Owner" :value (str (or (:owner data) "Unknown"))}]
-                 (or (contains? data :ssid) (contains? data :node-name))
-                 (conj {:id :node-name :label "Node Name"
-                        :value (str (or (:ssid data) (:node-name data) ""))
-                        :editable? (and initialized? owner?)})
-                 (contains? data :password)
-                 (conj {:id :password :label "Password"
-                        :value (str (or (:password data) ""))
-                        :editable? (and initialized? owner?)
-                        :masked? true}))]
+        fields (mapv field-entry
+                     (cond-> [{:id :range :label "Range" :value (str (or (:range data) 0))}
+                              {:id :owner :label "Owner" :value (str (or (:owner data) "Unknown"))}]
+                       (or (contains? data :ssid) (contains? data :node-name))
+                       (conj {:id :node-name :label "Node Name"
+                              :value (str (or (:ssid data) (:node-name data) ""))
+                              :editable? (and initialized? owner?)
+                              :draft-key :node-name})
+                       (contains? data :password)
+                       (conj {:id :password :label "Password"
+                              :value (str (or (:password data) ""))
+                              :editable? (and initialized? owner?)
+                              :masked? true
+                              :draft-key :network-password})))
+        sep-label "-- Info --"]
     {:title "Info"
      ;; Matches add-sepline! text formatting on main.
-     :sep-label "-- Info --"
+     :sep-label sep-label
+     :sep-visible? true
      :initialized? initialized?
      :editable? (and initialized? owner?)
      :load-ratio load-ratio

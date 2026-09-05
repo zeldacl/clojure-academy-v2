@@ -125,15 +125,15 @@
                    load (double (or (value-of :capacity 0.0) 0.0))
                    max-load (max 1.0 (double (or (value-of :max-capacity 1.0) 1.0)))
                    owner? (boolean (node-logic/owner-authorized? state player))
-                   form @form-state]
-               {:node-editable? owner?
-                :node-readonly? (not owner?)
-                :node-name (str (if (contains? form :node-name)
-                                  (:node-name form)
-                                  (value-of :ssid "")))
-                :network-password (str (if (contains? form :password)
-                                         (:password form)
-                                         (value-of :password "")))
+                   form @form-state
+                   node-name (str (if (contains? form :node-name)
+                                    (:node-name form)
+                                    (value-of :ssid "")))
+                   password (str (if (contains? form :password)
+                                   (:password form)
+                                   (value-of :password "")))]
+               {:node-name node-name
+                :network-password password
                 :node-anim (node-anim-items @linked*)
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
@@ -142,12 +142,8 @@
                               :capacity load
                               :owner (node-logic/owner-name state)
                               :range (or (value-of :range 0) 0)
-                              :ssid (if (contains? form :node-name)
-                                      (:node-name form)
-                                      (value-of :ssid ""))
-                              :password (if (contains? form :password)
-                                          (:password form)
-                                          (value-of :password ""))
+                              :ssid node-name
+                              :password password
                               :load load
                               :max-capacity max-load}
                              owner?)}))

@@ -489,6 +489,8 @@
 ;; `.ui.edn`, so compile-directory! never treats them as standalone views).
 ;; Site form: {:type :include :src "academy/shared/wireless_page" :key ...}
 ;; Optional site :key/:layout/:bind/:on/:semantics overlay the fragment root.
+;; Named slots: fragment may contain {:type :slot :name :inv}; the include site
+;; supplies :slots {:inv <node>}. See docs/06-gui/TECH_UI_SHELL.md.
 
 (defn- fragment-path
   [^Path source-root src path]
@@ -525,6 +527,62 @@
     (seq (:semantics site)) (update :semantics #(merge (or % {}) (:semantics site)))
     (seq (:style site)) (update :style #(merge (or % {}) (:style site)))))
 
+(defn- slot-node?
+  [n]
+  (and (map? n) (= :slot (keyword (name (:type n))))))
+
+(defn- collect-slot-names
+  [node]
+  (let [acc (atom #{})]
+    (letfn [(walk [n]
+              (when (map? n)
+                (when (slot-node? n)
+                  (let [nm (:name n)]
+                    (when-not (keyword? nm)
+                      (fail "slot" (str ":slot requires keyword :name, got " (pr-str nm))))
+                    (swap! acc conj nm)))
+                (when (vector? (:children n))
+                  (doseq [c (:children n)] (walk c)))))]
+      (walk node)
+      @acc)))
+
+(defn- assert-no-slots!
+  [node path]
+  (letfn [(walk [n]
+            (when (map? n)
+              (when (slot-node? n)
+                (fail path (str "unfilled :slot remains after expand: " (pr-str (:name n)))))
+              (when (vector? (:children n))
+                (doseq [c (:children n)] (walk c)))))]
+    (walk node)))
+
+(defn- fill-slots
+  "Replace {:type :slot :name k} nodes with providers from slot-map.
+   Validates :slots/required and rejects unknown site slot keys."
+  [body slot-map required path]
+  (let [slot-map (or slot-map {})
+        _ (when-not (map? slot-map)
+            (fail path ":include :slots must be a map"))
+        declared (collect-slot-names body)
+        provided (set (keys slot-map))
+        required (set (or required []))
+        _ (doseq [r required]
+            (when-not (contains? provided r)
+              (fail path (str "missing required slot: " (pr-str r)))))
+        _ (doseq [p provided]
+            (when-not (contains? declared p)
+              (fail path (str "unknown :slots key (no matching :slot in fragment): " (pr-str p)))))
+        _ (doseq [d declared]
+            (when-not (contains? provided d)
+              (fail path (str "unfilled slot: " (pr-str d)))))]
+    (letfn [(walk [n]
+              (cond
+                (not (map? n)) n
+                (slot-node? n) (get slot-map (:name n))
+                (vector? (:children n)) (update n :children #(mapv walk %))
+                :else n))]
+      (walk body))))
+
 (defn expand-includes
   "Replace :include nodes with fragment trees. Returns
    {:node <expanded> :state-schema <merged from fragments>}."
@@ -542,21 +600,27 @@
                        frag (load-fragment! source-root src path)
                        _ (when-let [ss (:state-schema frag)]
                            (when (map? ss) (swap! state* merge ss)))
-                       body (or (:root frag) (dissoc frag :fragment/id :state-schema))
+                       body (or (:root frag)
+                                (dissoc frag :fragment/id :state-schema :slots/required))
                        _ (when-not (and (map? body) (:type body)
                                         (not= :include (keyword (name (:type body)))))
                            (fail path (str ":include fragment must provide a non-include :root/:type: " src)))
-                       merged (-> (merge-include-site body (dissoc n :type :src))
+                       filled (fill-slots body (:slots n) (:slots/required frag) path)
+                       merged (-> (merge-include-site filled (dissoc n :type :src :slots))
                                   (dissoc :src))
                        nested (expand-includes merged source-root path (conj stack src))]
                    (swap! state* merge (:state-schema nested))
                    (:node nested))
+                 (slot-node? n)
+                 (fail path (str "bare :slot outside :include fragment: " (pr-str (:name n))))
                  :else
                  (cond-> n
                    (vector? (:children n))
                    (update :children #(mapv walk %)))))]
-       {:node (walk node)
-        :state-schema @state*}))))
+       (let [expanded (walk node)]
+         (assert-no-slots! expanded path)
+         {:node expanded
+          :state-schema @state*})))))
 
 (defn expand-source-includes
   "Expand :include under :root/:nodes; merge fragment :state-schema under view."

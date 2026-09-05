@@ -223,3 +223,81 @@
       (finally
         (doseq [^java.io.File f (reverse (file-seq tmp))]
           (.delete f))))))
+
+(deftest include-fills-required-slots
+  (let [tmp (doto (java.io.File/createTempFile "pui-slots" "")
+              (.delete)
+              (.mkdirs))
+        frag-dir (doto (java.io.File. tmp "shared") (.mkdirs))
+        _ (spit (java.io.File. frag-dir "shell.edn")
+                (pr-str {:fragment/id :test/shell
+                         :slots/required [:inv :info-body]
+                         :root {:type :column :key :shell
+                                :children [{:type :slot :name :inv}
+                                           {:type :slot :name :info-body}]}}))
+        source-root (.toPath tmp)
+        compiled (artifact/compile-source
+                  {:ui/schema 2
+                   :view/id :academy/test/slots
+                   :root {:type :include :src "shared/shell"
+                          :slots {:inv {:type :text :key :inv/t
+                                        :bind {:text [:state :title]}}
+                                  :info-body {:type :rect :key :info/r
+                                              :layout {:width 1.0 :height 1.0}}}}}
+                  "slots.ui.edn"
+                  source-root)]
+    (try
+      (is (= 3 (:node-count compiled)))
+      (is (= :inv/t (nth (:node/key compiled) 1)))
+      (is (= :info/r (nth (:node/key compiled) 2)))
+      (is (= [{:id 0 :path [:state :title]}] (:bindings compiled)))
+      (finally
+        (doseq [^java.io.File f (reverse (file-seq tmp))]
+          (.delete f))))))
+
+(deftest include-missing-required-slot-fails
+  (let [tmp (doto (java.io.File/createTempFile "pui-slots-miss" "")
+              (.delete)
+              (.mkdirs))
+        frag-dir (doto (java.io.File. tmp "shared") (.mkdirs))
+        _ (spit (java.io.File. frag-dir "shell.edn")
+                (pr-str {:fragment/id :test/shell
+                         :slots/required [:inv :info-body]
+                         :root {:type :column
+                                :children [{:type :slot :name :inv}
+                                           {:type :slot :name :info-body}]}}))
+        source-root (.toPath tmp)]
+    (try
+      (is (thrown-with-msg? Exception #"missing required slot"
+            (artifact/compile-source
+             {:ui/schema 2 :view/id :academy/test/slots-miss
+              :root {:type :include :src "shared/shell"
+                     :slots {:inv {:type :rect}}}}
+             "miss.ui.edn"
+             source-root)))
+      (finally
+        (doseq [^java.io.File f (reverse (file-seq tmp))]
+          (.delete f))))))
+
+(deftest include-unknown-slot-key-fails
+  (let [tmp (doto (java.io.File/createTempFile "pui-slots-unk" "")
+              (.delete)
+              (.mkdirs))
+        frag-dir (doto (java.io.File. tmp "shared") (.mkdirs))
+        _ (spit (java.io.File. frag-dir "shell.edn")
+                (pr-str {:fragment/id :test/shell
+                         :root {:type :column
+                                :children [{:type :slot :name :inv}]}}))
+        source-root (.toPath tmp)]
+    (try
+      (is (thrown-with-msg? Exception #"unknown :slots key"
+            (artifact/compile-source
+             {:ui/schema 2 :view/id :academy/test/slots-unk
+              :root {:type :include :src "shared/shell"
+                     :slots {:inv {:type :rect}
+                             :nope {:type :rect}}}}
+             "unk.ui.edn"
+             source-root)))
+      (finally
+        (doseq [^java.io.File f (reverse (file-seq tmp))]
+          (.delete f))))))
