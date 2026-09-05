@@ -1,0 +1,35 @@
+;; Shared InfoArea histogram block (main info-area-reactive geometry).
+;; histogram.png 210×210 @ 0.4 → 84×84 frame; bars via :info-area :hist-bars.
+;; Legend rows bind :info-area :histograms (label / color swatch / value).
+{:fragment/id :academy.shared/info-area-histogram
+ :root
+ {:type :absolute :key :info/histogram
+  :layout {:x 0.0 :y 0.0 :width 100.0 :height 88.0}
+  :children
+  [{:type :absolute :key :info/histogram-frame
+    :layout {:x 8.0 :y -20.0 :width 84.0 :height 84.0}
+    :children
+    [{:type :image :layout {:width 84.0 :height 84.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/histogram.png"}}
+      :semantics {:role :image}}
+     {:type :repeater :key :info/histogram-bars
+      :layout {:width 84.0 :height 84.0}
+      :bind {:items [:state :info-area :hist-bars]}
+      :children
+      [{:type :composite :layout {:width 0.0 :height 0.0}
+        :bind {:item [:state :item]}}]}]}
+   {:type :repeater :key :info/histogram-legend
+    :layout {:x 6.0 :y 64.0 :width 92.0 :height 24.0}
+    :bind {:items [:state :info-area :histograms]}
+    :semantics {:role :list}
+    :children
+    [{:type :row :layout {:height 10.0 :align :center}
+      :children
+      [{:type :text :layout {:width 30.0 :height 8.0}
+        :style {:font-size 8.0 :rgba 0xFFCCCCCC}
+        :bind {:text [:item :label]}}
+       {:type :rect :layout {:width 6.0 :height 6.0 :margin {:left 3.0}}
+        :bind {:rgba [:item :color]}}
+       {:type :text :layout {:width 55.0 :height 8.0 :margin {:left 4.0}}
+        :style {:font-size 8.0}
+        :bind {:text [:item :value]}}]}]}]}}

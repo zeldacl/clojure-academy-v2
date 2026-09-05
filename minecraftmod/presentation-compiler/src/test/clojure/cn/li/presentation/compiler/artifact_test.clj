@@ -196,3 +196,30 @@
         box (:node/box compiled)]
     ;; margin l,t,r,b | padding l,t,r,b | min-w,min-h,max-w,max-h -- 12 floats, node 0.
     (is (= [2.0 2.0 2.0 2.0 1.0 2.0 3.0 4.0 0.0 0.0 0.0 0.0] (vec (take 12 box))))))
+
+(deftest include-expands-fragment-under-source-root
+  (let [tmp (doto (java.io.File/createTempFile "pui-include" "")
+              (.delete)
+              (.mkdirs))
+        frag-dir (doto (java.io.File. tmp "shared") (.mkdirs))
+        _ (spit (java.io.File. frag-dir "hist.edn")
+                (pr-str {:fragment/id :test/hist
+                         :root {:type :rect :key :hist/root
+                                :layout {:width 10.0 :height 10.0}
+                                :bind {:rgba [:state :tint]}}}))
+        source-root (.toPath tmp)
+        compiled (artifact/compile-source
+                  {:ui/schema 2
+                   :view/id :academy/test/include
+                   :root {:type :column
+                          :children [{:type :include :src "shared/hist"
+                                      :key :site/hist}]}}
+                  "include.ui.edn"
+                  source-root)]
+    (try
+      (is (= 2 (:node-count compiled)))
+      (is (= :site/hist (nth (:node/key compiled) 1)))
+      (is (= [{:id 0 :path [:state :tint]}] (:bindings compiled)))
+      (finally
+        (doseq [^java.io.File f (reverse (file-seq tmp))]
+          (.delete f))))))

@@ -98,6 +98,9 @@
     (assoc base
            :presentation-form-state form-state
            :presentation-animate? true
+           :presentation-tech-tabs? true
+           :presentation-wireless {:domain :node :role :node}
+           :presentation-wireless-state (atom {:linked nil :avail [] :password ""})
            :presentation-text-fields [{:id :node-name :binding-key :node-name :x 12 :y 82 :width 120 :height 18
                                        :value-fn (fn [_ _] (value-of :ssid ""))}
                                       {:id :password :binding-key :network-password :x 12 :y 105 :width 120 :height 18

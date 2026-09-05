@@ -6,6 +6,7 @@
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.platform.neutral.gui-runtime :as container-state]
             [cn.li.platform.neutral.gui-runtime :as gui-reg]
+            [cn.li.platform.neutral.tabbed-gui :as tabbed]
             [cn.li.mcmod.runtime.owner :as runtime-owner]))
 
 (defonce ^:private create-presentation-container-screen-atom
@@ -55,6 +56,16 @@
   (and (map? m)
        (= (:type m) :presentation-container-screen)
        (fn? (:mount-fn m))))
+
+(defn render-vanilla-slots?
+  "Match main TechUI host-container: only inv tab draws AbstractContainerScreen
+   slots. Wireless (and other non-inv) tabs skip super.render so items/slot
+   chrome do not paint through transparent page art."
+  [screen-data]
+  (let [c (:container screen-data)]
+    (or (nil? c)
+        (not (tabbed/tabbed-container? c))
+        (tabbed/slots-active? c))))
 
 (defn owner-for-screen-menu
   "Resolve canonical client owner for a Minecraft menu's Clojure container."

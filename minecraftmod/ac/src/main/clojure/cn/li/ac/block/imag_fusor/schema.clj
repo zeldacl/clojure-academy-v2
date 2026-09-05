@@ -127,4 +127,13 @@
     :persist? true
     :block-state {:prop "facing"
                  :type :horizontal-facing
-                 :default "north"}}])
+                 :default "north"}}
+
+   {:key :tab-index
+    :gui-only? true
+    :gui-init (fn [_] 0)
+    :gui-sync? false
+    :gui-data-slot? false
+    :gui-coerce int
+    :gui-close-reset 0
+    :doc "Current GUI tab index (client-only)"}])

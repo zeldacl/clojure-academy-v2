@@ -32,6 +32,7 @@
   (assoc (gui-sync/create-schema-container former-gui-schema tile player former-gui-type
                                             {:gui-id (gui-manifest/gui-id :metal-former)})
          :presentation-close-fn (:on-close former-sync)
+         :presentation-tech-tabs? true
          :presentation-wireless {:domain :metal-former :role :machine}
          :presentation-wireless-state (atom {:linked nil :avail [] :password ""})
          :presentation-progress-fn (fn [c] (if @(:working c)

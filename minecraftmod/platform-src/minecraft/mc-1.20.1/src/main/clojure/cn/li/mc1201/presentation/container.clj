@@ -24,10 +24,16 @@
           (Component/literal (str (:screen-title data "Container"))))]
     (.setImageSize screen image-w image-h)
     (doto screen
+      ;; TechUI owns titles; suppress vanilla "Inventory"/menu title labels.
+      (.withRenderLabels (fn [_ _ _ _] nil))
       (.withRender
         (fn [s ^GuiGraphics graphics mouse-x mouse-y partial-tick]
-          (.callSuperRender ^DelegatingCGuiContainerScreen s graphics
-                            (int mouse-x) (int mouse-y) (float partial-tick))
+          (if (screen-impl/render-vanilla-slots? data)
+            ;; Inv: vanilla render (world veil + slots). Wireless: Presentation
+            ;; only — skip renderBackground so translucent wireless art is not
+            ;; double-dimmed while inv's opaque plate hides the same veil.
+            (.callSuperRender ^DelegatingCGuiContainerScreen s graphics
+                              (int mouse-x) (int mouse-y) (float partial-tick)))
           (when frame! (frame!))
           (presentation/submit-current-frame!
             :screen (float partial-tick) (.-width ^DelegatingCGuiContainerScreen s)

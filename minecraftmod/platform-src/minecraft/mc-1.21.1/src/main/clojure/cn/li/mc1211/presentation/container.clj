@@ -24,10 +24,12 @@
           (Component/literal (str (:screen-title data "Container"))))]
     (.setImageSize screen image-w image-h)
     (doto screen
+      (.withRenderLabels (fn [_ _ _ _] nil))
       (.withRender
         (fn [s ^GuiGraphics graphics mouse-x mouse-y partial-tick]
-          (.callSuperRender ^DelegatingCGuiContainerScreen s graphics
-                            (int mouse-x) (int mouse-y) (float partial-tick))
+          (if (screen-impl/render-vanilla-slots? data)
+            (.callSuperRender ^DelegatingCGuiContainerScreen s graphics
+                              (int mouse-x) (int mouse-y) (float partial-tick)))
           (when frame! (frame!))
           (presentation/submit-current-frame!
             :screen (float partial-tick) (.-width ^DelegatingCGuiContainerScreen s)

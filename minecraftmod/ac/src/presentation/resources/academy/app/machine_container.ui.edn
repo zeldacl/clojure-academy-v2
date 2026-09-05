@@ -1,5 +1,6 @@
 ;; TechUI machine shell — left 176×187 inventory stack + right info ~100×177 @ x~179.
-;; Page overlay via composite (machine-specific ui_*.png).
+;; Shared left inv/wireless tabs when :presentation-tech-tabs? is set.
+;; Wireless page + info chrome/histogram from academy/shared fragments (:include).
 {:ui/schema 2 :view/id :academy.app/machine-container
  :host {:kind :container :design-width 290 :design-height 187 :scale-policy :fit}
  :state-schema {:slots :vector :slot-anchors :vector :machine-state :string
@@ -8,12 +9,29 @@
                 :network-state :string :network-owner :string :network-range :string
                 :network-bandwidth :string :network-load :number :network-nodes :vector
                 :network-password :string :network-disconnect :map :network-available-label :map
+                :network-linked-label :string :network-logo-composite :vector
+                :network-connected? :boolean :network-disconnected? :boolean
+                :wireless-connect-password :string
+                :tech-tabs :vector
+                :inv-page-visible? :boolean :wireless-page-visible? :boolean
                 :button-left :map :button-right :map}
  :root
  {:type :absolute :key :container/root :layout {:width 290 :height 187}
   :children
-  [;; Left inventory stack
+  [{:type :repeater :key :container/tech-tabs
+    :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0 :direction :none}
+    :bind {:items [:state :tech-tabs]}
+    :children
+    [{:type :composite :layout {:width 0.0 :height 0.0}
+      :bind {:item [:state :item]
+             :x [:item :layout-x] :y [:item :layout-y]
+             :width [:item :w] :height [:item :h]}
+      :on {:activate :container/set-tab}
+      :semantics {:role :button}}]}
+
+   ;; Inv page
    {:type :absolute :key :container/left :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
+    :bind {:visible [:state :inv-page-visible?]}
     :children
     [{:type :image :key :container/parent-bg
       :layout {:width 176.0 :height 187.0}
@@ -57,36 +75,16 @@
         :on {:activate :container/button}
         :semantics {:role :button}}]}]}
 
-   ;; Right info panel — main TechUI info at (179,5) 100×177
-   {:type :absolute :key :container/info
+   {:type :include :src "academy/shared/wireless_page"}
+
+   {:type :include :src "academy/shared/info_area_chrome"}
+
+   {:type :clip :key :container/info
     :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
     :children
-    [{:type :image :key :container/info-bg
-      :layout {:width 100.0 :height 177.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_info.png"}}
-      :semantics {:role :image}}
-     {:type :text :key :container/info-title
-      :layout {:x 4.0 :y 6.0 :width 92.0 :height 12.0}
-      :style {:font-size 9.0}
-      :bind {:text [:state :info-area :title]}
-      :semantics {:role :heading}}
-     {:type :repeater :key :container/info-histograms
-      :layout {:x 4.0 :y 22.0 :width 92.0 :height 48.0}
-      :bind {:items [:state :info-area :histograms]}
-      :semantics {:role :list}
-      :children
-      [{:type :column :layout {:height 16.0}
-        :children
-        [{:type :text :layout {:height 8.0} :style {:font-size 7.0}
-          :bind {:text [:item :label]}}
-         {:type :row :layout {:height 8.0}
-          :children
-          [{:type :progress :layout {:width 56.0 :height 5.0}
-            :bind {:value [:item :ratio]} :semantics {:role :progress}}
-           {:type :text :layout {:width 36.0 :height 8.0} :style {:font-size 6.0}
-            :bind {:text [:item :value]}}]}]}]}
+    [{:type :include :src "academy/shared/info_area_histogram"}
      {:type :scroll :key :container/info-fields
-      :layout {:x 4.0 :y 74.0 :width 92.0 :height 70.0}
+      :layout {:x 4.0 :y 90.0 :width 92.0 :height 54.0}
       :bind {:items [:state :info-area :fields]}
       :semantics {:role :list}
       :children

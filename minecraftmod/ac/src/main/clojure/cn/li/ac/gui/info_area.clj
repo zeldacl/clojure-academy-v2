@@ -39,6 +39,17 @@
      ;; Composite draw-list form for the histogram.png frame overlay.
      :kind :quad :x x :y y :w HIST-BAR-W :h h :rgba color}))
 
+(defn project-histograms
+  "Attach bar geometry + legend color (main add-histogram! layout) to raw entries.
+   Each raw map needs :id :label :ratio :value and optional :color."
+  [raw-entries]
+  (mapv hist-entry (range) (or raw-entries [])))
+
+(defn hist-bars
+  "Composite draw-list for the histogram.png frame overlay."
+  [histograms]
+  (mapv #(select-keys % [:kind :x :y :w :h :rgba]) (or histograms [])))
+
 (defn snapshot
   [data policy]
   (let [initialized? (boolean (:initialized data))
@@ -60,7 +71,7 @@
                            :ratio load-ratio
                            :value (str (long capacity) "/" (long max-capacity))
                            :color CAPACITY-COLOR}))
-        histograms (mapv hist-entry (range) raw-hists)
+        histograms (project-histograms raw-hists)
         ;; Main node order after hist rows + "-- Info --": Range, Owner,
         ;; then optional Node Name / Password (editable when owner).
         fields (cond-> [{:id :range :label "Range" :value (str (or (:range data) 0))}
@@ -81,6 +92,5 @@
      :editable? (and initialized? owner?)
      :load-ratio load-ratio
      :histograms histograms
-     ;; Same bars as :quad composites for the histogram.png frame overlay.
-     :hist-bars (mapv #(select-keys % [:kind :x :y :w :h :rgba]) histograms)
+     :hist-bars (hist-bars histograms)
      :fields fields}))

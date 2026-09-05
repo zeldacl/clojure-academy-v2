@@ -1,0 +1,20 @@
+;; Shared InfoArea frame chrome (main info-area-reactive decorations).
+;; Hosts place content in a sibling clip/absolute at (179,5)×100×177.
+{:fragment/id :academy.shared/info-area-chrome
+ :root
+ {:type :absolute :key :info/chrome
+  :layout {:x 0.0 :y 0.0 :width 290.0 :height 187.0}
+  :children
+  [{:type :nine-slice :key :info/bg
+    :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/blend_quad.png"}
+            :slice 4.0}
+    :semantics {:role :image}}
+   {:type :image :key :info/line-top
+    :layout {:x 175.8 :y -3.6 :width 106.4 :height 12.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/line.png"}}
+    :semantics {:role :image}}
+   {:type :image :key :info/line-bot
+    :layout {:x 175.8 :y 180.0 :width 106.4 :height 8.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/line.png"}}
+    :semantics {:role :image}}]}}

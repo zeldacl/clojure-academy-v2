@@ -1,4 +1,5 @@
-;; Ability interferer — TechUI + ui_interfere; config + whitelist partitions.
+;; Ability interferer — TechUI + ui_interfere; shared left inv/wireless tabs.
+;; Wireless page from academy/shared/wireless_page (:include).
 {:ui/schema 2 :view/id :academy.app/ability-interferer
  :host {:kind :container :design-width 290 :design-height 187 :scale-policy :fit}
  :state-schema {:slots :vector :slot-anchors :vector :machine-state :string :energy-ratio :number
@@ -8,11 +9,28 @@
                 :interferer-remove :map :network-visible :boolean :network-state :string
                 :network-owner :string :network-range :string :network-bandwidth :string
                 :network-load :number :network-nodes :vector :network-password :string
-                :network-disconnect :map :network-available-label :map :info-area :map}
+                :network-disconnect :map :network-available-label :map
+                :network-linked-label :string :network-logo-composite :vector
+                :network-connected? :boolean :network-disconnected? :boolean
+                :wireless-connect-password :string
+                :tech-tabs :vector
+                :inv-page-visible? :boolean :wireless-page-visible? :boolean :info-area :map}
  :root
  {:type :absolute :key :interferer/root :layout {:width 290 :height 187}
   :children
-  [{:type :absolute :key :interferer/left :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
+  [{:type :repeater :key :interferer/tech-tabs
+    :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0 :direction :none}
+    :bind {:items [:state :tech-tabs]}
+    :children
+    [{:type :composite :layout {:width 0.0 :height 0.0}
+      :bind {:item [:state :item]
+             :x [:item :layout-x] :y [:item :layout-y]
+             :width [:item :w] :height [:item :h]}
+      :on {:activate :container/set-tab}
+      :semantics {:role :button}}]}
+
+   {:type :absolute :key :interferer/left :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
+    :bind {:visible [:state :inv-page-visible?]}
     :children
     [{:type :image :layout {:width 176.0 :height 187.0}
       :style {:resource {:namespace "academy" :path "textures/guis/parent/parent_background.png"}}
@@ -24,7 +42,6 @@
       :bind {:items [:state :slot-anchors]}
       :children [{:type :slot-anchor :bind {:item [:state :item]}}]}
 
-     ;; Config panel — range + toggle (page_interfere panel_config)
      {:type :column :key :interferer/config
       :layout {:x 8.0 :y 20.0 :width 160.0 :height 36.0}
       :children
@@ -46,7 +63,6 @@
           :bind {:text [:state :interferer-range-up]}
           :on {:activate :interferer/range-up} :semantics {:role :button}}]}]}
 
-     ;; Whitelist panel
      {:type :absolute :key :interferer/whitelist-panel
       :layout {:x 8.0 :y 70.0 :width 160.0 :height 100.0}
       :children
@@ -76,21 +92,20 @@
         :on {:change :interferer/input-change :submit :interferer/add-whitelist}
         :semantics {:role :textbox :field :interferer-input}}]}]}
 
-   {:type :absolute :key :interferer/info
+   {:type :include :src "academy/shared/wireless_page"}
+
+   {:type :include :src "academy/shared/info_area_chrome"}
+
+   {:type :clip :key :interferer/info
     :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
     :children
-    [{:type :image :layout {:width 100.0 :height 177.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_info.png"}}
-      :semantics {:role :image}}
-     {:type :text :layout {:x 4.0 :y 6.0 :width 92.0 :height 12.0}
-      :style {:font-size 9.0}
-      :bind {:text [:state :info-area :title]}}
-     {:type :text :layout {:x 4.0 :y 20.0 :width 92.0 :height 10.0}
+    [{:type :include :src "academy/shared/info_area_histogram"}
+     {:type :text :layout {:x 4.0 :y 90.0 :width 92.0 :height 10.0}
       :style {:font-size 8.0}
       :bind {:text [:state :machine-state]}}
-     {:type :progress :layout {:x 4.0 :y 34.0 :width 92.0 :height 5.0}
+     {:type :progress :layout {:x 4.0 :y 102.0 :width 92.0 :height 5.0}
       :bind {:value [:state :energy-ratio]} :semantics {:role :progress}}
-     {:type :scroll :layout {:x 4.0 :y 44.0 :width 92.0 :height 100.0}
+     {:type :scroll :layout {:x 4.0 :y 112.0 :width 92.0 :height 32.0}
       :bind {:items [:state :info-area :fields]}
       :children
       [{:type :row :layout {:height 12.0}

@@ -95,6 +95,7 @@
   (assoc (gui-sync/create-schema-container interferer-schema/ability-interferer-schema tile player gui-type
                                            {:gui-id (gui-manifest/gui-id :ability-interferer)})
          :presentation-close-fn (:on-close sync)
+         :presentation-tech-tabs? true
          :presentation-wireless {:domain :ability-interferer :role :ability-interferer}
          :presentation-wireless-state (atom {:linked nil :avail [] :password ""})
          :presentation-interferer-state (atom {:input "" :selected nil})

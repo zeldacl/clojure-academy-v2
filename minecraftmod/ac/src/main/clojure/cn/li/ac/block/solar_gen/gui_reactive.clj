@@ -17,6 +17,7 @@
   (assoc (gui-sync/create-schema-container solar-schema/unified-solar-schema tile player :solar
                                            {:gui-id (gui-manifest/gui-id :solar-gen)})
          :presentation-close-fn (:on-close solar-sync)
+         :presentation-tech-tabs? true
          :presentation-wireless {:domain :generator :role :generator}
          :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn get-slot-count [_] (slot-schema/tile-slot-count solar-gen-id))

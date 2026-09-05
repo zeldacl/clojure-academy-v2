@@ -484,40 +484,131 @@
               (str "unsupported source schema " schema " (v3 sources must declare " ui-source-schema ")")))))
   source)
 
-(defn compile-source [source path]
-  (validate-source! source path)
-  (let [view-id (or (:view/id source) (:view-id source))
-        root-source (or (:root source) (:nodes source))
-        physical-root (lower-node root-source)
-        flat (flatten-tree physical-root)
-        rows (:rows flat)
-        {:keys [own-ids bindings]} (assign-own-binding-ids rows)
-        {:keys [own-action-ids actions]} (assign-action-ids rows)
-        {:keys [mask words]} (compute-dep-masks rows (:parent flat) own-ids (count bindings))
-        fields (flat-fields rows)]
-    (canonicalize
-     (merge fields
-            {:magic artifact-magic
-             :schema artifact-schema
-             :ui/schema ui-source-schema
-             :view-id view-id
-             :source-hash (source-hash source)
-             :host (or (:host source) {})
-             :state-schema (or (:state-schema source) {})
-             :node-count (count rows)
-             :node/parent (:parent flat)
-             :node/first-child (:first-child flat)
-             :node/next-sibling (:next-sibling flat)
-             :node/child-count (:child-count flat)
-             :node/dep-mask mask
-             :mask-words words
-             :binding-count (count bindings)
-             :bindings bindings
-             :actions actions
-             :node/action-ids own-action-ids
-             :focus-order []
-             :semantics (or (:semantics source) {})
-             :capabilities (or (:capabilities source) (:requires-capabilities source) #{})}))))
+;; ============================== :include fragments ==============================
+;; Shared subtrees live as `.edn` under the presentation source root (not
+;; `.ui.edn`, so compile-directory! never treats them as standalone views).
+;; Site form: {:type :include :src "academy/shared/wireless_page" :key ...}
+;; Optional site :key/:layout/:bind/:on/:semantics overlay the fragment root.
+
+(defn- fragment-path
+  [^Path source-root src path]
+  (when-not (and (string? src) (not (str/blank? src)))
+    (fail path ":include requires non-empty string :src"))
+  (when (or (str/includes? src "..") (.isAbsolute (io/file src)))
+    (fail path (str ":include :src must be a relative path under the source root, got " (pr-str src))))
+  (let [rel (if (str/ends-with? src ".edn") src (str src ".edn"))
+        ^Path resolved (.normalize (.resolve source-root ^String rel))
+        ^Path root-n (.normalize source-root)]
+    (when-not (.startsWith resolved root-n)
+      (fail path (str ":include escapes source root: " rel)))
+    resolved))
+
+(defn- load-fragment!
+  [^Path source-root src path]
+  (let [^Path fp (fragment-path source-root src path)
+        ^File file (.toFile fp)]
+    (when-not (.isFile file)
+      (fail path (str ":include fragment not found: " src " (" (str fp) ")")))
+    (let [raw (edn/read-string (slurp file :encoding "UTF-8"))]
+      (when-not (map? raw)
+        (fail path (str ":include fragment must be a map: " src)))
+      raw)))
+
+(defn- merge-include-site
+  "Overlay include-site fields onto the fragment root node."
+  [frag-root site]
+  (cond-> frag-root
+    (contains? site :key) (assoc :key (:key site))
+    (seq (:layout site)) (update :layout #(merge (or % {}) (:layout site)))
+    (seq (:bind site)) (update :bind #(merge (or % {}) (:bind site)))
+    (seq (:on site)) (update :on #(merge (or % {}) (:on site)))
+    (seq (:semantics site)) (update :semantics #(merge (or % {}) (:semantics site)))
+    (seq (:style site)) (update :style #(merge (or % {}) (:style site)))))
+
+(defn expand-includes
+  "Replace :include nodes with fragment trees. Returns
+   {:node <expanded> :state-schema <merged from fragments>}."
+  ([node source-root path]
+   (expand-includes node source-root path #{}))
+  ([node ^Path source-root path stack]
+   (let [state* (atom {})]
+     (letfn [(walk [n]
+               (cond
+                 (not (map? n)) n
+                 (= :include (keyword (name (:type n))))
+                 (let [src (:src n)
+                       _ (when (contains? stack src)
+                           (fail path (str "cyclic :include: " (pr-str (conj (vec stack) src)))))
+                       frag (load-fragment! source-root src path)
+                       _ (when-let [ss (:state-schema frag)]
+                           (when (map? ss) (swap! state* merge ss)))
+                       body (or (:root frag) (dissoc frag :fragment/id :state-schema))
+                       _ (when-not (and (map? body) (:type body)
+                                        (not= :include (keyword (name (:type body)))))
+                           (fail path (str ":include fragment must provide a non-include :root/:type: " src)))
+                       merged (-> (merge-include-site body (dissoc n :type :src))
+                                  (dissoc :src))
+                       nested (expand-includes merged source-root path (conj stack src))]
+                   (swap! state* merge (:state-schema nested))
+                   (:node nested))
+                 :else
+                 (cond-> n
+                   (vector? (:children n))
+                   (update :children #(mapv walk %)))))]
+       {:node (walk node)
+        :state-schema @state*}))))
+
+(defn expand-source-includes
+  "Expand :include under :root/:nodes; merge fragment :state-schema under view."
+  [source source-root path]
+  (when-not source-root
+    (fail path ":include requires a presentation source root"))
+  (let [root-key (cond (:root source) :root (:nodes source) :nodes :else nil)
+        _ (when-not root-key (fail path "requires :root"))
+        {:keys [node state-schema]} (expand-includes (get source root-key) source-root path)]
+    (-> source
+        (assoc root-key node)
+        (update :state-schema #(merge (or state-schema {}) (or % {}))))))
+
+(defn compile-source
+  ([source path] (compile-source source path nil))
+  ([source path source-root]
+   (validate-source! source path)
+   (let [source (if source-root
+                  (expand-source-includes source source-root path)
+                  source)
+         view-id (or (:view/id source) (:view-id source))
+         root-source (or (:root source) (:nodes source))
+         physical-root (lower-node root-source)
+         flat (flatten-tree physical-root)
+         rows (:rows flat)
+         {:keys [own-ids bindings]} (assign-own-binding-ids rows)
+         {:keys [own-action-ids actions]} (assign-action-ids rows)
+         {:keys [mask words]} (compute-dep-masks rows (:parent flat) own-ids (count bindings))
+         fields (flat-fields rows)]
+     (canonicalize
+      (merge fields
+             {:magic artifact-magic
+              :schema artifact-schema
+              :ui/schema ui-source-schema
+              :view-id view-id
+              :source-hash (source-hash source)
+              :host (or (:host source) {})
+              :state-schema (or (:state-schema source) {})
+              :node-count (count rows)
+              :node/parent (:parent flat)
+              :node/first-child (:first-child flat)
+              :node/next-sibling (:next-sibling flat)
+              :node/child-count (:child-count flat)
+              :node/dep-mask mask
+              :mask-words words
+              :binding-count (count bindings)
+              :bindings bindings
+              :actions actions
+              :node/action-ids own-action-ids
+              :focus-order []
+              :semantics (or (:semantics source) {})
+              :capabilities (or (:capabilities source) (:requires-capabilities source) #{})})))))
 
 ;; ============================== directory compilation ==============================
 
@@ -546,7 +637,7 @@
         entries (for [^File file files
                       :let [source (edn/read-string (slurp file :encoding "UTF-8"))
                             relative-source (.replace (.toString (.relativize source-root (.toPath file))) "\\" "/")
-                            artifact (assoc (compile-source source relative-source)
+                            artifact (assoc (compile-source source relative-source source-root)
                                             :content-id content-id)
                             view-id (:view-id artifact)
                             relative (str "assets/" content-id "/presentation-compiled/"

@@ -1,0 +1,104 @@
+;; Shared TechUI wireless page.
+;; Page landmarks from main page_wireless.xml abs layout.
+;; Connected/list rows use absolute slots like main t_element / elem_connected
+;; (row/:fill on the label stretched the white bar and displaced text).
+{:fragment/id :academy.shared/wireless-page
+ :root
+ {:type :absolute :key :wireless/page
+  :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
+  :bind {:visible [:state :wireless-page-visible?]}
+  :children
+  [{:type :image :layout {:width 176.0 :height 187.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/parent/parent_background.png"}}
+    :semantics {:role :image}}
+
+   {:type :repeater :key :wireless/logo
+    :layout {:x 10.0 :y 10.0 :width 16.0 :height 16.0 :direction :none}
+    :bind {:items [:state :network-logo-composite]}
+    :children
+    [{:type :composite :layout {:width 16.0 :height 16.0}
+      :bind {:item [:state :item]}}]}
+
+   {:type :text :key :wireless/connected-label
+    :layout {:x 13.0 :y 28.0 :width 58.0 :height 8.0}
+    :style {:font-size 9.0 :rgba 0xCCFFFFFF}
+    :text "Connected"}
+
+   ;; main #elem_connected ~(8,35) 150x18
+   {:type :absolute :key :wireless/connected-row
+    :layout {:x 8.0 :y 35.0 :width 150.0 :height 18.0}
+    :children
+    [{:type :image :layout {:x 0.0 :y 0.0 :width 150.0 :height 18.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/element/element_background300x32.png"}}
+      :semantics {:role :image}}
+     {:type :image :layout {:x 8.0 :y 3.0 :width 12.0 :height 12.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_matrix.png"}}
+      :semantics {:role :image}}
+     {:type :text :layout {:x 20.0 :y 5.0 :width 80.0 :height 8.0}
+      :style {:font-size 9.0 :rgba 0xFFFFFFFF}
+      :bind {:text [:state :network-linked-label]}}
+     {:type :image :layout {:x 125.0 :y 3.0 :width 12.0 :height 12.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_connected.png"}
+              :rgba 0xCCFFFFFF}
+      :bind {:visible [:state :network-connected?]}
+      :on {:activate :container/wireless-disconnect}
+      :semantics {:role :button}}
+     {:type :image :layout {:x 125.0 :y 3.0 :width 12.0 :height 12.0}
+      :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_unconnected.png"}
+              :rgba 0x99FFFFFF}
+      :bind {:visible [:state :network-disconnected?]}
+      :semantics {:role :image}}]}
+
+   {:type :text :key :wireless/available-label
+    :layout {:x 13.0 :y 52.0 :width 58.0 :height 8.0}
+    :style {:font-size 9.0 :rgba 0xCCFFFFFF}
+    :bind {:text [:state :network-available-label :label]}}
+
+   ;; main list ~(8,60) 147.5x115; row template 150x16
+   {:type :scroll :key :wireless/list
+    :layout {:x 8.0 :y 60.0 :width 150.0 :height 115.0 :gap 0.0}
+    :bind {:items [:state :network-nodes]}
+    :semantics {:role :list}
+    :children
+    [{:type :absolute :layout {:width 150.0 :height 16.0}
+      :children
+      [{:type :image :layout {:x 0.0 :y 0.0 :width 150.0 :height 16.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/element/element_background300x32.png"}}
+        :semantics {:role :image}}
+       {:type :image :layout {:x 8.0 :y 2.0 :width 12.0 :height 12.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_matrix.png"}
+                :rgba 0xB2FFFFFF}
+        :semantics {:role :image}}
+       {:type :text :layout {:x 20.0 :y 4.0 :width 40.0 :height 8.0}
+        :style {:font-size 9.0 :rgba 0xFFDDDDDD}
+        :bind {:text [:item :label]}}
+       {:type :image :layout {:x 60.0 :y 2.0 :width 12.0 :height 12.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_key.png"}
+                :rgba 0xB2FFFFFF}
+        :bind {:visible [:item :is-encrypted?]}
+        :semantics {:role :image}}
+       {:type :rect :layout {:x 72.5 :y 3.5 :width 48.0 :height 9.0}
+        :style {:rgba 0xAA222222}
+        :bind {:visible [:item :is-encrypted?]}
+        :semantics {:role :image}}
+       {:type :text-input :layout {:x 72.5 :y 3.5 :width 48.0 :height 9.0}
+        :style {:font-size 10.0 :rgba 0xFFFFFFFF}
+        :bind {:text [:item :password] :visible [:item :is-encrypted?]}
+        :on {:change :container/wireless-row-password :submit :container/wireless-connect}
+        :semantics {:role :textbox :field :row-password}}
+       {:type :image :layout {:x 125.0 :y 2.0 :width 12.0 :height 12.0}
+        :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_unconnected.png"}
+                :rgba 0x99FFFFFF}
+        :on {:activate :container/wireless-connect}
+        :semantics {:role :button}}]}]}
+
+   {:type :image :key :wireless/arrow-up
+    :layout {:x 154.0 :y 52.0 :width 16.0 :height 16.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/button/button_arrowupb.png"}
+            :rgba 0xCCFFFFFF}
+    :semantics {:role :image}}
+   {:type :image :key :wireless/arrow-down
+    :layout {:x 154.0 :y 161.0 :width 16.0 :height 16.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/button/button_arrowdownb.png"}
+            :rgba 0xCCFFFFFF}
+    :semantics {:role :image}}]}}

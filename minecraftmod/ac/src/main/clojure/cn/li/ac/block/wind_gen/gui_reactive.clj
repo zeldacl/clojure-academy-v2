@@ -48,6 +48,7 @@
 (def ^:private base-schema-id :wind-gen-base) (def ^:private base-sync (gui-sync/schema-sync-fns wind-schema/wind-gen-base-schema))
 (defn- create-base-container [tile player] (assoc (gui-sync/create-schema-container wind-schema/wind-gen-base-schema tile player :wind-gen-base {:gui-id (gui-manifest/gui-id :wind-gen-base)})
                                               :presentation-close-fn (:on-close base-sync)
+                                              :presentation-tech-tabs? true
                                               :presentation-wireless {:domain :generator :role :generator}
                                               :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn- base-slot-count [_] (slot-schema/tile-slot-count base-schema-id))

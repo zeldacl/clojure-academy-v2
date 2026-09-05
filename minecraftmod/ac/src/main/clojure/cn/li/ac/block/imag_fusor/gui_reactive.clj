@@ -17,6 +17,7 @@
 (defn- phase-liquid-unit? [stack] (and stack (= (recipes/item-id-from-stack stack) cfg/matter-unit-item-id)))
 (defn- create-container [tile player] (assoc (gui-sync/create-schema-container fusor-schema/imag-fusor-schema tile player fusor-gui-type {:gui-id (gui-manifest/gui-id :imag-fusor)})
                                            :presentation-close-fn (:on-close fusor-sync)
+                                           :presentation-tech-tabs? true
                                            :presentation-wireless {:domain :developer :role :receiver}
                                            :presentation-wireless-state (atom {:linked nil :avail [] :password ""})))
 (defn- get-slot-count [_] (slot-schema/tile-slot-count fusor-slot-schema-id))

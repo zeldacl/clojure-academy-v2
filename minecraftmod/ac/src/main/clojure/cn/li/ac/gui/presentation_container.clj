@@ -6,12 +6,15 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.wireless.gui.container.common :as container-common]
             [cn.li.ac.gui.presentation :as presentation]
+            [cn.li.ac.gui.tech-ui-tabs :as tech-tabs]
+            [cn.li.ac.gui.info-area :as info-area]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.tab.role-config :as role-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (def binding-ids
@@ -38,24 +41,51 @@
   (or (some-> (:presentation-wireless-state container) deref)
       {:linked nil :avail [] :password ""}))
 
+(defn- wireless-role-cfg [container]
+  (get role-config/role-config (:role (wireless-config container))))
+
 (defn- wireless-items [container]
-  (let [cfg (wireless-config container)
-        data (wireless-state container)
-        name-fn (or (:name-fn (get role-config/role-config (:role cfg)))
+  (let [data (wireless-state container)
+        name-fn (or (:name-fn (wireless-role-cfg container))
                     (fn [item] (or (:node-name item) (:ssid item) "Node")))]
     (mapv (fn [item]
-            {:label (str (name-fn item)) :action-label "Link"
-             :node-x (:pos-x item) :node-y (:pos-y item) :node-z (:pos-z item)
-             :is-encrypted? (boolean (:is-encrypted? item))})
+            ;; Keep role connect fields (:ssid / pos-*) for connect-payload-fn.
+            (merge item
+                   {:label (str (name-fn item))
+                    :password (str (or (:password item) ""))
+                    :node-x (:pos-x item) :node-y (:pos-y item) :node-z (:pos-z item)
+                    :is-encrypted? (boolean (:is-encrypted? item))
+                    :is-open? (not (boolean (:is-encrypted? item)))}))
           (:avail data))))
 
-(defn- send-wireless! [container action payload callback]
+(defn- send-wireless!
+  "Send a wireless GUI message. `action` may be a keyword (:connect) or an
+  explicit message-id string from role-config list-msg."
+  [container action payload callback]
   (when-let [{:keys [domain]} (wireless-config container)]
     (let [owner (or (:owner container) (runtime-hooks/default-client-owner))
-          message-id (msg-registry/msg domain action)]
+          message-id (if (string? action)
+                       action
+                       (msg-registry/msg domain action))]
       (net-client/send-to-server owner message-id
         (action-payload/action-payload container payload)
         callback))))
+
+(defn- request-wireless-list!
+  [container callback]
+  (when-let [list-msg (:list-msg (wireless-role-cfg container))]
+    (send-wireless! container (list-msg) {} callback)))
+
+(defn- network-logo-src [container]
+  (if-let [path (:logo-path (wireless-role-cfg container))]
+    (modid/namespaced-path path)
+    (modid/namespaced-path "textures/guis/icons/icon_tonode.png")))
+
+(defn- linked-label [container]
+  (let [linked (:linked (wireless-state container))
+        name-fn (or (:name-fn (wireless-role-cfg container))
+                    (fn [t] (or (:node-name t) (:ssid t) "-")))]
+    (if linked (str (name-fn linked)) "Not Connected")))
 
 (defn- update-wireless-state! [container response]
   (when-let [state* (:presentation-wireless-state container)]
@@ -91,28 +121,34 @@
                  (conj {:label "Liquid Needed" :value (str (or (value-of (:current-recipe-liquid container)) "-"))})
                  (contains? container :liquid-amount)
                  (conj {:label "Liquid" :value (str (or (value-of (:liquid-amount container)) "-"))}))
-        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
+        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))
+        histograms (info-area/project-histograms
+                    (cond-> []
+                      (contains? container :energy)
+                      (conj (let [value (double (or (value-of (:energy container)) 0.0))
+                                  maximum (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))]
+                              {:id :energy :label "Energy"
+                               :ratio (max 0.0 (min 1.0 (/ value maximum)))
+                               :value (format "%.0f IF" value)
+                               :color (unchecked-int 0xFF25C4FF)}))
+                      (or (contains? container :capacity) (contains? container :max-capacity))
+                      (conj (let [value (double (or (value-of (:capacity container)) 0.0))
+                                  maximum (max 1.0 (double (or (value-of (:max-capacity container)) 1.0)))]
+                              {:id :capacity :label "Capacity"
+                               :ratio (max 0.0 (min 1.0 (/ value maximum)))
+                               :value (format "%.0f/%.0f" value maximum)
+                               :color (unchecked-int 0xFFFF6C00)}))
+                      (contains? container :liquid-amount)
+                      (conj (let [value (double (or (value-of (:liquid-amount container)) 0.0))
+                                  maximum (max 1.0 (double (or (value-of (:tank-size container)) 1.0)))]
+                              {:id :liquid :label "Liquid"
+                               :ratio (max 0.0 (min 1.0 (/ value maximum)))
+                               :value (format "%.0f mB" value)
+                               :color (unchecked-int 0xFF4CAF50)}))))]
     {:title "Machine Info"
      :fields fields
-     :histograms (cond-> []
-                   (contains? container :energy)
-                   (conj (let [value (double (or (value-of (:energy container)) 0.0))
-                               maximum (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))]
-                           {:id :energy :label "Energy"
-                            :ratio (max 0.0 (min 1.0 (/ value maximum)))
-                            :value (format "%.0f IF" value)}))
-                   (or (contains? container :capacity) (contains? container :max-capacity))
-                   (conj (let [value (double (or (value-of (:capacity container)) 0.0))
-                               maximum (max 1.0 (double (or (value-of (:max-capacity container)) 1.0)))]
-                           {:id :capacity :label "Capacity"
-                            :ratio (max 0.0 (min 1.0 (/ value maximum)))
-                            :value (format "%.0f/%.0f" value maximum)}))
-                   (contains? container :liquid-amount)
-                   (conj (let [value (double (or (value-of (:liquid-amount container)) 0.0))
-                               maximum (max 1.0 (double (or (value-of (:tank-size container)) 1.0)))]
-                           {:id :liquid :label "Liquid"
-                            :ratio (max 0.0 (min 1.0 (/ value maximum)))
-                            :value (format "%.0f mB" value)})))
+     :histograms histograms
+     :hist-bars (info-area/hist-bars histograms)
      :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
 (def ^:private page-texture-by-type
   "Keys must match each GUI's `:container-type` (see create-schema-container callers)."
@@ -145,6 +181,7 @@
 (defn- snapshot-for [container revision slot-count]
   (let [network (wireless-state container)
         linked (:linked network)
+        tabbed? (tech-tabs/tech-tabs-enabled? container)
         energy (double (or (value-of (:energy container)) 0.0))
         max-energy (max 1.0 (double (or (value-of (:max-energy container)) 1.0)))
         progress (double (or (when-let [f (:presentation-progress-fn container)] (f container))
@@ -155,29 +192,43 @@
                                 (/ (double (or (value-of (:crafting-progress container)) 0.0))
                                    (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))))
                               0.0))
-        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
+        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))
+        tab-keys (tech-tabs/snapshot-keys container)
+        ;; Info-area mini network is for non-tabbed wireless hosts only.
+        info-network? (and (boolean (wireless-config container)) (not tabbed?))]
     {:revision @revision
-     :values {:slots (mapv #(slot-value container %) (range slot-count))
-              :energy-ratio (max 0.0 (min 1.0 (/ energy max-energy)))
-              :progress-ratio (max 0.0 (min 1.0 (/ progress max-progress)))
-              :machine-state (or (value-of (:status container))
-                                 (value-of (:machine-state container))
-                                 (value-of (:mode container))
-                                 "IDLE")
-              :info-area (generic-info-area container progress)
-              :page-composite (or (page-composite-for container) [])
-              :network-visible (boolean (wireless-config container))
-              :network-state (if linked "Connected" "Not connected")
-              :network-owner (str "Node: " (or (:node-name linked) "-"))
-              :network-range (str "Range: " (or (:range linked) "-"))
-              :network-bandwidth (str "Bandwidth: " (or (:bandwidth linked) "-"))
-              :network-load (let [load (double (or (:load linked) 0.0))
-                                  capacity (max 1.0 (double (or (:max-capacity linked) 1.0)))]
-                              (max 0.0 (min 1.0 (/ load capacity))))
-              :network-nodes (wireless-items container)
-              :network-password (str (or (:password network) ""))
-              :network-disconnect {:label "Disconnect"}
-              :network-available-label {:label "Available"}}}))
+     :values (merge
+              {:slots (mapv #(slot-value container %) (range slot-count))
+               :energy-ratio (max 0.0 (min 1.0 (/ energy max-energy)))
+               :progress-ratio (max 0.0 (min 1.0 (/ progress max-progress)))
+               :machine-state (or (value-of (:status container))
+                                  (value-of (:machine-state container))
+                                  (value-of (:mode container))
+                                  "IDLE")
+               :info-area (generic-info-area container progress)
+               :page-composite (or (page-composite-for container) [])
+               :network-visible info-network?
+               :network-state (if linked "Connected" "Not connected")
+               :network-linked-label (linked-label container)
+               :network-owner (str "Node: " (or (:node-name linked) (:ssid linked) "-"))
+               :network-range (str "Range: " (or (:range linked) "-"))
+               :network-bandwidth (str "Bandwidth: " (or (:bandwidth linked) "-"))
+               :network-load (let [load (double (or (:load linked) 0.0))
+                                   capacity (max 1.0 (double (or (:max-capacity linked) 1.0)))]
+                               (max 0.0 (min 1.0 (/ load capacity))))
+               :network-nodes (wireless-items container)
+               :network-password (str (or (:password network) ""))
+               :wireless-connect-password (str (or (:password network) ""))
+               :network-disconnect {:label "Disconnect"}
+               :network-available-label {:label "Available"}
+               :network-logo (network-logo-src container)
+               :network-logo-composite [{:kind :image
+                                         :src (network-logo-src container)
+                                         :x 0.0 :y 0.0 :w 16.0 :h 16.0
+                                         :rgba (unchecked-int 0xFFFFFFFF)}]
+               :network-connected? (boolean linked)
+               :network-disconnected? (not (boolean linked))}
+              tab-keys)}))
 
 (defn- runtime-owned-action?
   "Presentation Runtime owns hover/scroll/pointer/key routing. These must never
@@ -309,6 +360,7 @@
   [container menu player schema-id template-id]
   (let [revision (atom 0)
         refresh* (atom nil)
+        wireless-attached?* (atom false)
         wireless* (or (:presentation-wireless-state container) (atom {:linked nil :avail [] :password ""}))
         container (assoc container
                      :minecraft-container menu
@@ -317,12 +369,18 @@
                        (when-let [refresh @refresh*] (refresh))))
         layout (or (slot-schema/get-slot-layout schema-id) {:slots []})
         slot-count (count (:slots layout))
-        anchors (into (tile-slot-anchors layout)
-                      (player-inventory-anchors slot-count))
+        base-anchors (into (tile-slot-anchors layout)
+                           (player-inventory-anchors slot-count))
         bridge (menu-bridge/create (or (:container-type container) schema-id)
-                                   anchors
+                                   base-anchors
                                    #{:container/click-slot :container/quick-move
                                      :container/button})
+        refresh-wireless-list!
+        (fn []
+          (request-wireless-list! container
+            (fn [response]
+              (update-wireless-state! container response)
+              (when-let [refresh @refresh*] (refresh)))))
         snapshot-fn (fn []
                       (swap! revision inc)
                       (let [base-values (:values (snapshot-for container revision slot-count))
@@ -341,6 +399,7 @@
                                                        1 [[:button-right {:label (str (or label ""))}]]
                                                        []))
                                                    (or (:presentation-buttons container) [])))
+                            anchors (tech-tabs/mark-slot-anchors container base-anchors)
                             values (merge base-values extra-values text-values button-values
                                           {:slot-anchors anchors})]
                         (menu-bridge/update-snapshot! bridge @revision values)
@@ -353,21 +412,54 @@
                              (sync-view-drafts-into-form!
                                (:presentation-form-state container) current)
 
+                             (= action :container/set-tab)
+                             (when (tech-tabs/tech-tabs-enabled? container)
+                               (let [item (:item payload)
+                                     idx (or (:tab-index item)
+                                             (:tab-index payload)
+                                             0)]
+                                 (tech-tabs/switch-tab! container idx
+                                   {:on-switch
+                                    (fn [tab-id _]
+                                      (when (and (= tab-id tech-tabs/wireless-tab-id)
+                                                 (compare-and-set! wireless-attached?* false true))
+                                        (refresh-wireless-list!)))})
+                                 (when-let [refresh @refresh*] (refresh))))
+
                              (= action :container/wireless-password)
                              (swap! wireless* assoc :password (str (or (:value payload) "")))
+
+                             (= action :container/wireless-row-password)
+                             (let [item (:item payload)
+                                   value (str (or (:value payload) ""))]
+                               (swap! wireless*
+                                      (fn [st]
+                                        (assoc st :avail
+                                               (mapv (fn [row]
+                                                       (if (and (= (:ssid row) (:ssid item))
+                                                                (= (:pos-x row) (:pos-x item))
+                                                                (= (:pos-y row) (:pos-y item))
+                                                                (= (:pos-z row) (:pos-z item))
+                                                                (= (:node-name row) (:node-name item)))
+                                                         (assoc row :password value)
+                                                         row))
+                                                     (vec (:avail st []))))))
+                               (when-let [refresh @refresh*] (refresh)))
 
                              (= action :container/wireless-connect)
                              (let [cfg (wireless-config container)
                                    role-cfg (get role-config/role-config (:role cfg))
                                    item (:item payload)
-                                   password (str (or (:password @wireless*) ""))
-                                   payload* (if-let [build (:connect-payload-fn role-cfg)]
-                                              (build {} item password)
-                                              item)]
-                               (send-wireless! container :connect payload*
-                                 (fn [response]
-                                   (update-wireless-state! container response)
-                                   (when-let [refresh @refresh*] (refresh)))))
+                                   password (str (or (:password item)
+                                                     (:password @wireless*)
+                                                     ""))]
+                               (let [payload* (if-let [build (:connect-payload-fn role-cfg)]
+                                                (build {} item password)
+                                                item)]
+                                 (send-wireless! container :connect payload*
+                                   (fn [response]
+                                     (update-wireless-state! container response)
+                                     (when-let [refresh @refresh*] (refresh))))))
 
                              (= action :container/wireless-disconnect)
                              (send-wireless! container :disconnect {}
@@ -411,11 +503,11 @@
                    (reset! refresh* (:refresh! vm))
                    (when-let [on-mount (:presentation-on-mount! container)]
                      (on-mount container))
-                   (when (wireless-config container)
-                     (send-wireless! container :list-nodes {}
-                       (fn [response]
-                         (update-wireless-state! container response)
-                         (when-let [refresh @refresh*] (refresh)))))
+                   ;; Non-tabbed wireless hosts still list on mount. Tabbed hosts
+                   ;; defer until first wireless tab (main attach-panel! lazy).
+                   (when (and (wireless-config container)
+                              (not (tech-tabs/tech-tabs-enabled? container)))
+                     (refresh-wireless-list!))
                    {:mount (:mount vm)
                     :frame! (fn []
                               (when-let [frame! (:presentation-frame! container)]
