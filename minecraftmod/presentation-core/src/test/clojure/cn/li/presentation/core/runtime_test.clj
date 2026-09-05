@@ -104,6 +104,32 @@
     (is (= 200.0 (double (aget (.geom dl2) 2))))
     (is (= 200.0 (double (aget (.geom dl2) 3))))))
 
+(deftest panel-geometry-pins-fit-content-to-minecraft-left-pos
+  "Container hosts pass leftPos/topPos; design must paint there (not float-center)."
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/panel-fit
+                           {:key :root :op UiOp/RECT :width [:fixed 290.0] :height [:fixed 187.0]
+                            :rgba (unchecked-int 0xFF00FF00)}
+                           :host {:kind :container :design-width 290 :design-height 187
+                                  :scale-policy :fit})
+        mount (runtime/mount! rt {:host {:stage :screen} :view-id :academy/test/panel-fit
+                                  :artifact artifact :state {}})
+        ;; Odd remainders: float center would be +0.5; Minecraft truncates.
+        left 101
+        top 47
+        _ (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 800 480 1.0))
+        dl (-> (runtime/extract-stage!
+                 rt :screen {:width 800 :height 480
+                             :panel-x left :panel-y top :panel-w 290 :panel-h 187})
+               :mounts first :commands)
+        ^HostGeometry g (:geometry (runtime/instance! rt mount))]
+    (is (= (float left) (.originX g)))
+    (is (= (float top) (.originY g)))
+    (is (= 290 (.viewportWidth g)))
+    (is (= 187 (.viewportHeight g)))
+    (is (= (double left) (double (aget (.geom dl) 0))))
+    (is (= (double top) (double (aget (.geom dl) 1))))))
+
 (deftest a-no-op-dispatch-does-not-invalidate-a-clean-paint
   ;; dispatch! and extract-stage! share the same layout-freshness stamp
   ;; (ensure-layout-current!) but must NOT share paint freshness the same
@@ -302,8 +328,9 @@
       ;; Fit 290×187 into 800×480 like a real container screen.
       (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 800 480 1.0))
       (runtime/extract-stage! rt :screen {:width 800 :height 480})
-      (let [ox (/ (- 800.0 290.0) 2.0)
-            oy (/ (- 480.0 187.0) 2.0)
+      (let [;; Integer center matches AbstractContainerScreen leftPos/topPos.
+            ox (quot (- 800 290) 2)
+            oy (quot (- 480 187) 2)
             ;; Node Name value cell: clip(179,5)+column(6,95)+rows 0..2 → (225,120)
             mx (+ ox 225.0 10.0)
             my (+ oy 120.0 5.0)

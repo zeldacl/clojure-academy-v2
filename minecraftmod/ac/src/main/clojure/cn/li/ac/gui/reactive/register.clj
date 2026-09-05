@@ -173,10 +173,12 @@
               (refresh-stage-state! :screen width height)
               ;; Raw FramePacket — dispatch-runtime-stage! wraps {:stage :frame}.
               (frame-packet frame-id :screen {:width width :height height}))
-    :frame-with-context! (fn [stage frame-id delta-seconds width height _vfx-context]
+    :frame-with-context! (fn [stage frame-id delta-seconds width height presentation-context]
                            (refresh-stage-state! stage width height)
-                           (let [ui-packet (frame-packet frame-id stage
-                                                         {:width width :height height})
+                           (let [frame-context (cond-> {:width width :height height}
+                                                 (map? presentation-context)
+                                                 (merge presentation-context))
+                                 ui-packet (frame-packet frame-id stage frame-context)
                                  vfx (sampled-vfx-frame! frame-id delta-seconds)
                                  packet (ability-compose/merge-vfx-into-frame ui-packet vfx)]
                              ;; Same envelope as dispatch-runtime-stage!: the

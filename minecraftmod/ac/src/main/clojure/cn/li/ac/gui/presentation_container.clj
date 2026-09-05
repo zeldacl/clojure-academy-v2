@@ -259,14 +259,16 @@
                         (dispatch-action! action payload current)
                         (catch clojure.lang.ArityException _
                           (dispatch-action! action payload)))
-                      (merge-drafts (state-fn) current payload))))})]
-    (assoc vm
-           :snapshot (atom (state-fn))
-           :refresh! (fn []
-                       (let [cur (when-let [st (:state vm)] @st)
-                             next (merge-drafts (state-fn) cur nil)]
-                         (reset! (:snapshot vm) next)
-                         (presentation/present! vm next)))))))
+                      (merge-drafts (state-fn) current payload))))})
+        ;; Bind :snapshot before assoc — refresh! must not close over the
+        ;; pre-assoc vm (where :snapshot is nil → reset! NPE every animate frame).
+        snapshot* (atom (state-fn))
+        refresh! (fn []
+                   (let [cur (when-let [st (:state vm)] @st)
+                         next (merge-drafts (state-fn) cur nil)]
+                     (reset! snapshot* next)
+                     (presentation/present! vm next)))]
+    (assoc vm :snapshot snapshot* :refresh! refresh!))))
 
 (defn open-screen!
   [menu-bridge snapshot-fn dispatch-action! on-close]
@@ -415,6 +417,12 @@
                          (update-wireless-state! container response)
                          (when-let [refresh @refresh*] (refresh)))))
                    {:mount (:mount vm)
+                    :frame! (fn []
+                              (when-let [frame! (:presentation-frame! container)]
+                                (frame! container))
+                              (when (:presentation-animate? container)
+                                (when-let [refresh @refresh*]
+                                  (refresh))))
                     :on-close (fn []
                                 (when-let [close (or (:presentation-close-fn container)
                                                      (:close-fn container))]

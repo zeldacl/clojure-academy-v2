@@ -15,7 +15,7 @@
   (Boolean/valueOf (boolean v)))
 
 (defn create! [data]
-  (let [{:keys [mount on-close]} ((:mount-fn data) data)
+  (let [{:keys [mount on-close frame!]} ((:mount-fn data) data)
         image-w (int (or (:image-width data) 290))
         image-h (int (or (:image-height data) 187))
         ^DelegatingCGuiContainerScreen screen
@@ -28,10 +28,17 @@
         (fn [s ^GuiGraphicsExtractor graphics mouse-x mouse-y partial-tick]
           (.callSuperRender ^DelegatingCGuiContainerScreen s graphics
                             (int mouse-x) (int mouse-y) (float partial-tick))
+          (when frame! (frame!))
           (presentation/submit-current-frame!
             :screen (float partial-tick) (.-width ^DelegatingCGuiContainerScreen s)
             (.-height ^DelegatingCGuiContainerScreen s)
-            (merge {:graphics graphics} (preview/backend-context)))))
+            (merge {:graphics graphics
+                    ;; Same origin/size Minecraft uses for slots (leftPos/topPos).
+                    :presentation-context {:panel-x (.getGuiLeft ^DelegatingCGuiContainerScreen s)
+                                           :panel-y (.getGuiTop ^DelegatingCGuiContainerScreen s)
+                                           :panel-w (.getXSize ^DelegatingCGuiContainerScreen s)
+                                           :panel-h (.getYSize ^DelegatingCGuiContainerScreen s)}}
+                   (preview/backend-context)))))
       (.withMouseClicked
         (fn [s x y button]
           (as-java-boolean

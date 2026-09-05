@@ -64,15 +64,17 @@
 
 (defn- draw-image-run! [^GuiGraphics gg ^UiDrawList dl start end ^ResourceLocation rl]
   (.flush gg)
-  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl)]
+  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl) ^floats uv (.uv dl)]
     (loop [i (int start)]
       (when (< i (int end))
         (let [g (* i 4)
               x (aget geom g) y (aget geom (unchecked-inc-int g))
               x2 (+ x (aget geom (+ g 2))) y2 (+ y (aget geom (+ g 3)))
+              u0 (aget uv g) v0 (aget uv (unchecked-inc-int g))
+              u1 (aget uv (+ g 2)) v1 (aget uv (+ g 3))
               [r gc b a] (rgba-components (long (aget rgba i)))]
           (RenderSystem/setShaderColor r gc b a)
-          (GuiGraphicsHelper/blitTexturedQuad gg rl x y x2 y2 0.0 0.0 1.0 0.0 1.0)
+          (GuiGraphicsHelper/blitTexturedQuad gg rl x y x2 y2 0.0 u0 u1 v0 v1)
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
         (recur (unchecked-inc-int i))))))
 

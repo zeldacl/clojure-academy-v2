@@ -58,14 +58,16 @@
         (recur (unchecked-inc-int i))))))
 
 (defn- draw-image-run! [^GuiGraphicsExtractor gg ^UiDrawList dl start end ^Identifier rl]
-  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl)]
+  (let [^floats geom (.geom dl) ^ints rgba (.rgba dl) ^floats uv (.uv dl)]
     (loop [i (int start)]
       (when (< i (int end))
         (let [g (* i 4)
               x0 (int (aget geom g)) y0 (int (aget geom (unchecked-inc-int g)))
               x1 (int (+ (aget geom g) (aget geom (+ g 2))))
-              y1 (int (+ (aget geom (unchecked-inc-int g)) (aget geom (+ g 3))))]
-          (GuiGraphicsHelper/blitTintedQuad gg rl x0 y0 x1 y1 0.0 1.0 0.0 1.0 (aget rgba i)))
+              y1 (int (+ (aget geom (unchecked-inc-int g)) (aget geom (+ g 3))))
+              u0 (aget uv g) u1 (aget uv (+ g 2))
+              v0 (aget uv (unchecked-inc-int g)) v1 (aget uv (+ g 3))]
+          (GuiGraphicsHelper/blitTintedQuad gg rl x0 y0 x1 y1 u0 u1 v0 v1 (aget rgba i)))
         (recur (unchecked-inc-int i))))))
 
 (defn- blit-nine-patch!

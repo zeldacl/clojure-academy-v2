@@ -117,12 +117,17 @@ public final class PaintKernel {
         switch (spec.kind()) {
             case CompositeSpec.QUAD ->
                     out.emit(UiOp.RECT, ix, iy, spec.w(), spec.h(), spec.rgba(), -1, clip, 0f, null);
-            case CompositeSpec.IMAGE ->
-                    out.emit(UiOp.IMAGE, ix, iy, spec.w(), spec.h(), spec.rgba(), spec.resIndex(), clip, 0f, null);
+            case CompositeSpec.IMAGE -> {
+                int idx = out.emit(UiOp.IMAGE, ix, iy, spec.w(), spec.h(), spec.rgba(), spec.resIndex(), clip, 0f, null);
+                out.setUv(idx, spec.u0(), spec.v0(), spec.u1(), spec.v1());
+            }
             case CompositeSpec.TEXT ->
                     out.emit(UiOp.TEXT, ix, iy, spec.w(), spec.h(), spec.rgba(), -1, clip, spec.fontSize(), spec.text());
-            case CompositeSpec.CONDITION ->
-                    out.emit(UiOp.IMAGE, ix, iy, Math.min(14f, spec.w()), Math.min(14f, spec.h()), spec.rgba(), spec.resIndex(), clip, 0f, null);
+            case CompositeSpec.CONDITION -> {
+                int idx = out.emit(UiOp.IMAGE, ix, iy, Math.min(14f, spec.w()), Math.min(14f, spec.h()),
+                        spec.rgba(), spec.resIndex(), clip, 0f, null);
+                out.setUv(idx, spec.u0(), spec.v0(), spec.u1(), spec.v1());
+            }
             case CompositeSpec.MODEL ->
                     out.emit(UiOp.MODEL, ix, iy, spec.w(), spec.h(), spec.rgba(), -1, clip, 0f, spec.text());
             default -> {

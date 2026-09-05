@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.wireless-node.gui-reactive
-  "Wireless Node container and Presentation Runtime bridge."
+  "Wireless Node container and Presentation Runtime bridge.
+   Owns form drafts, effect_node animation, and 2s link polling."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
@@ -22,12 +23,63 @@
 (def wireless-node-id :wireless-node)
 (def ^:private gui-type :node)
 
+;; effect_node.png — 186×75 sheet, 10 vertical frames (main attach-node-binds!).
+(def ^:private anim-texture "academy:textures/guis/effect/effect_node.png")
+(def ^:private anim-frame-count 10)
+(def ^:private anim-display-w 93.0)  ;; 186 @ scale 0.5
+(def ^:private anim-display-h 37.5)  ;; 75 @ scale 0.5
+;; Backgrounds sit in the centered page-art group; anim coords match main
+;; attach-node-binds! relative to the 176-wide ui_node art (not the slot origin).
+(def ^:private anim-x 25.0)
+(def ^:private anim-y 34.75)
+
+(defn- anim-config [state]
+  (case state
+    :linked {:begin 0 :frames 8 :frame-time 800}
+    :unlinked {:begin 8 :frames 2 :frame-time 3000}
+    {:begin 0 :frames 1 :frame-time 1000}))
+
+(defn- now-ms []
+  (System/currentTimeMillis))
+
+(defn- node-anim-items
+  "Build the single composite image for the center strip animation."
+  [linked?]
+  (let [ms (now-ms)
+        state (if linked? :linked :unlinked)
+        {:keys [begin frames frame-time]} (anim-config state)
+        ticks (quot (long ms) (long frame-time))
+        frame (+ begin (rem ticks frames))
+        v0 (/ (double frame) (double anim-frame-count))
+        v1 (/ (double (inc frame)) (double anim-frame-count))
+        ;; Breathe alpha: 0.675~0.85, 0.8s period (main breathe-alpha).
+        t (/ (double ms) 800.0)
+        s (* (+ 1.0 (Math/sin (* t Math/PI 2.0))) 0.5)
+        alpha (+ 0.675 (* s 0.175))]
+    [{:kind :image
+      :src anim-texture
+      :x anim-x :y anim-y
+      :w anim-display-w :h anim-display-h
+      :u0 0.0 :v0 v0 :u1 1.0 :v1 v1
+      :rgba {:r 1.0 :g 1.0 :b 1.0 :a alpha}}]))
+
 (defn- ensure-slot-schema! [] (node-logic/ensure-node-slot-schema!))
 (defn- resolve-state [tile]
   (if (map? tile)
     [nil tile]
     (try [tile (or (platform-be/get-custom-state tile) {})]
          (catch Exception e (log/warn "resolve-state:" (ex-message e)) [tile {}]))))
+
+(defn- msg [action] (msg-registry/msg gui-type action))
+
+(defn- send-link-query! [container menu owner linked*]
+  (let [c (assoc container :minecraft-container menu)]
+    (when (and owner (action-payload/menu-container-id c))
+      (net-client/send-to-server owner (msg :query-link)
+        (action-payload/action-payload c {})
+        (fn [resp]
+          (when (and resp (contains? resp :linked))
+            (reset! linked* (boolean (:linked resp)))))))))
 
 (defn create-container [tile player]
   (let [[be state] (resolve-state tile)
@@ -39,14 +91,30 @@
         ;; Bind atoms before assoc so text-change/submit closures do not capture
         ;; the pre-assoc container (where :presentation-form-state is nil).
         form-state (atom {:node-name (str (value-of :ssid ""))
-                          :password (str (value-of :password ""))})]
+                          :password (str (value-of :password ""))})
+        linked* (atom false)
+        last-poll* (atom -1)
+        link-owner (atom nil)]
     (assoc base
-           ;; Main node GUI had no Save/Refresh chrome — name/password submit on text-input.
            :presentation-form-state form-state
+           :presentation-animate? true
            :presentation-text-fields [{:id :node-name :binding-key :node-name :x 12 :y 82 :width 120 :height 18
                                        :value-fn (fn [_ _] (value-of :ssid ""))}
                                       {:id :password :binding-key :network-password :x 12 :y 105 :width 120 :height 18
                                        :value-fn (fn [_ _] (value-of :password ""))}]
+           :presentation-on-mount!
+           (fn [container]
+             (reset! link-owner (or (runtime-hooks/current-player-state-owner)
+                                    (runtime-hooks/default-client-owner)))
+             (when-let [menu (:minecraft-container container)]
+               (send-link-query! container menu @link-owner linked*)))
+           :presentation-frame!
+           (fn [container]
+             (let [bucket (quot (long (now-ms)) 2000)]
+               (when (not= bucket @last-poll*)
+                 (reset! last-poll* bucket)
+                 (when-let [menu (:minecraft-container container)]
+                   (send-link-query! container menu @link-owner linked*)))))
            :presentation-snapshot-fn
            (fn [_ _]
              (let [energy (double (or (value-of :energy 0.0) 0.0))
@@ -57,15 +125,13 @@
                    form @form-state]
                {:node-editable? owner?
                 :node-readonly? (not owner?)
-                ;; Form drafts always win while the atom holds the key — do not
-                ;; fall back to tile ssid/password mid-edit (that reverts glyphs
-                ;; when another field triggers a snapshot rebuild).
                 :node-name (str (if (contains? form :node-name)
                                   (:node-name form)
                                   (value-of :ssid "")))
                 :network-password (str (if (contains? form :password)
                                          (:password form)
                                          (value-of :password "")))
+                :node-anim (node-anim-items @linked*)
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
                               :energy energy

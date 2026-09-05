@@ -74,6 +74,12 @@ public final class CmdBuf {
         geom[g + 2] = w;
         geom[g + 3] = h;
         rgba[i] = rgbaColor;
+        // Default full-texture UV so backends can always read .uv without a
+        // special-case for unset crops (growFloats zero-fills otherwise).
+        uv[g] = 0f;
+        uv[g + 1] = 0f;
+        uv[g + 2] = 1f;
+        uv[g + 3] = 1f;
         res[i] = resIdx;
         clip[i] = clipIdx;
         scalar[i] = scalarValue;

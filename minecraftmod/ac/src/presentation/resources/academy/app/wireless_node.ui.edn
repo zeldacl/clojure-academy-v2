@@ -5,21 +5,36 @@
 {:ui/schema 2 :view/id :academy.app/wireless-node
  :host {:kind :container :design-width 290 :design-height 187 :scale-policy :fit}
  :state-schema {:node-name :string :node-editable? :boolean :node-readonly? :boolean
-                :network-password :string :info-area :map :slot-anchors :vector}
+                :network-password :string :info-area :map :slot-anchors :vector
+                :node-anim :vector}
  :root
  {:type :absolute :key :node/root :layout {:width 290 :height 187}
   :children
   [{:type :absolute :key :node/left :layout {:x 0.0 :y 0.0 :width 176.0 :height 187.0}
     :children
-    [{:type :image :layout {:width 176.0 :height 187.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/parent/parent_background.png"}}
-      :semantics {:role :image}}
-     {:type :image :layout {:width 176.0 :height 187.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_inventory.png"}}
-      :semantics {:role :image}}
-     {:type :image :layout {:width 176.0 :height 187.0}
-      :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_node.png"}}
-      :semantics {:role :image}}
+    [;; TechUI page-anchor: slots stay on design (0,0)=leftPos; center 176-wide
+     ;; art in the historical 172-wide page so (172−176)/2 = −2 matches main's
+     ;; texture↔slot inset (not a per-image x hack).
+     {:type :row :key :node/page-art
+      :layout {:x 0.0 :y 0.0 :width 172.0 :height 187.0 :justify :center}
+      :children
+      [{:type :absolute :layout {:width 176.0 :height 187.0}
+        :children
+        [{:type :image :layout {:width 176.0 :height 187.0}
+          :style {:resource {:namespace "academy" :path "textures/guis/parent/parent_background.png"}}
+          :semantics {:role :image}}
+         {:type :image :layout {:width 176.0 :height 187.0}
+          :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_inventory.png"}}
+          :semantics {:role :image}}
+         {:type :image :layout {:width 176.0 :height 187.0}
+          :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_node.png"}}
+          :semantics {:role :image}}
+         ;; effect_node.png strip — main attach-node-binds! at (25, 34.75) @ 0.5.
+         {:type :repeater :key :node/anim
+          :layout {:width 176.0 :height 187.0}
+          :bind {:items [:state :node-anim]}
+          :children [{:type :composite :layout {:width 0.0 :height 0.0}
+                      :bind {:item [:state :item]}}]}]}]}
      {:type :repeater :layout {:width 176.0 :height 187.0}
       :bind {:items [:state :slot-anchors]}
       :children [{:type :slot-anchor :bind {:item [:state :item]}}]}]}

@@ -46,47 +46,60 @@
 (defn- runtime-state [^UiRuntime runtime] @(:state runtime))
 
 (defn- stage-geometry-stale?
-  "Cheap pre-check (int compares against the existing HostGeometry's own
+  "Cheap pre-check (int/float compares against the existing HostGeometry's own
    fields, no new HostGeometry constructed) so the O(#mounts) map rebuild
-   below only runs when a real-frame width/height change actually happened,
+   below only runs when a real-frame geometry change actually happened,
    not on every single extract-stage! call regardless of memoization -- this
    was the dominant remaining allocation source in a 'clean frame', found by
    PresentationRuntimeBenchmark measuring real B/op instead of just identity."
-  [mounts stage width height]
+  [mounts stage origin-x origin-y width height]
   (boolean
    (some (fn [[_ instance]]
            (and (= stage (get-in instance [:host :stage]))
                 (let [^HostGeometry g (:geometry instance)]
-                  (or (not= (.viewportWidth g) width) (not= (.viewportHeight g) height)))))
+                  (or (not= (.originX g) origin-x)
+                      (not= (.originY g) origin-y)
+                      (not= (.viewportWidth g) width)
+                      (not= (.viewportHeight g) height)))))
          mounts)))
 
 (defn- update-stage-geometry! [^UiRuntime runtime stage frame-context]
-  (let [width (:width frame-context)
-        height (:height frame-context)]
-    (when (and (map? frame-context) (number? width) (number? height)
-               (pos? width) (pos? height))
-      (let [width (int width) height (int height)]
-        (when (stage-geometry-stale? (:mounts (runtime-state runtime)) stage width height)
-          (vswap! (:state runtime)
-                  (fn [snapshot]
-                    (update snapshot :mounts
-                            (fn [mounts]
-                              (reduce-kv
-                               (fn [result mount instance]
-                                 (if (= stage (get-in instance [:host :stage]))
-                                   (let [geometry (:geometry instance)
-                                         next-geometry (HostGeometry.
-                                                        (.originX ^HostGeometry geometry)
-                                                        (.originY ^HostGeometry geometry)
-                                                        width
-                                                        height
-                                                        (.scale ^HostGeometry geometry))]
-                                     (assoc result mount
-                                            (if (= geometry next-geometry)
-                                              instance
-                                              (assoc instance :geometry next-geometry))))
-                                   (assoc result mount instance)))
-                               {} mounts))))))))))
+  (when (map? frame-context)
+    (let [width (:width frame-context)
+          height (:height frame-context)
+          panel-x (:panel-x frame-context)
+          panel-y (:panel-y frame-context)
+          panel-w (:panel-w frame-context)
+          panel-h (:panel-h frame-context)
+          ;; Container screens pass Minecraft leftPos/topPos/image size so
+          ;; Presentation shares the slot grid origin — no per-texture hacks.
+          use-panel? (and (number? panel-x) (number? panel-y)
+                          (number? panel-w) (number? panel-h)
+                          (pos? (double panel-w)) (pos? (double panel-h)))]
+      (when (and (number? width) (number? height) (pos? width) (pos? height))
+        (let [origin-x (float (if use-panel? panel-x 0.0))
+              origin-y (float (if use-panel? panel-y 0.0))
+              vw (int (if use-panel? panel-w width))
+              vh (int (if use-panel? panel-h height))]
+          (when (stage-geometry-stale? (:mounts (runtime-state runtime))
+                                       stage origin-x origin-y vw vh)
+            (vswap! (:state runtime)
+                    (fn [snapshot]
+                      (update snapshot :mounts
+                              (fn [mounts]
+                                (reduce-kv
+                                 (fn [result mount instance]
+                                   (if (= stage (get-in instance [:host :stage]))
+                                     (let [geometry (:geometry instance)
+                                           next-geometry (HostGeometry.
+                                                          origin-x origin-y vw vh
+                                                          (.scale ^HostGeometry geometry))]
+                                       (assoc result mount
+                                              (if (= geometry next-geometry)
+                                                instance
+                                                (assoc instance :geometry next-geometry))))
+                                     (assoc result mount instance)))
+                                 {} mounts)))))))))))
 
 ;; ============================== BindResolver ==============================
 
@@ -195,18 +208,24 @@
     (let [kind (:kind item)
           ix (float (or (:x item) 0.0)) iy (float (or (:y item) 0.0))
           iw (float (or (:w item) 0.0)) ih (float (or (:h item) 0.0))
-          color (runtime-rgba (:rgba item) 0xFFFFFFFF)]
+          color (runtime-rgba (:rgba item) 0xFFFFFFFF)
+          u0 (float (or (:u0 item) 0.0))
+          v0 (float (or (:v0 item) 0.0))
+          u1 (float (or (:u1 item) 1.0))
+          v1 (float (or (:v1 item) 1.0))]
       (case kind
         :quad (CompositeSpec. CompositeSpec/QUAD ix iy iw ih color nil (float 0.0) -1)
         :image (CompositeSpec. CompositeSpec/IMAGE ix iy iw ih color nil (float 0.0)
-                               (resource-index-for resource-index default-namespace (:src item)))
+                               (resource-index-for resource-index default-namespace (:src item))
+                               u0 v0 u1 v1)
         :text (CompositeSpec. CompositeSpec/TEXT ix iy iw ih color (item-label (:text item))
                               (float (or (:font-size item) 8.0)) -1)
         :condition (let [accepted? (boolean (:accepted? item))
                         icon-color (if accepted? color (unchecked-int 0xFF555555))]
                     (CompositeSpec. CompositeSpec/CONDITION ix iy (min 14.0 iw) (min 14.0 ih)
                                     icon-color nil (float 0.0)
-                                    (resource-index-for resource-index default-namespace (:icon-path item))))
+                                    (resource-index-for resource-index default-namespace (:icon-path item))
+                                    u0 v0 u1 v1))
         :model (CompositeSpec. CompositeSpec/MODEL ix iy iw ih color
                                (str (or (:model-id item) (:src item) "")) (float 0.0) -1)
         nil))))
@@ -344,17 +363,32 @@
    :height (float (max 1 (.viewportHeight geometry)))})
 
 (defn- content-rect
-  "Center the artifact design box inside host geometry when scale-policy is :fit."
+  "Place the artifact design box inside host geometry when scale-policy is :fit.
+
+   Container hosts set HostGeometry to Minecraft leftPos/topPos × image size.
+   When that panel already matches the design box, use it as-is — do not
+   re-center (any leftover-pixel bias would drift off the slot grid).
+
+   Full-screen :fit uses the same truncating division as
+   `AbstractContainerScreen` leftPos/topPos: `(host - design) / 2` toward zero."
   [artifact geometry]
   (let [host (geometry-rect geometry)
         ah (or (:host artifact) {})
         dw (:design-width ah)
         dh (:design-height ah)]
     (if (and (= :fit (:scale-policy ah)) (number? dw) (number? dh))
-      {:x (float (+ (:x host) (/ (- (:width host) dw) 2.0)))
-       :y (float (+ (:y host) (/ (- (:height host) dh) 2.0)))
-       :width (float dw)
-       :height (float dh)}
+      (let [hw (int (:width host))
+            hh (int (:height host))
+            idw (int dw)
+            idh (int dh)
+            ox (float (:x host))
+            oy (float (:y host))]
+        (if (and (= hw idw) (= hh idh))
+          {:x ox :y oy :width (float idw) :height (float idh)}
+          {:x (float (+ (int ox) (quot (- hw idw) 2)))
+           :y (float (+ (int oy) (quot (- hh idh) 2)))
+           :width (float idw)
+           :height (float idh)}))
       host)))
 
 (defn- scroll-offset-array ^floats [key-index scroll-offsets node-count]
