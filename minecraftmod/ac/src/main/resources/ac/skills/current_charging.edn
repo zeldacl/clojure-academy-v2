@@ -1,24 +1,24 @@
-;; New-DSL conversion of ac/combat/abilities/current_charging.edn (S6).
-;; Session hold-charge energy pump: at :start, whichever the caster is
-;; doing (holding a chargeable item vs aiming at a chargeable block) is
-;; locked in for the whole activation via :is-item session state; every
-;; :pulse re-checks that same target kind and pushes :charge-amount
-;; energy into it. No cooldown at all (the old top-level :cooldown is
-;; genuinely nil, kept as-is).
-;;
-;; :energy/charge is a NEW vocab node (combat-core/dsl_vocabulary.clj):
-;; the old component was never wired into the vocabulary anywhere,
-;; unlike :energy/target which already existed from an earlier
-;; conversion. :returns nil since no old call site ever bound a result.
-;;
-;; The block-targeting branch's charging-budget spend happens AFTER the
-;; vfx update in BOTH its effective and ineffective sub-branches (unlike
-;; the item-targeting branch, which spends BEFORE deciding
-;; effective/ineffective) -- kept exactly as ordered in the old content,
-;; duplicated across both sub-branches rather than factored out, the
-;; same choice already established for this session's other same-
-;; ability repeated blocks.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/current_charging.edn (S6)."
+        "Session hold-charge energy pump: at :start, whichever the caster is"
+        "doing (holding a chargeable item vs aiming at a chargeable block) is"
+        "locked in for the whole activation via :is-item session state; every"
+        ":pulse re-checks that same target kind and pushes :charge-amount"
+        "energy into it. No cooldown at all (the old top-level :cooldown is"
+        "genuinely nil, kept as-is)."
+        ""
+        ":energy/charge is a NEW vocab node (combat-core/dsl_vocabulary.clj):"
+        "the old component was never wired into the vocabulary anywhere,"
+        "unlike :energy/target which already existed from an earlier"
+        "conversion. :returns nil since no old call site ever bound a result."
+        ""
+        "The block-targeting branch's charging-budget spend happens AFTER the"
+        "vfx update in BOTH its effective and ineffective sub-branches (unlike"
+        "the item-targeting branch, which spends BEFORE deciding"
+        "effective/ineffective) -- kept exactly as ordered in the old content,"
+        "duplicated across both sub-branches rather than factored out, the"
+        "same choice already established for this session's other same-"
+        "ability repeated blocks."]
+ :schema-version 2
  :kind :ability
  :id :current-charging
  :revision 1

@@ -18,6 +18,7 @@
             [cn.li.combat.beam-settlement :as beam-settlement]
             [cn.li.combat.vocabulary :as vocabulary]
             [cn.li.combat.kernels :as kernels]
+            [cn.li.combat.dsl-vocabulary :as dsl-vocabulary]
             [cn.li.combat.run :as run]
             [cn.li.combat.lib :as lib]
             [cn.li.combat.player :as player]))
@@ -51,6 +52,19 @@
 (def descriptor-specs vocabulary/descriptor-specs)
 (def kernel-descriptors kernels/kernel-specs)
 
+;; ---- surface-DSL vocabulary + fn library (for the node editor's palette,
+;; ability-runtime/editor/palette.clj -- these are the :vocab/:fns/
+;; category-for the editor's "skill mode" is configured with; see the
+;; node-editor plan's §2.2 injection table) ----
+(def skill-vocab dsl-vocabulary/nodes)
+(def skill-vocab-category-for dsl-vocabulary/category-for)
+;; capability-type is a FUNCTION (?budget/*, ?cooldown/* etc are typed by
+;; NAMESPACE, not enumerated one name at a time -- see run.clj's own
+;; docstring), the exact :capabilities value cn.li.node.compile's env
+;; expects for the editor's check.clj to compile-check a skill doc the
+;; same way real dispatch does.
+(def skill-capability-type run/capability-type)
+
 ;; ---- S8 cutover: the new node-core engine (cn.li.combat.run) is now the
 ;; live production dispatch path for real player actions -- see
 ;; cn.li.combat.run's own namespace docstring and NODE_LANGUAGE.md §0.
@@ -74,3 +88,12 @@
    something dispatchable."
   [glyphs complexity-cap]
   (player/compile-and-admit glyphs complexity-cap))
+
+(defn player-glyph-catalog
+  "-> [{:glyph :kind :effects :cost :admissible?} ...] for every known
+   glyph -- see cn.li.combat.player/glyph-catalog's own docstring. The
+   player spell composer's palette should filter on :admissible?, which
+   reads the identical allowlist compile-and-admit-player-spell's own
+   admit check enforces."
+  []
+  (player/glyph-catalog))

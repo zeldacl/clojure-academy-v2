@@ -4,6 +4,8 @@
             [cn.li.ac.tutorial.item :as tutorial-item]
             [cn.li.ac.item.app-installers :as app-installers]
             [cn.li.ac.item.constraint-plate :as constraint-plate]
+            [cn.li.ac.item.editor-dev-tool :as editor-dev-tool]
+            [cn.li.ac.item.spell-composer-dev-tool :as spell-composer-dev-tool]
             [cn.li.ac.item.energy-items :as energy-items]
             [cn.li.ac.item.materials :as materials]
             [cn.li.ac.item.mat-core :as mat-core]
@@ -22,6 +24,8 @@
     (tutorial-item/init-tutorial-item!)
     (app-installers/init-app-installers!)
     (constraint-plate/init-constraint-plate!)
+    (editor-dev-tool/init-editor-dev-tool!)
+    (spell-composer-dev-tool/init-spell-composer-dev-tool!)
     (energy-items/init-energy-items!)
     (mat-core/init-mat-cores!)
     (media/init-media!)

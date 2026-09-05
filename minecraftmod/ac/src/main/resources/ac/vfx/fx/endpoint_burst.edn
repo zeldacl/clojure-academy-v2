@@ -1,9 +1,9 @@
-;; New-DSL conversion of ac/vfx/effects/endpoint_burst.edn (S6). All
-;; three old timeline children are :at 0 (always run from the first
-;; sample, matching this pass's ring_particle_field.edn/particle_burst.edn
-;; precedent). Old top-level :bounds dropped, see
-;; blood_retrograde_charge.edn's docstring.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/endpoint_burst.edn (S6). All"
+        "three old timeline children are :at 0 (always run from the first"
+        "sample, matching this pass's ring_particle_field.edn/particle_burst.edn"
+        "precedent). Old top-level :bounds dropped, see"
+        "blood_retrograde_charge.edn's docstring."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

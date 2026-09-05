@@ -1,31 +1,31 @@
-;; New-DSL conversion of ac/combat/abilities/thunder_clap.edn (S6). Session
-;; ability (auto-discharges on full charge during :pulse, or on manual
-;; :release once past the minimum charge).
-;;
-;; Third (of 3) callback-typed old composite inlined at its call site --
-;; see vec_reflection.edn/arc_gen.edn's docstrings for the first two.
-;; combat/charged-area-damage's :on-impact is an EMPTY step list here (no
-;; per-target follow-up beyond the damage itself), and its own body
-;; computes an :overcharge-ratio LOCAL that the CALLER's own :damage
-;; argument expression references -- a macro-style shared-scope trick the
-;; old composite-expansion pipeline supported (the :ratio-slot input names
-;; which local the composite binds, and the caller's argument expression
-;; stays unresolved until the expanded tree's later nodes actually read
-;; it). Inlining sidesteps this entirely: compute the ratio, then the
-;; damage, then the query+foreach, as plain sequential `let`s in the
-;; ability's own scope -- ordinary lexical scoping, no special-casing
-;; needed. The old content's own two call sites (the :pulse full-charge
-;; branch and :release) already duplicated this whole block verbatim, so
-;; duplicating it here too is a faithful port, not a regression; it is
-;; deliberately NOT hoisted into a shared cn.li.combat.lib composite,
-;; since combat-core must not carry skill-specific knowledge
-;; (verifyCoreNoSkillKnowledge) and nothing else needs this exact
-;; sequence.
-;;
-;; Also the first real use of `finish`'s :next-phase field (:cost-failed-
-;; at-min jumps straight to :release from mid-:pulse) -- already
-;; supported by cn.li.node.compile/compile-finish, no new gap.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/thunder_clap.edn (S6). Session"
+        "ability (auto-discharges on full charge during :pulse, or on manual"
+        ":release once past the minimum charge)."
+        ""
+        "Third (of 3) callback-typed old composite inlined at its call site --"
+        "see vec_reflection.edn/arc_gen.edn's docstrings for the first two."
+        "combat/charged-area-damage's :on-impact is an EMPTY step list here (no"
+        "per-target follow-up beyond the damage itself), and its own body"
+        "computes an :overcharge-ratio LOCAL that the CALLER's own :damage"
+        "argument expression references -- a macro-style shared-scope trick the"
+        "old composite-expansion pipeline supported (the :ratio-slot input names"
+        "which local the composite binds, and the caller's argument expression"
+        "stays unresolved until the expanded tree's later nodes actually read"
+        "it). Inlining sidesteps this entirely: compute the ratio, then the"
+        "damage, then the query+foreach, as plain sequential `let`s in the"
+        "ability's own scope -- ordinary lexical scoping, no special-casing"
+        "needed. The old content's own two call sites (the :pulse full-charge"
+        "branch and :release) already duplicated this whole block verbatim, so"
+        "duplicating it here too is a faithful port, not a regression; it is"
+        "deliberately NOT hoisted into a shared cn.li.combat.lib composite,"
+        "since combat-core must not carry skill-specific knowledge"
+        "(verifyCoreNoSkillKnowledge) and nothing else needs this exact"
+        "sequence."
+        ""
+        "Also the first real use of `finish`'s :next-phase field (:cost-failed-"
+        "at-min jumps straight to :release from mid-:pulse) -- already"
+        "supported by cn.li.node.compile/compile-finish, no new gap."]
+ :schema-version 2
  :kind :ability
  :id :thunder-clap
  :name-key "ability.skill.electromaster.thunder_clap"

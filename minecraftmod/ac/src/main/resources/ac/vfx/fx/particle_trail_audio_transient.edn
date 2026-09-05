@@ -1,10 +1,10 @@
-;; New-DSL conversion of ac/vfx/effects/particle_trail_audio_transient.edn
-;; (S6). Mixed file: :vfx/particle-trail has no sample-node case
-;; (confirmed-dead class, see blood_retrograde_charge.edn's docstring)
-;; and is dropped along with every field only it read -- only the
-;; sibling :vfx/audio-one-shot is real. Old top-level :bounds dropped,
-;; see blood_retrograde_charge.edn's docstring.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/particle_trail_audio_transient.edn"
+        "(S6). Mixed file: :vfx/particle-trail has no sample-node case"
+        "(confirmed-dead class, see blood_retrograde_charge.edn's docstring)"
+        "and is dropped along with every field only it read -- only the"
+        "sibling :vfx/audio-one-shot is real. Old top-level :bounds dropped,"
+        "see blood_retrograde_charge.edn's docstring."]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

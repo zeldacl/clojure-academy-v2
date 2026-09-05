@@ -24,6 +24,8 @@
    }"
   (:require [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.ability.client.keybinds :as keybinds]
+            [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
+            [cn.li.ac.ability.client.screens.spell-composer-reactive :as spell-composer]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
@@ -67,6 +69,27 @@
   [_context]
   (when (content-key-allowed?)
     (runtime-hooks/toggle-debug-overlay-state!)))
+
+(defn- on-open-node-editor
+  "Handle the node editor dev-tool key (G, upstream: none -- this screen
+   has no in-game entry point otherwise, see NODE_EDITOR.md). Opens the
+   shared sample skill (thunder_bolt) in skill mode: there is no
+   file-picker UI yet (a real follow-up, not part of wiring an entry
+   point at all), so this is a fixed, documented default (shared with
+   the editor_dev_tool item, see node-editor's own docstring on why)."
+  [{:keys [player-uuid]}]
+  (when (and (content-key-allowed?) player-uuid)
+    (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills/thunder_bolt.edn")]
+      (node-editor/open! player-uuid path :skill)
+      (log/warn "Node editor: ac/skills/thunder_bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))))
+
+(defn- on-open-spell-composer
+  "Handle the spell composer dev-tool key (K, upstream: none). Unlike
+   the node editor, spell-composer/open! takes only a player-uuid -- no
+   file path to resolve, so there is no equivalent failure case here."
+  [{:keys [player-uuid]}]
+  (when (and (content-key-allowed?) player-uuid)
+    (spell-composer/open! player-uuid)))
 
 (defn- on-toggle-terminal
   "Handle terminal toggle (Left Alt / GLFW_KEY_LEFT_ALT).
@@ -140,6 +163,31 @@
                    :translation-key "key.content.toggle.terminal"
                    :category "keybind.category.content"}
      :handler #'on-toggle-terminal}
+
+    ;; G — open the node editor dev tool (node-editor plan). No upstream
+    ;; equivalent; this screen previously had no in-game entry point at
+    ;; all (see NODE_EDITOR.md).
+    :content/open-node-editor
+    {:input-id :content/open-node-editor
+     :scheme :alternative
+     :description "Open node editor (dev tool)"
+     :event-type :press
+     :key-mapping {:key 71  ; GLFW_KEY_G
+                   :translation-key "key.content.open.node.editor"
+                   :category "keybind.category.content"}
+     :handler #'on-open-node-editor}
+
+    ;; K — open the player spell composer dev tool (node-editor plan
+    ;; Phase 5). Same "no in-game entry point yet" gap as the node editor.
+    :content/open-spell-composer
+    {:input-id :content/open-spell-composer
+     :scheme :alternative
+     :description "Open spell composer (dev tool)"
+     :event-type :press
+     :key-mapping {:key 75  ; GLFW_KEY_K
+                   :translation-key "key.content.open.spell.composer"
+                   :category "keybind.category.content"}
+     :handler #'on-open-spell-composer}
   })
 
 ;; ==== Public API ====

@@ -1,52 +1,52 @@
-;; New-DSL conversion of ac/combat/abilities/railgun.edn (S6). Session
-;; ability with two firing modes (coin QTE via the :coin-thrown external
-;; event, or iron-item hold-charge) that converge on the same :release
-;; beam-strike/break-budget logic. First real call site of BOTH
-;; cn.li.combat.lib's combat/beam-strike and terrain/apply-break-budget
-;; composites from ac content (previously exercised only by combat-core's
-;; own lib_test.clj/run_test.clj fixtures).
-;;
-;; BUG FIX (S8, found auditing the live cutover): the old :progression
-;; :hit formula reads {:ref [:state :reflection-hit?]} -- a real
-;; formula the OLD engine evaluates lazily at the exact graph node that
-;; reads it, so it correctly sees a :reflection-hit? state write made
-;; moments earlier in the SAME dispatch (inside the each-loop just
-;; above). The NEW engine's ?progression/name capabilities are fixed
-;; values materialized once BEFORE dispatch starts and cannot see that
-;; same-dispatch write -- a plain ?progression/hit read here would
-;; always see the STALE pre-dispatch value (:reflection-hit? is reset
-;; to false at the top of this same phase, so it would always read as
-;; :exp-hit, never :exp-reflection-hit, regardless of what actually
-;; happened). Fixed by replacing the :reflection-hit? session-state
-;; field with a plain local (any-reflection-accepted?, predeclare +
-;; set! across the each-loop, this session's established same-
-;; activation-visibility fix pattern) and computing hit-progression
-;; inline via math/select instead of reading a capability. The
-;; :reflection-hit? field was never read anywhere outside this one
-;; phase (grep-confirmed), so dropping it from :program's own :state
-;; entirely (not just this read site) is a clean removal, not a partial
-;; fix.
-;;
-;; terrain/apply-break-budget's :drop-chance param has no old-code
-;; equivalent here -- the old :terrain/apply-break-budget COMPOSITE (not
-;; the new :defn) declared {:drop-chance {:type :float :default 0.0}},
-;; and railgun's :release step omitted the field entirely, so 0.0 is the
-;; faithful port, not a guess (meltdowner.edn's own call passes 0.05
-;; explicitly, confirming the field is real and abilities differ on it).
-;;
-;; :release's leading {:component :state/read :key :mode ...} is dropped:
-;; mode is bound but never read again anywhere later in the old :release
-;; sequence (only :fire-mode drives every branch past that point) --
-;; genuinely dead, the same class of dead-code drop mark_teleport.edn's
-;; own docstring already established for a trailing dead finish.
-;;
-;; The :events sibling map needs no new engine support (established
-;; porting penetrate_teleport.edn, S6): :coin-thrown is just one more key
-;; alongside :start/:pulse/:release/:abort in :phases, dispatched via
-;; run/dispatch! program :coin-thrown input from the item-use external
-;; trigger (kept verbatim below in :external-triggers, still consumed by
-;; the network dispatch layer this conversion does not touch).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/railgun.edn (S6). Session"
+        "ability with two firing modes (coin QTE via the :coin-thrown external"
+        "event, or iron-item hold-charge) that converge on the same :release"
+        "beam-strike/break-budget logic. First real call site of BOTH"
+        "cn.li.combat.lib's combat/beam-strike and terrain/apply-break-budget"
+        "composites from ac content (previously exercised only by combat-core's"
+        "own lib_test.clj/run_test.clj fixtures)."
+        ""
+        "BUG FIX (S8, found auditing the live cutover): the old :progression"
+        ":hit formula reads {:ref [:state :reflection-hit?]} -- a real"
+        "formula the OLD engine evaluates lazily at the exact graph node that"
+        "reads it, so it correctly sees a :reflection-hit? state write made"
+        "moments earlier in the SAME dispatch (inside the each-loop just"
+        "above). The NEW engine's ?progression/name capabilities are fixed"
+        "values materialized once BEFORE dispatch starts and cannot see that"
+        "same-dispatch write -- a plain ?progression/hit read here would"
+        "always see the STALE pre-dispatch value (:reflection-hit? is reset"
+        "to false at the top of this same phase, so it would always read as"
+        ":exp-hit, never :exp-reflection-hit, regardless of what actually"
+        "happened). Fixed by replacing the :reflection-hit? session-state"
+        "field with a plain local (any-reflection-accepted?, predeclare +"
+        "set! across the each-loop, this session's established same-"
+        "activation-visibility fix pattern) and computing hit-progression"
+        "inline via math/select instead of reading a capability. The"
+        ":reflection-hit? field was never read anywhere outside this one"
+        "phase (grep-confirmed), so dropping it from :program's own :state"
+        "entirely (not just this read site) is a clean removal, not a partial"
+        "fix."
+        ""
+        "terrain/apply-break-budget's :drop-chance param has no old-code"
+        "equivalent here -- the old :terrain/apply-break-budget COMPOSITE (not"
+        "the new :defn) declared {:drop-chance {:type :float :default 0.0}},"
+        "and railgun's :release step omitted the field entirely, so 0.0 is the"
+        "faithful port, not a guess (meltdowner.edn's own call passes 0.05"
+        "explicitly, confirming the field is real and abilities differ on it)."
+        ""
+        ":release's leading {:component :state/read :key :mode ...} is dropped:"
+        "mode is bound but never read again anywhere later in the old :release"
+        "sequence (only :fire-mode drives every branch past that point) --"
+        "genuinely dead, the same class of dead-code drop mark_teleport.edn's"
+        "own docstring already established for a trailing dead finish."
+        ""
+        "The :events sibling map needs no new engine support (established"
+        "porting penetrate_teleport.edn, S6): :coin-thrown is just one more key"
+        "alongside :start/:pulse/:release/:abort in :phases, dispatched via"
+        "run/dispatch! program :coin-thrown input from the item-use external"
+        "trigger (kept verbatim below in :external-triggers, still consumed by"
+        "the network dispatch layer this conversion does not touch)."]
+ :schema-version 2
  :kind :ability
  :id :railgun
  :name-key "ability.skill.electromaster.railgun"

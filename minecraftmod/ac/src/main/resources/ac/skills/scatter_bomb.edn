@@ -1,45 +1,45 @@
-;; New-DSL conversion of ac/combat/abilities/scatter_bomb.edn (S6). Session
-;; ability. Two new language gaps and two real content bugs found while
-;; porting.
-;;
-;; Gaps:
-;; - each's optional [item index] binding (old :flow/foreach's
-;;   :index-as) -- see node-core/compile.clj's own docstring for
-;;   compile-each.
-;; - :vec3/scatter-end, referenced under the :vec3/* namespace but
-;;   genuinely needing the activation's RNG cursor for its random cone
-;;   deviation -- an exhaustive search found no implementation anywhere
-;;   (the same never-wired-up-reference class :vec3/launch turned out to
-;;   be), so it is a NEW node, cn.li.combat.dsl-vocabulary's
-;;   :kernel/scatter-end, not a port.
-;;
-;; ?charge/ticks is :double (run.clj's fixed-capabilities), not :long --
-;; next-spawn-tick's own computation (charge-ticks + spawn-interval-ticks)
-;; needs math/floor-long, not long/add, to narrow the double sum back down
-;; to the :long the state field is declared.
-;;
-;; Bugs (both the same \"stale re-add\" class the RELEASE-side double-
-;; spend bugs already found this session belong to): the old :pulse's
-;; spawn-branch vfx :update read {:ref [:state :balls]} (already live-
-;; updated to balls+1 by an earlier same-activation write, per the
-;; pattern groundshock.edn/directed_blastwave.edn's docstrings
-;; established) and added ANOTHER +1 on top, so the displayed ball count
-;; would have been balls+2, one higher than the real count; and that
-;; same vfx :update was ALSO fired a second, redundant time right after
-;; the branch regardless of whether a ball spawned. Both use sites
-;; collapsed into the two branches of a single `if`, each using its own
-;; correct just-computed count once.
-;;
-;; The `if`/`set!` shape for `destination` (rather than a math/select
-;; expression) is required, not stylistic: the auto-aim branch is pure
-;; (vec3/add on already-known fields) but the scatter branch is a real
-;; host query (kernel/scatter-end), and a call cannot appear in
-;; math/select's expression-position args -- the same rule that also
-;; forces random/int into its own `let` elsewhere. destination is
-;; predeclared with a placeholder vec3 and reassigned via set! in
-;; whichever arm actually runs, the same accumulator pattern
-;; apply_break_budget.edn's set! usage already established.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/scatter_bomb.edn (S6). Session"
+        "ability. Two new language gaps and two real content bugs found while"
+        "porting."
+        ""
+        "Gaps:"
+        "- each's optional [item index] binding (old :flow/foreach's"
+        "  :index-as) -- see node-core/compile.clj's own docstring for"
+        "  compile-each."
+        "- :vec3/scatter-end, referenced under the :vec3/* namespace but"
+        "  genuinely needing the activation's RNG cursor for its random cone"
+        "  deviation -- an exhaustive search found no implementation anywhere"
+        "  (the same never-wired-up-reference class :vec3/launch turned out to"
+        "  be), so it is a NEW node, cn.li.combat.dsl-vocabulary's"
+        "  :kernel/scatter-end, not a port."
+        ""
+        "?charge/ticks is :double (run.clj's fixed-capabilities), not :long --"
+        "next-spawn-tick's own computation (charge-ticks + spawn-interval-ticks)"
+        "needs math/floor-long, not long/add, to narrow the double sum back down"
+        "to the :long the state field is declared."
+        ""
+        "Bugs (both the same \\\"stale re-add\\\" class the RELEASE-side double-"
+        "spend bugs already found this session belong to): the old :pulse's"
+        "spawn-branch vfx :update read {:ref [:state :balls]} (already live-"
+        "updated to balls+1 by an earlier same-activation write, per the"
+        "pattern groundshock.edn/directed_blastwave.edn's docstrings"
+        "established) and added ANOTHER +1 on top, so the displayed ball count"
+        "would have been balls+2, one higher than the real count; and that"
+        "same vfx :update was ALSO fired a second, redundant time right after"
+        "the branch regardless of whether a ball spawned. Both use sites"
+        "collapsed into the two branches of a single `if`, each using its own"
+        "correct just-computed count once."
+        ""
+        "The `if`/`set!` shape for `destination` (rather than a math/select"
+        "expression) is required, not stylistic: the auto-aim branch is pure"
+        "(vec3/add on already-known fields) but the scatter branch is a real"
+        "host query (kernel/scatter-end), and a call cannot appear in"
+        "math/select's expression-position args -- the same rule that also"
+        "forces random/int into its own `let` elsewhere. destination is"
+        "predeclared with a placeholder vec3 and reassigned via set! in"
+        "whichever arm actually runs, the same accumulator pattern"
+        "apply_break_budget.edn's set! usage already established."]
+ :schema-version 2
  :kind :ability
  :id :scatter-bomb
  :name-key "ability.skill.meltdowner.scatter_bomb"

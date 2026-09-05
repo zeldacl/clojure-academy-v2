@@ -1,16 +1,16 @@
-;; New-DSL conversion of ac/combat/abilities/thunder_bolt.edn (S6). See
-;; earlier skills/*.edn docstrings for the general pattern. Nothing new at
-;; the language level -- every op/node used here was already added
-;; converting rad_intensify/electron_bomb/arc_gen/ray_barrage.
-;;
-;; One old-content oddity resolved by simply following this session's
-;; established precedent: the old {:component :cooldown/start, :name
-;; :main} step has no :cooldown field at all (unlike every other
-;; cooldown/start call site converted so far, which explicitly reads
-;; ?cooldown/main). cn.li.combat.dsl-vocabulary's :cooldown/start requires
-;; :ticks with no default, so this was never ambiguous in the new DSL --
-;; :ticks is read from ?cooldown/main like everywhere else.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/thunder_bolt.edn (S6). See"
+        "earlier skills/*.edn docstrings for the general pattern. Nothing new at"
+        "the language level -- every op/node used here was already added"
+        "converting rad_intensify/electron_bomb/arc_gen/ray_barrage."
+        ""
+        "One old-content oddity resolved by simply following this session's"
+        "established precedent: the old {:component :cooldown/start, :name"
+        ":main} step has no :cooldown field at all (unlike every other"
+        "cooldown/start call site converted so far, which explicitly reads"
+        "?cooldown/main). cn.li.combat.dsl-vocabulary's :cooldown/start requires"
+        ":ticks with no default, so this was never ambiguous in the new DSL --"
+        ":ticks is read from ?cooldown/main like everywhere else."]
+ :schema-version 2
  :kind :ability
  :id :thunder-bolt
  :name-key "ability.skill.electromaster.thunder_bolt"

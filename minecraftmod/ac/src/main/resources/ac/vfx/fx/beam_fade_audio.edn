@@ -1,18 +1,18 @@
-;; New-DSL conversion of ac/vfx/effects/beam_fade_audio.edn (S6). Old
-;; :vfx/timeline's dynamic :at (:beam-at/:fade-at, not a fixed 0) becomes
-;; an explicit (when (math/gte ?age at) ...) guard -- unlike the fixed-0
-;; children ported elsewhere this pass, these ARE real runtime-
-;; conditional gates, not provably-always-true ones.
-;;
-;; Old :vfx/fade wraps a CHILD subtree and multiplies its constructed
-;; ops' [:material :alpha] by a computed fade factor
-;; (from-alpha + clamp((age-from-tick)/(to-tick-from-tick),0,1) *
-;; (to-alpha-from-alpha)) -- there is no generic "wrap and post-process a
-;; child's ops" concept in the new flat :do sequence, so the fade factor
-;; is computed as a local and threaded directly into the wrapped leaf's
-;; new :alpha field (see dsl_vocabulary.clj's :beam docstring for why
-;; that field exists).
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/beam_fade_audio.edn (S6). Old"
+        ":vfx/timeline's dynamic :at (:beam-at/:fade-at, not a fixed 0) becomes"
+        "an explicit (when (math/gte ?age at) ...) guard -- unlike the fixed-0"
+        "children ported elsewhere this pass, these ARE real runtime-"
+        "conditional gates, not provably-always-true ones."
+        ""
+        "Old :vfx/fade wraps a CHILD subtree and multiplies its constructed"
+        "ops' [:material :alpha] by a computed fade factor"
+        "(from-alpha + clamp((age-from-tick)/(to-tick-from-tick),0,1) *"
+        "(to-alpha-from-alpha)) -- there is no generic \"wrap and post-process a"
+        "child's ops\" concept in the new flat :do sequence, so the fade factor"
+        "is computed as a local and threaded directly into the wrapped leaf's"
+        "new :alpha field (see dsl_vocabulary.clj's :beam docstring for why"
+        "that field exists)."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

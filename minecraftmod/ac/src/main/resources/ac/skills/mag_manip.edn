@@ -1,37 +1,37 @@
-;; New-DSL conversion of ac/combat/abilities/mag_manip.edn (S6). Session
-;; ability: grab a metal block (from hand or by breaking one aimed at)
-;; into a physics-driven \"held body\" entity that homes toward a focus
-;; point in front of the caster every :pulse, then throw it on release.
-;;
-;; :pulse's old first half (query \"preflight-bodies\", re-affirm
-;; body-id from it, compute a `holding-nearby?` local) is CONFIRMED
-;; dead: `holding-nearby?` is bound but never referenced anywhere else
-;; in the phase, and the SAME entity query is repeated immediately
-;; after as \"held-bodies\" to do the actual work (which ALSO re-writes
-;; body-id state). This is a genuinely redundant duplicate host query
-;; with zero behavioral difference, not merely an unused read -- dropped
-;; entirely, keeping only the real held-bodies query and its logic.
-;;
-;; :release's throw logic is duplicated in the old content for the
-;; \"raycast hit something\" vs \"raycast missed, throw toward the aimed
-;; point instead\" cases -- only the throw TARGET position differs
-;; between them (:throw-hit's own :position vs held-body.position +
-;; aim*throw-range), and node-core's math/select is a plain expression
-;; (its branches never need a host call), so this collapses into one
-;; `throw-target` computed via math/select up front, then a single
-;; throw body using it -- unlike mag_movement.edn's consolidation
-;; (which needed the predeclare+set! pattern because ITS two paths
-;; differed by real host queries, not a plain value), this one needed
-;; no restructuring device at all.
-;;
-;; :events :block-body-hit's old ability/caster bind pulled
-;; owner-id/eye/aim/body/creative?/world-id -- none of which are ever
-;; read in the event body (only :throw-damage and ?context/target-id
-;; are), and :abort's own ability/caster bind is unused past :world-id.
-;; Both dropped to just the fields actually read, the same class of
-;; dead-read simplification already established this session
-;; (shift_teleport.edn, jet_engine.edn, mag_movement.edn).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/mag_manip.edn (S6). Session"
+        "ability: grab a metal block (from hand or by breaking one aimed at)"
+        "into a physics-driven \\\"held body\\\" entity that homes toward a focus"
+        "point in front of the caster every :pulse, then throw it on release."
+        ""
+        ":pulse's old first half (query \\\"preflight-bodies\\\", re-affirm"
+        "body-id from it, compute a `holding-nearby?` local) is CONFIRMED"
+        "dead: `holding-nearby?` is bound but never referenced anywhere else"
+        "in the phase, and the SAME entity query is repeated immediately"
+        "after as \\\"held-bodies\\\" to do the actual work (which ALSO re-writes"
+        "body-id state). This is a genuinely redundant duplicate host query"
+        "with zero behavioral difference, not merely an unused read -- dropped"
+        "entirely, keeping only the real held-bodies query and its logic."
+        ""
+        ":release's throw logic is duplicated in the old content for the"
+        "\\\"raycast hit something\\\" vs \\\"raycast missed, throw toward the aimed"
+        "point instead\\\" cases -- only the throw TARGET position differs"
+        "between them (:throw-hit's own :position vs held-body.position +"
+        "aim*throw-range), and node-core's math/select is a plain expression"
+        "(its branches never need a host call), so this collapses into one"
+        "`throw-target` computed via math/select up front, then a single"
+        "throw body using it -- unlike mag_movement.edn's consolidation"
+        "(which needed the predeclare+set! pattern because ITS two paths"
+        "differed by real host queries, not a plain value), this one needed"
+        "no restructuring device at all."
+        ""
+        ":events :block-body-hit's old ability/caster bind pulled"
+        "owner-id/eye/aim/body/creative?/world-id -- none of which are ever"
+        "read in the event body (only :throw-damage and ?context/target-id"
+        "are), and :abort's own ability/caster bind is unused past :world-id."
+        "Both dropped to just the fields actually read, the same class of"
+        "dead-read simplification already established this session"
+        "(shift_teleport.edn, jet_engine.edn, mag_movement.edn)."]
+ :schema-version 2
  :kind :ability
  :id :mag-manip
  :name-key "ability.skill.electromaster.mag_manip"

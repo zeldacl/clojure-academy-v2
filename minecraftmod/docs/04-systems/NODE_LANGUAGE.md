@@ -179,6 +179,20 @@ DSL 可见节点 id（`:target/raycast`、`:combat/damage`……），`cn.li.nod
 `nil` 时炸过至少一次真实内容（`mag_manip.edn`，修法是让 `value/normalize-id`
 本身对 `nil` 安全，而不是试图在 DSL 层面模拟短路）。
 
+**`:nid` 的稳定性契约**：`cn.li.node.compile/nid-for!` 在作者可见的构造点（节点/
+`:defn` 调用、sigil 读、字段访问、纯 op 调用、`when`/`if`/`each`/`finish`/
+`state!`/`set!`/`event!`/`vfx!`）优先读 form 自己的 `:nid` 元数据，没有才退回
+每次编译重新分配的计数器——纯编译器内部指令（bank 转换、`each` 自己的计数/索引
+记账、`when`/`if` 分支隐式的 `:jump`、兜底补上的收尾 `:finish`）没有稳定身份，
+永远用计数器。作者/编辑器要让某个节点的身份跨编辑保持稳定，只需要在源码里写
+`^{:nid "n7"} (form ...)`——`clojure.edn/read` 对带显式 `^{...}` 的 form 才会
+附带 `:line`/`:column`（对没有显式元数据的 form 不会，这条曾经在旧文档里被错误
+描述成"总是有"，见 `cn.li.node.surface` 自己的 docstring），所以 `:nid` 标记同时
+带回了诊断的真实源码位置。`cn.li.node.nid/stamp` 递归给一份文档里所有还没标记的
+list/map 分配 `:nid`，幂等，插入新语句不会移动已有节点的 `:nid`——是节点编辑器
+（[NODE_EDITOR.md](../06-gui/NODE_EDITOR.md)）用来让画布上的节点在编辑之间保持
+可识别、可选中的机制。
+
 ## 4. 词汇表：一张表
 
 ```clojure
@@ -248,8 +262,16 @@ DSL 文本（复用同一个编译器，没有第二套玩家专用 VM），`adm
 按拒绝处理）。任何玩家提交的法术必须先过 `admit` 再编译成可执行体——`admit` 之前
 拒绝的 IR 永远不会走到 `compile-program`/`dispatch!`。当前 glyph 目录只有
 `:form/self`、`:form/touch`、`:effect/damage`、`:effect/push`、`:augment/amplify`
-五个，目的是证明这条准入机制本身能跑通，不是要交付的内容广度——本次重写不含
-任何编辑器 UI，glyph 目录扩充是后续任务。
+五个，目的是证明这条准入机制本身能跑通，不是要交付的内容广度——glyph 目录扩充
+是后续任务。
+
+`cn.li.combat.player/glyph-catalog`（节点编辑器项目新增）给出每个 glyph 的真实
+`{:effects :cost :admissible?}`，不是第二张手写表：每个 glyph 的贡献靠实际编译一个
+最小合法法术、跑 `cost/analyze`、再相对 `:form/self`（零成本基线，因为它自己的
+DSL 只有一次 sigil 读，不产生 `:query`/`:action` 指令）取增量算出来的——`admit`
+本身的判定逻辑一个字节都没有被复制。玩家法术合成器屏幕
+（`ac/.../spell_composer_reactive.clj`）就是这张表的第一个真实消费者，见
+[NODE_EDITOR.md](../06-gui/NODE_EDITOR.md)。
 
 ## 7. VFX 场景 DSL：跟战斗共享编译器，词汇表不同
 
@@ -300,9 +322,18 @@ host 好查，"调用"就是"往这帧的 outbox 追加一条 draw/audio/camera 
   加载期被展开成真正能画的子树；展开细节见各自 `ac/vfx/fx/*.edn` 文件自己的
   docstring）。新版本据实转换：确认无渲染的组件对应一个诚实的空 `:scene`，不是
   发明新的视觉设计。
-- `combat-core/player.clj`（S7）已实现并测试，但没有对应的物品/合成/交互层
-  （"glyph 物品"本身——存法术数据的 Minecraft 物品、右键施法交互——是平台层内容，
-  不在本次重写范围）。
+- `combat-core/player.clj`（S7）已实现并测试，现在有一个真实的合成/提交交互层：
+  `ac/.../spell_composer_reactive.clj` 屏幕（选一个 form、叠 effect/augment、
+  提交），走已经存在的 `MSG-REQ-SPELL-SUBMIT` 服务端处理器（`combat-runtime/
+  dispatch-player-spell!`，desugar/compile/admit 全部服务端权威）。仍然缺的是
+  **物品层**——存法术数据的 Minecraft 物品、拾取/合成 glyph 物品、右键施法——
+  需要贴图/模型/合成表，是平台层内容，本次没有做（这个环境做不出、也验证不了
+  贴图和模型），今天这个屏幕靠直接调用 `open!` 打开，不挂在任何物品上。
+- 节点图编辑器（技能 + VFX 场景两种模式）已实现，见
+  [NODE_EDITOR.md](../06-gui/NODE_EDITOR.md)——本节描述的语言本身现在具备被
+  图形化编辑的性质：`cn.li.node.nid`（跨编辑稳定的节点 id）、`:doc` 数据字段
+  （取代原始注释，编辑器保存路径可预测哪些字节会变）、`cn.li.ability.editor.
+  graph`（表层 AST ⇄ 图的双向、无损转换）。
 - 旧路径的删除、`verifyNodeKernelSingleSource` 之类门禁的改写、真正把 `cn.li.
   combat.api`/AC composition root 切到新引擎上，是独立的、有意留待以后做的一步，
   §0 已经说明原因。

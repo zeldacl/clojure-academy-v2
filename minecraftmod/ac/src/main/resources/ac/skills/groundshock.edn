@@ -1,28 +1,28 @@
-;; New-DSL conversion of ac/combat/abilities/groundshock.edn (S6). Session
-;; ability. First real call site of cn.li.combat.lib's terrain/wave-plan
-;; composite. :block-transforms/:energy-cost use string block-id keys
-;; (\"minecraft:stone\" etc), a pre-existing content shape (see
-;; final_catalog.clj's own read-resource docstring) that a nested map
-;; literal accepts as-is -- compile-map-literal never restricts key types.
-;;
-;; A real bug found and fixed while porting: the old :release sequence
-;; calls cost/spend TWICE for the exact same resources -- once with an
-;; inline {:resources {:cp release-cp :overload release-overload}}
-;; literal (bound to a sufficiency check), and then AGAIN with
-;; {:budget {:ref [:input :budgets :release]}} if that check passed, with
-;; no :bind at all on the second call. final_engine.clj's spend-budget
-;; unconditionally commits the deduction on every call it makes (there is
-;; no separate check-only mode), so this would have deducted :release's
-;; cp/overload cost from the player TWICE per activation. Kept only the
-;; second (named-budget) spend, matching every other ability's pattern
-;; and this ability's own :costs {:release ...} declaration -- the first
-;; was dead weight computing the identical amount a second time, not a
-;; second, different charge.
-;;
-;; Also confirms {:ref [:frame :seed]} (an old direct-frame field access,
-;; distinct from {:ref [:input :capabilities ...]}) is the same activation
-;; seed ?rng/seed already reads elsewhere.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/groundshock.edn (S6). Session"
+        "ability. First real call site of cn.li.combat.lib's terrain/wave-plan"
+        "composite. :block-transforms/:energy-cost use string block-id keys"
+        "(\\\"minecraft:stone\\\" etc), a pre-existing content shape (see"
+        "final_catalog.clj's own read-resource docstring) that a nested map"
+        "literal accepts as-is -- compile-map-literal never restricts key types."
+        ""
+        "A real bug found and fixed while porting: the old :release sequence"
+        "calls cost/spend TWICE for the exact same resources -- once with an"
+        "inline {:resources {:cp release-cp :overload release-overload}}"
+        "literal (bound to a sufficiency check), and then AGAIN with"
+        "{:budget {:ref [:input :budgets :release]}} if that check passed, with"
+        "no :bind at all on the second call. final_engine.clj's spend-budget"
+        "unconditionally commits the deduction on every call it makes (there is"
+        "no separate check-only mode), so this would have deducted :release's"
+        "cp/overload cost from the player TWICE per activation. Kept only the"
+        "second (named-budget) spend, matching every other ability's pattern"
+        "and this ability's own :costs {:release ...} declaration -- the first"
+        "was dead weight computing the identical amount a second time, not a"
+        "second, different charge."
+        ""
+        "Also confirms {:ref [:frame :seed]} (an old direct-frame field access,"
+        "distinct from {:ref [:input :capabilities ...]}) is the same activation"
+        "seed ?rng/seed already reads elsewhere."]
+ :schema-version 2
  :kind :ability
  :id :groundshock
  :name-key "ability.skill.vecmanip.groundshock"

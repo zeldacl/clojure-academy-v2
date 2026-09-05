@@ -1,57 +1,57 @@
-;; New-DSL conversion of ac/combat/abilities/flashing.edn (S6, final
-;; ability of the S6 conversion pass). Toggle ability with a 12-event
-;; :movement/* map (4 directions x press/tick/release) whose bodies are
-;; byte-identical except for the :direction keyword and whether the
-;; teleport-marker vfx :operation is :spawn/:update (preview) or a full
-;; commit (release). Unlike every earlier ability's smaller-scale
-;; duplication (handled with the ability-local predeclare+set!
-;; technique), this duplication spans the ability's ENTIRE event set, so
-;; it is factored into two NEW combat-core :defn composites instead:
-;; combat-core/lib/blink_preview.edn (press/tick, shared by a
-;; marker-operation param) and combat-core/lib/blink_release.edn
-;; (release, which spends for real and commits the teleport). Both are
-;; new library files, not ports of pre-existing old composites -- this
-;; establishes :defn composites as a mechanism for cross-EVENT reuse
-;; within one ability, not just cross-ability reuse.
-;;
-;; combat/blink-release calls `finish` directly inside its own :defn
-;; body, relying on compile-fn-call inlining fn bodies at the call site
-;; (not a real call boundary) so the finish terminates the calling
-;; event's own block exactly as if written inline -- confirmed by this
-;; file's own tests actually dispatching :movement/*-release and
-;; observing the :teleported outcome and :end-ability? false default.
-;;
-;; ?caster/eye-y is a new fixed capability (combat-core/run.clj) --
-;; this is its first real content user, feeding
-;; target/directional-destination's :eye-y param the same way the old
-;; content's :ability/caster :eye-y bind did.
-;;
-;; :start's old :ability/caster bind pulled :eye/:eye-y/:body/:aim/
-;; :world-id alongside :creative?, but only :creative? is ever read
-;; anywhere in the old :start body (grep-confirmed) -- the rest are
-;; dropped as dead reads, matching this session's established
-;; dead-read-drop precedent (mine_ray.edn, jet_engine.edn, etc); each
-;; movement event re-reads its own fresh caster snapshot regardless.
-;;
-;; :pulse's old content re-read :active-ticks from state TWICE (once as
-;; the :max-active-ticks comparison, again for the increment) -- ported
-;; using the single already-bound active-ticks-check local for both,
-;; the same "reuse the already-computed local" rule established
-;; throughout this session (meltdowner/plasma_cannon/storm_wing).
-;;
-;; blink-interval-ticks is declared in :tunables but never read anywhere
-;; in the old :program (grep-confirmed, same as storm_wing.edn's own
-;; already-documented unused-tunable case) -- kept in the outer
-;; wrapper's :tunables (byte-for-byte per this session's convention) but
-;; not declared in :program's own :tunables map, since nothing in
-;; :program reads it via $.
-;;
-;; No top-level :release-keeps-session? key (grep-confirmed absent,
-;; unlike storm_wing.edn/plasma_cannon.edn's own use of that flag) --
-;; :release is a bare (finish {:outcome :continue}) with no
-;; :end-ability?, matching the old content's own bare
-;; {:component :flow/finish :outcome :continue}.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/flashing.edn (S6, final"
+        "ability of the S6 conversion pass). Toggle ability with a 12-event"
+        ":movement/* map (4 directions x press/tick/release) whose bodies are"
+        "byte-identical except for the :direction keyword and whether the"
+        "teleport-marker vfx :operation is :spawn/:update (preview) or a full"
+        "commit (release). Unlike every earlier ability's smaller-scale"
+        "duplication (handled with the ability-local predeclare+set!"
+        "technique), this duplication spans the ability's ENTIRE event set, so"
+        "it is factored into two NEW combat-core :defn composites instead:"
+        "combat-core/lib/blink_preview.edn (press/tick, shared by a"
+        "marker-operation param) and combat-core/lib/blink_release.edn"
+        "(release, which spends for real and commits the teleport). Both are"
+        "new library files, not ports of pre-existing old composites -- this"
+        "establishes :defn composites as a mechanism for cross-EVENT reuse"
+        "within one ability, not just cross-ability reuse."
+        ""
+        "combat/blink-release calls `finish` directly inside its own :defn"
+        "body, relying on compile-fn-call inlining fn bodies at the call site"
+        "(not a real call boundary) so the finish terminates the calling"
+        "event's own block exactly as if written inline -- confirmed by this"
+        "file's own tests actually dispatching :movement/*-release and"
+        "observing the :teleported outcome and :end-ability? false default."
+        ""
+        "?caster/eye-y is a new fixed capability (combat-core/run.clj) --"
+        "this is its first real content user, feeding"
+        "target/directional-destination's :eye-y param the same way the old"
+        "content's :ability/caster :eye-y bind did."
+        ""
+        ":start's old :ability/caster bind pulled :eye/:eye-y/:body/:aim/"
+        ":world-id alongside :creative?, but only :creative? is ever read"
+        "anywhere in the old :start body (grep-confirmed) -- the rest are"
+        "dropped as dead reads, matching this session's established"
+        "dead-read-drop precedent (mine_ray.edn, jet_engine.edn, etc); each"
+        "movement event re-reads its own fresh caster snapshot regardless."
+        ""
+        ":pulse's old content re-read :active-ticks from state TWICE (once as"
+        "the :max-active-ticks comparison, again for the increment) -- ported"
+        "using the single already-bound active-ticks-check local for both,"
+        "the same \"reuse the already-computed local\" rule established"
+        "throughout this session (meltdowner/plasma_cannon/storm_wing)."
+        ""
+        "blink-interval-ticks is declared in :tunables but never read anywhere"
+        "in the old :program (grep-confirmed, same as storm_wing.edn's own"
+        "already-documented unused-tunable case) -- kept in the outer"
+        "wrapper's :tunables (byte-for-byte per this session's convention) but"
+        "not declared in :program's own :tunables map, since nothing in"
+        ":program reads it via $."
+        ""
+        "No top-level :release-keeps-session? key (grep-confirmed absent,"
+        "unlike storm_wing.edn/plasma_cannon.edn's own use of that flag) --"
+        ":release is a bare (finish {:outcome :continue}) with no"
+        ":end-ability?, matching the old content's own bare"
+        "{:component :flow/finish :outcome :continue}."]
+ :schema-version 2
  :kind :ability
  :id :flashing
  :name-key "ability.skill.teleporter.flashing"

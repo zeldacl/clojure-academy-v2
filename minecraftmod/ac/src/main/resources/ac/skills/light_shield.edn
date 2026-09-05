@@ -1,58 +1,58 @@
-;; New-DSL conversion of ac/combat/abilities/light_shield.edn (S6).
-;; Toggle-activation ability (first :toggle conversion this session --
-;; :activation is passed through untyped/unchecked by both the old and
-;; new engines, so :toggle needed no special handling beyond keeping the
-;; same value on both the outer wrapper and the inner :program). Spawns
-;; a shield entity on :start, melee-touches a front cone of nearby
-;; entities each :pulse, and shares its :last-absorb-tick/:overload-floor
-;; session-state fields with the OLD damage-policy interpreter
-;; (:damage-policies below is left completely untouched, on the same
-;; still-old :mark-policies/:damage-policies path every other converted
-;; ability's docstring already references -- this ability just happens
-;; to be the first with a REAL damage-policy body, not a nil one).
-;;
-;; The shared four-step deactivate sequence (discard the shield entity,
-;; apply the caster's own post-shield slowness, start the :deactivate
-;; cooldown, destroy the three session VFX) appears four times in the
-;; old content (:pulse's insufficient-budget branch, :pulse's timeout
-;; branch, :release, :abort) -- kept duplicated rather than factored
-;; into a shared :defn, the same choice already established for
-;; thunder_bolt.edn/shift_teleport.edn's own repeated blocks.
-;;
-;; cooldown/start's old component omitted :ticks entirely (a shorthand
-;; the old engine supported: resolve the ticks value from the ability's
-;; own declared :cooldown map by :name when absent). The new vocab's
-;; cooldown/start always requires an explicit :ticks value, matching
-;; every other converted ability's own pattern (?cooldown/name read
-;; first, then passed through) -- not a new gap, just the same
-;; already-established shape this old component happened to shorthand.
-;;
-;; The touch loop's :flow/control :skip-item (skip the rest of THIS
-;; iteration's body when the touch budget is insufficient, but keep
-;; looping) has no direct equivalent statement in this DSL -- restructured
-;; as the remaining per-target steps nested inside a `when` on the same
-;; spend result, which is behaviorally identical (only this iteration's
-;; damage/progression/score-mark are skipped; the each loop itself
-;; always continues to the next target either way).
-;;
-;; BUG FIX (S8, found auditing the live cutover): the old :cooldown
-;; :deactivate formula reads {:ref [:state :active-ticks]} -- a real
-;; formula, not a fixed number, evaluated lazily by the OLD engine at
-;; the exact graph node that reads it. The NEW engine's ?cooldown/name
-;; capabilities are fixed values materialized once BEFORE dispatch
-;; starts and cannot see a :state! write that happens earlier in the
-;; SAME dispatch. :pulse's timeout branch (below) writes :active-ticks
-;; via next-active-ticks, then immediately needs the deactivate cooldown
-;; computed FROM that just-written value -- a plain ?cooldown/deactivate
-;; read there would silently use the STALE pre-dispatch active-ticks
-;; value instead. Fixed by computing the cooldown inline from
-;; next-active-ticks (the local this dispatch already has) instead of
-;; reading the capability, matching this session's established same-
-;; activation-visibility fix pattern. :release/:abort's own
-;; ?cooldown/deactivate reads (no state write earlier in those
-;; dispatches) are genuinely fine as plain capability reads and are
-;; NOT changed.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/light_shield.edn (S6)."
+        "Toggle-activation ability (first :toggle conversion this session --"
+        ":activation is passed through untyped/unchecked by both the old and"
+        "new engines, so :toggle needed no special handling beyond keeping the"
+        "same value on both the outer wrapper and the inner :program). Spawns"
+        "a shield entity on :start, melee-touches a front cone of nearby"
+        "entities each :pulse, and shares its :last-absorb-tick/:overload-floor"
+        "session-state fields with the OLD damage-policy interpreter"
+        "(:damage-policies below is left completely untouched, on the same"
+        "still-old :mark-policies/:damage-policies path every other converted"
+        "ability's docstring already references -- this ability just happens"
+        "to be the first with a REAL damage-policy body, not a nil one)."
+        ""
+        "The shared four-step deactivate sequence (discard the shield entity,"
+        "apply the caster's own post-shield slowness, start the :deactivate"
+        "cooldown, destroy the three session VFX) appears four times in the"
+        "old content (:pulse's insufficient-budget branch, :pulse's timeout"
+        "branch, :release, :abort) -- kept duplicated rather than factored"
+        "into a shared :defn, the same choice already established for"
+        "thunder_bolt.edn/shift_teleport.edn's own repeated blocks."
+        ""
+        "cooldown/start's old component omitted :ticks entirely (a shorthand"
+        "the old engine supported: resolve the ticks value from the ability's"
+        "own declared :cooldown map by :name when absent). The new vocab's"
+        "cooldown/start always requires an explicit :ticks value, matching"
+        "every other converted ability's own pattern (?cooldown/name read"
+        "first, then passed through) -- not a new gap, just the same"
+        "already-established shape this old component happened to shorthand."
+        ""
+        "The touch loop's :flow/control :skip-item (skip the rest of THIS"
+        "iteration's body when the touch budget is insufficient, but keep"
+        "looping) has no direct equivalent statement in this DSL -- restructured"
+        "as the remaining per-target steps nested inside a `when` on the same"
+        "spend result, which is behaviorally identical (only this iteration's"
+        "damage/progression/score-mark are skipped; the each loop itself"
+        "always continues to the next target either way)."
+        ""
+        "BUG FIX (S8, found auditing the live cutover): the old :cooldown"
+        ":deactivate formula reads {:ref [:state :active-ticks]} -- a real"
+        "formula, not a fixed number, evaluated lazily by the OLD engine at"
+        "the exact graph node that reads it. The NEW engine's ?cooldown/name"
+        "capabilities are fixed values materialized once BEFORE dispatch"
+        "starts and cannot see a :state! write that happens earlier in the"
+        "SAME dispatch. :pulse's timeout branch (below) writes :active-ticks"
+        "via next-active-ticks, then immediately needs the deactivate cooldown"
+        "computed FROM that just-written value -- a plain ?cooldown/deactivate"
+        "read there would silently use the STALE pre-dispatch active-ticks"
+        "value instead. Fixed by computing the cooldown inline from"
+        "next-active-ticks (the local this dispatch already has) instead of"
+        "reading the capability, matching this session's established same-"
+        "activation-visibility fix pattern. :release/:abort's own"
+        "?cooldown/deactivate reads (no state write earlier in those"
+        "dispatches) are genuinely fine as plain capability reads and are"
+        "NOT changed."]
+ :schema-version 2
  :kind :ability
  :id :light-shield
  :name-key "ability.skill.meltdowner.light_shield"

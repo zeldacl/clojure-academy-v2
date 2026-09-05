@@ -1,51 +1,51 @@
-;; New-DSL conversion of ac/combat/abilities/mag_movement.edn (S6).
-;; Session ability: lock onto a metal block or metal entity, then pull
-;; the caster toward it every tick until released/aborted/lost.
-;;
-;; The old :start cascades through THREE structurally identical
-;; \"lock onto this target\" bodies (normal-metal block, weak-metal
-;; block, metal entity -- differing only in what target-kind/id/
-;; position get set to) and FOUR structurally identical \"no valid
-;; target\" fallback bodies (one per cascade exit). Both are
-;; consolidated here into a single lock-on block and a single fallback
-;; block, reached via one combined boolean condition computed with the
-;; established predeclare-then-set! pattern (apply_break_budget.edn/
-;; scatter_bomb.edn) rather than duplicated 3x/4x -- this is a
-;; deliberate, provably behavior-preserving restructuring (every old
-;; condition is still checked, every action still taken exactly once
-;; on the same inputs), not a simplification of live logic the way
-;; this migration's other conversions have avoided. The scale here
-;; (3-4x duplication of already-large blocks) is what makes literal
-;; duplication impractical where every other converted ability's
-;; smaller repeated blocks were kept duplicated as-is.
-;; :pulse's :entity vs :block target-kind branches are consolidated
-;; the same way: the entity branch's only real difference is refreshing
-;; target-position from a live snapshot (and bailing to :target-lost if
-;; the entity died) before falling into the identical movement update
-;; both branches already shared.
-;;
-;; Two real vocabulary gaps found, both the same never-wired-up-
-;; reference class already established this session (:vec3/launch,
-;; :value/status-id):
-;; - :value/normalize-id (comparing a raycast hit's raw block/entity-
-;;   type id against a magnetic-material allowlist) was referenced but
-;;   never implemented. mcmod/runtime/expression_catalog.clj's own
-;;   worked example (\"block.minecraft.iron_block\") is a translation
-;;   key, not the \"minecraft:iron_block\" namespaced-id shape an
-;;   allowlist actually contains -- implemented to drop the leading
-;;   type-prefix segment and turn the next '.' into ':', passing an
-;;   already-namespaced string through unchanged.
-;; - :caster/normal-metal-blocks, :caster/weak-metal-blocks,
-;;   :caster/metal-entities (bound via the old ability/caster
-;;   component, so they LOOK like per-player state) are actually
-;;   server-configured constant allowlists -- added to
-;;   combat-core/run.clj's fixed-capabilities as :any.
-;;
-;; A genuinely dead :world/id read in :pulse's old entity branch
-;; (bound as :wid, never referenced again -- target/entity-snapshot's
-;; vocab node has no :world-id param at all) is dropped, the same class
-;; of simplification already established (shift_teleport.edn).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/mag_movement.edn (S6)."
+        "Session ability: lock onto a metal block or metal entity, then pull"
+        "the caster toward it every tick until released/aborted/lost."
+        ""
+        "The old :start cascades through THREE structurally identical"
+        "\\\"lock onto this target\\\" bodies (normal-metal block, weak-metal"
+        "block, metal entity -- differing only in what target-kind/id/"
+        "position get set to) and FOUR structurally identical \\\"no valid"
+        "target\\\" fallback bodies (one per cascade exit). Both are"
+        "consolidated here into a single lock-on block and a single fallback"
+        "block, reached via one combined boolean condition computed with the"
+        "established predeclare-then-set! pattern (apply_break_budget.edn/"
+        "scatter_bomb.edn) rather than duplicated 3x/4x -- this is a"
+        "deliberate, provably behavior-preserving restructuring (every old"
+        "condition is still checked, every action still taken exactly once"
+        "on the same inputs), not a simplification of live logic the way"
+        "this migration's other conversions have avoided. The scale here"
+        "(3-4x duplication of already-large blocks) is what makes literal"
+        "duplication impractical where every other converted ability's"
+        "smaller repeated blocks were kept duplicated as-is."
+        ":pulse's :entity vs :block target-kind branches are consolidated"
+        "the same way: the entity branch's only real difference is refreshing"
+        "target-position from a live snapshot (and bailing to :target-lost if"
+        "the entity died) before falling into the identical movement update"
+        "both branches already shared."
+        ""
+        "Two real vocabulary gaps found, both the same never-wired-up-"
+        "reference class already established this session (:vec3/launch,"
+        ":value/status-id):"
+        "- :value/normalize-id (comparing a raycast hit's raw block/entity-"
+        "  type id against a magnetic-material allowlist) was referenced but"
+        "  never implemented. mcmod/runtime/expression_catalog.clj's own"
+        "  worked example (\\\"block.minecraft.iron_block\\\") is a translation"
+        "  key, not the \\\"minecraft:iron_block\\\" namespaced-id shape an"
+        "  allowlist actually contains -- implemented to drop the leading"
+        "  type-prefix segment and turn the next '.' into ':', passing an"
+        "  already-namespaced string through unchanged."
+        "- :caster/normal-metal-blocks, :caster/weak-metal-blocks,"
+        "  :caster/metal-entities (bound via the old ability/caster"
+        "  component, so they LOOK like per-player state) are actually"
+        "  server-configured constant allowlists -- added to"
+        "  combat-core/run.clj's fixed-capabilities as :any."
+        ""
+        "A genuinely dead :world/id read in :pulse's old entity branch"
+        "(bound as :wid, never referenced again -- target/entity-snapshot's"
+        "vocab node has no :world-id param at all) is dropped, the same class"
+        "of simplification already established (shift_teleport.edn)."]
+ :schema-version 2
  :kind :ability
  :id :mag-movement
  :name-key "ability.skill.electromaster.mag_movement"

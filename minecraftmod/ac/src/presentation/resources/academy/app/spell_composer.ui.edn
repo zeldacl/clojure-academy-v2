@@ -1,0 +1,38 @@
+{:ui/schema 2 :view/id :academy.app/spell-composer
+ :host {:kind :screen :design-width 320 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :form-palette :vector :effect-palette :vector
+                :form-label :string :effect-slots :vector :can-cast? :boolean
+                :status :string :cast-label :string :clear-label :string}
+ :root {:type :column :key :composer/root :layout {:x 8 :y 8 :width 304 :height 224}
+        :children
+        [{:type :text :key :composer/title :layout {:height 16}
+          :bind {:text [:state :title]} :semantics {:role :heading}}
+         {:type :text :key :composer/form-header :layout {:height 14}
+          :bind {:text [:state :form-label]}}
+         {:type :scroll :key :composer/form-palette :layout {:height 40}
+          :bind {:items [:state :form-palette]} :semantics {:role :list}
+          :children [{:type :row :layout {:height 14}
+                      :children [{:type :button :layout {:width 280 :height 12}
+                                  :bind {:text [:item :label]}
+                                  :on {:activate :composer/pick-form}
+                                  :semantics {:role :button}}]}]}
+         {:type :scroll :key :composer/effect-palette :layout {:height 60}
+          :bind {:items [:state :effect-palette]} :semantics {:role :list}
+          :children [{:type :row :layout {:height 14}
+                      :children [{:type :button :layout {:width 280 :height 12}
+                                  :bind {:text [:item :label]}
+                                  :on {:activate :composer/add-effect}
+                                  :semantics {:role :button}}]}]}
+         {:type :scroll :key :composer/effect-slots :layout {:height 40}
+          :bind {:items [:state :effect-slots]} :semantics {:role :list}
+          :children [{:type :text :layout {:height 12} :bind {:text [:item :label]}}]}
+         {:type :row :key :composer/actions :layout {:height 16}
+          :children [{:type :button :layout {:width 80 :height 14}
+                      :bind {:text [:state :clear-label]}
+                      :on {:activate :composer/clear}
+                      :semantics {:role :button}}
+                     {:type :button :layout {:width 80 :height 14}
+                      :bind {:text [:state :cast-label]}
+                      :on {:activate :composer/cast}
+                      :semantics {:role :button}}]}
+         {:type :text :key :composer/status :bind {:text [:state :status]}}]}}

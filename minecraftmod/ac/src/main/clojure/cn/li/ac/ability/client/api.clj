@@ -4,6 +4,7 @@
   All requests require an explicit canonical client owner (see mcmod.runtime.owner)."
   (:require [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.owner :as owner]
+            [cn.li.mcmod.runtime.fixed-channel :as fixed-channel]
             [cn.li.ac.ability.messages :as catalog]))
 
 (defn- require-client-owner! [owner]
@@ -80,4 +81,21 @@
   (net-client/send-to-server (require-client-owner! owner)
                              catalog/MSG-REQ-SAVED-POS-PERFORM
                              {:name location-name}
+                             callback))
+
+(defn req-submit-spell!
+  "owner, glyphs ([{:glyph kw :params {...}} ...], the combat player-
+   spell desugar step's own input shape) -> submits a player-composed
+   spell for server-authoritative desugar/compile/admit + dispatch (see
+   cn.li.ac.ability.server.network's handle-spell-submit-request,
+   already wired -- this is the one missing client-side sender).
+   callback receives the dispatch-player-spell! result map verbatim:
+   {:status :accepted ...} or {:status :rejected :reason kw :detail
+   {...}} -- :reason is one of :over-complexity/:forbidden-effect/
+   :over-budget (the player-spell admit step's own reject codes), never
+   anything client-invented."
+  [owner glyphs callback]
+  (net-client/send-to-server (require-client-owner! owner)
+                             catalog/MSG-REQ-SPELL-SUBMIT
+                             {:wire (fixed-channel/encode-player-spell-submit glyphs)}
                              callback))

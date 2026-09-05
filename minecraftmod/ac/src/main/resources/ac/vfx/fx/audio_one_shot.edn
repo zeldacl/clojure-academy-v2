@@ -1,8 +1,8 @@
-;; New-DSL conversion of ac/vfx/effects/audio_one_shot.edn (S6). Same
-;; single-child-:at-0-timeline simplification as particle_burst.edn. Old
-;; top-level :bounds (radius 0.0) dropped, see
-;; blood_retrograde_charge.edn's docstring.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/audio_one_shot.edn (S6). Same"
+        "single-child-:at-0-timeline simplification as particle_burst.edn. Old"
+        "top-level :bounds (radius 0.0) dropped, see"
+        "blood_retrograde_charge.edn's docstring."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

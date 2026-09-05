@@ -22,6 +22,12 @@
     "key.content.ability.slot.2" "Ability Slot 3"
     "key.content.ability.slot.3" "Ability Slot 4"
     "key.content.edit.preset" "Edit Preset"
+    ;; Node-editor plan dev-tool entry points (no in-game UI to trigger
+    ;; them otherwise -- see NODE_EDITOR.md). Only :en_us: every other
+    ;; locale falls back to it for any key without an explicit
+    ;; translation, same precedent as editor-vocab-translations.
+    "key.content.open.node.editor" "Open Node Editor"
+    "key.content.open.spell.composer" "Open Spell Composer"
     "ability.academy.level1" "Level 1"
     "ability.academy.level2" "Level 2"
     "ability.academy.level3" "Level 3"
@@ -146,6 +152,8 @@
     "item.academy.crystal_pure" "High-purity Imag Crystal"
     "item.academy.data_chip" "Data Chip"
     "item.academy.developer_portable" "Portable Developer"
+    "item.academy.editor_dev_tool" "Node Editor Dev Tool"
+    "item.academy.spell_composer_dev_tool" "Spell Composer Dev Tool"
     "item.academy.energy_convert_component" "Energy Converter"
     "item.academy.energy_unit" "Energy Unit"
     "item.academy.imag_silicon_ingot" "Imag Silicon Ingot"
@@ -392,6 +400,8 @@
     "item.academy.crystal_pure" "高纯度虚能水晶"
     "item.academy.data_chip" "数据芯片"
     "item.academy.developer_portable" "便携能力开发机"
+    "item.academy.editor_dev_tool" "节点编辑器开发工具"
+    "item.academy.spell_composer_dev_tool" "法术合成器开发工具"
     "item.academy.energy_convert_component" "能量转换模块"
     "item.academy.energy_unit" "能量单元"
     "item.academy.imag_silicon_ingot" "虚像硅锭"

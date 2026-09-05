@@ -1,24 +1,24 @@
-;; New-DSL conversion of ac/combat/abilities/jet_engine.edn (S6). Two-
-;; phase session ability driven by its own :phase session-state field
-;; (:marking -> :triggering), not the run engine's :next-phase
-;; mechanism -- :pulse internally branches on %phase itself, and
-;; :release's phase-advancing finish carries no :end-ability?/:next-phase
-;; at all (a genuine :continue-shaped outcome, matching every other
-;; converted ability's own :continue finishes).
-;;
-;; :marking holds a raycast-tracked mark point open as long as CP holds
-;; out; :release converts the held position into a velocity (target -
-;; start, scaled by 1/8) and switches to :triggering, where each :pulse
-;; advances the caster along that velocity in 1/8-length segments,
-;; raycasting each segment for an entity hit to damage + radiation-mark,
-;; for 15 ticks before finishing.
-;;
-;; :pulse's triggering branch dropped an owner/snapshot read
-;; (old :bind {:snapshot :owner-now}): grep against the old file shows
-;; :owner-now appears exactly once, its own binding -- genuinely dead,
-;; the same class already established for mark_teleport.edn's dead
-;; trailing finish and shift_teleport.edn's dead :mode re-read.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/jet_engine.edn (S6). Two-"
+        "phase session ability driven by its own :phase session-state field"
+        "(:marking -> :triggering), not the run engine's :next-phase"
+        "mechanism -- :pulse internally branches on %phase itself, and"
+        ":release's phase-advancing finish carries no :end-ability?/:next-phase"
+        "at all (a genuine :continue-shaped outcome, matching every other"
+        "converted ability's own :continue finishes)."
+        ""
+        ":marking holds a raycast-tracked mark point open as long as CP holds"
+        "out; :release converts the held position into a velocity (target -"
+        "start, scaled by 1/8) and switches to :triggering, where each :pulse"
+        "advances the caster along that velocity in 1/8-length segments,"
+        "raycasting each segment for an entity hit to damage + radiation-mark,"
+        "for 15 ticks before finishing."
+        ""
+        ":pulse's triggering branch dropped an owner/snapshot read"
+        "(old :bind {:snapshot :owner-now}): grep against the old file shows"
+        ":owner-now appears exactly once, its own binding -- genuinely dead,"
+        "the same class already established for mark_teleport.edn's dead"
+        "trailing finish and shift_teleport.edn's dead :mode re-read."]
+ :schema-version 2
  :kind :ability
  :id :jet-engine
  :name-key "ability.skill.meltdowner.jet_engine"

@@ -1,15 +1,15 @@
-;; New-DSL conversion of ac/combat/abilities/blood_retrograde.edn (S6).
-;; Session ability. Fixed a real vocab bug found while porting:
-;; target/raycast-fan's :yaw-range-degrees was typed :double, but every
-;; real call site passes a [min max] range pair, matching :pitch-angles'
-;; own already-:any shape -- same mistake class as the earlier
-;; :direction/:entity-type fixes (see cn.li.combat.dsl-vocabulary's own
-;; comment on the fix).
-;;
-;; :period-ticks/:max-session-ticks (top-level ability metadata, not
-;; :program logic) stay untouched, same as every other still-unconverted
-;; metadata field.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/blood_retrograde.edn (S6)."
+        "Session ability. Fixed a real vocab bug found while porting:"
+        "target/raycast-fan's :yaw-range-degrees was typed :double, but every"
+        "real call site passes a [min max] range pair, matching :pitch-angles'"
+        "own already-:any shape -- same mistake class as the earlier"
+        ":direction/:entity-type fixes (see cn.li.combat.dsl-vocabulary's own"
+        "comment on the fix)."
+        ""
+        ":period-ticks/:max-session-ticks (top-level ability metadata, not"
+        ":program logic) stay untouched, same as every other still-unconverted"
+        "metadata field."]
+ :schema-version 2
  :kind :ability
  :id :blood-retrograde
  :name-key "ability.skill.vecmanip.blood_retrograde"

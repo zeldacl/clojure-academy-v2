@@ -1,13 +1,13 @@
-;; New-DSL conversion of ac/vfx/effects/trajectory_ribbon_session.edn
-;; (S6). :vfx/trajectory-ribbon has no sample-node case (confirmed-dead
-;; class, see blood_retrograde_charge.edn's docstring); empty :scene is
-;; the honest port. (Not to be confused with the WORKING vfx-core/
-;; composites/trajectory_ribbon.edn old-tree composite of the same shape
-;; -- that composite is registered under the DIFFERENT id :vfx.fx/
-;; trajectory-ribbon and is never referenced by this ability-level
-;; :vfx/trajectory-ribbon component at all.) Old top-level :bounds
-;; dropped, same reasoning as blood_retrograde_charge.edn.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/trajectory_ribbon_session.edn"
+        "(S6). :vfx/trajectory-ribbon has no sample-node case (confirmed-dead"
+        "class, see blood_retrograde_charge.edn's docstring); empty :scene is"
+        "the honest port. (Not to be confused with the WORKING vfx-core/"
+        "composites/trajectory_ribbon.edn old-tree composite of the same shape"
+        "-- that composite is registered under the DIFFERENT id :vfx.fx/"
+        "trajectory-ribbon and is never referenced by this ability-level"
+        ":vfx/trajectory-ribbon component at all.) Old top-level :bounds"
+        "dropped, same reasoning as blood_retrograde_charge.edn."]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

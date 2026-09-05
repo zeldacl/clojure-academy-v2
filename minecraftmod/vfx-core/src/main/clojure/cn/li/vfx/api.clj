@@ -9,7 +9,9 @@
    Sized from client-vfx-v2's own consumption of cn.li.vfx.runtime/cn.li.
    vfx.frame, not speculative coverage."
   (:require [cn.li.vfx.runtime :as runtime]
-            [cn.li.vfx.frame :as frame]))
+            [cn.li.vfx.frame :as frame]
+            [cn.li.vfx.dsl-vocabulary :as dsl-vocabulary]
+            [cn.li.vfx.scene :as scene]))
 
 (defn create-runtime
   ([registry] (runtime/create-client-runtime registry))
@@ -27,3 +29,10 @@
 (defn registered-effects [rt] (runtime/registered-effects rt))
 (defn instance-for-owner [rt effect-id owner] (runtime/instance-for-owner rt effect-id owner))
 (def ->java-frame frame/->java-frame)
+
+;; ---- surface-DSL scene vocabulary (for the node editor's palette,
+;; ability-runtime/editor/palette.clj -- see the node-editor plan's §2.2
+;; injection table's :scene mode) ----
+(def scene-vocab dsl-vocabulary/nodes)
+(defn compile-scene-doc! [text user-types] (scene/compile-doc! text user-types))
+(defn scene-capabilities-for [user-types] (scene/capabilities-for user-types))

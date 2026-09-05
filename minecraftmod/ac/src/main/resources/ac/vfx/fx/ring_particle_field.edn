@@ -1,9 +1,9 @@
-;; New-DSL conversion of ac/vfx/effects/ring_particle_field.edn (S6).
-;; Old :radius {:from :to} maps were resolved by final_engine.clj's
-;; graph-value (:lerp? true kernel option) as lerp(from, to, :progress) --
-;; the new engine has no implicit map-shaped lerp sugar, so it is ported
-;; as an explicit (math/lerp from to ?progress) call.
-{:schema-version 1
+{:doc ["New-DSL conversion of ac/vfx/effects/ring_particle_field.edn (S6)."
+        "Old :radius {:from :to} maps were resolved by final_engine.clj's"
+        "graph-value (:lerp? true kernel option) as lerp(from, to, :progress) --"
+        "the new engine has no implicit map-shaped lerp sugar, so it is ported"
+        "as an explicit (math/lerp from to ?progress) call."]
+ :schema-version 1
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

@@ -15,12 +15,20 @@
    are unremarkable symbols to the reader; the sigil meaning is entirely a
    cn.li.node.surface/cn.li.node.compile convention on top of that.
 
-   Position tracking: forms are read from a LineNumberingPushbackReader, so
-   clojure.edn/read attaches :line/:column metadata to every collection and
-   symbol it reads. cn.li.node.compile threads that metadata into
-   diagnostics; when a form was constructed by the compiler itself (not read
-   from source, e.g. after :defn inlining) the metadata is simply absent and
-   diagnostics fall back to nil position -- degraded, not broken."
+   Position tracking: forms are read from a LineNumberingPushbackReader, but
+   despite what this docstring used to claim, clojure.edn/read does NOT
+   attach :line/:column to every collection/symbol it reads -- only to a
+   form that already carries EXPLICIT reader metadata in the source text
+   (^{...} immediately before it; verified empirically, not assumed: an
+   ordinary unstamped form reads back with (meta form) => nil). Since no
+   hand-written DSL content uses ^{...} today, cn.li.node.compile's
+   pos-of helper reads :line as nil for effectively every diagnostic in
+   practice -- 'degraded, not broken' was describing the common case, not
+   an edge case. cn.li.node.nid/stamp's :nid metadata piggybacks on
+   exactly this mechanism: a form stamped ^{:nid \"n7\"} in source text
+   gets BOTH its stable node id AND a real :line/:column for free the next
+   time it is read, which is the practical fix for this gap (see the
+   node-editor plan's Phase 1)."
   (:require [clojure.edn :as edn]
             [clojure.string :as str])
   (:import [java.io StringReader]

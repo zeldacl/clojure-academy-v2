@@ -1,7 +1,7 @@
-;; New-DSL conversion of ac/combat/abilities/mind_course.edn (S6). Same
-;; pattern as brain_course.edn's own conversion -- passive, no
-;; :damage-policies/:mark-policies, real behavior is :passive-effects.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/mind_course.edn (S6). Same"
+        "pattern as brain_course.edn's own conversion -- passive, no"
+        ":damage-policies/:mark-policies, real behavior is :passive-effects."]
+ :schema-version 2
  :kind :ability
  :id :mind-course
  :revision 1

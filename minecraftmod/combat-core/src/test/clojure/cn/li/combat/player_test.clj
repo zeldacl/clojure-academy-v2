@@ -6,7 +6,9 @@
    and asserts the real host calls, or asserts a real admit rejection."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.combat.player :as player]
-            [cn.li.combat.run :as run]))
+            [cn.li.combat.run :as run]
+            [cn.li.combat.dsl-vocabulary :as vocab]
+            [cn.li.node.cost :as cost]))
 
 (defn- fake-host [calls]
   {:query! (fn [cap args _fr]
@@ -106,3 +108,40 @@
     (is (false? (:ok verdict)))
     (is (= :over-budget (:reject verdict)))
     (is (nil? (:max-iterations verdict)))))
+
+(deftest glyph-catalog-covers-every-known-glyph-test
+  (let [catalog (player/glyph-catalog)]
+    (is (= #{:form/self :form/touch :effect/damage :effect/push :augment/amplify}
+           (set (map :glyph catalog))))
+    (is (every? :admissible? catalog))))
+
+(deftest glyph-catalog-isolates-each-form-glyphs-own-marginal-cost-test
+  ;; :form/self is the zero-cost baseline by construction (a single sigil
+  ;; read, no :query/:action instruction); :form/touch's own contribution
+  ;; must equal exactly what target/raycast alone costs, not
+  ;; target/raycast PLUS whatever baseline effect it was measured against.
+  (let [by-glyph (into {} (map (juxt :glyph identity)) (player/glyph-catalog))
+        self-entry (get by-glyph :form/self)
+        touch-entry (get by-glyph :form/touch)]
+    (is (= {:effects #{} :cost 0} (select-keys self-entry [:effects :cost])))
+    (is (= #{:world-read} (:effects touch-entry)))
+    (is (pos? (:cost touch-entry)))))
+
+(deftest glyph-catalog-effects-match-a-direct-compile-of-the-same-vocab-node-test
+  ;; The catalog's :effects/:cost for :effect/damage must match compiling
+  ;; the SAME underlying vocab node (combat/damage) directly, independent
+  ;; of desugar/glyph-catalog's own machinery -- cross-checked against
+  ;; cn.li.node.cost/analyze run by hand, not just self-consistently
+  ;; against glyph-catalog's own output.
+  (let [damage-entry (some #(when (= :effect/damage (:glyph %)) %) (player/glyph-catalog))
+        ir (run/compile-doc!
+            "{:ability :t :activation :instant
+              :do [(combat/damage {:target ?caster/id :amount 1.0})
+                   (finish {:outcome :performed})]}")
+        summary (cost/analyze ir vocab/nodes)]
+    (is (= (:effects summary) (:effects damage-entry)))
+    (is (= (:complexity summary) (:cost damage-entry)))))
+
+(deftest glyph-catalog-augment-contributes-nothing-extra-test
+  (let [augment-entry (some #(when (= :augment/amplify (:glyph %)) %) (player/glyph-catalog))]
+    (is (= {:effects #{} :cost 0} (select-keys augment-entry [:effects :cost])))))

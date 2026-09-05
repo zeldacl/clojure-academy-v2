@@ -1,22 +1,22 @@
-;; New-DSL conversion of ac/combat/abilities/arc_gen.edn (S6). See earlier
-;; skills/*.edn docstrings for the general pattern.
-;;
-;; combat/impact-strike (the 2nd of the 3 callback-typed old composites
-;; always meant to be inlined rather than ported as a first-class
-;; higher-order :defn -- see vec_reflection.edn's docstring for the
-;; first) is inlined directly: combat/damage, then the :on-impact body
-;; spliced in verbatim (its own :scope was already empty in the old
-;; composite -- \"sees nothing beyond its own enclosing ability scope\" --
-;; so inlining changes nothing about what it can reference).
-;;
-;; One deliberate behavior refinement made inlining the on-impact body:
-;; the old :bool/and's :args are both tree-walked unconditionally (no
-;; short-circuit), so random/chance for the creeper-charge roll ran on
-;; EVERY hit, creeper or not, just to be ANDed away for non-creepers.
-;; Nesting it inside `when is-creeper?` only rolls it for an actual
-;; creeper hit -- the only difference is one fewer RNG cursor advance on
-;; a non-creeper hit, not a gameplay change.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/arc_gen.edn (S6). See earlier"
+        "skills/*.edn docstrings for the general pattern."
+        ""
+        "combat/impact-strike (the 2nd of the 3 callback-typed old composites"
+        "always meant to be inlined rather than ported as a first-class"
+        "higher-order :defn -- see vec_reflection.edn's docstring for the"
+        "first) is inlined directly: combat/damage, then the :on-impact body"
+        "spliced in verbatim (its own :scope was already empty in the old"
+        "composite -- \\\"sees nothing beyond its own enclosing ability scope\\\" --"
+        "so inlining changes nothing about what it can reference)."
+        ""
+        "One deliberate behavior refinement made inlining the on-impact body:"
+        "the old :bool/and's :args are both tree-walked unconditionally (no"
+        "short-circuit), so random/chance for the creeper-charge roll ran on"
+        "EVERY hit, creeper or not, just to be ANDed away for non-creepers."
+        "Nesting it inside `when is-creeper?` only rolls it for an actual"
+        "creeper hit -- the only difference is one fewer RNG cursor advance on"
+        "a non-creeper hit, not a gameplay change."]
+ :schema-version 2
  :kind :ability
  :id :arc-gen
  :name-key "ability.skill.electromaster.arc_gen"

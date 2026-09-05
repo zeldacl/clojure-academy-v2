@@ -1,9 +1,9 @@
-;; New-DSL conversion of ac/combat/abilities/brain_course.edn (S6). Same
-;; pattern as rad_intensify.edn/dim_folding_theorem.edn: only :program
-;; moves to new-DSL text. This one has neither :damage-policies nor
-;; :mark-policies -- its entire real behavior is :passive-effects (a flat
-;; stat bonus), a third still-untouched subsystem, unrelated to node-core.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/brain_course.edn (S6). Same"
+        "pattern as rad_intensify.edn/dim_folding_theorem.edn: only :program"
+        "moves to new-DSL text. This one has neither :damage-policies nor"
+        ":mark-policies -- its entire real behavior is :passive-effects (a flat"
+        "stat bonus), a third still-untouched subsystem, unrelated to node-core."]
+ :schema-version 2
  :kind :ability
  :id :brain-course
  :revision 1

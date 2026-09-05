@@ -47,6 +47,16 @@ tasks.register("runNodeCoreClojureTests", JavaExec) {
     args "-m", "cn.li.node.test-runner"
 }
 
+tasks.register("verifyPaletteMetadataNodeCore", JavaExec) {
+    group = "verification"
+    description = "Node-editor plan Phase 0 gate, node-core half: runs only cn.li.node.vocab-export-test (every exported op has a real :category, resolvable :i18n key, no :uncategorized) -- a fast, focused check, not the full suite. See root verifyVocabularyPaletteMetadata, which chains this with the combat-core/vfx-core/ac halves of the same assertion."
+    dependsOn "compileTestClojure", "classes"
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    systemProperty "node-core.test.only", "cn.li.node.vocab-export-test"
+    args "-m", "cn.li.node.test-runner"
+}
+
 // cn.li.test-support.pure-auto-test-runner has no mcmod dependency (unlike
 // cn.li.test-support.auto-test-runner, ac/mcmod's Framework-fixture-wrapped
 // equivalent) -- node-core must never depend on mcmod, even in test scope.

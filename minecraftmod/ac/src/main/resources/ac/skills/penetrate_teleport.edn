@@ -1,22 +1,22 @@
-;; New-DSL conversion of ac/combat/abilities/penetrate_teleport.edn (S6).
-;; Session ability, first real call site of cn.li.combat.lib's
-;; target/penetration-destination composite.
-;;
-;; First real occurrence of the old :program's sibling :events map
-;; ({:slot-wheel {...}}, an externally-triggered entry point distinct
-;; from :start/:pulse/:release/:abort -- a mouse-wheel distance-adjust
-;; event here). This turned out to need NO new compiler machinery at
-;; all: cn.li.node.surface's entries-of already treats every key of the
-;; :phases map as an independent dispatchable entry, with no special
-;; \"phase\" vs \"event\" distinction anywhere in the pipeline -- so
-;; :slot-wheel is simply one more sibling key inside :phases, alongside
-;; :start/:pulse/:release/:abort, dispatched by name exactly like any
-;; other entry (run/dispatch! program :slot-wheel input). The plan's
-;; earlier note that this DSL form was \"deferred\" turned out to be
-;; based on a wrong assumption (that :events would need to nest a
-;; sub-map inside one :phases entry, which really would have needed new
-;; handling); the actual old shape flattens cleanly.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/penetrate_teleport.edn (S6)."
+        "Session ability, first real call site of cn.li.combat.lib's"
+        "target/penetration-destination composite."
+        ""
+        "First real occurrence of the old :program's sibling :events map"
+        "({:slot-wheel {...}}, an externally-triggered entry point distinct"
+        "from :start/:pulse/:release/:abort -- a mouse-wheel distance-adjust"
+        "event here). This turned out to need NO new compiler machinery at"
+        "all: cn.li.node.surface's entries-of already treats every key of the"
+        ":phases map as an independent dispatchable entry, with no special"
+        "\\\"phase\\\" vs \\\"event\\\" distinction anywhere in the pipeline -- so"
+        ":slot-wheel is simply one more sibling key inside :phases, alongside"
+        ":start/:pulse/:release/:abort, dispatched by name exactly like any"
+        "other entry (run/dispatch! program :slot-wheel input). The plan's"
+        "earlier note that this DSL form was \\\"deferred\\\" turned out to be"
+        "based on a wrong assumption (that :events would need to nest a"
+        "sub-map inside one :phases entry, which really would have needed new"
+        "handling); the actual old shape flattens cleanly."]
+ :schema-version 2
  :kind :ability
  :id :penetrate-teleport
  :name-key "ability.skill.teleporter.penetrate_teleport"

@@ -181,3 +181,67 @@
         ir (run/compile-doc! text)
         verdict (admit ir complexity-cap)]
     (if (:ok verdict) (assoc verdict :ir ir) verdict)))
+
+;; --- glyph-catalog: the composer's palette, derived not hand-maintained --
+;;
+;; A player editor's grey-out list must never drift from what admit
+;; actually accepts. Rather than a second hand-authored {glyph -> effects}
+;; table (which COULD silently diverge from desugar/effect-stmts' real
+;; output), every entry here is measured by actually compiling a minimal
+;; real spell through the identical desugar -> run/compile-doc! ->
+;; cost/analyze path admit itself uses, then isolating one glyph's own
+;; marginal contribution:
+;;   - :form/self contributes {:effects #{} :cost 0} by construction --
+;;     its own DSL ((let target ?caster/id)) is a single sigil read, and
+;;     cost/analyze only ever charges :query/:action instructions (see
+;;     that function's own docstring), so it is the natural zero-cost
+;;     baseline every OTHER form's marginal cost is measured against:
+;;     cost([form, :effect/damage]) - cost([:form/self, :effect/damage]).
+;;   - an :effect/* glyph's own contribution is exactly cost([:form/self,
+;;     effect]), :form/self having already been shown to add nothing.
+;;   - an :augment/* glyph never adds a new instruction (amplify-
+;;     multiplier bakes its scaling straight into the DECORATED effect's
+;;     own numeric literal -- see that function's docstring), so its
+;;     marginal contribution is {:effects #{} :cost 0} by the same
+;;     "no new call, no new cost" reasoning, not measured by compiling
+;;     (there is nothing a compile could isolate that direct reasoning
+;;     does not already establish).
+
+(def ^:private known-form-glyphs [:form/self :form/touch])
+(def ^:private known-effect-glyphs [:effect/damage :effect/push])
+
+(defn- spell-cost [glyphs]
+  (cost/analyze (run/compile-doc! (desugar glyphs)) vocab/nodes))
+
+(defn- catalog-entry [kind glyph-kw {:keys [effects complexity]}]
+  {:glyph glyph-kw
+   :kind kind
+   :effects effects
+   :cost complexity
+   :admissible? (set/subset? effects allowed-player-effects)})
+
+(defn glyph-catalog
+  "-> a vector of {:glyph :kind (:form/:effect/:augment) :effects :cost
+   :admissible?} for every glyph desugar/effect-stmts/form-stmts knows
+   about. The editor's palette grey-out list should filter on
+   :admissible?, reading the SAME allowed-player-effects admit itself
+   checks against (see catalog-entry) -- there is no second copy of that
+   allowlist to keep in sync."
+  []
+  (let [baseline (spell-cost [{:glyph :form/self} {:glyph :effect/damage}])
+        form-entries
+        (mapv (fn [glyph-kw]
+                (if (= :form/self glyph-kw)
+                  (catalog-entry :form glyph-kw {:effects #{} :complexity 0})
+                  (let [total (spell-cost [{:glyph glyph-kw} {:glyph :effect/damage}])]
+                    (catalog-entry :form glyph-kw
+                                   {:effects (set/difference (:effects total) (:effects baseline))
+                                    :complexity (- (:complexity total) (:complexity baseline))}))))
+              known-form-glyphs)
+        effect-entries
+        (mapv (fn [glyph-kw] (catalog-entry :effect glyph-kw (spell-cost [{:glyph :form/self} {:glyph glyph-kw}])))
+              known-effect-glyphs)
+        augment-entries
+        (mapv (fn [glyph-kw] (catalog-entry :augment glyph-kw {:effects #{} :complexity 0}))
+              known-augment-glyphs)]
+    (vec (concat form-entries effect-entries augment-entries))))

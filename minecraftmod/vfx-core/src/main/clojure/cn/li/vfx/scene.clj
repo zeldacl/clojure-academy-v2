@@ -27,6 +27,17 @@
    the caller at compile time and merged with these -- see compile-doc!."
   {:age :double :progress :double})
 
+(defn capabilities-for
+  "user-types ({capability-key type}, an effect's own :inputs :spawn
+   declaration) -> the full :capabilities map a scene doc compiles
+   against, universal-capabilities merged in. Public (unlike universal-
+   capabilities itself) so a caller that needs the SAME :capabilities
+   value compile-doc! builds internally -- the node editor's scene mode,
+   cn.li.ability.editor.check -- can get it without duplicating this
+   merge or reaching into a private var."
+  [user-types]
+  (merge universal-capabilities user-types))
+
 (defn compile-doc!
   "text -> IR. user-types: {capability-key type} for this effect's own
    :user-declared params (?start, ?end, ...), merged with the universal
@@ -34,7 +45,7 @@
   [text user-types]
   (compile/compile! (surface/parse text)
                     {:vocab vocab/nodes
-                     :capabilities (merge universal-capabilities user-types)
+                     :capabilities (capabilities-for user-types)
                      :fns {}}))
 
 (def host

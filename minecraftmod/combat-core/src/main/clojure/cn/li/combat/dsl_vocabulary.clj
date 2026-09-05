@@ -48,7 +48,8 @@
    simplification, not an oversight -- see the redesign notes for the
    tradeoff. Authors get most of the same practical safety by checking
    cost/resource guards with `when` before any action that should not run
-   on insufficient resources, which is the idiomatic DSL shape anyway.")
+   on insufficient resources, which is the idiomatic DSL shape anyway."
+  (:require [clojure.string :as str]))
 
 (defn- node
   ([params returns effects] (node params returns effects nil 1))
@@ -65,7 +66,51 @@
 
 (defn- opt [type default] {:type type :default default})
 
-(def nodes
+;; --- editor palette presentation (:category/:i18n), attached below ---------
+;;
+;; Derived from each node id's own namespace rather than a 6th positional
+;; arg on every `node` call site above: touching ~54 call sites to add a
+;; presentation-only field would be pure edit-surface risk against code
+;; that already has real test coverage, for data that has nothing to do
+;; with what a node DOES. This table is the single place category
+;; assignment can drift, and it can only drift by omission -- a node
+;; whose namespace is missing here keeps :uncategorized, which
+;; schema-export_test.clj asserts never happens (see that test for why
+;; this is a stronger completeness guarantee than a per-call-site
+;; argument would have been: one exhaustive table beats 54 scattered ones).
+(def ^:private category-by-namespace
+  {"kernel" :kernel "random" :flow "target" :targeting "owner" :resource
+   "energy" :resource "data" :flow "combat" :combat "entity" :combat
+   "world" :world "block" :world "motion" :movement "projectile" :combat
+   "inventory" :resource "cost" :resource "cooldown" :resource
+   "resource" :resource "damage" :combat "terrain" :world})
+
+(defn category-for
+  "Public (not category-by-namespace itself): cn.li.node.schema-export/
+   export-fns takes this as its category-for callback for cn.li.combat.
+   lib/fns, since node-core cannot itself know combat-specific namespace
+   groupings (see export-fns's own docstring)."
+  [id]
+  (get category-by-namespace (namespace id) :uncategorized))
+
+(defn- i18n-for
+  "editor.node.combat.<ns>.<name>, name's hyphens folded to underscores to
+   match Minecraft's own translation-key convention (the same
+   hyphen->underscore folding ac's own skill name-key/description-key
+   generation already applies)."
+  [id]
+  (str "editor.node.combat." (namespace id) "." (str/replace (name id) "-" "_")))
+
+(defn- attach-presentation
+  "id->spec map -> the same map with :category/:i18n merged into every
+   spec. The editor palette (cn.li.node.schema-export/export-vocab) and
+   the player-effects grey-out derivation (export-player-effects) both
+   read these off the SAME node map every other consumer uses -- there is
+   no separate 'presentation vocabulary' to keep in sync."
+  [nodes-map]
+  (into {} (map (fn [[id spec]] [id (assoc spec :category (category-for id) :i18n (i18n-for id))])) nodes-map))
+
+(def ^:private raw-nodes
   (merge
    ;; --- kernel/* : host-facing primitives composites call directly ------
    ;; The old system's :layer :kernel tier does not exist here (the redesign
@@ -376,3 +421,5 @@
            :progression-per-level (opt :any nil) :events (opt :any nil) :events-by-level (opt :any nil)
            :feedback (opt :any nil) :vfx (opt :any nil)}
           nil #{:damage-context-write})}))
+
+(def nodes (attach-presentation raw-nodes))

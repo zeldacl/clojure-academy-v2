@@ -1,11 +1,11 @@
-;; New-DSL conversion of ac/vfx/effects/directed_blastwave_charge.edn
-;; (S6). :vfx/charge-ring has no sample-node case (confirmed-dead class,
-;; see blood_retrograde_charge.edn's docstring); empty :scene is the
-;; honest port. (Not to be confused with the WORKING vfx-core/composites/
-;; charge_ring.edn old-tree composite of the same shape -- that composite
-;; is registered under the DIFFERENT id :vfx.fx/charge-ring and is never
-;; referenced by this ability-level :vfx/charge-ring component at all.)
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/vfx/effects/directed_blastwave_charge.edn"
+        "(S6). :vfx/charge-ring has no sample-node case (confirmed-dead class,"
+        "see blood_retrograde_charge.edn's docstring); empty :scene is the"
+        "honest port. (Not to be confused with the WORKING vfx-core/composites/"
+        "charge_ring.edn old-tree composite of the same shape -- that composite"
+        "is registered under the DIFFERENT id :vfx.fx/charge-ring and is never"
+        "referenced by this ability-level :vfx/charge-ring component at all.)"]
+ :schema-version 2
  :kind :vfx/system
  :asset/type :vfx/system
  :asset/version 1

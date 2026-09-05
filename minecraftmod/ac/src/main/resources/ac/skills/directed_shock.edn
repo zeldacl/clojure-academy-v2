@@ -1,38 +1,38 @@
-;; New-DSL conversion of ac/combat/abilities/directed_shock.edn (S6).
-;; Session hold-charge punch ability: charge past a minimum, release
-;; within a window to raycast for a target and apply damage +
-;; mastery-gated knockback/teleport-nudge.
-;;
-;; Two real vec3-construction gaps found:
-;; - [0.0 dynamic-value 0.0] (e.g. the target-eye-height offset, the
-;;   knockback-y-adjust offset) is NOT a vec3 literal here --
-;;   compile.clj's vec3-literal? requires every element to already be a
-;;   NUMBER at parse time (every? number? form); a bound local fails
-;;   that check and falls through to the general non-vec3 vector path
-;;   (an untyped :objects/:any register, not usable as a :vec3 arg).
-;;   Only vec3/with-z exists (no with-x/with-y), so the fix is
-;;   `(vec3/scale [0.0 1.0 0.0] dynamic-value)`, a real :vec3 result.
-;; - {:ref [:local :knockback-base :vec3 1]} directly indexed the old
-;;   engine's internal {:vec3 [x y z]} representation to read a Y
-;;   component -- ports as the existing vec3/y pure op instead.
-;;
-;; The old :entity/teleport / :motion/entity-velocity(-add) components
-;; passed the WHOLE aim-hit hit-result as :target (the old engine's
-;; :target field was untyped). The new vocab types :target :entity-ref
-;; on all three, a genuinely different opaque type from :hit-result
-;; (cn.li.node.types/assignable? has no path between two different
-;; concrete opaque types), so all three now extract (:entity-id aim-hit)
-;; first -- exactly the same extraction combat/damage's own :target
-;; already needed on the very next old component, just applied
-;; consistently to the two call sites that used to skip it.
-;;
-;; math/select's condition must be a real :boolean -- the old
-;; target-eye-height2 select used aim-hit's raw (possibly-nil)
-;; :eye-height field as a truthy condition (the "use if present, else
-;; default" idiom), translated via the same
-;; (bool/not (value/eq field nil)) pattern threatening_teleport.edn's
-;; own docstring already established for a :hit-result truthy check.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/directed_shock.edn (S6)."
+        "Session hold-charge punch ability: charge past a minimum, release"
+        "within a window to raycast for a target and apply damage +"
+        "mastery-gated knockback/teleport-nudge."
+        ""
+        "Two real vec3-construction gaps found:"
+        "- [0.0 dynamic-value 0.0] (e.g. the target-eye-height offset, the"
+        "  knockback-y-adjust offset) is NOT a vec3 literal here --"
+        "  compile.clj's vec3-literal? requires every element to already be a"
+        "  NUMBER at parse time (every? number? form); a bound local fails"
+        "  that check and falls through to the general non-vec3 vector path"
+        "  (an untyped :objects/:any register, not usable as a :vec3 arg)."
+        "  Only vec3/with-z exists (no with-x/with-y), so the fix is"
+        "  `(vec3/scale [0.0 1.0 0.0] dynamic-value)`, a real :vec3 result."
+        "- {:ref [:local :knockback-base :vec3 1]} directly indexed the old"
+        "  engine's internal {:vec3 [x y z]} representation to read a Y"
+        "  component -- ports as the existing vec3/y pure op instead."
+        ""
+        "The old :entity/teleport / :motion/entity-velocity(-add) components"
+        "passed the WHOLE aim-hit hit-result as :target (the old engine's"
+        ":target field was untyped). The new vocab types :target :entity-ref"
+        "on all three, a genuinely different opaque type from :hit-result"
+        "(cn.li.node.types/assignable? has no path between two different"
+        "concrete opaque types), so all three now extract (:entity-id aim-hit)"
+        "first -- exactly the same extraction combat/damage's own :target"
+        "already needed on the very next old component, just applied"
+        "consistently to the two call sites that used to skip it."
+        ""
+        "math/select's condition must be a real :boolean -- the old"
+        "target-eye-height2 select used aim-hit's raw (possibly-nil)"
+        ":eye-height field as a truthy condition (the \"use if present, else"
+        "default\" idiom), translated via the same"
+        "(bool/not (value/eq field nil)) pattern threatening_teleport.edn's"
+        "own docstring already established for a :hit-result truthy check."]
+ :schema-version 2
  :kind :ability
  :id :directed-shock
  :name-key "ability.skill.vecmanip.directed_shock"

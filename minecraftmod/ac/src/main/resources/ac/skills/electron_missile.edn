@@ -1,45 +1,45 @@
-;; New-DSL conversion of ac/combat/abilities/electron_missile.edn (S6).
-;; Session ability: spawns a swarm of orbiting balls (up to
-;; :max-balls) and periodically fires one at the nearest living target
-;; in range. The "discard every remaining ball + destroy the charge vfx
-;; + start cooldown" cleanup sequence appears four times in the old
-;; content (charging-insufficient, timeout, release, abort) -- kept
-;; duplicated rather than factored into a shared :defn, the same choice
-;; already established for this session's other same-ability repeated
-;; blocks.
-;;
-;; Two real branch-escaping accumulators, both solved with the
-;; established set!-after-let pattern (apply_break_budget.edn/
-;; scatter_bomb.edn): the old engine's flat per-activation local
-;; namespace let a :data/bind INSIDE the spawn `when` be read by a
-;; LATER, separate `when` (the fire branch needs balls-out, the
-;; spawn-count possibly just updated) -- ported as `balls-out`/
-;; `next-spawn-tick-out` predeclared via `let` before the spawn `when`
-;; and reassigned via `set!` inside it. Kept in :long arithmetic
-;; throughout (long/add, a plain 0/1 delta via `when`+`set!` rather than
-;; math/select) specifically to avoid the type mismatch a :double
-;; math/select result would hit trying to flow back into a :long
-;; accumulator (math/select's own :returns is always :any -- see
-;; ops.clj's own docstring -- and :any->:long IS assignable, but a real
-;; :double->:long attempt is not, per cn.li.node.types/assignable?).
-;; Same technique for `spawned-ball-id` (predeclared nil, set! inside
-;; the innermost spawn `when`, read by the sibling ball-ids-append
-;; `when`) -- nil is a literal, so this also exercises this session's
-;; compile-let fix (any let-bound literal is promoted to a real mutable
-;; register, not left as an unwritable :const) from scatter_bomb.edn.
-;;
-;; :collection/remove existed in cn.li.node.expr but, like
-;; :collection/concat before it, had no ops.clj table entry -- added
-;; alongside it.
-;;
-;; The ad-hoc attack-cost budget is {:resources {:cp ... :overload ...}},
-;; NOT the bare {:cp ... :overload ...} shape every other converted
-;; ability's ad-hoc budget has used -- both are real, interchangeable
-;; resources-descriptor shapes (combat-core/run.clj's own capability-
-;; type docstring: "a ?budget/name capability is the WHOLE already-
-;; materialized resources descriptor (resource-key -> amount, OR
-;; {:resources {...}})"), so this is ported as-is, not normalized.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/electron_missile.edn (S6)."
+        "Session ability: spawns a swarm of orbiting balls (up to"
+        ":max-balls) and periodically fires one at the nearest living target"
+        "in range. The \"discard every remaining ball + destroy the charge vfx"
+        "+ start cooldown\" cleanup sequence appears four times in the old"
+        "content (charging-insufficient, timeout, release, abort) -- kept"
+        "duplicated rather than factored into a shared :defn, the same choice"
+        "already established for this session's other same-ability repeated"
+        "blocks."
+        ""
+        "Two real branch-escaping accumulators, both solved with the"
+        "established set!-after-let pattern (apply_break_budget.edn/"
+        "scatter_bomb.edn): the old engine's flat per-activation local"
+        "namespace let a :data/bind INSIDE the spawn `when` be read by a"
+        "LATER, separate `when` (the fire branch needs balls-out, the"
+        "spawn-count possibly just updated) -- ported as `balls-out`/"
+        "`next-spawn-tick-out` predeclared via `let` before the spawn `when`"
+        "and reassigned via `set!` inside it. Kept in :long arithmetic"
+        "throughout (long/add, a plain 0/1 delta via `when`+`set!` rather than"
+        "math/select) specifically to avoid the type mismatch a :double"
+        "math/select result would hit trying to flow back into a :long"
+        "accumulator (math/select's own :returns is always :any -- see"
+        "ops.clj's own docstring -- and :any->:long IS assignable, but a real"
+        ":double->:long attempt is not, per cn.li.node.types/assignable?)."
+        "Same technique for `spawned-ball-id` (predeclared nil, set! inside"
+        "the innermost spawn `when`, read by the sibling ball-ids-append"
+        "`when`) -- nil is a literal, so this also exercises this session's"
+        "compile-let fix (any let-bound literal is promoted to a real mutable"
+        "register, not left as an unwritable :const) from scatter_bomb.edn."
+        ""
+        ":collection/remove existed in cn.li.node.expr but, like"
+        ":collection/concat before it, had no ops.clj table entry -- added"
+        "alongside it."
+        ""
+        "The ad-hoc attack-cost budget is {:resources {:cp ... :overload ...}},"
+        "NOT the bare {:cp ... :overload ...} shape every other converted"
+        "ability's ad-hoc budget has used -- both are real, interchangeable"
+        "resources-descriptor shapes (combat-core/run.clj's own capability-"
+        "type docstring: \"a ?budget/name capability is the WHOLE already-"
+        "materialized resources descriptor (resource-key -> amount, OR"
+        "{:resources {...}})\"), so this is ported as-is, not normalized."]
+ :schema-version 2
  :kind :ability
  :id :electron-missile
  :name-key "ability.skill.meltdowner.electron_missile"

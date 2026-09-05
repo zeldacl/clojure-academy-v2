@@ -1,35 +1,35 @@
-;; New-DSL conversion of ac/combat/abilities/body_intensify.edn (S6).
-;; Session hold-charge self-buff: charge past a minimum, release to roll
-;; a tiered ladder of status effects (plus a fixed hunger debuff) scaled
-;; by how long the charge was held, and a mastery-scaled cooldown
-;; computed inline in :release rather than read via ?cooldown/main.
-;;
-;; :value/status-id and :value/status-max-amplifier, referenced under
-;; :value/* against the :effect-available-effects tunable (a list of
-;; "name:max-amplifier" strings, e.g. "jump-boost:1" -- confirmed by
-;; mcmod/runtime/expression_catalog.clj's own worked example), were
-;; never actually implemented anywhere despite being referenced -- the
-;; same never-wired-up-reference class :vec3/launch and
-;; :vec3/scatter-end already established this session. Genuinely pure
-;; string parsing (no RNG, no host state), implemented from scratch in
-;; cn.li.node.expr/ops as ordinary :pure ops. :random/uniform already
-;; existed in expr.clj but, like :random/int and :random/chance before
-;; it, had no :query vocab node exposing it to DSL authors -- added
-;; alongside them in combat-core/dsl_vocabulary.clj.
-;;
-;; :pulse's two if-arms (still charging vs. already at charge-max-ticks)
-;; both increment hold-ticks by the exact same amount and by the exact
-;; same formula (hold-ticks-cur + 1) -- hoisted to a single
-;; `hold-ticks-next` local computed ONCE before the branch and reused in
-;; both arms (and in the overcharge check that follows), rather than
-;; recomputed per-arm or re-read from state afterward. This sidesteps
-;; the old engine's own same-activation state re-read
-;; ({:ref [:state :hold-ticks]} after this same :pulse had already
-;; written it -- see groundshock.edn/directed_blastwave.edn's own
-;; docstrings for that general translation rule) even more directly than
-;; usual: since both arms compute the identical value, there is no
-;; branch-specific result to thread through set!/locals at all.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/body_intensify.edn (S6)."
+        "Session hold-charge self-buff: charge past a minimum, release to roll"
+        "a tiered ladder of status effects (plus a fixed hunger debuff) scaled"
+        "by how long the charge was held, and a mastery-scaled cooldown"
+        "computed inline in :release rather than read via ?cooldown/main."
+        ""
+        ":value/status-id and :value/status-max-amplifier, referenced under"
+        ":value/* against the :effect-available-effects tunable (a list of"
+        "\"name:max-amplifier\" strings, e.g. \"jump-boost:1\" -- confirmed by"
+        "mcmod/runtime/expression_catalog.clj's own worked example), were"
+        "never actually implemented anywhere despite being referenced -- the"
+        "same never-wired-up-reference class :vec3/launch and"
+        ":vec3/scatter-end already established this session. Genuinely pure"
+        "string parsing (no RNG, no host state), implemented from scratch in"
+        "cn.li.node.expr/ops as ordinary :pure ops. :random/uniform already"
+        "existed in expr.clj but, like :random/int and :random/chance before"
+        "it, had no :query vocab node exposing it to DSL authors -- added"
+        "alongside them in combat-core/dsl_vocabulary.clj."
+        ""
+        ":pulse's two if-arms (still charging vs. already at charge-max-ticks)"
+        "both increment hold-ticks by the exact same amount and by the exact"
+        "same formula (hold-ticks-cur + 1) -- hoisted to a single"
+        "`hold-ticks-next` local computed ONCE before the branch and reused in"
+        "both arms (and in the overcharge check that follows), rather than"
+        "recomputed per-arm or re-read from state afterward. This sidesteps"
+        "the old engine's own same-activation state re-read"
+        "({:ref [:state :hold-ticks]} after this same :pulse had already"
+        "written it -- see groundshock.edn/directed_blastwave.edn's own"
+        "docstrings for that general translation rule) even more directly than"
+        "usual: since both arms compute the identical value, there is no"
+        "branch-specific result to thread through set!/locals at all."]
+ :schema-version 2
  :kind :ability
  :id :body-intensify
  :name-key "ability.skill.electromaster.body_intensify"

@@ -1,25 +1,25 @@
-;; New-DSL conversion of ac/combat/abilities/directed_blastwave.edn (S6).
-;; Session ability (multi-punch combo: a successful :release does NOT end
-;; the ability, matching the old content's own lack of :finish-ability?
-;; on that outcome -- :pulse's own punch-ticks/punch-animation-ticks
-;; timeout is what eventually ends it via :performed).
-;;
-;; Confirms and reuses the pattern already established converting
-;; groundshock.edn: the old engine's {:ref [:state key]} reads (distinct
-;; from {:ref [:local key]}) see writes made EARLIER IN THE SAME
-;; activation (final_engine.clj's bind-state! mutates :ability-state in
-;; the threaded context immediately, not just at dispatch end) -- the new
-;; engine's %key sigil deliberately does NOT (state-read always reads the
-;; frame's original :input, :state-write only appends to a return list;
-;; state persists forward only across SEPARATE dispatches). Translating
-;; every same-activation {:ref [:state key]} read as the already-computed
-;; LOCAL value (not a %key re-read) reproduces the old live-visibility
-;; behavior faithfully.
-;;
-;; One more real content inconsistency found and handled: :hardness-caps
-;; is declared {:curve :pair} but real usage indexes THREE elements --
-;; see node-core's expr.clj/ops.clj for the new :pair/third accessor.
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/directed_blastwave.edn (S6)."
+        "Session ability (multi-punch combo: a successful :release does NOT end"
+        "the ability, matching the old content's own lack of :finish-ability?"
+        "on that outcome -- :pulse's own punch-ticks/punch-animation-ticks"
+        "timeout is what eventually ends it via :performed)."
+        ""
+        "Confirms and reuses the pattern already established converting"
+        "groundshock.edn: the old engine's {:ref [:state key]} reads (distinct"
+        "from {:ref [:local key]}) see writes made EARLIER IN THE SAME"
+        "activation (final_engine.clj's bind-state! mutates :ability-state in"
+        "the threaded context immediately, not just at dispatch end) -- the new"
+        "engine's %key sigil deliberately does NOT (state-read always reads the"
+        "frame's original :input, :state-write only appends to a return list;"
+        "state persists forward only across SEPARATE dispatches). Translating"
+        "every same-activation {:ref [:state key]} read as the already-computed"
+        "LOCAL value (not a %key re-read) reproduces the old live-visibility"
+        "behavior faithfully."
+        ""
+        "One more real content inconsistency found and handled: :hardness-caps"
+        "is declared {:curve :pair} but real usage indexes THREE elements --"
+        "see node-core's expr.clj/ops.clj for the new :pair/third accessor."]
+ :schema-version 2
  :kind :ability
  :id :directed-blastwave
  :name-key "ability.skill.vecmanip.directed_blastwave"

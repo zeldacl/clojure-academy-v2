@@ -1,15 +1,15 @@
-;; New-DSL conversion of ac/combat/abilities/ray_barrage.edn (S6). See
-;; earlier skills/*.edn docstrings for the general pattern.
-;;
-;; Two more cn.li.node.expr opcodes that existed but were never wired
-;; into ops/table -- same fix :math/select/:collection/contains? needed
-;; earlier: :collection/first (read a single-candidate query result as an
-;; optional value) and :collection/nonempty (guard reading it). Also adds
-;; :random/int to combat-core's vocabulary as a :query node, NOT a
-;; ops/table :pure op -- same reasoning as :random/chance (seeded, so it
-;; can only be correctly seeded through the host frame; ops/invoke always
-;; calls expr/evaluate with a hard-coded seed 0).
-{:schema-version 2
+{:doc ["New-DSL conversion of ac/combat/abilities/ray_barrage.edn (S6). See"
+        "earlier skills/*.edn docstrings for the general pattern."
+        ""
+        "Two more cn.li.node.expr opcodes that existed but were never wired"
+        "into ops/table -- same fix :math/select/:collection/contains? needed"
+        "earlier: :collection/first (read a single-candidate query result as an"
+        "optional value) and :collection/nonempty (guard reading it). Also adds"
+        ":random/int to combat-core's vocabulary as a :query node, NOT a"
+        "ops/table :pure op -- same reasoning as :random/chance (seeded, so it"
+        "can only be correctly seeded through the host frame; ops/invoke always"
+        "calls expr/evaluate with a hard-coded seed 0)."]
+ :schema-version 2
  :kind :ability
  :id :ray-barrage
  :name-key "ability.skill.meltdowner.ray_barrage"
