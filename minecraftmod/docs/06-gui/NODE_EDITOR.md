@@ -22,10 +22,14 @@ Brigadier 命令，而这两个屏幕的 `open!` 挂载的是客户端 Presentat
 - **`editor_dev_tool` 道具**——右键效果同 G 键；图标复用 `developer_portable`
   已有贴图（`developer_portable_full.png`），不含能量/3D 模型那套逻辑；没有
   合成表，只能创造模式获取。
+- **`spell_composer_dev_tool` 道具**——右键效果同 K 键；与 `editor_dev_tool`
+  完全同构（同一张贴图、同样无能量/无合成表/仅创造模式），只是目标换成
+  `spell-composer/open!`。
 
 以上均在 `cn.li.ac.input-ids`（键位注册，走 `:alternative` scheme，平台侧
 `register-all-keybindings-from-ac!` 是数据驱动的通用循环，不需要逐平台改
-Java）与 `cn.li.ac.item.editor-dev-tool`（道具注册）里。
+Java）与 `cn.li.ac.item.editor-dev-tool` / `cn.li.ac.item.spell-composer-dev-tool`
+（道具注册）里。
 
 ## 模块落点
 
