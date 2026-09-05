@@ -20,8 +20,9 @@
 (def ^:private LIQUID-COLOR (unchecked-int 0xFF4CAF50))
 
 (defn- clamp-ratio [ratio]
-  ;; Upstream TechUI clamps the visible fill to [0.03, 1].
-  (max 0.03 (min 1.0 (double ratio))))
+  ;; Visible fill in [0, 1]. Do not floor at 0.03 — that pins the bar for the
+  ;; first ~3% of capacity and reads as "stuck until a threshold".
+  (max 0.0 (min 1.0 (double ratio))))
 
 (defn fill-ratio
   "Bar fill in [0,1]. A non-positive `maximum` yields 0 — never coerce 0→1
@@ -68,6 +69,18 @@
 (def hist-live-keys
   [:energy :max-energy :capacity :max-capacity :liquid-amount :tank-size])
 
+(defn- deref-gui [v]
+  (if (instance? clojure.lang.IDeref v) @v v))
+
+(defn effective-max-energy
+  "Hist denominator for Energy. When `:presentation-energy-max-fn` is set
+   (wireless-node tier capacity), always use it — do not trust a stale/wrong
+   `:max-energy` atom. Generators omit the fn and use the synced atom."
+  [container]
+  (if-let [f (:presentation-energy-max-fn container)]
+    (double (or (f container) 0.0))
+    (double (or (deref-gui (get container :max-energy)) 0.0))))
+
 (defn- hist-entry
   [idx {:keys [id label ratio value color]}]
   (let [ratio (max 0.0 (min 1.0 (double ratio)))
@@ -92,9 +105,49 @@
   (mapv hist-entry (range) (or raw-entries [])))
 
 (defn hist-bars
-  "Draw-list for the histogram.png frame overlay (bound as rect items)."
+  "Paint-list for histogram.png overlays. Bound as `:rect` nodes in
+   `info_area_histogram.edn` (`:x/:y/:w/:h/:rgba`) so layout remeasures on
+   each present! — do not paint via `:composite` (live height breaks)."
   [histograms]
   (mapv #(select-keys % [:kind :x :y :w :h :rgba]) (or histograms [])))
+
+(defn hist-from-container
+  "Single Energy/Capacity/Liquid hist projection for TechUI pages that expose
+   `:energy` (generators, wireless-node, ability-interferer, fusor, …)."
+  [container]
+  (when (and (map? container) (contains? container :energy))
+    (let [histograms (project-histograms
+                      (cond-> [(energy-hist (deref-gui (get container :energy))
+                                            (effective-max-energy container))]
+                        (or (contains? container :capacity)
+                            (contains? container :max-capacity))
+                        (conj (capacity-hist (deref-gui (get container :capacity))
+                                             (deref-gui (get container :max-capacity))))
+                        (contains? container :liquid-amount)
+                        (conj (liquid-hist (deref-gui (get container :liquid-amount))
+                                           (deref-gui (get container :tank-size))))))]
+      {:histograms histograms
+       :hist-bars (hist-bars histograms)})))
+
+(defn hist-from-network
+  "Capacity hist for wireless-matrix (`:presentation-network` load/max)."
+  [container]
+  (when-let [n* (:presentation-network container)]
+    (when (instance? clojure.lang.IDeref n*)
+      (let [n @n*
+            capacity (double (or (:load n) (:capacity n) 0.0))
+            max-cap (double (or (:max-capacity n) 0.0))
+            histograms (project-histograms
+                         [(capacity-hist capacity max-cap)])]
+        {:histograms histograms
+         :hist-bars (hist-bars histograms)}))))
+
+(defn shared-info-hist
+  "Authoritative hist for every TechUI shell page. Prefer container-atom energy
+   pages; fall back to presentation-network (matrix)."
+  [container]
+  (or (hist-from-container container)
+      (hist-from-network container)))
 
 ;; ---------------------------------------------------------------------------
 ;; Draft-key contract (shared by every TechUI page — do not reimplement)
@@ -219,21 +272,14 @@
       (some? masked?) (assoc :masked? (boolean masked?)))))
 
 (defn snapshot
+  "Node/wireless field chrome only. Do not build :histograms/:hist-bars here —
+   those come solely from `shared-info-hist` in presentation_container."
   [data policy]
   (let [initialized? (boolean (:initialized data))
         owner? (boolean (:owner? policy))
-        energy (double (or (:energy data) 0.0))
-        max-energy (double (or (:max-energy data) 0.0))
         capacity (double (or (:load data) (:capacity data) 0.0))
         max-capacity (double (or (:max-capacity data) 0.0))
         load-ratio (fill-ratio capacity max-capacity)
-        energy-ratio (fill-ratio energy max-energy)
-        raw-hists (cond-> []
-                    (contains? data :energy)
-                    (conj (energy-hist energy max-energy))
-                    (or (contains? data :load) (contains? data :capacity))
-                    (conj (capacity-hist capacity max-capacity)))
-        histograms (project-histograms raw-hists)
         ;; Main node order after hist rows + "-- Info --": Range, Owner,
         ;; then optional Node Name / Password (editable when owner).
         fields (mapv field-entry
@@ -258,6 +304,4 @@
      :initialized? initialized?
      :editable? (and initialized? owner?)
      :load-ratio load-ratio
-     :histograms histograms
-     :hist-bars (hist-bars histograms)
      :fields fields}))

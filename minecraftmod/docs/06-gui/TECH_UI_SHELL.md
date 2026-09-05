@@ -94,11 +94,36 @@ All TechUI pages share one hist contract — do not reimplement per container:
 
 1. **Raw entries** — `info-area/energy-hist`, `capacity-hist`, `liquid-hist`
    (+ `fill-ratio`). Never coerce a zero max to `1.0` (pins the bar at 100%).
-2. **Geometry** — `project-histograms` → `:histograms` + `hist-bars`; shell
-   fragment `info_area_histogram.edn` paints bars as absolute `rect`s.
-3. **Live rebuild** — `presentation_container/live-sync-fingerprint` always
-   samples `info-area/hist-live-keys` and `:presentation-network` (matrix).
-   `:presentation-anim-fingerprint` is for time-based paint only (anim
-   frames / breathe) — do not put energy/capacity there.
-4. **present!** — when view-state changes, layout/paint stamps clear so
-   hist-bar rects remeasure (see presentation-core `present!`).
+2. **Single projection** — `info-area/shared-info-hist` only:
+   - `hist-from-container` when the container has `:energy` (phase/wind/solar
+     gens, imag-fusor, metal-former, ability-interferer, wireless-node, …)
+   - else `hist-from-network` for wireless-matrix (`:presentation-network`)
+   - `presentation_container` **always** merges this onto `:info-area` after
+     page snapshots (empty vectors when neither source applies)
+   - **Do not** build hist in `generic-info-area`, `info-area/snapshot`, or
+     page `:presentation-snapshot-fn` (fields/INIT chrome only)
+   - wireless-node supplies `:presentation-energy-max-fn` (tier max) so a
+     stale `:max-energy` atom cannot pin the bar at 100%
+3. **Geometry** — hist-bars carry `:x/:y/:w/:h/:rgba`; shell fragment
+   `info_area_histogram.edn` paints them as `:rect` with bound size
+   (`direction :none` so x/y are absolute in the histogram frame).
+   Do **not** use `:composite` here — composite 0×0 nodes do not remeasure
+   bar height on live energy updates.
+   Backend `draw-rect-run!` must use **float** fills (`fillColoredQuad`);
+   integer `GuiGraphics.fill` truncates to whole pixels (~48 steps) so bars
+   look stuck until energy crosses each pixel threshold.
+   Visible fill ratio is `[0,1]` with **no** 0.03 floor.
+4. **Live rebuild** — `live-sync-fingerprint` always samples
+   `info-area/hist-live-keys` and `:presentation-network` (matrix).
+5. **present!** — when view-state changes, layout/paint stamps clear so
+   hist rects remeasure.
+
+### Consumers (TechUI shell histogram)
+
+| Surface | Hist source | Notes |
+| --- | --- | --- |
+| phase-gen / wind / solar / fusor / metal-former / interferer | `hist-from-container` | Synced `:energy`+`:max-energy` (scaled doubles) |
+| wireless-node | `hist-from-container` + `:presentation-energy-max-fn` | Was broken: custom snapshot overrode hist |
+| wireless-matrix | `hist-from-network` | Capacity only; no `:energy` |
+| energy-converter | none (no TechUI hist) | Wireless-only page |
+| developer | none (uses `:energy-ratio` progress) | Not info-area histogram |

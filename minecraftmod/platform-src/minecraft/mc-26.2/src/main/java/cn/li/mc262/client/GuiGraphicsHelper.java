@@ -64,6 +64,39 @@ public final class GuiGraphicsHelper {
         fillGradient(graphics, x0, y0, x1, y1, argb, argb);
     }
 
+    /**
+     * Float-space solid quad for live histogram / progress bars.
+     * Prefer this over int {@link #fill}: truncating to whole pixels makes bars
+     * stair-step. Uses the white texture tint path when a warp is active;
+     * otherwise rounds to the nearest pixel (extractor fill is int-only).
+     *
+     * <p>Coordinates are {@code double} for Clojure static interop.
+     */
+    public static void fillColoredQuad(Object graphics,
+                                       double x1, double y1,
+                                       double x2, double y2,
+                                       int argb) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge)) {
+            return;
+        }
+        float xa = (float) Math.min(x1, x2);
+        float xb = (float) Math.max(x1, x2);
+        float ya = (float) Math.min(y1, y2);
+        float yb = (float) Math.max(y1, y2);
+        if (xb - xa < 1.0e-4f || yb - ya < 1.0e-4f) {
+            return;
+        }
+        Identifier white = Identifier.fromNamespaceAndPath("minecraft", "textures/misc/white.png");
+        if (submitWarpedTexture(gge, RenderPipelines.GUI_TEXTURED, white,
+                xa, ya, xb, yb, 0.0f, 1.0f, 0.0f, 1.0f, argb)) {
+            return;
+        }
+        fill(graphics,
+                Math.round(xa), Math.round(ya),
+                Math.round(xb), Math.round(yb),
+                argb);
+    }
+
     /** Top-to-bottom gradient rectangle, warped when a camera is installed. */
     public static void fillGradient(Object graphics, int x0, int y0, int x1, int y1,
                                     int argbTop, int argbBottom) {

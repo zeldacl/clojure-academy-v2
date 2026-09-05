@@ -2,28 +2,55 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.gui.info-area :as info-area]))
 
-(deftest hist-bars-scale-with-energy-ratio
-  (testing "bar height grows with energy/max-energy (live transfer)"
-    (let [low (info-area/snapshot {:initialized true :energy 1500.0 :max-energy 15000.0
-                                   :capacity 0 :max-capacity 8} {:owner? true})
-          high (info-area/snapshot {:initialized true :energy 12000.0 :max-energy 15000.0
-                                    :capacity 0 :max-capacity 8} {:owner? true})
-          h0 (get-in low [:hist-bars 0 :h])
-          h1 (get-in high [:hist-bars 0 :h])]
-      (is (number? h0))
-      (is (< (double h0) (double h1)))))
-  (testing "zero max-capacity does not pin capacity bar at 100%"
-    (let [snap (info-area/snapshot {:initialized true :energy 0.0 :max-energy 15000.0
-                                    :capacity 3 :max-capacity 0} {:owner? true})
-          ;; Energy bar is index 0; capacity is index 1.
-          cap-h (get-in snap [:hist-bars 1 :h])
-          min-h (* 48.0 0.03)] ;; HIST-BAR-FULL-H * clamp floor
-      (is (<= (double cap-h) (+ min-h 0.01)))))
-  (testing "shared hist helpers match fill-ratio contract"
+(deftest hist-from-container-matches-generators-and-node
+  (testing "energy bar grows from shared container atoms"
+    (let [low (info-area/hist-from-container
+                {:energy (atom 1500.0) :max-energy (atom 15000.0)})
+          high (info-area/hist-from-container
+                 {:energy (atom 12000.0) :max-energy (atom 15000.0)})]
+      (is (< (double (get-in low [:hist-bars 0 :h]))
+             (double (get-in high [:hist-bars 0 :h]))))))
+  (testing "presentation-energy-max-fn wins over a wrong max-energy atom"
+    (let [snap (info-area/hist-from-container
+                 {:energy (atom 7500.0)
+                  :max-energy (atom 7500.0) ;; would pin ratio at 100% if trusted
+                  :presentation-energy-max-fn (fn [_] 15000.0)})]
+      (is (= 0.5 (:ratio (get-in snap [:histograms 0]))))))
+  (testing "zero max-energy uses presentation-energy-max-fn (wireless-node)"
+    (let [snap (info-area/hist-from-container
+                 {:energy (atom 7500.0)
+                  :max-energy (atom 0)
+                  :presentation-energy-max-fn (fn [_] 15000.0)})]
+      (is (= 0.5 (:ratio (get-in snap [:histograms 0]))))
+      (is (< 20.0 (double (get-in snap [:hist-bars 0 :h]))))))
+  (testing "matrix without :energy leaves hist to hist-from-network"
+    (is (nil? (info-area/hist-from-container {:capacity (atom 1)}))))
+  (testing "matrix network capacity hist via shared-info-hist"
+    (let [snap (info-area/shared-info-hist
+                 {:presentation-network (atom {:load 4 :max-capacity 8})})]
+      (is (= 0.5 (:ratio (get-in snap [:histograms 0]))))
+      (is (number? (get-in snap [:hist-bars 0 :h])))))
+  (testing "info-area/snapshot must not residual-build hist bars"
+    (let [snap (info-area/snapshot
+                 {:initialized true :energy 5000 :max-energy 10000
+                  :load 1 :max-capacity 2 :range 8 :owner "A"
+                  :ssid "n" :password "p"}
+                 {:owner? true})]
+      (is (nil? (:histograms snap)))
+      (is (nil? (:hist-bars snap)))
+      (is (vector? (:fields snap)))))
+  (testing "fill-ratio contract"
     (is (= 0.0 (info-area/fill-ratio 3 0)))
     (is (= 0.5 (info-area/fill-ratio 5 10)))
     (is (= 0.5 (:ratio (info-area/energy-hist 5000 10000))))
-    (is (= 0.0 (:ratio (info-area/capacity-hist 3 0))))))
+    (is (= 0.0 (:ratio (info-area/capacity-hist 3 0)))))
+  (testing "bar height tracks ratio continuously (no 3% floor)"
+    (let [histograms (info-area/project-histograms
+                       [(info-area/energy-hist 150.0 15000.0)])
+          h (double (get-in histograms [0 :h]))
+          expected (* 48.0 (/ 150.0 15000.0))]
+      (is (< h 2.0) "must be below the old 0.03*48≈1.44 floor band visibly")
+      (is (< (Math/abs (- h expected)) 0.01)))))
 
 (deftest apply-drafts-to-fields-overlays-draft-keys
   (testing "snapshot field values lose to live draft keys (backspace/typing)"

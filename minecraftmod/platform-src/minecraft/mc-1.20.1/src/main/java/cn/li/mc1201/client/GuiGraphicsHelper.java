@@ -62,4 +62,44 @@ public final class GuiGraphicsHelper {
         ImmediateDraw.vertex(pose, x1, y1, z).uv(u0, v0).endVertex();
         ImmediateDraw.draw();
     }
+
+    /**
+     * Axis-aligned solid quad in float GUI space (PoseStack-transformed).
+     * Prefer this over {@link GuiGraphics#fill} for live progress / histogram
+     * bars — integer fill truncates height to whole pixels and looks stepped.
+     *
+     * <p>Coordinates are {@code double} so Clojure static interop resolves
+     * cleanly (Clojure numeric literals and {@code aget} float math promote
+     * to double; a {@code float} overload often fails at compile time).
+     */
+    public static void fillColoredQuad(
+            GuiGraphics graphics,
+            double x1, double y1,
+            double x2, double y2,
+            int argb) {
+        if (graphics == null) {
+            return;
+        }
+        float xa = (float) Math.min(x1, x2);
+        float xb = (float) Math.max(x1, x2);
+        float ya = (float) Math.min(y1, y2);
+        float yb = (float) Math.max(y1, y2);
+        if (xb - xa < 1.0e-4f || yb - ya < 1.0e-4f) {
+            return;
+        }
+        Matrix4f pose = graphics.pose().last().pose();
+        float a = ((argb >>> 24) & 0xff) / 255.0f;
+        float r = ((argb >>> 16) & 0xff) / 255.0f;
+        float g = ((argb >>> 8) & 0xff) / 255.0f;
+        float b = (argb & 0xff) / 255.0f;
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        ImmediateDraw.begin(ImmediateDraw.Mode.QUADS, ImmediateDraw.Format.POSITION_COLOR);
+        ImmediateDraw.vertex(pose, xa, yb, 0.0f).color(r, g, b, a).endVertex();
+        ImmediateDraw.vertex(pose, xb, yb, 0.0f).color(r, g, b, a).endVertex();
+        ImmediateDraw.vertex(pose, xb, ya, 0.0f).color(r, g, b, a).endVertex();
+        ImmediateDraw.vertex(pose, xa, ya, 0.0f).color(r, g, b, a).endVertex();
+        ImmediateDraw.draw();
+    }
 }

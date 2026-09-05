@@ -112,7 +112,9 @@
       (when-let [refresh @refresh*] (refresh)))))
 
 (defn- generic-info-area [container progress]
-  "Project the common code-built InfoArea contract into declarative state."
+  "Fields + load chrome only. Hist bars are owned solely by
+   `info-area/shared-info-hist` (re-applied after page merge) — do not build
+   hist here (would duplicate generators' hist-from-container path)."
   (let [tile (:tile-entity container)
         altitude (when (contains? #{:wind-gen-main :wind-gen-base} (:container-type container))
                    (try (some-> tile pos/block-pos pos/pos-y str)
@@ -148,26 +150,10 @@
                        (conj {:id :liquid-needed :label "Liquid Needed" :value (str (or (value-of (:current-recipe-liquid container)) "-"))})
                        (contains? container :liquid-amount)
                        (conj {:id :liquid :label "Liquid" :value (str (or (value-of (:liquid-amount container)) "-"))})))
-        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))
-        histograms (info-area/project-histograms
-                    (cond-> []
-                      (contains? container :energy)
-                      (conj (info-area/energy-hist
-                              (value-of (:energy container))
-                              (value-of (:max-energy container))))
-                      (or (contains? container :capacity) (contains? container :max-capacity))
-                      (conj (info-area/capacity-hist
-                              (value-of (:capacity container))
-                              (value-of (:max-capacity container))))
-                      (contains? container :liquid-amount)
-                      (conj (info-area/liquid-hist
-                              (value-of (:liquid-amount container))
-                              (value-of (:tank-size container))))))]
+        max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))]
     {:title "Machine Info"
      :sep-visible? false
      :fields fields
-     :histograms histograms
-     :hist-bars (info-area/hist-bars histograms)
      :load-ratio (max 0.0 (min 1.0 (/ (double progress) max-progress)))}))
 (def ^:private page-texture-by-type
   "Keys must match each GUI's `:container-type` (see create-schema-container callers)."
@@ -483,7 +469,13 @@
                                                    (or (:presentation-buttons container) [])))
                             anchors (tech-tabs/mark-slot-anchors container base-anchors)
                             values (merge base-values extra-values text-values button-values
-                                          {:slot-anchors anchors})]
+                                          {:slot-anchors anchors})
+                            ;; Sole hist owner for every TechUI shell page.
+                            ;; generic-info-area / page snapshots must not build hist.
+                            values (let [hist (or (info-area/shared-info-hist container)
+                                                  {:histograms [] :hist-bars []})]
+                                     (update values :info-area
+                                             (fn [ia] (merge (or ia {}) hist))))]
                         (menu-bridge/update-snapshot! bridge @revision values)
                         (menu-bridge/snapshot bridge)))
         dispatch-action! (fn dispatch-action!

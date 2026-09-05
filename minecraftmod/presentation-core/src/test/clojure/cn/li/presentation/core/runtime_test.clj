@@ -305,12 +305,66 @@
     (is (= "hi" (get-in (runtime/instance! rt mount) [:view-state :query])))
     (is (= :query (:field (second (last @seen)))))))
 
+(defn- wireless-node-golden-file
+  []
+  (first (filter #(.isFile ^java.io.File %)
+                 [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
+                  (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
+                  (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")])))
+
+(defn- hist-quad
+  [h]
+  {:kind :quad :x 22.4 :y (- 79.2 h) :w 6.4 :h (double h)
+   :rgba (unchecked-int 0xFF25C4FF)})
+
+(defn- painted-hist-heights
+  "Collect RECT command heights that match hist-bar width 6.4 (energy column)."
+  [dl]
+  (into []
+        (keep (fn [i]
+                (when (and (= UiOp/RECT (aget (.op dl) (int i)))
+                           (< (Math/abs (- (double (aget (.geom dl) (+ (* (int i) 4) 2))) 6.4)) 0.01))
+                  (double (aget (.geom dl) (+ (* (int i) 4) 3))))))
+        (range (.count dl))))
+
+(deftest wireless-node-hist-bars-resize-on-present
+  "Regression: info-area hist rects must grow when hist-bars :h changes
+   (bound :width/:height on :rect — not :composite)."
+  (let [art-file (wireless-node-golden-file)]
+    (is (some? art-file) "wireless-node golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          rt (runtime/create-runtime)
+          initial {:tech-tabs []
+                   :inv-page-visible? true
+                   :wireless-page-visible? false
+                   :info-area {:histograms [{:id :energy :label "Energy"
+                                             :value "100 IF" :color (unchecked-int 0xFF25C4FF)}]
+                               :hist-bars [(hist-quad 4.8)]
+                               :sep-label "-- Info --" :sep-visible? true
+                               :fields []}
+                   :slot-anchors []}
+          mount (runtime/mount!
+                  rt {:host {:stage :screen} :artifact artifact
+                      :state initial})
+          _ (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 800 480 1.0))
+          h0 (painted-hist-heights
+               (-> (runtime/extract-stage! rt :screen {:width 800 :height 480})
+                   :mounts first :commands))
+          _ (runtime/present!
+              rt mount
+              (-> initial
+                  (assoc-in [:info-area :hist-bars] [(hist-quad 36.0)])
+                  (assoc-in [:info-area :histograms 0 :value] "12000 IF")))
+          h1 (painted-hist-heights
+               (-> (runtime/extract-stage! rt :screen {:width 800 :height 480})
+                   :mounts first :commands))]
+      (is (seq h0) "low energy hist quad must paint")
+      (is (seq h1) "high energy hist quad must paint")
+      (is (< (apply max h0) (apply max h1))))))
+
 (deftest wireless-node-golden-text-input-accepts-click-and-characters
   "Regression: compact info-area text-inputs must focus and append typed chars."
-  (let [candidates [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
-                    (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
-                    (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")]
-        art-file (first (filter #(.isFile ^java.io.File %) candidates))]
+  (let [art-file (wireless-node-golden-file)]
     (is (some? art-file) "wireless-node golden artifact must be on disk")
     (let [artifact (edn/read-string (slurp art-file))
           rt (runtime/create-runtime)

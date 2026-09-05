@@ -137,6 +137,13 @@
            ;; energy/capacity here.
            :presentation-anim-fingerprint
            (fn [c] (anim-signature (wireless-linked? c)))
+           ;; Tier capacity when :max-energy DataSlot is 0/stale — shared hist
+           ;; path (hist-from-container) uses this like main's live max-fn.
+           :presentation-energy-max-fn
+           (fn [c]
+             (let [nt (let [x (get c :node-type)]
+                        (if (instance? clojure.lang.IDeref x) @x x))]
+               (node-logic/node-max-energy {:node-type (or nt :basic)})))
            :presentation-tech-tabs? true
            :presentation-wireless {:domain :node :role :node}
            :presentation-text-fields [{:id :node-name :binding-key :node-name :x 12 :y 82 :width 120 :height 18
@@ -160,21 +167,14 @@
            :presentation-snapshot-fn
            (fn [container _]
              ;; Read atoms from the live screen container (DataSlot target).
+             ;; Hist bars come from info-area/shared-info-hist (presentation_container);
+             ;; this snapshot only supplies node fields + anim + drafts.
              (let [live (fn [k default]
                           (let [x (get container k ::missing)]
                             (cond
                               (= x ::missing) default
                               (instance? clojure.lang.IDeref x) @x
                               :else x)))
-                   energy (double (or (live :energy 0.0) 0.0))
-                   max-energy-atom (double (or (live :max-energy 0.0) 0.0))
-                   max-energy (if (pos? max-energy-atom)
-                                max-energy-atom
-                                (double (node-logic/node-max-energy
-                                          {:node-type (or (live :node-type :basic)
-                                                         :basic)})))
-                   load (double (or (live :capacity 0.0) 0.0))
-                   max-load (double (or (live :max-capacity 0.0) 0.0))
                    owner? (boolean (node-logic/owner-authorized? state player))
                    form @form-state
                    linked? (wireless-linked? container)
@@ -189,15 +189,10 @@
                 :node-anim (node-anim-items linked?)
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
-                              :energy energy
-                              :max-energy max-energy
-                              :capacity load
                               :owner (node-logic/owner-name state)
                               :range (or (live :range 0) 0)
                               :ssid node-name
-                              :password password
-                              :load load
-                              :max-capacity max-load}
+                              :password password}
                              owner?)}))
            :presentation-text-change!
            (fn [field value]

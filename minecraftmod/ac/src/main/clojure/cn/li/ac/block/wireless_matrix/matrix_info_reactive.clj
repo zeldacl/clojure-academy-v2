@@ -59,8 +59,9 @@
       (action-payload/action-payload container {:new-password new-password}) nil)))
 
 (defn info-area-snapshot
-  "Presentation projection matching main `rebuild!` (capacity hist + owner/
-   range/bandwidth + ssid/password or INIT / noinit)."
+  "Presentation projection matching main `rebuild!` (owner/range/bandwidth +
+   ssid/password or INIT / noinit). Capacity hist bars are applied by
+   `info-area/shared-info-hist` from `:presentation-network`."
   [data is-owner?]
   (let [initialized? (boolean (network-initialized? data))
         owner? (boolean is-owner?)
@@ -68,8 +69,6 @@
         capacity (double (or (:load data) 0.0))
         max-capacity (double (or (:max-capacity data) 0.0))
         load-ratio (info-area/fill-ratio capacity max-capacity)
-        histograms (info-area/project-histograms
-                     [(info-area/capacity-hist capacity max-capacity)])
         ;; Main order after hist + "-- info --": owner, range, bandwidth.
         base-fields [(info-area/field-entry
                        {:id :owner :label "Owner"
@@ -116,8 +115,6 @@
      :initialized? initialized?
      :editable? (and initialized? owner?)
      :load-ratio load-ratio
-     :histograms histograms
-     :hist-bars (info-area/hist-bars histograms)
      :fields fields
      :init-visible? (boolean (:show-init? policy))
      :init-button {:label "INIT"}

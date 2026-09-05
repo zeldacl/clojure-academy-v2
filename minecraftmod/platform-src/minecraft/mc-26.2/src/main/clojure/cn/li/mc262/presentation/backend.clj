@@ -47,14 +47,20 @@
 ;; ============================== UI run drawing ==============================
 
 (defn- draw-rect-run! [^GuiGraphicsExtractor gg ^UiDrawList dl start end]
+  ;; Prefer float fillColoredQuad so hist/progress bars are not stair-stepped
+  ;; by (int) truncation of GuiGraphicsExtractor.fill.
   (let [^floats geom (.geom dl) ^ints rgba (.rgba dl)]
     (loop [i (int start)]
       (when (< i (int end))
-        (let [g (* i 4)]
-          (.fill gg (int (aget geom g)) (int (aget geom (unchecked-inc-int g)))
-                 (int (+ (aget geom g) (aget geom (+ g 2))))
-                 (int (+ (aget geom (unchecked-inc-int g)) (aget geom (+ g 3))))
-                 (aget rgba i)))
+        (let [g (* i 4)
+              x (aget geom g)
+              y (aget geom (unchecked-inc-int g))
+              w (aget geom (+ g 2))
+              h (aget geom (+ g 3))]
+          (GuiGraphicsHelper/fillColoredQuad gg
+                                            (double x) (double y)
+                                            (double (+ x w)) (double (+ y h))
+                                            (int (aget rgba i))))
         (recur (unchecked-inc-int i))))))
 
 (defn- draw-image-run! [^GuiGraphicsExtractor gg ^UiDrawList dl start end ^Identifier rl]
