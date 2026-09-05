@@ -31,15 +31,18 @@
 
 (defn create-container [tile player]
   (let [[be state] (resolve-state tile)
-        container (gui-sync/create-schema-container node-schema/unified-node-schema
-                    (or be tile) player :node {:gui-id (gui-manifest/gui-id :wireless-node)})
+        base (gui-sync/create-schema-container node-schema/unified-node-schema
+                (or be tile) player :node {:gui-id (gui-manifest/gui-id :wireless-node)})
         value-of (fn [key default]
-                   (let [value (get container key default)]
-                     (if (instance? clojure.lang.IDeref value) @value value)))]
-    (assoc container
+                   (let [value (get base key default)]
+                     (if (instance? clojure.lang.IDeref value) @value value)))
+        ;; Bind atoms before assoc so text-change/submit closures do not capture
+        ;; the pre-assoc container (where :presentation-form-state is nil).
+        form-state (atom {:node-name (str (value-of :ssid ""))
+                          :password (str (value-of :password ""))})]
+    (assoc base
            ;; Main node GUI had no Save/Refresh chrome — name/password submit on text-input.
-           :presentation-form-state (atom {:node-name (str (value-of :ssid ""))
-                                :password (str (value-of :password ""))})
+           :presentation-form-state form-state
            :presentation-text-fields [{:id :node-name :binding-key :node-name :x 12 :y 82 :width 120 :height 18
                                        :value-fn (fn [_ _] (value-of :ssid ""))}
                                       {:id :password :binding-key :network-password :x 12 :y 105 :width 120 :height 18
@@ -50,11 +53,19 @@
                    max-energy (max 1.0 (double (or (value-of :max-energy 1.0) 1.0)))
                    load (double (or (value-of :capacity 0.0) 0.0))
                    max-load (max 1.0 (double (or (value-of :max-capacity 1.0) 1.0)))
-                   owner? (boolean (node-logic/owner-authorized? state player))]
+                   owner? (boolean (node-logic/owner-authorized? state player))
+                   form @form-state]
                {:node-editable? owner?
                 :node-readonly? (not owner?)
-                :node-name (str (value-of :ssid ""))
-                :network-password (str (value-of :password ""))
+                ;; Form drafts always win while the atom holds the key — do not
+                ;; fall back to tile ssid/password mid-edit (that reverts glyphs
+                ;; when another field triggers a snapshot rebuild).
+                :node-name (str (if (contains? form :node-name)
+                                  (:node-name form)
+                                  (value-of :ssid "")))
+                :network-password (str (if (contains? form :password)
+                                         (:password form)
+                                         (value-of :password "")))
                 :info-area (node-info/info-area-snapshot
                              {:initialized true
                               :energy energy
@@ -62,20 +73,24 @@
                               :capacity load
                               :owner (node-logic/owner-name state)
                               :range (or (value-of :range 0) 0)
-                              :ssid (value-of :ssid "")
-                              :password (value-of :password "")
+                              :ssid (if (contains? form :node-name)
+                                      (:node-name form)
+                                      (value-of :ssid ""))
+                              :password (if (contains? form :password)
+                                          (:password form)
+                                          (value-of :password ""))
                               :load load
                               :max-capacity max-load}
                              owner?)}))
            :presentation-text-change!
            (fn [field value]
-             (swap! (:presentation-form-state container) assoc field value))
+             (swap! form-state assoc field value))
            :presentation-text-submit!
            (fn [field value]
              (when (node-logic/owner-authorized? state player)
                (case field
-                 :node-name (node-info/send-change-name container value)
-                 :password (node-info/send-change-password container value)
+                 :node-name (node-info/send-change-name base value)
+                 :password (node-info/send-change-password base value)
                  nil)))
            :presentation-dispatch-action!
            (fn [_action _payload] nil))))

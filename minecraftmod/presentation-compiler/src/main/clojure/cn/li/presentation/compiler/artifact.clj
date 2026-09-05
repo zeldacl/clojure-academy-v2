@@ -184,21 +184,42 @@
                     :font-size (:font-size physical)
                     :bind (if text-path {:text text-path} {})})])))
 
-(defn- lower-text-input [physical]
+(defn- lower-text-input
+  "Expand to a hit/focus wrapper with a fill RECT backdrop and a TEXT child.
+
+   Compact TechUI rows (declared height ≤ 12) pin text at (0,0) with no
+   backdrop — same baseline as sibling `:text` labels in a `:row`. Taller
+   inputs keep a small inset and vertically center the glyph box so single-
+   line fields don't sit on the top edge of a padded control.
+
+   The wrapper keeps the `:text` bind: focus routing reads path/on from the
+   FOCUSABLE node, while the TEXT child also binds `:text` for paint."
+  [physical]
   (let [bind (:bind physical)
-        text-path (get bind :text)]
+        text-path (get bind :text)
+        font (double (:font-size physical))
+        [h-mode h-val] (:height physical)
+        box-h (if (and (= h-mode :fixed) (pos? (double h-val)))
+                (double h-val)
+                (+ font 8.0))
+        compact? (<= box-h 12.0)
+        pad-x (if compact? 0.0 4.0)
+        pad-y (if compact? 0.0 (max 0.0 (/ (- box-h font) 2.0)))
+        bg (if compact? 0x00000000 0x66000000)]
     (assoc physical
            :phys-op nil :flags #{:hit-testable :focusable} :direction :none
-           :bind (select-keys bind [:visible])
+           :bind (cond-> (select-keys bind [:visible])
+                   text-path (assoc :text text-path))
            :children
            [(merge default-physical
                    {:phys-op UiOp/RECT :flags #{} :direction :none
                     :width [:fill 1.0] :height [:fill 1.0]
-                    :rgba 0x66000000})
+                    :rgba bg})
             (merge default-physical
                    {:phys-op UiOp/TEXT :flags #{} :direction :none
-                    :x 4.0 :y 4.0
-                    :font-size (:font-size physical)
+                    :x pad-x :y pad-y
+                    :font-size font
+                    :rgba (:rgba physical)
                     :bind (if text-path {:text text-path} {})})])))
 
 (defn- lower-glow-line

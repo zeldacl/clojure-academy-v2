@@ -72,10 +72,19 @@
                              (fn [_action _payload current] current))
         reduce (or reduce
                    (fn [current action payload]
-                     (let [next-state (dispatch-action! action payload current)]
+                     (let [next-state (dispatch-action! action payload current)
+                           ;; Bare pointer/key/hover must :pass so container screens
+                           ;; still forward to AbstractContainerScreen (slots,
+                           ;; hotbar). Focus + text editing + app actions consume.
+                           result (cond
+                                    (nil? action) :pass
+                                    (contains? #{:input/pointer :input/key :input/hover
+                                                 :input/unknown} action)
+                                    :pass
+                                    :else :consume)]
                        {:state (if (map? next-state) next-state current)
                         :effects []
-                        :event-result :consume})))
+                        :event-result result})))
         reduce* (fn [current action payload]
                   (let [response (reduce current action payload)
                         next-state (if (and (map? response)

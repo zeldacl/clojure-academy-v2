@@ -1,5 +1,7 @@
 (ns cn.li.presentation.core.runtime-test
   (:require [clojure.test :refer :all]
+            [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [cn.li.presentation.core.runtime :as runtime]
             [cn.li.presentation.core.nodetable :as nodetable]
             [cn.li.presentation.core.test-artifact :as ta])
@@ -261,16 +263,70 @@
                            {:key :root :flags #{:hit-testable :focusable}
                             :width [:fixed 100.0] :height [:fixed 20.0]
                             :bind {:text [:state :query]}
-                            :on {:change :edit/change :submit :edit/submit}})
+                            :on {:change :edit/change :submit :edit/submit}
+                            :semantics {:role :textbox :field :query}})
+        ;; test_artifact may not copy :semantics onto node/semantics — inject it.
+        artifact (assoc artifact :node/semantics [{:role :textbox :field :query}])
         mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state {:query ""}
                                   :reduce (fn [state action payload]
                                             (swap! seen conj [action payload])
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (is (= :query (:field (:focus (runtime/instance! rt mount)))))
     (runtime/dispatch! rt mount {:type :character :text "h"})
     (runtime/dispatch! rt mount {:type :character :text "i"})
-    (is (= "hi" (get-in (runtime/instance! rt mount) [:view-state :query])))))
+    (is (= "hi" (get-in (runtime/instance! rt mount) [:view-state :query])))
+    (is (= :query (:field (second (last @seen)))))))
+
+(deftest wireless-node-golden-text-input-accepts-click-and-characters
+  "Regression: compact info-area text-inputs must focus and append typed chars."
+  (let [candidates [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
+                    (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
+                    (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")]
+        art-file (first (filter #(.isFile ^java.io.File %) candidates))]
+    (is (some? art-file) "wireless-node golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          rt (runtime/create-runtime)
+          seen (atom [])
+          mount (runtime/mount!
+                  rt {:host {:stage :screen} :artifact artifact
+                      :state {:node-editable? true :node-readonly? false
+                              :node-name "ab" :network-password ""
+                              :info-area {:histograms [] :hist-bars [] :sep-label "-- Info --"
+                                          :fields [{:value "0"} {:value "me"}]}
+                              :slot-anchors []}
+                      :reduce (fn [state action payload]
+                                (swap! seen conj [action (:field payload) (:value payload)])
+                                {:state state :event-result :consume})})]
+      ;; Fit 290×187 into 800×480 like a real container screen.
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 800 480 1.0))
+      (runtime/extract-stage! rt :screen {:width 800 :height 480})
+      (let [ox (/ (- 800.0 290.0) 2.0)
+            oy (/ (- 480.0 187.0) 2.0)
+            ;; Node Name value cell: clip(179,5)+column(6,95)+rows 0..2 → (225,120)
+            mx (+ ox 225.0 10.0)
+            my (+ oy 120.0 5.0)
+            ;; Password row is one 10px row below name.
+            px mx
+            py (+ my 10.0)]
+        (is (= :consume
+               (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                            :space :viewport :x mx :y my :button 0})))
+        (is (= :node-name (:field (:focus (runtime/instance! rt mount)))))
+        (is (= [:state :node-name] (:path (:focus (runtime/instance! rt mount)))))
+        (runtime/dispatch! rt mount {:type :character :text "Z"})
+        (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))
+        (is (= :node-name (second (last @seen))))
+        ;; Focusing password must not wipe the name draft.
+        (is (= :consume
+               (runtime/dispatch! rt mount {:type :pointer :event-type :down
+                                            :space :viewport :x px :y py :button 0})))
+        (is (= :password (:field (:focus (runtime/instance! rt mount)))))
+        (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))
+        (runtime/dispatch! rt mount {:type :character :text "p"})
+        (is (= "p" (get-in (runtime/instance! rt mount) [:view-state :network-password])))
+        (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))))))
 
 (deftest progress-drag-reports-a-clamped-ratio
   (let [seen (atom nil)

@@ -9,7 +9,10 @@
 
 (defn- input! [mount event] (presentation/dispatch-input! mount event))
 (defn- consumed? [result]
-  (or (= result :consume) (= result :capture-pointer)))
+  (or (= result :consume) (= result :capture-pointer)
+      (= (str result) ":consume") (= (str result) ":capture-pointer")))
+(defn- as-java-boolean [v]
+  (Boolean/valueOf (boolean v)))
 
 (defn create! [data]
   (let [{:keys [mount on-close]} ((:mount-fn data) data)
@@ -30,34 +33,52 @@
             (.-height ^DelegatingCGuiContainerScreen s) (merge {:graphics graphics} (preview/backend-context)))))
       (.withMouseClicked
         (fn [s x y button]
-          (if (consumed? (input! mount {:type :pointer :event-type :down :x x :y y :button button}))
-            true (.callSuperMouseClicked ^DelegatingCGuiContainerScreen s x y button))))
+          (as-java-boolean
+            (if (consumed? (input! mount {:type :pointer :event-type :down
+                                          :space :viewport :x x :y y :button button}))
+              true
+              (.callSuperMouseClicked ^DelegatingCGuiContainerScreen s x y button)))))
       (.withMouseReleased
         (fn [s x y button]
-          (if (consumed? (input! mount {:type :pointer :event-type :up :x x :y y :button button}))
-            true (.callSuperMouseReleased ^DelegatingCGuiContainerScreen s x y button))))
+          (as-java-boolean
+            (if (consumed? (input! mount {:type :pointer :event-type :up
+                                          :space :viewport :x x :y y :button button}))
+              true
+              (.callSuperMouseReleased ^DelegatingCGuiContainerScreen s x y button)))))
       (.withMouseMoved
         (fn [s x y]
-          (input! mount {:type :pointer :event-type :move :x x :y y :button -1})
+          (input! mount {:type :pointer :event-type :move
+                         :space :viewport :x x :y y :button -1})
           (.callSuperMouseMoved ^DelegatingCGuiContainerScreen s x y)))
       (.withMouseScrolled
         (fn [s x y delta]
-          (if (consumed? (input! mount {:type :scroll :x x :y y :delta delta}))
-            true (.callSuperMouseScrolled ^DelegatingCGuiContainerScreen s x y delta))))
+          (as-java-boolean
+            (if (consumed? (input! mount {:type :scroll :space :viewport :x x :y y :delta delta}))
+              true
+              (.callSuperMouseScrolled ^DelegatingCGuiContainerScreen s x y delta)))))
       (.withKeyPressed
         (fn [s key scan modifiers]
-          (if (= 256 (int key))
-            (do (.onClose ^DelegatingCGuiContainerScreen s) true)
-            (if (consumed? (input! mount {:type :key :key-code (int key) :pressed? true
-                                          :scan-code (int scan) :modifiers (int modifiers)}))
-              true (.callSuperKeyPressed ^DelegatingCGuiContainerScreen s
-                                         (int key) (int scan) (int modifiers))))))
+          (as-java-boolean
+            (cond
+              (= 256 (int key))
+              (do (.onClose ^DelegatingCGuiContainerScreen s) true)
+              ;; Only claim editing keys when Presentation has a text focus;
+              ;; otherwise let the container handle hotbar / slot shortcuts.
+              (consumed? (input! mount {:type :key :key-code (int key) :pressed? true
+                                        :scan-code (int scan) :modifiers (int modifiers)}))
+              true
+              :else
+              (.callSuperKeyPressed ^DelegatingCGuiContainerScreen s
+                                    (int key) (int scan) (int modifiers))))))
       (.withCharTyped
         (fn [s character modifiers]
-          (if (consumed? (input! mount {:type :character :text (str (char character))
-                                        :modifiers (int modifiers) :composing? false}))
-            true (.callSuperCharTyped ^DelegatingCGuiContainerScreen s
-                                      (char character) (int modifiers)))))
+          (as-java-boolean
+            (if (consumed? (input! mount {:type :character
+                                          :text (str (char character))
+                                          :modifiers (int modifiers) :composing? false}))
+              true
+              (.callSuperCharTyped ^DelegatingCGuiContainerScreen s
+                                   (char character) (int modifiers))))))
       (.withRemoved
         (fn [_]
           (presentation/unmount! mount)

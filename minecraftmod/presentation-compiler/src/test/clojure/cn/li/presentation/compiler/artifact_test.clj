@@ -91,7 +91,10 @@
 (deftest text-input-wrapper-is-hit-testable-and-focusable
   (let [compiled (compile* {:type :text-input :bind {:text [:state :query]}})
         wrapper-flags (nth (:node/flags compiled) 0)]
-    (is (= (bit-or 8 64) (bit-and wrapper-flags (bit-or 8 64)))))) ; HIT_TESTABLE | FOCUSABLE
+    (is (= (bit-or 8 64) (bit-and wrapper-flags (bit-or 8 64)))) ; HIT_TESTABLE | FOCUSABLE
+    ;; Focus routing reads :text from the FOCUSABLE wrapper — must not strip it.
+    (is (= {:text [:state :query]} (nth (:node/bind-map compiled) 0)))
+    (is (= {:text [:state :query]} (nth (:node/bind-map compiled) 2)))))
 
 (deftest transform-retains-style-and-has-transform-flag
   (let [compiled (compile* {:type :transform

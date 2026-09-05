@@ -268,6 +268,7 @@
                   :table table
                   :bind-maps (:node/bind-map artifact)
                   :on-maps (:node/on-map artifact)
+                  :semantics-maps (or (:node/semantics artifact) [])
                   :scrollbar-maps (or (:node/scrollbar artifact) [])
                   :resource-index resource-index
                   :key-index (build-key-index table)
@@ -636,6 +637,7 @@
           root (:root-instance instance)
           bind-maps (:bind-maps instance)
           on-maps (:on-maps instance)
+          semantics-maps (:semantics-maps instance)
           scrollbar-maps (:scrollbar-maps instance)
           focus (:focus instance)
           capture (:pointer-capture instance)]
@@ -676,9 +678,27 @@
                         :value ratio :progress ratio :progress-input true}})
 
             (and hit (.has table hit-node NodeFlags/FOCUSABLE))
-            {:focus {:key (node-key table hit-node)
-                    :path (:text (nth bind-maps hit-node nil))
-                    :on (nth on-maps hit-node nil)}}
+            (let [sem (nth semantics-maps hit-node nil)
+                  bind (nth bind-maps hit-node nil)
+                  text-path (or (:text bind)
+                                ;; Defensive: older lowered text-inputs kept :text
+                                ;; only on the TEXT child.
+                                (loop [c (aget ^ints (.-firstChild table) (int hit-node))]
+                                  (when (>= c 0)
+                                    (or (:text (nth bind-maps c nil))
+                                        (recur (aget ^ints (.-nextSibling table) (int c)))))))
+                  field (or (:field sem)
+                            (when (and (vector? text-path) (seq text-path))
+                              (peek text-path)))]
+              {:focus {:key (node-key table hit-node)
+                       :node (int hit-node)
+                       :path text-path
+                       :on (nth on-maps hit-node nil)
+                       :field field}
+               :action :input/focus
+               :payload {:target (node-key table hit-node)
+                         :field field
+                         :path text-path}})
 
             ;; Prefer an explicit scrollbar under the pointer even when topmostAt
             ;; landed on a non-scrollbar sibling (thin thumb next to markdown).
@@ -722,10 +742,11 @@
               (cond
                 (and (= key-code 257) submit-action)
                 {:action submit-action
-                 :payload {:value (let [path (:path focus)]
-                                    (get-in (:view-state instance)
-                                            (if (and (vector? path) (= :state (first path)))
-                                              (subvec path 1) path)))}}
+                 :payload (cond-> {:value (let [path (:path focus)]
+                                            (get-in (:view-state instance)
+                                                    (if (and (vector? path) (= :state (first path)))
+                                                      (subvec path 1) path)))}
+                            (:field focus) (assoc :field (:field focus)))}
                 (= key-code 259) {:action :input/backspace :payload event}
                 :else {:action :input/key :payload event}))
 
@@ -757,9 +778,22 @@
 (defn- edit-input-state [state focus action payload]
   (if-let [path (focus-path focus)]
     (let [current (str (or (get-in state path) ""))
+          ;; Only append a typed glyph. Enriched text-change payloads already
+          ;; carry :value (full field); treating their :text as a glyph would
+          ;; double-append. Pointer/focus payloads must never mutate text.
           next-value (cond
-                       (= action :input/backspace) (if (seq current) (subs current 0 (dec (count current))) current)
-                       (or (= action :input/character) (contains? payload :text)) (str current (or (:text payload) ""))
+                       (= action :input/backspace)
+                       (if (seq current) (subs current 0 (dec (count current))) current)
+
+                       (= action :input/character)
+                       (str current (or (:text payload) ""))
+
+                       (and (keyword? action)
+                            (not= "input" (namespace action))
+                            (contains? payload :text)
+                            (not (contains? payload :value)))
+                       (str current (or (:text payload) ""))
+
                        :else nil)]
       (if (some? next-value) (assoc-in state path next-value) state))
     state))
@@ -767,7 +801,7 @@
 (defn- input-payload [state focus action payload]
   (if-let [path (focus-path focus)]
     (let [value (str (or (get-in state path) ""))]
-      (merge payload {:value value :text value :query value}
+      (merge payload {:value value :text value :query value :path (:path focus)}
              (when-let [field (:field focus)] {:field field})))
     payload))
 
@@ -790,7 +824,11 @@
         {:keys [action payload focus]} routed
         focus (or focus (:focus instance))
         _ (when (contains? routed :focus)
-            (vswap! (:state runtime) assoc-in [:mounts mount :focus] focus))
+            (vswap! (:state runtime)
+                    (fn [snapshot]
+                      (-> snapshot
+                          (assoc-in [:mounts mount :focus] focus)
+                          (assoc-in [:mounts mount :paint-stamp] nil)))))
         _ (when (contains? routed :hover-target)
             (vswap! (:state runtime) assoc-in [:mounts mount :hover-target] (:hover-target routed)))
         _ (when (contains? routed :pointer-capture)
@@ -811,6 +849,15 @@
         ;; delivers mouseDragged after mouseClicked returned true. Claim the
         ;; press/drag while a scrollbar capture is armed.
         result (let [base (or (:event-result response) :pass)
+                     editing? (some? (focus-path focus))
+                     base (if (and editing?
+                                   (or (= action :input/key)
+                                       (= action :input/backspace)
+                                       (= action :input/character)
+                                       (= action (get-in focus [:on :change]))
+                                       (= action (get-in focus [:on :submit]))))
+                            :consume
+                            base)
                      cap (or (:pointer-capture routed)
                              (when (and (= :pointer (:type event))
                                         (#{:drag :move} (:event-type event)))
@@ -844,7 +891,10 @@
      :frame-context frame-context
      :mounts (mapv (fn [instance]
                      (let [{:keys [root stamp geometry metrics-epoch fresh?]} (ensure-layout-current! instance)
-                           paint-fresh? (and fresh? (= stamp (:paint-stamp instance)) (:last-result instance))]
+                           paint-fresh? (and fresh?
+                                             (nil? (:focus instance))
+                                             (= stamp (:paint-stamp instance))
+                                             (:last-result instance))]
                        (when-not fresh?
                          (vswap! (:state runtime)
                                  (fn [snapshot]
@@ -868,6 +918,40 @@
                                                                  :arena arena))
                                _ (.reset cmdbuf)
                                _ (when (>= root 0) (PaintKernel/paint table arena ctx cmdbuf root))
+                               _ (when-let [focus (:focus instance)]
+                                   (when-let [node (:node focus)]
+                                     (when-let [path (focus-path focus)]
+                                       ;; ~530ms blink via nanoTime bit 29.
+                                       (when (bit-test (unsigned-bit-shift-right (System/nanoTime) 29) 0)
+                                         (let [inst (find-instance-for-node arena (int node))]
+                                           (when (>= inst 0)
+                                             (let [text-child
+                                                   (loop [c (aget ^ints (.-firstChild table) (int node))]
+                                                     (cond
+                                                       (< c 0) nil
+                                                       (= UiOp/TEXT (aget ^ints (.-op table) c)) c
+                                                       :else (recur (aget ^ints (.-nextSibling table) c))))
+                                                   use-inst (if text-child
+                                                              (let [ti (find-instance-for-node arena (int text-child))]
+                                                                (if (>= ti 0) ti inst))
+                                                              inst)
+                                                   font-node (int (or text-child node))
+                                                   font (float (aget ^floats (.-fontSize table) font-node))
+                                                   text (str (or (get-in (:view-state instance) path) ""))
+                                                   ^UiTextMetrics metrics (presentation-bridge/current-text-metrics)
+                                                   advance (float (if metrics
+                                                                    (.advance metrics 0 text font)
+                                                                    (* 0.6 (double (count text)) font)))]
+                                               (.emit cmdbuf UiOp/TEXT
+                                                      (float (+ (.x arena use-inst) advance))
+                                                      (float (.y arena use-inst))
+                                                      (float (max 2.0 (* 0.5 font)))
+                                                      (float (max font (.h arena use-inst)))
+                                                      (unchecked-int (aget ^ints (.-rgba table) font-node))
+                                                      -1
+                                                      (aget ^ints (.-clipOf arena) use-inst)
+                                                      font
+                                                      "|"))))))))
                                _ (when (map? xf)
                                    (transform/apply-to-cmdbuf! cmdbuf xf crect))
                                resources (or (finish-resources (:resource-index instance))

@@ -32,6 +32,17 @@
             :slice 4.0}
     :semantics {:role :image}}
 
+   ;; Main render-nine-slice! decorative line.png borders (full white):
+   ;;   lm=3.2, top y=lt=-8.6 h=12, bottom y=(h-2) h=8 — relative to info-bg.
+   {:type :image :key :node/info-line-top
+    :layout {:x 175.8 :y -3.6 :width 106.4 :height 12.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/line.png"}}
+    :semantics {:role :image}}
+   {:type :image :key :node/info-line-bot
+    :layout {:x 175.8 :y 180.0 :width 106.4 :height 8.0}
+    :style {:resource {:namespace "academy" :path "textures/guis/line.png"}}
+    :semantics {:role :image}}
+
    {:type :clip :key :node/info
     :layout {:x 179.0 :y 5.0 :width 100.0 :height 177.0}
     :children
@@ -47,19 +58,21 @@
         [{:type :composite :layout {:width 0.0 :height 0.0}
           :bind {:item [:state :item]}}]}]}
 
-     ;; histProperty rows — start at cursor y=64 after (84-20) advance.
+     ;; histProperty rows — auto layout approximating main absolute coords:
+     ;; label w30 @0, swatch 6×6 @33 (margin-left 3), value @43 (margin-left 4).
+     ;; :align :center puts the 6px swatch near main's y=1 inside the row.
      {:type :repeater :layout {:x 6.0 :y 64.0 :width 92.0 :height 24.0}
       :bind {:items [:state :info-area :histograms]}
       :semantics {:role :list}
       :children
-      [{:type :row :layout {:height 10.0}
+      [{:type :row :layout {:height 10.0 :align :center}
         :children
         [{:type :text :layout {:width 30.0 :height 8.0}
           :style {:font-size 8.0 :rgba 0xFFCCCCCC}
           :bind {:text [:item :label]}}
-         {:type :rect :layout {:width 6.0 :height 6.0}
+         {:type :rect :layout {:width 6.0 :height 6.0 :margin {:left 3.0}}
           :bind {:rgba [:item :color]}}
-         {:type :text :layout {:width 55.0 :height 8.0}
+         {:type :text :layout {:width 55.0 :height 8.0 :margin {:left 4.0}}
           :style {:font-size 8.0}
           :bind {:text [:item :value]}}]}]}
 
@@ -67,10 +80,12 @@
       :style {:font-size 6.0 :rgba 0x99FFFFFF}
       :bind {:text [:state :info-area :sep-label]}}
 
-     ;; Property rows — main x=6, label 40 / value 40, font 8.
+     ;; Property rows — main x=6, label 40 / value 40, font 8, row-h 10.
+     ;; Editable values are wrapped in [ ] like main add-property!; brackets
+     ;; live inside the absolute value cell so hidden state doesn't steal row width.
      {:type :column :layout {:x 6.0 :y 95.0 :width 90.0 :height 70.0}
       :children
-      [{:type :row :layout {:height 10.0}
+      [{:type :row :layout {:height 10.0 :align :center}
         :children
         [{:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0 :rgba 0xFFAAAAAA}
@@ -78,7 +93,7 @@
          {:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0}
           :bind {:text [:state :info-area :fields 0 :value]}}]}
-       {:type :row :layout {:height 10.0}
+       {:type :row :layout {:height 10.0 :align :center}
         :children
         [{:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0 :rgba 0xFFAAAAAA}
@@ -86,29 +101,49 @@
          {:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0}
           :bind {:text [:state :info-area :fields 1 :value]}}]}
-       {:type :row :layout {:height 10.0}
+       {:type :row :layout {:height 10.0 :align :center}
         :children
         [{:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0 :rgba 0xFFAAAAAA}
           :text "Node Name"}
-         {:type :text-input :layout {:width 40.0 :height 10.0}
-          :style {:font-size 8.0}
-          :bind {:text [:state :node-name] :visible [:state :node-editable?]}
-          :on {:change :container/text-change :submit :container/text-submit}
-          :semantics {:role :textbox :field :node-name}}
-         {:type :text :layout {:width 40.0 :height 10.0}
-          :style {:font-size 8.0}
-          :bind {:text [:state :node-name] :visible [:state :node-readonly?]}}]}
-       {:type :row :layout {:height 10.0}
+         {:type :absolute :layout {:width 46.0 :height 10.0}
+          :children
+          [{:type :text :layout {:x -4.0 :y 0.0 :width 10.0 :height 10.0}
+            :style {:font-size 8.0}
+            :text "["
+            :bind {:visible [:state :node-editable?]}}
+           {:type :text-input :layout {:x 0.0 :y 0.0 :width 46.0 :height 10.0}
+            :style {:font-size 8.0 :rgba 0xFF2180D8}
+            :bind {:text [:state :node-name] :visible [:state :node-editable?]}
+            :on {:change :container/text-change :submit :container/text-submit}
+            :semantics {:role :textbox :field :node-name}}
+           {:type :text :layout {:x 42.0 :y 0.0 :width 10.0 :height 10.0}
+            :style {:font-size 8.0}
+            :text "]"
+            :bind {:visible [:state :node-editable?]}}
+           {:type :text :layout {:x 0.0 :y 0.0 :width 40.0 :height 10.0}
+            :style {:font-size 8.0}
+            :bind {:text [:state :node-name] :visible [:state :node-readonly?]}}]}]}
+       {:type :row :layout {:height 10.0 :align :center}
         :children
         [{:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0 :rgba 0xFFAAAAAA}
           :text "Password"}
-         {:type :text-input :layout {:width 40.0 :height 10.0}
-          :style {:font-size 8.0}
-          :bind {:text [:state :network-password] :visible [:state :node-editable?]}
-          :on {:change :container/text-change :submit :container/text-submit}
-          :semantics {:role :textbox :field :password}}
-         {:type :text :layout {:width 40.0 :height 10.0}
-          :style {:font-size 8.0}
-          :bind {:text [:state :network-password] :visible [:state :node-readonly?]}}]}]}]}]}}
+         {:type :absolute :layout {:width 46.0 :height 10.0}
+          :children
+          [{:type :text :layout {:x -4.0 :y 0.0 :width 10.0 :height 10.0}
+            :style {:font-size 8.0}
+            :text "["
+            :bind {:visible [:state :node-editable?]}}
+           {:type :text-input :layout {:x 0.0 :y 0.0 :width 46.0 :height 10.0}
+            :style {:font-size 8.0 :rgba 0xFF2180D8}
+            :bind {:text [:state :network-password] :visible [:state :node-editable?]}
+            :on {:change :container/text-change :submit :container/text-submit}
+            :semantics {:role :textbox :field :password}}
+           {:type :text :layout {:x 42.0 :y 0.0 :width 10.0 :height 10.0}
+            :style {:font-size 8.0}
+            :text "]"
+            :bind {:visible [:state :node-editable?]}}
+           {:type :text :layout {:x 0.0 :y 0.0 :width 40.0 :height 10.0}
+            :style {:font-size 8.0}
+            :bind {:text [:state :network-password] :visible [:state :node-readonly?]}}]}]}]}]}]}}

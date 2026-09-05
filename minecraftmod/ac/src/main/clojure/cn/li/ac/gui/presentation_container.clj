@@ -187,6 +187,42 @@
       (and (keyword? action)
            (= "input" (namespace action)))))
 
+(def ^:private draft-state-keys
+  "Text-field drafts that must survive snapshot rebuilds / refresh."
+  [:node-name :network-password :network-ssid])
+
+(defn- merge-drafts
+  "Keep in-progress text drafts across snapshot rebuilds.
+
+   Preference (high -> low): payload active field, live view-state drafts,
+   form-backed snapshot. Text-change handlers sync view -> form first so the
+   next state-fn agrees with view; view still wins if form briefly lags."
+  [snapshot current payload]
+  (let [field (:field payload)
+        value (when (contains? payload :value) (str (:value payload)))
+        from-payload (case field
+                       (:node-name) (when value {:node-name value})
+                       (:password :network-password) (when value {:network-password value})
+                       (:ssid :network-ssid) (when value {:network-ssid value})
+                       nil)]
+    (merge snapshot
+           (select-keys (or current {}) draft-state-keys)
+           from-payload)))
+
+(defn- sync-view-drafts-into-form!
+  "Push live text-input view keys into presentation-form-state before rebuild."
+  [form current]
+  (when (and form (map? current))
+    (swap! form
+           (fn [m]
+             (cond-> (or m {})
+               (contains? current :node-name)
+               (assoc :node-name (str (:node-name current)))
+               (contains? current :network-password)
+               (assoc :password (str (:network-password current)))
+               (contains? current :network-ssid)
+               (assoc :ssid (str (:network-ssid current))))))))
+
 (defn mount-container!
   ([runtime menu-bridge snapshot-fn dispatch-action!]
    (mount-container! runtime menu-bridge snapshot-fn dispatch-action!
@@ -194,30 +230,41 @@
   ([_runtime menu-bridge snapshot-fn dispatch-action! view-id]
   (let [state-fn (fn []
                    (let [snapshot (snapshot-fn)]
-                     (merge (:values snapshot {}) snapshot)))
+                     ;; Prefer flattened :values over envelope keys so draft
+                     ;; fields are not shadowed by nested :values metadata.
+                     (merge snapshot (:values snapshot {}))))
         vm (presentation/mount-view!
              {:view-id view-id
               :host-kind :container
               :state (state-fn)
               :dispatch-action!
               (fn [action payload current]
+                ;; On focus change, push sibling drafts into form-state before any
+                ;; later keystroke rebuilds the snapshot from a stale form.
+                (when (and (map? current) (= action :input/focus))
+                  (try (dispatch-action! :presentation/sync-drafts {} current)
+                       (catch Throwable _)))
                 (cond
                   (runtime-owned-action? action)
                   current
 
                   (contains? (:allowed-actions menu-bridge) action)
                   (do (menu-bridge/dispatch-action menu-bridge action payload dispatch-action!)
-                      (state-fn))
+                      (merge-drafts (state-fn) current payload))
 
                   ;; Content-owned actions (wireless/text/custom) bypass the
                   ;; slot allow-list but still reach the container dispatcher.
                   :else
-                  (do (dispatch-action! action payload)
-                      (state-fn))))})]
+                  (do (try
+                        (dispatch-action! action payload current)
+                        (catch clojure.lang.ArityException _
+                          (dispatch-action! action payload)))
+                      (merge-drafts (state-fn) current payload))))})]
     (assoc vm
            :snapshot (atom (state-fn))
            :refresh! (fn []
-                       (let [next (state-fn)]
+                       (let [cur (when-let [st (:state vm)] @st)
+                             next (merge-drafts (state-fn) cur nil)]
                          (reset! (:snapshot vm) next)
                          (presentation/present! vm next)))))))
 
@@ -296,8 +343,14 @@
                                           {:slot-anchors anchors})]
                         (menu-bridge/update-snapshot! bridge @revision values)
                         (menu-bridge/snapshot bridge)))
-        dispatch-action! (fn [action payload]
+        dispatch-action! (fn dispatch-action!
+                           ([action payload] (dispatch-action! action payload nil))
+                           ([action payload current]
                            (cond
+                             (= action :presentation/sync-drafts)
+                             (sync-view-drafts-into-form!
+                               (:presentation-form-state container) current)
+
                              (= action :container/wireless-password)
                              (swap! wireless* assoc :password (str (or (:value payload) "")))
 
@@ -321,17 +374,28 @@
                                  (when-let [refresh @refresh*] (refresh))))
 
                              (contains? #{:container/text-change :container/text-submit} action)
-                             (when-let [handler (if (= action :container/text-submit)
-                                                   (:presentation-text-submit! container)
-                                                   (:presentation-text-change! container))]
-                               (handler (:field payload) (str (or (:value payload) ""))))
+                             (do (sync-view-drafts-into-form!
+                                   (:presentation-form-state container) current)
+                                 (when-let [handler (if (= action :container/text-submit)
+                                                       (:presentation-text-submit! container)
+                                                       (:presentation-text-change! container))]
+                                   (let [field (or (:field payload)
+                                                   ;; Fall back to bind-path tail when semantics omit :field.
+                                                   (when-let [p (:path payload)]
+                                                     (when (vector? p) (peek p))))
+                                         field (case field
+                                                 :network-password :password
+                                                 :network-ssid :ssid
+                                                 field)
+                                         value (str (or (:value payload) ""))]
+                                     (handler field value))))
 
                              :else
                              (if-let [dispatch (:presentation-dispatch-action! container)]
                                (dispatch action payload)
                                (when (= action :container/button)
                                  (when-let [button (:button-click-fn container)]
-                                   (button container (:button-id payload) player))))))]
+                                   (button container (:button-id payload) player)))))))]
     {:type :presentation-container-screen
      ;; Match TechUI host design so leftPos/topPos align with Presentation :fit.
      :image-width techui-image-width

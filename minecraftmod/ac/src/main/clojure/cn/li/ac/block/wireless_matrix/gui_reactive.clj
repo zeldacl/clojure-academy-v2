@@ -73,83 +73,93 @@
   [tile player]
   (let [[be state] (resolve-state tile)
         entity (or be tile)
-        proxy (matrix-capability/->MatrixJavaProxy entity)]
-    (let [container (gui-sync/create-schema-container
-                      matrix-schema/unified-matrix-schema
-                      state
-                      player
-                      :matrix
-                      {:gui-id (gui-manifest/gui-id :wireless-matrix)
-                       :base {:tile-entity entity
-                              :tile-java proxy}})]
-      (assoc container
-             :presentation-network (atom {:initialized false :ssid "" :password ""
-                                           :owner "Unknown" :load 0 :max-capacity 16
-                                           :range 64 :bandwidth 100})
-             :presentation-form-state (atom {:ssid nil :password nil})
-             :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
-                                     :width 52 :height 18 :label "Init/Refresh"}
-                                    {:id :right :button-id 1 :x 70 :y 145
-                                     :width 52 :height 18 :label "Eject"}]
-             :presentation-text-fields [{:id :ssid :binding-key :network-ssid
-                                         :x 12 :y 82 :width 120 :height 18
-                                         :value-fn (fn [c _]
-                                                     (get @(:presentation-network c) :ssid ""))}
-                                        {:id :password :binding-key :network-password
-                                         :x 12 :y 105 :width 120 :height 18
-                                         :value-fn (fn [c _]
-                                                     (get @(:presentation-network c) :password ""))}]
-             :presentation-snapshot-fn
-             (fn [c _]
-               (let [data @(:presentation-network c)
-                     initialized? (boolean (:initialized data))
-                     owner? (boolean (matrix-logic/owner-authorized? state player))
-                     max-capacity (max 1.0 (double (or (:max-capacity data) 1)))]
-                 {:network-input-visible? owner?
-                  :network-editable? (and initialized? owner?)
-                  :network-readonly? (and initialized? (not owner?))
-                  :network-init-form? (and (not initialized?) owner?)
-                  :network-noinit? (and (not initialized?) (not owner?)) :network-init-label "Initialize network" :network-noinit-label "Network unavailable"
-                  :network-state (if (:initialized data) "Initialized" "Not initialized")
-                  :network-owner (str "Owner: " (or (:owner data) "Unknown"))
-                  :network-range (str "Range: " (or (:range data) 0))
-                  :network-bandwidth (str "Bandwidth: " (or (:bandwidth data) 0) " IF/T")
-                  :network-load (max 0.0 (min 1.0 (/ (double (or (:load data) 0)) max-capacity)))
-                  :info-area (matrix-info/info-area-snapshot
-                               data (matrix-logic/owner-authorized? state player))}))
-             :presentation-text-submit!
-             (fn [field value]
-               (swap! (:presentation-form-state container) assoc field value)
-               (when (and (:initialized @(:presentation-network container))
-                          (matrix-logic/owner-authorized? state player))
-                 (case field
-                   :ssid (matrix-info/send-change-ssid container value)
-                   :password (matrix-info/send-change-password container value)
-                   nil)))
-             :presentation-text-change!
-             (fn [field value]
-               (swap! (:presentation-form-state container) assoc field value))
-             :presentation-dispatch-action!
-             (fn [action payload]
-               (when (= action :container/button)
-                 (case (int (:button-id payload))
-                   0 (if (:initialized @(:presentation-network container))
-                       (matrix-info/send-gather-info
-                         container (fn [data]
-                                     (reset! (:presentation-network container) (into {} data))))
-                       (let [{:keys [ssid password]} @(:presentation-form-state container)]
-                         (when (and (seq ssid) (seq password)
-                                    (matrix-logic/owner-authorized? state player))
-                           (matrix-info/send-init-network
-                             container ssid password
-                             (fn [success]
-                               (when success
-                                 (matrix-info/send-gather-info
-                                   container (fn [data]
-                                               (reset! (:presentation-network container)
-                                                       (into {} data))))))))))
-                   1 (handle-button-click! container 1 nil)
-                   nil)))))))
+        proxy (matrix-capability/->MatrixJavaProxy entity)
+        base (gui-sync/create-schema-container
+               matrix-schema/unified-matrix-schema
+               state
+               player
+               :matrix
+               {:gui-id (gui-manifest/gui-id :wireless-matrix)
+                :base {:tile-entity entity
+                       :tile-java proxy}})
+        network* (atom {:initialized false :ssid "" :password ""
+                        :owner "Unknown" :load 0 :max-capacity 16
+                        :range 64 :bandwidth 100})
+        form* (atom {:ssid nil :password nil})
+        ;; Self-ref so button/submit handlers can call matrix-info with the
+        ;; fully assoc'd container after create-container returns.
+        container* (atom nil)
+        container
+        (assoc base
+               :presentation-network network*
+               :presentation-form-state form*
+               :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
+                                       :width 52 :height 18 :label "Init/Refresh"}
+                                      {:id :right :button-id 1 :x 70 :y 145
+                                       :width 52 :height 18 :label "Eject"}]
+               :presentation-text-fields [{:id :ssid :binding-key :network-ssid
+                                           :x 12 :y 82 :width 120 :height 18
+                                           :value-fn (fn [c _]
+                                                       (get @(:presentation-network c) :ssid ""))}
+                                          {:id :password :binding-key :network-password
+                                           :x 12 :y 105 :width 120 :height 18
+                                           :value-fn (fn [c _]
+                                                       (get @(:presentation-network c) :password ""))}]
+               :presentation-snapshot-fn
+               (fn [c _]
+                 (let [data @(:presentation-network c)
+                       initialized? (boolean (:initialized data))
+                       owner? (boolean (matrix-logic/owner-authorized? state player))
+                       max-capacity (max 1.0 (double (or (:max-capacity data) 1)))]
+                   {:network-input-visible? owner?
+                    :network-editable? (and initialized? owner?)
+                    :network-readonly? (and initialized? (not owner?))
+                    :network-init-form? (and (not initialized?) owner?)
+                    :network-noinit? (and (not initialized?) (not owner?)) :network-init-label "Initialize network" :network-noinit-label "Network unavailable"
+                    :network-state (if (:initialized data) "Initialized" "Not initialized")
+                    :network-owner (str "Owner: " (or (:owner data) "Unknown"))
+                    :network-range (str "Range: " (or (:range data) 0))
+                    :network-bandwidth (str "Bandwidth: " (or (:bandwidth data) 0) " IF/T")
+                    :network-load (max 0.0 (min 1.0 (/ (double (or (:load data) 0)) max-capacity)))
+                    :info-area (matrix-info/info-area-snapshot
+                                 data (matrix-logic/owner-authorized? state player))}))
+               :presentation-text-submit!
+               (fn [field value]
+                 (swap! form* assoc field value)
+                 (let [c @container*]
+                   (when (and c (:initialized @network*)
+                              (matrix-logic/owner-authorized? state player))
+                     (case field
+                       :ssid (matrix-info/send-change-ssid c value)
+                       :password (matrix-info/send-change-password c value)
+                       nil))))
+               :presentation-text-change!
+               (fn [field value]
+                 (swap! form* assoc field value))
+               :presentation-dispatch-action!
+               (fn [action payload]
+                 (when (= action :container/button)
+                   (let [c @container*]
+                     (when c
+                       (case (int (:button-id payload))
+                         0 (if (:initialized @network*)
+                             (matrix-info/send-gather-info
+                               c (fn [data]
+                                   (reset! network* (into {} data))))
+                             (let [{:keys [ssid password]} @form*]
+                               (when (and (seq ssid) (seq password)
+                                          (matrix-logic/owner-authorized? state player))
+                                 (matrix-info/send-init-network
+                                   c ssid password
+                                   (fn [success]
+                                     (when success
+                                       (matrix-info/send-gather-info
+                                         c (fn [data]
+                                             (reset! network* (into {} data))))))))))
+                         1 (handle-button-click! c 1 nil)
+                         nil))))))]
+      (reset! container* container)
+      container))
 
 ;; ============================================================================
 ;; Slot Management
