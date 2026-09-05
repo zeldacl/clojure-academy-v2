@@ -204,7 +204,15 @@
         max-progress (max 1.0 (double (or (value-of (:max-progress container)) 1.0)))
         tab-keys (tech-tabs/snapshot-keys container)
         ;; Info-area mini network is for non-tabbed wireless hosts only.
-        info-network? (and (boolean (wireless-config container)) (not tabbed?))]
+        info-network? (and (boolean (wireless-config container)) (not tabbed?))
+        buttons (or (:presentation-buttons container) [])
+        ;; Inv-page progress/button chrome is opt-in: empty :button nodes lower
+        ;; to opaque white RECTs and look like a stray bar under the inventory.
+        inv-buttons? (boolean (seq buttons))
+        inv-bars? (boolean (:presentation-inv-bars? container))
+        info-load? (boolean (or (:presentation-info-load? container)
+                                (and (contains? container :max-progress)
+                                     (> max-progress 1.0))))]
     {:revision @revision
      :values (merge
               {:slots (mapv #(slot-value container %) (range slot-count))
@@ -216,6 +224,9 @@
                                   "IDLE")
                :info-area (generic-info-area container progress)
                :page-composite (or (page-composite-for container) [])
+               :inv-buttons-visible? inv-buttons?
+               :inv-bars-visible? inv-bars?
+               :info-load-visible? info-load?
                :network-visible info-network?
                :network-state (if linked "Connected" "Not connected")
                :network-linked-label (linked-label container)
@@ -328,7 +339,10 @@
                          next (merge-drafts (state-fn) cur nil)]
                      (reset! snapshot* next)
                      (presentation/present! vm next)))]
-    (assoc vm :snapshot snapshot* :refresh! refresh!))))
+    (assoc vm
+           :snapshot snapshot*
+           :refresh! refresh!
+           :clear-focus! (fn [] (presentation/clear-focus! vm))))))
 
 (defn open-screen!
   [menu-bridge snapshot-fn dispatch-action! on-close]
@@ -339,6 +353,33 @@
 
 (def ^:private techui-image-width 290)
 (def ^:private techui-image-height 187)
+
+(def ^:private ^:const live-sync-fallback-keys
+  "When :data-slot-field-specs is absent, sample these container atoms."
+  [:energy :max-energy :status :gen-speed :progress :mode
+   :capacity :max-capacity :work-progress :crafting-progress
+   :liquid-amount :tank-size])
+
+(defn- deref-gui-value
+  [v]
+  (if (instance? clojure.lang.IDeref v) @v v))
+
+(defn- live-sync-fingerprint
+  "O(fields) sample of GUI atoms (+ optional anim signature) that feed
+   snapshot projection. Compared each client frame; full present! runs
+   only when this changes.
+
+   Containers may supply `:presentation-anim-fingerprint` (fn [container] →
+   any value) for time-based paint (sprite frame / quantized breathe). Prefer
+   that over a blanket per-frame rebuild."
+  [container]
+  (let [keys (if-let [specs (seq (:data-slot-field-specs container))]
+               (mapv :container-key specs)
+               live-sync-fallback-keys)
+        atoms (mapv (fn [k] (deref-gui-value (get container k))) keys)
+        anim (when-let [f (:presentation-anim-fingerprint container)]
+               (f container))]
+    (if (some? anim) [atoms anim] atoms)))
 
 (defn- player-inventory-anchors
   "Mirror mcbase `add-player-inventory-slots!` at (6,105): 3×9 main + hotbar.
@@ -369,6 +410,8 @@
   [container menu player schema-id template-id]
   (let [revision (atom 0)
         refresh* (atom nil)
+        clear-focus* (atom nil)
+        live-fp* (atom ::uninitialized)
         wireless-attached?* (atom false)
         wireless* (or (:presentation-wireless-state container) (atom {:linked nil :avail [] :password ""}))
         container (assoc container
@@ -427,6 +470,8 @@
                                      idx (or (:tab-index item)
                                              (:tab-index payload)
                                              0)]
+                                 ;; Drop caret when leaving a page that owned focus.
+                                 (when-let [cf @clear-focus*] (cf))
                                  (tech-tabs/switch-tab! container idx
                                    {:on-switch
                                     (fn [tab-id _]
@@ -491,7 +536,13 @@
                                                  :network-ssid :ssid
                                                  field)
                                          value (str (or (:value payload) ""))]
-                                     (handler field value))))
+                                     ;; Pass the live screen container (has :minecraft-container)
+                                     ;; so C2S actions can resolve container-id. Fall back to
+                                     ;; 2-arity for older handlers.
+                                     (try
+                                       (handler field value container)
+                                       (catch clojure.lang.ArityException _
+                                         (handler field value))))))
 
                              :else
                              (if-let [dispatch (:presentation-dispatch-action! container)]
@@ -508,8 +559,17 @@
      :menu menu
      :player player
      :mount-fn (fn [_]
-                 (let [vm (mount-container! nil bridge snapshot-fn dispatch-action! template-id)]
-                   (reset! refresh* (:refresh! vm))
+                 (let [vm (mount-container! nil bridge snapshot-fn dispatch-action! template-id)
+                       raw-refresh! (:refresh! vm)
+                       refresh!
+                       (fn []
+                         (raw-refresh!)
+                         ;; Keep fingerprint in sync after action/wireless-driven
+                         ;; rebuilds so the next frame does not rebuild twice.
+                         (reset! live-fp* (live-sync-fingerprint container)))]
+                   (reset! refresh* refresh!)
+                   (reset! clear-focus* (:clear-focus! vm))
+                   (reset! live-fp* (live-sync-fingerprint container))
                    (when-let [on-mount (:presentation-on-mount! container)]
                      (on-mount container))
                    ;; Non-tabbed wireless hosts still list on mount. Tabbed hosts
@@ -521,9 +581,12 @@
                     :frame! (fn []
                               (when-let [frame! (:presentation-frame! container)]
                                 (frame! container))
-                              (when (:presentation-animate? container)
-                                (when-let [refresh @refresh*]
-                                  (refresh))))
+                              ;; Cheap fingerprint each frame (DataSlot atoms +
+                              ;; optional anim signature). Full snapshot rebuild
+                              ;; only when the fingerprint changes.
+                              (let [fp (live-sync-fingerprint container)]
+                                (when (not= fp @live-fp*)
+                                  (refresh!))))
                     :on-close (fn []
                                 (when-let [close (or (:presentation-close-fn container)
                                                      (:close-fn container))]

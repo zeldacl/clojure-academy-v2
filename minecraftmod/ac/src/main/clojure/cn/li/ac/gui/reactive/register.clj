@@ -77,10 +77,9 @@
   (presentation-host/api (presentation-runtime)))
 
 (def ^:private core-host-keys
-  [:mount! :sync! :mount-view! :present-view! :update-view! :update-host!
+  [:mount! :sync! :mount-view! :present-view! :clear-focus! :update-view! :update-host!
    :dispatch-input! :begin-frame! :extract-stage! :semantics! :unmount!
    :unmount-all! :invalidate-render-resources!])
-
 (defn- core-host-fn
   "Defer Runtime creation until the first real host call.
 

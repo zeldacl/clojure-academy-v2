@@ -14,6 +14,8 @@
    (fn [spec] (runtime/mount! runtime spec))
    :present-view!
    (fn [mount state] (runtime/present! runtime mount state))
+   :clear-focus!
+   (fn [mount] (runtime/clear-focus! runtime mount))
    :update-view!
    (fn [mount f & args] (apply runtime/update-view! runtime mount f args))
    :update-host!

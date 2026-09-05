@@ -1,19 +1,22 @@
 ;; Shared InfoArea field list (sep + label/value or bracket editors).
+;; Geometry matches main info-area-reactive: rows at x=6 w=90, label 40,
+;; value 40, brackets at value-x-4 / value-x+value-w+2. Content starts at
+;; y=88 below the shared histogram block (see info_area_histogram.edn).
 ;; Editable rows bind [:item :value]; runtime rewrites focus to :draft-key
 ;; (see docs/06-gui/TECH_UI_SHELL.md).
 {:fragment/id :academy.shared/info-fields
  :state-schema {:info-area :map}
  :root
  {:type :absolute :key :info/fields-root
-  :layout {:x 0.0 :y 0.0 :width 100.0 :height 177.0}
+  :layout {:x 0.0 :y 88.0 :width 100.0 :height 89.0}
   :children
   [{:type :text :key :info/sep
-    :layout {:x 3.0 :y 84.0 :width 97.0 :height 8.0}
+    :layout {:x 3.0 :y 0.0 :width 97.0 :height 8.0}
     :style {:font-size 6.0 :rgba 0x99FFFFFF}
     :bind {:text [:state :info-area :sep-label]
            :visible [:state :info-area :sep-visible?]}}
    {:type :repeater :key :info/fields
-    :layout {:x 6.0 :y 95.0 :width 90.0 :height 70.0 :direction :column :gap 0.0}
+    :layout {:x 6.0 :y 11.0 :width 90.0 :height 70.0 :direction :column :gap 0.0}
     :bind {:items [:state :info-area :fields]}
     :semantics {:role :list}
     :children
@@ -22,20 +25,21 @@
       [{:type :text :layout {:width 40.0 :height 10.0}
         :style {:font-size 8.0 :rgba 0xFFAAAAAA}
         :bind {:text [:item :label]}}
-       ;; Stack so readonly/edit share one 46-wide cell (invisible siblings
-       ;; still consume row main-axis space if placed as peers).
-       {:type :stack :layout {:width 46.0 :height 10.0}
+       ;; Value cell is exactly 40px (main valueArea). Stack keeps readonly /
+       ;; edit mutually exclusive without consuming extra row main-axis space.
+       {:type :stack :layout {:width 40.0 :height 10.0}
         :children
         [{:type :text :layout {:width 40.0 :height 10.0}
           :style {:font-size 8.0}
           :bind {:text [:item :value] :visible [:item :readonly?]}}
-         {:type :absolute :layout {:width 46.0 :height 10.0}
+         {:type :absolute :layout {:width 40.0 :height 10.0}
           :bind {:visible [:item :editable?]}
           :children
-          [{:type :text :layout {:x -4.0 :y 0.0 :width 10.0 :height 10.0}
+          [;; AcademyCraft brackets: "[" at -4, "]" at value-w+2 (=42).
+           {:type :text :layout {:x -4.0 :y 0.0 :width 10.0 :height 10.0}
             :style {:font-size 8.0}
             :text "["}
-           {:type :text-input :layout {:x 0.0 :y 0.0 :width 46.0 :height 10.0}
+           {:type :text-input :layout {:x 0.0 :y 0.0 :width 40.0 :height 10.0}
             :style {:font-size 8.0 :rgba 0xFF2180D8}
             :bind {:text [:item :value]}
             :on {:change :container/text-change :submit :container/text-submit}

@@ -336,6 +336,18 @@
   (vswap! (:state runtime) assoc-in [:mounts mount :view-state] next-state)
   next-state)
 
+(defn clear-focus!
+  "Drop text focus (and force a repaint so the caret disappears)."
+  [^UiRuntime runtime mount]
+  (owner-thread! runtime)
+  (instance! runtime mount)
+  (vswap! (:state runtime)
+          (fn [snapshot]
+            (-> snapshot
+                (assoc-in [:mounts mount :focus] nil)
+                (assoc-in [:mounts mount :paint-stamp] nil))))
+  nil)
+
 (defn update-view! [^UiRuntime runtime mount f & args]
   (let [current (:view-state (instance! runtime mount))]
     (present! runtime mount (apply f current args))))
@@ -545,16 +557,58 @@
 
 (defn- clamp01 [v] (max 0.0 (min 1.0 v)))
 
+(defn- instance-item-index
+  "Walk ancestors for the collection itemIndex stamped on a template root."
+  ^long [^LayoutArena arena ^long inst]
+  (loop [i (int inst)]
+    (if (< i 0)
+      (long -1)
+      (let [idx (aget ^ints (.-itemIndexOf arena) i)]
+        (if (>= idx 0)
+          (long idx)
+          (recur (aget ^ints (.-parentOf arena) i)))))))
+
 (defn- find-instance-for-node
-  "First arena instance whose node index matches, or -1."
-  [^LayoutArena arena node]
-  (let [n (.-n arena)
-        node (int node)]
-    (loop [i (int 0)]
-      (cond
-        (>= i n) -1
-        (= node (aget ^ints (.-nodeOf arena) i)) i
-        :else (recur (unchecked-inc-int i))))))
+  "Arena instance for a compiled node. With `item-index`, prefer the expansion
+   under that collection item (repeater text-inputs share one node id)."
+  ([^LayoutArena arena node]
+   (find-instance-for-node arena node nil))
+  ([^LayoutArena arena node item-index]
+   (let [n (.-n arena)
+         node (int node)
+         want (when (integer? item-index) (long item-index))]
+     (loop [i (int 0)]
+       (cond
+         (>= i n) -1
+         (not= node (aget ^ints (.-nodeOf arena) i))
+         (recur (unchecked-inc-int i))
+         (nil? want) i
+         (= want (instance-item-index arena i)) i
+         :else (recur (unchecked-inc-int i)))))))
+
+(defn- resolve-focus-instance
+  "Prefer the hit instance while it still maps to focus :node; else re-resolve
+   via node + item-index after layout rebuilds."
+  ^long [^LayoutArena arena focus]
+  (let [node (int (:node focus -1))
+        preferred (int (:instance focus -1))]
+    (if (and (>= preferred 0)
+             (< preferred (.-n arena))
+             (= node (aget ^ints (.-nodeOf arena) preferred)))
+      preferred
+      (long (find-instance-for-node arena node (:item-index focus))))))
+
+(defn- find-text-child-instance
+  "TEXT paint child under a lowered :text-input wrapper instance."
+  ^long [^NodeTable table ^LayoutArena arena ^long wrapper-inst]
+  (let [end (aget ^ints (.-subtreeEnd arena) (int wrapper-inst))]
+    (loop [c (LayoutKernel/firstChild arena (int wrapper-inst))]
+      (if (< c 0)
+        (long -1)
+        (let [cn (aget ^ints (.-nodeOf arena) c)]
+          (if (= UiOp/TEXT (aget ^ints (.-op table) cn))
+            (long c)
+            (recur (LayoutKernel/nextSibling arena c end))))))))
 
 (defn- apply-scrollbar-thumbs!
   "Move thumb instances to match linked scroll progress (pre-rewrite paint parity)."
@@ -749,10 +803,12 @@
                                     text-path)]
               {:focus (cond-> {:key (node-key table hit-node)
                                :node (int hit-node)
+                               :instance (int (.instance h))
                                :path focus-text-path
                                :on (nth on-maps hit-node nil)
                                :field field}
                         (keyword? draft-key) (assoc :draft-key draft-key)
+                        (map? item) (assoc :item item)
                         (>= item-index 0) (assoc :item-index item-index))
                :action :input/focus
                :payload {:target (node-key table hit-node)
@@ -806,7 +862,13 @@
                                                     (if (and (vector? path) (= :state (first path)))
                                                       (subvec path 1) path)))}
                             (:field focus) (assoc :field (:field focus)))}
-                (= key-code 259) {:action :input/backspace :payload event}
+                (= key-code 259)
+                (let [change (get-in focus [:on :change])]
+                  ;; Prefer the field's :change action so content handlers
+                  ;; (wireless-row-password / text-change) stay in sync; mark
+                  ;; :backspace so edit-input-state still deletes a glyph.
+                  {:action (or change :input/backspace)
+                   :payload (assoc event :backspace true)})
                 :else {:action :input/key :payload event}))
 
         :character {:action (or (get-in focus [:on :change]) :input/character) :payload event}
@@ -834,42 +896,93 @@
   (when-let [path (:path focus)]
     (if (and (vector? path) (= :state (first path))) (subvec path 1) path)))
 
+(defn- item-field-key
+  "When focus path is [:item :k] (or [:state :item :k] stripped), return :k."
+  [focus]
+  (let [path (:path focus)]
+    (when (vector? path)
+      (cond
+        (and (= :item (first path)) (keyword? (second path))) (second path)
+        (and (= :state (first path)) (= :item (second path)) (keyword? (nth path 2 nil)))
+        (nth path 2)
+        :else nil))))
+
+(defn- backspace-edit?
+  [action payload]
+  (or (= action :input/backspace)
+      (and (map? payload)
+           (or (true? (:backspace payload))
+               (= 259 (int (or (:key-code payload) -1)))))))
+
+(defn- focus-text-value
+  "Resolve the editable string for a focused text-input."
+  [state focus]
+  (let [item-key (item-field-key focus)
+        idx (:item-index focus)
+        path (focus-path focus)]
+    (str (or (cond
+               (and item-key (integer? idx) (>= (int idx) 0)
+                    (vector? (:network-nodes state)))
+               (get-in state [:network-nodes (int idx) item-key])
+               (and item-key (map? (:item focus)))
+               (get (:item focus) item-key)
+               path (get-in state path)
+               :else nil)
+             ""))))
+
 (defn- edit-input-state [state focus action payload]
-  (if-let [path (focus-path focus)]
-    (let [current (str (or (get-in state path) ""))
-          ;; Only append a typed glyph. Enriched text-change payloads already
-          ;; carry :value (full field); treating their :text as a glyph would
-          ;; double-append. Pointer/focus payloads must never mutate text.
-          next-value (cond
-                       (= action :input/backspace)
-                       (if (seq current) (subs current 0 (dec (count current))) current)
+  (let [item-key (item-field-key focus)
+        idx (:item-index focus)
+        path (focus-path focus)
+        current (focus-text-value state focus)
+        ;; Only append a typed glyph. Enriched text-change payloads already
+        ;; carry :value (full field); treating their :text as a glyph would
+        ;; double-append. Pointer/focus payloads must never mutate text.
+        next-value (cond
+                     (backspace-edit? action payload)
+                     (if (seq current) (subs current 0 (dec (count current))) current)
 
-                       (= action :input/character)
-                       (str current (or (:text payload) ""))
+                     (= action :input/character)
+                     (str current (or (:text payload) ""))
 
-                       (and (keyword? action)
-                            (not= "input" (namespace action))
-                            (contains? payload :text)
-                            (not (contains? payload :value)))
-                       (str current (or (:text payload) ""))
+                     (and (map? payload)
+                          (keyword? action)
+                          (not= "input" (namespace action))
+                          (contains? payload :text)
+                          (not (contains? payload :value))
+                          (not (backspace-edit? action payload)))
+                     (str current (or (:text payload) ""))
 
-                       :else nil)
-          idx (:item-index focus)]
-      (if (some? next-value)
-        (cond-> (assoc-in state path next-value)
-          ;; Keep repeater paint ([:item :value]) in sync while typing.
-          (and (integer? idx) (>= (int idx) 0))
-          (assoc-in [:info-area :fields (int idx) :value] next-value))
-        state))
-    state))
+                     :else nil)]
+    (if (some? next-value)
+      (cond-> state
+        ;; Top-level draft / state path (info-area editable rows via draft-key).
+        (and path (not item-key))
+        (assoc-in path next-value)
+
+        ;; Repeater item text (wireless row passwords bind [:item :password]).
+        (and item-key (integer? idx) (>= (int idx) 0)
+             (vector? (:network-nodes state)))
+        (assoc-in [:network-nodes (int idx) item-key] next-value)
+
+        ;; Keep info-area repeater paint in sync while typing/backspacing.
+        (and (not item-key) (integer? idx) (>= (int idx) 0)
+             (vector? (:fields (:info-area state))))
+        (assoc-in [:info-area :fields (int idx) :value] next-value))
+      state)))
 
 (defn- input-payload [state focus action payload]
   (if-let [path (focus-path focus)]
-    (let [value (str (or (get-in state path) ""))]
-      (merge payload {:value value :text value :query value :path (:path focus)}
-             (when-let [field (:field focus)] {:field field})))
+    (let [item-key (item-field-key focus)
+          idx (:item-index focus)
+          value (focus-text-value state focus)]
+      (cond-> (merge payload {:value value :text value :query value :path (:path focus)}
+                     (when-let [field (:field focus)] {:field field}))
+        (map? (:item focus))
+        (assoc :item (cond-> (:item focus)
+                       item-key (assoc item-key value)))
+        (integer? idx) (assoc :index (int idx))))
     payload))
-
 (defn dispatch!
   "Route one neutral input or explicit action through the pure reducer, then effects."
   [^UiRuntime runtime mount event]
@@ -988,21 +1101,13 @@
                                      (when-let [path (focus-path focus)]
                                        ;; ~530ms blink via nanoTime bit 29.
                                        (when (bit-test (unsigned-bit-shift-right (System/nanoTime) 29) 0)
-                                         (let [inst (find-instance-for-node arena (int node))]
+                                         (let [inst (long (resolve-focus-instance arena focus))]
                                            (when (>= inst 0)
-                                             (let [text-child
-                                                   (loop [c (aget ^ints (.-firstChild table) (int node))]
-                                                     (cond
-                                                       (< c 0) nil
-                                                       (= UiOp/TEXT (aget ^ints (.-op table) c)) c
-                                                       :else (recur (aget ^ints (.-nextSibling table) c))))
-                                                   use-inst (if text-child
-                                                              (let [ti (find-instance-for-node arena (int text-child))]
-                                                                (if (>= ti 0) ti inst))
-                                                              inst)
-                                                   font-node (int (or text-child node))
+                                             (let [text-inst (long (find-text-child-instance table arena inst))
+                                                   use-inst (if (>= text-inst 0) text-inst inst)
+                                                   font-node (int (aget ^ints (.-nodeOf arena) use-inst))
                                                    font (float (aget ^floats (.-fontSize table) font-node))
-                                                   text (str (or (get-in (:view-state instance) path) ""))
+                                                   text (focus-text-value (:view-state instance) focus)
                                                    ^UiTextMetrics metrics (presentation-bridge/current-text-metrics)
                                                    advance (float (if metrics
                                                                     (.advance metrics 0 text font)

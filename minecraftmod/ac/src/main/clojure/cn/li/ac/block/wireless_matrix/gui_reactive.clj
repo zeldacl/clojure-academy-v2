@@ -124,15 +124,14 @@
                     :info-area (matrix-info/info-area-snapshot
                                  data (matrix-logic/owner-authorized? state player))}))
                :presentation-text-submit!
-               (fn [field value]
+               (fn [field value container]
                  (swap! form* assoc field value)
-                 (let [c @container*]
-                   (when (and c (:initialized @network*)
-                              (matrix-logic/owner-authorized? state player))
-                     (case field
-                       :ssid (matrix-info/send-change-ssid c value)
-                       :password (matrix-info/send-change-password c value)
-                       nil))))
+                 (when (and container (:initialized @network*)
+                            (matrix-logic/owner-authorized? state player))
+                   (case field
+                     :ssid (matrix-info/send-change-ssid container value)
+                     :password (matrix-info/send-change-password container value)
+                     nil)))
                :presentation-text-change!
                (fn [field value]
                  (swap! form* assoc field value))

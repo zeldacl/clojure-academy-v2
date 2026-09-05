@@ -108,6 +108,9 @@
      :present! (fn [next-state]
                  (reset! state* next-state)
                  ((:present-view! api) mount next-state))
+     :clear-focus! (fn []
+                     (when-let [f (:clear-focus! api)]
+                       (f mount)))
      :update-host! (fn [width height scale]
                      ((:update-host! api) mount (HostGeometry. 0.0 0.0
                                                                (int width) (int height)
@@ -123,6 +126,10 @@
 (defn present! [{:keys [present!]} state]
   (when present!
     (present! state)))
+
+(defn clear-focus! [{:keys [clear-focus!]}]
+  (when clear-focus!
+    (clear-focus!)))
 
 (defn unmount! [{:keys [unmount!]}]
   (when unmount! (unmount!)))

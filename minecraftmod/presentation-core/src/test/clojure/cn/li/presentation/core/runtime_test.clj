@@ -342,9 +342,10 @@
       (let [;; Integer center matches AbstractContainerScreen leftPos/topPos.
             ox (quot (- 800 290) 2)
             oy (quot (- 480 187) 2)
-            ;; Node Name value cell: clip(179,5)+fields(6,95)+row2 → ~(225,120)
+            ;; Node Name value cell: clip(179,5)+fields-root(y88)+sep(11)+row2
+            ;; → value at ~(225, 5+88+11+20) = ~(225,124)
             mx (+ ox 225.0 10.0)
-            my (+ oy 120.0 5.0)
+            my (+ oy 124.0 5.0)
             ;; Password row is one 10px row below name.
             px mx
             py (+ my 10.0)]
@@ -397,10 +398,111 @@
     (let [focus (:focus (runtime/instance! rt mount))]
       (is (= :node-name (:field focus)))
       (is (= [:state :node-name] (:path focus)))
-      (is (= 0 (:item-index focus))))
+      (is (= 0 (:item-index focus)))
+      (is (integer? (:instance focus))))
     (runtime/dispatch! rt mount {:type :character :text "Z"})
     (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :node-name])))
-    (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :info-area :fields 0 :value])))))
+    (is (= "abZ" (get-in (runtime/instance! rt mount) [:view-state :info-area :fields 0 :value])))
+    (let [first-inst (:instance (:focus (runtime/instance! rt mount)))]
+      ;; Second repeater row must not reuse the first row's focus instance
+      ;; (caret previously painted on the first matching compiled node).
+      (is (= :consume
+             (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 30 :button 0})))
+      (let [focus2 (:focus (runtime/instance! rt mount))]
+        (is (= :password (:field focus2)))
+        (is (= 1 (:item-index focus2)))
+        (is (not= first-inst (:instance focus2)))))))
+
+(deftest info-field-backspace-deletes-glyph-and-field-value
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/info-backspace
+                           {:key :list :flags #{:is-collection :has-direction}
+                            :direction :column :width [:fixed 100.0] :height [:fixed 20.0]
+                            :bind {:items [:state :info-area :fields]}
+                            :children
+                            [{:key :row :flags #{:hit-testable :focusable}
+                              :width [:fixed 100.0] :height [:fixed 20.0]
+                              :bind {:text [:item :value]}
+                              :on {:change :container/text-change}
+                              :children []}]})
+        artifact (assoc artifact :node/semantics [nil {:role :textbox}])
+        mount (runtime/mount!
+                rt {:host {:stage :screen} :artifact artifact
+                    :state {:node-name "ab"
+                            :info-area {:fields
+                                        [{:id :node-name :value "ab" :draft-key :node-name
+                                          :editable? true}]}}
+                    :reduce (fn [state action payload]
+                              (swap! seen conj [action (:value payload)])
+                              {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (is (= :consume
+           (runtime/dispatch! rt mount {:type :key :key-code 259})))
+    (is (= "a" (get-in (runtime/instance! rt mount) [:view-state :node-name])))
+    (is (= "a" (get-in (runtime/instance! rt mount) [:view-state :info-area :fields 0 :value])))
+    (is (= :container/text-change (ffirst (filter #(= :container/text-change (first %)) @seen))))
+    (is (= "a" (second (first (filter #(= :container/text-change (first %)) @seen)))))))
+
+(deftest wireless-row-password-accepts-typed-characters-without-draft-key
+  "Wireless list rows bind [:item :password] with no draft-key; edits must land
+   on :network-nodes and enrich :item for :container/wireless-row-password."
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/wireless-row
+                           {:key :list :flags #{:is-collection :has-direction}
+                            :direction :column :width [:fixed 100.0] :height [:fixed 20.0]
+                            :bind {:items [:state :network-nodes]}
+                            :children
+                            [{:key :pwd :flags #{:hit-testable :focusable}
+                              :width [:fixed 100.0] :height [:fixed 20.0]
+                              :bind {:text [:item :password]}
+                              :on {:change :container/wireless-row-password}
+                              :semantics {:role :textbox :field :row-password}
+                              :children []}]})
+        artifact (assoc artifact :node/semantics
+                        [nil {:role :textbox :field :row-password}])
+        mount (runtime/mount!
+                rt {:host {:stage :screen} :artifact artifact
+                    :state {:network-nodes
+                            [{:ssid "net" :pos-x 1 :pos-y 2 :pos-z 3
+                              :node-name "A" :password "" :is-encrypted? true}]}
+                    :reduce (fn [state action payload]
+                              (swap! seen conj [action (:value payload) (:item payload)])
+                              {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (is (= :consume
+           (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})))
+    (let [focus (:focus (runtime/instance! rt mount))]
+      (is (= [:item :password] (:path focus)))
+      (is (= 0 (:item-index focus)))
+      (is (map? (:item focus))))
+    (runtime/dispatch! rt mount {:type :character :text "s"})
+    (runtime/dispatch! rt mount {:type :character :text "e"})
+    (is (= "se" (get-in (runtime/instance! rt mount) [:view-state :network-nodes 0 :password])))
+    (is (= :container/wireless-row-password (ffirst (filter #(= :container/wireless-row-password (first %)) @seen))))
+    (is (= "se" (second (last @seen))))
+    (is (= "se" (get-in (last @seen) [2 :password])))
+    (runtime/dispatch! rt mount {:type :key :key-code 259})
+    (is (= "s" (get-in (runtime/instance! rt mount) [:view-state :network-nodes 0 :password])))))
+
+(deftest clear-focus-drops-caret-state
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/clear-focus
+                           {:key :root :flags #{:hit-testable :focusable}
+                            :width [:fixed 100.0] :height [:fixed 20.0]
+                            :bind {:text [:state :query]}
+                            :on {:change :edit/change}
+                            :semantics {:role :textbox :field :query}})
+        artifact (assoc artifact :node/semantics [{:role :textbox :field :query}])
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state {:query "hi"}
+                                  :reduce (fn [state _ _] {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (is (some? (:focus (runtime/instance! rt mount))))
+    (runtime/clear-focus! rt mount)
+    (is (nil? (:focus (runtime/instance! rt mount))))))
 
 (deftest progress-drag-reports-a-clamped-ratio
   (let [seen (atom nil)

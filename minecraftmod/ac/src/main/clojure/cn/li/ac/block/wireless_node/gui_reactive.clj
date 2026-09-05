@@ -32,6 +32,8 @@
 ;; attach-node-binds! relative to the 176-wide ui_node art (not the slot origin).
 (def ^:private anim-x 25.0)
 (def ^:private anim-y 34.75)
+;; Quantize continuous breathe alpha so present! runs ~20/s, not every render frame.
+(def ^:private anim-paint-quantum-ms 50)
 
 (defn- anim-config [state]
   (case state
@@ -41,6 +43,19 @@
 
 (defn- now-ms []
   (System/currentTimeMillis))
+
+(defn- anim-signature
+  "Cheap dirty key for live-sync fingerprint: link state + sprite frame +
+   quantized breathe clock. Sprite frames already change slowly (0.8s/3s);
+   breath-bucket caps alpha-driven rebuilds at ~20 Hz."
+  [linked?]
+  (let [ms (long (now-ms))
+        state (if linked? :linked :unlinked)
+        {:keys [begin frames frame-time]} (anim-config state)
+        ticks (quot ms (long frame-time))
+        frame (+ begin (rem ticks frames))
+        breath-bucket (quot ms anim-paint-quantum-ms)]
+    [linked? frame breath-bucket]))
 
 (defn- node-anim-items
   "Build the single composite image for the center strip animation."
@@ -97,7 +112,9 @@
         link-owner (atom nil)]
     (assoc base
            :presentation-form-state form-state
-           :presentation-animate? true
+           ;; Anim paint is dirty-checked via fingerprint (~20 Hz), not every
+           ;; render frame — see presentation-container/live-sync-fingerprint.
+           :presentation-anim-fingerprint (fn [_] (anim-signature @linked*))
            :presentation-tech-tabs? true
            :presentation-wireless {:domain :node :role :node}
            :presentation-wireless-state (atom {:linked nil :avail [] :password ""})
@@ -151,11 +168,13 @@
            (fn [field value]
              (swap! form-state assoc field value))
            :presentation-text-submit!
-           (fn [field value]
+           (fn [field value container]
+             ;; Use the live screen container (has :minecraft-container), not
+             ;; create-container's base map — action-payload needs menu id.
              (when (node-logic/owner-authorized? state player)
                (case field
-                 :node-name (node-info/send-change-name base value)
-                 :password (node-info/send-change-password base value)
+                 :node-name (node-info/send-change-name container value)
+                 :password (node-info/send-change-password container value)
                  nil)))
            :presentation-dispatch-action!
            (fn [_action _payload] nil))))
