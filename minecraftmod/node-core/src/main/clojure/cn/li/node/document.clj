@@ -87,7 +87,32 @@
                   {:path path :ref ref}))))
   value)
 
-(declare validate-node!)
+(declare validate-node! validate-value!)
+
+(defn- validate-value!
+  "Validate a value which may contain nested author-visible nodes.
+   Component arguments and input payloads are deliberately recursive: the
+   graph editor addresses every nested expression by nid, not only the
+   top-level statement."
+  [value path]
+  (cond
+    (and (map? value) (contains? value :nid))
+    (validate-node! value path)
+
+    (map? value)
+    (do
+      (validate-ref! value path)
+      (doseq [[key child] value]
+        (validate-value! child (conj path key)))
+      value)
+
+    (vector? value)
+    (do
+      (doseq [[index child] (map-indexed vector value)]
+        (validate-value! child (conj path index)))
+      value)
+
+    :else value))
 
 (defn- validate-node-vector! [nodes path]
   (require! (vector? nodes) "V3 node body must be a vector" {:path path})
@@ -101,7 +126,7 @@
     (doseq [[key value] inputs]
       (require! (keyword? key) "V3 input names must be keywords"
                 {:path (conj path key) :value key})
-      (validate-ref! value (conj path key))))
+      (validate-value! value (conj path key))))
   inputs)
 
 (defn- validate-flow! [node path]
@@ -143,12 +168,18 @@
         (validate-node-vector! (:do node) (conj path :do)))
 
       :finish
-      (require! (map? (:result node))
-                "V3 :finish requires a result map" {:path path})
+      (do
+        (require! (map? (:result node))
+                  "V3 :finish requires a result map" {:path path})
+        (validate-value! (:result node) (conj path :result)))
 
       :bind
-      (require! (keyword? (:name node))
-                "V3 :bind requires a local :name" {:path path})
+      (do
+        (require! (keyword? (:name node))
+                  "V3 :bind requires a local :name" {:path path})
+        (require! (contains? node :value)
+                  "V3 :bind requires a :value" {:path path})
+        (validate-value! (:value node) (conj path :value)))
 
       (fail "unknown V3 flow node" {:path path :flow flow}))))
 
@@ -174,6 +205,10 @@
       (require! (keyword? (:component node))
                 "V3 :component must be a keyword" {:path path})
       (validate-input-map! (:inputs node) (conj path :inputs))
+      (when (some? (:args node))
+        (require! (vector? (:args node))
+                  "V3 component :args must be a vector" {:path path})
+        (validate-value! (:args node) (conj path :args)))
       (when-let [bind (:bind node)]
         (require! (map? bind) "V3 :bind must be a map" {:path path})
         (doseq [[port local] bind]

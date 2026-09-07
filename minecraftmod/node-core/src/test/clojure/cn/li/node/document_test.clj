@@ -51,3 +51,13 @@
         (catch clojure.lang.ExceptionInfo error
           (is (re-find #"node IDs must be unique"
                        (.getMessage error)))))))
+  (testing "invalid nested input node"
+    (let [invalid (assoc-in skill [:entries :activate :do 0 :inputs :origin]
+                            {:nid :bad/id :ref [:context :caster/eye]})]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (document/validate-document! invalid)))))
+  (testing "bind must carry a value"
+    (let [invalid (assoc-in skill [:entries :activate :do 0]
+                            {:nid :n/bind :flow :bind :name :local})]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (document/validate-document! invalid)))))
