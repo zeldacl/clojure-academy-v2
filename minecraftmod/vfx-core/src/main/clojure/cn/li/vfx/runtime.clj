@@ -173,7 +173,7 @@
 (defn create-client-runtime
   "registry: same shape create-store takes, plus each entry may declare
    :lifecycle (:transient effects auto-destroy after their declared
-   :duration-ticks, then :life-ticks, otherwise one client tick; see
+   :duration-ticks, then :life-ticks/:ttl-ticks, otherwise one client tick; see
    client-tick! below). This retires both long-lived transient visuals and
    true one-shot effects without requiring a synthetic duration input)."
   ([registry] (create-client-runtime registry {}))
@@ -192,13 +192,14 @@
 (defn- transient-duration
   "Returns the authoritative client lifetime for a transient instance.
    `duration-ticks` is the explicit V3 lifecycle contract. Effects whose
-   visual payload already owns a particle/ray lifetime use `life-ticks` as
-   the natural fallback. A transient with neither field is a one-shot
+   visual payload already owns a particle/ray lifetime uses `life-ticks` or
+   `ttl-ticks` as the natural fallback. A transient with neither field is a one-shot
    operation (audio, burst, etc.) and must still be retired after one tick;
    retaining it forever would sample the one-shot render op every frame."
   [instance]
   (max 1 (long (or (get-in instance [:user :duration-ticks])
                    (get-in instance [:user :life-ticks])
+                   (get-in instance [:user :ttl-ticks])
                    1))))
 
 (defn- remember-tombstone! [rt instance-key event-seq state-seq]
@@ -267,22 +268,31 @@
                     (swap! (:instances rt) update instance-key assoc :event-seq event-seq))
 
                   nil)))))))
-    nil))`r`n`r`n(defn client-tick!
+    nil))
+
+(defn client-tick!
   "tick! above (particle buffers + per-instance :age), then destroy any
    :transient instance whose :age has reached its effective lifetime:
-   explicit :duration-ticks, then :life-ticks, then one tick for a true
+   explicit :duration-ticks, then :life-ticks/:ttl-ticks, then one tick for a true
    one-shot."
   [rt ^double dt]
   (tick! rt dt)
-  (swap! (:instances rt)
-        (fn [instances]
-          (into {}
-                (remove (fn [[_ inst]]
-                         (let [decl (get (:registry rt) (:effect-id inst))]
-                           (and (= :transient (:lifecycle decl))
-                                (>= (long (:age inst)) (transient-duration inst))))))
-                instances)))
-  nil)
+  (let [expired (atom [])]
+    (swap! (:instances rt)
+          (fn [instances]
+            (into {}
+                  (remove (fn [[instance-key inst]]
+                           (let [decl (get (:registry rt) (:effect-id inst))
+                                 expired? (and (= :transient (:lifecycle decl))
+                                               (>= (long (:age inst)) (transient-duration inst)))]
+                             (when expired? (swap! expired conj [instance-key inst]))
+                             expired?)))
+                  instances)))
+    (doseq [[instance-key inst] @expired]
+      (remember-tombstone! rt instance-key
+                           (long (or (:event-seq inst) -1))
+                           (long (or (:state-seq inst) -1))))
+  nil))
 
 (defn sample-client-frame!
   "Samples every live instance (sample-frame! above), builds a VfxFrame

@@ -203,7 +203,15 @@
         "life-ticks keeps a transient alive for its visual lifetime")
     (runtime/client-tick! rt 0.05)
     (is (nil? (runtime/lookup rt [:life-timed]))
-        "life-timed transient retires once its declared life is reached")))
+        "life-timed transient retires once its declared life is reached")
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :one-shot
+                                  :instance-key [:one-shot] :event-seq 1})
+    (is (nil? (runtime/lookup rt [:one-shot]))
+        "a duplicate spawn cannot resurrect an auto-expired one-shot")
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :one-shot
+                                  :instance-key [:one-shot] :event-seq 2})
+    (is (some? (runtime/lookup rt [:one-shot]))
+        "a new activation sequence can reuse the expired instance key")))
 
 (deftest sample-client-frame-pools-by-frame-id-test
   (let [rt (runtime/create-client-runtime scene-registry {:max-frames 2})]
