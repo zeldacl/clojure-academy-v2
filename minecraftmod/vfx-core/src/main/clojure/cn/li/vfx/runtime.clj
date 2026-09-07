@@ -172,10 +172,10 @@
 
 (defn create-client-runtime
   "registry: same shape create-store takes, plus each entry may declare
-   :lifecycle (:transient effects with a :user :duration-ticks auto-
-   destroy once :age reaches it -- see client-tick! below; a :transient
-   effect with no :duration-ticks in its own :user never auto-expires,
-   matching final-client's identical fallback behavior)."
+   :lifecycle (:transient effects auto-destroy after their declared
+   :duration-ticks, then :life-ticks, otherwise one client tick; see
+   client-tick! below). This retires both long-lived transient visuals and
+   true one-shot effects without requiring a synthetic duration input)."
   ([registry] (create-client-runtime registry {}))
   ([registry {:keys [max-frames] :or {max-frames 8}}]
    (assoc (create-store registry)
@@ -188,6 +188,18 @@
 
 (defn- tombstone-seq [rt instance-key]
   (get @(:tombstones rt) instance-key {:event-seq -1 :state-seq -1}))
+
+(defn- transient-duration
+  "Returns the authoritative client lifetime for a transient instance.
+   `duration-ticks` is the explicit V3 lifecycle contract. Effects whose
+   visual payload already owns a particle/ray lifetime use `life-ticks` as
+   the natural fallback. A transient with neither field is a one-shot
+   operation (audio, burst, etc.) and must still be retired after one tick;
+   retaining it forever would sample the one-shot render op every frame."
+  [instance]
+  (max 1 (long (or (get-in instance [:user :duration-ticks])
+                   (get-in instance [:user :life-ticks])
+                   1))))
 
 (defn- remember-tombstone! [rt instance-key event-seq state-seq]
   (swap! (:tombstones rt) assoc instance-key
@@ -251,18 +263,18 @@
 
 (defn client-tick!
   "tick! above (particle buffers + per-instance :age), then destroy any
-   :transient-lifecycle instance whose :age has reached its own spawn-
-   declared :user :duration-ticks."
+   :transient instance whose :age has reached its effective lifetime:
+   explicit :duration-ticks, then :life-ticks, then one tick for a true
+   one-shot."
   [rt ^double dt]
   (tick! rt dt)
   (swap! (:instances rt)
         (fn [instances]
           (into {}
                 (remove (fn [[_ inst]]
-                         (let [decl (get (:registry rt) (:effect-id inst))
-                               duration (get-in inst [:user :duration-ticks])]
+                         (let [decl (get (:registry rt) (:effect-id inst))]
                            (and (= :transient (:lifecycle decl))
-                                duration (>= (long (:age inst)) (long duration))))))
+                                (>= (long (:age inst)) (transient-duration inst))))))
                 instances)))
   nil)
 

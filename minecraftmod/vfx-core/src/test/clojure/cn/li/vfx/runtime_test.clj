@@ -122,6 +122,16 @@
     :emitters []
     :lifecycle :transient}})
 
+(def ^:private transient-lifecycle-registry
+  {:one-shot
+   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+    :emitters []
+    :lifecycle :transient}
+   :life-timed
+   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+    :emitters []
+    :lifecycle :transient}})
+
 (deftest client-runtime-dispatch-signal-dedup-and-tombstone-test
   (let [rt (runtime/create-client-runtime scene-registry)]
     (testing "spawn creates, a stale spawn (lower event-seq, no tombstone win) is ignored"
@@ -181,6 +191,22 @@
     (is (some? (runtime/lookup rt [:d])) "age 1 < duration 2, still alive")
     (runtime/client-tick! rt 0.05)
     (is (nil? (runtime/lookup rt [:d])) "age 2 >= duration 2, auto-destroyed")))
+
+(deftest client-tick-retires-one-shot-and-life-timed-transients-test
+  (let [rt (runtime/create-client-runtime transient-lifecycle-registry)]
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :one-shot
+                                  :instance-key [:one-shot] :event-seq 1})
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :life-timed
+                                  :instance-key [:life-timed] :event-seq 1
+                                  :params {:life-ticks 2}})
+    (runtime/client-tick! rt 0.05)
+    (is (nil? (runtime/lookup rt [:one-shot]))
+        "a transient without a duration is a one-shot and retires after one tick")
+    (is (some? (runtime/lookup rt [:life-timed]))
+        "life-ticks keeps a transient alive for its visual lifetime")
+    (runtime/client-tick! rt 0.05)
+    (is (nil? (runtime/lookup rt [:life-timed]))
+        "life-timed transient retires once its declared life is reached")))
 
 (deftest sample-client-frame-pools-by-frame-id-test
   (let [rt (runtime/create-client-runtime scene-registry {:max-frames 2})]
