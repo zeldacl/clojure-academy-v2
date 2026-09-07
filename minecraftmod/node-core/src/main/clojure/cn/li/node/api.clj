@@ -12,6 +12,7 @@
   (:require [cn.li.node.composite :as composite]
             [cn.li.node.composite-loader :as composite-loader]
             [cn.li.node.digest :as digest]
+            [cn.li.node.document :as document]
             [cn.li.node.schema-export :as schema-export]
             [cn.li.node.scope :as scope]
             [cn.li.node.validate :as validate]
@@ -23,6 +24,12 @@
 
 ;; ---- content identity ----
 (defn content-hash [value] (digest/content-hash value))
+
+;; ---- persisted AC V3 documents -----------------------------------------
+(defn validate-document! [value] (document/validate-document! value))
+(defn document-kind [value] (document/kind value))
+(defn document-semantic-digest [value]
+  (digest/content-hash (document/semantic-document value)))
 
 ;; ---- structural validation ----
 (defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))
