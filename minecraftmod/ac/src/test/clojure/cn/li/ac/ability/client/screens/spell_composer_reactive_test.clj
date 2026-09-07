@@ -38,7 +38,8 @@
         moved (#'composer/move-effect state 1 -1)
         removed (#'composer/remove-effect moved 0)]
     (is (= :effect/push (:glyph (first (:effect-groups moved)))))
-    (is (= 1 (:selected-effect moved)))
+    ;; Moving the selected effect keeps that effect selected at its new index.
+    (is (= 0 (:selected-effect moved)))
     (is (= [:effect/damage] (mapv :glyph (:effect-groups removed))))))
 
 (deftest clear-composition-resets-grouped-state-test
@@ -76,7 +77,8 @@
   (let [rendered (#'composer/render-state (#'composer/initial-state))]
     (is (= #{"form/self" "form/touch"} (set (map :glyph (:form-palette rendered)))))
     (is (= #{"effect/damage" "effect/push"} (set (map :glyph (:effect-palette rendered)))))
-    (is (= #{"augment/amplify"} (set (map :glyph (:glyph (:augment-palette rendered))))))))
+    (is (= #{"augment/amplify"} (set (map :glyph (:augment-palette rendered)))))))
+
 (deftest selected-effect-parameters-can-be-edited-with-bounds-test
   (let [state (-> (#'composer/initial-state)
                   (#'composer/pick-form :form/self)

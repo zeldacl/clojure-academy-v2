@@ -22,11 +22,12 @@
       pins can be dragged to update expression references.
     - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
       cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
-      see pan-canvas-items) are wired. Palette insertion remains a follow-up
-      because it needs node templates and an inspector for required inputs.
-      No ZOOM: unlike pan, nothing in presentation-core exposes a
-      scroll-wheel or pinch input primitive to drive it yet.
-   - open! takes an EXPLICIT absolute file path from the caller, not a
+      see pan-canvas-items) are wired. Palette clicks now insert a call plus
+      default literal inputs; true drag-and-drop placement remains a follow-up
+      because it needs a richer inspector for required inputs. No ZOOM:
+      unlike pan, nothing in presentation-core exposes a scroll-wheel or
+      pinch input primitive to drive it yet.
+    - open! takes an EXPLICIT absolute file path from the caller, not a
      guessed game-directory/source-tree location: resolving 'where does
      the mod's source tree live relative to the running game' is itself
      a runtime detail this environment cannot verify without launching
@@ -278,7 +279,8 @@
    sort), so same-category entries run together; a real grouped/
    collapsible view is a presentation-layer follow-up, not a data gap."
   [{:keys [id category cost source]}]
-  {:label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")")})
+  {:id id :source source
+   :label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")")})
 
 (defn- pan-canvas-items
   "composite-items, viewport ({:x :y}, total accumulated drag amount
@@ -427,6 +429,18 @@
             (swap! state* assoc :preview-active? true :preview-label (str "Preview: " effect-id) :status "Preview running."))
           (catch Throwable error
             (swap! state* assoc :status (str "Preview unavailable: " (.getMessage error)))))))
+
+    :editor/add-palette-node
+    (let [entry (palette/find-by-id (:palette @state*) (:id (:item payload)))
+          prefix (str "palette-" (System/nanoTime))]
+      (if-not entry
+        (swap! state* assoc :status "Palette entry is no longer available.")
+        (try
+          (let [{:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)]
+            (install-graph! state* graph)
+            (swap! state* assoc :selected-nid nid :status (str "Added " (:id entry) ".")))
+          (catch Throwable error
+            (swap! state* assoc :status (str "Cannot add node: " (.getMessage error)))))))
 
     :editor/select-phase
     (swap! state* (fn [s] (recompute (assoc s :phase (keyword (:phase payload)) :selected-nid nil))))

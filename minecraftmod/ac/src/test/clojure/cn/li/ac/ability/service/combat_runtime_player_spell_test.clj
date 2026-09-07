@@ -83,10 +83,8 @@
 
 (deftest unknown-glyph-namespace-is-rejected-not-dispatched-test
   (let [owner "spell-owner-4"
-        glyphs [{:glyph :form/self} {:glyph :effect/does-not-exist}]]
-    (is (thrown? clojure.lang.ExceptionInfo
-                 (combat-runtime/dispatch-player-spell! owner glyphs))
-        "a genuinely malformed glyph vector throws at compile time -- the
-         network layer's own handler try/catch (cn.li.mcmod.network.server)
-         is what turns this into a safe {:success false} response, matching
-         every other :req-* handler's own contract in this namespace")))
+        glyphs [{:glyph :form/self} {:glyph :effect/does-not-exist}]
+        result (combat-runtime/dispatch-player-spell! owner glyphs)]
+    (is (= :rejected (:status result)))
+    (is (= :invalid-glyph (:reason result)))
+    (is (= :player/spell (:ability-id result)))))

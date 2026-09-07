@@ -177,4 +177,20 @@
         {:nodes {"a" {:nid "a" :kind :data :expr :literal :value 1}
                  "b" {:nid "b" :kind :exec :stmt :finish :fields {}}}
          :order ["b"]}
-        {:from-nid "a" :from-pin :out :to-nid "b" :to-pin :in :to-key :missing}))))
+         {:from-nid "a" :from-pin :out :to-nid "b" :to-pin :in :to-key :missing}))))
+
+(deftest palette-insertion-creates-round-trippable-call-and-literals-test
+  (let [g (graph/form->graph
+           (:do (surface/read-doc "{:ability :t :do [(finish {:outcome :performed})]}")))
+        inserted (graph/insert-palette-node
+                  g {:id :combat/damage
+                     :params {:amount {:type :float :default 2.0}}}
+                  "palette-1")
+        next-graph (:graph inserted)
+        call (get-in next-graph [:nodes (:nid inserted)])
+        form (graph/graph->form next-graph)]
+    (is (= 2 (count (:order next-graph))))
+    (is (= 3 (count (:nodes next-graph))))
+    (is (= :call (:stmt call)))
+    (is (= :data (:kind (get-in next-graph [:nodes (get-in call [:args :amount])]))))
+    (is (some #(= 'combat/damage (first %)) form))))

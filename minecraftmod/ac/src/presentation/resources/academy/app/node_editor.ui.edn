@@ -12,13 +12,13 @@
           :children [{:type :text :layout {:width 100} :bind {:text [:state :phase-label]}}
                      {:type :repeater :layout {:width 340}
                       :bind {:items [:state :phase-tabs]}
-                      :children [{:type :button :layout {:width 64 :height 14}
+                     :children [{:type :button :layout {:width 64 :height 14}
                                   :bind {:text [:item :action-label]}
                                   :on {:activate :editor/select-phase}
                                   :semantics {:role :button}}]}]}
          {:type :scroll :key :node-editor/palette :layout {:height 46}
           :bind {:items [:state :palette]} :semantics {:role :list}
-          :children [{:type :text :layout {:height 12} :bind {:text [:item :label]}}]}
+          :children [{:type :button :layout {:height 14 :width 440} :bind {:text [:item :label]} :on {:activate :editor/add-palette-node} :semantics {:role :button}}]}
          {:type :absolute :key :node-editor/canvas :layout {:height 140}
           :children
           [{:type :repeater :layout {:width 464 :height 140}

@@ -273,3 +273,12 @@
     (#'node-editor/nudge-node-layout! state* data-id 4.0 3.0)
     (is (= 284.0 (get-in @state* [:layout data-id :x])))
     (is (= 3.0 (get-in @state* [:layout data-id :y])))))
+(deftest palette-entry-adds-a-round-trippable-node-test
+  (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
+        entry (first (:palette @state*))
+        before (count (get-in @state* [:graph :order]))]
+    (#'node-editor/handle-action state* :editor/add-palette-node {:item {:id (:id entry)}})
+    ;; The executable call enters :order; literal parameters stay expression-only nodes.
+    (is (= (inc before) (count (get-in @state* [:graph :order]))))
+    (is (some? (:selected-nid @state*)))
+    (is (.contains ^String (:status @state*) "Added"))))

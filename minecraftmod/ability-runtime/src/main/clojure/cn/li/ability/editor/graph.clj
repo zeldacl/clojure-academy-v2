@@ -331,6 +331,39 @@
       (throw (ex-info "node id already exists or is missing" {:code :duplicate-node :nid nid})))
     (assoc graph :nodes (assoc nodes nid node) :order (conj (vec order) nid))))
 
+(defn- default-literal [descriptor]
+  (or (:default descriptor)
+      (case (:type descriptor)
+        (:float :double) 0.0
+        (:int :long) 0
+        (:bool :boolean) false
+        :vec3 [0.0 0.0 0.0]
+        :resource-id :minecraft/air
+        nil)))
+
+(defn insert-palette-node
+  "Append a palette entry as an executable call plus literal data nodes for
+   each declared parameter. Returns {:graph graph :nid call-nid}. The
+   generated call is intentionally conservative: diagnostics remain visible
+   for required inputs that need author adjustment, but the graph is always
+   structurally round-trippable and never contains an exec-as-expression ref."
+  [{:keys [nodes order] :as graph} {:keys [id params]} nid-prefix]
+  (when-not (and id (map? params))
+    (throw (ex-info "palette entry lacks an id or parameter map" {:code :invalid-palette-entry})))
+  (let [call-nid (str nid-prefix "-call")
+        param-ids (into {} (map-indexed (fn [i [key _]] [key (str nid-prefix "-arg" i)])) params)
+        data (into {}
+                   (map (fn [[key descriptor]]
+                          (let [data-nid (get param-ids key)]
+                            [data-nid {:nid data-nid :kind :data :expr :literal
+                                       :value (default-literal descriptor)}]))
+                   params))
+        args param-ids
+        with-data (assoc graph :nodes (merge nodes data))
+        op (if (keyword? id) (symbol (namespace id) (name id)) id)
+        call {:nid call-nid :kind :exec :stmt :call :op op :arg-shape :map :args args}]
+    {:graph (add-node with-data call) :nid call-nid}))
+
 (defn- remove-id [xs nid]
   (vec (remove #(= nid %) xs)))
 
