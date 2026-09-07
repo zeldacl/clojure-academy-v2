@@ -3,8 +3,8 @@
 > 语言本体见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md) §7（场景 DSL）——本文只讲
 > vfx-core 如何使用它、模块边界、以及排障。VFX 的**执行**侧（采样/实例生命周期/
 > 渲染）和**内容元数据加载**侧（`combat-catalog.clj`，读 skill tree UI/trigger
-> 需要的字段）现在都只读 `ac/vfx/fx/*.edn`——旧内容目录
-> （`ac/vfx/effects/*.edn`/`ac/vfx/manifest.edn`）和旧加载器
+> 需要的字段）现在都只读 `ac/vfx-v3/*.edn`——旧内容目录
+> （`旧 VFX effect 目录`/`ac/vfx/manifest.edn`）和旧加载器
 > （`ac/ability/final_catalog.clj`、`vfx-core/vocabulary.clj`/
 > `system_compiler.clj`）**已全部删除**，见下方"内容加载侧"一节。
 
@@ -27,30 +27,19 @@ Minecraft 渲染状态；真正的渲染由 `platform-src` 的 loader 消费这�
 | 客户端实例存储 | `cn.li.vfx.runtime`（`create-client-runtime`/`dispatch-signal!`/`client-tick!`/`sample-client-frame!`）——复刻了旧 `final-client` 的 event-seq/state-seq 去重 + tombstone + 帧池化语义，键控在 `instance-key` 上而非旧引擎自己的合成 id，`instance-for-owner` 之外全是 O(1) |
 | Java 帧投影 | `cn.li.vfx.frame/->java-frame`：把 `scene/sample!` 的 op 翻译成旧引擎曾经产出的同一套 `VfxBatch`/`VfxOutput`/`VfxFrame`（`legacy-op` 表，字段映射对照真实内容核实过，不是猜的），下游渲染桥接（`ability-runtime` 的 `compose.clj`、每个 loader 的 `presentation_world_renderer.clj`）零改动 |
 | 客户端组合根 | `cn.li.ability.client-vfx-v2`（`ability-runtime`），真实调用点：`ac/content/ability_client.clj` 的 `init-client-fx!`、`ac/client/vfx_host.clj` 的 `install!`、`ac/gui/reactive/register.clj` 的 `sampled-vfx-frame!`、`ac/ability/client/reactive_hud.clj` 的 storm-wing/flashing 状态读取 |
-| 内容资源 | `ac/vfx/fx/*.edn`（`:scene` 字段内嵌新 DSL 文本） |
+| 内容资源 | `ac/vfx-v3/*.edn`（每个文件都是可校验的 `:ac/vfx-v3` map，阶段位于 `:system`） |
 | 复用单元 | 无（36 个真实效果都不需要跨效果复用；见 NODE_LANGUAGE.md §8） |
 | 粒子模拟 | `cn.li.vfx.compile`（Niagara 模块栈 + SoA 布局）证明了模型，但没有真实内容在用它 |
 
 ## 内容加载：现在跟执行引擎读同一套内容
 
-`cn.li.ac.ability.service.combat-catalog`（真实生产启动时调用，测试套件广泛
-使用）读的是 `cn.li.ac.ability.skills-catalog/assemble`（`ac/skills/*.edn`）——
-VFX 相关的技能元数据（`:external-triggers` 里带 VFX 触发的字段等）跟战斗技能
-走同一条装配路径，不再有独立的 `load-vfx` 步骤。`ac/ability/final_catalog.clj`
-（旧 `load-combat`/`load-vfx` manifest 加载器）、`vfx-core/vocabulary.clj`（旧
-VFX 词汇表）、`vfx-core/system_compiler.clj`（旧 composite 展开 + 结构校验）
-连同它们读取的旧内容目录（`ac/vfx/effects/*.edn`〔36 个〕、
-`ac/vfx/manifest.edn`）**已全部删除**：`combat-catalog.clj` 切换元数据来源
-后，三者都失去了最后一个真实调用点。真正在客户端渲染出来的特效，源头一直是
-`ac/vfx/fx/*.edn`（执行引擎从未读过 `ac/vfx/effects/*.edn`）。`vfx-core/
-composites/*.edn`（下一节提到的 5 个旧 composite 源文件）未删除——它们此前是
-`load-vfx`/`vfx.vocabulary` 用的，现在两者都不存在了，composite 内容本身留作
-历史存档，不再有任何加载路径读取它们。
-
+VFX 生产资源只来自 `ac/vfx-v3/*.edn`，由 `fx-catalog-v3` 扫描并校验；技能元数据
+由 `skills-catalog-v3` 扫描 `ac/skills-v3/*.edn`。旧 manifest、旧 effect 目录和
+旧 composite 资源均已删除，V3 不再存在第二条内容读取路径。
 ## 历史记录：旧引擎里约一半的组件种类从未真正渲染过（S6 转换决策依据）
 
 `cn.li.vfx.final-engine`/`final_catalog.clj` 均已删除；本节保留作为
-`ac/vfx/fx/*.edn` 里为什么某些效果的 `:scene` 是诚实的空场景的历史依据，不再
+`ac/vfx-v3/*.edn` 里为什么某些效果的 `:scene` 是诚实的空场景的历史依据，不再
 描述任何仍在运行的代码。`cn.li.vfx.final-engine/sample-node`（已删除）的
 `case` 分支只覆盖：`:vfx/let :vfx/repeat
 :vfx/timeline :vfx/group :vfx/branch :vfx/fade :vfx/ring :vfx/beam :vfx/ray-beam
@@ -65,21 +54,16 @@ composites/*.edn`（下一节提到的 5 个旧 composite 源文件）未删除�
 `arc-field`。
 
 两个真实例外：`:vfx/beam-arc-fade` 和 `:vfx/humanoid-marker` 是**composite**
-（`vfx-core/composites/beam_arc_fade.edn`/`humanoid_marker.edn`），`final_catalog.
+（历史 composite 定义，现已删除），`final_catalog.
 clj` 的 `load-vfx` 在采样前就把它们展开成真正的子树——`beam-arc-fade` 展开后确实
 含有能画的 `:vfx/beam`/`:vfx/ring`；`humanoid-marker` 展开后唯一的子节点
 `:vfx/model-marker` 恰好也没有 `sample-node` 分支，所以展开了也还是不画东西。
-`vfx-core/composites/` 下另外三个（`charge_ring.edn`/`block_progress.edn`/
-`trajectory_ribbon.edn`）注册在 `:vfx.fx/*`（带额外的 `.fx` 段）命名空间下，跟
-`ac/vfx/effects/*.edn` 里实际引用的 `:vfx/*`（不带 `.fx` 段）id 对不上，永远
-不会被展开，是彻底不可达的孤儿资源。
+另外三个历史 composite 定义已删除；V3 不为零调用内容保留文件。
 
 转换到新引擎时，对应处理：确认无渲染的组件 → 诚实的空 `:scene`（不是发明新的
 视觉设计）；`beam-arc-fade` → 把它的 composite 展开结果直接内联进
-`ac/vfx/fx/beam_arc_fade.edn` 的 `:scene`（新引擎没有宏展开机制，`:defn` 组合
-是唯一的复用单元，而这个效果只有一个调用点，不值得为它单独建一个组合）；其余
-三个孤儿 composite 保持原样不动——它们零调用点、零真实渲染输出，转换成新语言
-只会是凭空发明未被使用的基础设施。
+`ac/vfx-v3/beam_arc_fade.edn` 的 `:scene`（新引擎没有宏展开机制，`:defn` 组合
+是唯一的复用单元，而这个效果只有一个调用点，不值得为它单独建一个组合）；其余三个孤儿 composite 已删除；V3 不为零调用内容保留文件。
 
 ## 场景 DSL 的模块边界（新引擎）
 
@@ -92,27 +76,20 @@ clj` 的 `load-vfx` 在采样前就把它们展开成真正的子树——`beam-
   这次采样产出的 op 向量）。
 - `vfx-core/src/main/clojure/cn/li/vfx/layout.clj` + `compile.clj`：Niagara
   模块栈机制，粒子属性 → SoA 列布局 → 编译好的逐粒子闭包。目前没有真实
-  `ac/vfx/fx/*.edn` 内容在用；是给未来需要真正 CPU 端逐粒子模拟的内容留的
+  `ac/vfx-v3/*.edn` 内容在用；是给未来需要真正 CPU 端逐粒子模拟的内容留的
   能力，不是当前 36 个效果缺的东西。
 
 ## 内容加载侧的模块边界
 
-- `ac/src/main/clojure/cn/li/ac/vfx/fx_catalog.clj`：`ac/vfx/fx/*.edn` +
-  `ac/vfx/fx/manifest.edn` 的加载器，VFX 执行引擎唯一的内容来源。
-- `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：技能
-  元数据侧读 `ac/skills/*.edn`（见 COMBAT_CORE.md），不单独为 VFX 走第二条
-  加载路径。
-- `vfx-core/src/main/clojure/cn/li/vfx/vocabulary.clj`/`system_compiler.clj`：
-  旧词汇表 + composite 展开/校验，只为已删除的 `final_catalog.clj`/`load-vfx`
-  服务，零真实调用点，**未删除**——处理方式跟 NODE_LANGUAGE.md §0 里
-  `combat.vocabulary`/`node-core` 那批"编辑器工具链预留基础设施"一致：不重新
-  接线，也不删除，删除需要一次独立决策。`vfx-core/composites/*.edn`（5 个旧
-  composite 源文件）同理留存，不再有任何加载路径读取。
-- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：`merge-draw-
-  lists`/`merge-vfx-into-frame` 是真实调用点（`ac/gui/reactive/register.clj`）；
-  `compose-catalog`/`catalog-fingerprint-input`（旧 `final_catalog.clj` 曾经的
-  调用方）已是零调用点，处理方式同上——不删除，也不重新接线。
-
+- `ac/src/main/clojure/cn/li/ac/vfx/fx_catalog.clj`：扫描 `ac/vfx-v3/*.edn`，是
+  VFX 执行引擎唯一的内容来源。
+- `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：技能元数据
+  侧读 `ac/skills-v3/*.edn`，不再走独立 manifest 或旧 composite 加载路径。
+- `vfx-core/src/main/clojure/cn/li/vfx/dsl_vocabulary.clj` 与
+  `node-core` composite/schema 命名空间仍是编辑器 schema-export 基础设施，
+  但不读取任何旧生产资源。
+- `ability-runtime/src/main/clojure/cn/li/ability/compose.clj`：`merge-draw-lists`/
+  `merge-vfx-into-frame` 是真实的帧合并调用点；旧 catalog 指纹函数不再接线。
 ## 生命周期与网络
 
 信号操作：`spawn/update/trigger/destroy/clear-owner/snapshot`。实例身份由
@@ -123,7 +100,7 @@ clj` 的 `load-vfx` 在采样前就把它们展开成真正的子树——`beam-
 
 ## 排障手册
 
-- 一份 `ac/vfx/fx/*.edn` 效果编译报 `unknown-node` → 对照 `dsl_vocabulary.clj`
+- 一份 `ac/vfx-v3/*.edn` 效果编译报 `unknown-node` → 对照 `dsl_vocabulary.clj`
   声明的叶子节点名字/字段。
 - 需要按 `:progress`/年龄插值的字段（旧的 `{:from :to}` 隐式 lerp）→ 显式写
   `(math/lerp from to ?progress)`，见 NODE_LANGUAGE.md §7。`cn.li.vfx.runtime/

@@ -123,7 +123,7 @@
 (defn- progress-of
   "age/duration-ticks, clamped to [0,1] -- the exact computation cn.li.
    vfx.final-engine's own sample-node used for :progress (its context's
-   :progress key), reproduced here since every real ac/vfx/fx/*.edn
+   :progress key), reproduced here since every real ac/vfx-v3/*.edn
    effect reads ?progress as a universal capability (cn.li.vfx.scene's
    own universal-capabilities). duration comes from the instance's own
    :user (a real spawn-declared field, e.g. arc_ring_session.edn's own

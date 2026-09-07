@@ -11,7 +11,7 @@
    op->java-output already know how to consume. Every new :kind here maps
    to exactly one old :vfx/* case; field-name differences (:layers/:style
    replace old's bare :material for :beam/:ray-beam; :from/:to replace
-   :start/:end for :line) are confirmed against real ac/vfx/fx/*.edn
+   :start/:end for :line) are confirmed against real ac/vfx-v3/*.edn
    content, not assumed -- cn.li.platform.neutral.vfx-render-plan's own
    line-ops already accepts :from/:to via its own fallback key chain.
 

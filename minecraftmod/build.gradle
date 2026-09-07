@@ -1539,9 +1539,9 @@ tasks.register("verifyVocabularyPaletteMetadata") {
 
 tasks.register("verifyContentEdnNoRawComments") {
     group = "verification"
-    description = "ac/skills/*.edn and ac/vfx/fx/*.edn must carry their authoring notes as a :doc data field, not raw ;; EDN comments -- the node editor's save path (cn.li.ability.editor.document/splice-program) only preserves bytes OUTSIDE the :program/:scene string; a raw comment would silently vanish the first time the file is saved through the editor, where a :doc entry survives because it round-trips like any other data. Migrated in the node-editor plan's Phase 1 (all 75 files verified content-identical outside the new :doc key via a git-diff-based check, not just eyeballed); this gate keeps it that way for new content going forward. A ';' inside a :doc string's own prose (an em-dash alternative, etc.) is fine -- only a LINE that starts with ';' (after leading whitespace) is a real EDN comment, which is what this checks."
+    description = "All structured V3 content EDN must store authoring notes in :doc data and must not contain raw EDN comment lines."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills"), file("ac/src/main/resources/ac/vfx/fx")]
+        def roots = [file("ac/src/main/resources/ac/skills-v3"), file("ac/src/main/resources/ac/vfx-v3")]
         def offenders = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.each { f ->
@@ -1561,14 +1561,14 @@ tasks.register("verifyContentEdnNoRawComments") {
 
 tasks.register("verifyEditorLayoutSidecarNotLoaded") {
     group = "verification"
-    description = "The node editor's layout sidecars (ac/skills/layout/<id>.layout.edn, ac/vfx/fx/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only :program/:scene. This gate asserts no ac DISPATCH source file references a 'skills/layout' or 'vfx/fx/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
+    description = "The node editor's layout sidecars (ac/skills-v3/layout/<id>.layout.edn, ac/vfx-v3/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only the structured V3 map. This gate asserts no ac DISPATCH source file references a 'skills-v3/layout' or 'vfx-v3/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
     doLast {
         def offenders = []
         def editorScreensDir = file("ac/src/main/clojure/cn/li/ac/ability/client/screens")
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
             if (f.canonicalPath.startsWith(editorScreensDir.canonicalPath)) return
             def text = f.text.replaceAll(/;.*$/, "")
-            if (text =~ /skills\/layout|vfx\/fx\/layout/) {
+            if (text =~ /skills-v3\/layout|vfx-v3\/layout/) {
                 offenders << f.path
             }
         }
@@ -2999,10 +2999,10 @@ tasks.register("verifyCoreNoSkillKnowledge") {
 
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
-    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills and ac/vfx/fx, the S6/S8 live content directories -- ac/combat/abilities and ac/vfx/effects (the old catalog's content, checked here until this session's catalog-source rewrite) are deleted."
+    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills-v3 and ac/vfx-v3, the S6/S8 live content directories -- ac/combat/abilities and ac/vfx/effects (the old catalog's content, checked here until this session's catalog-source rewrite) are deleted."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills"),
-                     file("ac/src/main/resources/ac/vfx/fx")]
+        def roots = [file("ac/src/main/resources/ac/skills-v3"),
+                     file("ac/src/main/resources/ac/vfx-v3")]
         def violations = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.files.each { source ->

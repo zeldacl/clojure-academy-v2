@@ -9,7 +9,7 @@
 > 旧的**内容元数据加载侧**（`ac/ability/final_catalog.clj`/
 > `final_catalog_service.clj`、`ac/combat/abilities/*.edn`〔39 个〕、
 > `combat-core/composites/*.edn`〔17 个〕）**也已删除**：`combat-catalog.clj`
-> 自己的元数据来源已重写为直接读 `ac/skills/*.edn`（`skills-catalog.clj`），
+> 自己的元数据来源已重写为直接读 `ac/skills-v3/*.edn`（`skills-catalog.clj`），
 > 见下方"内容元数据加载侧"一节。`kernels.clj` 不属于"旧引擎"，是永久保留的
 > 基础设施，见 NODE_LANGUAGE.md §0 详细说明。`final_damage.clj` 自己也已删除
 > ——聚合运算逐字节 port 进 `combat/damage.clj`（同一份算法，只是分派层从
@@ -32,7 +32,7 @@
   玩家操作、`process-damage-request!`/`apply-attack-precheck!`〔原生近战伤害/
   反射边界〕全部走这里） |
 | 词汇表 | `cn.li.combat.dsl-vocabulary`（`nodes`，带真实 `:params`/`:returns`/`:effects`/`:capability`/`:cost`） |
-| 内容资源 | `ac/src/main/resources/ac/skills/*.edn`（`:program` 字段内嵌新 DSL 文本，其余顶层键——`:tunables`/`:costs`/`:cooldown`/`:progression`/`:session-state`/`:mark-policies`/`:damage-policies`——跟旧文件逐字节相同） |
+| 内容资源 | `ac/src/main/resources/ac/skills-v3/*.edn`（每个文件都是可校验的 `:ac/skill-v3` map，入口位于 `:entries`，参数/状态/元数据同图编辑器共享） |
 | 复用单元 | `combat-core/lib/*.edn` + `combat-core/lib.clj`（`:defn`，显式文件名列表加载，见 NODE_LANGUAGE.md §1） |
 | 伤害管线 | `combat-core/damage.clj`（`combat-api/resolve-damage`/`materialize-vfx`）——独立于 dispatch 引擎，永久共享 |
 | 玩家法术 | `cn.li.combat.player`（S7，desugar/admit，见 NODE_LANGUAGE.md §6） |
@@ -44,8 +44,8 @@
 
 `combat-catalog.clj` 的技能元数据表（skill tree UI、trigger 索引、
 passive-effects、activation-context 的 bindings/presentation）现在直接读
-`cn.li.ac.ability.skills-catalog/assemble`（`ac/skills/*.edn` +
-`ac/skills/manifest.edn`），与 dispatch/伤害拦截读的是**同一套内容**——不再有
+`cn.li.ac.ability.skills-catalog/assemble`（`ac/skills-v3/*.edn` +
+`the ac/skills-v3 directory`），与 dispatch/伤害拦截读的是**同一套内容**——不再有
 第二条内容加载路径。`ac/ability/final_catalog.clj`/`final_catalog_service.clj`
 （旧 manifest 加载 + composite 展开 + `strict-graphs!` 结构校验）连同它们读取的
 旧内容目录（`ac/combat/abilities/*.edn`〔39 个〕、`ac/combat/manifest.edn`、
@@ -53,10 +53,10 @@ passive-effects、activation-context 的 bindings/presentation）现在直接读
 自己曾是它们最后一个真实调用点，切换元数据来源后二者都变成零调用点，随其一并
 删除。`vfx-core/vocabulary.clj`/`system_compiler.clj`（同样只为旧
 `final_catalog.clj` 的 `load-vfx` 服务）也一并删除，见 VFX_CORE.md。
-`vfx-core/composites/*.edn`（旧 VFX composite 源文件）**未删除**：`vfx.
+旧 VFX composite 资源已删除；`vfx.
 vocabulary.clj` 本身仍在（保留原因见 NODE_LANGUAGE.md §0 对旧词汇表/
 `node.environment`/`node.flow` 等的说明——它们是留给未来编辑器 UI 的 schema-
-export 基础设施，不是待清理的死代码），composite 内容跟着它一起留下。
+export 基础设施，不是待清理的死代码）；它们不读取任何旧生产资源。
 
 ## 新引擎（`cn.li.combat.run`）的模块边界
 
@@ -84,7 +84,7 @@ export 基础设施，不是待清理的死代码），composite 内容跟着它
 ## 内容元数据加载侧（独立于执行引擎，但现在共享同一套内容）的模块边界
 
 - `ac/src/main/clojure/cn/li/ac/ability/skills_catalog.clj`：`assemble` 读
-  `ac/skills/manifest.edn`，逐 `:sources`/`:registrations` 装配，`:program`
+  `the ac/skills-v3 directory`，逐 `:sources`/`:registrations` 装配，`:program`
   编译成 IR（`combat-api/compile-skill-doc!`）供新引擎 dispatch 用——纯数据
   组装，不做结构校验。
 - `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：在
@@ -122,7 +122,7 @@ export 基础设施，不是待清理的死代码），composite 内容跟着它
 
 ## 运行时流程（当前实机行为）
 
-1. `ac.ability.skills-catalog/assemble` 读 `ac/skills/manifest.edn`，逐文档编译
+1. `ac.ability.skills-catalog/assemble` 读 `the ac/skills-v3 directory`，逐文档编译
    `:program`（经 `combat-api/compile-skill-doc!` → `cn.li.combat.run`），失败的
    文档进 `:errors`，不影响其余文档启动。
 2. 客户端 CombatIntent 包（`network.clj`）、物品触发（`server_hooks.clj`）、传送
@@ -146,12 +146,12 @@ composite 展开 → `final_compiler/compile-program` → `final_engine/execute!
 **已经不存在**：`final_engine.clj`/`final_compiler.clj`/`final_catalog.clj`/
 `final_catalog_service.clj` 全部已删除，`combat-catalog.clj` 不再有第二条内容
 加载路径可比较——它现在读的就是步骤 1 里 `skills-catalog/assemble` 装配的同一份
-`ac/skills/*.edn` 内容，只是取其中 dispatch 不需要的字段（`:name-key`/
+`ac/skills-v3/*.edn` 内容，只是取其中 dispatch 不需要的字段（`:name-key`/
 `:actions`/`:external-triggers`/`:passive-effects` 等）。
 
 ## 排障手册
 
-- 一份 `ac/skills/*.edn` 编译报 `type-mismatch`/`unknown-node` → 对照
+- 一份 `ac/skills-v3/*.edn` 编译报 `type-mismatch`/`unknown-node` → 对照
   `dsl_vocabulary.clj` 对应节点的 `:params` 声明，字段名/类型是否匹配；确认
   `?capability` 是否已在 `run.clj` 的 `capability-type` 里声明或能按命名空间
   规则派生。
@@ -163,8 +163,8 @@ composite 展开 → `final_compiler/compile-program` → `final_engine/execute!
   不是代码：没调用 `finish` 时 `.-result` 是 `{:outcome :ended :next-phase nil
   :end-ability? false}`，见 NODE_LANGUAGE.md §1。
 - `combat-catalog/initialize!`（或任何依赖它的测试 fixture）报编译错误 → 检查
-  `ac/skills/*.edn` 里某个文件的问题；旧目录 `ac/combat/abilities/*.edn` 已删除，
-  `combat-catalog.clj` 现在只读 `ac/skills/*.edn`，跟 dispatch 引擎读的是同一份
+  `ac/skills-v3/*.edn` 里某个文件的问题；旧目录 `ac/combat/abilities/*.edn` 已删除，
+  `combat-catalog.clj` 现在只读 `ac/skills-v3/*.edn`，跟 dispatch 引擎读的是同一份
   内容，不会再有"两个目录、两份真相"的问题。
 
 ## 变更风险

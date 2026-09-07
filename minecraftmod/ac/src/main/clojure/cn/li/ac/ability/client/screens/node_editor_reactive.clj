@@ -116,7 +116,7 @@
             :fns {}
             :category-for nil}))
 
-;; --- layout sidecar (ac/skills/layout/<id>.layout.edn, VFX-同构) ---------
+;; --- layout sidecar (ac/skills-v3/layout/<id>.layout.edn, VFX-同构) ---------
 ;;
 ;; Deliberately a SIBLING file next to the opened document, derived only
 ;; from `path` (which the caller already resolved -- see this namespace's

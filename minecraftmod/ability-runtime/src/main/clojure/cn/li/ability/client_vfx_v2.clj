@@ -13,7 +13,7 @@
    new engine's registry is an IMMUTABLE map built once at runtime-
    creation time (cn.li.vfx.runtime/create-client-runtime), not
    incrementally registered/frozen -- there is exactly one real catalog
-   (AC's own ac/vfx/fx/*.edn), so register-catalog!/freeze!'s whole
+   (AC's own ac/vfx-v3/*.edn), so register-catalog!/freeze!'s whole
    multi-tenant-collision-guard concern does not apply here; create-
    runtime below takes a :catalog-compile zero-arg fn instead (mirroring
    cn.li.ability.engine-v2's own create-runtime contract).

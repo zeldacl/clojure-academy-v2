@@ -13,7 +13,7 @@
 (def ^:private thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
 (def ^:private railgun-path "src/main/resources/ac/skills-v3/railgun.edn")
 (def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
-(def ^:private legacy-thunder-bolt-path "src/main/resources/ac/skills/thunder_bolt.edn")
+(def ^:private legacy-thunder-bolt-path nil)
 (def ^:private multi-stage-vfx
   {:schema :ac/vfx-v3
    :id :editor/multi-stage
@@ -101,13 +101,13 @@
       (is (= 7.0 (:y pos))))))
 
 (deftest layout-path-is-a-sibling-layout-directory-file-test
-  (let [f (#'node-editor/layout-path-for "/a/b/ac/skills/thunder_bolt.edn")]
-    (is (= "thunder_bolt.edn.layout.edn" (.getName ^java.io.File f)))
+  (let [f (#'node-editor/layout-path-for "/a/b/ac/skills-v3/thunder-bolt.edn")]
+    (is (= "thunder-bolt.edn.layout.edn" (.getName ^java.io.File f)))
     (is (.endsWith (.getParent ^java.io.File f) "layout"))))
 
 (deftest workspace-path-is-a-sibling-editor-workspace-directory-file-test
-  (let [f (#'node-editor/workspace-path-for "/a/b/ac/skills/thunder_bolt.edn")]
-    (is (= "thunder_bolt.edn" (.getName ^java.io.File f)))
+  (let [f (#'node-editor/workspace-path-for "/a/b/ac/skills-v3/thunder-bolt.edn")]
+    (is (= "thunder-bolt.edn" (.getName ^java.io.File f)))
     (is (.endsWith (.getParent ^java.io.File f) "editor-workspace"))))
 
 (deftest save-layout-then-load-layout-round-trips-test
@@ -196,11 +196,15 @@
     (is (some? (:cost-summary state)))))
 
 (deftest open-document-rejects-legacy-string-wrapper-test
-  (try
-    (node-editor/open-document legacy-thunder-bolt-path :skill)
-    (is false "the production editor must accept structured V3 documents only")
-    (catch clojure.lang.ExceptionInfo error
-      (is (.contains (.getMessage error) "structured V3 document")))))
+  (let [legacy (java.io.File/createTempFile "node-editor-legacy" ".edn")]
+    (spit legacy "{:id :legacy :program \"(finish {:outcome :performed})\"}")
+    (try
+      (node-editor/open-document (.getPath legacy) :skill)
+      (is false "the production editor must accept structured V3 documents only")
+      (catch clojure.lang.ExceptionInfo error
+        (is (.contains (.getMessage error) "structured V3 document")))
+      (finally (when (.isFile legacy) (.delete legacy))))))
+
 (deftest open-document-loads-a-structured-v3-vfx-test
   (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)]
     (is (true? (:v3? (:document state))))

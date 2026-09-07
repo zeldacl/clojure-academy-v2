@@ -9,7 +9,7 @@
    runtime/dispatch-intent-v2!. The old final_engine.clj is kept alongside
    it, unchanged, and is still exercised directly by its own dedicated
    test suite -- see NODE_LANGUAGE.md §0 for the full picture. All 39 of
-   ac's abilities (ac/skills/*.edn) compile through this path.
+   ac's abilities (ac/skills-v3/*.edn) compile through this path.
 
    capability-type is a FUNCTION, not a static map: ?budget/fire,
    ?cooldown/main, ?progression/effective etc are named per-ability by its
