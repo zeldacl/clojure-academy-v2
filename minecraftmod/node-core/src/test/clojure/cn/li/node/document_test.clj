@@ -68,3 +68,10 @@
     (is (thrown? clojure.lang.ExceptionInfo
                  (document/validate-document!
                   (assoc skill :scene "(finish {:outcome :performed})")))))
+  (testing "VFX lifecycle mode is explicit"
+    (let [vfx {:schema :ac/vfx-v3
+               :id :ac.vfx/example
+               :lifecycle {:mode :typo}
+               :system {}}]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (document/validate-document! vfx)))))

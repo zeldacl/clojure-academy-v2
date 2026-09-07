@@ -10,6 +10,7 @@
 (def schemas #{:ac/skill-v3 :ac/vfx-v3 :ac/module-v3})
 (def ref-scopes #{:parameter :context :state :input :local :module-input})
 (def vfx-system-stages #{:spawn :update :render})
+(def vfx-lifecycle-modes #{:session :transient})
 (def vfx-emitter-stages #{:emitter/spawn :emitter/update
                           :particle/spawn :particle/update :render})
 
@@ -267,7 +268,11 @@
   (validate-field-specs! (:inputs document) [:inputs])
   (validate-parameters! (:parameters document) [:parameters])
   (validate-field-specs! (:state document) [:state])
-  (require! (map? (:lifecycle document)) "vfx-v3 requires :lifecycle" {})
+  (let [lifecycle (:lifecycle document)]
+    (require! (map? lifecycle) "vfx-v3 requires :lifecycle" {})
+    (require! (contains? vfx-lifecycle-modes (:mode lifecycle))
+              "vfx-v3 lifecycle requires :mode :session or :transient"
+              {:path [:lifecycle :mode] :mode (:mode lifecycle)}))
   (validate-stage-map! (:system document) vfx-system-stages [:system])
   (when-let [emitters (:emitters document)]
     (require! (vector? emitters) "vfx-v3 :emitters must be a vector" {:path [:emitters]})
