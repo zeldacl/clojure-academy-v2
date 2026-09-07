@@ -97,3 +97,14 @@
    admit check enforces."
   []
   (player/glyph-catalog))
+
+
+(defn analyze-player-spell
+  "Validate and statically analyze a player spell without exposing executable IR."
+  [glyphs complexity-cap]
+  (player/analyze-player-spell glyphs complexity-cap))
+
+(defn player-glyph-specs
+  "Return parameter descriptors shared by the player composer and validator."
+  []
+  (player/player-glyph-specs))

@@ -145,3 +145,26 @@
 (deftest glyph-catalog-augment-contributes-nothing-extra-test
   (let [augment-entry (some #(when (= :augment/amplify (:glyph %)) %) (player/glyph-catalog))]
     (is (= {:effects #{} :cost 0} (select-keys augment-entry [:effects :cost])))))
+
+(deftest analyze-player-spell-rejects-invalid-parameters-without-throwing-test
+  (testing "out-of-range range"
+    (let [verdict (player/analyze-player-spell
+                   [{:glyph :form/touch :params {:range 129.0}}
+                    {:glyph :effect/damage}]
+                   1000)]
+      (is (false? (:ok verdict)))
+      (is (= :invalid-glyph (:reject verdict)))))
+  (testing "unknown parameter"
+    (let [verdict (player/analyze-player-spell
+                   [{:glyph :form/self}
+                    {:glyph :effect/damage :params {:amount 2.0 :oops 1}}]
+                   1000)]
+      (is (false? (:ok verdict)))
+      (is (= :invalid-glyph (:reject verdict))))))
+
+(deftest compile-and-admit-enforces-player-glyph-count-and-augment-bounds-test
+  (let [too-many (vec (concat [{:glyph :form/self} {:glyph :effect/damage}]
+                              (repeat 31 {:glyph :augment/amplify})))
+        verdict (player/compile-and-admit too-many 1000)]
+    (is (false? (:ok verdict)))
+    (is (= :invalid-glyph (:reject verdict)))))

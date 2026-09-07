@@ -41,6 +41,106 @@
 (def ^:private allowed-player-effects #{:world-read :world-write :owner-read :owner-write})
 (def ^:private max-player-host-commands 64)
 (def ^:private max-player-iterations 256)
+(def ^:private max-player-glyphs 32)
+
+;; One descriptor table drives the client palette, pure analysis and server
+;; validation. UI controls are advisory; player-spell packets are not trusted.
+(def ^:private glyph-specs
+  {:form/self {:kind :form :params {}
+               :i18n "glyph.academy.form.self"}
+   :form/touch {:kind :form :params
+                {:range {:type :float :default 16.0 :min 1.0 :max 128.0}}
+                :i18n "glyph.academy.form.touch"}
+   :effect/damage {:kind :effect :params
+                   {:amount {:type :float :default 2.0 :min 0.0 :max 20.0}}
+                   :i18n "glyph.academy.effect.damage"}
+   :effect/push {:kind :effect :params
+                 {:strength {:type :float :default 1.0 :min 0.0 :max 8.0}}
+                 :i18n "glyph.academy.effect.push"}
+   :augment/amplify {:kind :augment :params {}
+                     :i18n "glyph.academy.augment.amplify"}})
+
+(defn player-glyph-specs
+  "Return the descriptor table used by both the player UI and validation."
+  []
+  (into {} (map (fn [[glyph spec]] [glyph (assoc spec :glyph glyph)])) glyph-specs))
+
+(defn- finite-number? [value]
+  (and (number? value) (Double/isFinite (double value))))
+
+(defn- normalize-param [glyph param-key value {:keys [type min max]}]
+  (when-not (case type
+             :int (integer? value)
+             :float (finite-number? value)
+             :string (string? value)
+             :keyword (keyword? value)
+             :any true
+             false)
+    (throw (ex-info "invalid player spell parameter"
+                    {:code :invalid-param-type :glyph glyph :param param-key
+                     :expected type :value value})))
+  (when (and (number? value) min (< (double value) (double min)))
+    (throw (ex-info "player spell parameter is below its minimum"
+                    {:code :param-too-small :glyph glyph :param param-key :min min :value value})))
+  (when (and (number? value) max (> (double value) (double max)))
+    (throw (ex-info "player spell parameter exceeds its maximum"
+                    {:code :param-too-large :glyph glyph :param param-key :max max :value value})))
+  value)
+
+(defn- normalize-glyph [glyph]
+  (when-not (map? glyph)
+    (throw (ex-info "player spell glyph must be a map" {:code :invalid-glyph :glyph glyph})))
+  (let [glyph-id (:glyph glyph)
+        spec (get glyph-specs glyph-id)
+        declared (or (:params glyph) {})
+        params-spec (:params spec)]
+    (when-not spec
+      (throw (ex-info "unknown player spell glyph" {:code :unknown-glyph :glyph glyph-id})))
+    (when-not (map? declared)
+      (throw (ex-info "player spell glyph params must be a map"
+                      {:code :invalid-params :glyph glyph-id})))
+    (when-let [unknown (seq (remove #(contains? params-spec %) (keys declared)))]
+      (throw (ex-info "unknown player spell parameter"
+                      {:code :unknown-param :glyph glyph-id :params (vec unknown)})))
+    (assoc glyph :params
+           (into {}
+                 (keep (fn [[param-key param-spec]]
+                         (when (or (contains? declared param-key)
+                                   (contains? param-spec :default))
+                           [param-key
+                            (normalize-param glyph-id param-key
+                                             (if (contains? declared param-key)
+                                               (get declared param-key)
+                                               (:default param-spec))
+                                             param-spec)])))
+                 params-spec))))
+
+(defn- normalize-glyphs [glyphs]
+  (when-not (vector? glyphs)
+    (throw (ex-info "player spell glyphs must be a vector" {:code :invalid-glyph-vector})))
+  (when (empty? glyphs)
+    (throw (ex-info "player spell has no glyphs" {:code :empty-spell})))
+  (when (> (count glyphs) max-player-glyphs)
+    (throw (ex-info "player spell has too many glyphs"
+                    {:code :too-many-glyphs :max max-player-glyphs :count (count glyphs)})))
+  (let [normalized (mapv normalize-glyph glyphs)
+        [form & tail] normalized]
+    (when-not (= :form (:kind (get glyph-specs (:glyph form))))
+      (throw (ex-info "player spell must start with a :form/* glyph"
+                      {:code :form-required :glyph (:glyph form)})))
+    (let [effect-count (count (filter #(= :effect (:kind (get glyph-specs (:glyph %)))) tail))
+          augment-run (loop [remaining tail current 0 runs []]
+                        (if-let [glyph (first remaining)]
+                          (if (= :effect (:kind (get glyph-specs (:glyph glyph))))
+                            (recur (next remaining) 0 runs)
+                            (recur (next remaining) (inc current) (conj runs (inc current))))
+                          runs))]
+      (when (zero? effect-count)
+        (throw (ex-info "player spell has no :effect/* glyph" {:code :effect-required})))
+      (when (some #(> % 8) augment-run)
+        (throw (ex-info "player spell has too many augments for one effect"
+                        {:code :too-many-augments :max 8}))))
+    normalized))
 
 (defn- amplify-multiplier
   "Ars Nouveau's own augment math: each stacked :augment/amplify adds a
@@ -126,10 +226,9 @@
    either an :effect/* (acts on that target) or an :augment/* (decorates
    the nearest preceding effect)."
   [glyphs]
-  (when (empty? glyphs) (throw (ex-info "player spell has no glyphs" {:glyphs glyphs})))
-  (let [[form & tail] glyphs]
-    (when-not (= "form" (namespace (:glyph form)))
-      (throw (ex-info "player spell must start with a :form/* glyph" {:glyphs glyphs})))
+
+  (let [[form & tail] (normalize-glyphs glyphs)]
+
     (let [{:keys [stmts target guard?]} (form-stmts form)
           effect-groups (group-by-effect tail)]
       (when (empty? effect-groups)
@@ -168,7 +267,11 @@
           (nil? max-iterations) (> max-iterations max-player-iterations))
       {:ok false :reject :over-budget :host-commands host-commands :max-iterations max-iterations}
 
-      :else {:ok true :complexity complexity})))
+      :else {:ok true
+              :complexity complexity
+              :effects effects
+              :host-commands host-commands
+              :max-iterations max-iterations})))
 
 (defn compile-and-admit
   "glyphs, complexity-cap -> the only path server-side code should ever
@@ -177,10 +280,28 @@
    :reject reason ...} otherwise -- callers must check :ok before
    touching :ir at all."
   [glyphs complexity-cap]
-  (let [text (desugar glyphs)
+  (try
+    (let [normalized (normalize-glyphs glyphs)
+        text (desugar normalized)
         ir (run/compile-doc! text)
         verdict (admit ir complexity-cap)]
-    (if (:ok verdict) (assoc verdict :ir ir) verdict)))
+      (if (:ok verdict) (assoc verdict :ir ir :glyphs normalized) verdict))
+    (catch clojure.lang.ExceptionInfo error
+      {:ok false :reject :invalid-glyph :detail (ex-data error)})
+    (catch Throwable error
+      {:ok false :reject :invalid-glyph
+       :detail {:code :compile-failure :message (.getMessage error)}})))
+
+(defn analyze-player-spell
+  "Validate and statically analyze a raw player spell without exposing IR."
+  [glyphs complexity-cap]
+  (try
+    (dissoc (compile-and-admit glyphs complexity-cap) :ir)
+    (catch clojure.lang.ExceptionInfo error
+      {:ok false :reject :invalid-glyph :detail (ex-data error)})
+    (catch Throwable error
+      {:ok false :reject :invalid-glyph
+       :detail {:code :compile-failure :message (.getMessage error)}})))
 
 ;; --- glyph-catalog: the composer's palette, derived not hand-maintained --
 ;;
@@ -207,18 +328,23 @@
 ;;     (there is nothing a compile could isolate that direct reasoning
 ;;     does not already establish).
 
-(def ^:private known-form-glyphs [:form/self :form/touch])
-(def ^:private known-effect-glyphs [:effect/damage :effect/push])
+(defn- glyph-ids-of-kind [kind]
+  (->> glyph-specs
+       (filter (fn [[_ spec]] (= kind (:kind spec))))
+       (map first)
+       sort
+       vec))
 
 (defn- spell-cost [glyphs]
   (cost/analyze (run/compile-doc! (desugar glyphs)) vocab/nodes))
 
 (defn- catalog-entry [kind glyph-kw {:keys [effects complexity]}]
-  {:glyph glyph-kw
-   :kind kind
-   :effects effects
-   :cost complexity
-   :admissible? (set/subset? effects allowed-player-effects)})
+  (merge (get glyph-specs glyph-kw)
+         {:glyph glyph-kw
+          :kind kind
+          :effects effects
+          :cost complexity
+          :admissible? (set/subset? effects allowed-player-effects)}))
 
 (defn glyph-catalog
   "-> a vector of {:glyph :kind (:form/:effect/:augment) :effects :cost
@@ -237,11 +363,11 @@
                     (catalog-entry :form glyph-kw
                                    {:effects (set/difference (:effects total) (:effects baseline))
                                     :complexity (- (:complexity total) (:complexity baseline))}))))
-              known-form-glyphs)
+              (glyph-ids-of-kind :form))
         effect-entries
         (mapv (fn [glyph-kw] (catalog-entry :effect glyph-kw (spell-cost [{:glyph :form/self} {:glyph glyph-kw}])))
-              known-effect-glyphs)
+              (glyph-ids-of-kind :effect))
         augment-entries
         (mapv (fn [glyph-kw] (catalog-entry :augment glyph-kw {:effects #{} :complexity 0}))
-              known-augment-glyphs)]
+              (glyph-ids-of-kind :augment))]
     (vec (concat form-entries effect-entries augment-entries))))
