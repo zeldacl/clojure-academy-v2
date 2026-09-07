@@ -65,3 +65,20 @@
           (is (= effect-id (:effect-id instance)))
           (is (vector? (get-in (runtime/sample-frame! rt)
                                [[:sample effect-id] :scene]))))))))
+
+(deftest every-v3-document-reaches-frame-abi
+  (let [{:keys [by-id]} (fx-catalog/assemble)]
+    (doseq [[effect-id entry] by-id]
+      (testing (str effect-id)
+        (let [document (:document entry)
+              user (into {} (map (fn [[key spec]] [key (sample-value (:type spec))])
+                                  (:inputs document)))
+              rt (runtime/create-client-runtime by-id)
+              _ (runtime/ensure! rt [:frame effect-id]
+                                 {:effect-id effect-id :seed 1 :user user})
+              java-frame (:java-frame (runtime/sample-client-frame! rt))
+              raw-scene (get-in (runtime/sample-frame! rt)
+                                [[:frame effect-id] :scene])
+              output-count (+ (count (.batches java-frame))
+                              (count (.outputs java-frame)))]
+          (is (= (pos? (count raw-scene)) (pos? output-count))))))))
