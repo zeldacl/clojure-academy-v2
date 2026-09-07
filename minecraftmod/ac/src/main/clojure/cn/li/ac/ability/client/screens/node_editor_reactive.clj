@@ -94,16 +94,15 @@
       (.getAbsolutePath (io/as-file url)))))
 
 (defn- mode-opts
-  "mode (:skill or :scene), document (the just-opened V3 map or legacy
-   wrapper, needed for scene mode's per-file capabilities) ->
-   {:vocab :capabilities :fns :field :category-for}."
+  "mode (:skill or :scene), document (the just-opened V3 map, needed for
+   scene mode's per-file capabilities) -> {:vocab :capabilities :fns
+   :category-for}."
   [mode wrapper-doc]
   (case mode
     :skill {:vocab combat-api/skill-vocab
             :capabilities combat-api/skill-capability-type
             :fns combat-api/skill-lib-fns
-            :category-for combat-api/skill-vocab-category-for
-            :field :program}
+            :category-for combat-api/skill-vocab-category-for}
     :scene {:vocab vfx-api/scene-vocab
             :capabilities
             (let [decls (or (get-in wrapper-doc [:inputs :spawn])
@@ -115,8 +114,7 @@
                               decls)]
               (vfx-api/scene-capabilities-for types))
             :fns {}
-            :category-for nil
-            :field :scene}))
+            :category-for nil}))
 
 ;; --- layout sidecar (ac/skills/layout/<id>.layout.edn, VFX-同构) ---------
 ;;
@@ -189,9 +187,9 @@
    reverting to stale source on the next open (document/save's own
    docstring calls this out as the intended two-path design: workspace
    write by default, explicit :editor/export publishes to source).
-   Structured V3 documents are opened as whole maps. Legacy wrappers still
-   use their :program/:scene field only for migration fixtures. Also loads
-   the layout sidecar
+   Structured V3 documents are opened as whole maps. The production editor
+   intentionally rejects legacy :program/:scene wrappers; migration is an
+   explicit offline step, never an implicit editor fallback. Also loads the layout sidecar
    (node positions from a prior session, if any) and builds the mode's
    palette once (vocab is static per mode, no need to recompute it on
    every edit)."
@@ -208,7 +206,10 @@
                                   :category-for (:category-for opts)})
          :document (if (document/v3-document? wrapper-doc)
                      (document/open-v3 raw)
-                     (document/open raw (:field opts)))
+                     (throw (ex-info "node editor requires a structured V3 document"
+                                     {:path path
+                                      :schema (:schema wrapper-doc)
+                                      :legacy-fields (select-keys wrapper-doc [:program :scene])})))
          :selected-nid nil
          :drag hit/idle
          :layout (load-layout path)

@@ -22,6 +22,52 @@
 (defn- require! [test message data]
   (when-not test (fail message data)))
 
+(defn- node-map?
+  "Return true for author-visible node maps while ignoring arbitrary data maps.
+   Node IDs are document-global: a graph editor cannot address two nodes by the
+   same ID without losing layout or connection information."
+  [value]
+  (and (map? value)
+       (contains? value :nid)
+       (or (contains? value :component)
+           (contains? value :ref)
+           (contains? value :flow))))
+
+(defn- collect-nids
+  [value path]
+  (cond
+    (node-map? value)
+    (into [{:nid (:nid value) :path path}]
+          (mapcat (fn [[key child]]
+                    (collect-nids child (conj path key)))
+                  value))
+
+    (map? value)
+    (mapcat (fn [[key child]]
+              (collect-nids child (conj path key)))
+            value)
+
+    (vector? value)
+    (mapcat (fn [[index child]]
+              (collect-nids child (conj path index)))
+            (map-indexed vector value))
+
+    :else []))
+
+(defn- validate-unique-nids!
+  [document]
+  (let [nids (collect-nids (dissoc document :editor) [])
+        duplicates (->> nids
+                        (group-by :nid)
+                        (keep (fn [[nid occurrences]]
+                                (when (> (count occurrences) 1)
+                                  {:nid nid
+                                   :paths (mapv :path occurrences)})))
+                        vec)]
+    (require! (empty? duplicates)
+              "V3 node IDs must be unique within a document"
+              {:duplicates duplicates})))
+
 (defn- valid-nid? [nid]
   (and (keyword? nid)
        (= "n" (namespace nid))
@@ -228,7 +274,8 @@
     (case schema
       :ac/skill-v3 (validate-skill! document)
       :ac/vfx-v3 (validate-vfx! document)
-      :ac/module-v3 (validate-module! document)))
+      :ac/module-v3 (validate-module! document))
+    (validate-unique-nids! document))
   document)
 
 (defn kind [document]

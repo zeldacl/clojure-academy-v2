@@ -9,9 +9,10 @@
             [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
             [cn.li.ability.editor.document :as editor-document]))
 
-(def ^:private thunder-bolt-path "src/main/resources/ac/skills/thunder_bolt.edn")
-(def ^:private railgun-path "src/main/resources/ac/skills/railgun.edn")
-(def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx/fx/arc_ring_fade_audio.edn")
+(def ^:private thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
+(def ^:private railgun-path "src/main/resources/ac/skills-v3/railgun.edn")
+(def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
+(def ^:private legacy-thunder-bolt-path "src/main/resources/ac/skills/thunder_bolt.edn")
 (def ^:private v3-thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
 (def ^:private v3-arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
 
@@ -42,7 +43,7 @@
 (deftest open-document-loads-a-real-scene-file-test
   (let [state (node-editor/open-document arc-ring-fade-audio-path :scene)]
     (is (= :scene (:mode state)))
-    (is (= :scene (:field (:opts state))))
+    (is (= :ac/vfx-v3 (get-in state [:document :v3-document :schema])))
     (is (seq (:order (:graph state))))
     (is (= [] (:diagnostics state))
         (str "scene file should compile cleanly against its own per-file capabilities: "
@@ -186,6 +187,12 @@
     (is (= [] (:diagnostics state)))
     (is (some? (:cost-summary state)))))
 
+(deftest open-document-rejects-legacy-string-wrapper-test
+  (try
+    (node-editor/open-document legacy-thunder-bolt-path :skill)
+    (is false "the production editor must accept structured V3 documents only")
+    (catch clojure.lang.ExceptionInfo error
+      (is (.contains (.getMessage error) "structured V3 document")))))
 (deftest open-document-loads-a-structured-v3-vfx-test
   (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)]
     (is (true? (:v3? (:document state))))

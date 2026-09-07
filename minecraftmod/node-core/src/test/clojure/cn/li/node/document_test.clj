@@ -43,3 +43,11 @@
                               :as :item
                               :limit 0
                               :do []}]))))))
+  (testing "duplicate node ids"
+    (let [duplicate (assoc-in skill [:entries :activate :do 1 :nid] :n/raycast)]
+      (try
+        (document/validate-document! duplicate)
+        (is false "duplicate node IDs must be rejected")
+        (catch clojure.lang.ExceptionInfo error
+          (is (re-find #"node IDs must be unique"
+                       (.getMessage error)))))))
