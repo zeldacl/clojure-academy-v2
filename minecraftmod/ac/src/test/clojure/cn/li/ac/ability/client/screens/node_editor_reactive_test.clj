@@ -6,11 +6,14 @@
    screen in-game; see the namespace's own docstring for why."
   (:require [clojure.test :refer [deftest is]]
             [clojure.java.io :as io]
-            [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]))
+            [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
+            [cn.li.ability.editor.document :as editor-document]))
 
 (def ^:private thunder-bolt-path "src/main/resources/ac/skills/thunder_bolt.edn")
 (def ^:private railgun-path "src/main/resources/ac/skills/railgun.edn")
 (def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx/fx/arc_ring_fade_audio.edn")
+(def ^:private v3-thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
+(def ^:private v3-arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
 
 (defn- temp-copy-of
   "Copies `source-path` into a fresh temp directory under the same
@@ -173,3 +176,40 @@
       (is (> (count (:phases state)) 1)
           "open-document must read the workspace sidecar, not `path` itself, when one exists")
       (is (.contains ^String (:status state) "workspace")))))
+
+(deftest open-document-loads-a-structured-v3-skill-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)]
+    (is (true? (:v3? (:document state))))
+    (is (= :ac/skill-v3 (get-in state [:document :v3-document :schema])))
+    (is (contains? (set (:phases state)) :default))
+    (is (seq (:order (:graph state))))
+    (is (= [] (:diagnostics state)))
+    (is (some? (:cost-summary state)))))
+
+(deftest open-document-loads-a-structured-v3-vfx-test
+  (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)]
+    (is (true? (:v3? (:document state))))
+    (is (= :ac/vfx-v3 (get-in state [:document :v3-document :schema])))
+    (is (contains? (set (:phases state)) :render))
+    (is (seq (:order (:graph state))))
+    (is (= [] (:diagnostics state)))))
+
+(deftest structured-v3-save-keeps-the-map-document-contract-test
+  (let [path (temp-copy-of v3-thunder-bolt-path)
+        state* (atom (node-editor/open-document path :skill))]
+    (#'node-editor/handle-action state* :editor/save nil)
+    (let [saved (slurp (#'node-editor/workspace-path-for path))
+          parsed (clojure.edn/read-string saved)]
+      (is (= :ac/skill-v3 (:schema parsed)))
+      (is (map? (:entries parsed)))
+      (is (nil? (:program parsed)))
+      (is (= saved (:file-text (:document @state*)))))))
+
+(deftest structured-v3-content-round-trip-remains-valid-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
+        edited (editor-document/edit (:document state) (:form (:document state)))
+        saved (editor-document/save edited pr-str)
+        parsed (clojure.edn/read-string (:file-text saved))]
+    (is (= :ac/skill-v3 (:schema parsed)))
+    (is (map? (:entries parsed)))
+    (is (every? map? (mapcat (comp :do val) (:entries parsed))))))

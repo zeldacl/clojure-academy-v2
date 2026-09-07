@@ -9,7 +9,8 @@
    needing a full-fidelity printer for the WRAPPER map, only for the DSL
    string inside it."
   (:require [clojure.string :as str]
-            [cn.li.node.surface :as surface]))
+            [cn.li.node.surface :as surface]
+            [cn.li.ability.editor.v3 :as v3]))
 
 ;; --- quote-aware text scanning ----------------------------------------
 
@@ -80,6 +81,19 @@
   (let [[start end] (string-value-span raw-text field)]
     (str (subs raw-text 0 start) (escape-edn-string new-dsl-text) (subs raw-text end))))
 
+(defn v3-document?
+  "Public predicate used by the screen/controller to select the structured
+   document path instead of looking for a legacy string field."
+  [value]
+  (v3/v3-document? value))
+
+(defn open-v3
+  "Open one structured AC V3 document. Unlike the legacy `open` function,
+   this path parses the complete top-level map and never searches for a
+   :program/:scene string."
+  [raw-text]
+  (v3/open raw-text))
+
 ;; --- document lifecycle --------------------------------------------------
 
 (defn open
@@ -138,5 +152,11 @@
    export action writes to the source tree; see the node-editor plan's
    Phase 3 save-strategy note)."
   [{:keys [field form] :as document} print-fn]
-  (let [new-text (splice-program (:file-text document) field (print-fn form))]
-    (assoc document :file-text new-text :dirty? false)))
+  (if (:v3? document)
+    (let [new-v3 (if (:dirty? document)
+                   (v3/form->document (:v3-document document) form)
+                   (:v3-document document))
+          new-text (pr-str new-v3)]
+      (assoc document :v3-document new-v3 :file-text new-text :dirty? false))
+    (let [new-text (splice-program (:file-text document) field (print-fn form))]
+      (assoc document :file-text new-text :dirty? false))))

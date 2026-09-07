@@ -33,6 +33,16 @@
                             (str nid))})
     form))
 
+(defn- derived-nid
+  "Give compiler-generated A-normalization bindings their own diagnostic
+   identity. The component node keeps the persisted :nid; sharing it with
+   the synthetic `let` makes the visual graph overwrite one node in its
+   index during a V3 document preview."
+  [nid suffix]
+  (if (keyword? nid)
+    (keyword (namespace nid) (str (name nid) suffix))
+    (str nid suffix)))
+
 (declare lower-expr)
 
 (defn- lower-map [m]
@@ -79,7 +89,7 @@
                                (if (contains? value :args)
                                  (component-form value call-args)
                                  (component-form value inputs)))
-                         (:nid value)))
+                         (derived-nid (:nid value) "-pre")))
        :form local})
 
     (map? value)
