@@ -376,7 +376,8 @@
   [{:keys [nodes] :as graph} {:keys [from-nid from-pin to-nid to-pin to-key]}]
   (let [from (get nodes from-nid)
         to (get nodes to-nid)]
-    (when-not (and from to (= :out from-pin) (= :in to-pin))
+    (when-not (and from to (= :data (:kind from)) (= :exec (:kind to))
+                 (= :out from-pin) (= :in to-pin))
       (throw (ex-info "wire endpoints are invalid"
                       {:code :invalid-wire :from-nid from-nid :to-nid to-nid})))
     (let [updated (assoc-input-pin to to-key from-nid)]

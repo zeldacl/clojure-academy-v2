@@ -4,21 +4,15 @@
    same mechanism ac's existing skill_tree.clj already uses to paint a
    graph -- see the node-editor plan's §1.4 for that precedent).
 
-   SCOPE for this first visual iteration (graph->composite-items):
-   renders the EXEC statement chain only, one box per statement
-   (including nested when/each/if bodies, indented), each box's label a
-   full one-line rendering of that statement's own DSL text (cn.li.
-   ability.editor.graph/stmt-text -- literally what saving would print,
-   so a label can never show something structurally different from the
-   real content) rather than a separate wired sub-node per nested pure
-   expression. A full Blueprint-style per-expression node graph is more
-   visually complex and, critically, not verifiable without an actual
-   screen to look at -- this ships the part whose correctness (every
-   statement gets exactly one box, nesting reads top-to-bottom with
-   indentation, sequential wires connect the flow) is provable by a unit
-   test today; expression-level sub-wiring is a real, deliberate
-   follow-up once the exec-chain view has been used in-game and the
-   extra complexity is worth it, not a silent gap."
+   SCOPE for this visual iteration (graph->composite-items):
+   renders the EXEC statement chain as the primary top-to-bottom flow and
+   renders every referenced pure expression in a secondary column. Statement
+   boxes remain readable one-line DSL summaries; expression boxes expose an
+   output pin and statement boxes expose semantic input pins, so value wires
+   are structurally editable without pretending an exec node is an expression.
+   The view is intentionally hybrid rather than a full Blueprint canvas: it
+   keeps the common control-flow path compact while making data dependencies
+   visible and testable."
   (:require [cn.li.ability.editor.graph :as graph]))
 
 (defn wire-quads
@@ -73,6 +67,7 @@
 
 (def ^:private node-box-width 220.0)
 (def ^:private node-box-height 16.0)
+(def ^:private expr-box-width 150.0)
 (def ^:private node-row-height 20.0)
 (def ^:private node-indent-x 18.0)
 (def ^:private wire-thickness 1.5)
@@ -96,36 +91,86 @@
 
 (defn- box-color [stmt] (get stmt-colors stmt 0xFF444444))
 
+(defn expr-default-layout
+  "data-node-ids -> deterministic secondary-column positions."
+  [nids]
+  (into {}
+        (map-indexed (fn [i nid]
+                       [nid {:x (+ 280.0 (* 160.0 (double (mod i 3))))
+                             :y (* node-row-height (double (quot i 3)))}]))
+        nids))
+
+(defn- expr-composite-items [nodes nid pos]
+  (let [x (:x pos) y (:y pos)
+        text (graph/expr-text nodes nid)
+        text (if (> (count text) 42) (str (subs text 0 39) "...") text)]
+    [{:kind :quad :role :expr-body :nid nid :x x :y y :w expr-box-width :h node-box-height
+      :rgba 0xFF34495E}
+     {:kind :text :role :expr-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
+      :text text :rgba 0xFFE8F1F8}
+     {:kind :quad :role :pin :target :pin :nid nid :pin :out :key :result
+      :x (+ x expr-box-width) :y (+ y 5.0) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))
+
+(defn- exec-inputs [node]
+  (let [stmt (:stmt node)]
+    (case stmt
+      :let (when (:rhs node) [[:rhs (:rhs node)]])
+      :when (when (:cond node) [[:cond (:cond node)]])
+      :each (when (:coll node) [[:coll (:coll node)]])
+      (:state! :set!) (when (:value node) [[:value (:value node)]])
+      :call (if (map? (:args node)) (seq (:args node))
+                (map-indexed vector (:args node)))
+      (:event! :vfx!) (seq (:fields node))
+      [])))
+
+(defn- exec-pin-items [node]
+  (mapv (fn [[key _]]
+          {:kind :quad :role :pin :target :pin :nid (:nid node) :pin :in :key key
+           :x -5.0 :y 5.0 :w 5.0 :h 5.0 :rgba 0xFF66CCFF})
+        (exec-inputs node)))
+
 (defn- node-composite-items [nodes nid pos]
   (let [{:keys [stmt]} (get nodes nid)
         x (:x pos) y (:y pos)
         text (graph/stmt-text nodes nid)
-        text (if (> (count text) 64) (str (subs text 0 61) "...") text)]
-    [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
-      :rgba (box-color stmt)}
-     {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
-      :text text :rgba 0xFFFFFFFF}]))
+        text (if (> (count text) 64) (str (subs text 0 61) "...") text)
+        pins (map (fn [pin] (assoc pin :x (+ x (:x pin)) :y (+ y (:y pin))))
+                  (exec-pin-items (assoc (get nodes nid) :nid nid)))]
+    (vec (concat
+          [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
+            :rgba (box-color stmt)}
+           {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
+            :text text :rgba 0xFFFFFFFF}]
+          pins))))
  
 (defn graph->composite-items
-  "graph (cn.li.ability.editor.graph/form->graph's output), stored-layout
-   -> a flat composite-item vector for a :repeater-bound canvas (see
-   this namespace's own docstring for the exec-chain-only scope of this
-   first iteration). Each node contributes a :quad (:role :node-body,
-   the click target) + a :text label; consecutive statements (including
-   into/out-of a nested when/each/if body) get a connecting wire. Every
-   item carries :nid (and :role) so a click handler can resolve the
-   :index the presentation runtime hands back into a real hit
-   classification (cn.li.ability.editor.hit's {:target :node :nid ..})
-   without a second lookup table."
+   "graph (cn.li.ability.editor.graph/form->graph's output), stored-layout
+    -> a flat composite-item vector for a :repeater-bound canvas. Execution
+    statements remain the primary top-to-bottom chain; expression nodes are
+    rendered in a secondary column with semantic output/input pins, so wires
+    can be edited without connecting an exec node to an expression slot."
   [graph stored-layout]
-  (let [flat (graph/exec-flatten graph)
-        layout (merge (exec-default-layout flat) stored-layout)
-        nodes (:nodes graph)
-        node-items (mapcat (fn [{:keys [nid]}] (node-composite-items nodes nid (get layout nid))) flat)
-        wire-items (mapcat (fn [[{a :nid} {b :nid}]]
-                             (let [pa (get layout a) pb (get layout b)]
-                               (wire-quads (+ (:x pa) (/ node-box-width 2.0)) (+ (:y pa) node-box-height)
-                                          (+ (:x pb) (/ node-box-width 2.0)) (:y pb)
-                                          wire-thickness 0xFFAAAAAA)))
-                           (partition 2 1 flat))]
-    (vec (concat node-items wire-items))))
+   (let [flat (graph/exec-flatten graph)
+         exec-ids (mapv :nid flat)
+         data-ids (->> (:nodes graph) (keep (fn [[nid node]] (when (= :data (:kind node)) nid))) vec)
+         layout (merge (exec-default-layout flat) (expr-default-layout data-ids) stored-layout)
+         nodes (:nodes graph)
+         node-items (mapcat (fn [{:keys [nid]}] (node-composite-items nodes nid (get layout nid))) flat)
+         expr-items (mapcat (fn [nid] (expr-composite-items nodes nid (get layout nid))) data-ids)
+         flow-wires (mapcat (fn [[{a :nid} {b :nid}]]
+                              (let [pa (get layout a) pb (get layout b)]
+                                (wire-quads (+ (:x pa) (/ node-box-width 2.0)) (+ (:y pa) node-box-height)
+                                            (+ (:x pb) (/ node-box-width 2.0)) (:y pb)
+                                            wire-thickness 0xFFAAAAAA)))
+                            (partition 2 1 flat))
+         value-wires (mapcat (fn [{:keys [nid] :as node}]
+                               (mapcat (fn [[key src]]
+                                         (when (contains? nodes src)
+                                           (let [pa (get layout src) pb (get layout nid)]
+                                             (map #(assoc % :role :value-wire :to-key key)
+                                                  (wire-quads (+ (:x pa) expr-box-width) (+ (:y pa) 8.0)
+                                                              (- (:x pb) 5.0) (+ (:y pb) 8.0)
+                                                              wire-thickness 0xFF66CCFF)))))
+                                       (exec-inputs node)))
+                             (map #(get nodes %) exec-ids))]
+     (vec (concat expr-items node-items value-wires flow-wires))))

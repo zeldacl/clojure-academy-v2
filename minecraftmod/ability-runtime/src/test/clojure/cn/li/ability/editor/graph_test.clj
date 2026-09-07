@@ -153,8 +153,8 @@
   (let [g (graph/form->graph
            (:do (surface/read-doc
                  "{:ability :t :do [(let x 1) (finish {:outcome :performed})]}")))
-        new (graph/add-node g {:nid "n-extra" :kind :exec :stmt :let :bind 'y :rhs nil})
-        source (first (:order new))
+         new (graph/add-node g {:nid "n-extra" :kind :exec :stmt :let :bind 'y :rhs nil})
+         source (->> (:nodes new) (keep (fn [[nid node]] (when (= :data (:kind node)) nid))) first)
         target "n-extra"
         connected (graph/connect-wire new {:from-nid source :from-pin :out
                                            :to-nid target :to-pin :in :to-key :rhs})
@@ -162,7 +162,7 @@
     (is (contains? (:nodes new) "n-extra"))
     (is (= source (get-in connected [:nodes target :rhs])))
     (is (not (contains? (:nodes removed) source)))
-    (is (empty? (graph/validate-graph removed)))))
+     (is (empty? (graph/validate-graph removed)))))
 
 (deftest graph-diagnostics-find-dangling-wire-test
   (let [errors (graph/validate-graph

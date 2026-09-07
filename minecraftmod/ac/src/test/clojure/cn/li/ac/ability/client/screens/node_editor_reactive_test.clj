@@ -261,3 +261,15 @@
     (when (.isFile (io/file (#'node-editor/workspace-path-for path)))
       (.delete (io/file (#'node-editor/workspace-path-for path))))
     (when (.isFile (io/file path)) (.delete (io/file path)))))
+(deftest expression-pin-hit-and-layout-are-semantic-test
+  (is (= {:target :pin :nid "expr-1" :pin :out :key :result}
+         (#'node-editor/item->hit {:kind :quad :role :pin :target :pin
+                                    :nid "expr-1" :pin :out :key :result})))
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
+        data-id (->> (:nodes (:graph state))
+                     (keep (fn [[id node]] (when (= :data (:kind node)) id)))
+                     first)
+        state* (atom state)]
+    (#'node-editor/nudge-node-layout! state* data-id 4.0 3.0)
+    (is (= 284.0 (get-in @state* [:layout data-id :x])))
+    (is (= 3.0 (get-in @state* [:layout data-id :y])))))

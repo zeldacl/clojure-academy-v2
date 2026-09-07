@@ -17,16 +17,15 @@
 
    SCOPE (real, deliberate boundaries for this first iteration -- see
    the plan's own commit history for why each was drawn where it was):
-   - Renders the EXEC statement chain only (cn.li.ability.editor.render's
-     own scope note); per-expression sub-node wiring is a follow-up.
-   - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
-     cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
-      see pan-canvas-items) are wired. Pin-to-pin connection is intentionally
-      hidden until expression nodes are rendered; palette insertion and
-      expression-node editing remain a follow-up because they need a richer
-      inspector than this compact first pass. No ZOOM: unlike pan, nothing
-      in presentation-core exposes a scroll-wheel or pinch input primitive
-      to drive it yet.
+    - Renders the EXEC statement chain as the primary flow, plus referenced
+      pure-expression nodes in a secondary column; semantic input/output
+      pins can be dragged to update expression references.
+    - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
+      cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
+      see pan-canvas-items) are wired. Palette insertion remains a follow-up
+      because it needs node templates and an inspector for required inputs.
+      No ZOOM: unlike pan, nothing in presentation-core exposes a
+      scroll-wheel or pinch input primitive to drive it yet.
    - open! takes an EXPLICIT absolute file path from the caller, not a
      guessed game-directory/source-tree location: resolving 'where does
      the mod's source tree live relative to the running game' is itself
@@ -341,10 +340,16 @@
   [state* nid dx dy]
   (swap! state* update :layout
          (fn [layout]
-           (let [flat (graph/exec-flatten (:graph @state*))
-                 base (merge (render/exec-default-layout flat) layout)
-                 cur (get base nid {:x 0.0 :y 0.0})]
-             (assoc layout nid {:x (+ (:x cur) (double dx)) :y (+ (:y cur) (double dy))})))))
+            (let [current-graph (:graph @state*)
+                  flat (graph/exec-flatten current-graph)
+                  data-ids (->> (:nodes current-graph)
+                                (keep (fn [[id node]] (when (= :data (:kind node)) id))))
+                  base (merge (render/exec-default-layout flat)
+                              (render/expr-default-layout data-ids)
+                              layout)
+                  cur (get base nid {:x 0.0 :y 0.0})]
+               (assoc layout nid {:x (+ (:x cur) (double dx)) :y (+ (:y cur) (double dy))})))))
+
 
 (defn- install-graph!
   "Replace the active phase with graph->form output, preserving the V3
