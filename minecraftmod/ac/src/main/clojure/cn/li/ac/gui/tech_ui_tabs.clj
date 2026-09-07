@@ -2,7 +2,7 @@
   "Presentation-era TechUI left tabs (inv + wireless).
 
    Geometry/ids match main tech-ui-tabs-reactive; wiring uses container
-   :tab-index + tabbed-gui/send-set-tab! instead of UiRt."
+   :tab-index + tabbed-gui/send-set-tab! instead of the retired generic widget runtime."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
