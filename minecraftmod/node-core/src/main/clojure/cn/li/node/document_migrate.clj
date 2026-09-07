@@ -196,3 +196,28 @@
       (some? metadata) (assoc :metadata metadata)
       (contains? (:bindings registration) :presentation)
       (assoc :presentation presentation))))
+
+(defn migrate-vfx
+  "Convert one old VFX wrapper (whose :scene is an ability-shaped surface
+   document) into the structured VFX V3 contract.  The render program is
+   placed under :system/:render; no source text is retained in the result.
+   Emitter declarations are carried as structured :emitters so Niagara-like
+   module stacks remain editable and can be compiled by vfx-core later."
+  [old]
+  (let [skill (migrate-skill {:id (:id old) :program (:scene old)})
+        spawn (get-in old [:inputs :spawn] {})
+        update (get-in old [:inputs :update] {})
+        type-of (fn [v] (if (map? v) (:type v) v))
+        inputs (into {}
+                     (map (fn [[key spec]] [key {:type (type-of spec)}]))
+                     (merge spawn update))
+        state (into {}
+                    (map (fn [[key spec]] [key {:type (type-of spec) :default nil}]))
+                    (or (:state-slots old) {}))]
+    {:schema :ac/vfx-v3
+     :id (:id old)
+     :lifecycle {:mode (:lifecycle old)}
+     :inputs inputs
+     :state state
+     :system {:render (get-in skill [:entries :default :do] [])}
+     :emitters (vec (or (:emitters old) []))}))

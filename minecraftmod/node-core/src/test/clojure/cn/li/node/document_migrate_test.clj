@@ -28,3 +28,17 @@
     (is (= :electromaster (get-in v3 [:skill :category])))
     (is (= :expert (get-in v3 [:presentation :variant])))))
 
+(deftest vfx-wrapper-becomes-structured-system-document
+  (let [old {:id :beam-session
+             :lifecycle :session
+             :inputs {:spawn {:start :vec3 :end :vec3}}
+             :state-slots {:age :float}
+             :scene "{:ability :beam-session
+                      :do [(ray-beam {:start ?start :end ?end})
+                           (finish {:outcome :performed})]}"}
+        v3 (migrate/migrate-vfx old)]
+    (document/validate-document! v3)
+    (is (= :ac/vfx-v3 (:schema v3)))
+    (is (= :session (get-in v3 [:lifecycle :mode])))
+    (is (= :ray-beam (get-in v3 [:system :render 0 :component])))
+    (is (= :finish (get-in v3 [:system :render 1 :flow])))))

@@ -76,3 +76,15 @@
     (is (= 3 (.resourceGeneration f)))
     (is (= 1 (count (.batches f))))
     (is (= 2 (count (.outputs f))))))
+
+(deftest particle-emitter-buffer-becomes-a-particle-batch-test
+  (let [buffer (cn.li.mcmod.runtime.vfx.ParticleColumns. 8 1 0)
+        layout {:id :sparks :capacity 8 :columns {:position [0 1 2]}}
+        f (frame/->java-frame 2 0 {[:k] {:scene []
+                                        :emitters [{:layout layout :buffer buffer}]}})
+        batch (first (.batches f))]
+    (is (= 1 (count (.batches f))))
+    (is (= "particle" (.primitive batch)))
+    (is (= 0 (.instanceCount batch)))
+    (is (= buffer (get-in (.payload batch) [:particles])))
+    (is (= layout (get-in (.payload batch) [:layout])))))

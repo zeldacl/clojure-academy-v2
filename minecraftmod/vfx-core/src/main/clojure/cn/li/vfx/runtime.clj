@@ -45,8 +45,11 @@
    :spawn/rate-style module re-triggering reservation on its own schedule)
    is a natural follow-up this pass does not implement or claim to."
   [decl {:keys [user] :as _spawn}]
-  (let [scene-program (when (:scene decl)
-                        (scene/compile-program (scene/compile-doc! (:scene decl) (:user-types decl {}))))
+  (let [scene-program (cond
+                        (:document decl) (scene/compile-v3-document! (:document decl))
+                        (:scene decl) (scene/compile-program
+                                       (scene/compile-doc! (:scene decl) (:user-types decl {})))
+                        :else nil)
         emitters (mapv (fn [emitter-decl]
                          (let [compiled (pcompile/compile-emitter emitter-decl user)
                                buffer ((:new-buffer compiled))]

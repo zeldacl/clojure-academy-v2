@@ -23,7 +23,7 @@
    which is behavioral parity with today's live rendering, not a
    regression -- fixing it for real is a separate, unrelated follow-up."
   (:import [java.util ArrayList]
-           [cn.li.mcmod.runtime.vfx VfxBatch VfxFrame VfxOutput VfxOutputKind VfxRenderStage]))
+           [cn.li.mcmod.runtime.vfx VfxBatch VfxFrame VfxOutput VfxOutputKind VfxRenderStage ParticleColumns]))
 
 (def ^:private stage->java
   {:world-translucent VfxRenderStage/WORLD_TRANSLUCENT
@@ -82,14 +82,12 @@
                   (some-> (or (:sound-id op) (:effect op)) str)))))
 
 (defn ->java-frame
-  "frame-id, resource-generation, cn.li.vfx.runtime/sample-frame!'s own
-   output ({instance-key {:scene [op...] :emitters [...]}}) -> a VfxFrame.
-   Only :scene ops feed batches/outputs today -- :emitters (the real
-   Niagara particle-buffer path, cn.li.vfx.compile) has no consumer here
-   yet because no real ac/vfx/fx/*.edn effect declares one (dsl-
-   vocabulary.clj's own docstring: none of the 36 need it); wiring
-   ParticleColumns into a VfxBatch is separate, unrelated follow-up work
-   for whenever real content actually needs it."
+  "frame-id, resource-generation, sample-frame!'s output
+   ({instance-key {:scene [op...] :emitters [...]}}) -> a VfxFrame.
+   Scene ops become their normal draw/audio outputs. Each Niagara-style
+   emitter becomes one `particle` batch whose payload carries the immutable
+   layout plus the live ParticleColumns buffer; the neutral Java ABI remains
+   unchanged while the renderer receives the complete SoA data it needs."
   ^VfxFrame [frame-id resource-generation sampled]
   (let [batches (ArrayList.) outputs (ArrayList.)]
     (doseq [[_ {:keys [scene]}] sampled
@@ -98,4 +96,16 @@
         (if (= :draw-batch (:operation legacy))
           (.add batches (op->java-batch legacy))
           (when-let [output (op->java-output legacy)] (.add outputs output)))))
+    (doseq [[instance-key {:keys [emitters]}] sampled
+            {:keys [layout buffer]} emitters]
+      (let [^ParticleColumns particle-buffer buffer]
+        (.add batches
+              (VfxBatch. VfxRenderStage/WORLD_TRANSLUCENT
+                         (int (hash (:id layout)))
+                         "particle"
+                         (int (.size particle-buffer))
+                         nil
+                         {:instance-key instance-key
+                          :layout layout
+                          :particles particle-buffer}))))
     (VfxFrame. (long frame-id) (long resource-generation) batches outputs)))
