@@ -46,18 +46,11 @@
 passive-effects、activation-context 的 bindings/presentation）现在直接读
 `cn.li.ac.ability.skills-catalog/assemble`（`ac/skills-v3/*.edn` +
 `the ac/skills-v3 directory`），与 dispatch/伤害拦截读的是**同一套内容**——不再有
-第二条内容加载路径。`ac/ability/final_catalog.clj`/`final_catalog_service.clj`
-（旧 manifest 加载 + composite 展开 + `strict-graphs!` 结构校验）连同它们读取的
-旧内容目录（`ac/combat/abilities/*.edn`〔39 个〕、`ac/combat/manifest.edn`、
-`combat-core/composites/*.edn`〔17 个〕）**已全部删除**：`combat-catalog.clj`
-自己曾是它们最后一个真实调用点，切换元数据来源后二者都变成零调用点，随其一并
-删除。`vfx-core/vocabulary.clj`/`system_compiler.clj`（同样只为旧
-`final_catalog.clj` 的 `load-vfx` 服务）也一并删除，见 VFX_CORE.md。
-旧 VFX composite 资源已删除；`vfx.
-vocabulary.clj` 本身仍在（保留原因见 NODE_LANGUAGE.md §0 对旧词汇表/
-`node.environment`/`node.flow` 等的说明——它们是留给未来编辑器 UI 的 schema-
-export 基础设施，不是待清理的死代码）；它们不读取任何旧生产资源。
-
+第二条内容加载路径。旧 manifest/composite 资源和对应读取器已删除；生产内容只从
+`ac/skills-v3/*.edn` 与 `ac/vfx-v3/*.edn` 进入 V3 catalog。V3 文档由
+`skills-catalog-v3`/`fx-catalog-v3` 解析、校验并编译，运行时只消费编译后的 IR。
+`node-core` 的 schema/export API 仅作为编辑器基础设施保留，不读取
+任何旧生产资源。
 ## 新引擎（`cn.li.combat.run`）的模块边界
 
 - `node-core/**`：语言本体，不依赖 Minecraft/combat-core/vfx-core/ac/mcmod。

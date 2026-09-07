@@ -53,18 +53,10 @@ VFX 生产资源只来自 `ac/vfx-v3/*.edn`，由 `fx-catalog-v3` 扫描并校�
 `trajectory-ribbon`/`humanoid-marker`/`beam-arc-fade`/`arc-strike`/`ray-fan`/
 `arc-field`。
 
-两个真实例外：`:vfx/beam-arc-fade` 和 `:vfx/humanoid-marker` 是**composite**
-（历史 composite 定义，现已删除），`final_catalog.
-clj` 的 `load-vfx` 在采样前就把它们展开成真正的子树——`beam-arc-fade` 展开后确实
-含有能画的 `:vfx/beam`/`:vfx/ring`；`humanoid-marker` 展开后唯一的子节点
-`:vfx/model-marker` 恰好也没有 `sample-node` 分支，所以展开了也还是不画东西。
-另外三个历史 composite 定义已删除；V3 不为零调用内容保留文件。
-
-转换到新引擎时，对应处理：确认无渲染的组件 → 诚实的空 `:scene`（不是发明新的
-视觉设计）；`beam-arc-fade` → 把它的 composite 展开结果直接内联进
-`ac/vfx-v3/beam_arc_fade.edn` 的 `:scene`（新引擎没有宏展开机制，`:defn` 组合
-是唯一的复用单元，而这个效果只有一个调用点，不值得为它单独建一个组合）；其余三个孤儿 composite 已删除；V3 不为零调用内容保留文件。
-
+V3 不再保留零调用的 composite 文件，也不存在旧的 `load-vfx` 读取路径。需要复用的
+场景结构直接写入 `ac/vfx-v3/*.edn` 的 `:scene`，运行时由 V3 compiler 生成统一 IR；
+无渲染效果使用诚实的空场景。通用 schema/export 代码只服务于编辑器元数据导出，
+不参与生产内容加载。
 ## 场景 DSL 的模块边界（新引擎）
 
 - `vfx-core/src/main/clojure/cn/li/vfx/dsl_vocabulary.clj`：场景叶子节点词汇

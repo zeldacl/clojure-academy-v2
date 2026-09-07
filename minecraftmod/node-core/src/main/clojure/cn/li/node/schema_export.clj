@@ -4,14 +4,14 @@
    Runtime injection, capabilities, kernel descriptors and host transaction
    details are intentionally excluded from the visual editor schema.
 
-   export-descriptor/export-environment below serve the OLD
-   descriptor/environment system (cn.li.node.descriptor + environment).
-   ac's own final_catalog_service.clj consumer of that path was deleted in
-   the S8 catalog cutover; whether cn.li.combat.kernels/cn.li.combat.
-   vocabulary (the remaining real callers of descriptor/environment) are
-   themselves still load-bearing anywhere is an open question this
-   docstring does not resolve -- see the node-editor plan's Phase 7 for
-   that trace. export-vocab/export-ops/export-fns further down are the
+   export-descriptor/export-environment below serve the descriptor
+   environment system used by the V3 editor palette.
+   V3 content consumes this export directly; no legacy catalog reader remains.
+   The remaining descriptor consumers are schema/export callers, not
+   runtime resource loaders.
+
+
+   export-vocab/export-ops/export-fns further down are the
    surface-DSL vocabulary's export path (cn.li.node.compile's :vocab shape,
    cn.li.node.ops's pure-op table, and cn.li.combat.lib-shaped :defn
    libraries) -- these are what the node editor's palette (schema-

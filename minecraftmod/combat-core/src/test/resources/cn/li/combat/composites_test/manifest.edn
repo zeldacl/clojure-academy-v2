@@ -1,3 +1,0 @@
-{:schema-version 1
- :documents [{:kind :composite :id :test/strike :resource "cn/li/combat/composites_test/strike.edn"}]}
-

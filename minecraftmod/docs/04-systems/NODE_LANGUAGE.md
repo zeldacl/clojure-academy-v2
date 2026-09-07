@@ -50,19 +50,11 @@
   （`combat/damage.clj`，取代已删除的 `final_damage.clj`——聚合算法逐字节
   port，只把线性扫描换成 mark-type+priority 索引查找，见 COMBAT_CORE.md）
   跟这两者同属一类：真正共享、独立于 dispatch 引擎，永久保留。
-- **`combat.vocabulary`/`combat.kernels`/`vfx.vocabulary`(vfx-core 的这份未删)/
-  `node.composite`/`composite-loader`/`scope`/`validate`/`environment`/
-  `flow`/`descriptor`/`schema-export`/`node-core/api.clj` 为什么还留着，即使
-  已经零真实调用点**：`combat/api.clj` 导出的 `descriptor-specs`/
-  `kernel-descriptors`（来自 `combat.vocabulary`/`combat.kernels`）目前确实
-  没有任何真实调用方——但这是有意为将来的图形化编辑器 UI 预留的 schema-export
-  基础设施（见本文档 §2.11、`node.schema-export` 自己的定位），**不是**待清理
-  的死代码，删除前需要一次关于"这层是否还要保留"的独立决策，不属于本次内容
-  目录清理的范围。`node-core/api.clj` 的 docstring 虽然写着"sized from
-  final_catalog.clj/final_catalog_service.clj 的两个消费点"（两者都已删除），
-  但它转达的 `node.composite`/`composite-loader`/`scope`/`validate`/
-  `environment` 这套结构校验能力本身跟 schema-export 是同一批"编辑器/工具链
-  预留基础设施"，处理方式一致：留着，不重新接线，也不删除。
+- **编辑器 schema 基础设施**：`combat.vocabulary`/`combat.kernels`/
+  `vfx.vocabulary`、`scope`/`validate`/`environment`/`flow`/`descriptor`/
+  `schema-export`/`node-core/api.clj` 仍用于编辑器 palette、类型和静态校验。
+  旧的 composite 展开器、manifest reader 及其测试已删除；V3 文档直接进入
+  `document`/`document-compile`，不会再经过旧资源读取链。
 
 修改本文档或新增新语言内容前，请先确认自己在哪一侧工作：**执行引擎**（已经
 只有一套）还是**内容元数据加载**（`combat-catalog.clj`，现在跟执行引擎读同一
