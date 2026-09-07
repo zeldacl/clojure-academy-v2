@@ -306,6 +306,11 @@
     (require! (contains? schemas schema) "unsupported V3 document schema"
               {:schema schema :asset id})
     (require! (keyword? id) "V3 document requires keyword :id" {:schema schema})
+    (require! (not (or (string? (:program document))
+                       (string? (:scene document))))
+              "V3 document cannot contain a legacy string program or scene"
+              {:schema schema :asset id
+               :legacy-fields (select-keys document [:program :scene])})
     (case schema
       :ac/skill-v3 (validate-skill! document)
       :ac/vfx-v3 (validate-vfx! document)

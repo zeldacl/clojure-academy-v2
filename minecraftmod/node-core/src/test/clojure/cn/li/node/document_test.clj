@@ -61,3 +61,10 @@
                             {:nid :n/bind :flow :bind :name :local})]
       (is (thrown? clojure.lang.ExceptionInfo
                    (document/validate-document! invalid)))))
+  (testing "top-level legacy string fields are rejected"
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (document/validate-document!
+                  (assoc skill :program "(finish {:outcome :performed})"))))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (document/validate-document!
+                  (assoc skill :scene "(finish {:outcome :performed})")))))
