@@ -1,50 +1,46 @@
 (ns cn.li.ac.ability.skills-catalog-test
-  "S8: cn.li.ac.ability.skills-catalog actually loads ac/skills/manifest.edn
-   and compiles all 39 ac/skills/*.edn sources (via the SAME real
-   cn.li.combat.dsl-vocabulary/cn.li.combat.lib every skills_test.clj
-   deftest already proves each file compiles against individually) as one
-   assembled catalog, and the 50-registration/39-source split (mine-ray's
-   3 variants, brain-course's/mind-course's 4 category variants) resolves
-   correctly."
+  "The V3 catalog loads one self-contained document per public skill id.
+   Registration bindings are stored on the document itself, so the editor
+   and runtime consume the same immutable source without a manifest layer."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.skills-catalog :as skills-catalog]))
 
-(deftest assembles-all-39-sources-and-50-registrations-test
+(deftest assembles-all-v3-documents-test
   (let [catalog (skills-catalog/assemble)]
-    (is (= 39 (:source-count catalog)))
-    (is (= 50 (:registration-count catalog)))
-    (is (= 39 (count (:sources catalog))))
-    (is (= 50 (count (:registrations catalog))))
-    (is (= 50 (count (:by-id catalog))))))
+    ;; Test resources intentionally contribute one editor smoke document;
+    ;; production resources contain exactly the 50 documents below.
+    (is (= 51 (:source-count catalog)))
+    (is (= 51 (:registration-count catalog)))
+    (is (= 51 (count (:sources catalog))))
+    (is (= 51 (count (:registrations catalog))))
+    (is (= 51 (count (:by-id catalog))))
+    (is (contains? (:by-id catalog) :ac.test/catalog-smoke))
+    (is (every? #(= (:id %) (:id (:document %))) (:registrations catalog)))))
 
-(deftest every-source-compiles-to-real-ir-test
+(deftest every-v3-document-compiles-to-real-ir-test
   (let [catalog (skills-catalog/assemble)]
     (doseq [[source-id source] (:sources catalog)]
       (testing (str source-id)
-        (is (= (:id source) (some #(when (= source-id (:source-id %)) source-id)
-                                  (:registrations catalog)))
-            "every source is reachable from at least one registration")))
-    (doseq [{:keys [id ir]} (:registrations catalog)]
+        (is (= source-id (:id source)))
+        (is (= :ac/skill-v3 (:schema source)))))
+    (doseq [{:keys [id ir document]} (:registrations catalog)]
       (testing (str id)
+        (is (= id (:id document)))
         (is (some? ir))
         (is (map? (:entries ir)) "compiled IR has real entry points")))))
 
-(deftest shared-source-registrations-carry-distinct-bindings-test
+(deftest public-registrations-preserve-editor-metadata-test
   (let [catalog (skills-catalog/assemble)
         by-id (:by-id catalog)]
-    (testing "mine-ray's 3 registrations share one source but differ in :bindings"
-      (is (= :mine-ray (:source-id (get by-id :mine-ray-basic))))
-      (is (= :mine-ray (:source-id (get by-id :mine-ray-expert))))
-      (is (= (:ir (get by-id :mine-ray-basic)) (:ir (get by-id :mine-ray-expert)))
-          "same compiled program, shared from one source")
-      (is (not= (get-in by-id [:mine-ray-basic :bindings])
-                (get-in by-id [:mine-ray-expert :bindings]))))
-    (testing "brain-course's 4 category registrations share one source"
-      (is (= :brain-course (:source-id (get by-id :electromaster/brain-course))))
-      (is (= :brain-course (:source-id (get by-id :vecmanip/brain-course))))
-      (is (not= (get-in by-id [:electromaster/brain-course :bindings])
-                (get-in by-id [:vecmanip/brain-course :bindings]))))))
-
-(deftest rejects-a-missing-resource-test
-  (is (thrown? clojure.lang.ExceptionInfo
-               (skills-catalog/assemble {:manifest "ac/skills/does_not_exist_manifest.edn"}))))
+    (testing "mine-ray variants are independent documents with distinct presentation"
+      (is (not= (:id (:document (get by-id :mine-ray-basic)))
+                (:id (:document (get by-id :mine-ray-expert)))))
+      (is (= :basic (get-in by-id [:mine-ray-basic :document :presentation :variant])))
+      (is (= :expert (get-in by-id [:mine-ray-expert :document :presentation :variant])))
+      (is (not= (get-in by-id [:mine-ray-basic :document :presentation])
+                (get-in by-id [:mine-ray-expert :document :presentation]))))
+    (testing "category variants carry category on the document"
+      (is (= :electromaster
+             (get-in by-id [:electromaster/brain-course :document :skill :category])))
+      (is (= :vecmanip
+             (get-in by-id [:vecmanip/brain-course :document :skill :category]))))))

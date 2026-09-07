@@ -36,29 +36,25 @@
 (declare lower-expr)
 
 (defn- lower-map [m]
-  (into {}
-        (map (fn [[k v]]
-               (let [{:keys [pre form]} (lower-expr v)]
-                 (when (seq pre)
-                   (fail "V3 component in a literal map needs an explicit bind"
-                         {:key k :value v}))
-                 [k form])))
-        m))
+  (let [parts (mapv (fn [[k v]] [k (lower-expr v)]) m)]
+    {:pre (vec (mapcat (comp :pre second) parts))
+     :form (into {} (map (fn [[k part]] [k (:form part)]) parts))}))
 
 (defn- lower-vector [v]
   (let [parts (mapv lower-expr v)
         pre (vec (mapcat :pre parts))]
-    (when (seq pre)
-      (fail "V3 component in a literal vector needs an explicit bind"
-            {:value v}))
-    {:pre [] :form (mapv :form parts)}))
+    {:pre pre :form (mapv :form parts)}))
 
 (defn- component-form [node inputs]
   (let [component (:component node)
         head (symbol (if-let [ns (namespace component)]
                        (str ns "/" (name component))
                        (name component)))]
-    (stamp (list head inputs) (:nid node))))
+    (if (= :value/field component)
+      (stamp (list (get inputs :field) (get inputs :value)) (:nid node))
+      (if (contains? node :args)
+        (stamp (list* head inputs) (:nid node))
+        (stamp (list head inputs) (:nid node))))))
 
 (defn lower-expr
   "Return {:pre [surface statements] :form surface expression}.
@@ -74,12 +70,20 @@
     (let [parts (mapv (fn [[k v]] [k (lower-expr v)]) (:inputs value))
           pre (vec (mapcat (comp :pre second) parts))
           inputs (into {} (map (fn [[k part]] [k (:form part)]) parts))
+          args (mapv lower-expr (:args value))
+          arg-pre (vec (mapcat :pre args))
+          call-args (mapv :form args)
           local (symbol (str "__v3_" (name (:nid value))))]
-      {:pre (conj pre (stamp (list 'let local (component-form value inputs)) (:nid value)))
+      {:pre (conj (into pre arg-pre)
+                  (stamp (list 'let local
+                               (if (contains? value :args)
+                                 (component-form value call-args)
+                                 (component-form value inputs)))
+                         (:nid value)))
        :form local})
 
     (map? value)
-    {:pre [] :form (lower-map value)}
+    (lower-map value)
 
     (vector? value)
     (lower-vector value)
@@ -98,12 +102,19 @@
   (let [parts (mapv (fn [[k v]] [k (lower-expr v)]) (:inputs node))
         pre (vec (mapcat (comp :pre second) parts))
         inputs (into {} (map (fn [[k part]] [k (:form part)]) parts))
-        call (component-form node inputs)
-        binds (:bind node)]
+        args (mapv lower-expr (:args node))
+        arg-pre (vec (mapcat :pre args))
+        call (component-form node (if (contains? node :args)
+                                    (mapv :form args)
+                                    inputs))
+        binds (:bind node)
+        call (if (and (= :value/field (:component node)) (empty? binds))
+               (list 'let (symbol (str "__v3_discard_" (name (:nid node)))) call)
+               call)]
     (when (> (count binds) 1)
       (fail "V3 lowering currently requires one bound output per statement"
             {:nid (:nid node) :bind binds}))
-    (into pre
+    (into (into pre arg-pre)
           (if-let [[_ local] (first binds)]
             [(stamp (list 'let (symbol (name local)) call) (:nid node))]
             [call]))))
@@ -136,8 +147,11 @@
 
     (= :foreach (:flow node))
     (let [{:keys [pre form]} (lower-expr (:collection node))
-          body (lower-stmts (:do node))]
-      (conj pre (stamp (list* 'each (symbol (name (:as node))) form body)
+          body (lower-stmts (:do node))
+          binding (if-let [index-as (:index-as node)]
+                    [(symbol (name (:as node))) (symbol (name index-as))]
+                    (symbol (name (:as node))))]
+      (conj pre (stamp (list* 'each binding form body)
                        (:nid node))))
 
     :else

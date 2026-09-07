@@ -12,7 +12,13 @@
    packaged mod."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [cn.li.combat.api :as combat-api]
             [cn.li.node.api :as node-api]))
+
+(defn- default-compile-opts []
+  {:vocab combat-api/skill-vocab
+   :capabilities combat-api/skill-capability-type
+   :fns combat-api/skill-lib-fns})
 
 (defn- classloader []
   (or (.getContextClassLoader (Thread/currentThread))
@@ -93,9 +99,9 @@
   ([] (assemble {}))
   ([{:keys [resource-root compile-opts mode]
      :or {resource-root "ac/skills-v3"
-          compile-opts {}
           mode :throw}}]
-   (let [resources (resource-names resource-root)
+   (let [compile-opts (or compile-opts (default-compile-opts))
+         resources (resource-names resource-root)
          skills (mapv (fn [resource]
                         (let [{:keys [id document] :as skill} (read-skill! resource)
                               {:keys [ir diagnostics]}
@@ -110,5 +116,11 @@
      (when-not (= (count ids) (count (set ids)))
        (throw (ex-info "AC V3 skill ids must be unique" {:ids ids})))
      {:skills skills
+      :registrations skills
+      :sources (into {} (map (juxt :id :document) skills))
       :by-id (into {} (map (juxt :id identity)) skills)
-      :resource-count (count resources)})))
+      :resource-count (count resources)
+      :source-count (count resources)
+      :registration-count (count skills)})))
+
+
