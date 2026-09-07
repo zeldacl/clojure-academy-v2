@@ -7,12 +7,20 @@
   (:require [clojure.test :refer [deftest is]]
             [clojure.java.io :as io]
             [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
-            [cn.li.ability.editor.document :as editor-document]))
+            [cn.li.ability.editor.document :as editor-document]
+            [cn.li.ability.editor.v3 :as editor-v3]))
 
 (def ^:private thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
 (def ^:private railgun-path "src/main/resources/ac/skills-v3/railgun.edn")
 (def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
 (def ^:private legacy-thunder-bolt-path "src/main/resources/ac/skills/thunder_bolt.edn")
+(def ^:private multi-stage-vfx
+  {:schema :ac/vfx-v3
+   :id :editor/multi-stage
+   :lifecycle {:mode :transient}
+   :system {:spawn [{:nid :n/spawn-root :component :particle/spawn}]
+            :update [{:nid :n/update-root :component :particle/update}]
+            :render [{:nid :n/render-root :component :particle/render}]}})
 (def ^:private v3-thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
 (def ^:private v3-arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
 
@@ -229,3 +237,12 @@
     (is (= :ac/vfx-v3 (:schema parsed)))
     (is (vector? (get-in parsed [:system :render])))
     (is (every? map? (get-in parsed [:system :render])))))
+
+(deftest structured-v3-vfx-save-preserves-all-system-stages-test
+  (let [form (editor-v3/document->form multi-stage-vfx)
+        edited (assoc-in form [:phases :spawn]
+                         [(list 'finish {:outcome :performed})])
+        saved (editor-v3/form->document multi-stage-vfx edited)]
+    (is (= :finish (get-in saved [:system :spawn 0 :flow])))
+    (is (= :particle/update (get-in saved [:system :update 0 :component])))
+    (is (= :particle/render (get-in saved [:system :render 0 :component])))))

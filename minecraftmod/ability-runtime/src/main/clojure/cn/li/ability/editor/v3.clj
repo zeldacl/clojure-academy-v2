@@ -248,10 +248,12 @@
                                  entries)))
 
                  :ac/vfx-v3
-                 (update-in document [:system :render]
-                            (fn [_]
-                              (mapv #(form->stmt % counter*)
-                                    (get phases :render []))))
+                 (assoc document :system
+                        (into {}
+                              (map (fn [[stage _nodes]]
+                                     [stage (mapv #(form->stmt % counter*)
+                                                  (get phases stage []))]))
+                              phases))
 
                  (throw (ex-info "unsupported V3 editor document"
                                  {:schema (:schema document)})))]
