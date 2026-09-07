@@ -14,12 +14,10 @@
    slot picked before any :effects/:augments can be added, not a flat
    list a player could reorder into something illegal.
 
-   The composed glyphs carry only DEFAULT params (:amount 2.0, :range
-   16.0, etc -- the same fallbacks the combat player-spell form/effect
-   statement builders already use) -- no per-glyph parameter tuning UI
-   in this pass. A reasonable follow-up once the basic compose-and-cast
-   loop has been used in-game, not a silent gap: the composer works
-   completely without it today, just with fixed glyph strengths.
+   The composed glyphs start with safe DEFAULT params (:amount 2.0, :range
+   16.0, etc) and expose bounded numeric fields for the selected effect.
+   Draft text is kept separate from committed params; submit validates
+   finiteness and descriptor min/max before the spell can be cast.
 
    Physical glyph items / a spell-storage item's NBT (the plan's other
    Phase 5 deliverable) are NOT part of this pass either -- both need a
@@ -28,7 +26,8 @@
    for the compose-and-cast LOOP to work end to end (this screen can be
    opened directly, e.g. from a command, with no physical item
    involved). Deferred as a real, separate content-integration task."
-  (:require [cn.li.ac.gui.presentation :as presentation]
+  (:require [clojure.string :as str]
+            [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
@@ -152,13 +151,66 @@
     state))
 
 (defn- clear-composition [state]
-  (assoc state :form nil :effect-groups [] :selected-effect nil :busy? false :status "Cleared."))
+  (assoc state :form nil :effect-groups [] :selected-effect nil :param-drafts {} :busy? false :status "Cleared."))
 
 (defn- composed-glyphs [{:keys [form effect-groups]}]
   (when form
     (into [form]
           (mapcat (fn [group] (cons (dissoc group :augments) (:augments group)))
                   effect-groups))))
+
+(declare payload-index)
+(defn- selected-param-fields [{:keys [effect-groups selected-effect param-drafts glyph-specs]}]
+  (if-let [group (and (integer? selected-effect) (get effect-groups selected-effect))]
+    (let [params (:params (get glyph-specs (:glyph group)))]
+      (mapv (fn [[key descriptor]]
+              {:effect-index selected-effect
+               :param-key key
+               :label (str (name key) " [" (:min descriptor) ".." (:max descriptor) "]")
+               :value (str (get param-drafts [selected-effect key]
+                                (get-in group [:params key])))})
+            params))
+    []))
+
+(defn- parse-finite-number [value]
+  (try
+    (let [n (Double/parseDouble (str/trim (str value)))]
+      (when (Double/isFinite n) n))
+    (catch Exception _ nil)))
+
+(defn- coerce-param-value [descriptor n]
+  (if (= :int (:type descriptor)) (long (Math/round (double n))) (double n)))
+
+(defn- param-change [state payload]
+  (let [item (:item payload)
+        idx (payload-index payload :effect-index)
+        key (:param-key item)
+        value (or (:value payload) (:value item) (:text payload))]
+    (if (and (integer? idx) (keyword? key))
+      (assoc-in state [:param-drafts [idx key]] (str value))
+      state)))
+
+(defn- param-submit [state payload]
+  (let [item (:item payload)
+        idx (payload-index payload :effect-index)
+        key (:param-key item)
+        glyph (get-in state [:effect-groups idx :glyph])
+        descriptor (get-in state [:glyph-specs glyph :params key])
+        value (parse-finite-number (or (:value payload) (:value item) (:text payload)))]
+    (cond
+      (not (and (integer? idx) (keyword? key) descriptor))
+      (assoc state :status "Unknown parameter.")
+      (nil? value)
+      (assoc state :status (str "Enter a finite number for " (name key) "."))
+      (< value (double (:min descriptor)))
+      (assoc state :status (str (name key) " is below its minimum."))
+      (> value (double (:max descriptor)))
+      (assoc state :status (str (name key) " exceeds its maximum."))
+      :else
+      (-> state
+          (assoc-in [:effect-groups idx :params key] (coerce-param-value descriptor value))
+          (update :param-drafts dissoc [idx key])
+          (assoc :status (str "Updated " (name key) "."))))))
 
 ;; --- render-state ------------------------------------------------------
 
@@ -179,6 +231,7 @@
      :effect-palette (mapv palette-item (filter :admissible? effects))
      :augment-palette (mapv palette-item (filter :admissible? augments))
      :form-label (if form (glyph-str (:glyph form)) "(none)")
+     :selected-param-fields (selected-param-fields state)
      :effect-slots
      (mapv (fn [idx {:keys [glyph augments]}]
              {:index idx :label (str (inc idx) ". " (glyph-str glyph))
@@ -227,6 +280,12 @@
     (swap! state* remove-augment
            (payload-index payload :effect-index)
            (payload-index payload :augment-index))
+
+     :composer/param-change
+     (swap! state* param-change payload)
+
+     :composer/param-submit
+     (swap! state* param-submit payload)
 
     :composer/clear
     (swap! state* clear-composition)

@@ -1,7 +1,7 @@
 {:ui/schema 2 :view/id :academy.app/spell-composer
  :host {:kind :screen :design-width 480 :design-height 320 :scale-policy :fit}
  :state-schema {:title :string :form-palette :vector :effect-palette :vector
-                :augment-palette :vector :form-label :string :effect-slots :vector
+                :augment-palette :vector :form-label :string :selected-param-fields :vector :effect-slots :vector
                 :can-cast? :boolean :busy? :boolean :status :string
                 :cast-label :string :clear-label :string}
  :root {:type :column :key :composer/root :layout {:x 8 :y 8 :width 464 :height 304}
@@ -42,7 +42,18 @@
                                       :bind {:text [:item :remove-label]}
                                       :on {:activate :composer/remove-effect}
                                       :semantics {:role :button}}]}]}]}]}
-         {:type :row :key :composer/palette-row :layout {:height 112}
+                  {:type :row :key :composer/params-row :layout {:height 54}
+          :children
+          [{:type :text :layout {:width 92 :height 14} :bind {:text "Parameters"}}
+           {:type :scroll :key :composer/selected-params :layout {:width 360 :height 52}
+            :bind {:items [:state :selected-param-fields]} :semantics {:role :list}
+            :children [{:type :row :layout {:height 16}
+                        :children [{:type :text :layout {:width 132 :height 14}
+                                    :bind {:text [:item :label]}}
+                                   {:type :text-input :layout {:width 96 :height 14}
+                                    :bind {:text [:item :value]}
+                                    :on {:change :composer/param-change :submit :composer/param-submit}
+                                    :semantics {:role :textbox :field :composer-param}}]}]}]}{:type :row :key :composer/palette-row :layout {:height 112}
           :children
           [{:type :column :layout {:width 220}
             :children

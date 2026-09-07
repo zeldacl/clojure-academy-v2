@@ -77,3 +77,19 @@
     (is (= #{"form/self" "form/touch"} (set (map :glyph (:form-palette rendered)))))
     (is (= #{"effect/damage" "effect/push"} (set (map :glyph (:effect-palette rendered)))))
     (is (= #{"augment/amplify"} (set (map :glyph (:glyph (:augment-palette rendered))))))))
+(deftest selected-effect-parameters-can-be-edited-with-bounds-test
+  (let [state (-> (#'composer/initial-state)
+                  (#'composer/pick-form :form/self)
+                  (#'composer/add-effect :effect/damage))
+        changed (#'composer/param-change state {:item {:effect-index 0 :param-key :amount}
+                                                :value "7.5"})
+        submitted (#'composer/param-submit changed {:item {:effect-index 0 :param-key :amount}
+                                                    :value "7.5"})
+        rejected (#'composer/param-submit submitted {:item {:effect-index 0 :param-key :amount}
+                                                     :value "99"})]
+    (is (= "7.5" (get-in changed [:param-drafts [0 :amount]])))
+    (is (= 7.5 (get-in submitted [:effect-groups 0 :params :amount])))
+    (is (= 7.5 (get-in rejected [:effect-groups 0 :params :amount])))
+    (is (.contains ^String (:status rejected) "exceeds"))
+    (is (= [{:effect-index 0 :param-key :amount :label "amount [0.0..20.0]" :value "7.5"}]
+           (#'composer/selected-param-fields submitted)))))
