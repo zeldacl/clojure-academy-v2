@@ -213,3 +213,12 @@
     (is (= :ac/skill-v3 (:schema parsed)))
     (is (map? (:entries parsed)))
     (is (every? map? (mapcat (comp :do val) (:entries parsed))))))
+
+(deftest structured-v3-vfx-content-round-trip-remains-valid-test
+  (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)
+        edited (editor-document/edit (:document state) (:form (:document state)))
+        saved (editor-document/save edited pr-str)
+        parsed (clojure.edn/read-string (:file-text saved))]
+    (is (= :ac/vfx-v3 (:schema parsed)))
+    (is (vector? (get-in parsed [:system :render])))
+    (is (every? map? (get-in parsed [:system :render])))))
