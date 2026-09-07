@@ -7,16 +7,37 @@
 						[cn.li.ac.ability.service.command-runtime :as command-rt]
 						[cn.li.ac.ability.registry.skill-query :as skill-query]))
 
+(defn- as-kw
+  "NBT / some transports rehydrate keywords as strings."
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    (symbol? x) (keyword (name x))
+    :else x))
+
+(defn- skill-learned?
+  [ability-data skill-id]
+  (let [learned (:learned-skills ability-data #{})
+        sid (as-kw skill-id)]
+    (or (contains? learned sid)
+        (contains? learned skill-id)
+        (contains? learned (some-> sid name)))))
+
 (defn- learned-controllable-slot
 	[player-uuid cat-id ctrl-id]
-	(when-let [skill-id (skill-query/get-skill-by-controllable cat-id ctrl-id)]
-		(when (ability-data/is-learned? (:ability-data (common/get-state player-uuid)) skill-id)
-			[cat-id ctrl-id])))
+  (let [cat-id (as-kw cat-id)
+        ctrl-id (as-kw ctrl-id)]
+    (when-let [skill-id (skill-query/get-skill-by-controllable cat-id ctrl-id)]
+      (when (skill-learned? (:ability-data (common/get-state player-uuid)) skill-id)
+        [cat-id ctrl-id]))))
 
 (defn handle-set-preset-request
 	[{:keys [preset-idx key-idx cat-id ctrl-id]} player]
 	(let [uuid (uuid/player-uuid player)
-				session-id (common/current-server-session-id)]
+				session-id (common/current-server-session-id)
+        cat-id (as-kw cat-id)
+        ctrl-id (as-kw ctrl-id)]
 		(when uuid
 			(cond
 				(and (nil? cat-id) (nil? ctrl-id))

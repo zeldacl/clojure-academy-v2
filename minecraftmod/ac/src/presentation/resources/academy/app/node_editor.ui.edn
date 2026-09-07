@@ -1,52 +1,177 @@
+;; Node editor — compact 400×240 (skill-tree sized) so :fit fits a normal
+;; GUI scale. Canvas has an invisible full-area hit target under the
+;; node repeater so empty-press can start panning; nodes stack above it.
 {:ui/schema 2 :view/id :academy.app/node-editor
- :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
- :state-schema {:title :string :path :string :phase-label :string :phase-tabs :vector
-                :palette :vector :canvas :vector :selected-label :string :diagnostics :vector
-                :diagnostic-count :number :cost-label :string :status :string :dirty? :boolean
+ :host {:kind :screen :design-width 400 :design-height 240 :scale-policy :fit}
+ :state-schema {:title :string :path-label :string
+                :phase-header :string :phase-tabs :vector
+                :palette-header :string :palette :vector
+                :canvas :vector
+                :selected-header :string :selected-label :string
+                :diag-header :string :diagnostics :vector
+                :cost-label :string :status :string :dirty? :boolean
                 :reload-label :string :save-label :string :export-label :string}
- :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
-        :children
-        [{:type :text :key :node-editor/title :layout {:height 16}
-          :bind {:text [:state :title]} :semantics {:role :heading}}
-         {:type :row :key :node-editor/phase-row :layout {:height 16}
-          :children [{:type :text :layout {:width 100} :bind {:text [:state :phase-label]}}
-                     {:type :repeater :layout {:width 340}
-                      :bind {:items [:state :phase-tabs]}
-                      :children [{:type :button :layout {:width 64 :height 14}
-                                  :bind {:text [:item :action-label]}
-                                  :on {:activate :editor/select-phase}
-                                  :semantics {:role :button}}]}]}
-         {:type :scroll :key :node-editor/palette :layout {:height 46}
-          :bind {:items [:state :palette]} :semantics {:role :list}
-          :children [{:type :text :layout {:height 12} :bind {:text [:item :label]}}]}
-         {:type :absolute :key :node-editor/canvas :layout {:height 140}
-          :children
-          [{:type :repeater :layout {:width 464 :height 140}
-            :bind {:items [:state :canvas]}
-            :children [{:type :composite :bind {:item [:state :item]}
-                        :on {:activate :editor/canvas-press}
-                        :semantics {:role :button}}]}]}
-         {:type :text :key :node-editor/selected :layout {:height 24}
-          :bind {:text [:state :selected-label]} :semantics {:role :generic}}
-         {:type :scroll :key :node-editor/diagnostics :layout {:height 44}
-          :bind {:items [:state :diagnostics]} :semantics {:role :list}
-          :children [{:type :row :layout {:height 14}
-                      :children [{:type :text :layout {:width 90} :bind {:text [:item :code]}}
-                                 {:type :text :layout {:width 300} :bind {:text [:item :message]}}]}]}
-         {:type :text :key :node-editor/cost :layout {:height 16}
-          :bind {:text [:state :cost-label]}}
-         {:type :row :key :node-editor/actions :layout {:height 16}
-          :children [{:type :button :layout {:width 110 :height 14}
-                      :bind {:text [:state :reload-label]}
-                      :on {:activate :editor/reload}
-                      :semantics {:role :button}}
-                     {:type :button :layout {:width 110 :height 14}
-                      :bind {:text [:state :save-label]}
-                      :on {:activate :editor/save}
-                      :semantics {:role :button}}
-                     {:type :button :layout {:width 110 :height 14}
-                      :bind {:text [:state :export-label]}
-                      :on {:activate :editor/export}
-                      :semantics {:role :button}}]}
-         {:type :text :key :node-editor/status :layout {:height 14}
-          :bind {:text [:state :status]}}]}}
+ :root
+ {:type :absolute :key :node-editor/root :layout {:width 400 :height 240}
+  :children
+  [{:type :rect :key :node-editor/blackout
+    :layout {:width :fill :height :fill}
+    :style {:rgba [0.0 0.0 0.0 0.72]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/title
+    :layout {:x 8.0 :y 4.0 :width 220.0 :height 12.0}
+    :style {:font-size 11.0 :rgba [1.0 1.0 1.0 1.0]}
+    :bind {:text [:state :title]}
+    :semantics {:role :heading}}
+
+   {:type :text :key :node-editor/path
+    :layout {:x 230.0 :y 5.0 :width 162.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.65 0.65 0.7 1.0]}
+    :bind {:text [:state :path-label]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/phase-header
+    :layout {:x 8.0 :y 18.0 :width 40.0 :height 10.0}
+    :style {:font-size 8.0 :rgba [0.75 0.75 0.8 1.0]}
+    :bind {:text [:state :phase-header]}
+    :semantics {:role :generic}}
+
+   {:type :scroll :key :node-editor/phase-tabs
+    :layout {:x 48.0 :y 17.0 :width 344.0 :height 12.0}
+    :bind {:items [:state :phase-tabs]}
+    :semantics {:role :list}
+    :children
+    [{:type :text :layout {:width 56.0 :height 11.0}
+      :style {:font-size 8.0}
+      :bind {:text [:item :label] :rgba [:item :rgba]}
+      :on {:activate :editor/select-phase}
+      :semantics {:role :button}}]}
+
+   ;; Left palette
+   {:type :rect :key :node-editor/palette-bg
+    :layout {:x 6.0 :y 32.0 :width 110.0 :height 202.0}
+    :style {:rgba [0.12 0.12 0.14 0.94]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/palette-header
+    :layout {:x 10.0 :y 35.0 :width 102.0 :height 10.0}
+    :style {:font-size 8.0 :rgba [0.65 0.85 1.0 1.0]}
+    :bind {:text [:state :palette-header]}
+    :semantics {:role :generic}}
+
+   {:type :scroll :key :node-editor/palette
+    :layout {:x 10.0 :y 46.0 :width 102.0 :height 182.0}
+    :bind {:items [:state :palette]}
+    :semantics {:role :list}
+    :children
+    [{:type :text :layout {:width :fill :height 10.0}
+      :style {:font-size 6.0 :rgba [0.88 0.88 0.9 1.0]}
+      :bind {:text [:item :label]}
+      :semantics {:role :generic}}]}
+
+   ;; Canvas panel
+   {:type :rect :key :node-editor/canvas-bg
+    :layout {:x 122.0 :y 32.0 :width 272.0 :height 118.0}
+    :style {:rgba [0.10 0.10 0.12 0.94]}
+    :semantics {:role :generic}}
+
+   {:type :clip :key :node-editor/canvas
+    :layout {:x 122.0 :y 32.0 :width 272.0 :height 118.0}
+    :children
+    [;; Full-area hit target UNDER nodes: empty press → :editor/canvas-press
+     ;; → pan. Must be hit-testable (:on) or blank clicks never arm panning.
+     {:type :rect :key :node-editor/canvas-hit
+      :layout {:width 272.0 :height 118.0}
+      :style {:rgba [0.0 0.0 0.0 0.01]}
+      :on {:activate :editor/canvas-press}
+      :semantics {:role :button}}
+
+     {:type :repeater :layout {:width 272.0 :height 118.0 :direction :none}
+      :bind {:items [:state :canvas]}
+      :children
+      [{:type :composite
+        :bind {:item [:state :item]
+               :x [:item :layout-x] :y [:item :layout-y]
+               :width [:item :w] :height [:item :h]}
+        :on {:activate :editor/canvas-press}
+        :semantics {:role :button}}]}]}
+
+   ;; Inspector — non-overlapping rows
+   {:type :rect :key :node-editor/inspect-bg
+    :layout {:x 122.0 :y 154.0 :width 272.0 :height 80.0}
+    :style {:rgba [0.12 0.12 0.14 0.94]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/selected-header
+    :layout {:x 128.0 :y 157.0 :width 80.0 :height 9.0}
+    :style {:font-size 7.0 :rgba [0.85 0.8 0.55 1.0]}
+    :bind {:text [:state :selected-header]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/selected
+    :layout {:x 128.0 :y 166.0 :width 260.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.92 0.92 0.92 1.0]}
+    :bind {:text [:state :selected-label]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/diag-header
+    :layout {:x 128.0 :y 178.0 :width 160.0 :height 9.0}
+    :style {:font-size 7.0 :rgba [1.0 0.55 0.55 1.0]}
+    :bind {:text [:state :diag-header]}
+    :semantics {:role :generic}}
+
+   {:type :scroll :key :node-editor/diagnostics
+    :layout {:x 128.0 :y 187.0 :width 260.0 :height 18.0}
+    :bind {:items [:state :diagnostics]}
+    :semantics {:role :list}
+    :children
+    [{:type :text :layout {:width :fill :height 9.0}
+      :style {:font-size 6.0 :rgba [0.9 0.7 0.7 1.0]}
+      :bind {:text [:item :line]}
+      :semantics {:role :generic}}]}
+
+   {:type :text :key :node-editor/cost
+    :layout {:x 128.0 :y 208.0 :width 140.0 :height 9.0}
+    :style {:font-size 7.0 :rgba [0.7 0.9 0.7 1.0]}
+    :bind {:text [:state :cost-label]}
+    :semantics {:role :generic}}
+
+   {:type :text :key :node-editor/status
+    :layout {:x 128.0 :y 218.0 :width 140.0 :height 10.0}
+    :style {:font-size 6.0 :rgba [0.7 0.7 0.72 1.0]}
+    :bind {:text [:state :status]}
+    :semantics {:role :generic}}
+
+   {:type :rect :key :node-editor/reload-bg
+    :layout {:x 274.0 :y 208.0 :width 36.0 :height 12.0}
+    :style {:rgba [0.22 0.22 0.26 0.95]}
+    :semantics {:role :generic}}
+   {:type :text :key :node-editor/reload
+    :layout {:x 274.0 :y 209.0 :width 36.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.9 0.9 0.9 1.0]}
+    :bind {:text [:state :reload-label]}
+    :on {:activate :editor/reload}
+    :semantics {:role :button}}
+
+   {:type :rect :key :node-editor/save-bg
+    :layout {:x 314.0 :y 208.0 :width 36.0 :height 12.0}
+    :style {:rgba [0.22 0.22 0.26 0.95]}
+    :semantics {:role :generic}}
+   {:type :text :key :node-editor/save
+    :layout {:x 314.0 :y 209.0 :width 36.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.9 0.9 0.9 1.0]}
+    :bind {:text [:state :save-label]}
+    :on {:activate :editor/save}
+    :semantics {:role :button}}
+
+   {:type :rect :key :node-editor/export-bg
+    :layout {:x 354.0 :y 208.0 :width 36.0 :height 12.0}
+    :style {:rgba [0.22 0.22 0.26 0.95]}
+    :semantics {:role :generic}}
+   {:type :text :key :node-editor/export
+    :layout {:x 354.0 :y 209.0 :width 36.0 :height 10.0}
+    :style {:font-size 7.0 :rgba [0.55 1.0 0.55 1.0]}
+    :bind {:text [:state :export-label]}
+    :on {:activate :editor/export}
+    :semantics {:role :button}}]}}

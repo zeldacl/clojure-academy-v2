@@ -70,6 +70,50 @@
 
 (defonce ^:private active-mounts (atom {}))
 
+(defn- classpath-file-protocol-path
+  "Only when ClassLoader exposes a plain file: URL. Loom runClient often
+   returns union:/… (or jar:) for the same resource — those are NOT
+   accepted here."
+  [resource]
+  (when-let [^java.net.URL url (io/resource resource)]
+    (when (= "file" (.getProtocol url))
+      (.getAbsolutePath (io/as-file url)))))
+
+(defn- source-tree-resource-path
+  "Walk parents of user.dir for ac/src/main/resources/<resource>. Loom's
+   client working directory is typically platform/run/<target>/client, a
+   few levels below the Gradle root that holds the real skill sources."
+  [resource]
+  (let [rel (str "ac" java.io.File/separator "src" java.io.File/separator
+                 "main" java.io.File/separator "resources" java.io.File/separator
+                 (-> (str resource)
+                     (str/replace "/" java.io.File/separator)
+                     (str/replace "\\" java.io.File/separator)))]
+    (loop [^java.io.File dir (io/file (System/getProperty "user.dir"))
+           depth 0]
+      (when (and dir (< depth 10))
+        (let [cand (io/file dir rel)]
+          (if (.isFile cand)
+            (.getAbsolutePath cand)
+            (recur (.getParentFile dir) (inc depth))))))))
+
+(defn- materialize-classpath-resource!
+  "Last resort: copy any resolvable classpath URL (jar:/union:/file:) into
+   a writable sidecar under user.dir so Save/layout have a real file to
+   sit next to. Prefer source-tree-resource-path in dev so Export writes
+   the real ac/skills tree."
+  [resource]
+  (when-let [url (io/resource resource)]
+    (let [out (io/file (System/getProperty "user.dir")
+                       ".academy-node-editor"
+                       (-> (str resource)
+                           (str/replace "/" java.io.File/separator)
+                           (str/replace "\\" java.io.File/separator)))]
+      (.mkdirs (.getParentFile out))
+      (with-open [in (io/input-stream url)]
+        (io/copy in out))
+      (.getAbsolutePath out))))
+
 (defn default-sample-skill-resource-path
   "A classpath-relative content resource (e.g. \"ac/skills/thunder_bolt.
    edn\") -> its absolute on-disk path, or nil. Public because there is
@@ -78,20 +122,18 @@
    the editor_dev_tool item share this to pick a fixed default file to
    open, rather than each guessing its own.
 
-   Every other content reader in this mod (cn.li.ac.ability.skills-
-   catalog's own load-resource) goes through (io/resource ...) + slurp
-   precisely because slurp reads equally well from a dev-run's on-disk
-   resources or a packaged jar's zip entries -- but this screen needs to
-   WRITE sibling files (editor-workspace/, layout/) next to the opened
-   file, which only makes sense against a real file:// resource, not a
-   jar entry. Returns nil rather than guessing at a working directory
-   (see this namespace's own docstring on why open! never does that
-   itself) when the resource is not on disk, so the caller can report a
-   clear reason instead of failing deep inside io/file."
+   Resolution order:
+   1. classpath file: URL (rare under Loom)
+   2. walk up from user.dir to ac/src/main/resources/<resource> (dev)
+   3. materialize the classpath bytes into .academy-node-editor/ (jar/
+      union classpath — still opens; Export then targets that copy)
+
+   Returns nil only when the resource is missing from BOTH the source
+   tree and the classpath."
   [resource]
-  (when-let [^java.net.URL url (io/resource resource)]
-    (when (= "file" (.getProtocol url))
-      (.getAbsolutePath (io/as-file url)))))
+  (or (classpath-file-protocol-path resource)
+      (source-tree-resource-path resource)
+      (materialize-classpath-resource! resource)))
 
 (defn- mode-opts
   "mode (:skill or :scene), wrapper-doc (the just-opened, un-normalized
@@ -217,8 +259,23 @@
 
 ;; --- render-state (map -> what the .ui.edn's :state-schema binds) ------
 
+(defn- short-path
+  "Keep the basename + parent folder so a long absolute path fits the
+   title strip without dominating the screen."
+  [path]
+  (if (str/blank? path)
+    ""
+    (let [f (io/file path)
+          parent (.getName (.getParentFile f))]
+      (if (str/blank? parent)
+        (.getName f)
+        (str parent "/" (.getName f))))))
+
 (defn- diagnostic-item [d]
-  {:code (str (:code d)) :message (:message d) :nid (str (:nid d)) :line (str (or (:line d) "-"))})
+  {:code (str (:code d))
+   :message (:message d)
+   :nid (str (:nid d))
+   :line (str (or (:code d) "?") ": " (:message d))})
 
 (defn- palette-item
   "One cn.li.ability.editor.palette/build entry -> a display row. No
@@ -247,27 +304,58 @@
   [items {:keys [x y]}]
   (mapv (fn [item] (-> item (update :x + x) (update :y + y))) items))
 
+(defn- canvas-placement-items
+  "render.clj emits absolute :x/:y inside each composite item. Presentation
+   repeaters need those as the NODE's layout position (layout-x/y) with
+   local paint at 0,0 -- same split skill_tree uses -- otherwise a column
+   repeater stacks wrappers while paint still jumps to absolute coords and
+   the canvas looks scattered / clipped."
+  [items]
+  (mapv (fn [item]
+          (let [x (double (or (:x item) 0.0))
+                y (double (or (:y item) 0.0))
+                w (double (or (:w item) (if (= :text (:kind item)) 212.0 1.0)))
+                h (double (or (:h item) (if (= :text (:kind item)) 12.0 1.0)))]
+            (assoc item :layout-x x :layout-y y :x 0.0 :y 0.0 :w w :h h)))
+        items))
+
+(def ^:private phase-selected-rgba [1.0 1.0 0.55 1.0])
+(def ^:private phase-idle-rgba [0.75 0.78 0.85 1.0])
+
 (defn- render-state [state]
   (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport]} state
-        selected (selected-node-info state)]
+        selected (selected-node-info state)
+        n-diag (count diagnostics)]
     {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
-     :path (:path state)
-     :phase-label (str "Phase: " (name (or phase :default)))
-     :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
+     :path-label (short-path (:path state))
+     :phase-header "Phase"
+     :phase-tabs (mapv (fn [p]
+                         (let [selected? (= p phase)]
+                           {:phase (name p)
+                            :label (name p)
+                            :rgba (if selected? phase-selected-rgba phase-idle-rgba)}))
+                       phases)
+     :palette-header "Palette"
      :palette (mapv palette-item palette)
-     :canvas (pan-canvas-items (render/graph->composite-items graph (:layout state)) viewport)
-     :selected-label (if selected (:text selected) "(nothing selected)")
-     :diagnostics (mapv diagnostic-item diagnostics)
-     :diagnostic-count (double (count diagnostics))
+     :canvas (-> (render/graph->composite-items graph (:layout state))
+                 (pan-canvas-items viewport)
+                 canvas-placement-items)
+     :selected-header "Selected"
+     :selected-label (if selected (:text selected) "(nothing selected — click a node)")
+     :diag-header (str "Diagnostics (" n-diag ")")
+     :diagnostics (if (seq diagnostics)
+                    (mapv diagnostic-item diagnostics)
+                    [{:line "(clean)"}])
+     :diagnostic-count (double n-diag)
      :cost-label (if cost-summary
-                   (str "complexity=" (:complexity cost-summary)
-                        " host-cmds=" (:host-commands cost-summary))
-                   "(compile errors -- see diagnostics)")
+                   (str "Cost  complexity=" (:complexity cost-summary)
+                        "  host=" (:host-commands cost-summary))
+                   "Cost  (compile errors — see diagnostics)")
      :status (or status "")
      :dirty? (boolean (:dirty? document))
-     :reload-label "Reload from disk"
-     :save-label "Save to workspace"
-     :export-label "Export to source"}))
+     :reload-label "Reload"
+     :save-label "Save"
+     :export-label "Export"}))
 
 ;; --- input handling ------------------------------------------------------
 
@@ -278,63 +366,96 @@
    child -- see cn.li.ability.editor.render/graph->composite-items),
    so any item carrying :nid (regardless of :role -- :node-body or
    :node-label) is a node hit; the connecting-wire quads carry no :nid
-   and are not meant to be clickable, falling through to :canvas."
+   and fall through to :canvas. Nil item (empty-canvas hit rect) is also
+   :canvas — required for panning."
   [item]
-  (if-let [nid (:nid item)]
+  (if-let [nid (when (map? item) (:nid item))]
     {:target :node :nid nid}
     {:target :canvas}))
 
 (defn- nudge-node-layout!
   "state*, nid, dx, dy -> accumulates (dx, dy) into nid's current layout
    position, seeding from the default (grid/exec-order) position on its
-   very first move. dx/dy are the presentation runtime's own PER-FRAME
-   INCREMENTAL :drag-x/:drag-y (see runtime.clj's scroll-offset handling
-   for the same field, added there directly rather than diffed from a
-   remembered press position) -- not a start-position delta, so this
-   needs no memory of where the drag began, only where the node
-   currently sits."
+   very first move."
   [state* nid dx dy]
   (swap! state* update :layout
          (fn [layout]
            (let [flat (graph/exec-flatten (:graph @state*))
                  base (merge (render/exec-default-layout flat) layout)
                  cur (get base nid {:x 0.0 :y 0.0})]
-             (assoc layout nid {:x (+ (:x cur) (double dx)) :y (+ (:y cur) (double dy))})))))
+             (assoc layout nid {:x (+ (:x cur) (double dx))
+                               :y (+ (:y cur) (double dy))})))))
+
+(defn- apply-pointer-delta!
+  "Apply one frame of pointer motion to the armed drag mode."
+  [state* drag-mode dx dy]
+  (case drag-mode
+    :dragging-node
+    (when-let [nid (:nid (:drag @state*))]
+      (nudge-node-layout! state* nid dx dy))
+    :panning
+    (swap! state* update :viewport
+           (fn [{:keys [x y]}]
+             {:x (+ (double (or x 0.0)) (double dx))
+              :y (+ (double (or y 0.0)) (double dy))}))
+    nil))
 
 (defn- handle-action [state* action payload]
   (case action
-    ;; A composite item's :down (:target/:item/:index only -- this
-    ;; presentation runtime does NOT include :x/:y on the CUSTOM
-    ;; :activate payload, only on the generic :input/pointer one below;
-    ;; see runtime.clj's routed-event, the :pointer case's `hit` branch
-    ;; vs its :else fallback). Selects the node and arms dragging; the
-    ;; actual movement is driven by :input/pointer's :drag-x/:drag-y.
+    ;; Presentation routes BOTH :down and :drag that hit an :activate node
+    ;; as the activate action (not :input/pointer) — see runtime routed-event
+    ;; hit branch. So we must (a) arm on first press using payload :x/:y and
+    ;; (b) treat later activates while armed as motion via cur-x/cur-y deltas.
+    ;; :input/pointer still handles :up and drags that miss the hit box.
     :editor/canvas-press
     (let [item (:item payload)
-          hit-val (item->hit item)]
-      (when (= :node (:target hit-val)) (swap! state* assoc :selected-nid (:nid hit-val)))
-      (swap! state* assoc :drag (hit/on-down hit/idle hit-val 0.0 0.0))
+          px (double (or (:x payload) 0.0))
+          py (double (or (:y payload) 0.0))
+          hit-val (item->hit item)
+          prev (:drag @state*)
+          mode (:mode prev)]
+      (if (#{:dragging-node :panning} mode)
+        (let [dx (- px (double (or (:cur-x prev) px)))
+              dy (- py (double (or (:cur-y prev) py)))]
+          (apply-pointer-delta! state* mode dx dy)
+          (swap! state* assoc :drag (assoc prev :cur-x px :cur-y py)))
+        (do
+          (when (= :node (:target hit-val))
+            (swap! state* assoc :selected-nid (:nid hit-val)))
+          (swap! state* assoc :drag (hit/on-down hit/idle hit-val px py))))
       nil)
 
     :input/pointer
-    (let [{:keys [event-type drag-x drag-y]} payload
+    (let [{:keys [event-type drag-x drag-y x y]} payload
           drag-mode (:mode (:drag @state*))]
       (case event-type
-        :drag (case drag-mode
-                :dragging-node (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0))
-                ;; Empty-canvas press classifies as :panning (hit/on-down)
-                ;; -- previously nothing consumed that mode, so dragging
-                ;; empty canvas was a silent no-op. Same per-frame
-                ;; incremental :drag-x/:drag-y contract as node move.
-                :panning (swap! state* update :viewport
-                                (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
-                nil)
+        ;; Miss-target press (e.g. outside any control) — do not arm pan;
+        ;; only the canvas hit rect / node composites should start a drag.
+        :down nil
+        :drag
+        (if (#{:dragging-node :panning} drag-mode)
+          (apply-pointer-delta! state* drag-mode (or drag-x 0.0) (or drag-y 0.0))
+          nil)
         :up (swap! state* assoc :drag hit/idle)
+        :move
+        ;; Some hosts deliver move-with-button as :move; if armed, use absolute
+        ;; deltas from last cur when drag-x is absent.
+        (when (and (#{:dragging-node :panning} drag-mode) (number? x) (number? y))
+          (let [prev (:drag @state*)
+                dx (- (double x) (double (or (:cur-x prev) x)))
+                dy (- (double y) (double (or (:cur-y prev) y)))]
+            (apply-pointer-delta! state* drag-mode dx dy)
+            (swap! state* assoc :drag (assoc prev :cur-x (double x) :cur-y (double y)))))
         nil)
       nil)
 
     :editor/select-phase
-    (swap! state* (fn [s] (recompute (assoc s :phase (keyword (:phase payload)) :selected-nid nil))))
+    ;; Activate payload carries the repeater row under :item (same shape
+    ;; as spell-composer's palette picks) — reading :phase off the root
+    ;; payload was always nil and left the phase stuck.
+    (let [phase-name (or (:phase (:item payload)) (:phase payload))]
+      (when phase-name
+        (swap! state* (fn [s] (recompute (assoc s :phase (keyword phase-name) :selected-nid nil))))))
 
     ;; Re-reads `path` from disk and rebuilds the whole editor state,
     ;; discarding any in-memory edit that was never saved -- an honest

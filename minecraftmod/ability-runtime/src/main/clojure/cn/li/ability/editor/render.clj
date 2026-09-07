@@ -6,19 +6,11 @@
 
    SCOPE for this first visual iteration (graph->composite-items):
    renders the EXEC statement chain only, one box per statement
-   (including nested when/each/if bodies, indented), each box's label a
-   full one-line rendering of that statement's own DSL text (cn.li.
-   ability.editor.graph/stmt-text -- literally what saving would print,
-   so a label can never show something structurally different from the
-   real content) rather than a separate wired sub-node per nested pure
-   expression. A full Blueprint-style per-expression node graph is more
-   visually complex and, critically, not verifiable without an actual
-   screen to look at -- this ships the part whose correctness (every
-   statement gets exactly one box, nesting reads top-to-bottom with
-   indentation, sequential wires connect the flow) is provable by a unit
-   test today; expression-level sub-wiring is a real, deliberate
-   follow-up once the exec-chain view has been used in-game and the
-   extra complexity is worth it, not a silent gap."
+   (including nested when/each/if bodies, indented). Canvas labels use
+   graph/stmt-label (short plain words like bind hit / damage) — not
+   raw DSL. Full stmt-text remains for inspectors that need the exact
+   printable form. A full Blueprint-style per-expression node graph is
+   a deliberate follow-up."
   (:require [cn.li.ability.editor.graph :as graph]))
 
 (defn wire-quads
@@ -99,8 +91,7 @@
 (defn- node-composite-items [nodes nid pos]
   (let [{:keys [stmt]} (get nodes nid)
         x (:x pos) y (:y pos)
-        text (graph/stmt-text nodes nid)
-        text (if (> (count text) 64) (str (subs text 0 61) "...") text)]
+        text (graph/stmt-label nodes nid)]
     [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
       :rgba (box-color stmt)}
      {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0) :text text :rgba 0xFFFFFFFF}]))

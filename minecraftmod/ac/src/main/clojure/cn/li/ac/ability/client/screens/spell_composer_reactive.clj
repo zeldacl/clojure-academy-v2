@@ -45,6 +45,12 @@
   [kw]
   (subs (str kw) 1))
 
+(defn- glyph-short
+  "UI chip label: the name segment only (\"touch\"), keeping the
+   namespace visible in the composition pane via glyph-str."
+  [kw]
+  (name kw))
+
 ;; NOT routed through the mod's i18n/datagen translation system (checked
 ;; before writing this: every existing reactive controller's dynamic
 ;; :status text -- skill_tree.clj, settings_reactive.clj, about_reactive.
@@ -62,6 +68,17 @@
    :forbidden-effect "Spell uses an effect players are not allowed to cast."
    :over-budget "Spell exceeds the host-command/iteration budget."})
 
+(def ^:private kind-rgba
+  {:form [0.55 0.85 1.0 1.0]
+   :effect [1.0 1.0 1.0 1.0]
+   :augment [0.7 1.0 0.65 1.0]})
+
+(def ^:private selected-rgba [1.0 1.0 0.55 1.0])
+(def ^:private idle-rgba [0.92 0.92 0.92 1.0])
+(def ^:private muted-rgba [0.45 0.45 0.48 0.7])
+(def ^:private cast-ready-rgba [0.55 1.0 0.55 1.0])
+(def ^:private cast-blocked-rgba [0.45 0.45 0.45 0.55])
+
 (defn- owner-for [player-uuid]
   (read-model/local-client-owner player-uuid "spell-composer"))
 
@@ -71,7 +88,7 @@
   {:catalog (combat-api/player-glyph-catalog)
    :form nil
    :effects []
-   :status "Pick a form, then add effects/augments, then Cast."})
+   :status "Pick a form, then add effects, then Cast."})
 
 (defn- pick-form [state glyph-kw]
   (assoc state :form {:glyph glyph-kw} :status (str "Form: " (glyph-str glyph-kw))))
@@ -87,24 +104,81 @@
 (defn- composed-glyphs [{:keys [form effects]}]
   (when form (into [form] effects)))
 
+(defn- catalog-by-glyph [catalog]
+  (into {} (map (juxt :glyph identity) catalog)))
+
+(defn- total-cost [state]
+  (let [by (catalog-by-glyph (:catalog state))
+        glyphs (or (composed-glyphs state) [])]
+    (reduce (fn [^double acc g]
+              (+ acc (double (or (:cost (by (:glyph g))) 0.0))))
+            0.0
+            glyphs)))
+
 ;; --- render-state ------------------------------------------------------
 
-(defn- palette-item [{:keys [glyph kind cost admissible?]}]
-  {:glyph (glyph-str glyph) :kind (name kind)
-   :cost (double cost)
-   :label (str (glyph-str glyph) " (cost " cost ")")
-   :admissible? admissible?})
+(defn- form-palette-item [entry selected-glyph]
+  (let [g (:glyph entry)
+        selected? (= g selected-glyph)]
+    {:glyph (glyph-str g)
+     :kind "form"
+     :cost (double (:cost entry))
+     :label (str (if selected? "▶ " "  ") (glyph-short g)
+                 "  (" (:cost entry) ")")
+     :rgba (if selected? selected-rgba idle-rgba)
+     :admissible? (:admissible? entry)}))
+
+(defn- effect-palette-item [entry form?]
+  (let [g (:glyph entry)
+        kind (:kind entry)]
+    {:glyph (glyph-str g)
+     :kind (name kind)
+     :cost (double (:cost entry))
+     :label (str "+ " (glyph-short g)
+                 (when (pos? (double (:cost entry)))
+                   (str "  (" (:cost entry) ")")))
+     :rgba (if form?
+             (get kind-rgba kind idle-rgba)
+             muted-rgba)
+     :admissible? (:admissible? entry)}))
+
+(defn- composition-row [i {:keys [glyph]} kind]
+  {:index i
+   :label (str (inc i) ". [" (name kind) "] " (glyph-str glyph))
+   :rgba (get kind-rgba kind idle-rgba)})
 
 (defn- render-state [state]
   (let [{:keys [catalog form effects status]} state
+        selected-glyph (when form (:glyph form))
         forms (filter #(= :form (:kind %)) catalog)
-        others (remove #(= :form (:kind %)) catalog)]
+        others (remove #(= :form (:kind %)) catalog)
+        form? (some? form)
+        can-cast? (boolean (and form (seq effects)))
+        composition (vec
+                     (concat
+                      (when form
+                        [(composition-row 0 form :form)])
+                      (map-indexed
+                       (fn [i g]
+                         (let [entry (get (catalog-by-glyph catalog) (:glyph g))
+                               kind (or (:kind entry) :effect)]
+                           (composition-row (inc i) g kind)))
+                       effects)))]
     {:title "Spell Composer"
-     :form-palette (mapv palette-item (filter :admissible? forms))
-     :effect-palette (mapv palette-item (filter :admissible? others))
-     :form-label (if form (glyph-str (:glyph form)) "(none)")
-     :effect-slots (mapv (fn [g] {:label (glyph-str (:glyph g))}) effects)
-     :can-cast? (boolean (and form (seq effects)))
+     :form-header "Form (pick one)"
+     :effect-header "Effects / Augments"
+     :spell-header "Composition"
+     :form-palette (mapv #(form-palette-item % selected-glyph)
+                         (filter :admissible? forms))
+     :effect-palette (mapv #(effect-palette-item % form?)
+                           (filter :admissible? others))
+     :composition (if (seq composition)
+                    composition
+                    [{:label "(empty — pick a form)"
+                      :rgba muted-rgba}])
+     :cost-label (str "Cost: " (total-cost state))
+     :can-cast? can-cast?
+     :cast-rgba (if can-cast? cast-ready-rgba cast-blocked-rgba)
      :status (or status "")
      :cast-label "Cast"
      :clear-label "Clear"}))
@@ -124,7 +198,7 @@
 
     :composer/cast
     (let [glyphs (composed-glyphs @state*)]
-      (if-not glyphs
+      (if-not (and glyphs (seq (rest glyphs)))
         (swap! state* assoc :status "Pick a form and at least one effect first.")
         (do
           (swap! state* assoc :status "Casting...")

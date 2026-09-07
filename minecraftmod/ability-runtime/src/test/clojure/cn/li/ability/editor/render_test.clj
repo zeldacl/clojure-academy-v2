@@ -56,7 +56,9 @@
         labels (filter #(= :node-label (:role %)) items)]
     (is (= (count (graph/exec-flatten g)) (count bodies) (count labels)))
     (is (every? :nid bodies))
-    (is (every? string? (map :text labels)))))
+    (is (every? string? (map :text labels)))
+    (is (every? #(<= (count %) 28) (map :text labels)))
+    (is (not-any? #(re-find #"^\(let " %) (map :text labels)))))
 
 (deftest graph->composite-items-includes-wires-between-statements-test
   (let [g (sample-graph)

@@ -1,5 +1,9 @@
 ;; Combat HUD — full-screen host; CP/slots/overlays are screen-space composites
 ;; from presentation_hud (not a centered 427×240 design box).
+;;
+;; Vignette (screen_mask.png + category tint) is emitted from presentation_hud
+;; into :composite-list — keep this root free of a solid full-screen :rect
+;; (that washed the whole view) and free of a duplicate mask image.
 {:ui/schema 2 :view/id :academy.app/combat-hud
  :host {:kind :hud}
  :state-schema {:cp-ratio :number :overload-ratio :number :charging? :boolean
@@ -8,12 +12,9 @@
  :root
  {:type :stack :key :combat/root :layout {:width :fill :height :fill}
   :children
-  [{:type :rect :key :combat/background
-    :layout {:width :fill :height :fill}
-    :bind {:alpha [:state :background-mask]}
-    :semantics {:role :generic}}
-   {:type :repeater :key :combat/composite
-    :layout {:width :fill :height :fill}
+  [{:type :repeater :key :combat/composite
+    ;; Absolute screen-space items — do not stack in a column.
+    :layout {:width :fill :height :fill :direction :none}
     :bind {:items [:state :composite-list]}
     :children
     [{:type :composite :layout {:width 0.0 :height 0.0}

@@ -39,6 +39,7 @@
 (def ^:private terminal-cursor-show-fn nil)
 (def ^:private local-player-uuid-fn nil)
 (def ^:private overlay-activated-override-fn nil)
+(def ^:private set-client-activated-overlay-fn nil)
 (def ^:private local-player-pos-fn nil)
 (def ^:private camera-position-fn nil)
 (def ^:private camera-raycast-visible-fn nil)
@@ -66,6 +67,7 @@
    :terminal-cursor-show! #'terminal-cursor-show-fn
    :local-player-uuid #'local-player-uuid-fn
    :client-overlay-activated-override #'overlay-activated-override-fn
+   :set-client-activated-overlay! #'set-client-activated-overlay-fn
    :local-player-pos #'local-player-pos-fn
    :camera-position #'camera-position-fn
    :camera-raycast-visible? #'camera-raycast-visible-fn
@@ -156,6 +158,16 @@
 (defn local-player-uuid          [] (when local-player-uuid-fn (local-player-uuid-fn)))
 (defn client-overlay-activated-override [owner]
   (when overlay-activated-override-fn (overlay-activated-override-fn owner)))
+
+(defn set-client-activated-overlay!
+  "Hot-path write for V-key / resource-sync HUD activation.
+   Prefer this over call-adapter: set must not depend on a Framework map
+   lookup that can miss when merge raced bootstrap."
+  [owner activated]
+  (when set-client-activated-overlay-fn
+    (set-client-activated-overlay-fn owner (boolean activated)))
+  nil)
+
 (defn local-player-block-aim
   "Where the local player is aiming, as {:x :y :z}: the precise block hit
   within `distance`, else the look end. nil when the loader does not provide

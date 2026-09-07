@@ -1,19 +1,24 @@
-;; Developer — main page_developer.xml dual panel ~400×187.
+;; Developer — main page_developer.xml classic 400×187 dual panel.
+;; Positions bake XML align math: child = (parent-size - child-size)/2 + pos
+;; for center/middle (see mcmod ui layout_test).
 {:ui/schema 2 :view/id :academy.app/developer
  :host {:kind :container :design-width 400 :design-height 187 :scale-policy :fit}
- :state-schema {:title :string :mode :string :ability-name :string :level-label :string
-                :exp-label :string :energy-ratio :number :sync-rate :number
-                :skills :vector :selected-skill :string :console-lines :vector
-                :console-input :string :wireless-visible :boolean :wireless-state :string
-                :wireless-owner :string :wireless-range :string :wireless-bandwidth :string
-                :wireless-load :number :wireless-nodes :vector :wireless-password :string
-                :wireless-disconnect :map :wireless-available-label :map :status :string
-                :button-upgrade :map :button-reset :map :button-wireless :map
-                :selected-detail :map :machine-panel-visible? :boolean}
+ :state-schema {:title :string :mode :string
+                :ability-name :string :level-label :string :exp-label :string
+                :ability-icon-items :vector
+                :level-prog :number :can-upgrade? :boolean :level-label-visible? :boolean
+                :energy-ratio :number :sync-rate :number
+                :wireless-visible :boolean :wireless-node-name :string
+                :wireless-page-visible? :boolean
+                :skill-tree-visible? :boolean :console-visible? :boolean
+                :composite-list :vector
+                :console-display :vector
+                :detail-visible? :boolean :selected-detail :map
+                :status :string}
  :root
  {:type :absolute :key :developer/root :layout {:width 400 :height 187}
   :children
-  [;; Left panel — 108.5×187 at x~4
+  [;; Left: XML parent-left pos 4,0 size 108.5×187 align left,center → (4,0)
    {:type :absolute :key :developer/left
     :layout {:x 4.0 :y 0.0 :width 108.5 :height 187.0}
     :children
@@ -25,55 +30,101 @@
       :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_developerleft.png"}}
       :semantics {:role :image}}
 
-     ;; Ability summary
+     ;; Ability: pos 2,-10 size 104×32 align left,center → y=(187-32)/2-10=67.5
      {:type :absolute :key :developer/ability
-      :layout {:x 2.0 :y 70.0 :width 104.0 :height 40.0}
+      :layout {:x 2.0 :y 67.5 :width 104.0 :height 32.0}
       :children
-      [{:type :image :layout {:x 0.0 :y 4.0 :width 32.0 :height 32.0}
-        :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_nocategory.png"}}
-        :semantics {:role :image}}
-       {:type :text :layout {:x 34.0 :y 2.0 :width 70.0 :height 12.0}
-        :style {:font-size 10.0}
+      [{:type :repeater :layout {:x 0.0 :y 0.0 :width 32.0 :height 32.0 :direction :none}
+        :bind {:items [:state :ability-icon-items]}
+        :children
+        [{:type :composite :layout {:width 32.0 :height 32.0}
+          :bind {:item [:state :item]}}]}
+       ;; name: center+pos(14,-8) → x=31 y=2 font 13
+       {:type :text :layout {:x 31.0 :y 2.0 :width 70.0 :height 12.0}
+        :style {:font-size 13.0 :rgba [1.0 1.0 1.0 1.0]}
         :bind {:text [:state :ability-name]}}
-       {:type :text :layout {:x 34.0 :y 14.0 :width 42.0 :height 10.0}
-        :style {:font-size 8.0}
-        :bind {:text [:state :level-label]}}
-       {:type :text :layout {:x 34.0 :y 26.0 :width 42.0 :height 10.0}
-        :style {:font-size 7.0}
+       ;; progress: left,center pos(31,-2) → y=13.25
+       {:type :rect :layout {:x 31.0 :y 13.25 :width 70.0 :height 1.5}
+        :style {:rgba [0.4 0.4 0.4 0.3]}
+        :semantics {:role :generic}}
+       {:type :progress :layout {:x 31.0 :y 13.25 :width 70.0 :height 1.5}
+        :bind {:value [:state :level-prog]}
+        :semantics {:role :progress}}
+       ;; level: center+pos(27.8,6) → x=59.2 y=16 (hidden when upgrade shown)
+       {:type :text :layout {:x 59.2 :y 16.0 :width 41.2 :height 12.0}
+        :style {:font-size 9.0 :rgba [0.067 0.467 0.839 1.0]}
+        :bind {:text [:state :level-label] :visible [:state :level-label-visible?]}}
+       ;; exp: left,top pos(30,15.5)
+       {:type :text :layout {:x 30.0 :y 15.5 :width 42.0 :height 10.0}
+        :style {:font-size 8.0 :rgba [1.0 1.0 1.0 1.0]}
         :bind {:text [:state :exp-label]}}
-       {:type :button :layout {:x 60.0 :y 22.0 :width 40.0 :height 14.0}
-        :bind {:text [:state :button-upgrade]}
+       ;; upgrade image @0.26 of 186×59.5 → 48.36×15.47 at 60,14.5
+       {:type :absolute :layout {:x 60.0 :y 14.5 :width 48.4 :height 15.5}
+        :bind {:visible [:state :can-upgrade?]}
         :on {:activate :developer/level-up}
-        :semantics {:role :button}}]}
+        :semantics {:role :button}
+        :children
+        [{:type :image :layout {:width 48.4 :height 15.5}
+          :style {:resource {:namespace "academy"
+                             :path "textures/guis/button/button_learn.png"}
+                  :rgba [1.0 1.0 1.0 0.7]}
+          :semantics {:role :image}}]}]}
 
-     ;; Machine / wireless panel
+     ;; Machine overlay — labels use center/middle on 108.5×187 (lower half)
      {:type :absolute :key :developer/machine
-      :layout {:x 0.0 :y 0.0 :width 108.5 :height 70.0}
+      :layout {:x 0.0 :y 0.0 :width 108.5 :height 187.0}
+      :bind {:visible [:state :wireless-visible]}
       :children
-      [{:type :image :layout {:width 108.5 :height 70.0}
+      [{:type :image :layout {:width 108.5 :height 187.0}
         :style {:resource {:namespace "academy"
                            :path "textures/guis/parent/parent_background_developermachine.png"}}
-        :bind {:visible [:state :wireless-visible]}
         :semantics {:role :image}}
-       {:type :text :layout {:x 4.0 :y 8.0 :width 100.0 :height 10.0}
-        :style {:font-size 8.0}
-        :bind {:text [:state :wireless-state] :visible [:state :wireless-visible]}}
-       {:type :button :layout {:x 4.0 :y 20.0 :width 100.0 :height 14.0}
-        :bind {:text [:state :button-wireless] :visible [:state :wireless-visible]}
+       ;; Current Node: center+pos(0,17) → (4.25, 104.5)
+       {:type :text :layout {:x 4.25 :y 104.5 :width 100.0 :height 12.0}
+        :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
+        :text "Current Node:"}
+       ;; wireless button: center+pos(0,29) → (4.25, 114.5)
+       {:type :absolute :layout {:x 4.25 :y 114.5 :width 100.0 :height 16.0}
         :on {:activate :developer/wireless}
-        :semantics {:role :button}}
-       {:type :text :layout {:x 4.0 :y 38.0 :width 100.0 :height 10.0}
-        :style {:font-size 8.0}
-        :text "Power"
-        :bind {:visible [:state :wireless-visible]}}
-       {:type :progress :layout {:x 6.0 :y 48.0 :width 97.0 :height 6.0}
-        :bind {:value [:state :energy-ratio] :visible [:state :wireless-visible]}
+        :semantics {:role :button}
+        :children
+        [{:type :image :layout {:width 100.0 :height 16.0}
+          :style {:resource {:namespace "academy"
+                             :path "textures/guis/element/element_background300x32.png"}
+                  :rgba [1.0 1.0 1.0 0.7]}
+          :semantics {:role :image}}
+         ;; logo-node: center+pos(-37,0) within button → (7, 2)
+         {:type :image :layout {:x 7.0 :y 2.0 :width 12.0 :height 12.0}
+          :style {:resource {:namespace "academy" :path "textures/guis/icons/icon_node.png"}}
+          :semantics {:role :image}}
+         ;; nodename: center+pos(11,0) → (26, 2)
+         {:type :text :layout {:x 26.0 :y 2.0 :width 70.0 :height 12.0}
+          :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
+          :bind {:text [:state :wireless-node-name]}}]}
+       ;; Power: center+pos(0,43) → (4.25, 130.5)
+       {:type :text :layout {:x 4.25 :y 130.5 :width 100.0 :height 12.0}
+        :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
+        :text "Power:"}
+       ;; power bar: left,center pos(5.75,55.5) → y=145
+       {:type :rect :layout {:x 5.75 :y 145.0 :width 97.0 :height 8.0}
+        :style {:rgba [1.0 1.0 1.0 0.2]}
+        :semantics {:role :generic}}
+       {:type :progress :layout {:x 5.75 :y 145.0 :width 97.0 :height 8.0}
+        :bind {:value [:state :energy-ratio]}
         :semantics {:role :progress}}
-       {:type :progress :layout {:x 6.0 :y 58.0 :width 97.0 :height 6.0}
-        :bind {:value [:state :sync-rate] :visible [:state :wireless-visible]}
+       ;; Sync Rate: center+pos(0,66) → (4.25, 153.5)
+       {:type :text :layout {:x 4.25 :y 153.5 :width 100.0 :height 12.0}
+        :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
+        :text "Sync Rate:"}
+       ;; sync bar: left,center pos(5.75,77.5) → y=167
+       {:type :rect :layout {:x 5.75 :y 167.0 :width 97.0 :height 8.0}
+        :style {:rgba [1.0 1.0 1.0 0.2]}
+        :semantics {:role :generic}}
+       {:type :progress :layout {:x 5.75 :y 167.0 :width 97.0 :height 8.0}
+        :bind {:value [:state :sync-rate]}
         :semantics {:role :progress}}]}]}
 
-   ;; Right panel — 278×187 at x~118 (400-278-4)
+   ;; Right: align right → x=118
    {:type :absolute :key :developer/right
     :layout {:x 118.0 :y 0.0 :width 278.0 :height 187.0}
     :children
@@ -85,45 +136,91 @@
       :style {:resource {:namespace "academy" :path "textures/guis/ui/ui_developerright.png"}}
       :semantics {:role :image}}
 
-     {:type :column :key :developer/detail
+     {:type :absolute :key :developer/area
       :layout {:x 10.0 :y 18.0 :width 257.0 :height 139.0}
       :children
-      [{:type :text :layout {:height 12.0} :style {:font-size 10.0}
-        :bind {:text [:state :selected-detail :title]}}
-       {:type :text :layout {:height 10.0} :style {:font-size 8.0}
-        :bind {:text [:state :selected-detail :level]}}
-       {:type :text :layout {:height 20.0} :style {:font-size 8.0}
-        :bind {:text [:state :selected-detail :description]}}
-       {:type :text :layout {:height 10.0} :style {:font-size 8.0}
-        :bind {:text [:state :selected-detail :condition-label]}}
-       {:type :grid :layout {:height 18.0}
-        :bind {:items [:state :selected-detail :condition-items]}
+      [{:type :repeater :key :developer/skill-graph
+        :layout {:x 0.0 :y 0.0 :width 257.0 :height 139.0 :direction :none}
+        :bind {:items [:state :composite-list] :visible [:state :skill-tree-visible?]}
         :children
-        [{:type :composite :layout {:height 18.0}
-          :bind {:item [:state :item]}
-          :on {:hover :developer/condition-hover}}]}
-       {:type :progress :layout {:height 6.0 :width 180.0}
+        [{:type :composite :layout {:width 0.0 :height 0.0}
+          :bind {:item [:state :item]
+                 :x [:item :layout-x] :y [:item :layout-y]
+                 :width [:item :w] :height [:item :h]}
+          :on {:activate :developer/select-skill}}]}
+
+       ;; Console: painted text rows (body + OS > / status). Invisible
+       ;; focusable catcher owns the whole 257×139 area for key input —
+       ;; no text-input widget (matches main terminal-style console).
+       {:type :repeater :key :developer/console-lines
+        :layout {:x 0.0 :y 0.0 :width 257.0 :height 139.0 :direction :none}
+        :bind {:items [:state :console-display] :visible [:state :console-visible?]}
+        :children
+        [{:type :text
+          :style {:font-size 8.0 :rgba [1.0 1.0 1.0 1.0]}
+          :bind {:x [:item :x] :y [:item :y]
+                 :width [:item :w] :height [:item :h]
+                 :text [:item :label]}}]}
+       {:type :absolute :key :developer/console-catcher
+        :layout {:x 0.0 :y 0.0 :width 257.0 :height 139.0}
+        :bind {:visible [:state :console-visible?]}
+        :on {:change :developer/console-input :submit :developer/console-submit}
+        :semantics {:role :textbox :field :developer-console}
+        :children []}]}
+
+     {:type :absolute :key :developer/detail
+      :layout {:x 10.0 :y 18.0 :width 257.0 :height 139.0}
+      :bind {:visible [:state :detail-visible?]}
+      :children
+      [{:type :rect :layout {:width 257.0 :height 139.0}
+        :style {:rgba [0.0 0.0 0.0 0.72]}
+        :semantics {:role :generic}}
+       {:type :text :layout {:x 10.0 :y 10.0 :width 237.0 :height 14.0}
+        :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
+        :bind {:text [:state :selected-detail :title]}}
+       {:type :text :layout {:x 10.0 :y 28.0 :width 237.0 :height 12.0}
+        :style {:font-size 9.0 :rgba [0.7 0.85 1.0 1.0]}
+        :bind {:text [:state :selected-detail :level]}}
+       {:type :text :layout {:x 10.0 :y 44.0 :width 237.0 :height 36.0}
+        :style {:font-size 8.0 :rgba [0.9 0.9 0.9 1.0]}
+        :bind {:text [:state :selected-detail :description]}}
+       {:type :text :layout {:x 10.0 :y 84.0 :width 237.0 :height 10.0}
+        :style {:font-size 8.0}
+        :bind {:text [:state :selected-detail :condition-hint]}}
+       {:type :progress :layout {:x 10.0 :y 100.0 :width 180.0 :height 6.0}
         :bind {:value [:state :selected-detail :development-progress]}
         :semantics {:role :progress}}
-       {:type :button :layout {:height 14.0 :width 84.0}
-        :bind {:text [:state :selected-detail :learn-label]
-               :visible [:state :selected-detail :can-learn?]}
+       {:type :text :layout {:x 10.0 :y 110.0 :width 120.0 :height 12.0}
+        :style {:font-size 8.0}
+        :bind {:text [:state :selected-detail :development-label]}}
+       {:type :absolute :layout {:x 175.0 :y 108.0 :width 72.0 :height 18.0}
+        :bind {:visible [:state :selected-detail :can-learn?]}
         :on {:activate :developer/learn-skill}
-        :semantics {:role :button}}
-       {:type :scroll :layout {:height 40.0}
-        :bind {:items [:state :skills]}
-        :semantics {:role :list}
+        :semantics {:role :button}
         :children
-        [{:type :row :layout {:height 14.0}
-          :children
-          [{:type :text :layout {:width 170.0} :style {:font-size 8.0}
-            :bind {:text [:item :label]}}
-           {:type :button :layout {:width 70.0 :height 12.0}
-            :bind {:text [:item :select-label]}
-            :on {:activate :developer/select-skill}
-            :semantics {:role :button}}]}]}]}
+        [{:type :image :layout {:width 72.0 :height 18.0}
+          :style {:resource {:namespace "academy"
+                             :path "textures/guis/button/button_learn.png"}
+                  :rgba [1.0 1.0 1.0 0.85]}
+          :semantics {:role :image}}
+         {:type :text :layout {:x 8.0 :y 3.0 :width 56.0 :height 12.0}
+          :style {:font-size 9.0 :rgba [1.0 1.0 1.0 1.0]}
+          :bind {:text [:state :selected-detail :learn-label]}}]}
+       {:type :text :layout {:x 232.0 :y 6.0 :width 18.0 :height 14.0}
+        :style {:font-size 12.0 :rgba [1.0 1.0 1.0 0.8]}
+        :text "X"
+        :on {:activate :developer/close-detail}
+        :semantics {:role :button}}]}]}
 
-     {:type :text-input :layout {:x 10.0 :y 162.0 :width 257.0 :height 16.0}
-      :bind {:text [:state :console-input]}
-      :on {:change :developer/console-input :submit :developer/console-submit}
-      :semantics {:role :textbox :field :developer-console}}]}]}}
+   ;; Wireless overlay — main open-wireless-overlay! (cover + page_wireless).
+   ;; Centered 176×187 on the 400×187 classic canvas: x=(400-176)/2=112.
+   {:type :absolute :key :developer/wireless-modal
+    :layout {:x 0.0 :y 0.0 :width 400.0 :height 187.0}
+    :bind {:visible [:state :wireless-page-visible?]}
+    :children
+    [{:type :rect :layout {:width 400.0 :height 187.0}
+      :style {:rgba [0.0 0.0 0.0 0.7]}
+      :on {:activate :developer/wireless-close}
+      :semantics {:role :button}}
+     {:type :include :src "academy/shared/wireless_page"
+      :layout {:x 112.0 :y 0.0 :width 176.0 :height 187.0}}]}]}}

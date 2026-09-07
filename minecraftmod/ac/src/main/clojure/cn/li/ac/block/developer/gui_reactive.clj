@@ -33,7 +33,10 @@
     (gui-sync/create-schema-container dev-schema/unified-developer-schema
                                       tile player :developer
                                       {:gui-id (gui-manifest/gui-id :developer)
-                                       :state state})))
+                                       :state state
+                                       ;; Classic developer is a full-panel UI — no
+                                       ;; player inventory strip (main :no-slots?).
+                                       :base {:default-player-inventory-mode :none}})))
 
 (defn get-slot-count [_container]
   0)  ;; No visible slots — inventory is internal-only for automation
@@ -99,7 +102,10 @@
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :developer)
       (merge (gui-manifest/gui-registration :developer)
-        {:container-predicate developer-container?
+        {:slot-layout {:slots []
+                       :player-inventory-mode :none
+                       :ranges {:tile [0 -1] :player-main [0 -1] :player-hotbar [0 -1]}}
+         :container-predicate developer-container?
          :container-fn create-container
          :screen-fn create-screen
          :server-menu-sync-fn server-menu-sync!

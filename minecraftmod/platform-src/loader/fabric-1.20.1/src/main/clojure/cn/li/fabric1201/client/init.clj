@@ -113,8 +113,10 @@
     {:open-screen open-screen-dispatcher
      :presentation-open-screen! presentation-screen/open!
      :set-client-activated-overlay!
-     (fn [owner activated]
-       (when-let [o (or owner (mc-session/current-local-player-owner))]
+     (fn [_owner activated]
+       ;; Same owner as :client-overlay-activated-override — ignore the caller's
+       ;; possibly incomplete uuid/map so set/get never diverge.
+       (when-let [o (mc-session/current-local-player-owner)]
          (overlay-state/set-client-activated! o (boolean activated))))
      :client-overlay-activated-override
      (fn [_owner]

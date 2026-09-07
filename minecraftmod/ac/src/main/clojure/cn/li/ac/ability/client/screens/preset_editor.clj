@@ -4,7 +4,6 @@
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
-            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.mcmod.i18n :as i18n]))
 
 
@@ -49,6 +48,29 @@
   [skill-spec]
   (or (:skill-id skill-spec) (:id skill-spec)))
 
+(defn- as-keyword
+  "NBT/network sync may rehydrate keywords as strings; normalize for set lookups."
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    (symbol? x) (keyword (name x))
+    :else x))
+
+(defn- learned-skill-ids
+  [ability-data]
+  (into #{} (map as-keyword) (:learned-skills ability-data #{})))
+
+(defn- skill-learned?
+  [learned-ids skill-spec]
+  (contains? learned-ids (as-keyword (spec-skill-id skill-spec))))
+
+(defn- skill-bindable?
+  "Enabled + controllable; treat missing flags as true (registry defaults)."
+  [skill-spec]
+  (and (not (false? (:enabled skill-spec)))
+       (not (false? (:controllable? skill-spec)))))
+
 (defn- slot-info
   "Build slot info map for a controllable pair. Returns nil if skill not found."
   [pair]
@@ -92,38 +114,41 @@
   (let [state (editor-state-snapshot owner)
         owner-key (editor-owner-key owner)]
     (when-let [_player-uuid (:player-uuid state)]
-      (when-let [player-state (and owner-key (get-editor-player-state owner-key))]
+      (when-let [player-state (and owner-key (get-editor-player-state owner))]
         (let [ability-data (:ability-data player-state)
               preset-data (:preset-data player-state)
-              category-id (:category-id ability-data)
+              category-id (as-keyword (:category-id ability-data))
               slots-data (:slots preset-data {})
               current-preset (:selected-preset state)
               active-preset (:active-preset preset-data 0)
-              ;; All learned + enabled + controllable skills in current category
-              learned-skills (when category-id
-                               (filter #(adata/is-learned? ability-data (spec-skill-id %))
-                                 (skill-query/get-skills-for-category category-id)))
-              controllable-skills (filter #(and (:enabled %) (:controllable? %)) learned-skills)
-              ;; Exclude skills already assigned in current preset (matching upstream)
+              learned-ids (learned-skill-ids ability-data)
+              ;; All category skills, then learned ∩ bindable (nil flags OK).
+              category-skills (if category-id
+                                (skill-query/get-skills-for-category category-id)
+                                [])
+              learned-bindable (->> category-skills
+                                    (filter #(skill-learned? learned-ids %))
+                                    (filter skill-bindable?))
               assigned-ids (assigned-ctrl-ids slots-data current-preset)
-              available-for-preset (remove #(contains? assigned-ids (:ctrl-id %)) controllable-skills)]
+              available-for-preset (remove (fn [s]
+                                             (contains? assigned-ids
+                                                        (or (:ctrl-id s) (spec-skill-id s))))
+                                           learned-bindable)]
           {:presets (range 4)
            :selected-preset current-preset
            :active-preset active-preset
-           ;; All 4 presets' slot data (for carousel)
            :all-preset-slots (presets-all-slots slots-data)
-           ;; Selected preset's slots (for detail view / selector)
            :slots (mapv (fn [idx] (slot-info (get slots-data [current-preset idx]))) (range 4))
-           ;; Skills NOT yet in current preset (matching upstream filter)
            :available-skills (mapv
                                (fn [s]
-                                 {:skill-id (spec-skill-id s)
-                                  :skill-name (let [nk (:name-key s)]
-                                                (if nk (or (i18n/translate nk) (name (spec-skill-id s)))
-                                                    (or (:name s) (name (spec-skill-id s)))))
-                                  :skill-icon (skill-query/get-skill-icon-path (spec-skill-id s))
-                                  :cat-id (:category-id s)
-                                  :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})
+                                 (let [sid (spec-skill-id s)]
+                                   {:skill-id sid
+                                    :skill-name (let [nk (:name-key s)]
+                                                  (if nk (or (i18n/translate nk) (name sid))
+                                                      (or (:name s) (name sid))))
+                                    :skill-icon (skill-query/get-skill-icon-path sid)
+                                    :cat-id (as-keyword (:category-id s))
+                                    :ctrl-id (or (:ctrl-id s) sid)}))
                                available-for-preset)})))))
 
 (defn selector-debug-snapshot
@@ -133,20 +158,26 @@
   (let [state (editor-state-snapshot owner)
         owner-key (editor-owner-key owner)]
     (when-let [_player-uuid (:player-uuid state)]
-      (when-let [player-state (and owner-key (get-editor-player-state owner-key))]
+      (when-let [player-state (and owner-key (get-editor-player-state owner))]
         (let [ability-data (:ability-data player-state)
               preset-data (:preset-data player-state)
-              category-id (:category-id ability-data)
-              learned (:learned-skills ability-data #{})
+              category-id (as-keyword (:category-id ability-data))
+              learned (learned-skill-ids ability-data)
               slots-data (:slots preset-data {})
               current-preset (:selected-preset state)
               all-skills (if category-id
                            (vec (skill-query/get-skills-for-category category-id))
                            [])
-              learned-skills (vec (filter #(adata/is-learned? ability-data (spec-skill-id %)) all-skills))
-              controllable-skills (vec (filter #(and (:enabled %) (:controllable? %)) learned-skills))
+              controllable (if category-id
+                             (vec (skill-query/get-controllable-skills-for-category category-id))
+                             [])
+              learned-skills (vec (filter #(skill-learned? learned %) all-skills))
+              controllable-skills (vec (filter skill-bindable? (filter #(skill-learned? learned %) controllable)))
               assigned-ids (assigned-ctrl-ids slots-data current-preset)
-              available-for-preset (vec (remove #(contains? assigned-ids (:ctrl-id %)) controllable-skills))]
+              available-for-preset (vec (remove (fn [s]
+                                                  (contains? assigned-ids
+                                                             (or (:ctrl-id s) (spec-skill-id s))))
+                                                controllable-skills))]
           {:category-id category-id
            :selected-preset current-preset
            :active-preset (:active-preset preset-data 0)

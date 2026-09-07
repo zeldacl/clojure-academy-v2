@@ -42,12 +42,16 @@
   (let [state (-> (#'composer/initial-state) (#'composer/pick-form :form/self))
         rendered (#'composer/render-state state)]
     (is (string? (:title rendered)))
+    (is (string? (:form-header rendered)))
+    (is (string? (:effect-header rendered)))
+    (is (string? (:spell-header rendered)))
     (is (vector? (:form-palette rendered)))
     (is (vector? (:effect-palette rendered)))
-    (is (string? (:form-label rendered)))
-    (is (vector? (:effect-slots rendered)))
+    (is (vector? (:composition rendered)))
+    (is (string? (:cost-label rendered)))
     (is (boolean? (:can-cast? rendered)))
     (is (false? (:can-cast? rendered)) "no effects picked yet")
+    (is (vector? (:cast-rgba rendered)))
     (is (string? (:status rendered)))
     (is (= "Cast" (:cast-label rendered)))
     (is (= "Clear" (:clear-label rendered)))))
@@ -57,7 +61,9 @@
                    (#'composer/pick-form :form/self)
                    (#'composer/add-effect :effect/damage))
         rendered (#'composer/render-state state)]
-    (is (true? (:can-cast? rendered)))))
+    (is (true? (:can-cast? rendered)))
+    (is (= 2 (count (:composition rendered))))
+    (is (re-find #"Cost:" (:cost-label rendered)))))
 
 (deftest palette-splits-forms-from-effects-and-augments-test
   (let [state (#'composer/initial-state)
@@ -66,3 +72,11 @@
         effect-glyphs (set (map :glyph (:effect-palette rendered)))]
     (is (= #{"form/self" "form/touch"} form-glyphs))
     (is (= #{"effect/damage" "effect/push" "augment/amplify"} effect-glyphs))))
+
+(deftest selected-form-is-highlighted-in-palette-test
+  (let [state (#'composer/pick-form (#'composer/initial-state) :form/touch)
+        rendered (#'composer/render-state state)
+        touch (first (filter #(= "form/touch" (:glyph %)) (:form-palette rendered)))
+        self (first (filter #(= "form/self" (:glyph %)) (:form-palette rendered)))]
+    (is (re-find #"▶" (:label touch)))
+    (is (not (re-find #"▶" (:label self))))))

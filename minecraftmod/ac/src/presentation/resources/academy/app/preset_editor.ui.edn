@@ -86,16 +86,32 @@
                      :text [:item :skill-name] :rgba [:item :tint]}
               :semantics {:role :generic}}]}]}]}]}]}
 
+   ;; When the skill picker is open, capture ALL pointer hits so they cannot
+   ;; fall through the translucent popup into carousel slots underneath.
+   ;; Outside the popup → dismiss; inside the popup the selector/icons win
+   ;; (painted/hit later in sibling order).
+   {:type :rect :key :preset/selector-block
+    :layout {:x 0.0 :y 0.0 :width 540.0 :height 280.0}
+    :bind {:visible [:state :selector-visible?]}
+    :style {:rgba [0.0 0.0 0.0 0.0]}
+    :on {:activate :preset/selector-dismiss}
+    :semantics {:role :generic}}
+
    ;; Selector popup — explicit sizes only (never :fill: an unbound AUTO
    ;; parent + FILL child expands to the full design width ≈ "huge/wide").
    {:type :absolute :key :preset/selector
     :bind {:x [:state :selector-x] :y [:state :selector-y]
            :width [:state :selector-w] :height [:state :selector-h]
            :visible [:state :selector-visible?]}
+    ;; Whole popup panel is hit-testable so empty chrome never click-throughs.
+    :on {:activate :preset/selector-bg}
     :children
     [{:type :rect :key :preset/selector-bg
+      ;; Bind explicit size — :fill under absolute measures against the
+      ;; parent's AT_MOST avail (full design), not the bound selector box.
       :bind {:width [:state :selector-w] :height [:state :selector-h]}
       :style {:rgba [0.192 0.192 0.192 0.784]}
+      :on {:activate :preset/selector-bg}
       :semantics {:role :generic}}
 
      {:type :repeater :key :preset/selector-skills
@@ -104,10 +120,11 @@
       :layout {:direction :none}
       :semantics {:role :list}
       :children
-      [{:type :composite
-        :bind {:x [:item :cell-x] :y [:item :cell-y]
+      [{:type :composite :layout {:width 15.0 :height 15.0}
+        :bind {:item [:state :item]
+               :x [:item :cell-x] :y [:item :cell-y]
                :width [:item :w] :height [:item :h]}
-        :on {:activate :preset/assign}
+        :on {:activate :preset/assign :hover :preset/skill-hover}
         :semantics {:role :button}}]}]}
 
    ;; Compact tip — width capped to the grid (main tip follows text but
@@ -117,6 +134,7 @@
            :width [:state :selector-hint-w]
            :visible [:state :selector-visible?]}
     :layout {:height 11.5}
+    :on {:activate :preset/selector-bg}
     :children
     [{:type :rect
       :bind {:width [:state :selector-hint-w]}

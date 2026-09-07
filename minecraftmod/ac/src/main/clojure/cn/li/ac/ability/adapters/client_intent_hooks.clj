@@ -194,6 +194,12 @@
                         (assoc :develop-data (:develop-data payload)))]
           (command-runtime/run-command-in-session!
            (current-session) uuid command {:mark-dirty? false})
+          ;; Mirror server activation into the platform overlay atom so HUD
+          ;; refresh does not depend on a successful V-key write alone.
+          (when-not (zero? (bit-and mask store/resource-data-mask))
+            (runtime-hooks/set-client-overlay-activated!
+             uuid
+             (boolean (get-in payload [:resource-data :activated]))))
           (when (and (not (zero? (bit-and mask store/ability-data-mask)))
                      (runtime-sync-resets-input? (:ability-data old-state)
                                                  (:ability-data payload)))
@@ -292,13 +298,11 @@
    :client-req-set-activated!
    (fn [p active callback]
      (client-api/req-set-activated! (client-owner p) active callback))
-   ;; V-key immediate HUD feedback: write the platform overlay atom that
-   ;; reactive-hud/build-snapshot reads via client-overlay-activated-override.
+   ;; V-key / resource-sync HUD feedback: platform overlay atom only
+   ;; (no AC-local activated override). Hot-path setter — not call-adapter.
    :set-client-overlay-activated!
    (fn [player-uuid activated]
-     (client-bridge/call-adapter :set-client-activated-overlay!
-                                 {:player-uuid player-uuid}
-                                 (boolean activated)))
+     (client-bridge/set-client-activated-overlay! player-uuid (boolean activated)))
    :client-req-set-preset-slot!
    (fn [p preset key category ctrl callback]
      (client-api/req-set-preset-slot! (client-owner p) preset key category ctrl callback))

@@ -873,10 +873,14 @@
               (cond
                 (and (= key-code 257) submit-action)
                 {:action submit-action
-                 :payload (cond-> {:value (let [path (:path focus)]
-                                            (get-in (:view-state instance)
-                                                    (if (and (vector? path) (= :state (first path)))
-                                                      (subvec path 1) path)))}
+                 ;; (get-in m nil) returns m — never call get-in without a
+                 ;; real text path (terminal catchers have :submit but no :text).
+                 :payload (cond-> {:value (when-let [path (:path focus)]
+                                            (when (vector? path)
+                                              (get-in (:view-state instance)
+                                                      (if (= :state (first path))
+                                                        (subvec path 1)
+                                                        path))))}
                             (:field focus) (assoc :field (:field focus)))}
                 (= key-code 259)
                 (let [change (get-in focus [:on :change])]

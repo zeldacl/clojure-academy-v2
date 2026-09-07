@@ -96,6 +96,15 @@
     (is (= {:text [:state :query]} (nth (:node/bind-map compiled) 0)))
     (is (= {:text [:state :query]} (nth (:node/bind-map compiled) 2)))))
 
+(deftest change-submit-nodes-are-focusable
+  (let [compiled (compile* {:type :absolute
+                            :layout {:width 100 :height 40}
+                            :on {:change :demo/type :submit :demo/go}
+                            :children []})
+        flags (nth (:node/flags compiled) 0)]
+    (is (= (bit-or 8 64) (bit-and flags (bit-or 8 64)))
+        "HIT_TESTABLE | FOCUSABLE for terminal-style catchers")))
+
 (deftest transform-retains-style-and-has-transform-flag
   (let [compiled (compile* {:type :transform
                             :layout {:width 100 :height 80}

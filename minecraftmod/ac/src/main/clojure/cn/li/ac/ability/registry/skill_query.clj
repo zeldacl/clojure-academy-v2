@@ -41,9 +41,32 @@
 	(when-let [s (skill/get-skill skill-id)]
 		(str (name (:category-id s)) "/" (name skill-id))))
 
+(def ^:private icon-stem-overrides
+  "AcademyCraft texture stems that diverge from skill-id kebab→snake."
+  {:blood-retrograde "blood_retro"
+   :directed-blastwave "dir_blast"
+   :directed-shock "dir_shock"
+   :groundshock "ground_shock"
+   :shift-teleport "shift_tp"
+   :current-charging "charging"
+   :mine-ray "mine_ray_basic"})
+
+(defn- default-skill-icon-path
+  "Convention used by shipped textures when a skill EDN omits :icon:
+   textures/abilities/<category>/skills/<stem>.png"
+  [skill-id]
+  (when-let [cat (or (some-> (skill/raw-skill skill-id) :category-id)
+                     (get-in skill-config/skill-definitions-by-id [skill-id :category-id]))]
+    (let [stem (or (get icon-stem-overrides skill-id)
+                   (str/replace (name skill-id) "-" "_"))]
+      (str "textures/abilities/" (name cat) "/skills/" stem ".png"))))
+
 (defn get-skill-icon-path
 	[skill-id]
-	(let [icon (get-in (skill/raw-skill skill-id) [:icon] "")]
+	(let [explicit (get-in (skill/raw-skill skill-id) [:icon] "")
+        icon (if (seq explicit)
+               explicit
+               (or (default-skill-icon-path skill-id) ""))]
 		;; Content skill :icon values are bare paths ("textures/abilities/...");
 		;; a namespace-less ResourceLocation resolves against "minecraft:" and
 		;; 404s into the checkerboard texture. Normalize here — the single query
@@ -69,13 +92,23 @@
 	(when-let [s (skill/get-skill skill-id)]
 		[(:category-id s) (or (:ctrl-id s) skill-id)]))
 
+(defn- as-kw
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    (symbol? x) (keyword (name x))
+    :else x))
+
 (defn get-skill-by-controllable
 	[category-id ctrl-id]
-	(some (fn [[sid base]]
-				(let [s (skill-config/apply-skill-overrides base)]
-					(when (and (= (:category-id s) category-id)
-									 (:enabled s)
-									 (:controllable? s)
-									 (= (or (:ctrl-id s) sid) ctrl-id))
-						sid)))
-				(skill/raw-skill-entries)))
+  (let [category-id (as-kw category-id)
+        ctrl-id (as-kw ctrl-id)]
+    (some (fn [[sid base]]
+            (let [s (skill-config/apply-skill-overrides base)]
+              (when (and (= (as-kw (:category-id s)) category-id)
+                         (:enabled s)
+                         (:controllable? s)
+                         (= (as-kw (or (:ctrl-id s) sid)) ctrl-id))
+                sid)))
+          (skill/raw-skill-entries))))

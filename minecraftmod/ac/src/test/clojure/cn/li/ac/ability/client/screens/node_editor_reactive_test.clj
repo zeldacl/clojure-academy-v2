@@ -59,19 +59,25 @@
         rendered (#'node-editor/render-state state)]
     (is (string? (:title rendered)))
     (is (.contains ^String (:title rendered) "skill"))
-    (is (string? (:phase-label rendered)))
+    (is (string? (:path-label rendered)))
+    (is (string? (:phase-header rendered)))
     (is (vector? (:phase-tabs rendered)))
+    (is (every? #(and (string? (:label %)) (string? (:phase %)) (vector? (:rgba %)))
+                (:phase-tabs rendered)))
+    (is (string? (:palette-header rendered)))
     (is (vector? (:palette rendered)))
     (is (seq (:palette rendered)))
     (is (every? #(string? (:label %)) (:palette rendered)))
     (is (vector? (:canvas rendered)))
+    (is (string? (:selected-header rendered)))
+    (is (string? (:diag-header rendered)))
     (is (vector? (:diagnostics rendered)))
     (is (number? (:diagnostic-count rendered)))
     (is (string? (:cost-label rendered)))
     (is (boolean? (:dirty? rendered)))
-    (is (= "Reload from disk" (:reload-label rendered)))
-    (is (= "Save to workspace" (:save-label rendered)))
-    (is (= "Export to source" (:export-label rendered)))))
+    (is (= "Reload" (:reload-label rendered)))
+    (is (= "Save" (:save-label rendered)))
+    (is (= "Export" (:export-label rendered)))))
 
 (deftest item->hit-classifies-nid-bearing-items-as-node-hits-test
   (is (= {:target :node :nid "n3"} (#'node-editor/item->hit {:kind :quad :role :node-body :nid "n3"})))
@@ -87,6 +93,17 @@
     (let [pos (get (:layout @state*) nid)]
       (is (= 13.0 (:x pos)))
       (is (= 7.0 (:y pos))))))
+
+(deftest default-sample-skill-resource-path-resolves-thunder-bolt-from-source-tree-test
+  "G key / editor_dev_tool share this resolver. Under ac's test cwd the
+   classpath may already be file:, but the source-tree walk must also
+   succeed on its own (Loom runClient often only has union:/ jar URLs)."
+  (let [via-public (node-editor/default-sample-skill-resource-path "ac/skills/thunder_bolt.edn")
+        via-walk (#'node-editor/source-tree-resource-path "ac/skills/thunder_bolt.edn")]
+    (is (some? via-public))
+    (is (.isFile (io/file via-public)))
+    (is (some? via-walk))
+    (is (.endsWith ^String via-walk "thunder_bolt.edn"))))
 
 (deftest layout-path-is-a-sibling-layout-directory-file-test
   (let [f (#'node-editor/layout-path-for "/a/b/ac/skills/thunder_bolt.edn")]
@@ -143,22 +160,33 @@
 
 (deftest canvas-drag-on-empty-canvas-pans-the-viewport-test
   (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
-    (#'node-editor/handle-action state* :editor/canvas-press {:item {}})
+    ;; In-game: empty press hits the canvas hit-rect → activate with no :item.
+    (#'node-editor/handle-action state* :editor/canvas-press {:x 10.0 :y 20.0})
     (is (= :panning (:mode (:drag @state*)))
-        "an item with no :nid classifies as a :canvas hit, arming panning")
-    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 10.0 :drag-y 4.0})
-    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 3.0 :drag-y 1.0})
+        "nil/empty item classifies as :canvas hit, arming panning")
+    ;; In-game: subsequent mouseDragged while still over the hit-rect are also
+    ;; routed as :editor/canvas-press (not :input/pointer) — motion must use
+    ;; absolute :x/:y deltas from the armed cur position.
+    (#'node-editor/handle-action state* :editor/canvas-press {:x 20.0 :y 24.0})
+    (#'node-editor/handle-action state* :editor/canvas-press {:x 23.0 :y 25.0})
     (is (= {:x 13.0 :y 5.0} (:viewport @state*))
-        "viewport accumulates per-frame drag deltas the same way node layout does")
+        "viewport accumulates activate-drag absolute deltas")
     (#'node-editor/handle-action state* :input/pointer {:event-type :up})
     (is (= :idle (:mode (:drag @state*))))))
 
+(deftest canvas-drag-continues-via-input-pointer-when-hit-misses-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {} :x 0.0 :y 0.0})
+    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 10.0 :drag-y 4.0})
+    (is (= {:x 10.0 :y 4.0} (:viewport @state*))
+        "once armed, miss-target :input/pointer drags still pan")))
+
 (deftest render-state-canvas-reflects-the-accumulated-viewport-test
   (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))
-        before (:x (first (:canvas (#'node-editor/render-state @state*))))]
+        before (:layout-x (first (:canvas (#'node-editor/render-state @state*))))]
     (#'node-editor/handle-action state* :editor/canvas-press {:item {}})
     (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 7.0 :drag-y 2.0})
-    (let [after (:x (first (:canvas (#'node-editor/render-state @state*))))]
+    (let [after (:layout-x (first (:canvas (#'node-editor/render-state @state*))))]
       (is (= (+ before 7.0) after)
           "panning must actually move what render-state hands the .ui.edn canvas, not just internal state"))))
 

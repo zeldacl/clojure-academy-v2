@@ -79,9 +79,14 @@
    the editor_dev_tool item, see node-editor's own docstring on why)."
   [{:keys [player-uuid]}]
   (when (and (content-key-allowed?) player-uuid)
-    (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills/thunder_bolt.edn")]
-      (node-editor/open! player-uuid path :skill)
-      (log/warn "Node editor: ac/skills/thunder_bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))))
+    (try
+      (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills/thunder_bolt.edn")]
+        (do
+          (log/debug "Opening node editor" {:path path :uuid player-uuid})
+          (node-editor/open! player-uuid path :skill))
+        (log/warn "Node editor: could not resolve ac/skills/thunder_bolt.edn (missing from classpath and source tree)"))
+      (catch Throwable e
+        (log/stacktrace "Node editor failed to open" e)))))
 
 (defn- on-open-spell-composer
   "Handle the spell composer dev-tool key (K, upstream: none). Unlike

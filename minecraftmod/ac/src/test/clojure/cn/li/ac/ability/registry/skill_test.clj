@@ -49,7 +49,14 @@
   (is (false? (skill-query/can-control? :y)))
   (sk/register-skill! (assoc (minimal-skill :z :c :z2) :icon "path/to/icon.png"))
   ;; bare paths are resolved against the mod namespace
-  (is (= "academy:path/to/icon.png" (skill-query/get-skill-icon-path :z))))
+  (is (= "academy:path/to/icon.png" (skill-query/get-skill-icon-path :z)))
+  ;; EDN without :icon still resolves via category/skills/<stem>.png convention
+  (sk/register-skill! (dissoc (minimal-skill :railgun :electromaster :railgun) :icon))
+  (is (= "academy:textures/abilities/electromaster/skills/railgun.png"
+         (skill-query/get-skill-icon-path :railgun)))
+  (sk/register-skill! (dissoc (minimal-skill :shift-teleport :teleporter :shift-teleport) :icon))
+  (is (= "academy:textures/abilities/teleporter/skills/shift_tp.png"
+         (skill-query/get-skill-icon-path :shift-teleport))))
 
 (deftest learning-cost-and-developer-type-test
   (is (= 5.0 (progression/learning-cost 2))) ;; 3 + 2²×0.5
