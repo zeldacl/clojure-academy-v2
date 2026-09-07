@@ -315,8 +315,15 @@
   (let [catalog (:catalog (final-runtime-v2))
         sources (:sources catalog)
         registration (get (:by-id catalog) ability-id)
-        source-id (or (:source-id registration) ability-id)]
-    (get sources source-id)))
+        source-id (or (:source-id registration) ability-id)
+        source (get sources source-id)]
+    ;; V3 keeps activation extensible for editor metadata (`{:mode ...}`),
+    ;; while the dispatch ABI consumes the scalar mode. Normalize it once at
+    ;; the catalog boundary so toggle/session orchestration and all future
+    ;; callers observe the same runtime shape.
+    (if (map? (:activation source))
+      (assoc source :activation (get-in source [:activation :mode]))
+      source)))
 
 (defn initialize-final-runtime-v2!
   "Install the new engine's own production runtime -- the only combat
@@ -1622,7 +1629,6 @@
    already-cached snapshot left behind by an earlier, unrelated test."
   []
   (reset! final-runtime-v2* nil))
-
 
 
 

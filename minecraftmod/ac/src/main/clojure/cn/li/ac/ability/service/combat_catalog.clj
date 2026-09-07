@@ -27,6 +27,12 @@
                  [id (merge source
                             metadata
                             {:id id
+                             ;; Existing runtime reducers consume the old
+                             ;; scalar activation mode; V3 stores it as an
+                             ;; explicit map for editor extensibility.
+                             :activation (or (get-in document [:activation :mode])
+                                             (:activation metadata)
+                                             (:activation source))
                              :bindings (or bindings {})
                              :presentation presentation
                              :program (:ir entry)})])))

@@ -168,17 +168,25 @@
                                     :default (get spec :default nil)}]))
                          (:tunables program))
         entries (:entries program)]
-    {:schema :ac/skill-v3
-     :id (:id old)
-     :skill {:category (or (:category old) :migrated) :level 1}
-     :activation {:mode (or (:activation program) :instant)}
-     :parameters parameters
-     :state (or (:state program) {})
-     :entries (into {}
-                    (map (fn [[entry body]]
-                           [entry {:on (entry-trigger entry)
-                                   :do (statements body [:entry entry])}]))
-                    entries)}))
+    (merge
+     {:schema :ac/skill-v3
+      :id (:id old)
+      :skill {:category (or (:category old) :migrated) :level 1}
+      :activation {:mode (or (:activation program) :instant)}
+      :parameters parameters
+      :state (or (:state program) {})
+      :entries (into {}
+                     (map (fn [[entry body]]
+                            [entry {:on (entry-trigger entry)
+                                    :do (statements body [:entry entry])}]))
+                     entries)}
+     ;; Gameplay metadata is already declarative and remains part of the
+     ;; public V3 document. Keeping these fields at the document boundary
+     ;; preserves tunables/costs/progression/name keys for runtime and UI;
+     ;; only the executable :program string is removed.
+     (select-keys old [:name-key :description-key :tunables :costs
+                       :invariants :progression :requires :damage-policies
+                       :cooldown :mark-policies :passive-effects :translations]))))
 
 (defn migrate-registration
   "Expand one old manifest registration into its own public V3 document.
