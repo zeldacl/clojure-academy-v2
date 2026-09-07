@@ -202,66 +202,72 @@
                    1))))
 
 (defn- remember-tombstone! [rt instance-key event-seq state-seq]
-  (swap! (:tombstones rt) assoc instance-key
-        {:event-seq (long event-seq) :state-seq (long state-seq)})
+  (swap! (:tombstones rt) update instance-key
+         (fn [previous]
+           {:event-seq (max (long (or (:event-seq previous) -1)) (long event-seq))
+            :state-seq (max (long (or (:state-seq previous) -1)) (long state-seq))}))
   nil)
 
 (defn dispatch-signal!
-  "Apply a network signal with explicit lifecycle and sequence semantics
-   -- see cn.li.vfx.final-client/dispatch-signal!'s own docstring, this
-   reproduces the same :snapshot/:spawn/:update/:trigger/:release/
-   :destroy contract (independent event-seq/state-seq checks, a tombstone
-   so a delayed :spawn/:snapshot can never resurrect an authoritatively
-   destroyed instance) against instance-key directly rather than a
-   synthetic id."
+  "Apply a network signal with explicit lifecycle and sequence semantics.
+   Destroy records a tombstone even when the instance is not currently live;
+   a later spawn/snapshot must carry a strictly newer event sequence to
+   recreate that identity. This prevents delayed packets from resurrecting
+   an authoritatively destroyed effect."
   [rt {:keys [op owner instance-key seed params] :as signal}]
   (let [event-seq (long (or (:event-seq signal) 0))
         state-seq (long (or (:state-seq signal) event-seq))]
     (if (= :clear-owner op)
       (clear-owner! rt owner)
       (let [tomb (tombstone-seq rt instance-key)
-            existing (lookup rt instance-key)
-            create? (and (contains? #{:spawn :snapshot} op)
-                        (or (nil? existing) (> event-seq (long (:event-seq tomb)))))
-            instance (or existing
-                        (when create?
-                          (ensure! rt instance-key (assoc signal :seed (or seed 0) :user params))))]
-        (when instance
-          (let [event-new? (> event-seq (long (or (:event-seq instance) -1)))
-                state-new? (> state-seq (long (or (:state-seq instance) -1)))]
-            (case op
-              :release
-              (when (or event-new? state-new?) (destroy! rt instance-key))
+            existing (lookup rt instance-key)]
+        (if (= :destroy op)
+          (let [event-new? (> event-seq (long (:event-seq tomb)))
+                state-new? (> state-seq (long (:state-seq tomb)))]
+            (when (or event-new? state-new?)
+              (remember-tombstone! rt instance-key event-seq state-seq)
+              (when existing
+                (let [instance-event (long (or (:event-seq existing) -1))
+                      instance-state (long (or (:state-seq existing) -1))]
+                  (when (or (> event-seq instance-event)
+                            (> state-seq instance-state))
+                    (destroy! rt instance-key))))))
+          (let [create? (and (contains? #{:spawn :snapshot} op)
+                             (nil? existing)
+                             (> event-seq (long (:event-seq tomb))))
+                instance (or existing
+                             (when create?
+                               (ensure! rt instance-key
+                                        (assoc signal :seed (or seed 0) :user params))))]
+            (when instance
+              (let [event-new? (> event-seq (long (or (:event-seq instance) -1)))
+                    state-new? (> state-seq (long (or (:state-seq instance) -1)))]
+                (case op
+                  :release
+                  (when (or event-new? state-new?) (destroy! rt instance-key))
 
-              :destroy
-              (when (or event-new? state-new?)
-                (remember-tombstone! rt instance-key event-seq state-seq)
-                (destroy! rt instance-key))
+                  :update
+                  (when state-new?
+                    (swap! (:instances rt) update instance-key
+                           (fn [cur] (assoc cur :state-seq state-seq
+                                            :user (merge (:user cur) (or params {})))))
+                    (when event-new?
+                      (swap! (:instances rt) update instance-key assoc :event-seq event-seq)))
 
-              :update
-              (when state-new?
-                (swap! (:instances rt) update instance-key
-                      (fn [cur] (assoc cur :state-seq state-seq
-                                       :user (merge (:user cur) (or params {})))))
-                (when event-new?
-                  (swap! (:instances rt) update instance-key assoc :event-seq event-seq)))
+                  (:spawn :snapshot)
+                  (when (or event-new? state-new? (= :snapshot op))
+                    (swap! (:instances rt) update instance-key
+                           (fn [cur]
+                             (cond-> (assoc cur :event-seq (max event-seq (long (or (:event-seq cur) -1)))
+                                                :state-seq (max state-seq (long (or (:state-seq cur) -1))))
+                               (contains? #{:spawn :snapshot} op) (update :user merge (or params {}))))))
 
-              (:spawn :snapshot)
-              (when (or event-new? state-new? (= :snapshot op))
-                (swap! (:instances rt) update instance-key
-                      (fn [cur]
-                        (cond-> (assoc cur :event-seq (max event-seq (long (or (:event-seq cur) -1)))
-                                           :state-seq (max state-seq (long (or (:state-seq cur) -1))))
-                          (contains? #{:spawn :snapshot} op) (update :user merge (or params {}))))))
+                  :trigger
+                  (when event-new?
+                    (swap! (:instances rt) update instance-key assoc :event-seq event-seq))
 
-              :trigger
-              (when event-new?
-                (swap! (:instances rt) update instance-key assoc :event-seq event-seq))
-
-              nil)))))
-    nil))
-
-(defn client-tick!
+                  nil)))))))
+    nil))`r`n`r`n(defn client-tick!
   "tick! above (particle buffers + per-instance :age), then destroy any
    :transient instance whose :age has reached its effective lifetime:
    explicit :duration-ticks, then :life-ticks, then one tick for a true
