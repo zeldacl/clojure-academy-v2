@@ -21,12 +21,12 @@
      own scope note); per-expression sub-node wiring is a follow-up.
    - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
      cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
-     see pan-canvas-items) are wired. Pin-to-pin connect is supported for
-     the rendered execution pins; palette insertion and expression-node
-     editing remain a follow-up because they need a richer inspector than
-     this compact first pass. No ZOOM: unlike pan, nothing in
-     presentation-core exposes a scroll-wheel or pinch input primitive to
-     drive it yet.
+      see pan-canvas-items) are wired. Pin-to-pin connection is intentionally
+      hidden until expression nodes are rendered; palette insertion and
+      expression-node editing remain a follow-up because they need a richer
+      inspector than this compact first pass. No ZOOM: unlike pan, nothing
+      in presentation-core exposes a scroll-wheel or pinch input primitive
+      to drive it yet.
    - open! takes an EXPLICIT absolute file path from the caller, not a
      guessed game-directory/source-tree location: resolving 'where does
      the mod's source tree live relative to the running game' is itself
