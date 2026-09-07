@@ -15,6 +15,12 @@
   (or (= result :capture-pointer)
       (= (str result) ":capture-pointer")))
 
+(defn- modifier-flags [modifiers]
+  (let [bits (int (or modifiers 0))]
+    {:shift? (pos? (bit-and bits 1))
+     :control? (pos? (bit-and bits 2))
+     :alt? (pos? (bit-and bits 4))}))
+
 (defn- as-java-boolean [v]
   ;; DelegatingScreen requires java.lang.Boolean; a bare keyword would become false.
   (Boolean/valueOf (boolean v)))
@@ -31,14 +37,16 @@
                         (presentation/submit-current-frame!
                           :screen (float partial-tick) (.-width ^DelegatingScreen s)
                           (.-height ^DelegatingScreen s) (merge {:graphics graphics} (preview/backend-context))))
-                      (fn [s key _scan-code _modifiers]
-                        (if (= 256 (int key))
-                          (do (.onClose ^DelegatingScreen s) true)
-                          (do (presentation/dispatch-input!
-                                mount {:type :key :key-code (int key) :pressed? true
-                                       :shift? false :control? false :alt? false})
-                              false)))
-                      (fn [_ character _modifiers]
+                      (fn [s key scan-code modifiers]
+                        (let [result (presentation/dispatch-input!
+                                       mount (merge {:type :key :key-code (int key) :pressed? true
+                                                     :scan-code (int scan-code)}
+                                                    (modifier-flags modifiers)))]
+                          (if (= 256 (int key))
+                            (if (consumed? result)
+                              true
+                              (do (.onClose ^DelegatingScreen s) true))
+                            (as-java-boolean (consumed? result)))))(fn [_ character _modifiers]
                         (presentation/dispatch-input!
                           mount {:type :character :text (str character) :composing? false})
                         false)
