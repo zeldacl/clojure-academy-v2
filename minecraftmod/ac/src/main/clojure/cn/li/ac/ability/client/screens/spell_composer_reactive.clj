@@ -3,8 +3,8 @@
    (node-editor plan Phase 5). Follows preset-editor-reactive's
    self-contained active-mounts pattern, same as the node editor screen.
 
-   State is shaped to make an INVALID glyph sequence unrepresentable
-   rather than caught after the fact: the combat player-spell desugar
+   State is shaped so ordinary UI actions cannot create an INVALID glyph sequence
+   while the combat layer still validates every packet at the server boundary: the combat player-spell desugar
    step requires the first glyph to be a :form/* and throws otherwise
    (an ex-info that would propagate uncaught through the compile-and-
    admit/dispatch path if it ever reached the server that way -- not
@@ -60,8 +60,8 @@
 (def ^:private reject-labels
   {:over-complexity "Spell is too complex for your current mastery."
    :forbidden-effect "Spell uses an effect players are not allowed to cast."
-   :over-budget "Spell exceeds the host-command/iteration budget."})
-
+    :over-budget "Spell exceeds the host-command/iteration budget."
+    :invalid-glyph "Spell contains invalid glyph data."})
 (defn- owner-for [player-uuid]
   (read-model/local-client-owner player-uuid "spell-composer"))
 
