@@ -314,3 +314,106 @@
                                   (mapcat #(walk % (inc depth)) (:else-order node)))
                       []))))]
     (vec (mapcat #(walk % 0) order))))
+
+;; --- structural graph editing --------------------------------------------
+
+(defn new-node
+  "Create a minimal node record suitable for the editor palette."
+  [nid kind spec]
+  (merge {:nid nid :kind kind} spec))
+
+(defn add-node
+  "Append a node to the graph's top-level execution order. Existing ids are
+   rejected so a stale palette click cannot overwrite user data."
+  [{:keys [nodes order] :as graph} node]
+  (let [nid (:nid node)]
+    (when (or (nil? nid) (contains? nodes nid))
+      (throw (ex-info "node id already exists or is missing" {:code :duplicate-node :nid nid})))
+    (assoc graph :nodes (assoc nodes nid node) :order (conj (vec order) nid))))
+
+(defn- remove-id [xs nid]
+  (vec (remove #(= nid %) xs)))
+
+(defn- remove-ref [node nid]
+  (cond-> node
+    (and (contains? node :rhs) (= nid (:rhs node))) (dissoc :rhs)
+    (and (contains? node :cond) (= nid (:cond node))) (dissoc :cond)
+    (and (contains? node :coll) (= nid (:coll node))) (dissoc :coll)
+    (and (contains? node :value) (= nid (:value node))) (dissoc :value)
+    (and (contains? node :src) (= nid (:src node))) (dissoc :src)
+    (map? (:args node)) (update :args #(into {} (remove (fn [[_ v]] (= nid v)) %)))
+    (vector? (:args node)) (update :args (fn [args] (vec (remove (fn [value] (= nid value)) args))))
+    (vector? (:body-order node)) (update :body-order remove-id nid)
+    (vector? (:then-order node)) (update :then-order remove-id nid)
+    (vector? (:else-order node)) (update :else-order remove-id nid)))
+
+(defn remove-node
+  "Remove a node and all references to it. This deliberately leaves the
+   graph structurally editable; check/diagnostics decides whether the
+   resulting form is executable."
+  [{:keys [nodes order] :as graph} nid]
+  (when-not (contains? nodes nid)
+    (throw (ex-info "cannot remove unknown node" {:code :unknown-node :nid nid})))
+  (assoc graph
+         :nodes (into {} (keep (fn [[id node]]
+                                 (when (not= id nid) [id (remove-ref node nid)]))
+                               nodes))
+         :order (remove-id order nid)))
+
+(defn- assoc-input-pin [node key from-nid]
+  (cond
+    (and (map? (:args node)) (contains? (:args node) key))
+    (assoc-in node [:args key] from-nid)
+    (and (vector? (:args node)) (integer? key) (< -1 key) (< key (count (:args node))))
+    (assoc-in node [:args key] from-nid)
+    (contains? node key) (assoc node key from-nid)
+    :else nil))
+
+(defn connect-wire
+  "Connect an output pin to an input pin. Pin keys are semantic keys from
+   the node record (:rhs/:cond/:args key, etc.). Returns a new graph or
+   throws a descriptive error for an impossible connection."
+  [{:keys [nodes] :as graph} {:keys [from-nid from-pin to-nid to-pin to-key]}]
+  (let [from (get nodes from-nid)
+        to (get nodes to-nid)]
+    (when-not (and from to (= :out from-pin) (= :in to-pin))
+      (throw (ex-info "wire endpoints are invalid"
+                      {:code :invalid-wire :from-nid from-nid :to-nid to-nid})))
+    (let [updated (assoc-input-pin to to-key from-nid)]
+      (when-not updated
+        (throw (ex-info "target input pin does not exist"
+                        {:code :unknown-input-pin :nid to-nid :key to-key})))
+      (assoc-in graph [:nodes to-nid] updated))))
+
+(defn disconnect-wire
+  "Clear an input pin when it points at the given source."
+  [{:keys [nodes] :as graph} {:keys [from-nid to-nid to-key]}]
+  (if-let [to (get nodes to-nid)]
+    (let [value (or (get to to-key) (get-in to [:args to-key]))]
+      (if (= value from-nid)
+        (assoc-in graph [:nodes to-nid]
+                  (if (and (map? (:args to)) (contains? (:args to) to-key))
+                    (update to :args dissoc to-key)
+                    (dissoc to to-key)))
+        graph))
+    graph))
+
+(defn validate-graph
+  "Return a vector of structural errors. No compiler dependency: callers can
+   use it while a wire is being dragged, before a form can be rebuilt."
+  [{:keys [nodes order]}]
+  (let [ids (set (keys nodes))
+        refs (fn [node]
+               (keep identity
+                     (concat (when (map? (:args node)) (vals (:args node)))
+                             (when (vector? (:args node)) (:args node))
+                             (for [k [:rhs :cond :coll :src] :when (contains? node k)] (get node k))
+                             (when (#{:state! :set!} (:stmt node)) [(:value node)])
+                             (:body-order node) (:then-order node) (:else-order node))))]
+    (vec (concat
+          (when (not= (count order) (count (distinct order)))
+            [{:code :duplicate-order-entry}])
+          (for [nid order :when (not (contains? ids nid))]
+            {:code :order-refers-to-missing-node :nid nid})
+          (for [[nid node] nodes ref (refs node) :when (not (contains? ids ref))]
+            {:code :dangling-reference :nid nid :ref ref})))))

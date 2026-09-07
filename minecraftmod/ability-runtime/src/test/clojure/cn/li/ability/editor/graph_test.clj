@@ -148,3 +148,33 @@
         g (graph/form->graph (:do doc))
         back (graph/graph->form g)]
     (is (= "n7" (:nid (meta (first back)))))))
+
+(deftest graph-structural-editing-add-connect-remove-test
+  (let [g (graph/form->graph
+           (:do (surface/read-doc
+                 "{:ability :t :do [(let x 1) (finish {:outcome :performed})]}")))
+        new (graph/add-node g {:nid "n-extra" :kind :exec :stmt :let :bind 'y :rhs nil})
+        source (first (:order new))
+        target "n-extra"
+        connected (graph/connect-wire new {:from-nid source :from-pin :out
+                                           :to-nid target :to-pin :in :to-key :rhs})
+        removed (graph/remove-node connected source)]
+    (is (contains? (:nodes new) "n-extra"))
+    (is (= source (get-in connected [:nodes target :rhs])))
+    (is (not (contains? (:nodes removed) source)))
+    (is (empty? (graph/validate-graph removed)))))
+
+(deftest graph-diagnostics-find-dangling-wire-test
+  (let [errors (graph/validate-graph
+                {:nodes {"n1" {:nid "n1" :kind :exec :stmt :let :rhs "missing"}}
+                 :order ["n1"]})]
+    (is (= :dangling-reference (:code (first errors))))))
+
+(deftest graph-connect-rejects-unknown-input-pin-test
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"target input pin"
+       (graph/connect-wire
+        {:nodes {"a" {:nid "a" :kind :data :expr :literal :value 1}
+                 "b" {:nid "b" :kind :exec :stmt :finish :fields {}}}
+         :order ["b"]}
+        {:from-nid "a" :from-pin :out :to-nid "b" :to-pin :in :to-key :missing}))))

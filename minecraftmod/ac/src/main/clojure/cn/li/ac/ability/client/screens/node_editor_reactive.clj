@@ -284,17 +284,12 @@
 ;; --- input handling ------------------------------------------------------
 
 (defn- item->hit
-  "A composite item -> a hit.clj classification. Both a node's body quad
-   AND its label text are hit-testable (both are entries in the SAME
-   repeater, and :on {:activate ...} applies uniformly to every repeated
-   child -- see cn.li.ability.editor.render/graph->composite-items),
-   so any item carrying :nid (regardless of :role -- :node-body or
-   :node-label) is a node hit; the connecting-wire quads carry no :nid
-   and are not meant to be clickable, falling through to :canvas."
+  "Resolve a composite item into the pure canvas interaction classification."
   [item]
-  (if-let [nid (:nid item)]
-    {:target :node :nid nid}
-    {:target :canvas}))
+  (cond
+    (= :pin (:role item)) (select-keys item [:target :nid :pin :key])
+    (:nid item) {:target :node :nid (:nid item)}
+    :else {:target :canvas}))
 
 (defn- nudge-node-layout!
   "state*, nid, dx, dy -> accumulates (dx, dy) into nid's current layout
@@ -312,6 +307,26 @@
                  base (merge (render/exec-default-layout flat) layout)
                  cur (get base nid {:x 0.0 :y 0.0})]
              (assoc layout nid {:x (+ (:x cur) (double dx)) :y (+ (:y cur) (double dy))})))))
+
+(defn- install-graph!
+  "Replace the active phase with graph->form output, preserving the V3
+   document envelope and history. Invalid temporary wires stay in-memory
+   only and are surfaced as status instead of corrupting source."
+  [state* edited-graph]
+  (try
+    (let [snapshot @state*
+          doc-form (get-in snapshot [:document :form])
+          stmts (graph/graph->form edited-graph)
+          new-form (if (contains? doc-form :phases)
+                     (assoc-in doc-form [:phases (:phase snapshot)] stmts)
+                     (assoc doc-form :do stmts))]
+      (swap! state*
+             (fn [s]
+               (recompute (assoc s
+                                 :document (document/edit (:document s) new-form)
+                                 :status "Graph updated.")))))
+    (catch Throwable error
+      (swap! state* assoc :status (str "Cannot apply wire: " (.getMessage error))))))
 
 (defn- handle-action [state* action payload]
   (case action
@@ -341,8 +356,18 @@
                 :panning (swap! state* update :viewport
                                 (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
                 nil)
-        :up (swap! state* assoc :drag hit/idle)
-        nil)
+        :up
+        (let [{:keys [hit-item]} payload
+              {:keys [state action]} (hit/on-up (:drag @state*)
+                                                (item->hit hit-item)
+                                                (double (or (:x payload) 0.0))
+                                                (double (or (:y payload) 0.0)))]
+          (when (= :connect-wire (:kind action))
+            (try
+              (install-graph! state* (graph/connect-wire (:graph @state*) action))
+              (catch Throwable error
+                (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
+          (swap! state* assoc :drag state))        nil)
       nil)
 
     :editor/select-phase

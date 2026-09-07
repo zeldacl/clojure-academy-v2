@@ -100,10 +100,20 @@
   (let [{:keys [stmt]} (get nodes nid)
         x (:x pos) y (:y pos)
         text (graph/stmt-text nodes nid)
-        text (if (> (count text) 64) (str (subs text 0 61) "...") text)]
-    [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
-      :rgba (box-color stmt)}
-     {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0) :text text :rgba 0xFFFFFFFF}]))
+        text (if (> (count text) 64) (str (subs text 0 61) "...") text)
+        input-key (case stmt
+                    :let :rhs :when :cond :each :coll :state! :value :set! :value
+                    :event! nil :vfx! nil nil)]
+    (vec (concat
+          [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
+            :rgba (box-color stmt)}
+           {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
+            :text text :rgba 0xFFFFFFFF}]
+          (when input-key
+            [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key input-key
+              :x (- x 5.0) :y (+ y 5.0) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}])
+          [{:kind :quad :role :pin :target :pin :nid nid :pin :out :key :result
+            :x (+ x node-box-width) :y (+ y 5.0) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))))
 
 (defn graph->composite-items
   "graph (cn.li.ability.editor.graph/form->graph's output), stored-layout

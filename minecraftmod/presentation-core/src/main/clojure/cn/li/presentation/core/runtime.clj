@@ -750,7 +750,7 @@
                                    (content-rect-of instance) (view-transform-of instance))
               px (float px) py (float py)
               event (assoc event :x px :y py)
-              ^HitKernel$Hit hit (when (and (>= root 0) (#{:down :drag} (:event-type event)))
+              ^HitKernel$Hit hit (when (and (>= root 0) (#{:down :drag :up} (:event-type event)))
                                    (HitKernel/topmostAt table arena resolver root px py))
               ^HitKernel$Hit hover (when (and (>= root 0) (= :move (:event-type event)))
                                      (HitKernel/topmostAt table arena resolver root px py))
@@ -763,7 +763,9 @@
                              (or (:action hover-target) (:action previous)))]
           (cond
             (= :up (:event-type event))
-            {:action :input/pointer :pointer-capture nil :payload event}
+            {:action :input/pointer :pointer-capture nil
+             :payload (cond-> event
+                       hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit)))}
 
             ;; mouseDragged is not always delivered (some hosts only get mouseMoved
             ;; while the button is held). Keep scrollbar dragging alive on :move too.
@@ -832,7 +834,7 @@
 
             ;; Prefer an explicit scrollbar under the pointer even when topmostAt
             ;; landed on a non-scrollbar sibling (thin thumb next to markdown).
-            (and (#{:down :drag} (:event-type event))
+            (and (#{:down :drag :up} (:event-type event))
                  (or (and hit (scrollbar-node? table scrollbar-maps hit-node))
                      (some? (find-scrollbar-under instance arena px py))))
             (or (scrollbar-route instance table arena hit-node hit px py (:event-type event) event)

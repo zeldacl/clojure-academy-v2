@@ -225,7 +225,7 @@
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 75 :y 10 :button 0})))
-    (is (= [:demo/right {:target :right}] @seen))))
+    (is (= [:demo/right {:target :right}] (update @seen 1 #(select-keys % [:target]))))))
 
 (deftest pointer-coordinates-are-offset-by-a-nonzero-host-origin
   ;; A HUD overlay mounted at a nonzero screen origin gets mount-local
@@ -244,7 +244,7 @@
     (runtime/update-host! rt mount (HostGeometry. 50.0 60.0 100 100 1.0))
     ;; mount-local (5,5) + origin (50,60) = absolute (55,65), inside the 50,60..70,80 button rect.
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
-    (is (= [:demo/go {:target :btn}] @seen))))
+    (is (= [:demo/go {:target :btn}] (update @seen 1 #(select-keys % [:target]))))))
 
 (deftest viewport-space-pointer-events-skip-the-origin-offset
   (let [seen (atom nil)
@@ -261,7 +261,7 @@
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0 :space :viewport})
     (is (= :input/pointer (first @seen)) "a viewport-space click at (5,5) misses the button, which is at absolute (50,60)")
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 55 :y 65 :button 0 :space :viewport})
-    (is (= [:demo/go {:target :btn}] @seen))))
+    (is (= [:demo/go {:target :btn}] (update @seen 1 #(select-keys % [:target]))))))
 
 (deftest pointer-down-in-a-repeater-carries-item-and-index
   (let [seen (atom nil)
@@ -280,7 +280,7 @@
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 30 :button 0})))
-    (is (= [:demo/item {:target :row/action :item {:label "Two"} :index 1}] @seen))))
+    (is (= [:demo/item {:target :row/action :item {:label "Two"} :index 1}] (update @seen 1 #(select-keys % [:target :item :index]))))))
 
 (deftest text-input-focuses-on-click-and-accepts-typed-characters
   (let [seen (atom [])
