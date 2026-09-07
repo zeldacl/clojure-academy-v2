@@ -2963,7 +2963,7 @@ tasks.register("verifyCoreNoSkillKnowledge") {
 
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
-    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills-v3 and ac/vfx-v3, the S6/S8 live content directories -- ac/combat/abilities and ac/vfx/effects (the old catalog's content, checked here until this session's catalog-source rewrite) are deleted."
+    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills-v3 and ac/vfx-v3, the S6/S8 live content directories -- no pre-V3 resource roots are included in the production build."
     doLast {
         def roots = [file("ac/src/main/resources/ac/skills-v3"),
                      file("ac/src/main/resources/ac/vfx-v3")]

@@ -1,5 +1,5 @@
-;; New composite (S6), not a port of a pre-existing old composite:
-;; ac/combat/abilities/flashing.edn's :events map has 8 movement events
+;; Shared V3 library definition (S6), kept as a single reusable function:
+;; The V3 flashing skill's :events map has 8 movement events
 ;; (right/back/left/forward, each with a -press and a -tick variant)
 ;; whose bodies are byte-identical except for the :direction keyword
 ;; passed to target/directional-destination and whether the resulting

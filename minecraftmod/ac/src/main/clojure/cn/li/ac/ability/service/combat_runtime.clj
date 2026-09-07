@@ -1382,7 +1382,7 @@
    :sources]), against the new catalog's :sources instead. :damage-
    policies is a non-:program top-level key, byte-identical (as data,
    modulo pretty-printing whitespace) between an ac/combat/abilities/
-   *.edn source and its ac/skills-v3/*.edn counterpart -- the same S6
+   *.edn V3 source -- the same S6
    guarantee combat-source's own docstring already relies on. Computed
    fresh per call rather than cached: a damage event is not a per-frame
    hot path, and this avoids a second piece of mutable state to keep in
