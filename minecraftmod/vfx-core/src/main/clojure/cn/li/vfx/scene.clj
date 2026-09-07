@@ -66,10 +66,27 @@
 ;; bridge renders V3 nodes to that surface data model only at compile time;
 ;; no source string is retained in a runtime instance.
 
-(defn- ref->surface-symbol [[scope key & path]]
-  (let [prefix (case scope :context "?" :parameter "$" :state "%" :local "" "?")
-        suffix (str (name key) (apply str (map #(str "/" (name %)) path)))]
-    (symbol (str prefix suffix))))
+(defn- ref-key-string [key]
+  (if (keyword? key)
+    (if-let [ns (namespace key)]
+      (str ns "/" (name key))
+      (name key))
+    (str key)))
+
+(defn- ref->surface-form [[scope key & path]]
+  (let [prefix (case scope
+                 :context "?"
+                 :parameter "$"
+                 :state "%"
+                 :local ""
+                 :input "?input/"
+                 :module-input "?module/"
+                 "?")
+        base (symbol (str prefix (ref-key-string key)))]
+    (reduce (fn [form field]
+              (list (if (keyword? field) field (keyword (str field))) form))
+            base
+            path)))
 
 (declare v3-form)
 
@@ -81,7 +98,7 @@
 (defn- v3-form [value]
   (cond
     (and (map? value) (:ref value))
-    (ref->surface-symbol (:ref value))
+    (ref->surface-form (:ref value))
 
     (and (map? value) (:component value))
     (let [component (:component value)
