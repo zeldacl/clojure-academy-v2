@@ -17,6 +17,14 @@
 
 (def ^:private nid-pattern #"[a-z0-9][a-z0-9-]{2,31}")
 
+(defn- compact-nid
+  [raw fallback]
+  (let [value (if (some? raw)
+                (hash (str raw))
+                fallback)
+        token (format "%08x" (long (bit-and (int value) 0xffffffff)))]
+    (keyword "n" (str "editor-" token))))
+
 (defn v3-document?
   "Return true when value is one of the editor-backed AC V3 documents."
   [value]
@@ -45,13 +53,13 @@
                                raw)]
                     (when (re-matches nid-pattern name)
                       (keyword "n" name)))
-    :else (keyword "n" (str "editor-" fallback))))
+    :else (compact-nid raw fallback)))
 
 (defn- form-nid
   [form counter*]
   (let [fallback (swap! counter* inc)]
     (or (normalize-nid (:nid (meta form)) fallback)
-        (keyword "n" (str "editor-" fallback)))))
+        (compact-nid (:nid (meta form)) fallback))))
 
 (defn- parse-keyword
   [s]
