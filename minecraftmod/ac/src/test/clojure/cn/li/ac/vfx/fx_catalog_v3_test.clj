@@ -37,3 +37,31 @@
           (is (= effect-id
                  (:effect-id (runtime/ensure! rt [:compile effect-id]
                                                {:effect-id effect-id :user {}})))))))))
+
+(defn- sample-value [type]
+  (case type
+    :vec3 {:x 0.0 :y 0.0 :z 0.0}
+    :float 1.0
+    :double 1.0
+    :int 1
+    :long 1
+    :string "test"
+    :resource-id "test"
+    :entity-ref nil
+    :bool false
+    :any {}
+    nil))
+
+(deftest every-v3-document-samples-with-declared-input-shapes
+  (let [{:keys [by-id]} (fx-catalog/assemble)]
+    (doseq [[effect-id entry] by-id]
+      (testing (str effect-id)
+        (let [document (:document entry)
+              user (into {} (map (fn [[key spec]] [key (sample-value (:type spec))])
+                                  (:inputs document)))
+              rt (runtime/create-store by-id)
+              instance (runtime/ensure! rt [:sample effect-id]
+                                        {:effect-id effect-id :seed 1 :user user})]
+          (is (= effect-id (:effect-id instance)))
+          (is (vector? (get-in (runtime/sample-frame! rt)
+                               [[:sample effect-id] :scene]))))))))
