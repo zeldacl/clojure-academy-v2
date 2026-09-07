@@ -242,6 +242,7 @@
                                       :schema (:schema wrapper-doc)
                                       :legacy-fields (select-keys wrapper-doc [:program :scene])})))
          :selected-nid nil
+         :param-drafts {}
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
@@ -262,6 +263,63 @@
                          (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
       {:nid selected-nid :text (str text vfx-note)})))
 
+(defn- node-op-id [node]
+  (let [op (:op node)]
+    (if (symbol? op) (keyword (namespace op) (name op)) op)))
+
+(defn- node-input-refs [node]
+  (case (:stmt node)
+    :call (:args node)
+    :event! (:fields node)
+    :vfx! (:fields node)
+    {}))
+
+(defn- selected-param-fields
+  "state -> display/edit fields for expression inputs of the selected node.
+   Literal, vector-literal and map-literal expressions are locally editable;
+   references/calls remain read-only so wiring stays the explicit operation."
+  [{:keys [graph selected-nid palette param-drafts]}]
+  (if-let [node (get-in graph [:nodes selected-nid])]
+    (let [refs (node-input-refs node)
+          specs (:params (or (some #(when (= (node-op-id node) (:id %)) %) palette) {}))]
+      (mapv (fn [[key ref]]
+              (let [data (get-in graph [:nodes ref])
+                    descriptor (get specs key)
+                    rendered (try (graph/expr-text (:nodes graph) ref)
+                                  (catch Throwable _ (pr-str (:value data))))]
+                {:nid selected-nid
+                 :param-key key
+                 :data-nid ref
+                 :type (:type descriptor)
+                 :label (str (name key) (when (:type descriptor)
+                                         (str " [" (name (:type descriptor)) "]")))
+                 :value (or (get param-drafts [selected-nid key]) rendered)
+                 :editable? (and (= :data (:kind data))
+                                 (contains? #{:literal :vec-lit :map-lit} (:expr data)))}))
+            refs))
+    []))
+
+(defn- parse-editor-value [descriptor raw]
+  (let [type (:type descriptor)
+        text (str/trim (str raw))
+        read-edn (fn [] (binding [*read-eval* false] (read-string text)))]
+    (case type
+      (:float :double)
+      (try (let [n (Double/parseDouble text)] (when (Double/isFinite n) (double n)))
+           (catch Exception _ nil))
+      (:int :long)
+      (try (Long/parseLong text) (catch Exception _ nil))
+      (:bool :boolean)
+      (case (str/lower-case text) "true" true "false" false nil)
+      :vec3
+      (try (let [v (read-edn)]
+             (when (and (vector? v) (= 3 (count v)) (every? number? v)
+                        (every? #(Double/isFinite (double %)) v))
+               (mapv double v)))
+           (catch Exception _ nil))
+      :string text
+      :keyword (when (seq text) (keyword text))
+      (try (read-edn) (catch Exception _ nil)))))
 ;; --- render-state (map -> what the .ui.edn's :state-schema binds) ------
 
 (defn- diagnostic-item [d]
@@ -305,6 +363,7 @@
      :palette (mapv palette-item palette)
      :canvas (pan-canvas-items (render/graph->composite-items graph (:layout state)) viewport)
      :selected-label (if selected (:text selected) "(nothing selected)")
+     :selected-params (selected-param-fields state)
      :diagnostics (mapv diagnostic-item diagnostics)
      :diagnostic-count (double (count diagnostics))
      :cost-label (if cost-summary
@@ -373,6 +432,40 @@
     (catch Throwable error
       (swap! state* assoc :status (str "Cannot apply wire: " (.getMessage error))))))
 
+(declare install-graph!)
+
+(defn- param-submit [state* payload]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+        key (:param-key item)
+        raw (or (:value payload) (:value item) (:text payload))
+        node (get-in @state* [:graph :nodes nid])
+        refs (node-input-refs node)
+        data-nid (get refs key)
+        data (get-in @state* [:graph :nodes data-nid])
+        entry (some #(when (= (node-op-id node) (:id %)) %) (:palette @state*))
+        descriptor (or (get-in entry [:params key])
+                       {:type (cond (number? (:value data)) :double
+                                    (boolean? (:value data)) :boolean
+                                    (string? (:value data)) :string
+                                    :else :any)})
+        parsed (parse-editor-value descriptor raw)]
+    (cond
+      (nil? node) (swap! state* assoc :status "Select a node first.")
+      (nil? key) (swap! state* assoc :status "Unknown node parameter.")
+      (not (and (= :data (:kind data))
+                (contains? #{:literal :vec-lit :map-lit} (:expr data))))
+      (swap! state* assoc :status "This input is driven by an expression; connect a literal node instead.")
+      (nil? parsed) (swap! state* assoc :status (str "Invalid " (name key) " value."))
+      :else
+      (do
+        (install-graph! state* (assoc-in (:graph @state*) [:nodes data-nid]
+                                          (-> data
+                                              (dissoc :args)
+                                              (assoc :expr :literal :value parsed))))
+        (swap! state* (fn [s] (-> s
+                                   (update :param-drafts dissoc [nid key])
+                                   (assoc :status (str "Updated " (name key) ".")))))))))
 (defn- handle-action [state* action payload]
   (case action
     ;; A composite item's :down (:target/:item/:index only -- this
@@ -442,6 +535,16 @@
           (catch Throwable error
             (swap! state* assoc :status (str "Cannot add node: " (.getMessage error)))))))
 
+    :editor/param-change
+    (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+          key (:param-key item)
+          value (or (:value payload) (:value item) (:text payload))]
+      (when (and nid key)
+        (swap! state* assoc-in [:param-drafts [nid key]] (str value))))
+
+    :editor/param-submit
+    (param-submit state* payload)
     :editor/select-phase
     (swap! state* (fn [s] (recompute (assoc s :phase (keyword (:phase payload)) :selected-nid nil))))
 

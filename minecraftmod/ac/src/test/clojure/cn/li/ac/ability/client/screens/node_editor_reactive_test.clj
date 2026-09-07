@@ -282,3 +282,21 @@
     (is (= (inc before) (count (get-in @state* [:graph :order]))))
     (is (some? (:selected-nid @state*)))
     (is (.contains ^String (:status @state*) "Added"))))
+
+
+(deftest node-inspector-edits-literal-parameter-and-rebuilds-document-test
+  (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
+        entry (some #(when (some (fn [[_ d]] (#{:double :float} (:type d))) (:params %)) %)
+                    (:palette @state*))
+        before (count (get-in @state* [:graph :order]))]
+    (#'node-editor/handle-action state* :editor/add-palette-node {:item {:id (:id entry)}})
+    (let [field (some #(when (and (:editable? %) (#{:double :float} (:type %))) %) (:selected-params (#'node-editor/render-state @state*)))
+          data-nid (:data-nid field)]
+      (is (= (inc before) (count (get-in @state* [:graph :order]))))
+      (is (true? (:editable? field)))
+      (#'node-editor/handle-action state* :editor/param-change (assoc field :value "3.5"))
+      (is (= "3.5" (get-in @state* [:param-drafts [(:nid field) (:param-key field)]])))
+      (#'node-editor/handle-action state* :editor/param-submit (assoc field :value "3.5"))
+      (is (= 3.5 (get-in @state* [:graph :nodes data-nid :value])))
+      (is (true? (get-in @state* [:document :dirty?])))
+      (is (.contains ^String (:status @state*) "Updated")))))

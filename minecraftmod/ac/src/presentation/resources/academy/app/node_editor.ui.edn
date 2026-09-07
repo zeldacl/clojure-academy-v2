@@ -1,7 +1,7 @@
 {:ui/schema 2 :view/id :academy.app/node-editor
  :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
  :state-schema {:title :string :path :string :phase-label :string :phase-tabs :vector
-                :palette :vector :canvas :vector :selected-label :string :diagnostics :vector
+                :palette :vector :canvas :vector :selected-label :string :selected-params :vector :diagnostics :vector
                 :diagnostic-count :number :cost-label :string :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
                 :reload-label :string :save-label :string :export-label :string}
  :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
@@ -26,8 +26,16 @@
             :children [{:type :composite :bind {:item [:state :item]}
                         :on {:activate :editor/canvas-press}
                         :semantics {:role :button}}]}]}
-         {:type :text :key :node-editor/selected :layout {:height 24}
+         {:type :text :key :node-editor/selected :layout {:height 20}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
+         {:type :scroll :key :node-editor/params :layout {:height 32}
+          :bind {:items [:state :selected-params]} :semantics {:role :list}
+          :children [{:type :row :layout {:height 14}
+                      :children [{:type :text :layout {:width 150} :bind {:text [:item :label]}}
+                                 {:type :text-input :layout {:width 140 :height 14}
+                                  :bind {:text [:item :value]}
+                                  :on {:change :editor/param-change :submit :editor/param-submit}
+                                  :semantics {:role :textbox :field :editor-param}}]}]}
          {:type :scroll :key :node-editor/diagnostics :layout {:height 44}
           :bind {:items [:state :diagnostics]} :semantics {:role :list}
           :children [{:type :row :layout {:height 14}

@@ -8,6 +8,9 @@
 语言层规格见 [NODE_LANGUAGE.md](../04-systems/NODE_LANGUAGE.md)（尤其是其中
 `:nid` 稳定性契约那一节）——本文档只描述编辑器本身。
 
+复核后的分阶段实施、验收门禁和依赖关系见
+[NODE_EDITOR_EXECUTION_PLAN.md](NODE_EDITOR_EXECUTION_PLAN.md)。
+
 ## 游戏内入口
 
 两个屏幕原本都没有任何触发方式（`open!` 只在自己的源文件和
@@ -103,9 +106,11 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
   有测试，但 `ac/vfx-v3/*.edn` 里零文件使用 `:emitters`——这个编辑器服务的是
   尚不存在的内容。按设计文档自己定的决策点：没有真实 `:emitters` 内容就不做，
   不是欠债。
-- **参数微调**：法术合成器已经提供基于 glyph schema 的有界数值输入（非法、越界和
-  非有限值会保留旧值并给出状态提示）；技能/场景节点检查器目前仍只能查看完整文本，
-  不能就地编辑数值，后续需要把同一 schema 映射到节点 inspector。
+- **参数微调**：法术合成器提供基于 glyph schema 的有界数值输入（非法、越界和
+  非有限值会保留旧值并给出状态提示）；技能/场景节点检查器也已把 palette schema
+  映射到选中节点的参数检查器，可编辑 `literal`、向量字面量和映射字面量，并在提交
+  前按 `double/int/bool/keyword/vec3` 做解析和有限值校验。由其他节点、sigil 或调用
+  驱动的输入保持只读，必须通过语义连线修改，避免检查器悄悄改变图的拓扑。
 - **场景效果准星定位**：场景模式已有 Preview/Stop 生命周期，使用独立的
   `client-vfx-v2` runtime、只读场景输入并在 screen tick 中推进，关闭窗口会清理
   owner；它不会污染生产 runtime。当前仍未绑定玩家准星，因为仓库没有可复用的
