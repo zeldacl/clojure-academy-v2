@@ -222,7 +222,7 @@
     (let [node (get (:nodes graph) selected-nid)
           text (graph/stmt-text (:nodes graph) selected-nid)
           vfx-note (when (and (= :skill mode) (= :vfx! (:stmt node)))
-                     (when-let [unknown (check/unknown-vfx-fields node (fx-catalog/assemble))]
+                     (when-let [unknown (check/unknown-vfx-fields node (:by-id (fx-catalog/assemble)))]
                        (when (seq unknown)
                          (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
       {:nid selected-nid :text (str text vfx-note)})))
