@@ -58,3 +58,16 @@
                                                   :age 0.0 :progress 0.0}})]
     (is (= {:x 1.0 :y 2.0 :z 3.0} (:start (first ops))))
     (is (= {:x 4.0 :y 5.0 :z 6.0} (:end (first ops))))))
+
+(deftest v3-runtime-rejects-unimplemented-system-stages-test
+  (let [document {:schema :ac/vfx-v3
+                  :id :unsupported-stage
+                  :lifecycle {:mode :session}
+                  :system {:update [{:nid :n/update-root
+                                     :flow :finish
+                                     :result {:outcome :performed}}]}}]
+    (try
+      (scene/compile-v3-document! document)
+      (is false "V3 VFX :system/:update must not be silently ignored")
+      (catch clojure.lang.ExceptionInfo error
+        (is (= [:update] (:unsupported-stages (ex-data error))))))))

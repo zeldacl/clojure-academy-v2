@@ -154,6 +154,11 @@
   [document]
   (let [validate! (requiring-resolve 'cn.li.node.document/validate-document!)
         _ (validate! document)
+        unsupported-stages (seq (keys (dissoc (or (:system document) {}) :render)))
+        _ (when unsupported-stages
+            (throw (ex-info "V3 VFX runtime only supports :system/:render"
+                            {:id (:id document)
+                             :unsupported-stages (vec unsupported-stages)})))
         input-types (into {}
                          (map (fn [[key spec]] [key (:type spec)]))
                          (:inputs document))
