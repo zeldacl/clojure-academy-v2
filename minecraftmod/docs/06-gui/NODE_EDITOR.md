@@ -36,7 +36,7 @@ Java）与 `cn.li.ac.item.editor-dev-tool` / `cn.li.ac.item.spell-composer-dev-t
 ```
 ability-runtime/src/main/clojure/cn/li/ability/editor/   纯函数、无内容知识
     palette.clj    词汇表 + 纯 op + fn 库,按 :category 分组、按 :effects 过滤
-    document.clj   打开/undo/redo/结构化 V3 保存
+    document.clj   打开/undo/redo/结构化 V3 保存契约
     graph.clj      表层 form ⇄ 节点/连线图,双向无损
     check.clj      诊断(cn.li.node.compile :collect 模式) + 静态代价读数
     render.clj     图 → 扁平 composite-item 向量(exec 链视图) + 正交连线
@@ -62,7 +62,8 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 `ac/skills-v3/*.edn` 与 `ac/vfx-v3/*.edn` 都是完整的结构化 V3 map，节点、阶段、
 参数和 `:nid` 同时属于持久化模型。编辑器通过 `document/open-v3` 解析并调用
 `node.document/validate-document!`，保存时由 `editor.v3/form->document` 重建 map，
-再以 EDN 序列化写入工作区或显式导出路径。不存在旧的 `:program`/`:scene` 字符串
+再以 EDN 序列化写入工作区或显式导出路径。工作区与源文件写入使用临时文件 + 原子替换；
+导出前比较打开时的源文件指纹，外部修改会阻止覆盖并要求 Reload。不存在旧的 `:program`/`:scene` 字符串
 读取器，也不存在字节 splice；因此不会出现“运行时读取一套、编辑器保存另一套”的
 双格式问题。
 
@@ -91,13 +92,10 @@ Blueprint 式全图渲染，需要大量视觉设计判断（方框大小、引�
 
 ## 已知不做的部分（不是遗漏）
 
-- **拖拽新增节点 / 拖线连接引脚**：需要能感知"松开时鼠标下面是什么"的几何命中
-  测试；这套 presentation runtime 的 `:down` 命中路径（走 `:activate` 自定义
-  动作）会带 `:item`/`:index`，但 `:up`（走通用 `:input/pointer` 兜底）不会
-  ——没有现成的命中信息可用，要自己写一套基于当前渲染坐标的命中测试。移动已有
-  节点是安全的（`:input/pointer` 的 `:drag` 事件带的是运行时自己算好的**每帧
-  增量** `:drag-x`/`:drag-y`，不是起点到终点的位移，累加式操作不需要知道松开
-  时鼠标下面是什么），已实现。
+- **拖拽新增节点**：当前调色板是只读词汇参考；执行链节点移动、选择、空白画布平移
+  和已渲染执行引脚的拖线连接已经实现。Presentation Runtime 的 pointer-up 现在
+  携带 `:hit-item`/`:hit-index`，控制器可用同一套几何命中完成连接；表达式子节点
+  与调色板拖拽新增仍留给后续检查器迭代。
 - **玩家法术的 glyph 物品 / 法术存储物品 NBT**：需要贴图、模型 json、合成表，
   这个环境创建不了也验证不了。法术合成器屏幕今天靠直接调用 `open!` 打开，不挂
   在任何物品上；服务端提交/校验/派发路径（`MSG-REQ-SPELL-SUBMIT` →
@@ -109,15 +107,10 @@ Blueprint 式全图渲染，需要大量视觉设计判断（方框大小、引�
 - **参数微调**：技能/场景效果模式的检查器目前只能看某个节点的完整文本，不能
   就地拖拽修改一个数值参数；法术合成器里的 glyph 全部用固定默认参数
   （`:amount 2.0`、`:range 16.0` 等），没有强度滑杆。两者都是明确的后续增量。
-- **场景效果准星实时预览**（计划 Phase 4 第 3 项：编辑时在玩家准星处播放正在
-  编辑的效果，保存时重新发布）：查过代码不是漏做——`ac/.../ability/client/`
-  整棵树里没有任何现成的客户端"取玩家视线/眼位置"辅助函数可复用，需要新写一个
-  且要同时构造并发布一个真实的 `vfx_contract/signal`（`:effect-id`/`:owner`/
-  `:event-seq` 加 spawn/update 等操作各自要求的实例身份）。跟上面已完成的布局
-  旁车、真实保存/重载不同（那些是纯 Clojure/文件 I/O，这个开发环境里就能完整
-  测试），这里是全新的、本仓库没有先例的 Minecraft 客户端 API 接触面，而且结果
-  "特效是否真的出现在准星处"这件事本身就没法在不启动游戏的情况下验证。跟拖线
-  连接、glyph 物品一样，是有理由的暂缓，不是静默缺口。
+- **场景效果准星定位**：场景模式已有 Preview/Stop 生命周期，使用独立的
+  `client-vfx-v2` runtime、只读场景输入并在 screen tick 中推进，关闭窗口会清理
+  owner；它不会污染生产 runtime。当前仍未绑定玩家准星，因为仓库没有可复用的
+  客户端相机锚点契约；待该契约建立后再增加位置发布。
 - **画布缩放**：画布平移（拖空白处移动视口）已实现——`cn.li.ability.editor.
   hit` 的 `:panning` 模式一直存在且有测试，只是之前螢幕控制器没接（发现即修）。
   缩放不同：`presentation-core` 整套运行时里没有任何滚轮/捏合输入原语可用（查过

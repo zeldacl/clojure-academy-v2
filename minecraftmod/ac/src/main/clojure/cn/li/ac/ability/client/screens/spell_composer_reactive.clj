@@ -238,7 +238,7 @@
         (:busy? snapshot) nil
         (not glyphs) (swap! state* assoc :status "Pick a form and at least one effect first.")
         :else
-        (let [analysis (combat-api/analyze-player-spell glyphs 20)]
+        (let [analysis (combat-api/analyze-player-spell glyphs combat-api/player-spell-complexity-cap)]
           (if-not (:ok analysis)
             (swap! state* assoc :status
                    (get reject-labels (:reject analysis)

@@ -108,3 +108,5 @@
   "Return parameter descriptors shared by the player composer and validator."
   []
   (player/player-glyph-specs))
+
+(def player-spell-complexity-cap player/player-spell-complexity-cap)

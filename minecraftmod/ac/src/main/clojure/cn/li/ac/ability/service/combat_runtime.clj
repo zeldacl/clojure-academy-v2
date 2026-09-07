@@ -960,16 +960,7 @@
             (combat-sessions/start! content-id (str owner) ability-id prepared))
           result)))))
 
-(def ^:private player-spell-complexity-cap
-  "S7: no player-spell-specific progression stat exists yet (unlike
-   skill-exp, which every catalog ability already has) to derive a
-   scaling cap from, so this is a fixed, conservative constant instead
-   of a formula -- enough for a real [form effect augment*] cast (a
-   handful of :pure/:query/:action instructions) but far below what
-   :costs/:cooldown/:progression-declaring catalog abilities can reach.
-   Linking this to a real player-progression stat is separate future
-   work, not part of wiring the admit mechanism itself."
-  20)
+(def player-spell-complexity-cap combat-api/player-spell-complexity-cap)
 
 (defn dispatch-player-spell!
   "owner, glyphs ([{:glyph kw :params {...}} ...], the desugar-ready

@@ -59,6 +59,9 @@
                  :i18n "glyph.academy.effect.push"}
    :augment/amplify {:kind :augment :params {}
                      :i18n "glyph.academy.augment.amplify"}})
+(def player-spell-complexity-cap
+  "Conservative shared cap used by the client composer and server admission."
+  20)
 
 (defn player-glyph-specs
   "Return the descriptor table used by both the player UI and validation."
