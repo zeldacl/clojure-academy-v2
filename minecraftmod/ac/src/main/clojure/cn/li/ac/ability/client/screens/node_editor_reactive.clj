@@ -21,15 +21,12 @@
      own scope note); per-expression sub-node wiring is a follow-up.
    - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
      cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
-     see pan-canvas-items) are wired; adding a node from the palette or
-     rewiring a pin is not in this pass -- both need UI machinery
-     (drag-from-palette, pin-to-pin connect) whose exact feel can only
-     really be tuned by using it in-game, which is explicitly what
-     happens after this lands (see the plan's Phase 3 discussion). No
-     ZOOM: unlike pan, nothing in presentation-core exposes a scroll-
-     wheel or pinch input primitive to drive it (grepped for one) --
-     there is no gesture to wire a zoom action to yet, not just an
-     unwired mode like pan was.
+     see pan-canvas-items) are wired. Pin-to-pin connect is supported for
+     the rendered execution pins; palette insertion and expression-node
+     editing remain a follow-up because they need a richer inspector than
+     this compact first pass. No ZOOM: unlike pan, nothing in
+     presentation-core exposes a scroll-wheel or pinch input primitive to
+     drive it yet.
    - open! takes an EXPLICIT absolute file path from the caller, not a
      guessed game-directory/source-tree location: resolving 'where does
      the mod's source tree live relative to the running game' is itself
@@ -40,19 +37,12 @@
      path; :editor/export is the separate, explicit action that
      overwrites the real source file at that path (document/save's own
      docstring documents this as the intended two-path design).
-   - No crosshair live-preview (plan Phase 4 item 3, 'play the effect
-     being edited at the player's crosshair, republish on save').
-     Investigated, not just skipped: it needs a NEW client-side player
-     eye-position/look-vector lookup -- grepped this whole client/ tree
-     for one and there is no existing precedent to build on -- plus
-     constructing and publishing a real cn.li.mcmod.runtime.vfx-contract
-     signal (:effect-id/:owner/:event-seq + instance identity for
-     :spawn/:update/...). Unlike the layout sidecar and save/reload work
-     above (pure Clojure/file-I/O, fully testable without the game), this
-     is new Minecraft-client-API surface with no in-repo precedent and no
-     way to visually verify the result lands on the actual crosshair in
-     this environment. Same category as drag-to-connect and glyph items
-     above: deferred with a real reason, not a silent gap."
+   - Scene preview is deliberately isolated from production: the Preview
+     action starts a short-lived client-vfx-v2 runtime using the scene's
+     declared inputs, ticks it from the screen refresh hook, and tears it
+     down on stop/close. It is not crosshair placement yet; the preview is
+     a lifecycle/safety slice until a client camera anchor contract exists.
+      Skill mode never exposes this action."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cn.li.ac.gui.presentation :as presentation]
@@ -65,8 +55,10 @@
             [cn.li.ability.editor.hit :as hit]
             [cn.li.ability.editor.palette :as palette]
             [cn.li.combat.api :as combat-api]
+            [cn.li.ability.client-vfx-v2 :as vfx-client]
             [cn.li.node.ops :as ops]
-            [cn.li.vfx.api :as vfx-api]))
+            [cn.li.vfx.api :as vfx-api])
+  (:import [java.nio.file Files StandardCopyOption]))
 
 (defonce ^:private active-mounts (atom {}))
 
@@ -152,6 +144,45 @@
   (let [f (io/file path)]
     (io/file (.getParentFile f) "editor-workspace" (.getName f))))
 
+
+(defn- file-signature [path]
+  (let [^java.io.File f (io/file path)]
+    (when (.isFile f)
+      {:length (.length f) :last-modified (.lastModified f)
+       :hash (hash (slurp f))})))
+
+(defn- atomic-write! [^java.io.File target text]
+  (.mkdirs (.getParentFile target))
+  (let [tmp (io/file (.getParentFile target) (str "." (.getName target) ".tmp-" (System/nanoTime)))]
+    (try
+      (spit tmp text)
+      (try
+        (Files/move (.toPath tmp) (.toPath target)
+                    (into-array StandardCopyOption
+                                [StandardCopyOption/ATOMIC_MOVE StandardCopyOption/REPLACE_EXISTING]))
+        (catch java.nio.file.AtomicMoveNotSupportedException _
+          (Files/move (.toPath tmp) (.toPath target)
+                      (into-array StandardCopyOption [StandardCopyOption/REPLACE_EXISTING]))))
+      (finally
+        (when (.exists tmp) (.delete tmp))))))
+(defn- preview-value [type]
+  (case type
+    :float 0.0
+    :double 0.0
+    :int 1
+    :long 1
+    :bool false
+    :boolean false
+    :vec3 {:x 0.0 :y 1.0 :z 0.0}
+    :resource-id "minecraft:air"
+    :string ""
+    nil))
+
+(defn- preview-params [wrapper-doc]
+  (into {} (map (fn [[key spec]]
+                  [key (preview-value (if (map? spec) (:type spec) spec))]))
+             (or (:inputs wrapper-doc) {})))
+
 ;; --- pure state --------------------------------------------------------
 
 (defn- entries-of [form]
@@ -214,6 +245,10 @@
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
+         :preview-active? false
+         :preview-label "Preview off"
+         :source-signature (file-signature path)
+         :workspace-signature (when (.isFile ws) (file-signature ws))
          :status (if (.isFile ws) "Loaded (from workspace)" "Loaded")}
         recompute)))
 
@@ -276,6 +311,9 @@
                         " host-cmds=" (:host-commands cost-summary))
                    "(compile errors -- see diagnostics)")
      :status (or status "")
+     :preview-active? (boolean (:preview-active? state))
+     :preview-label (or (:preview-label state) "Preview off")
+     :preview-toggle-label (if (:preview-active? state) "Stop preview" "Preview")
      :dirty? (boolean (:dirty? document))
      :reload-label "Reload from disk"
      :save-label "Save to workspace"
@@ -370,6 +408,21 @@
           (swap! state* assoc :drag state))        nil)
       nil)
 
+    :editor/toggle-preview
+    (if (not= :scene (:mode @state*))
+      (swap! state* assoc :status "Preview is available for VFX scene mode only.")
+      (if (:preview-active? @state*)
+        (do (vfx-client/stop-preview!)
+            (swap! state* assoc :preview-active? false :preview-label "Preview off" :status "Preview stopped."))
+        (try
+          (let [doc (get-in @state* [:document :form])
+                effect-id (:id doc)]
+            (when-not effect-id (throw (ex-info "VFX document has no :id" {})))
+            (vfx-client/start-preview! effect-id (preview-params doc))
+            (swap! state* assoc :preview-active? true :preview-label (str "Preview: " effect-id) :status "Preview running."))
+          (catch Throwable error
+            (swap! state* assoc :status (str "Preview unavailable: " (.getMessage error)))))))
+
     :editor/select-phase
     (swap! state* (fn [s] (recompute (assoc s :phase (keyword (:phase payload)) :selected-nid nil))))
 
@@ -400,10 +453,10 @@
            (fn [s]
              (let [doc (document/save (:document s) (fn [form] (pr-str form)))
                    ^java.io.File ws (workspace-path-for (:path s))]
-               (.mkdirs (.getParentFile ws))
-               (spit ws (:file-text doc))
+                (atomic-write! ws (:file-text doc))
                (save-layout! (:path s) (:layout s))
-               (recompute (assoc s :document doc :status (str "Saved to " ws))))))
+               (recompute (assoc s :document doc :workspace-signature (file-signature ws)
+                                  :status (str "Saved to " ws))))))
 
     ;; The other half of document/save's own documented two-path design
     ;; (see that docstring): overwrites the REAL source-tree file at
@@ -418,14 +471,24 @@
     :editor/export
     (swap! state*
            (fn [s]
-             (let [doc (document/save (:document s) (fn [form] (pr-str form)))]
-               (spit (:path s) (:file-text doc))
-               (recompute (assoc s :document doc :status (str "Exported to " (:path s)))))))
-
+             (if (not= (:source-signature s) (file-signature (:path s)))
+               (assoc s :status "Source changed on disk; reload before export.")
+               (let [doc (document/save (:document s) (fn [form] (pr-str form)))]
+                 (atomic-write! (io/file (:path s)) (:file-text doc))
+                 (recompute (assoc s :document doc :source-signature (file-signature (:path s))
+                                   :status (str "Exported to " (:path s))))))))
     nil)
   (render-state @state*))
 
 ;; --- mount ---------------------------------------------------------------
+
+(defn screen-tick!
+  "Advance only the isolated scene preview; production VFX is sampled by the render seam."
+  []
+  (doseq [{:keys [state*]} (vals @active-mounts)]
+    (when (:preview-active? @state*)
+      (vfx-client/tick-preview! 0.05)))
+  nil)
 
 (defn open!
   "player-uuid, path (absolute .edn file path), mode (:skill or :scene)
@@ -434,7 +497,8 @@
   ([player-uuid path] (open! player-uuid path :skill))
   ([player-uuid path mode]
    (let [state* (atom (open-document path mode))
-         on-close #(swap! active-mounts dissoc (str player-uuid))
+         on-close #(do (when (= :scene (:mode @state*)) (vfx-client/stop-preview!))
+                      (swap! active-mounts dissoc (str player-uuid)))
          vm (presentation/mount-view!
              {:view-id :academy.app/node-editor
               :host-kind :screen

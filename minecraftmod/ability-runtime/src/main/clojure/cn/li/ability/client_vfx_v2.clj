@@ -32,6 +32,9 @@
 (defonce ^:private screen-flashes* (atom {}))
 (defonce ^:private camera-fov-targets* (atom {}))
 (defonce ^:private camera-fov-eased* (atom {}))
+(defonce ^:private preview-runtime* (atom nil))
+(defonce ^:private production-options* (atom nil))
+
 (defonce ^:private camera-pitch* (ArrayDeque. 1024))
 
 (defn create-runtime
@@ -41,9 +44,50 @@
   (core/create-runtime (catalog-compile) {:max-frames max-frames}))
 
 (defn install-production! [options]
-  (reset! runtime* (create-runtime options)))
+  (reset! production-options* options)
+  (reset! runtime* (create-runtime options))
+  (reset! preview-runtime* nil))
 
 (defn runtime [] @runtime*)
+
+(defn- preview-runtime []
+  (or @preview-runtime*
+      (when-let [production @runtime*]
+        (let [preview (core/create-runtime (:registry production)
+                                           {:max-frames 2})]
+          (if (compare-and-set! preview-runtime* nil preview)
+            preview
+            @preview-runtime*)))))
+
+(defn start-preview!
+  "Run one isolated editor preview instance. It never enters the production
+   runtime or production VFX frame pool."
+  [effect-id params]
+  (let [rt (or (preview-runtime)
+               (throw (ex-info "production VFX runtime is not installed" {})))
+        owner "editor-preview"
+        key [:editor-preview effect-id]]
+    (core/dispatch-signal! rt
+                           (contract/signal
+                            {:op :spawn :effect-id effect-id :owner owner
+                             :instance-key key :event-seq 1 :state-seq 1
+                             :params (or params {})}))
+    key))
+
+(defn tick-preview! [delta-seconds]
+  (when-let [rt @preview-runtime*]
+    (core/tick! rt (double (or delta-seconds 0.05))))
+  nil)
+
+(defn sample-preview-frame! []
+  (when-let [rt @preview-runtime*]
+    (:java-frame (core/sample-frame! rt))))
+
+(defn stop-preview! []
+  (when-let [rt @preview-runtime*]
+    (core/clear-owner! rt "editor-preview"))
+  (reset! preview-runtime* nil)
+  nil)
 
 (defn- update-presentation-sidechannels! [signal]
   (let [owner (some-> (:owner signal) str)
@@ -173,6 +217,8 @@
 
 (defn reset-for-test! []
   (reset! runtime* nil)
+  (reset! preview-runtime* nil)
+  (reset! production-options* nil)
   (reset! screen-flashes* {})
   (reset! camera-fov-targets* {})
   (reset! camera-fov-eased* {})

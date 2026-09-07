@@ -250,3 +250,14 @@
     (is (= :finish (get-in saved [:system :spawn 0 :flow])))
     (is (= :particle/update (get-in saved [:system :update 0 :component])))
     (is (= :particle/render (get-in saved [:system :render 0 :component])))))
+
+(deftest export-refuses-to-overwrite-an-externally-changed-source-test
+  (let [path (temp-copy-of v3-thunder-bolt-path)
+        state* (atom (node-editor/open-document path :skill))]
+    (spit path (str (slurp path) " "))
+    (#'node-editor/handle-action state* :editor/export nil)
+    (is (.contains ^String (:status @state*) "Source changed on disk"))
+    (is (.contains (slurp path) " "))
+    (when (.isFile (io/file (#'node-editor/workspace-path-for path)))
+      (.delete (io/file (#'node-editor/workspace-path-for path))))
+    (when (.isFile (io/file path)) (.delete (io/file path)))))

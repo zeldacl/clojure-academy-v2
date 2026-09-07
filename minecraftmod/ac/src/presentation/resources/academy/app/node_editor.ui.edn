@@ -2,7 +2,7 @@
  :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
  :state-schema {:title :string :path :string :phase-label :string :phase-tabs :vector
                 :palette :vector :canvas :vector :selected-label :string :diagnostics :vector
-                :diagnostic-count :number :cost-label :string :status :string :dirty? :boolean
+                :diagnostic-count :number :cost-label :string :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
                 :reload-label :string :save-label :string :export-label :string}
  :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
         :children
@@ -35,6 +35,12 @@
                                  {:type :text :layout {:width 300} :bind {:text [:item :message]}}]}]}
          {:type :text :key :node-editor/cost :layout {:height 16}
           :bind {:text [:state :cost-label]}}
+         {:type :row :key :node-editor/preview :layout {:height 16}
+          :children [{:type :text :layout {:width 300} :bind {:text [:state :preview-label]}}
+                     {:type :button :layout {:width 120 :height 14}
+                      :bind {:text [:state :preview-toggle-label]}
+                      :on {:activate :editor/toggle-preview}
+                      :semantics {:role :button}}]}
          {:type :row :key :node-editor/actions :layout {:height 16}
           :children [{:type :button :layout {:width 110 :height 14}
                       :bind {:text [:state :reload-label]}
