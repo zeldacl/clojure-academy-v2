@@ -15,6 +15,8 @@
 
 (def v3-schemas #{:ac/skill-v3 :ac/vfx-v3})
 
+(def ^:private nid-pattern #"[a-z0-9][a-z0-9-]{2,31}")
+
 (defn v3-document?
   "Return true when value is one of the editor-backed AC V3 documents."
   [value]
@@ -33,17 +35,23 @@
    the persisted keyword form required by the V3 validator."
   [raw fallback]
   (cond
-    (and (keyword? raw) (= "n" (namespace raw))) raw
-    (keyword? raw) (keyword "n" (name raw))
-    (string? raw) (let [raw (if (str/starts-with? raw "n/")
-                              (subs raw 2)
-                              raw)]
-                    (keyword "n" raw))
+    (and (keyword? raw) (= "n" (namespace raw))
+         (re-matches nid-pattern (name raw))) raw
+    (keyword? raw) (let [name (name raw)]
+                     (when (re-matches nid-pattern name)
+                       (keyword "n" name)))
+    (string? raw) (let [name (if (str/starts-with? raw "n/")
+                               (subs raw 2)
+                               raw)]
+                    (when (re-matches nid-pattern name)
+                      (keyword "n" name)))
     :else (keyword "n" (str "editor-" fallback))))
 
 (defn- form-nid
   [form counter*]
-  (normalize-nid (:nid (meta form)) (swap! counter* inc)))
+  (let [fallback (swap! counter* inc)]
+    (or (normalize-nid (:nid (meta form)) fallback)
+        (keyword "n" (str "editor-" fallback)))))
 
 (defn- parse-keyword
   [s]
