@@ -73,6 +73,6 @@
     (is (= 15 (count surface-manifest/application-surfaces)))
     (is (= 11 (count surface-manifest/container-surfaces)))
     (is (= 26 (count surface-manifest/active-surfaces)))
-    (is (= 17 (count (set (map :artifact surface-manifest/active-surfaces)))))
+    (is (= 19 (count (set (map :artifact surface-manifest/active-surfaces)))))
     (is (= 26 (count (filter :controller surface-manifest/active-surfaces))))))
 

@@ -115,7 +115,7 @@
       (.getAbsolutePath out))))
 
 (defn default-sample-skill-resource-path
-  "A classpath-relative content resource (e.g. \"ac/skills/thunder_bolt.
+  "A classpath-relative V3 content resource (e.g. \"ac/skills-v3/thunder-
    edn\") -> its absolute on-disk path, or nil. Public because there is
    no in-game file-picker UI yet (a real follow-up, not part of this
    screen's own scope) -- both the G keybind (cn.li.ac.input-ids) and
@@ -136,23 +136,29 @@
       (materialize-classpath-resource! resource)))
 
 (defn- mode-opts
-  "mode (:skill or :scene), wrapper-doc (the just-opened, un-normalized
-   ac/skills or ac/vfx/fx wrapper map, needed for scene mode's per-file
-   capabilities) -> {:vocab :capabilities :fns :field :category-for}."
+  "mode (:skill or :scene), document (the just-opened V3 map, needed for
+   scene mode's per-file capabilities) -> {:vocab :capabilities :fns
+   :category-for}."
   [mode wrapper-doc]
   (case mode
     :skill {:vocab combat-api/skill-vocab
             :capabilities combat-api/skill-capability-type
             :fns combat-api/skill-lib-fns
-            :category-for combat-api/skill-vocab-category-for
-            :field :program}
+            :category-for combat-api/skill-vocab-category-for}
     :scene {:vocab vfx-api/scene-vocab
-            :capabilities (vfx-api/scene-capabilities-for (get-in wrapper-doc [:inputs :spawn] {}))
+            :capabilities
+            (let [decls (or (get-in wrapper-doc [:inputs :spawn])
+                            (:inputs wrapper-doc)
+                            {})
+                  types (into {}
+                              (map (fn [[key spec]]
+                                     [key (if (map? spec) (:type spec) spec)]))
+                              decls)]
+              (vfx-api/scene-capabilities-for types))
             :fns {}
-            :category-for nil
-            :field :scene}))
+            :category-for nil}))
 
-;; --- layout sidecar (ac/skills/layout/<id>.layout.edn, VFX-同构) ---------
+;; --- layout sidecar (ac/skills-v3/layout/<id>.layout.edn, VFX-同构) ---------
 ;;
 ;; Deliberately a SIBLING file next to the opened document, derived only
 ;; from `path` (which the caller already resolved -- see this namespace's
@@ -223,8 +229,9 @@
    reverting to stale source on the next open (document/save's own
    docstring calls this out as the intended two-path design: workspace
    write by default, explicit :editor/export publishes to source).
-   wrapper-doc's own :program/:scene text (the field mode-opts selects)
-   is what document/open then parses. Also loads the layout sidecar
+   Structured V3 documents are opened as whole maps. The production editor
+   intentionally rejects legacy :program/:scene wrappers; migration is an
+   explicit offline step, never an implicit editor fallback. Also loads the layout sidecar
    (node positions from a prior session, if any) and builds the mode's
    palette once (vocab is static per mode, no need to recompute it on
    every edit)."
@@ -239,7 +246,12 @@
          :opts opts
          :palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
                                   :category-for (:category-for opts)})
-         :document (document/open raw (:field opts))
+         :document (if (document/v3-document? wrapper-doc)
+                     (document/open-v3 raw)
+                     (throw (ex-info "node editor requires a structured V3 document"
+                                     {:path path
+                                      :schema (:schema wrapper-doc)
+                                      :legacy-fields (select-keys wrapper-doc [:program :scene])})))
          :selected-nid nil
          :drag hit/idle
          :layout (load-layout path)
@@ -252,7 +264,7 @@
     (let [node (get (:nodes graph) selected-nid)
           text (graph/stmt-text (:nodes graph) selected-nid)
           vfx-note (when (and (= :skill mode) (= :vfx! (:stmt node)))
-                     (when-let [unknown (check/unknown-vfx-fields node (fx-catalog/assemble))]
+                     (when-let [unknown (check/unknown-vfx-fields node (:by-id (fx-catalog/assemble)))]
                        (when (seq unknown)
                          (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
       {:nid selected-nid :text (str text vfx-note)})))
@@ -529,4 +541,3 @@
      (bridge/call-adapter :presentation-open-screen!
                           (:mount vm) "Node Editor" on-close)
      vm)))
-

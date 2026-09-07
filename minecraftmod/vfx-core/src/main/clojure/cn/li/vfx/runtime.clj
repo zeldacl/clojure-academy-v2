@@ -45,8 +45,11 @@
    :spawn/rate-style module re-triggering reservation on its own schedule)
    is a natural follow-up this pass does not implement or claim to."
   [decl {:keys [user] :as _spawn}]
-  (let [scene-program (when (:scene decl)
-                        (scene/compile-program (scene/compile-doc! (:scene decl) (:user-types decl {}))))
+  (let [scene-program (cond
+                        (:document decl) (scene/compile-v3-document! (:document decl))
+                        (:scene decl) (scene/compile-program
+                                       (scene/compile-doc! (:scene decl) (:user-types decl {})))
+                        :else nil)
         emitters (mapv (fn [emitter-decl]
                          (let [compiled (pcompile/compile-emitter emitter-decl user)
                                buffer ((:new-buffer compiled))]
@@ -120,7 +123,7 @@
 (defn- progress-of
   "age/duration-ticks, clamped to [0,1] -- the exact computation cn.li.
    vfx.final-engine's own sample-node used for :progress (its context's
-   :progress key), reproduced here since every real ac/vfx/fx/*.edn
+   :progress key), reproduced here since every real ac/vfx-v3/*.edn
    effect reads ?progress as a universal capability (cn.li.vfx.scene's
    own universal-capabilities). duration comes from the instance's own
    :user (a real spawn-declared field, e.g. arc_ring_session.edn's own
@@ -169,10 +172,10 @@
 
 (defn create-client-runtime
   "registry: same shape create-store takes, plus each entry may declare
-   :lifecycle (:transient effects with a :user :duration-ticks auto-
-   destroy once :age reaches it -- see client-tick! below; a :transient
-   effect with no :duration-ticks in its own :user never auto-expires,
-   matching final-client's identical fallback behavior)."
+   :lifecycle (:transient effects auto-destroy after their declared
+   :duration-ticks, then :life-ticks/:ttl-ticks, otherwise one client tick; see
+   client-tick! below). This retires both long-lived transient visuals and
+   true one-shot effects without requiring a synthetic duration input)."
   ([registry] (create-client-runtime registry {}))
   ([registry {:keys [max-frames] :or {max-frames 8}}]
    (assoc (create-store registry)
@@ -186,82 +189,110 @@
 (defn- tombstone-seq [rt instance-key]
   (get @(:tombstones rt) instance-key {:event-seq -1 :state-seq -1}))
 
+(defn- transient-duration
+  "Returns the authoritative client lifetime for a transient instance.
+   `duration-ticks` is the explicit V3 lifecycle contract. Effects whose
+   visual payload already owns a particle/ray lifetime uses `life-ticks` or
+   `ttl-ticks` as the natural fallback. A transient with neither field is a one-shot
+   operation (audio, burst, etc.) and must still be retired after one tick;
+   retaining it forever would sample the one-shot render op every frame."
+  [instance]
+  (max 1 (long (or (get-in instance [:user :duration-ticks])
+                   (get-in instance [:user :life-ticks])
+                   (get-in instance [:user :ttl-ticks])
+                   1))))
+
 (defn- remember-tombstone! [rt instance-key event-seq state-seq]
-  (swap! (:tombstones rt) assoc instance-key
-        {:event-seq (long event-seq) :state-seq (long state-seq)})
+  (swap! (:tombstones rt) update instance-key
+         (fn [previous]
+           {:event-seq (max (long (or (:event-seq previous) -1)) (long event-seq))
+            :state-seq (max (long (or (:state-seq previous) -1)) (long state-seq))}))
   nil)
 
 (defn dispatch-signal!
-  "Apply a network signal with explicit lifecycle and sequence semantics
-   -- see cn.li.vfx.final-client/dispatch-signal!'s own docstring, this
-   reproduces the same :snapshot/:spawn/:update/:trigger/:release/
-   :destroy contract (independent event-seq/state-seq checks, a tombstone
-   so a delayed :spawn/:snapshot can never resurrect an authoritatively
-   destroyed instance) against instance-key directly rather than a
-   synthetic id."
+  "Apply a network signal with explicit lifecycle and sequence semantics.
+   Destroy records a tombstone even when the instance is not currently live;
+   a later spawn/snapshot must carry a strictly newer event sequence to
+   recreate that identity. This prevents delayed packets from resurrecting
+   an authoritatively destroyed effect."
   [rt {:keys [op owner instance-key seed params] :as signal}]
   (let [event-seq (long (or (:event-seq signal) 0))
         state-seq (long (or (:state-seq signal) event-seq))]
     (if (= :clear-owner op)
       (clear-owner! rt owner)
       (let [tomb (tombstone-seq rt instance-key)
-            existing (lookup rt instance-key)
-            create? (and (contains? #{:spawn :snapshot} op)
-                        (or (nil? existing) (> event-seq (long (:event-seq tomb)))))
-            instance (or existing
-                        (when create?
-                          (ensure! rt instance-key (assoc signal :seed (or seed 0) :user params))))]
-        (when instance
-          (let [event-new? (> event-seq (long (or (:event-seq instance) -1)))
-                state-new? (> state-seq (long (or (:state-seq instance) -1)))]
-            (case op
-              :release
-              (when (or event-new? state-new?) (destroy! rt instance-key))
+            existing (lookup rt instance-key)]
+        (if (= :destroy op)
+          (let [event-new? (> event-seq (long (:event-seq tomb)))
+                state-new? (> state-seq (long (:state-seq tomb)))]
+            (when (or event-new? state-new?)
+              (remember-tombstone! rt instance-key event-seq state-seq)
+              (when existing
+                (let [instance-event (long (or (:event-seq existing) -1))
+                      instance-state (long (or (:state-seq existing) -1))]
+                  (when (or (> event-seq instance-event)
+                            (> state-seq instance-state))
+                    (destroy! rt instance-key))))))
+          (let [create? (and (contains? #{:spawn :snapshot} op)
+                             (nil? existing)
+                             (> event-seq (long (:event-seq tomb))))
+                instance (or existing
+                             (when create?
+                               (ensure! rt instance-key
+                                        (assoc signal :seed (or seed 0) :user params))))]
+            (when instance
+              (let [event-new? (> event-seq (long (or (:event-seq instance) -1)))
+                    state-new? (> state-seq (long (or (:state-seq instance) -1)))]
+                (case op
+                  :release
+                  (when (or event-new? state-new?) (destroy! rt instance-key))
 
-              :destroy
-              (when (or event-new? state-new?)
-                (remember-tombstone! rt instance-key event-seq state-seq)
-                (destroy! rt instance-key))
+                  :update
+                  (when state-new?
+                    (swap! (:instances rt) update instance-key
+                           (fn [cur] (assoc cur :state-seq state-seq
+                                            :user (merge (:user cur) (or params {})))))
+                    (when event-new?
+                      (swap! (:instances rt) update instance-key assoc :event-seq event-seq)))
 
-              :update
-              (when state-new?
-                (swap! (:instances rt) update instance-key
-                      (fn [cur] (assoc cur :state-seq state-seq
-                                       :user (merge (:user cur) (or params {})))))
-                (when event-new?
-                  (swap! (:instances rt) update instance-key assoc :event-seq event-seq)))
+                  (:spawn :snapshot)
+                  (when (or event-new? state-new? (= :snapshot op))
+                    (swap! (:instances rt) update instance-key
+                           (fn [cur]
+                             (cond-> (assoc cur :event-seq (max event-seq (long (or (:event-seq cur) -1)))
+                                                :state-seq (max state-seq (long (or (:state-seq cur) -1))))
+                               (contains? #{:spawn :snapshot} op) (update :user merge (or params {}))))))
 
-              (:spawn :snapshot)
-              (when (or event-new? state-new? (= :snapshot op))
-                (swap! (:instances rt) update instance-key
-                      (fn [cur]
-                        (cond-> (assoc cur :event-seq (max event-seq (long (or (:event-seq cur) -1)))
-                                           :state-seq (max state-seq (long (or (:state-seq cur) -1))))
-                          (contains? #{:spawn :snapshot} op) (update :user merge (or params {}))))))
+                  :trigger
+                  (when event-new?
+                    (swap! (:instances rt) update instance-key assoc :event-seq event-seq))
 
-              :trigger
-              (when event-new?
-                (swap! (:instances rt) update instance-key assoc :event-seq event-seq))
-
-              nil)))))
+                  nil)))))))
     nil))
 
 (defn client-tick!
   "tick! above (particle buffers + per-instance :age), then destroy any
-   :transient-lifecycle instance whose :age has reached its own spawn-
-   declared :user :duration-ticks."
+   :transient instance whose :age has reached its effective lifetime:
+   explicit :duration-ticks, then :life-ticks/:ttl-ticks, then one tick for a true
+   one-shot."
   [rt ^double dt]
   (tick! rt dt)
-  (swap! (:instances rt)
-        (fn [instances]
-          (into {}
-                (remove (fn [[_ inst]]
-                         (let [decl (get (:registry rt) (:effect-id inst))
-                               duration (get-in inst [:user :duration-ticks])]
-                           (and (= :transient (:lifecycle decl))
-                                duration (>= (long (:age inst)) (long duration))))))
-                instances)))
-  nil)
+  (let [expired (atom [])]
+    (swap! (:instances rt)
+          (fn [instances]
+            (into {}
+                  (remove (fn [[instance-key inst]]
+                           (let [decl (get (:registry rt) (:effect-id inst))
+                                 expired? (and (= :transient (:lifecycle decl))
+                                               (>= (long (:age inst)) (transient-duration inst)))]
+                             (when expired? (swap! expired conj [instance-key inst]))
+                             expired?)))
+                  instances)))
+    (doseq [[instance-key inst] @expired]
+      (remember-tombstone! rt instance-key
+                           (long (or (:event-seq inst) -1))
+                           (long (or (:state-seq inst) -1))))
+  nil))
 
 (defn sample-client-frame!
   "Samples every live instance (sample-frame! above), builds a VfxFrame

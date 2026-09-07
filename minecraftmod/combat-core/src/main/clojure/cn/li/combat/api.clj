@@ -6,7 +6,7 @@
    Sized from combat-core's actual external consumers, not speculative
    coverage.
 
-   The old graph compiler/engine facade (compile-program/create-engine/
+   The retired graph compiler facade (compile-program/create-engine/
    execute!/capability-matrix, delegating to final-compiler/final-engine)
    was removed once it had zero real callers left: cn.li.ac.ability.
    final-catalog-service was the last one, and it stopped compiling

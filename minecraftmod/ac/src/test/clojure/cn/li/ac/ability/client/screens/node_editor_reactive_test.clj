@@ -6,11 +6,23 @@
    screen in-game; see the namespace's own docstring for why."
   (:require [clojure.test :refer [deftest is]]
             [clojure.java.io :as io]
-            [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]))
+            [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
+            [cn.li.ability.editor.document :as editor-document]
+            [cn.li.ability.editor.v3 :as editor-v3]))
 
-(def ^:private thunder-bolt-path "src/main/resources/ac/skills/thunder_bolt.edn")
-(def ^:private railgun-path "src/main/resources/ac/skills/railgun.edn")
-(def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx/fx/arc_ring_fade_audio.edn")
+(def ^:private thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
+(def ^:private railgun-path "src/main/resources/ac/skills-v3/railgun.edn")
+(def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
+(def ^:private legacy-thunder-bolt-path nil)
+(def ^:private multi-stage-vfx
+  {:schema :ac/vfx-v3
+   :id :editor/multi-stage
+   :lifecycle {:mode :transient}
+   :system {:spawn [{:nid :n/spawn-root :component :particle/spawn}]
+            :update [{:nid :n/update-root :component :particle/update}]
+            :render [{:nid :n/render-root :component :particle/render}]}})
+(def ^:private v3-thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
+(def ^:private v3-arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
 
 (defn- temp-copy-of
   "Copies `source-path` into a fresh temp directory under the same
@@ -39,7 +51,7 @@
 (deftest open-document-loads-a-real-scene-file-test
   (let [state (node-editor/open-document arc-ring-fade-audio-path :scene)]
     (is (= :scene (:mode state)))
-    (is (= :scene (:field (:opts state))))
+    (is (= :ac/vfx-v3 (get-in state [:document :v3-document :schema])))
     (is (seq (:order (:graph state))))
     (is (= [] (:diagnostics state))
         (str "scene file should compile cleanly against its own per-file capabilities: "
@@ -106,13 +118,13 @@
     (is (.endsWith ^String via-walk "thunder_bolt.edn"))))
 
 (deftest layout-path-is-a-sibling-layout-directory-file-test
-  (let [f (#'node-editor/layout-path-for "/a/b/ac/skills/thunder_bolt.edn")]
-    (is (= "thunder_bolt.edn.layout.edn" (.getName ^java.io.File f)))
+  (let [f (#'node-editor/layout-path-for "/a/b/ac/skills-v3/thunder-bolt.edn")]
+    (is (= "thunder-bolt.edn.layout.edn" (.getName ^java.io.File f)))
     (is (.endsWith (.getParent ^java.io.File f) "layout"))))
 
 (deftest workspace-path-is-a-sibling-editor-workspace-directory-file-test
-  (let [f (#'node-editor/workspace-path-for "/a/b/ac/skills/thunder_bolt.edn")]
-    (is (= "thunder_bolt.edn" (.getName ^java.io.File f)))
+  (let [f (#'node-editor/workspace-path-for "/a/b/ac/skills-v3/thunder-bolt.edn")]
+    (is (= "thunder-bolt.edn" (.getName ^java.io.File f)))
     (is (.endsWith (.getParent ^java.io.File f) "editor-workspace"))))
 
 (deftest save-layout-then-load-layout-round-trips-test
@@ -201,3 +213,68 @@
       (is (> (count (:phases state)) 1)
           "open-document must read the workspace sidecar, not `path` itself, when one exists")
       (is (.contains ^String (:status state) "workspace")))))
+
+(deftest open-document-loads-a-structured-v3-skill-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)]
+    (is (true? (:v3? (:document state))))
+    (is (= :ac/skill-v3 (get-in state [:document :v3-document :schema])))
+    (is (contains? (set (:phases state)) :default))
+    (is (seq (:order (:graph state))))
+    (is (= [] (:diagnostics state)))
+    (is (some? (:cost-summary state)))))
+
+(deftest open-document-rejects-legacy-string-wrapper-test
+  (let [legacy (java.io.File/createTempFile "node-editor-legacy" ".edn")]
+    (spit legacy "{:id :legacy :program \"(finish {:outcome :performed})\"}")
+    (try
+      (node-editor/open-document (.getPath legacy) :skill)
+      (is false "the production editor must accept structured V3 documents only")
+      (catch clojure.lang.ExceptionInfo error
+        (is (.contains (.getMessage error) "structured V3 document")))
+      (finally (when (.isFile legacy) (.delete legacy))))))
+
+(deftest open-document-loads-a-structured-v3-vfx-test
+  (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)]
+    (is (true? (:v3? (:document state))))
+    (is (= :ac/vfx-v3 (get-in state [:document :v3-document :schema])))
+    (is (contains? (set (:phases state)) :render))
+    (is (seq (:order (:graph state))))
+    (is (= [] (:diagnostics state)))))
+
+(deftest structured-v3-save-keeps-the-map-document-contract-test
+  (let [path (temp-copy-of v3-thunder-bolt-path)
+        state* (atom (node-editor/open-document path :skill))]
+    (#'node-editor/handle-action state* :editor/save nil)
+    (let [saved (slurp (#'node-editor/workspace-path-for path))
+          parsed (clojure.edn/read-string saved)]
+      (is (= :ac/skill-v3 (:schema parsed)))
+      (is (map? (:entries parsed)))
+      (is (nil? (:program parsed)))
+      (is (= saved (:file-text (:document @state*)))))))
+
+(deftest structured-v3-content-round-trip-remains-valid-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
+        edited (editor-document/edit (:document state) (:form (:document state)))
+        saved (editor-document/save edited pr-str)
+        parsed (clojure.edn/read-string (:file-text saved))]
+    (is (= :ac/skill-v3 (:schema parsed)))
+    (is (map? (:entries parsed)))
+    (is (every? map? (mapcat (comp :do val) (:entries parsed))))))
+
+(deftest structured-v3-vfx-content-round-trip-remains-valid-test
+  (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)
+        edited (editor-document/edit (:document state) (:form (:document state)))
+        saved (editor-document/save edited pr-str)
+        parsed (clojure.edn/read-string (:file-text saved))]
+    (is (= :ac/vfx-v3 (:schema parsed)))
+    (is (vector? (get-in parsed [:system :render])))
+    (is (every? map? (get-in parsed [:system :render])))))
+
+(deftest structured-v3-vfx-save-preserves-all-system-stages-test
+  (let [form (editor-v3/document->form multi-stage-vfx)
+        edited (assoc-in form [:phases :spawn]
+                         [(list 'finish {:outcome :performed})])
+        saved (editor-v3/form->document multi-stage-vfx edited)]
+    (is (= :finish (get-in saved [:system :spawn 0 :flow])))
+    (is (= :particle/update (get-in saved [:system :update 0 :component])))
+    (is (= :particle/render (get-in saved [:system :render 0 :component])))))

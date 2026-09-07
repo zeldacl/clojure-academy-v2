@@ -6,10 +6,10 @@
    the live production dispatch path -- wired into cn.li.combat.api
    (compile-skill-doc!/compile-skill-program/dispatch-skill!) and reached
    by every real player action via cn.li.ac.ability.service.combat-
-   runtime/dispatch-intent-v2!. The old final_engine.clj is kept alongside
-   it, unchanged, and is still exercised directly by its own dedicated
-   test suite -- see NODE_LANGUAGE.md §0 for the full picture. All 39 of
-   ac's abilities (ac/skills/*.edn) compile through this path.
+   runtime/dispatch-intent-v2!. No legacy graph engine is loaded or retained;
+   this single V3 path is exercised by the catalog/runtime test suite -- see
+   NODE_LANGUAGE.md §0 for the language boundary. All AC V3 skills
+   (ac/skills-v3/*.edn) compile through this path.
 
    capability-type is a FUNCTION, not a static map: ?budget/fire,
    ?cooldown/main, ?progression/effective etc are named per-ability by its
@@ -27,7 +27,7 @@
 (def ^:private fixed-capabilities
   "Capabilities present on every activation regardless of which ability
    declared what -- the old system's caster-capability-values/entry-frame
-   ports (see final_engine.clj's :ability/caster source node, folded here
+   ports (the V3 capability source nodes folded here
    into the ?cap sigil uniformly, and combat_runtime.clj's :capabilities
    construction for the real name list)."
   {:caster/eye :vec3 :caster/aim :vec3 :caster/body :vec3
@@ -76,7 +76,7 @@
         "budget" :any
         "cooldown" :long
         "progression" :double
-        ;; ?invariant/name (final_engine.clj's :ability/invariant source,
+        ;; ?invariant/name (the V3 :ability/invariant source,
         ;; e.g. a toggle ability's per-tick resource floor, S6) is always
         ;; a single tunable-derived number in every real ability seen so
         ;; far -- unlike ?budget/*, which genuinely needs a whole

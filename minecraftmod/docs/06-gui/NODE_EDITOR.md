@@ -1,7 +1,7 @@
 # Node Editor
 
 三个规划中的可视化编辑器（技能/VFX 图编辑器、玩家法术合成器、粒子发射器编辑器）
-里，前两个已实现；第三个按设计文档自己的决策点评估后暂不做（`ac/vfx/fx/*.edn`
+里，前两个已实现；第三个按设计文档自己的决策点评估后暂不做（`ac/vfx-v3/*.edn`
 里没有任何一个文件用 `:emitters`，见下）。设计过程记录在
 `C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
 
@@ -16,7 +16,7 @@ Brigadier 命令，而这两个屏幕的 `open!` 挂载的是客户端 Presentat
 没有现成桥（也没打算建，属于新平台面、这个环境验证不了，见上面几节同类判断的
 一贯标准）。现有入口都是纯客户端事件，照抄 `preset-editor` 绑 `N` 键的先例：
 
-- **G 键**——打开节点编辑器（技能模式，固定加载 `ac/skills/thunder_bolt.edn`
+- **G 键**——打开节点编辑器（技能模式，固定加载 `ac/skills-v3/thunder_bolt.edn`
   作为示例文件；目前没有文件选择 UI，是后续增量，不是这次遗漏）。
 - **K 键**——打开玩家法术合成器（不需要文件参数）。
 - **`editor_dev_tool` 道具**——右键效果同 G 键；图标复用 `developer_portable`
@@ -36,7 +36,7 @@ Java）与 `cn.li.ac.item.editor-dev-tool` / `cn.li.ac.item.spell-composer-dev-t
 ```
 ability-runtime/src/main/clojure/cn/li/ability/editor/   纯函数、无内容知识
     palette.clj    词汇表 + 纯 op + fn 库,按 :category 分组、按 :effects 过滤
-    document.clj   打开/undo/redo/外科式保存(splice-program)
+    document.clj   打开/undo/redo/结构化 V3 保存
     graph.clj      表层 form ⇄ 节点/连线图,双向无损
     check.clj      诊断(cn.li.node.compile :collect 模式) + 静态代价读数
     render.clj     图 → 扁平 composite-item 向量(exec 链视图) + 正交连线
@@ -57,35 +57,31 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 技能/效果 id——`verifyCoreNoSkillKnowledge` 会扫描这一点；词汇表、文档列表、效果
 `:inputs` 表全部由 `ac` 侧作为数据注入。
 
-## 保存：外科式拼接，不是重新打印
+## 保存：结构化 V3 文档
 
-`ac/skills/*.edn`/`ac/vfx/fx/*.edn` 不是裸 DSL 文档，是一个包装 map，DSL 以
-字符串形式存在 `:program`（技能）/`:scene`（VFX）字段里。编辑器的保存路径
-（`document/splice-program`）只替换这一个字段的字符串值，包装层的其余字段
-（`:tunables`/`:costs`/`:cooldown`/`:doc`……）一字节不动——定位靠对源文本做
-quote-aware 扫描，不是把整个 map 重新序列化一遍。这是保存路径**不会**把
-`;;` 风格注释悄悄丢掉的前提：所有真实作者注释已经在语言重构阶段迁移成 `:doc`
-向量字段（75 个真实内容文件全部迁移，逐字节验证过除 `:doc` 外其余字段与迁移前
-完全一致），`verifyContentEdnNoRawComments` 门禁保证新内容不会引入裸注释——一
-个裸注释一旦写在字符串以外的位置，编辑器保存时会原样保留（因为压根不碰那部分
-字节），但下次有人手写编辑那个字段整体重排就可能丢；转成 `:doc` 之后不存在这个
-风险，因为它是数据，走跟其余字段完全一样的保留路径。
+`ac/skills-v3/*.edn` 与 `ac/vfx-v3/*.edn` 都是完整的结构化 V3 map，节点、阶段、
+参数和 `:nid` 同时属于持久化模型。编辑器通过 `document/open-v3` 解析并调用
+`node.document/validate-document!`，保存时由 `editor.v3/form->document` 重建 map，
+再以 EDN 序列化写入工作区或显式导出路径。不存在旧的 `:program`/`:scene` 字符串
+读取器，也不存在字节 splice；因此不会出现“运行时读取一套、编辑器保存另一套”的
+双格式问题。
 
-`:tunables` 目前拆成两半——包装层写 `:curve`（`skill_config.clj` 用来算熟练度
-插值），`:program`/`:scene` 字符串内部写 `:type`（编译期类型检查用）。编辑器改
-一个 tunable 的类型必须两处都改，这是既有设计的 wart，不是编辑器引入的，合并
-两处是独立重构。
+作者说明放在 `:doc` 数据字段中。`verifyContentEdnNoRawComments` 会扫描两个 V3
+目录，禁止新增裸 EDN 注释；这使得编辑器保存、目录扫描和运行时加载都遵循同一份
+结构化数据契约。
+
+技能目录由 `skills-catalog-v3` 扫描，VFX 目录由 `fx-catalog-v3` 扫描；目录中的每个
+文件都必须通过 V3 schema、节点唯一性和对应 capability 编译校验。编辑器 corpus
+测试会逐个打开全部 50 个技能和 36 个 VFX 文件，确保真实内容与 UI 入口使用同一条
+读取路径。
 
 ## `graph.clj` 的范围
 
 支持 `let`/裸调用/`when`/`if`/`each`/`finish`/`state!`/`set!`/`event!`/`vfx!`
 语句，任意深度嵌套（`if`/`when`/`each` 互相嵌套没有层数限制），以及任意深度的
 纯表达式树。这个范围不是猜的——写 `graph_test.clj` 之前先 grep 了真实内容：
-`if` 最初被想当然地认为很少见、准备跳过不支持，结果发现 39 个技能文件里 31 个
-用了它，于是老老实实实现了，不是留一个"documented gap"。`ac/.../editor_corpus_
-test.clj` 拿全部 39 个技能 + 36 个场景效果（204 个 phase/scene 条目）跑
-`form → graph → form` 往返测试，这是真正证明覆盖率的测试，不是挑几个样例文件
-自证。
+`if` 最初被想当然地认为很少见、准备跳过不支持，结果发现 50 个技能文件里 31 个
+用了它，于是老老实实实现了，不是留一个"documented gap"。`ac/.../editor_corpus_test.clj` 会打开全部 50 个技能与 36 个场景效果，验证结构化 V3 schema、节点 ID 唯一性和编辑器读取路径，这是真实 corpus 校验，不是挑几个样例文件自证。
 
 `render.clj` 目前只画 exec 语句链本身（每条语句一个方框，标签是
 `graph/stmt-text`——`pr-str` 该语句的表层 form，保证画布上看到的文字永远和保存
@@ -107,7 +103,7 @@ Blueprint 式全图渲染，需要大量视觉设计判断（方框大小、引�
   在任何物品上；服务端提交/校验/派发路径（`MSG-REQ-SPELL-SUBMIT` →
   `combat-runtime/dispatch-player-spell!`）本身已经完整可用。
 - **粒子发射器编辑器**：`vfx-core/compile.clj` 的 Niagara 式模块栈机制存在且
-  有测试，但 `ac/vfx/fx/*.edn` 里零文件使用 `:emitters`——这个编辑器服务的是
+  有测试，但 `ac/vfx-v3/*.edn` 里零文件使用 `:emitters`——这个编辑器服务的是
   尚不存在的内容。按设计文档自己定的决策点：没有真实 `:emitters` 内容就不做，
   不是欠债。
 - **参数微调**：技能/场景效果模式的检查器目前只能看某个节点的完整文本，不能

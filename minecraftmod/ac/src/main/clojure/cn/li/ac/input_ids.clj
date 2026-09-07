@@ -80,11 +80,11 @@
   [{:keys [player-uuid]}]
   (when (and (content-key-allowed?) player-uuid)
     (try
-      (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills/thunder_bolt.edn")]
+      (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
         (do
           (log/debug "Opening node editor" {:path path :uuid player-uuid})
           (node-editor/open! player-uuid path :skill))
-        (log/warn "Node editor: could not resolve ac/skills/thunder_bolt.edn (missing from classpath and source tree)"))
+        (log/warn "Node editor: ac/skills-v3/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))
       (catch Throwable e
         (log/stacktrace "Node editor failed to open" e)))))
 

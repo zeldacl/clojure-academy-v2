@@ -1176,41 +1176,27 @@ tasks.register("verifyNodeCoreDependencyDirection") {
 
 tasks.register("verifyNodeLayerDiscipline") {
     group = "verification"
-    description = "Mechanical half of the node-layer rule (NODE_LANGUAGE.md section 1): a :layer :composite component must be pure EDN, never a Clojure case-branch/handler. NodeEnvironment normalization rejects implementation functions on composites; this gate covers what normalization alone cannot -- a composite document's own :id literally appearing as a dispatch target inside a domain VM, which would let a composite silently execute as if it were a primitive."
+    description = "Ensure every production authoring document uses an AC V3 schema and no non-V3 resource tree is loaded."
     dependsOn ":node-core:checkClojure"
     doLast {
+        def roots = [file("ac/src/main/resources/ac/skills-v3"), file("ac/src/main/resources/ac/vfx-v3")]
         def violations = []
-        [
-            [dir: file("ac/src/main/resources/ac/combat/composites"), vm: file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj")],
-            [dir: file("ac/src/main/resources/ac/vfx/composites"), vm: file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj")]
-        ].each { pair ->
-            if (pair.dir.directory && pair.vm.file) {
-                def vmSourceWithoutComments = pair.vm.text.replaceAll(/(?m);.*$/, "")
-                fileTree(pair.dir) { include "*.edn" }.files.each { File doc ->
+        roots.each { root ->
+            if (!root.directory) {
+                violations << "missing V3 resource root: ${root}"
+            } else {
+                fileTree(root) { include "*.edn" }.files.each { File doc ->
                     def text = doc.text
-                    if (text =~ /:layer\s+:composite/) {
-                        // Composite ids are namespaced keywords. Restrict the
-                        // scan so payload keys such as `:id :type` do not look
-                        // like node dispatch targets.
-                        (text =~ /:id\s+(:[A-Za-z0-9!?*\-]+\/[A-Za-z0-9!?*\/-]+)/).each { match ->
-                            def id = match[1].toString()
-                            // Match a complete keyword token; e.g.
-                            // :target/directional-destination must not match
-                            // the distinct primitive :target/directional-destination-query.
-                            def token = /(?<![A-Za-z0-9!?*\/-])${Pattern.quote(id)}(?![A-Za-z0-9!?*\/-])/ 
-                            if (vmSourceWithoutComments =~ token) {
-                                violations << "${doc}: :composite component ${id} appears as a literal dispatch target in ${pair.vm} -- composites must only ever be reached through expansion, never a case branch in the domain VM"
-                            }
-                        }
+                    if (!(text =~ /:schema\s+:ac\/(?:skill|vfx)-v3/)) {
+                        violations << "${doc}: missing :ac/skill-v3 or :ac/vfx-v3 schema"
                     }
                 }
             }
         }
         if (!violations.isEmpty()) throw new GradleException(violations.unique().join("\n"))
-        logger.lifecycle("[verifyNodeLayerDiscipline] ok")
+        logger.lifecycle("[verifyNodeLayerDiscipline] ok (V3 resource roots only)")
     }
 }
-
 tasks.register("verifyPresentationContainsNoVfxRuntime") {
     group = "verification"
     description = "Ensure Presentation Core is limited to UI/HUD and does not own skill VFX runtime."
@@ -1375,22 +1361,8 @@ tasks.register("verifyNodeCoreLanguageKernel") {
 
 tasks.register("verifyNodeKernelSingleSource") {
     group = "verification"
-    description = "The SplitMix64 mixing constant must be defined in exactly one place (cn.li.node.expr) -- this half of the gate still runs unconditionally and is real. The other half (whichever of combat-core/vfx-core's old tree-walking engines still exist must resolve {:ref}/{:expr} through cn.li.node.kernel/defresolver, not a hand-written case-based resolver) is now permanently inert: both combat-core/final_engine.clj and vfx-core/final_engine.clj are deleted (the combat-core one was believed load-bearing behind combat-catalog.clj at the time this gate was written; that turned out to be pure wasted compilation with zero real execution callers, and it was deleted once combat-catalog.clj's own metadata source was rewritten off the old catalog -- see cn.li.combat.api's own docstring). Kept registered (not deleted) purely as a pinning check: if either file ever comes back, resolverSources stops being empty and the kernel/defresolver check starts running again automatically, same guard pattern verifyNodeLayerDiscipline uses for the identical reason."
+    description = "The SplitMix64 mixing constant is defined in exactly one node-language kernel location."
     doLast {
-        def resolverSources = [
-            file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
-            file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj")
-        ].findAll { it.file }
-        def missingKernel = resolverSources.findAll { !it.text.contains("kernel/defresolver") }
-        if (!missingKernel.isEmpty()) {
-            throw new GradleException("expected kernel/defresolver in: ${missingKernel}")
-        }
-        def handWritten = ~/\(defn-?\s+[a-zA-Z0-9?!*_-]+\s*\[[^\]]*\]\s*\n?\s*\(let \[\[[a-zA-Z-]+ [a-zA-Z-]+ & [a-zA-Z-]+\]/
-        resolverSources.each { source ->
-            if (handWritten.matcher(source.text).find()) {
-                throw new GradleException("hand-written [scope key & path] ref resolver found outside cn.li.node.kernel: ${source}")
-            }
-        }
         def splitMix64Marker = "9E3779B97F4A7C15"
         def definitionSites = fileTree(".") {
             include "**/*.clj"
@@ -1402,10 +1374,9 @@ tasks.register("verifyNodeKernelSingleSource") {
         logger.lifecycle("[verifyNodeKernelSingleSource] ok")
     }
 }
-
 tasks.register("verifyNoDuplicateUtilities") {
     group = "verification"
-    description = "vec3-components (vec3 shape dispatch: {:vec3 [...]}/[...]/{:x :y :z}) must be defined exactly once (cn.li.node.expr) -- vfx-core/final_client.clj used to carry a second, narrower copy (no {:x :y :z} support, silently returned [0 0 0] on bad input instead of throwing)."
+    description = "vec3-components (vec3 shape dispatch: {:vec3 [...]}/[...]/{:x :y :z}) must be defined exactly once in the node-language kernel."
     doLast {
         def definitionSites = fileTree(".") {
             include "**/*.clj"
@@ -1420,31 +1391,25 @@ tasks.register("verifyNoDuplicateUtilities") {
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
-    description = "Every effect emitted by an EDN ability must be present in the EDN VFX manifest. Real EDN parsing (cn.li.ac.ability.service.edn-coverage-test), not a text regex -- see that namespace's docstring for why the old Groovy-regex version was replaced."
+    description = "Every effect emitted by an AC V3 ability must be present in the V3 VFX catalog. Coverage uses real EDN parsing."
     dependsOn ":vfx-core:checkClojure", ":ac:checkClojure"
 }
 
 tasks.register("verifyVfxSingleTickPath") {
     group = "verification"
-    description = "Exactly one VFX instance-tick implementation exists. The old engine's own final_client.clj/final_engine.clj (a second, competing tick/sample path) were deleted once the client-vfx-v2 cutover made them dead -- this gate pins that state so a future addition can't silently reintroduce a second path."
+    description = "Exactly one V3 VFX instance-tick implementation exists."
     dependsOn ":vfx-core:checkClojure"
     doLast {
-        def deletedOldEngine = [
-            file("vfx-core/src/main/clojure/cn/li/vfx/final_engine.clj"),
-            file("vfx-core/src/main/clojure/cn/li/vfx/final_client.clj")
-        ]
-        def resurrected = deletedOldEngine.findAll { it.file }
-        if (!resurrected.isEmpty()) {
-            throw new GradleException("old VFX engine file(s) back on disk, reintroducing a second tick/sample path: ${resurrected}")
+        def runtimeSources = fileTree("vfx-core/src/main/clojure") {
+            include "**/*.clj"
+        }.files
+        def definitions = runtimeSources.findAll { it.text =~ /\(defn\s+client-tick!/ }
+        if (definitions.size() != 1) {
+            throw new GradleException("expected exactly one V3 VFX client-tick! definition, found: ${definitions}")
         }
-        def runtimeSource = file("vfx-core/src/main/clojure/cn/li/vfx/runtime.clj")
-        if (!runtimeSource.file || !(runtimeSource.text =~ /\(defn\s+client-tick!/)) {
-            throw new GradleException("expected the single real VFX tick entry point (cn.li.vfx.runtime/client-tick!) not found")
-        }
-        logger.lifecycle("[verifyVfxSingleTickPath] ok (single tick path: cn.li.vfx.runtime/client-tick!)")
+        logger.lifecycle("[verifyVfxSingleTickPath] ok (${definitions[0]})")
     }
 }
-
 tasks.register("verifyCombatIntentOnlyNetwork") {
     group = "verification"
     description = "Ensure AC server combat registration exposes CombatIntent only, not Context/slot packets, and that the ability:combat/result payload never carries raw VFX signals (those are audience-routed onto ability:combat/vfx instead)."
@@ -1539,9 +1504,9 @@ tasks.register("verifyVocabularyPaletteMetadata") {
 
 tasks.register("verifyContentEdnNoRawComments") {
     group = "verification"
-    description = "ac/skills/*.edn and ac/vfx/fx/*.edn must carry their authoring notes as a :doc data field, not raw ;; EDN comments -- the node editor's save path (cn.li.ability.editor.document/splice-program) only preserves bytes OUTSIDE the :program/:scene string; a raw comment would silently vanish the first time the file is saved through the editor, where a :doc entry survives because it round-trips like any other data. Migrated in the node-editor plan's Phase 1 (all 75 files verified content-identical outside the new :doc key via a git-diff-based check, not just eyeballed); this gate keeps it that way for new content going forward. A ';' inside a :doc string's own prose (an em-dash alternative, etc.) is fine -- only a LINE that starts with ';' (after leading whitespace) is a real EDN comment, which is what this checks."
+    description = "All structured V3 content EDN must store authoring notes in :doc data and must not contain raw EDN comment lines."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills"), file("ac/src/main/resources/ac/vfx/fx")]
+        def roots = [file("ac/src/main/resources/ac/skills-v3"), file("ac/src/main/resources/ac/vfx-v3")]
         def offenders = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.each { f ->
@@ -1561,14 +1526,14 @@ tasks.register("verifyContentEdnNoRawComments") {
 
 tasks.register("verifyEditorLayoutSidecarNotLoaded") {
     group = "verification"
-    description = "The node editor's layout sidecars (ac/skills/layout/<id>.layout.edn, ac/vfx/fx/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only :program/:scene. This gate asserts no ac DISPATCH source file references a 'skills/layout' or 'vfx/fx/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
+    description = "The node editor's layout sidecars (ac/skills-v3/layout/<id>.layout.edn, ac/vfx-v3/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only the structured V3 map. This gate asserts no ac DISPATCH source file references a 'skills-v3/layout' or 'vfx-v3/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
     doLast {
         def offenders = []
         def editorScreensDir = file("ac/src/main/clojure/cn/li/ac/ability/client/screens")
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
             if (f.canonicalPath.startsWith(editorScreensDir.canonicalPath)) return
             def text = f.text.replaceAll(/;.*$/, "")
-            if (text =~ /skills\/layout|vfx\/fx\/layout/) {
+            if (text =~ /skills-v3\/layout|vfx-v3\/layout/) {
                 offenders << f.path
             }
         }
@@ -1581,12 +1546,12 @@ tasks.register("verifyEditorLayoutSidecarNotLoaded") {
 
 tasks.register("verifyContentModuleCoreIsolation") {
     group = "verification"
-    description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring, and -- added for the node editor's palette-translation datagen and its editor screens -- cn.li.node.ops/cn.li.vfx.api for the pure-op table and the VFX scene vocabulary); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here. Pruned in the node-editor plan's Phase 7 cleanup: cn.li.combat.vocabulary/cn.li.node.composite/composite-loader/scope/validate had zero real callers left anywhere in ac/src/main/clojure (grep-verified, not assumed) -- stale from an earlier migration, not load-bearing."
+    description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring, and -- added for the node editor's palette-translation datagen and its editor screens -- cn.li.node.ops/cn.li.vfx.api for the pure-op table and the VFX scene vocabulary); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here. Pruned in the node-editor plan's Phase 7 cleanup: cn.li.combat.vocabulary/cn.li.node.scope/validate had zero real callers left anywhere in ac/src/main/clojure (grep-verified, not assumed) -- editor schema infrastructure is now V3-only."
     doLast {
         def allowed = [
             "cn.li.combat.api", "cn.li.combat.damage-math",
             "cn.li.combat.platform",
-            "cn.li.node.digest",
+            "cn.li.node.api", "cn.li.node.digest",
             "cn.li.node.rng", "cn.li.node.schema-export",
             "cn.li.node.ops", "cn.li.vfx.api",
             "cn.li.presentation.core", "cn.li.presentation.core.artifact", "cn.li.presentation.core.host"
@@ -1607,7 +1572,7 @@ tasks.register("verifyContentModuleCoreIsolation") {
 
 tasks.register("verifyAbilityCompositionBoundary") {
     group = "verification"
-    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary. Used to also check that the catalog (final_catalog.clj) called ability-runtime's compose-catalog -- that whole assembly path (and its own compose-catalog/catalog-fingerprint-input consumers) is gone: combat-catalog.clj's S8 rewrite reads cn.li.ac.ability.skills-catalog directly, which never went through ability-runtime's cross-core composition (there is only one core -- combat -- in its own catalog, no VFX/Presentation bundle to compose). The presentation/Gradle-edge checks below are still real and still checked."
+    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary for V3 content."
     dependsOn ":ac:checkClojure"
     doLast {
         def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
@@ -2880,12 +2845,11 @@ tasks.register("lintClojureNative") {
     }
 }
 
-// Effect-runtime source is intentionally stricter than the legacy AC code:
+// Effect-runtime source is intentionally stricter than platform-facing code:
 // carriers are Java field bags and all executable behavior remains Clojure.
 def effectRuntimeClojureRoots = [
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/safe_edn.clj"),
     file("node-core/src/main/clojure/cn/li/node/rng.clj"),
-    file("combat-core/src/main/clojure/cn/li/combat/final_engine.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/effect_schema.clj"),
     file("vfx-core/src/main/clojure/cn/li/vfx/compiler.clj"),
     file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
@@ -2898,7 +2862,7 @@ tasks.register("verifyVfxJavaBoundary") {
         def forbidden = ~/(?m)\(\s*(deftype|defrecord|definterface|defprotocol|gen-class|proxy|reify)\b/
         def roots = [file("vfx-core/src/main/clojure"),
                      file("ac/src/main/clojure/cn/li/ac/client"),
-                     file("ac/src/main/clojure/cn/li/ac/ability/final_catalog.clj")]
+                     ]
         roots.findAll { it.exists() }.each { root ->
             def sources = root.isFile() ? [root] : fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.files
             sources.each { source ->
@@ -2999,10 +2963,10 @@ tasks.register("verifyCoreNoSkillKnowledge") {
 
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
-    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills and ac/vfx/fx, the S6/S8 live content directories -- ac/combat/abilities and ac/vfx/effects (the old catalog's content, checked here until this session's catalog-source rewrite) are deleted."
+    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills-v3 and ac/vfx-v3, the S6/S8 live content directories -- no pre-V3 resource roots are included in the production build."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills"),
-                     file("ac/src/main/resources/ac/vfx/fx")]
+        def roots = [file("ac/src/main/resources/ac/skills-v3"),
+                     file("ac/src/main/resources/ac/vfx-v3")]
         def violations = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.files.each { source ->

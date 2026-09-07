@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.service.combat-runtime-final-capabilities-v2-test
   "S8: cn.li.ac.ability.service.combat-runtime/final-capabilities-v2
    actually materializes real :costs/:cooldown/:progression/:invariants
-   declarations from real ac/skills/*.edn sources (via the old catalog's
+   declarations from real ac/skills-v3/*.edn sources (via the old catalog's
    own combat-source, byte-identical to the new files per S6 -- see this
    function's own docstring) into the plain-number ?budget/?cooldown/
    ?progression/?invariant capability values the new engine expects, not

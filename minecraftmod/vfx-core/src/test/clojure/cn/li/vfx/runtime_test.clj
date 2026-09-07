@@ -122,6 +122,16 @@
     :emitters []
     :lifecycle :transient}})
 
+(def ^:private transient-lifecycle-registry
+  {:one-shot
+   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+    :emitters []
+    :lifecycle :transient}
+   :life-timed
+   {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
+    :emitters []
+    :lifecycle :transient}})
+
 (deftest client-runtime-dispatch-signal-dedup-and-tombstone-test
   (let [rt (runtime/create-client-runtime scene-registry)]
     (testing "spawn creates, a stale spawn (lower event-seq, no tombstone win) is ignored"
@@ -132,20 +142,17 @@
       (runtime/dispatch-signal! rt {:op :destroy :effect-id :with-scene :owner "p1"
                                     :instance-key [:a] :event-seq 6})
       (is (nil? (runtime/lookup rt [:a]))))
-    (testing "a spawn arriving once the key is no longer live always (re)creates --
-              matches final-client's own create? logic EXACTLY: (or (nil? internal-id)
-              (> event-seq tombstone-seq)) short-circuits true the moment no live
-              instance is tracked, before the tombstone-seq comparison is even
-              reached. The tombstone only guards a delayed spawn against a
-              CURRENTLY-LIVE instance at the same identity (a case this port does
-              not need, since instance-key alone is authoritative here, unlike
-              final-client's separate instance-id/instance-key matching) -- ported
-              faithfully, not re-derived, since changing dedup semantics from what
-              real content already runs against is a correctness risk this session
-              cannot visually verify either way."
+    (testing "a delayed lower-sequence spawn cannot resurrect a destroyed key"
       (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
                                     :instance-key [:a] :event-seq 4 :params {:duration-ticks 4}})
-      (is (some? (runtime/lookup rt [:a]))))
+      (is (nil? (runtime/lookup rt [:a]))))
+    (testing "destroy-before-spawn also records the tombstone"
+      (runtime/dispatch-signal! rt {:op :destroy :effect-id :with-scene :owner "p1"
+                                    :instance-key [:missing] :event-seq 8})
+      (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
+                                    :instance-key [:missing] :event-seq 7
+                                    :params {:duration-ticks 4}})
+      (is (nil? (runtime/lookup rt [:missing]))))
     (testing "a spawn with a HIGHER event-seq than the tombstone succeeds"
       (runtime/dispatch-signal! rt {:op :spawn :effect-id :with-scene :owner "p1"
                                     :instance-key [:a] :event-seq 7 :params {:duration-ticks 4}})
@@ -181,6 +188,30 @@
     (is (some? (runtime/lookup rt [:d])) "age 1 < duration 2, still alive")
     (runtime/client-tick! rt 0.05)
     (is (nil? (runtime/lookup rt [:d])) "age 2 >= duration 2, auto-destroyed")))
+
+(deftest client-tick-retires-one-shot-and-life-timed-transients-test
+  (let [rt (runtime/create-client-runtime transient-lifecycle-registry)]
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :one-shot
+                                  :instance-key [:one-shot] :event-seq 1})
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :life-timed
+                                  :instance-key [:life-timed] :event-seq 1
+                                  :params {:life-ticks 2}})
+    (runtime/client-tick! rt 0.05)
+    (is (nil? (runtime/lookup rt [:one-shot]))
+        "a transient without a duration is a one-shot and retires after one tick")
+    (is (some? (runtime/lookup rt [:life-timed]))
+        "life-ticks keeps a transient alive for its visual lifetime")
+    (runtime/client-tick! rt 0.05)
+    (is (nil? (runtime/lookup rt [:life-timed]))
+        "life-timed transient retires once its declared life is reached")
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :one-shot
+                                  :instance-key [:one-shot] :event-seq 1})
+    (is (nil? (runtime/lookup rt [:one-shot]))
+        "a duplicate spawn cannot resurrect an auto-expired one-shot")
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :one-shot
+                                  :instance-key [:one-shot] :event-seq 2})
+    (is (some? (runtime/lookup rt [:one-shot]))
+        "a new activation sequence can reuse the expired instance key")))
 
 (deftest sample-client-frame-pools-by-frame-id-test
   (let [rt (runtime/create-client-runtime scene-registry {:max-frames 2})]

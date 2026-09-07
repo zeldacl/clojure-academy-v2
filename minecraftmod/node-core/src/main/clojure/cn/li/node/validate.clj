@@ -1,11 +1,9 @@
 (ns cn.li.node.validate
-  "Structural validation of an already-expanded (see cn.li.node.composite)
-   node tree: unknown component, unknown field, missing required field,
-   literal type mismatch. Runs after composite expansion so every node here
-   is a real primitive (or a top-level source) with a real :impl -- this is
-   deliberately independent of cn.li.node.scope (which only proves binding
-   safety) and of cn.li.node.composite (which only proves expansion
-   terminates); together the three cover shape, binding, and expansion."
+  "Structural validation for V3 IR/document nodes: unknown component, unknown
+   field, missing required field, literal type mismatch. Validation runs on
+   compiled primitives and is deliberately independent of cn.li.node.scope,
+   which proves binding safety; together they cover shape and binding for the
+   editor/runtime boundary."
   (:require [cn.li.node.environment :as registry]
             [cn.li.node.types :as types]))
 

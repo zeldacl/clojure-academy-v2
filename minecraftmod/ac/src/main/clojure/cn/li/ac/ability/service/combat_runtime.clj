@@ -315,8 +315,15 @@
   (let [catalog (:catalog (final-runtime-v2))
         sources (:sources catalog)
         registration (get (:by-id catalog) ability-id)
-        source-id (or (:source-id registration) ability-id)]
-    (get sources source-id)))
+        source-id (or (:source-id registration) ability-id)
+        source (get sources source-id)]
+    ;; V3 keeps activation extensible for editor metadata (`{:mode ...}`),
+    ;; while the dispatch ABI consumes the scalar mode. Normalize it once at
+    ;; the catalog boundary so toggle/session orchestration and all future
+    ;; callers observe the same runtime shape.
+    (if (map? (:activation source))
+      (assoc source :activation (get-in source [:activation :mode]))
+      source)))
 
 (defn initialize-final-runtime-v2!
   "Install the new engine's own production runtime -- the only combat
@@ -561,7 +568,7 @@
 ;; resolver -- it covers exactly the
 ;; {:ref [:input :tunables k]} / {:ref [:input :context k]} / {:ref
 ;; [:state k]} / {:expr :math/mul|:math/sub|:math/select :args [...]}
-;; shapes every real ac/skills/*.edn :costs/:cooldown/:progression/
+;; shapes every real ac/skills-v3/*.edn :costs/:cooldown/:progression/
 ;; :invariants declaration actually uses (grep-confirmed across all 39
 ;; files before writing this, not assumed complete).
 (defn- resolve-final-formula-v2
@@ -595,7 +602,7 @@
    params, a completely different input shape belonging to the damage-
    reaction pipeline (damage.clj's own reaction resolution, already
    engine-agnostic and unaffected by S8), not this ability's own dispatch-
-   time capabilities. Confirmed by grep: no real ac/skills/*.edn :program
+   time capabilities. Confirmed by grep: no real ac/skills-v3/*.edn :program
    ever reads ?progression/damaged (or any other :params-backed entry) as
    a plain capability sigil -- if a name is never read that way, silently
    NOT materializing it as a capability is correct, not a gap; throwing
@@ -611,7 +618,7 @@
           declarations)))
 
 (defn final-capabilities-v2
-  "owner, ability-id, intent, seed, source (an ac/skills/*.edn raw doc,
+  "owner, ability-id, intent, seed, source (an ac/skills-v3/*.edn raw doc,
    cn.li.ac.ability.skills-catalog's own :sources entry shape) -> the
    full ?capability -> value map the new engine's own dispatch expects
    as :capabilities, merging caster-facade's own caster/world/movement/
@@ -1375,7 +1382,7 @@
    :sources]), against the new catalog's :sources instead. :damage-
    policies is a non-:program top-level key, byte-identical (as data,
    modulo pretty-printing whitespace) between an ac/combat/abilities/
-   *.edn source and its ac/skills/*.edn counterpart -- the same S6
+   *.edn V3 source -- the same S6
    guarantee combat-source's own docstring already relies on. Computed
    fresh per call rather than cached: a damage event is not a per-frame
    hot path, and this avoids a second piece of mutable state to keep in
@@ -1622,7 +1629,6 @@
    already-cached snapshot left behind by an earlier, unrelated test."
   []
   (reset! final-runtime-v2* nil))
-
 
 
 

@@ -2,7 +2,7 @@
   "Surface DSL -> IR compiler.
 
    Compiles directly to registers instead of textually substituting/renaming
-   EDN (the old cn.li.node.composite approach): a :defn call is inlined by
+   EDN graph nodes: a :defn call is inlined by
    binding the callee's declared params to freshly-allocated registers and
    recursively compiling its body into the caller's block, so there is
    nothing to rename -- registers are unique by construction (a fresh
@@ -813,6 +813,7 @@
         entries (into {} (map (fn [[phase stmts]] [phase (compile-entry! env stmts)])) (:entries doc))
         ir {:ir/version 1
             :id (:id doc)
+            :entry-triggers (:entry-triggers doc)
             ;; Not consumed by cn.li.node.ir/validate! or the emitter -- kept
             ;; on the IR purely so cn.li.node.pretty can reconstruct a
             ;; recompilable :tunables/:state block, :default included (the

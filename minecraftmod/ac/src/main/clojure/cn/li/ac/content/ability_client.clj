@@ -18,14 +18,15 @@
   Safe to call multiple times.
 
   VFX cutover: installs the new engine's runtime (cn.li.ability.client-
-  vfx-v2, ac/vfx/fx/*.edn via fx-catalog) as the real client dispatch
+  vfx-v2, the indexed V3 documents from fx-catalog) as the real client dispatch
   path -- the old engine's own client-vfx composition root is no longer
   installed from here, only exercised directly by its own test suite."
   []
   (install/framework-once! ::fx-initialized?
   (fn []
     (keybinds/freeze-keybind-registries!)
-    (vfx/install-production! {:catalog-compile fx-catalog/assemble})
+    (vfx/install-production!
+     {:catalog-compile #(-> (fx-catalog/assemble) :by-id)})
     (combat-vfx/install-dispatch! vfx/dispatch-signal!)
     (log/info "Ability client FX content initialized"))))
 

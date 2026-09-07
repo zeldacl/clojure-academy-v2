@@ -58,6 +58,114 @@
   [ir]
   (emit/compile-program ir {:invoke-op ops/invoke :host host}))
 
+;; ---------------------------------------------------------------------------
+;; V3 document bridge
+;; ---------------------------------------------------------------------------
+;; Persisted VFX is map-shaped so an editor can address every node by :nid.
+;; The scene executor still consumes the small, tested surface compiler. This
+;; bridge renders V3 nodes to that surface data model only at compile time;
+;; no source string is retained in a runtime instance.
+
+(defn- ref-key-string [key]
+  (if (keyword? key)
+    (if-let [ns (namespace key)]
+      (str ns "/" (name key))
+      (name key))
+    (str key)))
+
+(defn- ref->surface-form [[scope key & path]]
+  (let [prefix (case scope
+                 :context "?"
+                 :parameter "$"
+                 :state "%"
+                 :local ""
+                 :input "?input/"
+                 :module-input "?module/"
+                 "?")
+        base (symbol (str prefix (ref-key-string key)))]
+    (reduce (fn [form field]
+              (list (if (keyword? field) field (keyword (str field))) form))
+            base
+            path)))
+
+(declare v3-form)
+
+(defn- v3-map [value]
+  (into {}
+        (map (fn [[key child]] [key (v3-form child)]))
+        value))
+
+(defn- v3-form [value]
+  (cond
+    (and (map? value) (:ref value))
+    (ref->surface-form (:ref value))
+
+    (and (map? value) (:component value))
+    (let [component (:component value)
+          head (if-let [ns (namespace component)]
+                 (symbol ns (name component))
+                 (symbol (name component)))]
+      (if (contains? value :inputs)
+        (list head (v3-map (:inputs value)))
+        (apply list head (map v3-form (:args value)))))
+
+    (map? value) (v3-map value)
+    (vector? value) (mapv v3-form value)
+    (seq? value) (apply list (map v3-form value))
+    :else value))
+
+(defn- v3-statements [nodes]
+  (mapv (fn [node]
+          (cond
+            (= :bind (:flow node))
+            (list 'let (symbol (name (:name node))) (v3-form (:value node)))
+
+            (= :when (:flow node))
+            (apply list 'when (v3-form (:condition node))
+                   (v3-statements (:do node)))
+
+            (= :if (:flow node))
+            (list 'if (v3-form (:condition node))
+                  (vec (v3-statements (:then node)))
+                  (vec (v3-statements (:else node))))
+
+            (= :foreach (:flow node))
+            (let [binding (if (:index-as node)
+                            [(:as node) (:index-as node)]
+                            (:as node))]
+              (apply list 'each binding (v3-form (:collection node))
+                     (v3-statements (:do node))))
+
+            (= :repeat (:flow node))
+            (apply list 'each 'i (list 'range (:count node))
+                   (v3-statements (:do node)))
+
+            (= :finish (:flow node))
+            (list 'finish (v3-form (:result node)))
+
+            (:component node) (v3-form node)
+            :else (throw (ex-info "unsupported V3 VFX statement" {:node node}))))
+        nodes))
+
+(defn compile-v3-document!
+  "Compile an :ac/vfx-v3 document's :system/:render stage using the scene
+   vocabulary. The persisted document remains structured; the generated
+   surface form exists only during compilation and is not runtime state."
+  [document]
+  (let [validate! (requiring-resolve 'cn.li.node.document/validate-document!)
+        _ (validate! document)
+        unsupported-stages (seq (keys (dissoc (or (:system document) {}) :render)))
+        _ (when unsupported-stages
+            (throw (ex-info "V3 VFX runtime only supports :system/:render"
+                            {:id (:id document)
+                             :unsupported-stages (vec unsupported-stages)})))
+        input-types (into {}
+                         (map (fn [[key spec]] [key (:type spec)]))
+                         (:inputs document))
+        surface-doc {:ability (:id document)
+                     :do (v3-statements (get-in document [:system :render] []))}]
+    (compile-program (compile-doc! (pr-str surface-doc) input-types))))
+
 (defn sample!
   "Run `program` once against `input` ({:capabilities {...} ...}),
    returning the vector of ops this sample produced."
