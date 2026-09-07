@@ -813,6 +813,7 @@
         entries (into {} (map (fn [[phase stmts]] [phase (compile-entry! env stmts)])) (:entries doc))
         ir {:ir/version 1
             :id (:id doc)
+            :entry-triggers (:entry-triggers doc)
             ;; Not consumed by cn.li.node.ir/validate! or the emitter -- kept
             ;; on the IR purely so cn.li.node.pretty can reconstruct a
             ;; recompilable :tunables/:state block, :default included (the

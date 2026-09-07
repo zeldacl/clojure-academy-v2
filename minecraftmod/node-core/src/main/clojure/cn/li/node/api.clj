@@ -13,6 +13,7 @@
             [cn.li.node.composite-loader :as composite-loader]
             [cn.li.node.digest :as digest]
             [cn.li.node.document :as document]
+            [cn.li.node.document-compile :as document-compile]
             [cn.li.node.schema-export :as schema-export]
             [cn.li.node.scope :as scope]
             [cn.li.node.validate :as validate]
@@ -30,6 +31,8 @@
 (defn document-kind [value] (document/kind value))
 (defn document-semantic-digest [value]
   (digest/content-hash (document/semantic-document value)))
+(defn compile-skill-document! [value opts mode]
+  (document-compile/compile-skill! value opts mode))
 
 ;; ---- structural validation ----
 (defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))
