@@ -11,7 +11,11 @@ if not exist "%MC_JAVA_HOME_21%\bin\java.exe" (
   echo Java executable not found: %MC_JAVA_HOME_21%\bin\java.exe 1>&2
   exit /b 2
 )
-call "%ROOT%\gradlew.bat" :tools:target-launcher:installDist --no-daemon
+rem --daemon, not --no-daemon: this bootstrap build runs on every launch, and a
+rem single-use JVM made it pay a full cold start each time. The explicit flag also
+rem beats a -Dorg.gradle.daemon=false coming from an inherited GRADLE_OPTS.
+rem GRADLE_OPTS is sanitized for the real build inside TargetGradleLauncher.
+call "%ROOT%\gradlew.bat" :tools:target-launcher:installDist --daemon
 if errorlevel 1 exit /b %ERRORLEVEL%
 rem %* keeps the original argument list after SHIFT, so forward the shifted
 rem arguments explicitly to avoid passing the target id as a Gradle task.
