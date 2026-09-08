@@ -248,6 +248,7 @@
          :palette-recent []
          :palette-drag nil
          :ghost nil
+         :canvas-viewport? false
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
@@ -486,7 +487,7 @@
 
 (defn- render-state [state]
   (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport zoom ghost
-                palette-query palette-collapsed palette-recent]} state
+                palette-query palette-collapsed palette-recent canvas-viewport?]} state
         selected (selected-node-info state)
         selected-params (selected-param-fields state)
         ;; Repeater text inputs need a stable state-backed draft. The
@@ -501,7 +502,8 @@
                                     [draft-key (str value)])))
                           draft-items)
         raw-canvas (into (render/graph->composite-items graph (:layout state))
-                         (when ghost (ghost-items ghost)))]
+                         (when ghost (ghost-items ghost)))
+        canvas-viewport? (boolean canvas-viewport?)]
     (merge draft-state
            {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
@@ -513,6 +515,11 @@
      :palette-search-label "Filter palette"
      :palette-clear-label "Clear"
      :canvas (transform-canvas-items raw-canvas viewport zoom)
+     :canvas-viewport? canvas-viewport?
+     :canvas-compact-visible? (not canvas-viewport?)
+     :canvas-viewport-visible? canvas-viewport?
+     :canvas-viewport-label (if canvas-viewport? "Close viewport (Esc)" "Expand canvas")
+     :canvas-viewport-title "Canvas viewport"
      :selected-label (if selected (:text selected) "(nothing selected)")
      :selected-params selected-params
      :diagnostics (mapv diagnostic-item diagnostics)
@@ -793,7 +800,7 @@
     (let [{:keys [event-type drag-x drag-y drag? drag-item drop-zone x y]} payload
           drag-mode (:mode (:drag @state*))]
       (cond
-        (and drag? drag-item (= :up event-type))
+        (and drag? drag-item (= :up event-type) (not (:nid drag-item)))
         (do
           (if (= :node-editor/canvas drop-zone)
             (palette-drop! state* payload)
@@ -801,7 +808,7 @@
                    :status "Drop the palette item on the canvas."))
           nil)
 
-        (and drag? drag-item)
+        (and drag? drag-item (not (:nid drag-item)))
         (let [entry (palette/find-by-id (:palette @state*) (:id drag-item))
               point (screen->canvas-point @state* x y)]
           (swap! state* assoc
@@ -811,7 +818,7 @@
                          :valid? (= :node-editor/canvas (:drop-zone payload))}))
 
         :else
-        (case event-type
+        (case (if (= :move event-type) :drag event-type)
           :drag (case drag-mode
                   :dragging-node (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0))
                   :panning (swap! state* update :viewport
@@ -863,6 +870,13 @@
     :editor/reset-zoom
     (swap! state* assoc :zoom 1.0 :status "Zoom reset to 100%.")
 
+    :editor/toggle-canvas-viewport
+    (let [expanded? (not (:canvas-viewport? @state*))]
+      (swap! state* assoc :canvas-viewport? expanded?
+             :status (if expanded?
+                       "Canvas viewport expanded. Press Esc to close."
+                       "Canvas viewport collapsed.")))
+
     :editor/undo
     (history-action! state* :undo)
 
@@ -879,7 +893,10 @@
 
     :input/key
     (if (= 256 (int (or (:key-code payload) -1)))
-      (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled.")
+      (if (:canvas-viewport? @state*)
+        (swap! state* assoc :canvas-viewport? false :palette-drag nil :ghost nil
+               :status "Canvas viewport collapsed.")
+        (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled."))
       nil)
     :editor/toggle-preview
     (if (not= :scene (:mode @state*))

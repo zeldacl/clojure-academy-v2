@@ -388,3 +388,32 @@
   (is (= [1.0 2.0 3.0] (#'node-editor/vec3-values [1 2 3])))
   (is (nil? (#'node-editor/vec3-values [1 2])))
   (is (nil? (#'node-editor/vec3-values [1 ##NaN 3]))))
+(deftest captured-node-drag-does-not-enter-palette-ghost-path-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))
+        nid (some (fn [[k v]] (when (#{:call :event! :vfx!} (:stmt v)) k)) (get-in @state* [:graph :nodes]))]
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {:nid nid}})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :move :drag? true :drag-item {:nid nid} :drag-x 4.0 :drag-y 2.0})
+    (is (nil? (:ghost @state*)))
+    (is (= :dragging-node (get-in @state* [:drag :mode])))
+    (is (map? (get-in @state* [:layout nid])))
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :up :drag? true :drag-item {:nid nid} :x 4.0 :y 2.0})
+    (is (= :idle (get-in @state* [:drag :mode])))))
+
+(deftest canvas-viewport-toggle-expands-and-escape-collapses-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
+    (is (false? (:canvas-viewport? @state*)))
+    (let [rendered (#'node-editor/render-state @state*)]
+      (is (true? (:canvas-compact-visible? rendered)))
+      (is (false? (:canvas-viewport-visible? rendered))))
+    (#'node-editor/handle-action state* :editor/toggle-canvas-viewport nil)
+    (is (true? (:canvas-viewport? @state*)))
+    (is (= "Canvas viewport expanded. Press Esc to close." (:status @state*)))
+    (let [rendered (#'node-editor/render-state @state*)]
+      (is (false? (:canvas-compact-visible? rendered)))
+      (is (true? (:canvas-viewport-visible? rendered)))
+      (is (= "Canvas viewport" (:canvas-viewport-title rendered))))
+    (#'node-editor/handle-action state* :input/key {:key-code 256})
+    (is (false? (:canvas-viewport? @state*)))
+    (is (= "Canvas viewport collapsed." (:status @state*)))))

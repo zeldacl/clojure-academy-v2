@@ -123,11 +123,34 @@
           (update-in [:effect-groups idx :augments] conj (glyph-entry state glyph-kw))
           (assoc :status (str "Added " (glyph-str glyph-kw) " to effect " (inc idx) "."))))))
 
+(defn- remap-drafts-after-remove
+  "Drop drafts for effect IDX and shift later effect indices left."
+  [drafts idx]
+  (into {}
+        (keep (fn [[[effect-idx key] value]]
+                (cond
+                  (= effect-idx idx) nil
+                  (> effect-idx idx) [[(dec effect-idx) key] value]
+                  :else [[effect-idx key] value])))
+        (or drafts {})))
+
+(defn- remap-drafts-after-swap
+  "Swap draft indices together with two reordered effect groups."
+  [drafts idx target]
+  (into {}
+        (map (fn [[[effect-idx key] value]]
+               [(cond
+                  (= effect-idx idx) [target key]
+                  (= effect-idx target) [idx key]
+                  :else [effect-idx key])
+                value]))
+        (or drafts {})))
 (defn- remove-effect [state idx]
   (if (and (integer? idx) (< -1 idx) (< idx (count (:effect-groups state))))
     (let [groups (vec (concat (subvec (:effect-groups state) 0 idx)
                                (subvec (:effect-groups state) (inc idx))))]
       (assoc state :effect-groups groups
+             :param-drafts (remap-drafts-after-remove (:param-drafts state) idx)
              :selected-effect (when (seq groups) (min idx (dec (count groups))))
              :status "Effect removed."))
     state))
@@ -140,7 +163,9 @@
             reordered (-> groups vec
                           (assoc idx (nth groups target))
                           (assoc target item))]
-        (assoc state :effect-groups reordered :selected-effect target))
+        (assoc state :effect-groups reordered
+               :param-drafts (remap-drafts-after-swap (:param-drafts state) idx target)
+               :selected-effect target))
       state)))
 
 (defn- remove-augment [state effect-idx augment-idx]
@@ -179,6 +204,19 @@
       (when (Double/isFinite n) n))
     (catch Exception _ nil)))
 
+(defn- valid-param-drafts?
+  "True when every in-progress parameter draft is finite and within its
+   descriptor bounds. Invalid drafts never become part of the spell payload."
+  [{:keys [param-drafts effect-groups glyph-specs]}]
+  (every? (fn [[[idx key] raw]]
+            (let [glyph (get-in effect-groups [idx :glyph])
+                  descriptor (get-in glyph-specs [glyph :params key])
+                  value (parse-finite-number raw)]
+              (and descriptor
+                   (some? value)
+                   (>= value (double (:min descriptor)))
+                   (<= value (double (:max descriptor))))))
+          (or param-drafts {})))
 (defn- coerce-param-value [descriptor n]
   (if (= :int (:type descriptor)) (long (Math/round (double n))) (double n)))
 
@@ -243,12 +281,20 @@
      (mapv (fn [idx {:keys [glyph augments]}]
              {:index idx :label (str (inc idx) ". " (glyph-str glyph))
               :selected? (= idx selected-effect)
-              :augments (mapv (fn [a] {:label (glyph-str (:glyph a))}) augments)
+              :augment-label (when (seq augments)
+                               (str/join " " (map #(str "+" (glyph-str (:glyph %))) augments)))
+              :augments (mapv (fn [augment-index a]
+                                {:effect-index idx
+                                 :augment-index augment-index
+                                 :label (str "+ " (glyph-str (:glyph a)))
+                                 :remove-label "X"})
+                              (range) augments)
               :can-move-up? (pos? idx)
               :can-move-down? (< idx (dec (count effect-groups)))
               :up-label "UP" :down-label "DN" :remove-label "X"})
            (range) effect-groups)
-     :can-cast? (boolean (and (not busy?) form (seq effect-groups)))
+     :can-cast? (boolean (and (not busy?) form (seq effect-groups)
+                              (valid-param-drafts? state)))
      :busy? (boolean busy?)
      :status (or status "")
      :cast-label (if busy? "Casting..." "Cast")
@@ -303,6 +349,8 @@
       (cond
         (:busy? snapshot) nil
         (not glyphs) (swap! state* assoc :status "Pick a form and at least one effect first.")
+        (not (valid-param-drafts? snapshot))
+        (swap! state* assoc :status "Finish valid parameter edits before casting.")
         :else
         (let [analysis (combat-api/analyze-player-spell glyphs combat-api/player-spell-complexity-cap)]
           (if-not (:ok analysis)

@@ -5,6 +5,8 @@
                 :palette-search-label :string :palette-clear-label :string
                 :canvas :vector :selected-label :string :selected-params :vector :diagnostics :vector
                 :diagnostic-count :number :cost-label :string :zoom-label :string :zoom-reset-label :string
+                :canvas-viewport? :boolean :canvas-compact-visible? :boolean :canvas-viewport-visible? :boolean
+                :canvas-viewport-label :string :canvas-viewport-title :string
                 :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
                 :reload-label :string :save-label :string :export-label :string :undo-label :string :redo-label :string}
  :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
@@ -40,15 +42,39 @@
                                   :on {:activate :editor/add-palette-node :drag-start :editor/palette-drag-start}
                                   :semantics {:role :button}}]}]}
          {:type :absolute :key :node-editor/canvas :layout {:height 128}
+          :bind {:visible [:state :canvas-compact-visible?]}
           :children
           [{:type :box :layout {:width 464 :height 128}
-            :on {:drop :editor/palette-drop}
+            :on {:drag-start :editor/canvas-press :drop :editor/palette-drop}
             :semantics {:role :generic :drop-zone :node-editor/canvas}}
            {:type :repeater :layout {:width 464 :height 128}
             :bind {:items [:state :canvas]}
             :children [{:type :composite :bind {:item [:state :item]}
-                        :on {:activate :editor/canvas-press :drop :editor/palette-drop}
+                        :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
                         :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}
+         {:type :absolute :key :node-editor/canvas-viewport :layout {:x 0 :y 24 :width 464 :height 300}
+          :bind {:visible [:state :canvas-viewport-visible?]}
+          :children
+          [{:type :box :layout {:width 464 :height 300}
+            :style {:rgba [0.05 0.06 0.09 0.97]}
+            :semantics {:role :dialog :field :canvas-viewport}}
+           {:type :row :layout {:x 8 :y 4 :width 448 :height 16}
+            :children [{:type :text :layout {:width 360 :height 14}
+                        :bind {:text [:state :canvas-viewport-title]}}
+                       {:type :button :layout {:width 80 :height 14}
+                        :bind {:text [:state :canvas-viewport-label]}
+                        :on {:activate :editor/toggle-canvas-viewport}
+                        :semantics {:role :button :field :canvas-viewport-toggle}}]}
+           {:type :absolute :layout {:x 0 :y 22 :width 464 :height 278}
+            :children
+            [{:type :box :layout {:width 464 :height 278}
+              :on {:drag-start :editor/canvas-press :drop :editor/palette-drop}
+              :semantics {:role :generic :drop-zone :node-editor/canvas}}
+             {:type :repeater :layout {:width 464 :height 278}
+              :bind {:items [:state :canvas]}
+              :children [{:type :composite :bind {:item [:state :item]}
+                          :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
+                          :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}]}
          {:type :text :key :node-editor/selected :layout {:height 18}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
          {:type :scroll :key :node-editor/params :layout {:height 28}
@@ -90,12 +116,16 @@
                       :children [{:type :text :layout {:width 90} :bind {:text [:item :code]}}
                                  {:type :text :layout {:width 300} :bind {:text [:item :message]}}]}]}
          {:type :row :key :node-editor/cost :layout {:height 14}
-          :children [{:type :text :layout {:width 300} :bind {:text [:state :cost-label]}}
+          :children [{:type :text :layout {:width 220} :bind {:text [:state :cost-label]}}
                      {:type :text :layout {:width 80} :bind {:text [:state :zoom-label]}}
                      {:type :button :layout {:width 80 :height 14}
                       :bind {:text [:state :zoom-reset-label]}
                       :on {:activate :editor/reset-zoom}
-                      :semantics {:role :button}}]}
+                      :semantics {:role :button}}
+                     {:type :button :layout {:width 80 :height 14}
+                      :bind {:text [:state :canvas-viewport-label]}
+                      :on {:activate :editor/toggle-canvas-viewport}
+                      :semantics {:role :button :field :canvas-viewport-toggle}}]}
          {:type :row :key :node-editor/preview :layout {:height 16}
           :children [{:type :text :layout {:width 300} :bind {:text [:state :preview-label]}}
                      {:type :button :layout {:width 120 :height 14}

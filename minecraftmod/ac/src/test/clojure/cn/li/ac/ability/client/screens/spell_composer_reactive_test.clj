@@ -95,3 +95,43 @@
     (is (.contains ^String (:status rejected) "exceeds"))
     (is (= [{:effect-index 0 :param-key :amount :draft-key :composer-param-0-amount :label "amount [0.0..20.0]" :value "7.5"}]
            (#'composer/selected-param-fields submitted)))))
+
+(deftest effect-reorder-and-remove-remap-parameter-drafts-test
+  (let [base (-> (#'composer/initial-state)
+                 (#'composer/pick-form :form/self)
+                 (#'composer/add-effect :effect/damage)
+                 (#'composer/add-effect :effect/push))
+        drafted (-> base
+                     (#'composer/param-change {:item {:effect-index 0 :param-key :amount}
+                                               :value "3.0"})
+                     (#'composer/param-change {:item {:effect-index 1 :param-key :distance}
+                                               :value "4.0"}))
+        moved (#'composer/move-effect drafted 1 -1)
+        removed (#'composer/remove-effect moved 0)]
+    (is (= "3.0" (get-in moved [:param-drafts [1 :amount]])))
+    (is (= "4.0" (get-in moved [:param-drafts [0 :distance]])))
+    (is (nil? (get-in moved [:param-drafts [0 :amount]])))
+    (is (= "3.0" (get-in removed [:param-drafts [0 :amount]])))
+    (is (nil? (get-in removed [:param-drafts [0 :distance]])))))
+
+(deftest invalid-in-progress-draft-cannot-be-cast-test
+  (let [state (-> (#'composer/initial-state)
+                  (#'composer/pick-form :form/self)
+                  (#'composer/add-effect :effect/damage)
+                  (#'composer/param-change {:item {:effect-index 0 :param-key :amount}
+                                            :value "not-a-number"}))]
+    (is (false? (#'composer/valid-param-drafts? state)))
+    (is (false? (:can-cast? (#'composer/render-state state))))) )
+
+(deftest rendered-effect-slot-exposes-augment-remove-payload-test
+  (let [state (-> (#'composer/initial-state)
+                  (#'composer/pick-form :form/self)
+                  (#'composer/add-effect :effect/damage)
+                  (#'composer/add-augment :augment/amplify))
+        slot (first (:effect-slots (#'composer/render-state state)))
+        augment (first (:augments slot))]
+    (is (= "+ augment/amplify" (:label augment)))
+    (is (= 0 (:effect-index augment)))
+    (is (= 0 (:augment-index augment)))
+    (is (= "X" (:remove-label augment)))
+    (is (= [] (get-in (#'composer/remove-augment state 0 0) [:effect-groups 0 :augments])))))
