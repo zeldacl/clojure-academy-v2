@@ -32,7 +32,7 @@
                       :bind {:text [:state :palette-clear-label]}
                       :on {:activate :editor/clear-palette-search}
                       :semantics {:role :button}}]}
-         {:type :scroll :key :node-editor/palette :layout {:height 40}
+         {:type :scroll :key :node-editor/palette :layout {:height 32}
           :bind {:items [:state :palette-rows]} :semantics {:role :list}
           :children [{:type :row :layout {:height 14}
                       :children [{:type :text :layout {:height 14 :width 440}
@@ -89,7 +89,7 @@
                                   :bind {:text [:item :control-label] :visible [:item :toggle?]}
                                   :on {:activate :editor/param-toggle}
                                   :semantics {:role :button :field :editor-param-toggle}}]}]}
-         {:type :scroll :key :node-editor/diagnostics :layout {:height 36}
+         {:type :scroll :key :node-editor/diagnostics :layout {:height 28}
           :bind {:items [:state :diagnostics]} :semantics {:role :list}
           :children [{:type :row :layout {:height 14}
                       :children [{:type :text :layout {:width 90} :bind {:text [:item :code]}}
