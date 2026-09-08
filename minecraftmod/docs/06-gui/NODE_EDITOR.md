@@ -125,8 +125,8 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 ## 验证状态
 
 架构门（`verifyCurrentPlatforms`）、真实 AOT 编译（forge-1.20.1、
-neoforge-1.21.1）、单元测试（`ability-runtime`/`combat-core`/`vfx-core`/`ac`
-四个模块）、以及 `.ui.edn` 自身的 schema 校验（`compilePresentationViews`，
+neoforge-1.21.1）、单元测试（`node-core`/`ability-runtime`/`combat-core`/`vfx-core`/`presentation-core`/`ac`
+六个模块）、以及 `.ui.edn` 自身的 schema 校验（`compilePresentationViews`，
 在这套开发环境里就能跑，不需要启动游戏）全部通过，且在开发过程中真的抓到过
 几个实质 bug（`:semantics {:role :status}` 不是合法角色、一个没有默认分支的
 `case` 会在点击节点标签时抛异常、`(name :form/self)` 会悄悄丢掉命名空间）。
