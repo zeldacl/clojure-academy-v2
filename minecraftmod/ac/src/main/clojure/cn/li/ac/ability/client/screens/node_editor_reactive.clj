@@ -24,9 +24,9 @@
       cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
       see pan-canvas-items) are wired. Palette clicks and drag-and-drop now
       insert a call plus default literal inputs; a ghost/drop-zone state gives
-      feedback and a click with no movement remains the shortcut. No ZOOM:
-      unlike pan, nothing in presentation-core exposes a scroll-wheel or
-      pinch input primitive to drive it yet.
+      feedback and a click with no movement remains the shortcut. The existing
+      neutral :scroll event drives cursor-anchored 50%-200% zoom; pinch remains
+      deferred until Presentation exposes a distinct gesture contract.
     - open! takes an EXPLICIT absolute file path from the caller, not a
      guessed game-directory/source-tree location: resolving 'where does
      the mod's source tree live relative to the running game' is itself
@@ -243,11 +243,15 @@
                                       :legacy-fields (select-keys wrapper-doc [:program :scene])})))
          :selected-nid nil
          :param-drafts {}
+         :palette-query ""
+         :palette-collapsed #{}
+         :palette-recent []
          :palette-drag nil
          :ghost nil
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
+         :zoom 1.0
          :preview-active? false
          :preview-label "Preview off"
          :source-signature (file-signature path)
@@ -287,20 +291,30 @@
       (mapv (fn [[key ref]]
               (let [data (get-in graph [:nodes ref])
                     descriptor (get specs key)
+                    type (:type descriptor)
                     rendered (try (graph/expr-text (:nodes graph) ref)
-                                  (catch Throwable _ (pr-str (:value data))))]
+                                  (catch Throwable _ (pr-str (:value data))))
+                    editable? (and (= :data (:kind data))
+                                   (contains? #{:literal :vec-lit :map-lit} (:expr data)))
+                    bool? (contains? #{:bool :boolean} type)
+                    numeric? (contains? #{:int :long :float :double} type)
+                    bool-value? (= "true" (str/lower-case (str rendered)))]
                 {:nid selected-nid
                  :param-key key
                  :data-nid ref
-                 :type (:type descriptor)
-                 :label (str (name key) (when (:type descriptor)
-                                         (str " [" (name (:type descriptor)) "]")))
+                 :type type
+                 :label (str (name key) (when type
+                                       (str " [" (name type) "]")))
                  :value (or (get param-drafts [selected-nid key]) rendered)
-                 :editable? (and (= :data (:kind data))
-                                 (contains? #{:literal :vec-lit :map-lit} (:expr data)))}))
+                 :editable? editable?
+                 :toggle? (and editable? bool?)
+                 :text-editor? (or (not bool?) (not editable?))
+                 :stepper? (and editable? numeric?)
+                 :control-label (if bool-value? "On" "Off")
+                 :decrement-label "−"
+                 :increment-label "+"}))
             refs))
     []))
-
 (defn- parse-editor-value [descriptor raw]
   (let [type (:type descriptor)
         text (str/trim (str raw))
@@ -330,41 +344,118 @@
 (defn- palette-item
   "One cn.li.ability.editor.palette/build entry -> a display row. The same
    row is both a browseable reference and a drag source for canvas insertion.
-   Category is folded INTO the label text (\"[targeting] target/
-   raycast (cost 2)\") rather than rendered as separate collapsible
-   sections -- there is no section-header widget in this UI schema, and
-   the list is already sorted by (:category :id) (palette/build's own
-   sort), so same-category entries run together; a real grouped/
-   collapsible view is a presentation-layer follow-up, not a data gap."
+   Category is folded into the label text (\"[targeting] target/raycast (cost 2)\").
+   The palette row model adds collapsible category headers while preserving
+   palette/build's stable (:category :id) ordering."
   [{:keys [id category cost source]}]
   {:id id :source source
    :label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")")})
 
+(defn- palette-search-text [entry]
+  (str/lower-case
+   (str (:id entry) " " (:category entry) " " (:source entry) " "
+        (:i18n entry) " " (:doc entry))))
+
+(defn- palette-visible-entries [palette query]
+  (let [q (str/lower-case (str/trim (str (or query ""))))]
+    (filterv #(or (str/blank? q)
+                  (str/includes? (palette-search-text %) q)) palette)))
+
+(defn- palette-entry-row [entry recent?]
+  (assoc (palette-item entry)
+         :row-type :entry :entry? true :header? false :recent? recent?))
+
+(defn- palette-header-row [category count collapsed]
+  {:row-type :category
+   :category category
+   :header? true
+   :entry? false
+   :toggleable? true
+   :collapsed? collapsed
+   :header-label (str (if collapsed "▶ " "▼ ") (name category) " (" count ")")})
+
+(defn- palette-rows
+  "Build the compact palette presentation model: optional recent group,
+   stable category groups, and entries hidden by a collapsed category. The
+   source palette remains immutable and sorted; query/fold/recent are view
+   state only, so document and graph contracts never depend on UI ordering."
+  [palette query collapsed recent]
+  (let [visible (palette-visible-entries palette query)
+        by-category (group-by :category visible)
+        categories (->> visible (map :category) distinct vec)
+        by-id (into {} (map (juxt :id identity) visible))
+        recent-entries (->> recent (keep by-id) distinct vec)
+        recent-collapsed? (contains? collapsed :recent)
+        recent-rows (when (seq recent-entries)
+                      (into [(palette-header-row :recent (count recent-entries) recent-collapsed?)]
+                            (when-not recent-collapsed?
+                              (map #(palette-entry-row % true) recent-entries))))
+        category-rows (mapcat (fn [category]
+                                (let [entries (get by-category category [])
+                                      folded? (contains? collapsed category)]
+                                  (cons (palette-header-row category (count entries) folded?)
+                                        (when-not folded?
+                                          (map #(palette-entry-row % false) entries)))))
+                              categories)]
+    (vec (if (seq visible)
+           (concat recent-rows category-rows)
+           [{:row-type :empty :category :empty :header? true :entry? false
+             :toggleable? false :header-label "No matching palette entries"}]))))
+
+(defn- remember-palette! [state* id]
+  (when id
+    (swap! state* update :palette-recent
+           (fn [ids]
+             (vec (take 8 (cons id (remove #{id} (or ids [])))))))))
 (defn- pan-canvas-items
   "composite-items, viewport ({:x :y}, total accumulated drag amount
    since open -- see the :panning branch in handle-action's :input/
    pointer case) -> the same items with every :x/:y shifted by viewport,
    so dragging empty canvas moves the content WITH the cursor (the
-   conventional 'hand tool' feel). render.clj's own graph->composite-
-   items has no viewport concept -- deliberately: panning is a per-
-   SCREEN camera, not a property of the graph->layout transform itself
-   (cn.li.ability.editor.hit's own docstring frames viewport state as
-   caller-owned) -- so the shift is applied here, once, after layout."
+   conventional 'hand tool' feel). Kept as a pure helper for callers and
+   tests; render-state uses the combined zoom transform below."
   [items {:keys [x y]}]
   (mapv (fn [item] (-> item (update :x + x) (update :y + y))) items))
+
+(defn- transform-canvas-items
+  "Apply the screen camera to graph-local composite items. Layout values
+   remain unscaled and are saved exactly as authored; only the rendered
+   geometry is transformed. viewport is the post-zoom translation, so a
+   zoom operation can preserve the point beneath the cursor."
+  [items {:keys [x y]} zoom]
+  (let [zoom (double (or zoom 1.0))
+        vx (double (or x 0.0))
+        vy (double (or y 0.0))]
+    (mapv (fn [item]
+            (reduce (fn [m key]
+                      (if (number? (get m key))
+                        (assoc m key
+                               (double (if (#{:x :y} key)
+                                          (+ (if (= :x key) vx vy)
+                                             (* zoom (double (get m key))))
+                                          (* zoom (double (get m key))))))
+                        m))
+                    item [:x :y :w :h :x0 :y0 :x1 :y1]))
+          items)))
 
 (declare ghost-items)
 
 (defn- render-state [state]
-  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport ghost]} state
-        selected (selected-node-info state)]
+  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport zoom ghost
+                palette-query palette-collapsed palette-recent]} state
+        selected (selected-node-info state)
+        raw-canvas (into (render/graph->composite-items graph (:layout state))
+                         (when ghost (ghost-items ghost)))]
     {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
      :phase-label (str "Phase: " (name (or phase :default)))
      :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
      :palette (mapv palette-item palette)
-     :canvas (into (pan-canvas-items (render/graph->composite-items graph (:layout state)) viewport)
-                         (when ghost (ghost-items ghost)))
+     :palette-query (or palette-query "")
+     :palette-rows (palette-rows palette palette-query palette-collapsed palette-recent)
+     :palette-search-label "Filter palette"
+     :palette-clear-label "Clear"
+     :canvas (transform-canvas-items raw-canvas viewport zoom)
      :selected-label (if selected (:text selected) "(nothing selected)")
      :selected-params (selected-param-fields state)
      :diagnostics (mapv diagnostic-item diagnostics)
@@ -373,6 +464,8 @@
                    (str "complexity=" (:complexity cost-summary)
                         " host-cmds=" (:host-commands cost-summary))
                    "(compile errors -- see diagnostics)")
+     :zoom-label (format "Zoom %.0f%%" (* 100.0 (double (or zoom 1.0))))
+     :zoom-reset-label "Reset zoom"
      :status (or status "")
      :preview-active? (boolean (:preview-active? state))
      :preview-label (or (:preview-label state) "Preview off")
@@ -380,8 +473,9 @@
      :dirty? (boolean (:dirty? document))
      :reload-label "Reload from disk"
      :save-label "Save to workspace"
-     :export-label "Export to source"}))
-
+     :export-label "Export to source"
+     :undo-label "Undo"
+     :redo-label "Redo"}))
 ;; --- input handling ------------------------------------------------------
 
 (defn- item->hit
@@ -469,6 +563,43 @@
         (swap! state* (fn [s] (-> s
                                    (update :param-drafts dissoc [nid key])
                                    (assoc :status (str "Updated " (name key) ".")))))))))
+(defn- param-step [state* payload direction]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+        key (:param-key item)
+        data-nid (or (:data-nid item) (get-in @state* [:graph :nodes nid :args key]))
+        data (get-in @state* [:graph :nodes data-nid])
+        entry (some #(when (= (node-op-id (get-in @state* [:graph :nodes nid])) (:id %)) %) (:palette @state*))
+        descriptor (get-in entry [:params key])
+        type (:type descriptor)
+        current (when (number? (:value data)) (double (:value data)))
+        step (if (contains? #{:float :double} type) 0.1 1.0)
+        raw-next (when (some? current) (+ current (* direction step)))
+        next-value (cond-> raw-next
+                     (number? (:min descriptor)) (max (double (:min descriptor)))
+                     (number? (:max descriptor)) (min (double (:max descriptor))))]
+    (if (and key (number? next-value))
+      (param-submit state* (assoc item :value (if (contains? #{:int :long} type) (str (long next-value)) (str next-value))))
+      (swap! state* assoc :status "Only numeric literal inputs support stepper controls."))))
+
+(defn- param-toggle [state* payload]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+        key (:param-key item)
+        data-nid (or (:data-nid item) (get-in @state* [:graph :nodes nid :args key]))
+        data (get-in @state* [:graph :nodes data-nid])
+        current (= "true" (str/lower-case (str (:value data))))]
+    (if (and key (= :data (:kind data))
+             (contains? #{:literal :vec-lit :map-lit} (:expr data)))
+      (param-submit state* (assoc item :value (str (not current))))
+      (swap! state* assoc :status "Only boolean literal inputs support toggle controls."))))
+(defn- screen->canvas-point [state x y]
+  (let [zoom (double (or (:zoom state) 1.0))
+        viewport (:viewport state)
+        vx (double (or (:x viewport) 0.0))
+        vy (double (or (:y viewport) 0.0))]
+    {:x (/ (- (double (or x 0.0)) vx) zoom)
+     :y (/ (- (double (or y 0.0)) vy) zoom)}))
 (defn- ghost-items [{:keys [id label x y valid?]}]
   (let [x (double (or x 0.0)) y (double (or y 0.0))]
     [{:kind :quad :role :ghost :x x :y y :w 220.0 :h 16.0 :rgba (if valid? 0xAA4CAF50 0xAAE0A23B)}
@@ -488,9 +619,11 @@
         (let [entry (palette/find-by-id (:palette @state*) id)
               prefix (str "palette-" (System/nanoTime))
               {:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)
-              x (double (or (:x payload) 0.0))
-              y (double (or (:y payload) 0.0))]
+              point (screen->canvas-point @state* (:x payload) (:y payload))
+              x (:x point)
+              y (:y point)]
           (install-graph! state* graph)
+          (remember-palette! state* id)
           (swap! state* (fn [s] (-> s
                                     (assoc :selected-nid nid
                                            :palette-drag nil
@@ -501,6 +634,40 @@
         (catch Throwable error
           (swap! state* assoc :palette-drag nil :ghost nil
                  :status (str "Cannot add node: " (.getMessage error))))))))
+(def ^:private zoom-min 0.5)
+(def ^:private zoom-max 2.0)
+
+(defn- zoom-canvas! [state* payload]
+  "Apply a wheel delta to the screen camera. The graph/layout stays in
+   document coordinates; viewport is adjusted so the pointer anchor remains
+   visually stationary while zoom changes."
+  (let [old (double (or (:zoom @state*) 1.0))
+        delta (double (or (:delta payload) 0.0))
+        next-zoom (-> (* old (Math/pow 1.1 delta))
+                      (max zoom-min)
+                      (min zoom-max))
+        ratio (if (pos? old) (/ next-zoom old) 1.0)
+        anchor-x (double (or (:x payload) 232.0))
+        anchor-y (double (or (:y payload) 70.0))
+        {:keys [x y]} (:viewport @state*)
+        vx (double (or x 0.0))
+        vy (double (or y 0.0))]
+    (swap! state* assoc
+           :zoom next-zoom
+           :viewport {:x (- anchor-x (* ratio (- anchor-x vx)))
+                      :y (- anchor-y (* ratio (- anchor-y vy)))}
+           :status (format "Zoom %.0f%%" (* 100.0 next-zoom)))))
+
+(defn- history-action! [state* direction]
+  (let [doc (:document @state*)
+        history? (if (= direction :undo) (seq (:history doc)) (seq (:future doc)))]
+    (if-not history?
+      (swap! state* assoc :status (if (= direction :undo) "Nothing to undo." "Nothing to redo."))
+      (swap! state*
+             (fn [s]
+               (let [next-doc ((if (= direction :undo) document/undo document/redo) (:document s))]
+                 (recompute (assoc s :document next-doc
+                                      :status (if (= direction :undo) "Undid edit." "Redid edit.")))))))))
 (defn- handle-action [state* action payload]
   (case action
     ;; A composite item's :down (:target/:item/:index only -- this
@@ -529,11 +696,13 @@
           nil)
 
         (and drag? drag-item)
-        (let [entry (palette/find-by-id (:palette @state*) (:id drag-item))]
+        (let [entry (palette/find-by-id (:palette @state*) (:id drag-item))
+              point (screen->canvas-point @state* x y)]
           (swap! state* assoc
-                 :palette-drag {:id (:id drag-item) :x x :y y}
-                 :ghost {:id (:id drag-item) :label (:label (palette-item entry)) :x x :y y
-                 :valid? (= :node-editor/canvas (:drop-zone payload))}))
+                 :palette-drag (assoc point :id (:id drag-item))
+                 :ghost {:id (:id drag-item) :label (:label (palette-item entry))
+                         :x (:x point) :y (:y point)
+                         :valid? (= :node-editor/canvas (:drop-zone payload))}))
 
         :else
         (case event-type
@@ -557,14 +726,50 @@
           nil)))
 
     :editor/palette-drag-start
-    (let [item (:item payload)]
+    (let [item (:item payload)
+          point (screen->canvas-point @state* (:x payload) (:y payload))]
       (swap! state* assoc
-             :palette-drag {:id (:id item) :x (:x payload) :y (:y payload)}
-             :ghost {:id (:id item) :label (:label item) :x (:x payload) :y (:y payload) :valid? false}
+             :palette-drag (assoc point :id (:id item))
+             :ghost {:id (:id item) :label (:label item) :x (:x point) :y (:y point) :valid? false}
              :status (str "Dragging " (:id item) ".")))
 
     :editor/palette-drop
     (palette-drop! state* (assoc payload :drop-zone :node-editor/canvas))
+
+    :editor/palette-search-change
+    (swap! state* assoc :palette-query (str (or (:value payload) (:text payload) "")))
+
+    :editor/palette-search-submit
+    (swap! state* assoc :palette-query (str (or (:value payload) (:text payload) "")))
+
+    :editor/clear-palette-search
+    (swap! state* assoc :palette-query "")
+
+    :editor/toggle-palette-category
+    (let [category (or (:category payload) (get-in payload [:item :category]))]
+      (when category
+        (swap! state* update :palette-collapsed
+               (fn [collapsed]
+                 (if (contains? collapsed category)
+                   (disj collapsed category)
+                   (conj (or collapsed #{}) category))))))
+
+    :editor/reset-zoom
+    (swap! state* assoc :zoom 1.0 :status "Zoom reset to 100%.")
+
+    :editor/undo
+    (history-action! state* :undo)
+
+    :editor/redo
+    (history-action! state* :redo)
+
+    :input/unknown
+    (when (= :scroll (:type payload))
+      (zoom-canvas! state* payload))
+
+    :input/scroll
+    (when (= :node-editor/canvas (:target payload))
+      (zoom-canvas! state* payload))
 
     :input/key
     (if (= 256 (int (or (:key-code payload) -1)))
@@ -593,9 +798,19 @@
         (try
           (let [{:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)]
             (install-graph! state* graph)
+            (remember-palette! state* (:id entry))
             (swap! state* assoc :selected-nid nid :palette-drag nil :ghost nil :status (str "Added " (:id entry) ".")))
           (catch Throwable error
             (swap! state* assoc :status (str "Cannot add node: " (.getMessage error)))))))
+
+    :editor/param-decrement
+    (param-step state* payload -1)
+
+    :editor/param-increment
+    (param-step state* payload 1)
+
+    :editor/param-toggle
+    (param-toggle state* payload)
 
     :editor/param-change
     (let [item (or (:item payload) payload)

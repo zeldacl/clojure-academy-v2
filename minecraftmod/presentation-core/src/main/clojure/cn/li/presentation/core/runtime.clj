@@ -771,11 +771,13 @@
                     origin-item (:drag-item capture)
                     origin-on (:drag-on capture)]
                 (if moved?
-                  {:action :input/pointer :pointer-capture nil
+                  {:action (or (get-in (nth on-maps hit-node nil) [:drop]) :input/pointer)
+                   :pointer-capture nil
                    :payload (cond-> (assoc event :drag? true
                                            :drag-item origin-item
                                            :drag-origin (:drag-origin capture))
-                              hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit) :drop-zone (:drop-zone (nth semantics-maps hit-node nil))))}
+                              hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit)
+                                         :drop-zone (:drop-zone (nth semantics-maps hit-node nil))))}
                   {:action (or (:activate origin-on) drag-action)
                    :pointer-capture nil
                    :payload (assoc event :item origin-item :index 0)}))

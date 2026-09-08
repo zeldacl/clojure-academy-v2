@@ -1,9 +1,12 @@
 {:ui/schema 2 :view/id :academy.app/node-editor
  :host {:kind :screen :design-width 480 :design-height 360 :scale-policy :fit}
  :state-schema {:title :string :path :string :phase-label :string :phase-tabs :vector
-                :palette :vector :canvas :vector :selected-label :string :selected-params :vector :diagnostics :vector
-                :diagnostic-count :number :cost-label :string :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
-                :reload-label :string :save-label :string :export-label :string}
+                :palette :vector :palette-query :string :palette-rows :vector
+                :palette-search-label :string :palette-clear-label :string
+                :canvas :vector :selected-label :string :selected-params :vector :diagnostics :vector
+                :diagnostic-count :number :cost-label :string :zoom-label :string :zoom-reset-label :string
+                :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
+                :reload-label :string :save-label :string :export-label :string :undo-label :string :redo-label :string}
  :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
         :children
         [{:type :text :key :node-editor/title :layout {:height 16}
@@ -12,40 +15,74 @@
           :children [{:type :text :layout {:width 100} :bind {:text [:state :phase-label]}}
                      {:type :repeater :layout {:width 340}
                       :bind {:items [:state :phase-tabs]}
-                     :children [{:type :button :layout {:width 64 :height 14}
+                      :children [{:type :button :layout {:width 64 :height 14}
                                   :bind {:text [:item :action-label]}
                                   :on {:activate :editor/select-phase}
                                   :semantics {:role :button}}]}]}
-         {:type :scroll :key :node-editor/palette :layout {:height 46}
-          :bind {:items [:state :palette]} :semantics {:role :list}
-          :children [{:type :button :layout {:height 14 :width 440} :bind {:text [:item :label]} :on {:activate :editor/add-palette-node :drag-start :editor/palette-drag-start} :semantics {:role :button}}]}
-         {:type :absolute :key :node-editor/canvas :layout {:height 140}
+         {:type :row :key :node-editor/palette-search :layout {:height 16}
+          :children [{:type :text-input :layout {:height 14 :width 380}
+                      :bind {:text [:state :palette-query]}
+                      :on {:change :editor/palette-search-change :submit :editor/palette-search-submit}
+                      :semantics {:role :textbox :field :palette-search}}
+                     {:type :button :layout {:height 14 :width 70}
+                      :bind {:text [:state :palette-clear-label]}
+                      :on {:activate :editor/clear-palette-search}
+                      :semantics {:role :button}}]}
+         {:type :scroll :key :node-editor/palette :layout {:height 40}
+          :bind {:items [:state :palette-rows]} :semantics {:role :list}
+          :children [{:type :row :layout {:height 14}
+                      :children [{:type :text :layout {:height 14 :width 440}
+                                  :bind {:text [:item :header-label] :visible [:item :header?]}
+                                  :on {:activate :editor/toggle-palette-category}
+                                  :semantics {:role :button :field :palette-category}}
+                                 {:type :button :layout {:height 14 :width 440}
+                                  :bind {:text [:item :label] :visible [:item :entry?]}
+                                  :on {:activate :editor/add-palette-node :drag-start :editor/palette-drag-start}
+                                  :semantics {:role :button}}]}]}
+         {:type :absolute :key :node-editor/canvas :layout {:height 128}
           :children
-          [{:type :box :layout {:width 464 :height 140}
+          [{:type :box :layout {:width 464 :height 128}
             :on {:drop :editor/palette-drop}
             :semantics {:role :generic :drop-zone :node-editor/canvas}}
-           {:type :repeater :layout {:width 464 :height 140}
+           {:type :repeater :layout {:width 464 :height 128}
             :bind {:items [:state :canvas]}
             :children [{:type :composite :bind {:item [:state :item]}
-                        :on {:activate :editor/canvas-press}
+                        :on {:activate :editor/canvas-press :drop :editor/palette-drop}
                         :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}
-         {:type :text :key :node-editor/selected :layout {:height 20}
+         {:type :text :key :node-editor/selected :layout {:height 18}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
-         {:type :scroll :key :node-editor/params :layout {:height 32}
+         {:type :scroll :key :node-editor/params :layout {:height 28}
           :bind {:items [:state :selected-params]} :semantics {:role :list}
           :children [{:type :row :layout {:height 14}
                       :children [{:type :text :layout {:width 150} :bind {:text [:item :label]}}
-                                 {:type :text-input :layout {:width 140 :height 14}
-                                  :bind {:text [:item :value]}
+                                 {:type :text-input :layout {:width 98 :height 14}
+                                  :bind {:text [:item :value] :visible [:item :text-editor?]}
                                   :on {:change :editor/param-change :submit :editor/param-submit}
-                                  :semantics {:role :textbox :field :editor-param}}]}]}
-         {:type :scroll :key :node-editor/diagnostics :layout {:height 44}
+                                  :semantics {:role :textbox :field :editor-param}}
+                                 {:type :button :layout {:width 22 :height 14}
+                                  :bind {:text [:item :decrement-label] :visible [:item :stepper?]}
+                                  :on {:activate :editor/param-decrement}
+                                  :semantics {:role :button :field :editor-param-decrement}}
+                                 {:type :button :layout {:width 22 :height 14}
+                                  :bind {:text [:item :increment-label] :visible [:item :stepper?]}
+                                  :on {:activate :editor/param-increment}
+                                  :semantics {:role :button :field :editor-param-increment}}
+                                 {:type :button :layout {:width 60 :height 14}
+                                  :bind {:text [:item :control-label] :visible [:item :toggle?]}
+                                  :on {:activate :editor/param-toggle}
+                                  :semantics {:role :button :field :editor-param-toggle}}]}]}
+         {:type :scroll :key :node-editor/diagnostics :layout {:height 36}
           :bind {:items [:state :diagnostics]} :semantics {:role :list}
           :children [{:type :row :layout {:height 14}
                       :children [{:type :text :layout {:width 90} :bind {:text [:item :code]}}
                                  {:type :text :layout {:width 300} :bind {:text [:item :message]}}]}]}
-         {:type :text :key :node-editor/cost :layout {:height 16}
-          :bind {:text [:state :cost-label]}}
+         {:type :row :key :node-editor/cost :layout {:height 14}
+          :children [{:type :text :layout {:width 300} :bind {:text [:state :cost-label]}}
+                     {:type :text :layout {:width 80} :bind {:text [:state :zoom-label]}}
+                     {:type :button :layout {:width 80 :height 14}
+                      :bind {:text [:state :zoom-reset-label]}
+                      :on {:activate :editor/reset-zoom}
+                      :semantics {:role :button}}]}
          {:type :row :key :node-editor/preview :layout {:height 16}
           :children [{:type :text :layout {:width 300} :bind {:text [:state :preview-label]}}
                      {:type :button :layout {:width 120 :height 14}
@@ -53,17 +90,25 @@
                       :on {:activate :editor/toggle-preview}
                       :semantics {:role :button}}]}
          {:type :row :key :node-editor/actions :layout {:height 16}
-          :children [{:type :button :layout {:width 110 :height 14}
+          :children [{:type :button :layout {:width 78 :height 14}
                       :bind {:text [:state :reload-label]}
                       :on {:activate :editor/reload}
                       :semantics {:role :button}}
-                     {:type :button :layout {:width 110 :height 14}
+                     {:type :button :layout {:width 78 :height 14}
                       :bind {:text [:state :save-label]}
                       :on {:activate :editor/save}
                       :semantics {:role :button}}
-                     {:type :button :layout {:width 110 :height 14}
+                     {:type :button :layout {:width 78 :height 14}
                       :bind {:text [:state :export-label]}
                       :on {:activate :editor/export}
+                      :semantics {:role :button}}
+                     {:type :button :layout {:width 64 :height 14}
+                      :bind {:text [:state :undo-label]}
+                      :on {:activate :editor/undo}
+                      :semantics {:role :button}}
+                     {:type :button :layout {:width 64 :height 14}
+                      :bind {:text [:state :redo-label]}
+                      :on {:activate :editor/redo}
                       :semantics {:role :button}}]}
          {:type :text :key :node-editor/status :layout {:height 14}
-          :bind {:text [:state :status]}}]}}
+          :bind {:text [:state :status]} :semantics {:role :generic}}]}}

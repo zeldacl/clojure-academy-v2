@@ -5,6 +5,7 @@
    open! (the actual mount-view! side) is exercised only by using the
    screen in-game; see the namespace's own docstring for why."
   (:require [clojure.test :refer [deftest is]]
+            [clojure.string :as str]
             [clojure.java.io :as io]
             [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
             [cn.li.ability.editor.document :as editor-document]
@@ -323,3 +324,59 @@
     (#'node-editor/handle-action state* :input/key {:key-code 256})
     (is (nil? (:palette-drag @state*)))
     (is (nil? (:ghost @state*)))))
+
+(deftest palette-search-category-collapse-and-recent-rows-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
+        palette (:palette state)
+        first-entry (first palette)
+        category (:category first-entry)
+        all-rows (#'node-editor/palette-rows palette "" #{} [])
+        filtered (#'node-editor/palette-rows palette (name (:id first-entry)) #{} [])
+        collapsed (#'node-editor/palette-rows palette "" #{category} [])
+        recent (#'node-editor/palette-rows palette "" #{} [(:id first-entry)])
+        needle (str/lower-case (str (:id first-entry)))
+        matches (filter :entry? filtered)]
+    (is (some :entry? all-rows))
+    (is (every? (fn [row]
+                  (= needle (str/lower-case (str (:id row))))) matches)
+        "search rows must only contain matching entries")
+    (is (some #(and (= category (:category %)) (:collapsed? %)) collapsed))
+    (is (= (:id first-entry) (:id (some #(when (:recent? %) %) recent))))))
+(deftest zoom-is-clamped-and-keeps-pointer-anchor-test
+  (let [state* (atom {:zoom 1.0 :viewport {:x 0.0 :y 0.0}})]
+    (#'node-editor/zoom-canvas! state* {:delta 1.0 :x 100.0 :y 50.0})
+    (is (= 11 (Math/round (* 10.0 (:zoom @state*))))
+        "one wheel notch should apply the stable 1.1 zoom step")
+    (is (= -10 (Math/round (:x (:viewport @state*))))
+        "the cursor x coordinate remains the zoom anchor")
+    (is (= -5 (Math/round (:y (:viewport @state*)))))
+    (#'node-editor/zoom-canvas! state* {:delta 100.0 :x 100.0 :y 50.0})
+    (is (= 2.0 (:zoom @state*)) "zoom has a 200% upper bound")
+    (#'node-editor/handle-action state* :editor/reset-zoom nil)
+    (is (= 1.0 (:zoom @state*)))) )
+
+(deftest undo-and-redo-rebuild-the-editor-graph-test
+  (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
+        entry (first (:palette @state*))
+        before (count (get-in @state* [:graph :order]))]
+    (#'node-editor/handle-action state* :editor/add-palette-node {:item {:id (:id entry)}})
+    (is (= (inc before) (count (get-in @state* [:graph :order]))))
+    (#'node-editor/handle-action state* :editor/undo nil)
+    (is (= before (count (get-in @state* [:graph :order]))))
+    (#'node-editor/handle-action state* :editor/redo nil)
+    (is (= (inc before) (count (get-in @state* [:graph :order]))))))
+
+(deftest palette-drop-converts-screen-point-to-layout-coordinates-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
+        entry (first (:palette state))
+        state* (atom (assoc state :zoom 2.0 :viewport {:x 10.0 :y 20.0}))
+        item {:id (:id entry) :label "screen-space"}]
+    (#'node-editor/handle-action state* :editor/palette-drag-start
+     {:item item :x 110.0 :y 220.0})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :up :drag? true :drag-item item :x 110.0 :y 220.0
+      :drop-zone :node-editor/canvas})
+    (let [nid (:selected-nid @state*)
+          pos (get-in @state* [:layout nid])]
+      (is (= 50 (Math/round (:x pos))))
+      (is (= 100 (Math/round (:y pos)))))))

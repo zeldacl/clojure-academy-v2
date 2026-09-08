@@ -64,8 +64,11 @@
 ;; which exists specifically so the editor's grey-out list and the server's
 ;; actual admission rule can never drift apart).
 
-(defn- export-param [{:keys [type default]}]
-  (cond-> {:type type} (some? default) (assoc :default default)))
+(defn- export-param [{:keys [type min max default]}]
+  (cond-> {:type type}
+    (some? min) (assoc :min min)
+    (some? max) (assoc :max max)
+    (some? default) (assoc :default default)))
 
 (defn export-vocab-node [id spec]
   {:id id

@@ -759,3 +759,21 @@
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
     (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 5 :y 5 :button 0})
     (is (= :demo/activate (first (last @actions))))))
+
+(deftest custom-drag-drop-action-routes-to-hit-target
+  (let [rt (runtime/create-runtime)
+        actions (atom [])
+        artifact (ta/build :academy/test/custom-drop
+                           {:key :root :flags #{:hit-testable} :width [:fixed 80.0] :height [:fixed 20.0]
+                            :on {:drag-start :demo/drag-start :drop :demo/drop}
+                            :semantics {:role :generic :drop-zone :demo/canvas}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state { }
+                                  :reduce (fn [state action payload]
+                                            (swap! actions conj [action payload])
+                                            {:state state :event-result :pass})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 80 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 20 :y 5 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 20 :y 5 :button 0})
+    (is (= :demo/drop (first (last @actions))))
+    (is (true? (:drag? (second (last @actions)))))))
