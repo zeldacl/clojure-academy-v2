@@ -18,7 +18,7 @@
 - “参数检查器尚未实现”已过时：节点检查器现在根据 palette schema 显示类型，并安全提交 `double/int/long/bool/keyword/vec3`；由 sigil、调用或其他节点驱动的输入保持只读。
 - “画布不能拖动”已过时：节点移动、空白画布平移、pin 连线和调色板拖放已接入 `presentation-core` 的 pointer 路由。
 - “法术合成器只维护数据、不展示分组细节”已过时：效果行现在显示并可单独删除已添加的 augment；效果重排/删除会同步重映射参数草稿，未完成或越界的草稿不能进入施法请求。
-- “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v3/*.edn` 没有任何 `:emitters` 内容，只有 `vfx-core` 的编译机制；必须先有内容 schema 和样例，再启动 UI。
+- “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空，只有 `vfx-core` 的编译机制；必须先有内容 schema 和非空样例，再启动 UI。
 - glyph 物品、法术存储 NBT、准星锚点和文件选择器都需要当前仓库尚未提供的资源或平台契约，不能在现有中立 Presentation 层伪造完成；滚轮缩放已使用现有 `:scroll`，只有 pinch 仍等待独立手势契约。
 
 ## 3. 可执行阶段
@@ -82,7 +82,7 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 2. **视图产物**：运行 `cmd /c gradlew.bat :ac:compilePresentationViews --quiet`，将 `build/neutral/ac/generated/resources/presentation/assets` 下的变更同步到 `docs/06-gui/presentation/golden/assets`，再运行 `cmd /c gradlew.bat :verifyPresentationGoldenArtifacts --quiet`。
 3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、紧凑/viewport 屏幕坐标逆变换、缩放锚点、缩放后拖动和保存坐标，以及法术效果/augment 重排、增幅纵向布局与独立删除命中、参数草稿、非法值拒绝和法术合成器 320×240 布局边界。随后运行 Presentation core 测试中的 compiled node-editor 与 spell-composer smoke，分别覆盖实际 golden artifact 的绘制和关键条目命中。
 4. **全量门禁**：依次运行 `cmd /c gradlew.bat :node-core:runNodeCoreClojureTests --quiet`、`cmd /c gradlew.bat :ability-runtime:runAbilityClojureTests --quiet`、`cmd /c gradlew.bat :combat-core:runCombatClojureTests --quiet`、`cmd /c gradlew.bat :vfx-core:runVfxClojureTests --quiet`、`cmd /c gradlew.bat :presentation-core:runCoreClojureTests --quiet`、`cmd /c gradlew.bat :ac:runAcClojureTests --quiet` 和 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace`；任一失败不得以“与本改动无关”跳过，需记录失败测试和回归范围。
-5. **真实游戏验收（外部人工步骤）**：在 480×360 与 320×240 两种窗口验证默认紧凑模式、viewport 打开/关闭、拖拽/滚轮缩放、Tab 焦点和文本截断；记录帧时间与命中问题，只有真实宿主缺陷才进入 pinch/SPI/P3 队列。本仓库的自动门禁不启动 `runClient`，需要具备游戏窗口的验收者按此清单执行并回填记录。
+5. **真实游戏验收（外部人工步骤）**：在 480×360 与 320×240 两种窗口验证默认紧凑模式、viewport 打开/关闭、拖拽/滚轮缩放、Tab 焦点和文本截断；记录帧时间与命中问题，只有真实宿主缺陷才进入 pinch/SPI/P3 队列。本轮按用户约束不启动 `runClient`，因此此项保持“待外部验收”而不是伪造完成；具备游戏窗口的验收者应按此清单执行并回填记录。
 6. **提交边界**：只提交本计划涉及的源码、视图、测试、文档和 golden；保留工作区中与本任务无关的生成目录/脚本，不做清理或 reset。
 
 完成定义：步骤 1–4 全部通过，步骤 5 有可复现记录，且 P3 的每个工作包都具备“先决条件—交付物—验收门槛”三项信息后，才可将本轮重构标记为完成。
