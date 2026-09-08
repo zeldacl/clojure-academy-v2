@@ -316,6 +316,7 @@
     (#'node-editor/handle-action state* :input/pointer
      {:event-type :drag :drag? true :drag-item item :x 52.0 :y 124.0 :drop-zone :node-editor/canvas})
     (is (= 52.0 (get-in @state* [:ghost :x])))
+    (is (= 44.0 (get-in @state* [:ghost :y])))
     (is (true? (get-in @state* [:ghost :valid?])))
     (#'node-editor/handle-action state* :input/pointer
      {:event-type :up :drag? true :drag-item item :x 52.0 :y 124.0
@@ -347,13 +348,13 @@
     (is (= (:id first-entry) (:id (some #(when (:recent? %) %) recent))))))
 (deftest zoom-is-clamped-and-keeps-pointer-anchor-test
   (let [state* (atom {:zoom 1.0 :viewport {:x 0.0 :y 0.0}})]
-    (#'node-editor/zoom-canvas! state* {:delta 1.0 :x 100.0 :y 50.0})
+    (#'node-editor/zoom-canvas! state* {:delta 1.0 :x 100.0 :y 130.0})
     (is (= 11 (Math/round (* 10.0 (:zoom @state*))))
         "one wheel notch should apply the stable 1.1 zoom step")
     (is (= -10 (Math/round (:x (:viewport @state*))))
         "the cursor x coordinate remains the zoom anchor")
     (is (= -5 (Math/round (:y (:viewport @state*)))))
-    (#'node-editor/zoom-canvas! state* {:delta 100.0 :x 100.0 :y 50.0})
+    (#'node-editor/zoom-canvas! state* {:delta 100.0 :x 100.0 :y 130.0})
     (is (= 2.0 (:zoom @state*)) "zoom has a 200% upper bound")
     (#'node-editor/handle-action state* :editor/reset-zoom nil)
     (is (= 1.0 (:zoom @state*)))) )
@@ -382,7 +383,25 @@
     (let [nid (:selected-nid @state*)
           pos (get-in @state* [:layout nid])]
       (is (= 50 (Math/round (:x pos))))
-      (is (= 100 (Math/round (:y pos)))))))
+      (is (= 60 (Math/round (:y pos)))))))
+(deftest viewport-screen-point-converts-to-local-graph-coordinates-test
+  (let [state (assoc (node-editor/open-document v3-thunder-bolt-path :skill)
+                     :canvas-viewport? true
+                     :zoom 2.0
+                     :viewport {:x 10.0 :y 20.0})
+        point (#'node-editor/screen->canvas-point state 110.0 146.0)]
+    (is (= 50 (Math/round (:x point))))
+    (is (= 40 (Math/round (:y point))))))
+
+(deftest zoomed-node-drag-converts-screen-delta-to-graph-delta-test
+  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
+        nid (first (get-in state [:graph :order]))
+        state* (atom (assoc state :zoom 2.0 :layout {nid {:x 100.0 :y 40.0}}))]
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {:nid nid}})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :drag :drag-x 4.0 :drag-y 2.0})
+    (is (= 102.0 (get-in @state* [:layout nid :x])))
+    (is (= 41.0 (get-in @state* [:layout nid :y])))))
 (deftest schema-driven-keyword-and-vec3-editor-primitives-test
   (is (= :safe (#'node-editor/parse-editor-value {:type :keyword} ":safe")))
   (is (= :safe (#'node-editor/parse-editor-value {:type :keyword} "safe")))

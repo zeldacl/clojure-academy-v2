@@ -706,13 +706,38 @@
       (do
         (param-submit state* (assoc item :value (pr-str (assoc current index parsed))))
         (swap! state* update :param-drafts dissoc [nid key axis])))))
+(defn- canvas-origin
+  "Design-space origin of the active canvas inside node-editor.ui.edn.
+   Compact mode follows the fixed controls (16+16+16+32 = 80px); the
+   viewport overlay starts at 24px and its inner canvas at 22px. Keeping
+   this explicit makes screen->canvas-point the inverse of the UI layout
+   instead of treating the whole screen as graph space."
+  [state]
+  (if (:canvas-viewport? state)
+    {:x 0.0 :y 46.0}
+    {:x 0.0 :y 80.0}))
+
+(defn- screen->camera-point [state x y]
+  (let [{ox :x oy :y} (canvas-origin state)]
+    {:x (- (double (or x ox)) (double ox))
+     :y (- (double (or y oy)) (double oy))}))
+
 (defn- screen->canvas-point [state x y]
   (let [zoom (double (or (:zoom state) 1.0))
         viewport (:viewport state)
         vx (double (or (:x viewport) 0.0))
-        vy (double (or (:y viewport) 0.0))]
-    {:x (/ (- (double (or x 0.0)) vx) zoom)
-     :y (/ (- (double (or y 0.0)) vy) zoom)}))
+        vy (double (or (:y viewport) 0.0))
+        {:keys [x y]} (screen->camera-point state x y)]
+    {:x (/ (- x vx) zoom)
+     :y (/ (- y vy) zoom)}))
+(defn- screen->canvas-delta
+  "Convert a per-frame pointer delta from screen pixels to graph units.
+   Panning deliberately does not use this helper: viewport translation is
+   stored in screen-space so an empty-canvas drag follows the cursor."
+  [state dx dy]
+  (let [zoom (double (or (:zoom state) 1.0))]
+    {:dx (/ (double (or dx 0.0)) zoom)
+     :dy (/ (double (or dy 0.0)) zoom)}))
 (defn- ghost-items [{:keys [id label x y valid?]}]
   (let [x (double (or x 0.0)) y (double (or y 0.0))]
     [{:kind :quad :role :ghost :x x :y y :w 220.0 :h 16.0 :rgba (if valid? 0xAA4CAF50 0xAAE0A23B)}
@@ -760,8 +785,12 @@
                       (max zoom-min)
                       (min zoom-max))
         ratio (if (pos? old) (/ next-zoom old) 1.0)
-        anchor-x (double (or (:x payload) 232.0))
-        anchor-y (double (or (:y payload) 70.0))
+        origin (canvas-origin @state*)
+        camera-point (screen->camera-point @state*
+                                           (or (:x payload) (+ (:x origin) 232.0))
+                                           (or (:y payload) (+ (:y origin) 70.0)))
+        anchor-x (double (:x camera-point))
+        anchor-y (double (:y camera-point))
         {:keys [x y]} (:viewport @state*)
         vx (double (or x 0.0))
         vy (double (or y 0.0))]
@@ -820,7 +849,8 @@
         :else
         (case (if (= :move event-type) :drag event-type)
           :drag (case drag-mode
-                  :dragging-node (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0))
+                  :dragging-node (let [{:keys [dx dy]} (screen->canvas-delta @state* drag-x drag-y)]
+                                    (nudge-node-layout! state* (:nid (:drag @state*)) dx dy))
                   :panning (swap! state* update :viewport
                                   (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
                   nil)
