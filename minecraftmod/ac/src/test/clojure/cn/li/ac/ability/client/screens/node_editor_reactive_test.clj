@@ -295,6 +295,7 @@
           data-nid (:data-nid field)]
       (is (= (inc before) (count (get-in @state* [:graph :order]))))
       (is (true? (:editable? field)))
+      (is (keyword? (:draft-key field)))
       (#'node-editor/handle-action state* :editor/param-change (assoc field :value "3.5"))
       (is (= "3.5" (get-in @state* [:param-drafts [(:nid field) (:param-key field)]])))
       (#'node-editor/handle-action state* :editor/param-submit (assoc field :value "3.5"))

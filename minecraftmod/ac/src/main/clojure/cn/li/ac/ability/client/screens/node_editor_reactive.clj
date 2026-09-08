@@ -292,6 +292,10 @@
               (let [data (get-in graph [:nodes ref])
                     descriptor (get specs key)
                     type (:type descriptor)
+                    draft-key (keyword (str "node-editor-param-"
+                                            (-> (str selected-nid)
+                                                (str/replace #"[^A-Za-z0-9_-]" "-"))
+                                            "-" (name key)))
                     rendered (try (graph/expr-text (:nodes graph) ref)
                                   (catch Throwable _ (pr-str (:value data))))
                     editable? (and (= :data (:kind data))
@@ -302,6 +306,7 @@
                 {:nid selected-nid
                  :param-key key
                  :data-nid ref
+                 :draft-key draft-key
                  :type type
                  :label (str (name key) (when type
                                        (str " [" (name type) "]")))
