@@ -382,3 +382,9 @@
           pos (get-in @state* [:layout nid])]
       (is (= 50 (Math/round (:x pos))))
       (is (= 100 (Math/round (:y pos)))))))
+(deftest schema-driven-keyword-and-vec3-editor-primitives-test
+  (is (= :safe (#'node-editor/parse-editor-value {:type :keyword} ":safe")))
+  (is (= :safe (#'node-editor/parse-editor-value {:type :keyword} "safe")))
+  (is (= [1.0 2.0 3.0] (#'node-editor/vec3-values [1 2 3])))
+  (is (nil? (#'node-editor/vec3-values [1 2])))
+  (is (nil? (#'node-editor/vec3-values [1 ##NaN 3]))))

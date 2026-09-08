@@ -23,7 +23,7 @@
   (reduce-kv (fn [acc k spec]
                (if (= false (:editor-visible? spec))
                  acc
-                 (assoc acc k (select-keys spec [:type :min :max :default :doc :scope]))))
+               (assoc acc k (select-keys spec [:type :min :max :default :choices :doc :scope]))))
              {} fields))
 
 (defn export-descriptor [d]
@@ -64,10 +64,11 @@
 ;; which exists specifically so the editor's grey-out list and the server's
 ;; actual admission rule can never drift apart).
 
-(defn- export-param [{:keys [type min max default]}]
+(defn- export-param [{:keys [type min max default choices]}]
   (cond-> {:type type}
     (some? min) (assoc :min min)
     (some? max) (assoc :max max)
+    (some? choices) (assoc :choices (vec choices))
     (some? default) (assoc :default default)))
 
 (defn export-vocab-node [id spec]

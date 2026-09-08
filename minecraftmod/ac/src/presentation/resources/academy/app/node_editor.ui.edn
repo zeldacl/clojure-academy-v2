@@ -59,6 +59,19 @@
                                   :bind {:text [:item :value] :visible [:item :text-editor?]}
                                   :on {:change :editor/param-change :submit :editor/param-submit}
                                   :semantics {:role :textbox :field :editor-param}}
+                                 {:type :repeater :layout {:width 98 :height 14}
+                                  :bind {:items [:item :vec3-components] :visible [:item :vec3-editor?]}
+                                  :children [{:type :row :layout {:height 14}
+                                              :children [{:type :text :layout {:width 14 :height 14}
+                                                          :bind {:text [:item :axis-label]}}
+                                                         {:type :text-input :layout {:width 80 :height 14}
+                                                          :bind {:text [:item :value]}
+                                                          :on {:change :editor/param-axis-change :submit :editor/param-axis-submit}
+                                                          :semantics {:role :textbox :field :editor-param-axis}}]}]}
+                                 {:type :button :layout {:width 64 :height 14}
+                                  :bind {:text [:item :choice-next-label] :visible [:item :choice?]}
+                                  :on {:activate :editor/param-cycle}
+                                  :semantics {:role :button :field :editor-param-choice}}
                                  {:type :button :layout {:width 22 :height 14}
                                   :bind {:text [:item :decrement-label] :visible [:item :stepper?]}
                                   :on {:activate :editor/param-decrement}

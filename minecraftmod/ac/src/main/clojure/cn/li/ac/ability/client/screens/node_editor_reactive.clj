@@ -280,10 +280,24 @@
     :vfx! (:fields node)
     {}))
 
+(defn- vec3-values [value]
+  (let [v (cond
+            (and (map? value) (vector? (:vec3 value))) (:vec3 value)
+            (vector? value) value
+            :else nil)]
+    (when (and (= 3 (count v)) (every? number? v)
+               (every? #(Double/isFinite (double %)) v))
+      (mapv double v))))
+
+(defn- axis-draft-key [draft-key axis]
+  (keyword (str (name draft-key) "-" (name axis))))
+
 (defn- selected-param-fields
   "state -> display/edit fields for expression inputs of the selected node.
    Literal, vector-literal and map-literal expressions are locally editable;
-   references/calls remain read-only so wiring stays the explicit operation."
+   references/calls remain read-only so wiring stays the explicit operation.
+   Keyword choices and vec3 axes are opt-in schema controls; without metadata
+   they retain the safe text-editor fallback."
   [{:keys [graph selected-nid palette param-drafts]}]
   (if-let [node (get-in graph [:nodes selected-nid])]
     (let [refs (node-input-refs node)
@@ -302,6 +316,20 @@
                                    (contains? #{:literal :vec-lit :map-lit} (:expr data)))
                     bool? (contains? #{:bool :boolean} type)
                     numeric? (contains? #{:int :long :float :double} type)
+                    choices (vec (filter keyword? (:choices descriptor)))
+                    choice? (and editable? (= :keyword type) (seq choices))
+                    current-vec3 (vec3-values (:value data))
+                    vec3-editor? (and editable? (= :vec3 type) current-vec3)
+                    vec3-components (when vec3-editor?
+                                      (mapv (fn [[axis value]]
+                                              {:nid selected-nid
+                                               :param-key key
+                                               :data-nid ref
+                                               :axis axis
+                                               :axis-label (str (name axis) ":")
+                                               :draft-key (axis-draft-key draft-key axis)
+                                               :value (str (or (get param-drafts [selected-nid key axis]) value))})
+                                            (map vector [:x :y :z] current-vec3)))
                     bool-value? (= "true" (str/lower-case (str rendered)))]
                 {:nid selected-nid
                  :param-key key
@@ -313,7 +341,14 @@
                  :value (or (get param-drafts [selected-nid key]) rendered)
                  :editable? editable?
                  :toggle? (and editable? bool?)
-                 :text-editor? (or (not bool?) (not editable?))
+                 :choice? choice?
+                 :choices choices
+                 :choice-next-label "Next"
+                 :text-editor? (and (or (not bool?) (not editable?))
+                                    (not choice?)
+                                    (not vec3-editor?))
+                 :vec3-editor? (boolean vec3-editor?)
+                 :vec3-components (vec (or vec3-components []))
                  :stepper? (and editable? numeric?)
                  :control-label (if bool-value? "On" "Off")
                  :decrement-label "−"
@@ -339,7 +374,11 @@
                (mapv double v)))
            (catch Exception _ nil))
       :string text
-      :keyword (when (seq text) (keyword text))
+      :keyword
+      (or (try
+            (let [v (read-edn)] (when (keyword? v) v))
+            (catch Exception _ nil))
+          (when (seq text) (keyword text)))
       (try (read-edn) (catch Exception _ nil)))))
 ;; --- render-state (map -> what the .ui.edn's :state-schema binds) ------
 
@@ -453,11 +492,14 @@
         ;; Repeater text inputs need a stable state-backed draft. The
         ;; Presentation runtime rewrites focus to this per-field key so
         ;; character/backspace/Enter events carry the current value.
+        draft-items (mapcat (fn [field]
+                             (cons field (:vec3-components field)))
+                           selected-params)
         draft-state (into {}
-                          (keep (fn [{:keys [draft-key value text-editor?]}]
-                                  (when (and draft-key text-editor?)
+                          (keep (fn [{:keys [draft-key value text-editor? axis]}]
+                                  (when (and draft-key (or text-editor? axis))
                                     [draft-key (str value)])))
-                          selected-params)
+                          draft-items)
         raw-canvas (into (render/graph->composite-items graph (:layout state))
                          (when ghost (ghost-items ghost)))]
     (merge draft-state
@@ -569,6 +611,9 @@
                 (contains? #{:literal :vec-lit :map-lit} (:expr data))))
       (swap! state* assoc :status "This input is driven by an expression; connect a literal node instead.")
       (nil? parsed) (swap! state* assoc :status (str "Invalid " (name key) " value."))
+      (and (seq (:choices descriptor))
+           (not (some #(= parsed %) (:choices descriptor))))
+      (swap! state* assoc :status (str "Choose one of the allowed values for " (name key) "."))
       :else
       (do
         (install-graph! state* (assoc-in (:graph @state*) [:nodes data-nid]
@@ -608,6 +653,52 @@
              (contains? #{:literal :vec-lit :map-lit} (:expr data)))
       (param-submit state* (assoc item :value (str (not current))))
       (swap! state* assoc :status "Only boolean literal inputs support toggle controls."))))
+(defn- param-cycle [state* payload direction]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+        key (:param-key item)
+        node (get-in @state* [:graph :nodes nid])
+        ref (get (node-input-refs node) key)
+        data (get-in @state* [:graph :nodes ref])
+        entry (some #(when (= (node-op-id node) (:id %)) %) (:palette @state*))
+        descriptor (get-in entry [:params key])
+        choices (vec (filter keyword? (:choices descriptor)))
+        current (parse-editor-value descriptor (or (:value item) (:value data)))
+        index (or (first (keep-indexed (fn [i v] (when (= current v) i)) choices)) -1)
+        next-value (when (seq choices) (nth choices (mod (+ index direction) (count choices))))]
+    (if next-value
+      (param-submit state* (assoc item :value (pr-str next-value)))
+      (swap! state* assoc :status "This keyword input has no selectable choices."))))
+
+(defn- param-axis-change [state* payload]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+        key (:param-key item)
+        axis (:axis item)
+        value (or (:value payload) (:value item) (:text payload))]
+    (when (and nid key (contains? #{:x :y :z} axis))
+      (swap! state* assoc-in [:param-drafts [nid key axis]] (str value)))))
+
+(defn- param-axis-submit [state* payload]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state*))
+        key (:param-key item)
+        axis (:axis item)
+        node (get-in @state* [:graph :nodes nid])
+        ref (get (node-input-refs node) key)
+        data (get-in @state* [:graph :nodes ref])
+        current (vec3-values (:value data))
+        raw (or (:value payload) (:value item) (:text payload))
+        parsed (parse-editor-value {:type :double} raw)
+        index ({:x 0 :y 1 :z 2} axis)]
+    (cond
+      (nil? current) (swap! state* assoc :status "This input is not an editable vec3 literal.")
+      (nil? index) (swap! state* assoc :status "Unknown vec3 axis.")
+      (nil? parsed) (swap! state* assoc :status (str "Invalid " (name axis) " value."))
+      :else
+      (do
+        (param-submit state* (assoc item :value (pr-str (assoc current index parsed))))
+        (swap! state* update :param-drafts dissoc [nid key axis])))))
 (defn- screen->canvas-point [state x y]
   (let [zoom (double (or (:zoom state) 1.0))
         viewport (:viewport state)
@@ -826,6 +917,15 @@
 
     :editor/param-toggle
     (param-toggle state* payload)
+
+    :editor/param-cycle
+    (param-cycle state* payload 1)
+
+    :editor/param-axis-change
+    (param-axis-change state* payload)
+
+    :editor/param-axis-submit
+    (param-axis-submit state* payload)
 
     :editor/param-change
     (let [item (or (:item payload) payload)
