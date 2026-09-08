@@ -80,7 +80,7 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 
 1. **源码/视图收束**：确认 `node_editor_reactive.clj` 的 viewport 状态、按钮 action、Esc 关闭和旧 canvas 拖拽分支同时存在；确认 `node_editor.ui.edn` 的紧凑画布、464×278 viewport 覆盖层及状态绑定成对出现。
 2. **视图产物**：运行 `cmd /c gradlew.bat :ac:compilePresentationViews --quiet`，将 `build/neutral/ac/generated/resources/presentation/assets` 下的变更同步到 `docs/06-gui/presentation/golden/assets`，再运行 `cmd /c gradlew.bat :verifyPresentationGoldenArtifacts --quiet`。
-3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、缩放锚点和保存坐标。
+3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、缩放锚点和保存坐标，以及法术效果/augment 重排、参数草稿和非法值拒绝。
 4. **全量门禁**：依次运行 `cmd /c gradlew.bat :ability-runtime:runAbilityClojureTests --quiet`、`cmd /c gradlew.bat :combat-core:runCombatClojureTests --quiet`、`cmd /c gradlew.bat :vfx-core:runVfxClojureTests --quiet`、`cmd /c gradlew.bat :presentation-core:runCoreClojureTests --quiet`、`cmd /c gradlew.bat :ac:runAcClojureTests --quiet` 和 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace`；任一失败不得以“与本改动无关”跳过，需记录失败测试和回归范围。
 5. **真实游戏验收**：在 480×360 与 320×240 两种窗口验证默认紧凑模式、viewport 打开/关闭、拖拽/滚轮缩放、Tab 焦点和文本截断；记录帧时间与命中问题，只有真实宿主缺陷才进入 pinch/SPI/P3 队列。
 6. **提交边界**：只提交本计划涉及的源码、视图、测试、文档和 golden；保留工作区中与本任务无关的生成目录/脚本，不做清理或 reset。
