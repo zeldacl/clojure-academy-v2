@@ -3,6 +3,8 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.screens.spell-composer-reactive :as composer]))
 
+(def ^:private spell-composer-ui-path "src/presentation/resources/academy/app/spell_composer.ui.edn")
+
 (deftest initial-state-has-catalog-and-grouped-empty-composition-test
   (let [state (#'composer/initial-state)]
     (is (seq (:catalog state)))
@@ -135,3 +137,20 @@
     (is (= 0 (:augment-index augment)))
     (is (= "X" (:remove-label augment)))
     (is (= [] (get-in (#'composer/remove-augment state 0 0) [:effect-groups 0 :augments])))))
+(deftest spell-composer-layout-fits-design-and-320x240-bounds-test
+  (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))
+        host (:host ui)
+        root-layout (get-in ui [:root :layout])
+        scale (min (/ 320.0 (double (:design-width host)))
+                   (/ 240.0 (double (:design-height host))))
+        right (* scale (+ (double (:x root-layout)) (double (:width root-layout))))
+        bottom (* scale (+ (double (:y root-layout)) (double (:height root-layout))))]
+    (is (= :screen (:kind host)))
+    (is (<= (+ (double (:x root-layout)) (double (:width root-layout)))
+            (double (:design-width host)))
+        "composer root must fit its declared design width")
+    (is (<= (+ (double (:y root-layout)) (double (:height root-layout)))
+            (double (:design-height host)))
+        "composer root must fit its declared design height")
+    (is (<= right 320.0) (str "composer right edge exceeds 320px: " right))
+    (is (<= bottom 240.0) (str "composer bottom edge exceeds 240px: " bottom))))
