@@ -543,6 +543,81 @@
       (some? (:item src))
       (assoc :item (:item src) :index (:index src)))))
 
+(declare instance-item-index resolve-focus-instance)
+
+(defn- focus-for-instance
+  "Build the same focus descriptor used by pointer hit-testing for an arranged
+   focusable instance. Keeping this in the runtime also covers repeater
+   expansions, whose node id is shared by every row."
+  [instance inst]
+  (let [^NodeTable table (:table instance)
+        ^LayoutArena arena (:arena instance)
+        bind-maps (:bind-maps instance)
+        on-maps (:on-maps instance)
+        semantics-maps (:semantics-maps instance)
+        node (aget ^ints (.-nodeOf arena) (int inst))
+        sem (nth semantics-maps node nil)
+        bind (nth bind-maps node nil)
+        text-path (or (:text bind)
+                      (loop [c (aget ^ints (.-firstChild table) (int node))]
+                        (when (>= c 0)
+                          (or (:text (nth bind-maps c nil))
+                              (recur (aget ^ints (.-nextSibling table) (int c)))))))
+        item (aget ^objects (.-itemOf arena) (int inst))
+        item-index (instance-item-index arena inst)
+        draft-key (when (map? item) (:draft-key item))
+        field (or (:field sem)
+                  (when (map? item) (:id item))
+                  (when (and (vector? text-path) (seq text-path))
+                    (peek text-path)))
+        focus-text-path (if (and (vector? text-path)
+                                 (= :item (first text-path))
+                                 (keyword? draft-key))
+                          [:state draft-key]
+                          text-path)]
+    (cond-> {:key (node-key table node)
+             :node (int node)
+             :instance (int inst)
+             :path focus-text-path
+             :on (nth on-maps node nil)
+             :field field}
+      (keyword? draft-key) (assoc :draft-key draft-key)
+      (map? item) (assoc :item item)
+      (>= item-index 0) (assoc :item-index item-index))))
+
+(defn- focusable-instances
+  "Return visible, arranged focusable instances in deterministic pre-order."
+  [instance]
+  (let [^NodeTable table (:table instance)
+        ^LayoutArena arena (:arena instance)
+        n (int (.-n arena))]
+    (->> (range n)
+         (filter (fn [inst]
+                   (let [node (aget ^ints (.-nodeOf arena) (int inst))]
+                     (and (.has table node NodeFlags/FOCUSABLE)
+                          (pos? (aget ^ints (.-visible arena) (int inst)))
+                          (pos? (.w arena (int inst)))
+                          (pos? (.h arena (int inst)))))))
+         vec)))
+
+(defn- next-focus
+  "Resolve Tab/Shift-Tab against the current arranged focusable instances."
+  [instance shift?]
+  (let [candidates (focusable-instances instance)
+        current (:focus instance)
+        current-inst (when current
+                       (let [resolved (resolve-focus-instance (:arena instance) current)]
+                         (when (some #(= (int %) (int resolved)) candidates)
+                           (int resolved))))]
+    (when (seq candidates)
+      (let [last-idx (dec (count candidates))
+            idx (if (nil? current-inst)
+                  (if shift? last-idx 0)
+                  (let [at (.indexOf ^java.util.List candidates (int current-inst))]
+                    (if shift?
+                      (mod (dec at) (count candidates))
+                      (mod (inc at) (count candidates)))))]
+        (focus-for-instance instance (nth candidates idx))))))
 (defn- event-point
   "Version hosts normally provide mount-local coordinates. Explicit
    :viewport coordinates are accepted for overlays whose origin is nonzero.
@@ -914,6 +989,14 @@
         :key (let [key-code (int (or (:key-code event) -1))
                   submit-action (get-in focus [:on :submit])]
               (cond
+                (= key-code 258)
+                (if-let [next (next-focus instance (true? (:shift? event)))]
+                  {:focus next
+                   :focus-navigation? true
+                   :action :input/focus
+                   :payload (assoc event :focus-navigation? true
+                                         :target (:key next))}
+                  {:action :input/key :payload event})
                 (= key-code 256)
                 {:action :input/key :pointer-capture nil :payload event}
                 (and (= key-code 257) submit-action)
@@ -1089,14 +1172,16 @@
         ;; press/drag while a scrollbar capture is armed.
         result (let [base (or (:event-result response) :pass)
                      editing? (some? (focus-path focus))
-                     base (if (and editing?
+                     base (if (:focus-navigation? routed)
+                            :consume
+                            (if (and editing?
                                    (or (= action :input/key)
                                        (= action :input/backspace)
                                        (= action :input/character)
                                        (= action (get-in focus [:on :change]))
                                        (= action (get-in focus [:on :submit]))))
                             :consume
-                            base)
+                            base))
                      cap (or (:pointer-capture routed)
                              (when (and (= :pointer (:type event))
                                         (#{:drag :move} (:event-type event)))

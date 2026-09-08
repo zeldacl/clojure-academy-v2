@@ -305,6 +305,32 @@
     (is (= "hi" (get-in (runtime/instance! rt mount) [:view-state :query])))
     (is (= :query (:field (second (last @seen)))))))
 
+(deftest tab-and-shift-tab-cycle-focusable-controls
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/tab-focus
+                           {:key :root :direction :row :flags #{:has-direction}
+                            :width [:fixed 120.0] :height [:fixed 20.0]
+                            :children
+                            [{:key :first :flags #{:hit-testable :focusable}
+                              :width [:fixed 60.0] :height [:fixed 20.0]
+                              :bind {:text [:state :first]}
+                              :semantics {:role :textbox :field :first}}
+                             {:key :second :flags #{:hit-testable :focusable}
+                              :width [:fixed 60.0] :height [:fixed 20.0]
+                              :bind {:text [:state :second]}
+                              :semantics {:role :textbox :field :second}}]})
+        artifact (assoc artifact :node/semantics [nil {:role :textbox :field :first}
+                                                   {:role :textbox :field :second}])
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:first "" :second ""}
+                                  :reduce (fn [state _ _] {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 120 20 1.0))
+    (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258})))
+    (is (= :first (:field (:focus (runtime/instance! rt mount)))))
+    (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258})))
+    (is (= :second (:field (:focus (runtime/instance! rt mount)))))
+    (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258 :shift? true})))
+    (is (= :first (:field (:focus (runtime/instance! rt mount)))))))
 (defn- wireless-node-golden-file
   []
   (first (filter #(.isFile ^java.io.File %)
