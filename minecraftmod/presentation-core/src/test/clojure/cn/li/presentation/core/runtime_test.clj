@@ -473,9 +473,11 @@
    :form-label "Form"
    :selected-param-fields []
    :effect-slots [{:index 0 :label "1. effect/damage"
-                   :row-height 30 :augment-height 14
-                   :augments [{:effect-index 0 :augment-index 0
-                               :label "+ augment/amplify" :remove-label "X"}]
+                   :row-height 128 :augment-height 112
+                   :augments (mapv (fn [augment-index]
+                               {:effect-index 0 :augment-index augment-index
+                                :label "+ augment/amplify" :remove-label "X"})
+                             (range 8))
                    :can-move-up? false :can-move-down? false
                    :up-label "UP" :down-label "DN" :remove-label "X"}]
    :can-cast? true
