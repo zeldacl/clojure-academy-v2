@@ -78,7 +78,7 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 
 以下步骤是把本次复核后的实现安全交付的最短路径；每一步失败都应先修复再进入下一步：
 
-1. **源码/视图收束**：确认 `node_editor_reactive.clj` 的 viewport 状态、按钮 action、Esc 关闭和旧 canvas 拖拽分支同时存在；确认 `node_editor.ui.edn` 用 `:stack` 将固定高度的 `:node-editor/base` 列与 464×278 viewport 覆盖层分离，紧凑画布、覆盖层及状态绑定成对出现，避免隐藏 overlay 仍参与 column 流布局。
+1. **源码/视图收束**：确认 `node_editor_reactive.clj` 的 viewport 状态、按钮 action、Esc 关闭和旧 canvas 拖拽分支同时存在；确认 `node_editor.ui.edn` 用 `:stack` 将固定高度的 `:node-editor/base` 列与 464×278 viewport 覆盖层分离，紧凑画布、覆盖层及状态绑定成对出现，避免隐藏 overlay 仍参与 column 流布局；同时确认基础列声明高度不小于所有固定行高度之和。
 2. **视图产物**：运行 `cmd /c gradlew.bat :ac:compilePresentationViews --quiet`，将 `build/neutral/ac/generated/resources/presentation/assets` 下的变更同步到 `docs/06-gui/presentation/golden/assets`，再运行 `cmd /c gradlew.bat :verifyPresentationGoldenArtifacts --quiet`。
 3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、缩放锚点和保存坐标，以及法术效果/augment 重排、参数草稿、非法值拒绝和法术合成器 320×240 布局边界。
 4. **全量门禁**：依次运行 `cmd /c gradlew.bat :node-core:runNodeCoreClojureTests --quiet`、`cmd /c gradlew.bat :ability-runtime:runAbilityClojureTests --quiet`、`cmd /c gradlew.bat :combat-core:runCombatClojureTests --quiet`、`cmd /c gradlew.bat :vfx-core:runVfxClojureTests --quiet`、`cmd /c gradlew.bat :presentation-core:runCoreClojureTests --quiet`、`cmd /c gradlew.bat :ac:runAcClojureTests --quiet` 和 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace`；任一失败不得以“与本改动无关”跳过，需记录失败测试和回归范围。
