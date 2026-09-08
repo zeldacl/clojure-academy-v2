@@ -279,19 +279,25 @@
      :selected-param-fields selected-params
      :effect-slots
      (mapv (fn [idx {:keys [glyph augments]}]
-             {:index idx :label (str (inc idx) ". " (glyph-str glyph))
-              :selected? (= idx selected-effect)
-              :augment-label (when (seq augments)
-                               (str/join " " (map #(str "+" (glyph-str (:glyph %))) augments)))
-              :augments (mapv (fn [augment-index a]
-                                {:effect-index idx
-                                 :augment-index augment-index
-                                 :label (str "+ " (glyph-str (:glyph a)))
-                                 :remove-label "X"})
-                              (range) augments)
-              :can-move-up? (pos? idx)
-              :can-move-down? (< idx (dec (count effect-groups)))
-              :up-label "UP" :down-label "DN" :remove-label "X"})
+             (let [augment-height (* 14 (count augments))]
+               {:index idx :label (str (inc idx) ". " (glyph-str glyph))
+                :selected? (= idx selected-effect)
+                ;; The slot row grows with its augment list. Augments are
+                ;; rendered as a vertical set of removable rows so eight
+                ;; augments cannot overflow the fixed effect controls.
+                :row-height (+ 16 augment-height)
+                :augment-height augment-height
+                :augment-label (when (seq augments)
+                                 (str/join " " (map #(str "+" (glyph-str (:glyph %))) augments)))
+                :augments (mapv (fn [augment-index a]
+                                  {:effect-index idx
+                                   :augment-index augment-index
+                                   :label (str "+ " (glyph-str (:glyph a)))
+                                   :remove-label "X"})
+                                (range) augments)
+                :can-move-up? (pos? idx)
+                :can-move-down? (< idx (dec (count effect-groups)))
+                :up-label "UP" :down-label "DN" :remove-label "X"}))
            (range) effect-groups)
      :can-cast? (boolean (and (not busy?) form (seq effect-groups)
                               (valid-param-drafts? state)))

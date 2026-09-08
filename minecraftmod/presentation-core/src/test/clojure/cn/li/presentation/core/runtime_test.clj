@@ -472,7 +472,12 @@
    :augment-palette [{:id :augment/amplify :label "Amplify"}]
    :form-label "Form"
    :selected-param-fields []
-   :effect-slots []
+   :effect-slots [{:index 0 :label "1. effect/damage"
+                   :row-height 30 :augment-height 14
+                   :augments [{:effect-index 0 :augment-index 0
+                               :label "+ augment/amplify" :remove-label "X"}]
+                   :can-move-up? false :can-move-down? false
+                   :up-label "UP" :down-label "DN" :remove-label "X"}]
    :can-cast? true
    :busy? false
    :status ""
@@ -502,7 +507,13 @@
       (runtime/dispatch! rt mount
                           {:type :pointer :event-type :down :x 20 :y 150 :button 0})
       (is (= :composer/add-effect (ffirst @seen)))
-      (is (= :effect/damage (get-in (last @seen) [1 :item :id]))))))
+       (is (= :effect/damage (get-in (last @seen) [1 :item :id])))
+       (reset! seen [])
+       ;; The first augment row has its own remove button at x280..296, y48..62.
+       (runtime/dispatch! rt mount
+                           {:type :pointer :event-type :down :x 288 :y 55 :button 0})
+       (is (= :composer/remove-augment (ffirst @seen)))
+       (is (= 0 (get-in (last @seen) [1 :item :augment-index]))))))
 (defn- hist-quad
   [h]
   {:kind :quad :x 22.4 :y (- 79.2 h) :w 6.4 :h (double h)

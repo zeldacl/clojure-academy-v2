@@ -25,32 +25,39 @@
             [{:type :text :layout {:height 14} :bind {:text "Effects"}}
              {:type :scroll :key :composer/effect-slots :layout {:height 36}
               :bind {:items [:state :effect-slots]} :semantics {:role :list}
-              :children [{:type :row :layout {:height 16}
-                          :children [{:type :button :layout {:width 92 :height 14}
-                                      :bind {:text [:item :label]}
-                                      :on {:activate :composer/select-effect}
-                                      :semantics {:role :button}}
-                                     {:type :repeater :layout {:width 68 :height 14 :direction :row}
-                                      :bind {:items [:item :augments]}
-                                      :children [{:type :row :layout {:width 68 :height 14}
-                                                  :children [{:type :text :layout {:width 50 :height 14}
-                                                              :bind {:text [:item :label]}}
-                                                             {:type :button :layout {:width 16 :height 14}
-                                                              :bind {:text [:item :remove-label]}
-                                                              :on {:activate :composer/remove-augment}
-                                                              :semantics {:role :button}}]}]}
-                                     {:type :button :layout {:width 22 :height 14}
-                                      :bind {:text [:item :up-label]}
-                                      :on {:activate :composer/move-effect-up}
-                                      :semantics {:role :button}}
-                                     {:type :button :layout {:width 22 :height 14}
-                                      :bind {:text [:item :down-label]}
-                                      :on {:activate :composer/move-effect-down}
-                                      :semantics {:role :button}}
-                                     {:type :button :layout {:width 22 :height 14}
-                                      :bind {:text [:item :remove-label]}
-                                      :on {:activate :composer/remove-effect}
-                                      :semantics {:role :button}}]}]}]}]}{:type :row :key :composer/params-row :layout {:height 54}
+              :children
+              [{:type :column :layout {:width 260}
+                :bind {:height [:item :row-height]}
+                :children
+                [{:type :row :layout {:height 16}
+                  :children
+                  [{:type :button :layout {:width 92 :height 14}
+                    :bind {:text [:item :label]}
+                    :on {:activate :composer/select-effect}
+                    :semantics {:role :button}}
+                   {:type :button :layout {:width 22 :height 14}
+                    :bind {:text [:item :up-label]}
+                    :on {:activate :composer/move-effect-up}
+                    :semantics {:role :button}}
+                   {:type :button :layout {:width 22 :height 14}
+                    :bind {:text [:item :down-label]}
+                    :on {:activate :composer/move-effect-down}
+                    :semantics {:role :button}}
+                   {:type :button :layout {:width 22 :height 14}
+                    :bind {:text [:item :remove-label]}
+                    :on {:activate :composer/remove-effect}
+                    :semantics {:role :button}}]}
+                 {:type :repeater :layout {:width 110 :direction :column}
+                  :bind {:items [:item :augments] :height [:item :augment-height]}
+                  :children
+                  [{:type :row :layout {:width 110 :height 14}
+                    :children
+                    [{:type :text :layout {:width 90 :height 14}
+                      :bind {:text [:item :label]}}
+                     {:type :button :layout {:width 16 :height 14}
+                      :bind {:text [:item :remove-label]}
+                      :on {:activate :composer/remove-augment}
+                      :semantics {:role :button}}]}]}]}]}]}]}{:type :row :key :composer/params-row :layout {:height 54}
           :children
           [{:type :text :layout {:width 92 :height 14} :bind {:text "Parameters"}}
            {:type :scroll :key :composer/selected-params :layout {:width 360 :height 52}

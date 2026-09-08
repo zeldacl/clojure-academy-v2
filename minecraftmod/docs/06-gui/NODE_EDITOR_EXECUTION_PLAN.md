@@ -11,7 +11,7 @@
 | Blueprint | 执行流与数据流分层、语义 pin、可移动节点、可平移画布 | 不引入无类型的任意连线 |
 | Niagara | 模块栈、参数面板、预览与生产运行时隔离 | 当前没有 `:emitters` 内容时不虚构发射器编辑器 |
 
-当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量及 schema 驱动控件）、法术合成器的有界参数校验、两个编辑器可提交的 repeater 草稿、独立场景预览和工作区/导出双路径。节点编辑器还提供可由按钮或 Esc 关闭的 viewport 画布层，将有限的 128px 画布扩展为独立的 464×278px 操作区，同时保留原有缩放/平移相机。
+当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量及 schema 驱动控件）、法术合成器的有界参数校验、两个编辑器可提交的 repeater 草稿、独立场景预览和工作区/导出双路径。节点编辑器还提供可由按钮或 Esc 关闭的 viewport 画布层，将有限的 128px 画布扩展为独立的 464×278px 操作区，同时保留原有缩放/平移相机；法术合成器的 effect slot 会按 augment 数量动态增高，augment 纵向堆叠并逐行删除，避免横向溢出固定控制区。
 
 ## 2. 复核后纠正的矛盾
 
@@ -80,7 +80,7 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 
 1. **源码/视图收束**：确认 `node_editor_reactive.clj` 的 viewport 状态、按钮 action、Esc 关闭和旧 canvas 拖拽分支同时存在；确认 `node_editor.ui.edn` 用 `:stack` 将固定高度的 `:node-editor/base` 列与 464×278 viewport 覆盖层分离，紧凑画布、覆盖层及状态绑定成对出现，避免隐藏 overlay 仍参与 column 流布局；画布 repeater 必须使用 `:direction :none`，并以条目自身的 x/y/w/h 作为绝对命中包装器，composite 使用局部偏移；屏幕指针进入拖放、ghost 和滚轮缩放前必须扣除当前画布起点并按 zoom 逆变换，节点拖动增量也必须换算回图坐标；同时确认基础列声明高度不小于所有固定行高度之和。
 2. **视图产物**：运行 `cmd /c gradlew.bat :ac:compilePresentationViews --quiet`，将 `build/neutral/ac/generated/resources/presentation/assets` 下的变更同步到 `docs/06-gui/presentation/golden/assets`，再运行 `cmd /c gradlew.bat :verifyPresentationGoldenArtifacts --quiet`。
-3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、紧凑/viewport 屏幕坐标逆变换、缩放锚点、缩放后拖动和保存坐标，以及法术效果/augment 重排、参数草稿、非法值拒绝和法术合成器 320×240 布局边界。随后运行 Presentation core 测试中的 compiled node-editor 与 spell-composer smoke，分别覆盖实际 golden artifact 的绘制和关键条目命中。
+3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、紧凑/viewport 屏幕坐标逆变换、缩放锚点、缩放后拖动和保存坐标，以及法术效果/augment 重排、增幅纵向布局与独立删除命中、参数草稿、非法值拒绝和法术合成器 320×240 布局边界。随后运行 Presentation core 测试中的 compiled node-editor 与 spell-composer smoke，分别覆盖实际 golden artifact 的绘制和关键条目命中。
 4. **全量门禁**：依次运行 `cmd /c gradlew.bat :node-core:runNodeCoreClojureTests --quiet`、`cmd /c gradlew.bat :ability-runtime:runAbilityClojureTests --quiet`、`cmd /c gradlew.bat :combat-core:runCombatClojureTests --quiet`、`cmd /c gradlew.bat :vfx-core:runVfxClojureTests --quiet`、`cmd /c gradlew.bat :presentation-core:runCoreClojureTests --quiet`、`cmd /c gradlew.bat :ac:runAcClojureTests --quiet` 和 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace`；任一失败不得以“与本改动无关”跳过，需记录失败测试和回归范围。
 5. **真实游戏验收（外部人工步骤）**：在 480×360 与 320×240 两种窗口验证默认紧凑模式、viewport 打开/关闭、拖拽/滚轮缩放、Tab 焦点和文本截断；记录帧时间与命中问题，只有真实宿主缺陷才进入 pinch/SPI/P3 队列。本仓库的自动门禁不启动 `runClient`，需要具备游戏窗口的验收者按此清单执行并回填记录。
 6. **提交边界**：只提交本计划涉及的源码、视图、测试、文档和 golden；保留工作区中与本任务无关的生成目录/脚本，不做清理或 reset。
