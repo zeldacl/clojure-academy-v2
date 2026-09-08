@@ -9,9 +9,11 @@
                 :canvas-viewport-label :string :canvas-viewport-title :string
                 :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
                 :reload-label :string :save-label :string :export-label :string :undo-label :string :redo-label :string}
- :root {:type :column :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
+ :root {:type :stack :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
         :children
-        [{:type :text :key :node-editor/title :layout {:height 16}
+        [{:type :column :key :node-editor/base :layout {:width 464 :height 344}
+          :children
+          [{:type :text :key :node-editor/title :layout {:height 16}
           :bind {:text [:state :title]} :semantics {:role :heading}}
          {:type :row :key :node-editor/phase-row :layout {:height 16}
           :children [{:type :text :layout {:width 100} :bind {:text [:state :phase-label]}}
@@ -52,29 +54,6 @@
             :children [{:type :composite :bind {:item [:state :item]}
                         :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
                         :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}
-         {:type :absolute :key :node-editor/canvas-viewport :layout {:x 0 :y 24 :width 464 :height 300}
-          :bind {:visible [:state :canvas-viewport-visible?]}
-          :children
-          [{:type :box :layout {:width 464 :height 300}
-            :style {:rgba [0.05 0.06 0.09 0.97]}
-            :semantics {:role :dialog :field :canvas-viewport}}
-           {:type :row :layout {:x 8 :y 4 :width 448 :height 16}
-            :children [{:type :text :layout {:width 360 :height 14}
-                        :bind {:text [:state :canvas-viewport-title]}}
-                       {:type :button :layout {:width 80 :height 14}
-                        :bind {:text [:state :canvas-viewport-label]}
-                        :on {:activate :editor/toggle-canvas-viewport}
-                        :semantics {:role :button :field :canvas-viewport-toggle}}]}
-           {:type :absolute :layout {:x 0 :y 22 :width 464 :height 278}
-            :children
-            [{:type :box :layout {:width 464 :height 278}
-              :on {:drag-start :editor/canvas-press :drop :editor/palette-drop}
-              :semantics {:role :generic :drop-zone :node-editor/canvas}}
-             {:type :repeater :layout {:width 464 :height 278}
-              :bind {:items [:state :canvas]}
-              :children [{:type :composite :bind {:item [:state :item]}
-                          :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
-                          :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}]}
          {:type :text :key :node-editor/selected :layout {:height 18}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
          {:type :scroll :key :node-editor/params :layout {:height 28}
@@ -154,4 +133,28 @@
                       :on {:activate :editor/redo}
                       :semantics {:role :button}}]}
          {:type :text :key :node-editor/status :layout {:height 14}
-          :bind {:text [:state :status]} :semantics {:role :generic}}]}}
+          :bind {:text [:state :status]} :semantics {:role :generic}}]}
+         {:type :absolute :key :node-editor/canvas-viewport :layout {:x 0 :y 24 :width 464 :height 300}
+          :bind {:visible [:state :canvas-viewport-visible?]}
+          :children
+          [{:type :box :layout {:width 464 :height 300}
+            :style {:rgba [0.05 0.06 0.09 0.97]}
+            :semantics {:role :dialog :field :canvas-viewport}}
+           {:type :row :layout {:x 8 :y 4 :width 448 :height 16}
+            :children [{:type :text :layout {:width 360 :height 14}
+                        :bind {:text [:state :canvas-viewport-title]}}
+                       {:type :button :layout {:width 80 :height 14}
+                        :bind {:text [:state :canvas-viewport-label]}
+                        :on {:activate :editor/toggle-canvas-viewport}
+                        :semantics {:role :button :field :canvas-viewport-toggle}}]}
+           {:type :absolute :layout {:x 0 :y 22 :width 464 :height 278}
+            :children
+            [{:type :box :layout {:width 464 :height 278}
+              :on {:drag-start :editor/canvas-press :drop :editor/palette-drop}
+              :semantics {:role :generic :drop-zone :node-editor/canvas}}
+             {:type :repeater :layout {:width 464 :height 278}
+              :bind {:items [:state :canvas]}
+              :children [{:type :composite :bind {:item [:state :item]}
+                          :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
+                          :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}]}
+       ]}}
