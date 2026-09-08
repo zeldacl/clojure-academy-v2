@@ -416,17 +416,33 @@
 ;; ---------------------------------------------------------------------------
 
 (defn register!
-  "Register the imag-phase TESR via the scripted tile renderer registry.
+  "Register the imag-phase TESR via the scripted tile renderer registry, and
+  contribute `draw-pending!` to the post-translucent stage.
 
   The render callback does not draw: it queues the cell for `draw-pending!`,
   which runs in the post-translucent stage (the opaque fluid surface would
-  cover BE-pass geometry)."
+  cover BE-pass geometry).
+
+  Both halves must stay together. A TESR registered without its drain leaves
+  the queue filling every frame with nothing to empty it: the flash never
+  appears and `pending-tiles` retains block entities from unloaded chunks. The
+  renderer sat in exactly that state for a while after a merge dropped the
+  loader-side hook, and nothing failed loudly — hence one call site, not two.
+
+  AC is a standalone neutral module, so the platform-neutral seam is linked at
+  this one registration boundary via `requiring-resolve` -- the same pattern as
+  cn.li.ac.client.vfx-host. A loader must never require an AC namespace to find
+  this drain."
   []
   (tesr-api/register-scripted-tile-renderer!
     "imag-phase"
     {:render-tile (fn [tile-entity _partial-ticks _pose-stack _buffer-source
                        _packed-light _packed-overlay]
-                    (swap! pending-tiles conj tile-entity))}))
+                    (swap! pending-tiles conj tile-entity))})
+  ((requiring-resolve
+     'cn.li.platform.neutral.world-render-stage/install-drain!)
+   ::imag-phase-flash
+   draw-pending!))
 
 (defn init!
   "Client-side renderer init hook. Called by the AC hook registry during

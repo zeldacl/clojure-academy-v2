@@ -40,6 +40,7 @@
             [cn.li.forge1201.runtime.owner :as runtime-owner]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.presentation-world-renderer :as presentation-world-renderer]
+            [cn.li.forge1201.client.imag-phase-stage :as imag-phase-stage]
             [cn.li.forge1201.client.fov-renderer :as fov-renderer]
             [cn.li.mc1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.platform.neutral.client-runtime :as pose]
@@ -423,6 +424,7 @@
   (media-playback-bridge/install-media-playback-bridge!)
   (hand-effect-renderer/init!)
   (presentation-world-renderer/init!)
+  (imag-phase-stage/init!)
   (fov-renderer/init!)
   (request-bridge/init!)
 
