@@ -99,23 +99,74 @@
           (or (:name spec) (some-> skill-id name))))
       (or (:name spec) (some-> skill-id name)))))
 
+(defn- skill-id-aliases
+  "Accept kebab/snake and qualified/unqualified spellings for the same skill."
+  [skill-id]
+  (when-let [sid (as-kw skill-id)]
+    (let [n (name sid)
+          ns (namespace sid)
+          flipped (str/replace n #"[_-]" (fn [ch] (if (= ch "_") "-" "_")))
+          kw (fn [stem] (if ns (keyword ns stem) (keyword stem)))]
+      (cond-> #{sid}
+        (not= sid (kw n)) (conj (kw n))
+        (not= n flipped) (conj (kw flipped))
+        (and ns (not= sid (keyword n))) (conj (keyword n))))))
+
+(defn- definition-for
+  [skill-id]
+  (some skill-config/skill-definitions-by-id (skill-id-aliases skill-id)))
+
+(defn- canonical-category
+  "Prefer skill-definitions category over registry/EDN (:migrated) drift."
+  [skill-id registry-category]
+  (or (some-> (definition-for skill-id) :category-id as-kw)
+      (as-kw registry-category)))
+
 (defn controllable-key
-	[skill-id]
-	(when-let [s (skill/get-skill skill-id)]
-		[(:category-id s) (or (:ctrl-id s) skill-id)]))
+  "Return canonical [category-id ctrl-id] for a skill.
+
+  Category comes from skill-definitions when present so preset bind requests
+  match server resolution even if the live registry still carries :migrated
+  from skills-v3 EDN."
+  [skill-id]
+  (let [sid (as-kw skill-id)
+        aliases (or (skill-id-aliases sid) #{})
+        s (or (skill/get-skill sid)
+              (some skill/get-skill (disj aliases sid)))
+        defn (definition-for sid)]
+    (when (or s defn)
+      (let [id (or (:id s) (:id defn) sid)]
+        [(canonical-category id (:category-id s))
+         (as-kw (or (:ctrl-id s) id))]))))
 
 (defn get-skill-by-controllable
-	"Resolve skill id from a [category ctrl] pair.
+  "Resolve skill id from a [category ctrl] pair.
 
   Identity match only (category + ctrl-id). Do not gate on live Forge
   config enabled/controllable — those flags empty the preset slot paint
   and HUD after a successful bind while the selector (structural canControl)
-  still works."
-	[category-id ctrl-id]
+  still works.
+
+  Category comparison uses skill-definitions when available so
+  electromaster/arc-gen still resolves when the registry entry was projected
+  with EDN :skill {:category :migrated}. Falls back to skill-definitions
+  alone when the live registry is empty (client picker synthesizes the same
+  table)."
+  [category-id ctrl-id]
   (let [category-id (as-kw category-id)
-        ctrl-id (as-kw ctrl-id)]
-    (some (fn [[sid base]]
-            (when (and (= (as-kw (:category-id base)) category-id)
-                       (= (as-kw (or (:ctrl-id base) sid)) ctrl-id))
-              sid))
-          (skill/raw-skill-entries))))
+        ctrl-id (as-kw ctrl-id)
+        ctrl-aliases (or (skill-id-aliases ctrl-id) #{})
+        from-registry
+        (some (fn [[sid base]]
+                (let [effective-cat (canonical-category sid (:category-id base))
+                      base-ctrl (as-kw (or (:ctrl-id base) sid))]
+                  (when (and (= effective-cat category-id)
+                             (or (= base-ctrl ctrl-id)
+                                 (contains? ctrl-aliases base-ctrl)
+                                 (contains? ctrl-aliases sid)))
+                    sid)))
+              (skill/raw-skill-entries))]
+    (or from-registry
+        (when-let [defn (definition-for ctrl-id)]
+          (when (= category-id (as-kw (:category-id defn)))
+            (:id defn))))))

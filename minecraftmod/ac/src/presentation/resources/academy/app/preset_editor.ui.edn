@@ -120,8 +120,10 @@
       :semantics {:role :list}
       :children
       [{:type :composite :layout {:width 15.0 :height 15.0}
-        :bind {:item [:state :item]
-               :x [:item :cell-x] :y [:item :cell-y]
+        ;; No :item bind — fall back to the repeater row (skill map with
+        ;; :cat-id/:ctrl-id). [:state :item] was wrong and could wipe the
+        ;; assign payload when state happened to carry an :item key.
+        :bind {:x [:item :cell-x] :y [:item :cell-y]
                :width [:item :w] :height [:item :h]}
         :on {:activate :preset/assign :hover :preset/skill-hover}
         :semantics {:role :button}}]}]}

@@ -94,7 +94,7 @@
       (is (contains? ids :body-intensify))
       (is (>= (count ids) 4))))
 
-  (testing "empty client projection heals from peer server session (SP learn_all)"
+  (testing "client projection is authoritative — empty client stays empty without sync"
     (let [server-ad (-> (adata/new-ability-data)
                         (adata/set-category :electromaster)
                         (adata/learn-skill :railgun)
@@ -110,10 +110,7 @@
       (let [ids (set (map :skill-id
                           (:available-skills
                            (pe/build-preset-editor-render-data (owner)))))]
-        (is (contains? ids :railgun))
-        (is (contains? ids :thunder-bolt))
-        (is (contains? ids :body-intensify))
-        (is (>= (count ids) 3)))))
+        (is (empty? ids)))))
 
   (testing "Forge config controllable/enabled=false must not empty the picker"
     ;; In-game tip empty L=29 A=0: learn_all wrote skills, but get-skill's

@@ -9,14 +9,40 @@
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.client.toast :as toast]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
 
 (defonce ^:private active-mounts (atom {}))
 (defonce ^:private screen-tick* (atom nil))
+
+(defn- try-present!
+  "Present only while the Presentation mount is still registered.
+
+  Minecraft Screen onClose unmounts the handle; async preset responses and
+  carousel ticks must not throw `unknown Presentation mount` after that."
+  [present!]
+  (when present!
+    (try
+      (present!)
+      (catch clojure.lang.ExceptionInfo e
+        (if (= "unknown Presentation mount" (ex-message e))
+          (log/debug "preset editor present skipped; mount already unmounted")
+          (throw e)))))
+  nil)
+
+(defn- present-active-for-owner!
+  "Refresh the currently open editor for this owner, if any.
+
+  Do not close over a specific open!'s present! — reopening replaces the
+  mount while an in-flight set-preset response may still arrive."
+  [owner]
+  (when-let [uuid (some-> (editor/editor-owner-key owner) (nth 2) str)]
+    (when-let [{:keys [present!]} (get @active-mounts uuid)]
+      (try-present! present!))))
 
 ;; ---------------------------------------------------------------------------
 ;; Carousel constants (main PresetEditUI.java)
@@ -404,19 +430,71 @@
                :cards cards}]
      (merge base (or selector (closed-selector))))))
 
-(defn- patch-local-preset-slot!
-  "Optimistic client preset write so the carousel updates before sync arrives."
-  [owner preset-idx key-idx controllable]
-  (let [owner-key (editor/editor-owner-key owner)]
-    (read-model/with-player-state-owner owner-key
-      (fn [session-id player-uuid]
-        (let [ps (or (store/get-player-state session-id player-uuid) {})
-              pd (or (:preset-data ps) (preset-data/new-preset-data))
-              new-pd (preset-data/set-slot pd preset-idx key-idx controllable)]
+(defn- apply-server-preset-data!
+  "Replace the client preset projection with the server-authoritative snapshot.
+   Never invent local slot writes — only hydrate what the server returned."
+  [owner preset-data]
+  (when (map? preset-data)
+    (let [owner-key (editor/editor-owner-key owner)
+          pd (preset-data/normalize-preset-data preset-data)]
+      (read-model/with-player-state-owner owner-key
+        (fn [session-id player-uuid]
           (command-rt/run-command-in-session!
            session-id player-uuid
-           {:command :hydrate-player-state :preset-data new-pd}
-           {:mark-dirty? false}))))))
+           {:command :hydrate-player-state :preset-data pd}
+           {:mark-dirty? false})))))
+  nil)
+
+(defn- show-preset-reject!
+  "Surface server/network rejection so binds never fail silently."
+  [resp]
+  (let [message-key (or (:message-key resp)
+                        (when (:error resp) "ac.ability.preset.reject.handler_error")
+                        "ac.ability.preset.reject.unknown")
+        detail (or (:detail resp) (:error resp))
+        args (cond-> []
+               (seq (str detail)) (conj (str detail)))
+        translated (apply i18n/translate message-key args)
+        ;; If the lang key is missing, i18n returns the key itself — show a
+        ;; readable fallback that still includes the server detail.
+        text (if (or (nil? translated) (= translated message-key))
+               (str (or (some-> (:reason resp) name) "preset-rejected")
+                    (when (seq (str detail)) (str ": " detail)))
+               translated)]
+    (toast/show-toast! {:message-key message-key
+                        :args args
+                        :text text
+                        :duration-ms 3500}))
+  nil)
+
+(defn- on-server-preset-response!
+  [owner resp]
+  (cond
+    (not (map? resp))
+    (do (show-preset-reject! {:reason :empty-response
+                              :message-key "ac.ability.preset.reject.empty_response"})
+        (present-active-for-owner! owner))
+
+    ;; Transport/handler exception envelope from network.server
+    (false? (:success resp))
+    (do (show-preset-reject! {:reason :network-error
+                              :message-key "ac.ability.preset.reject.handler_error"
+                              :detail (:error resp)})
+        (when (contains? resp :preset-data)
+          (apply-server-preset-data! owner (:preset-data resp)))
+        (present-active-for-owner! owner))
+
+    (false? (:ok resp))
+    (do (show-preset-reject! resp)
+        (when (contains? resp :preset-data)
+          (apply-server-preset-data! owner (:preset-data resp)))
+        (present-active-for-owner! owner))
+
+    :else
+    (do (when (contains? resp :preset-data)
+          (apply-server-preset-data! owner (:preset-data resp)))
+        (present-active-for-owner! owner)))
+  nil)
 
 (defn refresh-ui!
   "Re-present the open preset editor for this player uuid (or mount entry).
@@ -432,7 +510,7 @@
             sx (double (or (:selector-x @selector*) 0.0))
             sy (double (or (:selector-y @selector*) 0.0))]
         (reset! selector* (selector-grid skills sx sy (:debug data)))))
-    (when present! (present!))))
+    (try-present! present!)))
 
 (defn refresh-active-screen! [player-uuid]
   ;; active-mounts is keyed by player-uuid string (see open!). Looking up by
@@ -465,6 +543,7 @@
         anim* (atom (fresh-anim (int (or (:selected-preset data0) 0))))
         on-close (fn []
                    (reset! screen-tick* nil)
+                   (reset! mount* nil)
                    (swap! active-mounts dissoc (str player-uuid))
                    (editor/close-screen! owner))
         present! (fn []
@@ -545,18 +624,23 @@
                       (when-let [[p s] @selected-slot*]
                         (cond
                           (:remove? item)
-                          (do (patch-local-preset-slot! owner p s nil)
-                              (api/req-set-preset-slot! owner p s nil nil nil)
-                              (close-sel!)
+                          (do (close-sel!)
+                              (api/req-set-preset-slot!
+                               owner p s nil nil
+                               (fn [resp] (on-server-preset-response! owner resp)))
                               (render-state owner nil @anim* @selector*))
 
                           :else
                           (if-let [[cat ctrl] (assign-controllable item)]
-                            (do (patch-local-preset-slot! owner p s [cat ctrl])
-                                (api/req-set-preset-slot! owner p s cat ctrl nil)
-                                (close-sel!)
+                            (do (close-sel!)
+                                (api/req-set-preset-slot!
+                                 owner p s cat ctrl
+                                 (fn [resp] (on-server-preset-response! owner resp)))
                                 (render-state owner nil @anim* @selector*))
-                            (render-state owner @selected-slot* @anim* @selector*))))
+                            (do (show-preset-reject!
+                                 {:reason :invalid-item
+                                  :message-key "ac.ability.preset.reject.invalid_item"})
+                                (render-state owner @selected-slot* @anim* @selector*)))))
 
                       :preset/previous
                       (let [selected (long (:active @anim*))
@@ -578,10 +662,11 @@
                 :on-close on-close})]
       (reset! mount* vm)
       (reset! screen-tick*
-              (fn [] (advance-and-present! anim* selected-slot* selector* present!)))
+              (fn [] (advance-and-present! anim* selected-slot* selector*
+                                           #(try-present! present!))))
       (swap! active-mounts assoc (str player-uuid)
              {:mount (:mount vm) :owner owner :selected-slot* selected-slot*
-              :selector* selector* :anim* anim* :present! present!})
+              :selector* selector* :anim* anim* :present! #(try-present! present!)})
       (bridge/call-adapter :presentation-open-screen!
                            (:mount vm) "Preset Editor" on-close)
       vm)))

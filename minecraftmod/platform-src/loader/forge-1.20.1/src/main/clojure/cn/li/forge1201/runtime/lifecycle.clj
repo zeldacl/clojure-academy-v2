@@ -102,7 +102,8 @@
     :spawn-item-stack-at! world-effects/spawn-item-stack-at!})
   (lifecycle-core/install-server-stop-cleanup!
     {:cleanup-session! (fn [session-id]
-                         (runtime-sync/clear-session-scheduler-state! session-id))})
+                         (runtime-sync/clear-session-scheduler-state! session-id))
+     :save-all-players! runtime-nbt/save-all-players!})
   (let [world-tick-callback (platform-bootstrap/world-tick-callback!)
         tick-callbacks {:mark-player-dirty! runtime-sync/mark-player-dirty!
                         :tick-sync! runtime-sync/tick-sync!

@@ -67,17 +67,25 @@
 (defn get-slot [d preset-idx key-idx]
   (get (slots-map d) [(int preset-idx) (int key-idx)]))
 
+(defn normalize-preset-data
+  "Normalize active-preset and slot keys after NBT/network rehydration."
+  [d]
+  (let [d (or d (new-preset-data))]
+    {:active-preset (int (or (:active-preset d) 0))
+     :slots (normalize-slots (:slots d {}))}))
+
 (defn set-slot [d preset-idx key-idx controllable]
-  (let [d (or d (new-preset-data))
-        pair (normalize-controllable controllable)]
+  (let [d (normalize-preset-data d)
+        pair (normalize-controllable controllable)
+        k [(int preset-idx) (int key-idx)]]
     (if (nil? pair)
-      (update d :slots dissoc [(int preset-idx) (int key-idx)])
-      (assoc-in d [:slots [(int preset-idx) (int key-idx)]] pair))))
+      (update d :slots dissoc k)
+      (assoc-in d [:slots k] pair))))
 
 (defn clear-slots
   "Remove all preset slot bindings while preserving the active preset index."
   [d]
-  (assoc (or d (new-preset-data)) :slots {}))
+  (assoc (normalize-preset-data d) :slots {}))
 
 (defn get-active-slots
   "Return vec of 4 controllables (or nil) for the active preset."

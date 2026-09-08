@@ -43,22 +43,28 @@
                                                           [:electromaster :disabled] nil
                                                           nil))]
     (seed-player! "p1" [] [:electromaster :existing])
-    (preset-handler/handle-set-preset-request {:preset-idx 0
-                                               :key-idx 0
-                                               :cat-id :electromaster
-                                               :ctrl-id :arc-gen}
-                                              "p1")
-    (is (= [:electromaster :existing]
-          (get-in (store/get-player-state test-player/test-session-id "p1") [:preset-data :slots [0 0]])))
+    (let [resp (preset-handler/handle-set-preset-request {:preset-idx 0
+                                                          :key-idx 0
+                                                          :cat-id :electromaster
+                                                          :ctrl-id :arc-gen}
+                                                         "p1")]
+      (is (false? (:ok resp)))
+      (is (= :not-learned (:reason resp)))
+      (is (= "ac.ability.preset.reject.not_learned" (:message-key resp)))
+      (is (= [:electromaster :existing]
+             (get-in (store/get-player-state test-player/test-session-id "p1") [:preset-data :slots [0 0]]))))
 
     (seed-player! "p2" [:disabled] [:electromaster :existing])
-    (preset-handler/handle-set-preset-request {:preset-idx 0
-                                               :key-idx 0
-                                               :cat-id :electromaster
-                                               :ctrl-id :disabled}
-                                              "p2")
-    (is (= [:electromaster :existing]
-          (get-in (store/get-player-state test-player/test-session-id "p2") [:preset-data :slots [0 0]])))))
+    (let [resp (preset-handler/handle-set-preset-request {:preset-idx 0
+                                                          :key-idx 0
+                                                          :cat-id :electromaster
+                                                          :ctrl-id :disabled}
+                                                         "p2")]
+      (is (false? (:ok resp)))
+      (is (= :unknown-skill (:reason resp)))
+      (is (= "ac.ability.preset.reject.unknown_skill" (:message-key resp)))
+      (is (= [:electromaster :existing]
+             (get-in (store/get-player-state test-player/test-session-id "p2") [:preset-data :slots [0 0]]))))))
 
 (deftest set-preset-slot-clear-request-removes-slot-test
   (with-redefs [uuid/player-uuid identity]

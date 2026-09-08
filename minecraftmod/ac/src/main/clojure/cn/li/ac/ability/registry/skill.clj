@@ -54,9 +54,22 @@
   ([{:keys [state*] :or {state* (atom {:registry {} :frozen? false})}}]
    {::skill-registry-runtime true :state* state*}))
 
-(defn install-skill-registry-runtime! [runtime]
+(defn install-skill-registry-runtime!
+  "Install a skill-registry runtime seed into Framework.
+
+  An empty seed must not clobber a registry already filled/frozen by content
+  activation — runtime-hooks install an empty container before content load,
+  and a second install (or mis-ordered re-entry) would otherwise wipe skills
+  and make preset bind report :unknown-skill while the client picker still
+  synthesizes rows from skill-definitions."
+  [runtime]
   (when-let [state* (:state* runtime)]
-    ((:reset-for-test! ops) (:registry @state*)))
+    (let [incoming (or (:registry @state*) {})
+          current ((:snapshot ops))]
+      (cond
+        (seq incoming) ((:reset-for-test! ops) incoming)
+        (empty? current) ((:reset-for-test! ops) {})
+        :else nil)))
   (reset-spec-cache!)
   runtime)
 

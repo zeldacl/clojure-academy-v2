@@ -36,3 +36,15 @@
     (is (= [[:electromaster :railgun] [:electromaster :arc-gen] nil nil]
            (preset/get-active-slots d)))))
 
+(deftest set-slot-clears-long-keys-after-nbt-shaped-load-test
+  "After NBT reload slot keys are Longs; clearing must not leave a ghost entry."
+  (let [loaded {:active-preset (long 0)
+                :slots {[(long 0) (long 0)] [:electromaster :railgun]}}
+        cleared (preset/set-slot loaded 0 0 nil)
+        rebound (preset/set-slot loaded 0 0 [:electromaster :arc-gen])]
+    (is (nil? (preset/get-slot cleared 0 0)))
+    (is (= {} (:slots cleared)))
+    (is (= [:electromaster :arc-gen] (preset/get-slot rebound 0 0)))
+    (is (= {[0 0] [:electromaster :arc-gen]} (:slots rebound)))
+    (is (= 0 (:active-preset (preset/normalize-preset-data loaded))))))
+

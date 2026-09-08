@@ -116,7 +116,15 @@
     "command.academy.aim.cheats_on.success" "Enabled cheat mode"
     "command.academy.aim.cheats_off.success" "Disabled cheat mode"
     "command.academy.aim.notactive" "Cheat mode is off. Run \"/aim cheats_on\" first."
-    "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"
+    "ac.ability.preset.reject.unknown_skill" "Cannot bind unknown skill: %s"
+    "ac.ability.preset.reject.not_learned" "Cannot bind unlearned skill: %s"
+    "ac.ability.preset.reject.invalid_payload" "Invalid preset bind request"
+    "ac.ability.preset.reject.no_player" "Cannot bind skill: player missing"
+    "ac.ability.preset.reject.handler_error" "Preset bind failed: %s"
+    "ac.ability.preset.reject.empty_response" "Preset bind failed: empty server response"
+    "ac.ability.preset.reject.unknown" "Preset bind rejected"
+    "ac.ability.preset.reject.invalid_item" "Cannot bind: skill data incomplete"}
    :zh_cn
    {"command.academy.acach.missing_advancement" "缺少进度参数"
     "command.academy.aim.cat.success" "已切换到类别: %s"
@@ -149,7 +157,15 @@
     "command.academy.aim.cheats_on.success" "已启用作弊模式"
     "command.academy.aim.cheats_off.success" "已禁用作弊模式"
     "command.academy.aim.notactive" "作弊模式未启用，请先执行 \"/aim cheats_on\"。"
-    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"
+    "ac.ability.preset.reject.unknown_skill" "无法绑定未知技能: %s"
+    "ac.ability.preset.reject.not_learned" "无法绑定未学习技能: %s"
+    "ac.ability.preset.reject.invalid_payload" "无效的预设绑定请求"
+    "ac.ability.preset.reject.no_player" "无法绑定技能: 玩家不存在"
+    "ac.ability.preset.reject.handler_error" "预设绑定失败: %s"
+    "ac.ability.preset.reject.empty_response" "预设绑定失败: 服务器无响应"
+    "ac.ability.preset.reject.unknown" "预设绑定被拒绝"
+    "ac.ability.preset.reject.invalid_item" "无法绑定: 技能数据不完整"}
    :zh_tw
    {"command.academy.acach.missing_advancement" "缺少進度參數"
     "command.academy.aim.cat.success" "已切換到類別: %s"
@@ -182,7 +198,15 @@
     "command.academy.aim.cheats_on.success" "已啟用作弊模式"
     "command.academy.aim.cheats_off.success" "已禁用作弊模式"
     "command.academy.aim.notactive" "作弊模式未啟用，請先執行 \"/aim cheats_on\"。"
-    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"
+    "ac.ability.preset.reject.unknown_skill" "無法綁定未知技能: %s"
+    "ac.ability.preset.reject.not_learned" "無法綁定未學習技能: %s"
+    "ac.ability.preset.reject.invalid_payload" "無效的預設綁定請求"
+    "ac.ability.preset.reject.no_player" "無法綁定技能: 玩家不存在"
+    "ac.ability.preset.reject.handler_error" "預設綁定失敗: %s"
+    "ac.ability.preset.reject.empty_response" "預設綁定失敗: 伺服器無回應"
+    "ac.ability.preset.reject.unknown" "預設綁定被拒絕"
+    "ac.ability.preset.reject.invalid_item" "無法綁定: 技能資料不完整"}
    :ja_jp
    {"command.academy.acach.missing_advancement" "進捗引数がありません"
     "command.academy.aim.cat.success" "カテゴリを切り替えました: %s"
@@ -215,7 +239,15 @@
     "command.academy.aim.cheats_on.success" "チートモードを有効にしました"
     "command.academy.aim.cheats_off.success" "チートモードを無効にしました"
     "command.academy.aim.notactive" "チートモードが無効です。先に \"/aim cheats_on\" を実行してください。"
-    "command.academy.aim.help" "使用可能なコマンド: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "使用可能なコマンド: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"
+    "ac.ability.preset.reject.unknown_skill" "未知のスキルは割り当てできません: %s"
+    "ac.ability.preset.reject.not_learned" "未学習のスキルは割り当てできません: %s"
+    "ac.ability.preset.reject.invalid_payload" "無効なプリセット割り当て要求です"
+    "ac.ability.preset.reject.no_player" "スキルを割り当てできません: プレイヤーがありません"
+    "ac.ability.preset.reject.handler_error" "プリセット割り当てに失敗しました: %s"
+    "ac.ability.preset.reject.empty_response" "プリセット割り当てに失敗しました: サーバー応答が空です"
+    "ac.ability.preset.reject.unknown" "プリセット割り当てが拒否されました"
+    "ac.ability.preset.reject.invalid_item" "割り当てできません: スキルデータが不完全です"}
    :ko_kr
    {"command.academy.acach.missing_advancement" "발전 과제 인수가 없습니다"
     "command.academy.aim.cat.success" "카테고리를 전환했습니다: %s"
@@ -248,7 +280,15 @@
     "command.academy.aim.cheats_on.success" "치트 모드를 활성화했습니다"
     "command.academy.aim.cheats_off.success" "치트 모드를 비활성화했습니다"
     "command.academy.aim.notactive" "치트 모드가 꺼져 있습니다. 먼저 \"/aim cheats_on\" 을 실행하세요."
-    "command.academy.aim.help" "사용 가능한 명령어: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "사용 가능한 명령어: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"
+    "ac.ability.preset.reject.unknown_skill" "알 수 없는 스킬은 배치할 수 없습니다: %s"
+    "ac.ability.preset.reject.not_learned" "배우지 않은 스킬은 배치할 수 없습니다: %s"
+    "ac.ability.preset.reject.invalid_payload" "잘못된 프리셋 배치 요청"
+    "ac.ability.preset.reject.no_player" "스킬을 배치할 수 없습니다: 플레이어 없음"
+    "ac.ability.preset.reject.handler_error" "프리셋 배치 실패: %s"
+    "ac.ability.preset.reject.empty_response" "프리셋 배치 실패: 서버 응답 없음"
+    "ac.ability.preset.reject.unknown" "프리셋 배치가 거부되었습니다"
+    "ac.ability.preset.reject.invalid_item" "배치할 수 없음: 스킬 데이터가 불완전합니다"}
    :ru_ru
    {"command.academy.acach.missing_advancement" "Отсутствует аргумент достижения"
     "command.academy.aim.cat.success" "Переключено на категорию: %s"
@@ -281,7 +321,15 @@
     "command.academy.aim.cheats_on.success" "Режим читов включен"
     "command.academy.aim.cheats_off.success" "Режим читов выключен"
     "command.academy.aim.notactive" "Режим читов выключен. Сначала выполните \"/aim cheats_on\"."
-    "command.academy.aim.help" "Доступные команды: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}})
+    "command.academy.aim.help" "Доступные команды: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"
+    "ac.ability.preset.reject.unknown_skill" "Нельзя назначить неизвестный навык: %s"
+    "ac.ability.preset.reject.not_learned" "Нельзя назначить неизученный навык: %s"
+    "ac.ability.preset.reject.invalid_payload" "Некорректный запрос назначения пресета"
+    "ac.ability.preset.reject.no_player" "Нельзя назначить навык: игрок отсутствует"
+    "ac.ability.preset.reject.handler_error" "Ошибка назначения пресета: %s"
+    "ac.ability.preset.reject.empty_response" "Ошибка назначения пресета: пустой ответ сервера"
+    "ac.ability.preset.reject.unknown" "Назначение пресета отклонено"
+    "ac.ability.preset.reject.invalid_item" "Нельзя назначить: неполные данные навыка"}})
 
 (defn register-datagen-metadata!
   "Register ability domain's datagen content into shared metadata registry.

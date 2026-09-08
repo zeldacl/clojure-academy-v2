@@ -8,6 +8,7 @@
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver NbtAccess]
+           [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
 
@@ -54,19 +55,41 @@
     (power-runtime/sync-player-state! uuid state)
     (or (power-runtime/get-player-state uuid) state)))
 
-(defn save-player-state!
+(defn write-player-state!
+  "Copy the in-memory runtime store into the player's persistent CompoundTag.
+   Used by the normal logout/death/server-stop save path only."
   [^ServerPlayer player]
   (let [uuid (str (.getUUID player))
         state (power-runtime/ensure-player-state! uuid)
         root (CompoundTag.)
         player-data (player-tag player)]
+    (when-not player-data
+      (throw (ex-info "Player persistent data unavailable for ac_runtime_v2 write"
+                      {:uuid uuid})))
     (.putInt root "schema" schema-version)
     (doseq [domain persisted-domains]
       (when-let [domain-state (get state domain)]
         (.put root (name domain) (native-nbt/encode-value domain-state))))
-    (.put player-data root-key root)
-    (power-runtime/mark-player-clean! uuid)
+    (.put ^CompoundTag player-data root-key root)
     true))
+
+(defn save-player-state!
+  [^ServerPlayer player]
+  (write-player-state! player)
+  (power-runtime/mark-player-clean! (str (.getUUID player)))
+  true)
+
+(defn save-all-players!
+  "Flush every online player before the server session store is torn down."
+  [^MinecraftServer server]
+  (when server
+    (doseq [^ServerPlayer player (.getPlayers (.getPlayerList server))]
+      (try
+        (save-player-state! player)
+        (catch Exception error
+          (log/warn "Failed to flush ac_runtime_v2 on server stop for"
+                    (str (.getUUID player)) ":" (ex-message error))))))
+  nil)
 
 (defn clone-player-state!
   [^ServerPlayer old-player ^ServerPlayer new-player]

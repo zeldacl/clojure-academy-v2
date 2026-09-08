@@ -7,10 +7,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.preset :as preset-data]
-            [cn.li.ac.ability.service.command-runtime :as command-rt]
-            [cn.li.ac.ability.service.runtime-store :as store]
-            [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.i18n :as i18n]))
 
 
 ;; Editor state
@@ -223,62 +220,29 @@
 
 (defn- available-skill-entry
   [s]
-  (let [sid (spec-skill-id s)]
+  (let [sid (spec-skill-id s)
+        ;; Prefer skill-definitions category so bind requests never send
+        ;; EDN :migrated while the server/player category is :electromaster.
+        [cat ctrl] (or (skill-query/controllable-key sid)
+                       [(as-keyword (:category-id s))
+                        (as-keyword (or (:ctrl-id s) sid))])]
     {:skill-id sid
      :skill-name (let [nk (:name-key s)]
                    (if nk (or (i18n/translate nk) (name sid))
                        (or (:name s) (name sid))))
      :skill-icon (skill-query/get-skill-icon-path sid)
-     :cat-id (as-keyword (:category-id s))
-     :ctrl-id (as-keyword (or (:ctrl-id s) sid))}))
+     :cat-id (as-keyword cat)
+     :ctrl-id (as-keyword ctrl)}))
 
 (defn- learned-count
   [ability-data]
   (count (:learned-skills ability-data #{})))
 
-(defn- peer-ability-with-learned
-  "On integrated singleplayer the server and client share one JVM but use
-   different runtime-store session keys. /aim learn_all writes the server
-   partition; the picker reads the client partition. When ability sync has
-   not landed yet, borrow the richer peer ability-data for the same uuid."
-  [session-id player-uuid]
-  (->> (store/list-sessions)
-       (remove #{session-id})
-       (keep (fn [sid]
-               (when-let [st (store/get-player-state sid player-uuid)]
-                 (:ability-data st))))
-       (filter (fn [ad] (pos? (learned-count ad))))
-       (sort-by learned-count >)
-       first))
-
-(defn heal-client-ability-projection!
-  "If this client's :learned-skills is empty but another store session for the
-   same player already has learned skills (typical SP after /aim learn_all),
-   hydrate that ability-data into the client partition so the picker can see it."
-  [owner]
-  (let [owner-key (editor-owner-key owner)
-        [session-id _screen player-uuid] owner-key]
-    (read-model/ensure-player-state! owner-key)
-    (let [local (store/get-player-state session-id player-uuid)
-          local-n (learned-count (:ability-data local))]
-      (when (zero? local-n)
-        (when-let [peer-ad (peer-ability-with-learned session-id player-uuid)]
-          (log/warn "preset-editor: client learned-skills empty; mirroring peer session"
-                    {:player-uuid player-uuid
-                     :client-session session-id
-                     :peer-learned (learned-count peer-ad)})
-          (command-rt/run-command-in-session!
-           session-id player-uuid
-           {:command :hydrate-player-state
-            :ability-data peer-ad}
-           {:mark-dirty? false})))))
-  nil)
-
 (defn build-preset-editor-render-data
-  "Build complete preset editor render data.
+  "Build complete preset editor render data from the client store projection.
+   Does not mirror peer/server sessions — that would diverge from sync truth.
    Returns nil if player state is unavailable."
   [owner]
-  (heal-client-ability-projection! owner)
   (let [state (editor-state-snapshot owner)
         owner-key (editor-owner-key owner)]
     (when-let [_player-uuid (:player-uuid state)]
@@ -312,7 +276,6 @@
   "Return a compact diagnostic map for selector filtering.
    Used only for runtime troubleshooting of missing skills in preset editor."
   [owner]
-  (heal-client-ability-projection! owner)
   (let [state (editor-state-snapshot owner)
         owner-key (editor-owner-key owner)]
     (when-let [_player-uuid (:player-uuid state)]
@@ -355,10 +318,8 @@
   [owner]
   (let [owner-key (editor-owner-key owner)
         player-uuid (nth owner-key 2)]
-    ;; Same hydrate path as skill-tree: avoid a nil player-state projection
-    ;; that collapses render-data (and the selector) to empty.
+    ;; Ensure the client projection exists; do not copy peer/server sessions.
     (read-model/ensure-player-state! owner-key)
-    (heal-client-ability-projection! owner)
     (managed-screens/set-active-owner! screen-id owner-key)
     (swap-editor-state! owner merge default-editor-state {:player-uuid player-uuid}))
   {:command :open-screen

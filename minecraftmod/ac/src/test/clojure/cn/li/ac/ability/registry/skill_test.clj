@@ -41,6 +41,23 @@
   (sk/register-skill! (minimal-skill :mine :electromaster :arc-gen))
   (is (= :mine (skill-query/get-skill-by-controllable :electromaster :arc-gen))))
 
+(deftest get-skill-by-controllable-definitions-fallback-test
+  "Picker synthesizes from skill-definitions when registry is empty; bind must
+   still resolve electromaster/arc-gen without a live registry entry."
+  (is (= :arc-gen (skill-query/get-skill-by-controllable :electromaster :arc-gen)))
+  (is (nil? (skill-query/get-skill-by-controllable :migrated :arc-gen))))
+
+(deftest get-skill-by-controllable-migrated-registry-category-test
+  "Registry may still carry EDN :migrated; definitions category wins."
+  (sk/register-skill! (minimal-skill :arc-gen :migrated :arc-gen :level 1))
+  (is (= :arc-gen (skill-query/get-skill-by-controllable :electromaster :arc-gen)))
+  (is (= [:electromaster :arc-gen] (skill-query/controllable-key :arc-gen))))
+
+(deftest install-empty-skill-runtime-does-not-clobber-test
+  (sk/register-skill! (minimal-skill :keep :electromaster :keep :level 1))
+  (sk/install-skill-registry-runtime! (sk/create-skill-registry-runtime))
+  (is (= :keep (:id (sk/raw-skill :keep)))))
+
 (deftest controllable-and-icon-test
   (sk/register-skill! (-> (minimal-skill :x :c :x)
                           (assoc :enabled false)))

@@ -13,6 +13,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
             [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.messages :as messages]
@@ -194,7 +195,8 @@
                         (not (zero? (bit-and mask store/cooldown-data-mask)))
                         (assoc :cooldown-data (:cooldown-data payload))
                         (not (zero? (bit-and mask store/preset-data-mask)))
-                        (assoc :preset-data (:preset-data payload))
+                        (assoc :preset-data
+                               (preset-data/normalize-preset-data (:preset-data payload)))
                         (not (zero? (bit-and mask store/develop-data-mask)))
                         (assoc :develop-data (:develop-data payload)))]
           (command-runtime/run-command-in-session!
