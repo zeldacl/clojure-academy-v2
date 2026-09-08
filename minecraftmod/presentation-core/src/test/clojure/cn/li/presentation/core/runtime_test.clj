@@ -457,6 +457,52 @@
                           {:type :pointer :event-type :down :x 18 :y 74 :button 0})
       (is (= :editor/canvas-press (ffirst @seen)))
       (is (= "first" (get-in (last @seen) [1 :item :nid]))))))
+(defn- spell-composer-golden-file
+  []
+  (first (filter #(.isFile ^java.io.File %)
+                 [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")
+                  (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")
+                  (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")])))
+
+(defn- spell-composer-smoke-state
+  []
+  {:title "Spell Composer"
+   :form-palette [{:id :form/projectile :label "Projectile"}]
+   :effect-palette [{:id :effect/damage :label "Damage"}]
+   :augment-palette [{:id :augment/amplify :label "Amplify"}]
+   :form-label "Form"
+   :selected-param-fields []
+   :effect-slots []
+   :can-cast? true
+   :busy? false
+   :status ""
+   :cast-label "Cast"
+   :clear-label "Clear"})
+
+(deftest compiled-spell-composer-paints-and-routes-effect-palette-hit
+  (let [art-file (spell-composer-golden-file)]
+    (is (some? art-file) "spell-composer golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          seen (atom [])
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/spell-composer
+                      :artifact artifact
+                      :state (spell-composer-smoke-state)
+                      :reduce (fn [state action payload]
+                                (swap! seen conj [action payload])
+                                {:state state :event-result :consume})})]
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 480 320 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 320})
+                   :mounts first :commands)]
+        (is (pos? (.count dl)) "compiled spell composer must paint"))
+      ;; The effect palette begins below title/form/parameter rows at y=128;
+      ;; its first button is the 142..158 row in the 480x320 design space.
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 20 :y 150 :button 0})
+      (is (= :composer/add-effect (ffirst @seen)))
+      (is (= :effect/damage (get-in (last @seen) [1 :item :id]))))))
 (defn- hist-quad
   [h]
   {:kind :quad :x 22.4 :y (- 79.2 h) :w 6.4 :h (double h)
