@@ -24,6 +24,7 @@
             :render [{:nid :n/render-root :component :particle/render}]}})
 (def ^:private v3-thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
 (def ^:private v3-arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
+(def ^:private node-editor-ui-path "src/presentation/resources/academy/app/node_editor.ui.edn")
 
 (defn- temp-copy-of
   "Copies `source-path` into a fresh temp directory under the same
@@ -417,3 +418,20 @@
     (#'node-editor/handle-action state* :input/key {:key-code 256})
     (is (false? (:canvas-viewport? @state*)))
     (is (= "Canvas viewport collapsed." (:status @state*)))))
+
+
+(deftest canvas-viewport-layout-fits-compact-and-320x240-design-bounds-test
+  (let [ui (binding [*read-eval* false] (read-string (slurp node-editor-ui-path)))
+        host (:host ui)
+        root-layout (get-in ui [:root :layout])
+        viewport (some #(when (= :node-editor/canvas-viewport (:key %)) %) (get-in ui [:root :children]))
+        {:keys [x y width height]} (:layout viewport)
+        scale (min (/ 320.0 (double (:design-width host)))
+                   (/ 240.0 (double (:design-height host))))
+        right (* scale (+ (double (:x root-layout)) (double x) (double width)))
+        bottom (* scale (+ (double (:y root-layout)) (double y) (double height)))]
+    (is viewport "viewport overlay must remain an explicit absolute child")
+    (is (= 464 (:width (:layout viewport))))
+    (is (= 300 (:height (:layout viewport))))
+    (is (<= right 320.0) (str "viewport right edge exceeds 320px design: " right))
+    (is (<= bottom 240.0) (str "viewport bottom edge exceeds 240px design: " bottom))))
