@@ -124,7 +124,10 @@
     "ac.ability.preset.reject.handler_error" "Preset bind failed: %s"
     "ac.ability.preset.reject.empty_response" "Preset bind failed: empty server response"
     "ac.ability.preset.reject.unknown" "Preset bind rejected"
-    "ac.ability.preset.reject.invalid_item" "Cannot bind: skill data incomplete"}
+    "ac.ability.preset.reject.invalid_item" "Cannot bind: skill data incomplete"
+    "ac.activate.hint.activate" "Press V to activate"
+    "ac.activate.hint.deactivate" "Press V to deactivate"
+    "ac.activate.hint.abort" "Skill key held (V cancels)"}
    :zh_cn
    {"command.academy.acach.missing_advancement" "缺少进度参数"
     "command.academy.aim.cat.success" "已切换到类别: %s"
@@ -165,7 +168,10 @@
     "ac.ability.preset.reject.handler_error" "预设绑定失败: %s"
     "ac.ability.preset.reject.empty_response" "预设绑定失败: 服务器无响应"
     "ac.ability.preset.reject.unknown" "预设绑定被拒绝"
-    "ac.ability.preset.reject.invalid_item" "无法绑定: 技能数据不完整"}
+    "ac.ability.preset.reject.invalid_item" "无法绑定: 技能数据不完整"
+    "ac.activate.hint.activate" "按 V 开启能力"
+    "ac.activate.hint.deactivate" "按 V 关闭能力"
+    "ac.activate.hint.abort" "技能键按住中（V 可取消）"}
    :zh_tw
    {"command.academy.acach.missing_advancement" "缺少進度參數"
     "command.academy.aim.cat.success" "已切換到類別: %s"
@@ -206,7 +212,10 @@
     "ac.ability.preset.reject.handler_error" "預設綁定失敗: %s"
     "ac.ability.preset.reject.empty_response" "預設綁定失敗: 伺服器無回應"
     "ac.ability.preset.reject.unknown" "預設綁定被拒絕"
-    "ac.ability.preset.reject.invalid_item" "無法綁定: 技能資料不完整"}
+    "ac.ability.preset.reject.invalid_item" "無法綁定: 技能資料不完整"
+    "ac.activate.hint.activate" "按 V 開啟能力"
+    "ac.activate.hint.deactivate" "按 V 關閉能力"
+    "ac.activate.hint.abort" "技能鍵按住中（V 可取消）"}
    :ja_jp
    {"command.academy.acach.missing_advancement" "進捗引数がありません"
     "command.academy.aim.cat.success" "カテゴリを切り替えました: %s"
@@ -247,7 +256,10 @@
     "ac.ability.preset.reject.handler_error" "プリセット割り当てに失敗しました: %s"
     "ac.ability.preset.reject.empty_response" "プリセット割り当てに失敗しました: サーバー応答が空です"
     "ac.ability.preset.reject.unknown" "プリセット割り当てが拒否されました"
-    "ac.ability.preset.reject.invalid_item" "割り当てできません: スキルデータが不完全です"}
+    "ac.ability.preset.reject.invalid_item" "割り当てできません: スキルデータが不完全です"
+    "ac.activate.hint.activate" "Vで能力を有効化"
+    "ac.activate.hint.deactivate" "Vで能力を無効化"
+    "ac.activate.hint.abort" "スキルキー押し中（Vでキャンセル）"}
    :ko_kr
    {"command.academy.acach.missing_advancement" "발전 과제 인수가 없습니다"
     "command.academy.aim.cat.success" "카테고리를 전환했습니다: %s"

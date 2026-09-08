@@ -47,6 +47,7 @@
     :client-trigger-mode-switch!
     :client-trigger-preset-switch!
     :set-client-overlay-activated!
+    :client-show-combat-notice!
     :toggle-debug-overlay-state!})
 
 (def ^:private debug-overlay-hooks

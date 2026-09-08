@@ -105,8 +105,7 @@
       intent-id)))
 
 (defn- combat-slot? [player-uuid slot]
-  (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
-    (boolean (and ability-id (combat-catalog/available? ability-id)))))
+  (some? (keybinds/get-skill-id-for-slot-public player-uuid slot)))
 
 (defn- runtime-sync-resets-input?
   [old-ability-data new-ability-data]
@@ -131,6 +130,7 @@
         (when (and (bytes? wire)
                    (client-bridge/local-player-uuid))
           (let [remote (fixed-channel/decode-catalog-hello wire)
+                _ (combat-catalog/ensure-ready!)
                 local (select-keys (combat-catalog/catalog)
                                    [:schema-version :content-hash])
                 accepted? (= local (select-keys remote
@@ -152,7 +152,14 @@
               (doseq [feedback (:feedback result)]
                 (reactive-hud/show-combat-notice!
                  :combat-critical
-                 (or feedback {:text "Combat rejected"}))))
+                 (cond
+                   (string? (:text feedback)) feedback
+                   (keyword? (:reason feedback))
+                   {:text (str "Combat rejected: " (name (:reason feedback)))}
+                   (keyword? (:type feedback))
+                   {:text (str "Combat rejected: " (name (:type feedback)))}
+                   :else
+                   (or feedback {:text "Combat rejected"})))))
             (catch Throwable error
               (log/warn "Rejected malformed fixed combat feedback packet"
                         {:error (.getMessage error)}))))))
@@ -217,6 +224,12 @@
             (clear-owner-state! uuid))
           (when-not (zero? (bit-and mask store/preset-data-mask))
             (keybinds/update-default-group! uuid))
+          ;; Entering ability mode: rebuild slot delegates even when preset
+          ;; dirty-mask was empty (e.g. prior sync failed to register them).
+          (when (and (not (zero? (bit-and mask store/resource-data-mask)))
+                     (boolean (get-in payload [:resource-data :activated]))
+                     (not (boolean (get-in old-state [:resource-data :activated]))))
+            (keybinds/update-default-group! uuid))
           ;; learn_all / learn-skill dirty ability-data only; without a refresh
           ;; an open selector keeps a stale empty skill grid.
           (when (or (not (zero? (bit-and mask store/ability-data-mask)))
@@ -252,9 +265,26 @@
    :client-on-slot-key-down!
    (fn [player-uuid slot]
      (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
-       (if (= :location-teleport ability-id)
+       (cond
+         (= :location-teleport ability-id)
          (location-teleport/open! (client-bridge/get-client-player))
-         (when (combat-slot? player-uuid slot)
+
+         (nil? ability-id)
+         (do (log/warn "Skill slot press ignored: no bound skill"
+                       {:uuid (str player-uuid) :slot slot})
+             (reactive-hud/show-combat-notice!
+              :combat-critical {:text "No skill bound to this key"}))
+
+         :else
+         (do
+           (when-not (combat-catalog/available? ability-id)
+             (log/warn "Local combat catalog missing bound skill; sending anyway"
+                       {:uuid (str player-uuid)
+                        :slot slot
+                        :ability-id ability-id
+                        :catalog-status (:status (combat-catalog/catalog))
+                        :catalog-count (count (get-in (combat-catalog/catalog)
+                                                      [:combat :abilities]))}))
            (send-combat-intent! player-uuid slot :start)))))
    :client-on-slot-key-tick! (fn [_ _] nil)
    :client-on-slot-key-up!

@@ -271,7 +271,19 @@
                  (combat-runtime/finalize-result! owner result)
                  result)]
     (when (= :rejected (:status result))
-      (log/debug "Combat intent rejected" {:owner owner :feedback (:feedback result)}))
+      (log/warn "Combat intent rejected" {:owner owner
+                                          :reason (:reason result)
+                                          :ability-id (:ability-id result)
+                                          :feedback (:feedback result)})
+      (when (seq (:feedback result))
+        (try
+          (server-bridge/send-to-client!
+           owner catalog/MSG-COMBAT-RESULT
+           {:wire (fixed-channel/encode-combat-feedback
+                   {:status :rejected
+                    :feedback (vec (:feedback result))})})
+          (catch Throwable e
+            (log/debug "Failed to push combat reject feedback" {:error (.getMessage e)})))))
     result))
 
 (defn- handle-spell-submit-request

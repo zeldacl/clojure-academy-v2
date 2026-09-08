@@ -7,12 +7,13 @@
    represented by module references in the document, not by duplicated
    registration metadata.
 
-   Enumeration works from both an exploded development classpath and a jar,
-   which keeps the editor-facing resource layout identical in dev and in the
-   packaged mod."
+   Enumeration works from an exploded development classpath, a packaged jar,
+   and Loom runClient `union:` URLs (directory `getResources` is empty there)."
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.util.classpath-edn :as classpath-edn]
             [cn.li.combat.api :as combat-api]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.node.api :as node-api]))
 
 (defn- default-compile-opts []
@@ -20,36 +21,17 @@
    :capabilities combat-api/skill-capability-type
    :fns combat-api/skill-lib-fns})
 
-(defn- classloader []
-  (or (.getContextClassLoader (Thread/currentThread))
-      (clojure.lang.RT/baseLoader)))
+(defn- skill-edn-name [id]
+  (if-let [ns (namespace id)]
+    (str ns "__" (name id) ".edn")
+    (str (name id) ".edn")))
 
-(defn- resource-names-from-url [root ^java.net.URL url]
-  (case (.getProtocol url)
-    "file"
-    (let [dir (io/file url)
-          base (.toPath ^java.io.File dir)]
-      (if (.isDirectory dir)
-        (->> (file-seq dir)
-             (filter #(and (.isFile ^java.io.File %)
-                           (.endsWith (.getName ^java.io.File %) ".edn")))
-             (map #(.relativize base (.toPath ^java.io.File %)))
-             (map #(str root "/" (str/replace (str %) java.io.File/separator "/")))
-             set)
-        #{}))
-
-    "jar"
-    (let [connection ^java.net.URLConnection (.openConnection url)
-          jar ^java.util.jar.JarFile (.getJarFile ^java.net.JarURLConnection connection)
-          prefix (if (.endsWith ^String root "/") root (str root "/"))]
-      (->> (enumeration-seq (.entries jar))
-           (map #(.getName ^java.util.jar.JarEntry %))
-           (filter #(and (.startsWith ^String % prefix)
-                         (.endsWith ^String % ".edn")
-                         (not (.endsWith ^String % "/"))))
-           set))
-
-    #{}))
+(defn- skill-candidate-names []
+  (into ["catalog_smoke.edn"]
+        (concat (map skill-edn-name skill-config/all-skill-ids)
+                (for [cat skill-config/category-ids
+                      suffix ["brain-course" "brain-course-advanced" "mind-course"]]
+                  (str (name cat) "__" suffix ".edn")))))
 
 (defn resource-names
   "Return sorted EDN resource paths below `root`.
@@ -58,18 +40,13 @@
    a leading slash. Duplicate classpath roots are harmless because names are
    deduplicated before sorting."
   [root]
-  (let [loader ^java.lang.ClassLoader (classloader)
-        urls (enumeration-seq (.getResources loader root))]
-    (->> urls
-         (mapcat #(resource-names-from-url root %))
-         (filter #(and (.endsWith ^String % ".edn")
-                       (not (.endsWith ^String % "/index.edn"))))
-         distinct
-         sort
-         vec)))
+  (classpath-edn/edn-resource-names
+   root
+   {:sentinels ["arc-gen.edn" "catalog_smoke.edn"]
+    :candidates (skill-candidate-names)}))
 
 (defn- read-resource [resource]
-  (let [url (io/resource resource)]
+  (let [url (or (classpath-edn/find-resource resource) (io/resource resource))]
     (when-not url
       (throw (ex-info "AC V3 resource not found" {:resource resource})))
     (binding [*read-eval* false]
@@ -102,6 +79,11 @@
           mode :throw}}]
    (let [compile-opts (or compile-opts (default-compile-opts))
          resources (resource-names resource-root)
+         _ (when (empty? resources)
+             (log/warn "Skill catalog enumerated no EDN documents"
+                       {:resource-root resource-root
+                        :sentinel-found? (boolean (classpath-edn/find-resource
+                                                   (str resource-root "/arc-gen.edn")))}))
          skills (mapv (fn [resource]
                         (let [{:keys [id document] :as skill} (read-skill! resource)
                               {:keys [ir diagnostics]}

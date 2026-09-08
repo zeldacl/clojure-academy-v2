@@ -1004,7 +1004,12 @@
              :feedback [{:type :cooldown-active :ability-id ability-id}]}
             (let [result (assoc (final-runtime-v2/dispatch-production! owner ability-id
                                                                         {:entry entry :input prepared})
-                                :schema-version 1 :ability-id ability-id)]
+                                :schema-version 1 :ability-id ability-id)
+                  result (if (and (= :rejected (:status result))
+                                  (empty? (:feedback result)))
+                           (assoc result :feedback [{:type :combat-input-rejected
+                                                     :reason (or (:reason result) :rejected)}])
+                           result)]
               (when (should-open-session? (:status result) (:op intent) (:activation source)
                                           (:finish-ability? result)
                                           (boolean active-session))

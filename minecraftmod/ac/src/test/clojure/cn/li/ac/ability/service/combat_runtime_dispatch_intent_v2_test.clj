@@ -90,6 +90,17 @@
       (is (true? (:finish-ability? result)))
       (is (nil? (combat-sessions/session :ac owner))))))
 
+(deftest unknown-ability-reject-carries-feedback-test
+  "engine-v2 returns :reason without :feedback; AC must attach feedback so
+   the network path can push a visible reject to the client."
+  (let [result (combat-runtime/dispatch-intent-v2!
+                "v2-unknown-owner"
+                {:op :start :ability-id :not-a-real-skill})]
+    (is (= :rejected (:status result)))
+    (is (= :unknown-ability (:reason result)))
+    (is (= [{:type :combat-input-rejected :reason :unknown-ability}]
+           (:feedback result)))))
+
 (deftest slot-intent-resolves-skill-id-without-ability-id-test
   "Client LMB intents carry :slot only. resolve-slot returns a skill-id
    keyword; edn-ability-id must not treat that keyword as a map (:id)."
