@@ -449,9 +449,19 @@
   (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport zoom ghost
                 palette-query palette-collapsed palette-recent]} state
         selected (selected-node-info state)
+        selected-params (selected-param-fields state)
+        ;; Repeater text inputs need a stable state-backed draft. The
+        ;; Presentation runtime rewrites focus to this per-field key so
+        ;; character/backspace/Enter events carry the current value.
+        draft-state (into {}
+                          (keep (fn [{:keys [draft-key value text-editor?]}]
+                                  (when (and draft-key text-editor?)
+                                    [draft-key (str value)])))
+                          selected-params)
         raw-canvas (into (render/graph->composite-items graph (:layout state))
                          (when ghost (ghost-items ghost)))]
-    {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
+    (merge draft-state
+           {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
      :phase-label (str "Phase: " (name (or phase :default)))
      :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
@@ -462,7 +472,7 @@
      :palette-clear-label "Clear"
      :canvas (transform-canvas-items raw-canvas viewport zoom)
      :selected-label (if selected (:text selected) "(nothing selected)")
-     :selected-params (selected-param-fields state)
+     :selected-params selected-params
      :diagnostics (mapv diagnostic-item diagnostics)
      :diagnostic-count (double (count diagnostics))
      :cost-label (if cost-summary
@@ -480,7 +490,7 @@
      :save-label "Save to workspace"
      :export-label "Export to source"
      :undo-label "Undo"
-     :redo-label "Redo"}))
+     :redo-label "Redo"})))
 ;; --- input handling ------------------------------------------------------
 
 (defn- item->hit
