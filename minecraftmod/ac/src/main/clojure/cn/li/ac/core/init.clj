@@ -6,6 +6,7 @@
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
+            [cn.li.ac.ability.skills-catalog :as skills-catalog]
             [cn.li.combat.platform :as combat-platform]
             [cn.li.ability.combat :as ability-combat]
             [cn.li.ac.block.platform-bridge :as block-bridge]
@@ -73,10 +74,17 @@
   (combat-platform/install!
    {:schedule-beam! ability-combat/schedule-installed!})
   (combat-runtime/install-ac-host-capabilities!)
-  (combat-runtime/initialize-final-runtime-v2!)
-  ;; The final EDN catalog is authoritative.  Catalog initialization fails
-  ;; closed if any source is not a compiled final program.
-  (combat-catalog/initialize!)
+  ;; Assembling the V3 catalog parses, validates and node-compiles every shipped
+  ;; skill document. The runtime install and the metadata projection below both
+  ;; need it, so assemble once and hand the same value to both instead of doing
+  ;; that work twice. Pass the raw assembly, not the runtime's :catalog: engine-v2
+  ;; replaces :registrations with compiled entries and content-hash only strips
+  ;; :ir, so the compiled shape would change the pinned combat content hash.
+  (let [assembled (skills-catalog/assemble)]
+    (combat-runtime/initialize-final-runtime-v2! (constantly assembled))
+    ;; The final EDN catalog is authoritative.  Catalog initialization fails
+    ;; closed if any source is not a compiled final program.
+    (combat-catalog/initialize! assembled))
   (ability-messages/install!)
   (entity-hook-catalog/install-resolvers!)
   (block-bridge/install-blockstate-hooks!)

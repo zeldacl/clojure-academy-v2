@@ -57,7 +57,14 @@
 
    Pending skills remain metadata-only and are rejected by the server gate."
   []
-  (combat-catalog/initialize!)
+  ;; cn.li.ac.core.init initializes the catalog during core init (Phase 1) and
+  ;; content activation (Phase 2) always runs after it, so this call was a third
+  ;; full assembly of the same static EDN -- parsing, validating and
+  ;; node-compiling every shipped skill document again for an identical result.
+  ;; Still initialize when nothing has, so driving this namespace directly (as
+  ;; the tests do) keeps working.
+  (when-not (= :ready (:status (combat-catalog/state)))
+    (combat-catalog/initialize!))
   (doseq [skill-spec (combat-catalog/skill-specs)]
     ;; Final entries enter the executable skill registry; the registry is a
     ;; UI/progression index and never an alternate graph evaluator.

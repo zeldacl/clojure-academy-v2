@@ -338,23 +338,29 @@
    need
    them): install-runtime-adapters!'s own :cost/spend/:cooldown/start
    handlers already commit their effect immediately, as ordinary host
-   actions, the moment a graph reaches them."
-  []
-  (install/framework-once!
-   ::final-runtime-v2-installed?
-   (fn []
-     (install-runtime-adapters!)
-     (let [runtime (final-runtime-v2/install-production!
-                    {:catalog-compile skills-catalog/assemble
-                     :commit-ability-state! (fn [owner patches]
-                                        (when (seq patches)
-                                          (combat-sessions/apply-actions!
-                                           content-id (str owner)
-                                           [{:type :session-patch :entries patches}])))
-                     :remove-ability-state! (fn [owner]
-                                        (combat-sessions/remove! content-id (str owner)))})]
-       (reset! final-runtime-v2* runtime))))
-  @final-runtime-v2*)
+   actions, the moment a graph reaches them.
+
+   The one-arg form supplies the catalog-compile fn. Assembling the V3 catalog
+   parses, validates and node-compiles every shipped skill document, so a caller
+   that also needs the assembled catalog (cn.li.ac.core.init does) can assemble
+   once and pass (constantly assembled) instead of paying for it twice."
+  ([] (initialize-final-runtime-v2! skills-catalog/assemble))
+  ([catalog-compile]
+   (install/framework-once!
+    ::final-runtime-v2-installed?
+    (fn []
+      (install-runtime-adapters!)
+      (let [runtime (final-runtime-v2/install-production!
+                     {:catalog-compile catalog-compile
+                      :commit-ability-state! (fn [owner patches]
+                                               (when (seq patches)
+                                                 (combat-sessions/apply-actions!
+                                                  content-id (str owner)
+                                                  [{:type :session-patch :entries patches}])))
+                      :remove-ability-state! (fn [owner]
+                                               (combat-sessions/remove! content-id (str owner)))})]
+        (reset! final-runtime-v2* runtime))))
+   @final-runtime-v2*))
 
 (defn final-runtime-v2 [] @final-runtime-v2*)
 

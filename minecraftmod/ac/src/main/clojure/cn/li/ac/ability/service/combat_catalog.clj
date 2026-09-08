@@ -43,28 +43,38 @@
    {:sources (source-map assembled)
     :registrations (mapv #(dissoc % :ir) (:registrations assembled))}))
 
-(defn initialize! []
-  (let [assembled (skills-catalog/assemble)
-        abilities (ability-map assembled)
-        trigger-index (reduce (fn [index source]
-                                (reduce (fn [result trigger]
-                                          (if (and (:source trigger) (:dispatch trigger))
-                                            (update result (:source trigger) (fnil conj []) trigger)
-                                            result))
-                                        index (:external-triggers source)))
-                              {} (vals (source-map assembled)))
-        combat {:sources (source-map assembled)
-                :registrations (:registrations assembled)
-                :abilities abilities
-                :by-id (registration-map assembled)
-                :trigger-index trigger-index
-                :errors {}}
-        value {:status :ready
-               :schema-version schema-version
-               :content-hash (content-hash assembled)
-               :combat combat}]
-    (reset! state* value)
-    value))
+(defn initialize!
+  "Project the assembled V3 catalog into the read-only metadata state.
+
+   The zero-arg form assembles the catalog itself. Assembling parses, validates
+   and node-compiles every shipped skill document, so callers that already hold
+   an assembled catalog should pass it in rather than paying for a second,
+   identical assembly. Pass the raw catalog from skills-catalog/assemble, not a
+   runtime's :catalog -- engine-v2 replaces :registrations with compiled entries,
+   and content-hash only strips :ir, so a compiled catalog would change the hash
+   that verifyCombatContentHash pins."
+  ([] (initialize! (skills-catalog/assemble)))
+  ([assembled]
+   (let [abilities (ability-map assembled)
+         trigger-index (reduce (fn [index source]
+                                 (reduce (fn [result trigger]
+                                           (if (and (:source trigger) (:dispatch trigger))
+                                             (update result (:source trigger) (fnil conj []) trigger)
+                                             result))
+                                         index (:external-triggers source)))
+                               {} (vals (source-map assembled)))
+         combat {:sources (source-map assembled)
+                 :registrations (:registrations assembled)
+                 :abilities abilities
+                 :by-id (registration-map assembled)
+                 :trigger-index trigger-index
+                 :errors {}}
+         value {:status :ready
+                :schema-version schema-version
+                :content-hash (content-hash assembled)
+                :combat combat}]
+     (reset! state* value)
+     value)))
 
 (defn state [] @state*)
 (defn catalog [] @state*)

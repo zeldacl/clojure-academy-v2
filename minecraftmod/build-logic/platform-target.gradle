@@ -283,20 +283,19 @@ if (target.loader != "none") {
         "org.clojure:core.specs.alpha:${clojureVersions.coreSpecsAlpha}"
     ]
 
-    // Maven Central publishes org.clojure:clojure in two variants: the
-    // ordinary jar (with AOT-compiled classes for the runtime namespaces)
-    // and the `slim` classifier jar (identical .clj sources, no Clojure AOT
-    // classes, ~3x smaller). Dev/test/compile classpaths keep the full jar
-    // so every JVM avoids load-time compilation; only the packaged artifacts
-    // (Jar-in-Jar / Loom include) embed the slim jar, shrinking the
-    // distributed mod. Only the clojure entry differs — the other two
-    // runtime libraries are packaged as resolved.
+    // Maven Central publishes org.clojure:clojure in two variants: the ordinary
+    // jar (with AOT-compiled classes for the runtime namespaces) and the `slim`
+    // classifier jar (identical .clj sources, no Clojure AOT classes, ~3x
+    // smaller). Embedding slim in the Jar-in-Jar payload would cut roughly 2.8 MB
+    // (~10%) off the distributed mod, and commit 56d5819ec did exactly that.
+    //
+    // DO NOT re-enable it. The slim jar omits Java interfaces the runtime needs,
+    // so the packaged mod fails at load time. It was disabled again in ea8a8d12f
+    // ("update version"), which recorded no reason -- hence this note. The size
+    // win is real but unusable; look at the asset payload instead, which is ~52%
+    // of the archive versus ~16% for the embedded Clojure runtime.
     def packagedRuntimeLibraries = clojureRuntimeLibraries.collect { dependencyNotation ->
-//        if (dependencyNotation.startsWith("org.clojure:clojure:")) {
-//            "${dependencyNotation}:slim"
-//        } else {
-            dependencyNotation
-//        }
+        dependencyNotation
     }
 
     // Do not put SourceSetOutput on platform configurations: it is built by
