@@ -67,6 +67,13 @@
     ;; N-1 consecutive pairs -> 3 quads (wire-quads) each.
     (is (= (* 3 (dec (count flat))) (count wires)))))
 
+(deftest graph->composite-items-provides-local-composite-offsets-test
+  (let [items (render/graph->composite-items (sample-graph) {})]
+    (is (seq items))
+    (is (every? #(and (= 0.0 (:local-x %))
+                      (= 0.0 (:local-y %)))
+                items)
+        "canvas items are painted local to their item-sized hit wrapper")))
 (deftest graph->composite-items-respects-stored-layout-override-test
   (let [g (sample-graph)
         first-nid (:nid (first (graph/exec-flatten g)))

@@ -173,4 +173,11 @@
                                                               wire-thickness 0xFF66CCFF)))))
                                        (exec-inputs node)))
                              (map #(get nodes %) exec-ids))]
-     (vec (concat expr-items node-items value-wires flow-wires))))
+     ;; Presentation hit-testing is rectangle based. Keep the authored canvas
+     ;; coordinates in :x/:y for the camera transform, while marking the
+     ;; composite payload as local to the per-item hit wrapper. The UI binds
+     ;; that wrapper to each item's own x/y/w/h, so nodes/pins no longer all
+     ;; occupy the full canvas and the topmost repeater item cannot swallow
+     ;; every click.
+     (mapv #(assoc % :local-x 0.0 :local-y 0.0)
+           (concat expr-items node-items value-wires flow-wires))))

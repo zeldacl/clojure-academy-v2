@@ -206,7 +206,11 @@
   [resource-index default-namespace item]
   (when (map? item)
     (let [kind (:kind item)
-          ix (float (or (:x item) 0.0)) iy (float (or (:y item) 0.0))
+          ;; A composite may be hosted by an item-sized absolute hit wrapper.
+          ;; :local-x/:local-y keep its visual primitive local to that wrapper;
+          ;; legacy composite payloads continue to use :x/:y directly.
+          ix (float (or (:local-x item) (:x item) 0.0))
+          iy (float (or (:local-y item) (:y item) 0.0))
           iw (float (or (:w item) 0.0)) ih (float (or (:h item) 0.0))
           color (runtime-rgba (:rgba item) 0xFFFFFFFF)
           u0 (float (or (:u0 item) 0.0))

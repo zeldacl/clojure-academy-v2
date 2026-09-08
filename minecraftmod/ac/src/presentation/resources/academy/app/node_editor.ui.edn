@@ -49,11 +49,16 @@
           [{:type :box :layout {:width 464 :height 128}
             :on {:drag-start :editor/canvas-press :drop :editor/palette-drop}
             :semantics {:role :generic :drop-zone :node-editor/canvas}}
-           {:type :repeater :layout {:width 464 :height 128}
+           {:type :repeater :layout {:width 464 :height 128 :direction :none}
             :bind {:items [:state :canvas]}
-            :children [{:type :composite :bind {:item [:state :item]}
+            :children [{:type :absolute
+                        :bind {:x [:item :x] :y [:item :y]
+                               :width [:item :w] :height [:item :h]}
                         :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
-                        :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}
+                        :semantics {:role :button :drop-zone :node-editor/canvas}
+                        :children [{:type :composite
+                                    :bind {:item [:state :item]
+                                           :width [:item :w] :height [:item :h]}}]}]}]}
          {:type :text :key :node-editor/selected :layout {:height 18}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
          {:type :scroll :key :node-editor/params :layout {:height 28}
@@ -152,9 +157,14 @@
             [{:type :box :layout {:width 464 :height 278}
               :on {:drag-start :editor/canvas-press :drop :editor/palette-drop}
               :semantics {:role :generic :drop-zone :node-editor/canvas}}
-             {:type :repeater :layout {:width 464 :height 278}
+             {:type :repeater :layout {:width 464 :height 278 :direction :none}
               :bind {:items [:state :canvas]}
-              :children [{:type :composite :bind {:item [:state :item]}
-                          :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
-                          :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}]}
+              :children [{:type :absolute
+                        :bind {:x [:item :x] :y [:item :y]
+                               :width [:item :w] :height [:item :h]}
+                        :on {:activate :editor/canvas-press :drag-start :editor/canvas-press :drop :editor/palette-drop}
+                        :semantics {:role :button :drop-zone :node-editor/canvas}
+                        :children [{:type :composite
+                                    :bind {:item [:state :item]
+                                           :width [:item :w] :height [:item :h]}}]}]}]}]}
        ]}}

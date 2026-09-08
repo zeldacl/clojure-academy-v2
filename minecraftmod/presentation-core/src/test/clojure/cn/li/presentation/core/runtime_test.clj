@@ -263,6 +263,49 @@
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 55 :y 65 :button 0 :space :viewport})
     (is (= [:demo/go {:target :btn}] (update @seen 1 #(select-keys % [:target]))))))
 
+(deftest item-sized-composite-repeater-routes-hit-to-the-item-under-pointer
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/repeater-hit
+                           {:key :root :width [:fixed 100.0] :height [:fixed 100.0]
+                            :children [{:key :canvas
+                                       :flags #{:is-collection :has-direction}
+                                       :direction :none
+                                       :width [:fixed 100.0] :height [:fixed 100.0]
+                                       :bind {:items [:state :items]}
+                                       :children [{:key :item-wrapper
+                                                  :flags #{:hit-testable}
+                                                  :bind {:x [:item :x] :y [:item :y]
+                                                         :width [:item :w] :height [:item :h]}
+                                                  :on {:activate :demo/hit}
+                                                  :children [{:op UiOp/COMPOSITE
+                                                              :bind {:item [:state :item]
+                                                                     :width [:item :w]
+                                                                     :height [:item :h]}}]}]}]})
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :view-id :academy/test/repeater-hit
+                                  :artifact artifact
+                                  :state {:items [{:nid "first" :x 10.0 :y 10.0 :w 20.0 :h 20.0
+                                                    :kind :quad :local-x 0.0 :local-y 0.0}
+                                                   {:nid "second" :x 60.0 :y 10.0 :w 20.0 :h 20.0
+                                                    :kind :quad :local-x 0.0 :local-y 0.0}]}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action (get-in payload [:item :nid])])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 100 1.0))
+    (let [dl (-> (runtime/extract-stage! rt :screen {:width 100 :height 100})
+                 :mounts first :commands)]
+      (is (= 10.0 (double (aget (.geom dl) 0)))
+          "first composite paints at its wrapper x, not wrapper x plus item x")
+      (is (= 60.0 (double (aget (.geom dl) 4)))
+          "second composite paints at its own wrapper x"))
+    (is (= :consume (runtime/dispatch! rt mount
+                                       {:type :pointer :event-type :down :x 15 :y 15 :button 0})))
+    (is (= [:demo/hit "first"] @seen))
+    (is (= :consume (runtime/dispatch! rt mount
+                                       {:type :pointer :event-type :down :x 65 :y 15 :button 0})))
+    (is (= [:demo/hit "second"] @seen))))
+
 (deftest pointer-down-in-a-repeater-carries-item-and-index
   (let [seen (atom nil)
         rt (runtime/create-runtime)
