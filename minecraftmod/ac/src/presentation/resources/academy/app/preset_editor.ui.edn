@@ -70,15 +70,14 @@
               :style {:resource {:namespace "academy"
                                  :path "textures/guis/preset_settings/selected.png"}}
               :semantics {:role :image}}
-             {:type :repeater
-              :bind {:x [:item :icon-x] :y [:item :icon-y]
+             ;; Paint the skill icon from :slot-icon on the slot row (not a
+             ;; nested repeater). Runtime COMPOSITE resolves :item bind first.
+             {:type :composite :layout {:width 0.0 :height 0.0}
+              :bind {:item [:item :slot-icon]
+                     :x [:item :icon-x] :y [:item :icon-y]
                      :width [:item :icon-s] :height [:item :icon-s]
-                     :items [:item :icon-items]}
-              :layout {:direction :none}
-              :children
-              [{:type :composite
-                :bind {:width [:item :w] :height [:item :h]}
-                :semantics {:role :image}}]}
+                     :visible [:item :has-icon?]}
+              :semantics {:role :image}}
              {:type :text
               :bind {:x [:item :text-x] :y [:item :text-y]
                      :width [:item :text-w] :height [:item :text-h]

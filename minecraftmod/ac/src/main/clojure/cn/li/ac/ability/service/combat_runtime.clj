@@ -423,9 +423,56 @@
           :command-count (count commands)}]))))
 
 (defn- edn-ability-id [owner intent]
+  ;; resolve-slot returns a skill-id keyword (via get-skill-by-controllable),
+  ;; not a skill map — do not read :id from it.
   (or (:ability-id intent)
       (:ability intent)
-      (some-> (resolve-slot owner intent) :id)))
+      (resolve-slot owner intent)))
+
+(defn- entry-triggers-for
+  "Map of compiled entry-name -> :on trigger from the skill-v3 IR/document."
+  [ability-id]
+  (when ability-id
+    (or (get-in (final-runtime-v2) [:catalog :by-id ability-id :ir :entry-triggers])
+        (let [source (combat-source ability-id)
+              entries (:entries source)]
+          (when (map? entries)
+            (into {}
+                  (keep (fn [[entry spec]]
+                          (when-let [on (or (when (map? spec) (:on spec))
+                                            (when (keyword? spec) spec))]
+                            [entry on])))
+                  entries))))))
+
+(defn- op-trigger-candidates
+  "Intent :op values map onto one or more skill-v3 :on triggers. Instant
+   skills typically use :activation/start (entry often named :default);
+   session/toggle skills use :phase/start (entry often named :start)."
+  [op]
+  (case op
+    :start #{:activation/start :phase/start}
+    :pulse #{:phase/pulse :activation/pulse}
+    :release #{:phase/release :activation/release}
+    :abort #{:phase/abort :activation/abort}
+    nil))
+
+(defn- resolve-program-entry
+  "Translate an intent's :op/:event into the compiled program entry key.
+
+  skill-v3 documents name entries freely and declare the trigger in :on;
+  dispatch must not assume the entry is literally named :start/:pulse/... ."
+  [ability-id intent]
+  (let [requested (or (:event intent) (:op intent))
+        triggers (entry-triggers-for ability-id)
+        by-trigger (into {} (map (fn [[entry on]] [on entry]) triggers))]
+    (or (when (and requested (contains? triggers requested))
+          requested)
+        (when-let [on (:event intent)]
+          (get by-trigger on))
+        (when-let [cands (and (not (:event intent))
+                              (op-trigger-candidates (:op intent)))]
+          (some by-trigger cands))
+        requested)))
 
 
 (defn- activation-context
@@ -907,9 +954,9 @@
    helpers (toggle-close-edge?/should-open-session?/cooldown-active?/
    generate-activation-seed/edn-ability-id/combat-source) that are pure
    functions of owner/ability-id/session data, engine-agnostic by
-   construction. :entry (not :phase): the engine's compiled :entries map
-   is keyed DIRECTLY by :start/:pulse/:release/:abort/an :event's own
-   name (e.g. :movement/right-press).
+   construction. Program entry keys are resolved via skill-v3 :on
+   triggers (resolve-program-entry) so instant skills whose entry is
+   named :default still receive :op :start intents.
 
    Every real intent-handling call site (network.clj's CombatIntent
    packet handler, server_hooks.clj's item-triggered abilities,
@@ -919,46 +966,50 @@
   (when-not (final-runtime-v2)
     (install-ac-host-capabilities!)
     (initialize-final-runtime-v2!))
-  (let [ability-id (edn-ability-id owner intent)
-        source (combat-source ability-id)
-        active-session (combat-sessions/session content-id (str owner))
-        intent (if (toggle-close-edge? (:op intent) (:activation source)
-                                       (:ability-id active-session) ability-id)
-                 (assoc intent :op :abort)
-                 intent)
-        intent (if (and active-session
-                        (#{:pulse :release} (:op intent))
-                        (not (contains? intent :hold-ticks)))
-                 (assoc intent :hold-ticks
-                        (inc (max 0 (- (long @last-known-tick*)
-                                       (long (or (:start-tick active-session)
-                                                 @last-known-tick*))))))
-                 intent)
-        entry (or (:event intent) (:op intent))
-        seed (long (or (:activation-seed intent)
-                       (generate-activation-seed owner ability-id
-                                                 (long (or (:server-tick intent)
-                                                           @last-known-tick*)))))
-        prepared (final-input-v2 owner ability-id (assoc intent :activation-seed seed) seed)]
-    (if (and (= :slot-wheel (:event intent))
-             (not (and active-session
-                       (= ability-id (:ability-id active-session)))))
-      {:status :rejected :reason :no-active-session
-       :schema-version 1 :ability-id ability-id
-       :feedback [{:type :combat-input-rejected :reason :no-active-session}]}
-      (if (and (= :start (:op intent))
-               (cooldown-active? owner ability-id))
-        {:status :rejected :reason :cooldown
-         :schema-version 1 :ability-id ability-id
-         :feedback [{:type :cooldown-active :ability-id ability-id}]}
-        (let [result (assoc (final-runtime-v2/dispatch-production! owner ability-id
-                                                                    {:entry entry :input prepared})
-                            :schema-version 1 :ability-id ability-id)]
-          (when (should-open-session? (:status result) (:op intent) (:activation source)
-                                      (:finish-ability? result)
-                                      (boolean active-session))
-            (combat-sessions/start! content-id (str owner) ability-id prepared))
-          result)))))
+  (let [ability-id (edn-ability-id owner intent)]
+    (if (nil? ability-id)
+      {:status :rejected :reason :unknown-ability
+       :schema-version 1 :ability-id nil
+       :feedback [{:type :combat-input-rejected :reason :unknown-ability}]}
+      (let [source (combat-source ability-id)
+            active-session (combat-sessions/session content-id (str owner))
+            intent (if (toggle-close-edge? (:op intent) (:activation source)
+                                           (:ability-id active-session) ability-id)
+                     (assoc intent :op :abort)
+                     intent)
+            intent (if (and active-session
+                            (#{:pulse :release} (:op intent))
+                            (not (contains? intent :hold-ticks)))
+                     (assoc intent :hold-ticks
+                            (inc (max 0 (- (long @last-known-tick*)
+                                           (long (or (:start-tick active-session)
+                                                     @last-known-tick*))))))
+                     intent)
+            entry (resolve-program-entry ability-id intent)
+            seed (long (or (:activation-seed intent)
+                           (generate-activation-seed owner ability-id
+                                                     (long (or (:server-tick intent)
+                                                               @last-known-tick*)))))
+            prepared (final-input-v2 owner ability-id (assoc intent :activation-seed seed) seed)]
+        (if (and (= :slot-wheel (:event intent))
+                 (not (and active-session
+                           (= ability-id (:ability-id active-session)))))
+          {:status :rejected :reason :no-active-session
+           :schema-version 1 :ability-id ability-id
+           :feedback [{:type :combat-input-rejected :reason :no-active-session}]}
+          (if (and (= :start (:op intent))
+                   (cooldown-active? owner ability-id))
+            {:status :rejected :reason :cooldown
+             :schema-version 1 :ability-id ability-id
+             :feedback [{:type :cooldown-active :ability-id ability-id}]}
+            (let [result (assoc (final-runtime-v2/dispatch-production! owner ability-id
+                                                                        {:entry entry :input prepared})
+                                :schema-version 1 :ability-id ability-id)]
+              (when (should-open-session? (:status result) (:op intent) (:activation source)
+                                          (:finish-ability? result)
+                                          (boolean active-session))
+                (combat-sessions/start! content-id (str owner) ability-id prepared))
+              result)))))))
 
 (def ^:private player-spell-complexity-cap
   "S7: no player-spell-specific progression stat exists yet (unlike

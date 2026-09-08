@@ -193,17 +193,24 @@
   (let [s (double scale)
         skill-id (:skill-id slot)
         icon-sz (* icon-s s)
-        icon-src (when skill-id (skill-icon-or-missing skill-id nil))
+        icon-src (when skill-id
+                   (skill-icon-or-missing skill-id (:skill-icon slot)))
         icon (icon-item icon-src icon-sz icon-sz alpha)
         selected? (= selected-slot [preset-index slot-index])
         sw (* slot-w s)
-        sh (* slot-h s)]
+        sh (* slot-h s)
+        skill-name (or (:skill-name slot)
+                       (some-> skill-id name)
+                       "")]
     {:kind :slot
      :preset-index preset-index
      :slot-index slot-index
      :index preset-index
      :skill-id skill-id
-     :skill-name (or (:skill-name slot) "")
+     :skill-name skill-name
+     ;; Nested icon map for composite :item [:item :slot-icon] bind.
+     :slot-icon icon
+     :has-icon? (boolean icon)
      :icon-items (if icon [icon] [])
      :selected? selected?
      :tint tint
@@ -271,53 +278,68 @@
                                (* 5.0 (count (str text))))))]
     (max 20.0 (min (double sel-w) raw))))
 
+(defn- selector-empty-hint
+  "Visible in-game proof when the picker has only cancel (or nothing)."
+  [debug]
+  (let [learned (long (or (:learned-count debug) -1))
+        resolved (long (or (:resolved-count debug) -1))
+        bindable (long (or (:bindable-count debug) -1))
+        assigned (long (or (:assigned-count debug) -1))
+        avail (long (or (:available-count debug) 0))
+        cat (or (:category-id debug) "?")]
+    (str "empty L=" learned " R=" resolved " B=" bindable
+         " As=" assigned " A=" avail " cat=" cat)))
+
 (defn- selector-grid
   "Main Selector: cancel + learned skills as a 15×15 icon grid at mouse (mx, my).
    Names live in the hover tip (and :label), not as cell text — matching
    PresetEditUI / main `build-selector!` (SIZE=15, STEP=18, MAX_PER_ROW=4)."
-  [skills mx my]
-  (let [items (into [{:remove? true
-                      :label (local-key "cancel")
-                      :src cancel-tex}]
-                    (map (fn [skill]
-                           {:remove? false
-                            :skill-id (:skill-id skill)
-                            :cat-id (:cat-id skill)
-                            :ctrl-id (:ctrl-id skill)
-                            :label (str (or (:skill-name skill) "?"))
-                            :src (skill-icon-or-missing (:skill-id skill)
-                                                        (:skill-icon skill))})
-                         skills))
-        n (count items)
-        rows (int (Math/ceil (/ (double (max 1 n)) sel-max-per-row)))
-        cols (min (max 1 n) sel-max-per-row)
-        sel-w (+ (* 2.0 sel-margin) (* sel-step (double (dec cols))) sel-size)
-        sel-h (+ (* 2.0 sel-margin) (* sel-step (double (dec rows))) sel-size)
-        [sx sy] (clamp-selector-pos mx my sel-w sel-h)
-        hint (local-skill-hint)
-        hint-w (tip-width-for hint sel-w)
-        placed (mapv (fn [i item]
-                       (let [row (quot i sel-max-per-row)
-                             col (rem i sel-max-per-row)
-                             cx (+ sel-margin (* col sel-step))
-                             cy (+ sel-margin (* row sel-step))]
-                         (assoc item
-                                :kind :image
-                                :x 0.0 :y 0.0
-                                :w sel-size :h sel-size
-                                :rgba (icon-rgba 1.0)
-                                :cell-x cx :cell-y cy :index i)))
-                     (range n) items)]
-    {:selector-visible? true
-     :selector-x (double sx)
-     :selector-y (double sy)
-     :selector-w (double sel-w)
-     :selector-h (double sel-h)
-     :selector-tip-x (double sx)
-     :selector-tip-y (double (- sy 13.5))
-     :selector-hint hint
-     :selector-hint-w (double hint-w)
-     :selector-skills placed}))
+  ([skills mx my] (selector-grid skills mx my nil))
+  ([skills mx my debug]
+   (let [items (into [{:remove? true
+                       :label (local-key "cancel")
+                       :src cancel-tex}]
+                     (map (fn [skill]
+                            {:remove? false
+                             :skill-id (:skill-id skill)
+                             :cat-id (:cat-id skill)
+                             :ctrl-id (:ctrl-id skill)
+                             :label (str (or (:skill-name skill) "?"))
+                             :src (skill-icon-or-missing (:skill-id skill)
+                                                         (:skill-icon skill))})
+                          skills))
+         n (count items)
+         rows (int (Math/ceil (/ (double (max 1 n)) sel-max-per-row)))
+         cols (min (max 1 n) sel-max-per-row)
+         sel-w (+ (* 2.0 sel-margin) (* sel-step (double (dec cols))) sel-size)
+         sel-h (+ (* 2.0 sel-margin) (* sel-step (double (dec rows))) sel-size)
+         [sx sy] (clamp-selector-pos mx my sel-w sel-h)
+         hint (if (seq skills)
+                (local-skill-hint)
+                (selector-empty-hint debug))
+         hint-w (tip-width-for hint (max sel-w 120.0))
+         placed (mapv (fn [i item]
+                        (let [row (quot i sel-max-per-row)
+                              col (rem i sel-max-per-row)
+                              cx (+ sel-margin (* col sel-step))
+                              cy (+ sel-margin (* row sel-step))]
+                          (assoc item
+                                 :kind :image
+                                 :x 0.0 :y 0.0
+                                 :w sel-size :h sel-size
+                                 :rgba (icon-rgba 1.0)
+                                 :cell-x cx :cell-y cy :index i)))
+                      (range n) items)]
+     {:selector-visible? true
+      :selector-x (double sx)
+      :selector-y (double sy)
+      :selector-w (double sel-w)
+      :selector-h (double sel-h)
+      :selector-tip-x (double sx)
+      :selector-tip-y (double (- sy 13.5))
+      :selector-hint hint
+      :selector-hint-w (double hint-w)
+      :selector-skills placed})))
 
 (defn- with-selector-hint
   "Update tip text/width for the currently open selector (hover)."
@@ -397,11 +419,20 @@
            {:mark-dirty? false}))))))
 
 (defn refresh-ui!
-  "Re-present the open preset editor for this player uuid (or mount entry)."
+  "Re-present the open preset editor for this player uuid (or mount entry).
+   Rebuilds an open skill selector from fresh ability-data (learn_all sync)."
   [player-uuid-or-mount]
-  (when-let [{:keys [present!]} (or (get @active-mounts (str player-uuid-or-mount))
-                                    (get @active-mounts player-uuid-or-mount))]
-    (present!)))
+  (when-let [{:keys [present! owner selected-slot* selector* anim*]}
+             (or (get @active-mounts (str player-uuid-or-mount))
+                 (get @active-mounts player-uuid-or-mount))]
+    (when (and owner selector* selected-slot* (:selector-visible? @selector*))
+      (let [[_p _s] @selected-slot*
+            data (or (editor/build-preset-editor-render-data owner) {})
+            skills (vec (or (:available-skills data) []))
+            sx (double (or (:selector-x @selector*) 0.0))
+            sy (double (or (:selector-y @selector*) 0.0))]
+        (reset! selector* (selector-grid skills sx sy (:debug data)))))
+    (when present! (present!))))
 
 (defn refresh-active-screen! [player-uuid]
   ;; active-mounts is keyed by player-uuid string (see open!). Looking up by
@@ -483,7 +514,7 @@
                                   (render-state owner nil @anim* @selector*))
                               (let [data (or (editor/build-preset-editor-render-data owner) {})
                                     skills (vec (or (:available-skills data) []))
-                                    grid (selector-grid skills mx my)]
+                                    grid (selector-grid skills mx my (:debug data))]
                                 (editor/on-preset-tab-click owner p)
                                 (reset! selected-slot* [p s])
                                 (reset! selector* grid)

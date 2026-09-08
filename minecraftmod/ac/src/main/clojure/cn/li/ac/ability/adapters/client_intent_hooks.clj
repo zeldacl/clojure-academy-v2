@@ -30,7 +30,12 @@
 (defonce ^:private active-slots* (atom #{}))
 (defonce ^:private handlers-registered?* (atom false))
 (defn- current-session []
-  (or keybinds/*client-session-id* (runtime-hooks/client-session-id)))
+  (or keybinds/*client-session-id*
+      (runtime-hooks/client-session-id)
+      ;; Same session the preset editor / HUD read via default-client-owner.
+      ;; Network push threads may lack ThreadLocal client-ctx; without this
+      ;; fallback hydrate lands nowhere and :learned-skills stays empty.
+      (:client-session-id (runtime-hooks/default-client-owner))))
 
 (defn- client-owner [player-uuid]
   (owner/require-client-owner
@@ -166,9 +171,9 @@
 
 (defn- hydrate! [player-uuid domain value]
   (command-runtime/run-command-in-session!
-   (or keybinds/*client-session-id* (runtime-hooks/client-session-id))
-    (str player-uuid)
-    {:command :hydrate-player-state domain value}))
+   (current-session)
+   (str player-uuid)
+   {:command :hydrate-player-state domain value}))
 
 (defn- apply-client-runtime-v2!
   [{:keys [version opcode uuid revision dirty-mask] :as payload}]
@@ -209,7 +214,11 @@
                                                     (:resource-data payload)))
             (clear-owner-state! uuid))
           (when-not (zero? (bit-and mask store/preset-data-mask))
-            (keybinds/update-default-group! uuid)
+            (keybinds/update-default-group! uuid))
+          ;; learn_all / learn-skill dirty ability-data only; without a refresh
+          ;; an open selector keeps a stale empty skill grid.
+          (when (or (not (zero? (bit-and mask store/ability-data-mask)))
+                    (not (zero? (bit-and mask store/preset-data-mask))))
             (preset-editor-reactive/refresh-active-screen! uuid)))))))
 
 (defn- slot-visual-state [player-uuid slot]

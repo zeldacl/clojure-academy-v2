@@ -5,6 +5,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
+            [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.ac.ability.client.delegate-state :as dstate]
             [cn.li.ac.config.gameplay :as gameplay]
@@ -144,10 +145,11 @@
   (vec
    (keep-indexed
     (fn [idx slot]
-      (when (and slot (vector? slot) (= 2 (count slot)))
-        (let [[cat-id ctrl-id] slot
-              skill-id (skill-query/get-skill-by-controllable cat-id ctrl-id)
-              skill-spec (when skill-id (skill-registry/get-skill skill-id))]
+      (when-let [[cat-id ctrl-id] (preset-data/normalize-controllable slot)]
+        (let [skill-id (or (skill-query/get-skill-by-controllable cat-id ctrl-id)
+                           ctrl-id)
+              skill-spec (or (skill-registry/raw-skill skill-id)
+                             (skill-registry/get-skill skill-id))]
           (when skill-id
             {:type :skill-slot
              :idx idx
@@ -162,7 +164,8 @@
              :key-label (ability-key-label idx)
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
-             :skill-name (skill-query/skill-display-name skill-id)
+             :skill-name (or (skill-query/skill-display-name skill-id)
+                             (name skill-id))
              ;; Stand-in denominator for slots with no live cooldown to read a
              ;; recorded duration from — same declaration the apply paths use,
              ;; so the two can no longer disagree.

@@ -27,3 +27,12 @@
     (is (= [:ac :y] (get-in r [:slots [3 1]])))
     (is (= d r))))
 
+(deftest preset-slots-survive-list-pairs-and-long-keys-test
+  (let [d {:active-preset 0
+           :slots {[(long 0) (long 0)] (list :electromaster :railgun)
+                   [0 1] [:electromaster :arc-gen]}}]
+    (is (= [:electromaster :railgun] (preset/get-slot d 0 0)))
+    (is (= [:electromaster :arc-gen] (preset/get-slot d 0 1)))
+    (is (= [[:electromaster :railgun] [:electromaster :arc-gen] nil nil]
+           (preset/get-active-slots d)))))
+

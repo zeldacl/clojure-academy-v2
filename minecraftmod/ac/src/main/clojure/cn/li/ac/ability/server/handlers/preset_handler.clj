@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.server.handlers.preset-handler
 	"Preset request network handlers."
 	(:require 
+            [clojure.string :as str]
             [cn.li.ac.ability.server.handlers.common :as common]
 [cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.ability.model.ability :as ability-data]
@@ -8,7 +9,6 @@
 						[cn.li.ac.ability.registry.skill-query :as skill-query]))
 
 (defn- as-kw
-  "NBT / some transports rehydrate keywords as strings."
   [x]
   (cond
     (keyword? x) x
@@ -16,13 +16,25 @@
     (symbol? x) (keyword (name x))
     :else x))
 
+(defn- skill-id-aliases
+  [skill-id]
+  (when-let [sid (as-kw skill-id)]
+    (let [n (name sid)
+          ns (namespace sid)
+          flipped (str/replace n #"[_-]" (fn [ch] (if (= ch "_") "-" "_")))
+          kw (fn [stem] (if ns (keyword ns stem) (keyword stem)))]
+      (cond-> #{sid}
+        (not= n flipped) (conj (kw flipped))))))
+
 (defn- skill-learned?
   [ability-data skill-id]
   (let [learned (:learned-skills ability-data #{})
-        sid (as-kw skill-id)]
-    (or (contains? learned sid)
-        (contains? learned skill-id)
-        (contains? learned (some-> sid name)))))
+        aliases (skill-id-aliases skill-id)]
+    (or (some (fn [id] (contains? learned id)) aliases)
+        (some (fn [id] (contains? learned (some-> id name))) aliases)
+        (boolean (some (fn [learned-id]
+                         (some aliases (skill-id-aliases learned-id)))
+                       learned)))))
 
 (defn- learned-controllable-slot
 	[player-uuid cat-id ctrl-id]

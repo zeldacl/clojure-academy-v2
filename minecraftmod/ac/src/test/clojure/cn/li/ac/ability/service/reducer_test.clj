@@ -99,11 +99,32 @@
                                          :activated true}
                                         {:command :switch-preset
                                          :player-uuid "p-3"
-                                         :preset-idx 2}])]
+                                         :preset-idx 2}])
+        effect-types (mapv :effect/type (:effects result))]
     (is (= 2 (count (:events result))))
-    (is (= 1 (count (:effects result))))
-    (is (= :network-send (-> result :effects first :effect/type)))
+    (is (some #{:persist-state} effect-types))
+    (is (some #{:network-send} effect-types))
+    (is (every? #(= "p-3" (:player-uuid %)) (:effects result)))
     (is (= 2 (get-in result [:state :preset-data :active-preset])))))
+
+(deftest set-preset-slot-persist-effect-includes-player-uuid-test
+  "Regression: missing :player-uuid made execute-persist-state! no-op, so
+   bound slots never reached NBT and vanished after restart."
+  (let [result (reducer/apply-command
+                (base-state)
+                {:command :set-preset-slot
+                 :player-uuid "p-preset"
+                 :preset-idx 0
+                 :key-idx 1
+                 :controllable [:electromaster :railgun]})
+        persist (->> (:effects result)
+                     (filter #(= :persist-state (:effect/type %)))
+                     first)]
+    (is (= [:electromaster :railgun]
+           (get-in result [:state :preset-data :slots [0 1]])))
+    (is (some? persist))
+    (is (= "p-preset" (:player-uuid persist)))
+    (is (= :preset-data (:domain persist)))))
 
 ;; ============================================================================
 ;; server-tick-noop? equivalence — must mirror cmd-server-tick branch-for-branch.

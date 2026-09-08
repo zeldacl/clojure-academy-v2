@@ -6,6 +6,15 @@
                     [cn.li.mcmod.i18n :as i18n]
 					[clojure.string :as str]))
 
+(defn- as-kw
+  "NBT/network may rehydrate keywords as strings; normalize for comparisons."
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    (symbol? x) (keyword (name x))
+    :else x))
+
 (defn list-skills
 	"Return all effective skill specs as a realized vector."
 	[]
@@ -13,23 +22,26 @@
 
 (defn get-skills-for-category
 	[cat-id]
-	(into []
-			(filter #(= (:category-id %) cat-id))
-			(list-skills)))
+  (let [cat-id (as-kw cat-id)]
+	  (into []
+			  (filter #(= (as-kw (:category-id %)) cat-id))
+			  (list-skills))))
 
 (defn get-controllable-skills-for-category
 	[cat-id]
-	(into []
-			(filter #(and (= (:category-id %) cat-id) (:controllable? %)))
-			(list-skills)))
+  (let [cat-id (as-kw cat-id)]
+	  (into []
+			  (filter #(and (= (as-kw (:category-id %)) cat-id) (:controllable? %)))
+			  (list-skills))))
 
 (defn get-controllable-skills-at-level
 	[cat-id level]
-	(into []
-			(filter #(and (= (:category-id %) cat-id)
-									 (:controllable? %)
-									 (= (:level %) level)))
-			(list-skills)))
+  (let [cat-id (as-kw cat-id)]
+	  (into []
+			  (filter #(and (= (as-kw (:category-id %)) cat-id)
+									   (:controllable? %)
+									   (= (:level %) level)))
+			  (list-skills))))
 
 (defn can-control?
 	[skill-id]
@@ -92,23 +104,18 @@
 	(when-let [s (skill/get-skill skill-id)]
 		[(:category-id s) (or (:ctrl-id s) skill-id)]))
 
-(defn- as-kw
-  [x]
-  (cond
-    (keyword? x) x
-    (string? x) (keyword x)
-    (symbol? x) (keyword (name x))
-    :else x))
-
 (defn get-skill-by-controllable
+	"Resolve skill id from a [category ctrl] pair.
+
+  Identity match only (category + ctrl-id). Do not gate on live Forge
+  config enabled/controllable — those flags empty the preset slot paint
+  and HUD after a successful bind while the selector (structural canControl)
+  still works."
 	[category-id ctrl-id]
   (let [category-id (as-kw category-id)
         ctrl-id (as-kw ctrl-id)]
     (some (fn [[sid base]]
-            (let [s (skill-config/apply-skill-overrides base)]
-              (when (and (= (as-kw (:category-id s)) category-id)
-                         (:enabled s)
-                         (:controllable? s)
-                         (= (as-kw (or (:ctrl-id s) sid)) ctrl-id))
-                sid)))
+            (when (and (= (as-kw (:category-id base)) category-id)
+                       (= (as-kw (or (:ctrl-id base) sid)) ctrl-id))
+              sid))
           (skill/raw-skill-entries))))

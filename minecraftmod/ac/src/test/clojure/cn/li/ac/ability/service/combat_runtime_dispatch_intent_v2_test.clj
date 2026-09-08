@@ -7,6 +7,8 @@
    ability, the real vec-reflection.edn toggle ability against the real
    capability registry and player-state store."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.model.preset :as preset-data]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.service.runtime-store :as runtime-store]
@@ -18,12 +20,20 @@
     (combat-catalog/initialize!)
     (player-state-support/clean-player-states-fixture
      (fn []
+       ;; Register after the fixture installs a fresh Framework — the skill
+       ;; registry lives there, and production (cn.li.ac.content.ability)
+       ;; does the same projection from combat-catalog skill-specs.
+       (skill-registry/reset-skill-registry-for-test!)
+       (doseq [spec (combat-catalog/skill-specs)]
+         (skill-registry/register-skill! spec))
        (runtime-store/create-session! player-state-support/test-session-id)
        (combat-sessions/reset-for-test!)
+       (combat-runtime/reset-final-runtime-v2-for-test!)
        (try
          (f)
          (finally
-           (combat-sessions/reset-for-test!)))))))
+           (combat-sessions/reset-for-test!)
+           (combat-runtime/reset-final-runtime-v2-for-test!)))))))
 
 (defn- flush-with-resources! [owner]
   ;; :max-overload 1000.0 (not the smoke test's own default-100.0 pattern):
@@ -79,3 +89,35 @@
       (is (= :insufficient-resource (:outcome result)))
       (is (true? (:finish-ability? result)))
       (is (nil? (combat-sessions/session :ac owner))))))
+
+(deftest slot-intent-resolves-skill-id-without-ability-id-test
+  "Client LMB intents carry :slot only. resolve-slot returns a skill-id
+   keyword; edn-ability-id must not treat that keyword as a map (:id)."
+  (let [owner "v2-slot-owner"]
+    (flush-with-resources! owner)
+    (runtime-store/set-player-state!
+     player-state-support/test-session-id owner
+     (update (runtime-store/get-player-state player-state-support/test-session-id owner)
+             :preset-data
+             #(-> (or % (preset-data/new-preset-data))
+                  (preset-data/set-slot 0 0 [:vecmanip :vec-reflection]))))
+    (is (= :vec-reflection (combat-runtime/resolve-slot owner {:slot 0})))
+    (is (= :vec-reflection (@#'combat-runtime/edn-ability-id owner {:op :start :slot 0})))
+    (let [result (combat-runtime/dispatch-intent-v2! owner {:op :start :slot 0})]
+      (is (= :vec-reflection (:ability-id result)))
+      (is (not= :unknown-ability (:reason result)))
+      (is (= :accepted (:status result)))
+      (is (= :started (:outcome result))))))
+
+(deftest instant-skill-entry-maps-op-start-via-activation-trigger-test
+  "arc-gen (and other instant skills) name their entry :default with
+   :on :activation/start. :op :start must resolve to that entry, not
+   assume the entry is literally named :start."
+  (with-redefs [cn.li.ac.ability.service.combat-runtime/entry-triggers-for
+                (fn [ability-id]
+                  (case ability-id
+                    :arc-gen {:default :activation/start}
+                    :vec-reflection {:start :phase/start}
+                    nil))]
+    (is (= :default (@#'combat-runtime/resolve-program-entry :arc-gen {:op :start})))
+    (is (= :start (@#'combat-runtime/resolve-program-entry :vec-reflection {:op :start})))))

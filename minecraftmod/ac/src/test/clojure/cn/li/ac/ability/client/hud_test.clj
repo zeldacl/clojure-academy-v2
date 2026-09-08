@@ -86,7 +86,9 @@
   (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [])
                 skill-query/get-skill-by-controllable (fn [_ _] :railgun)
                 skill-registry/get-skill (fn [_] {:name "Railgun"})
+                skill-registry/raw-skill (fn [_] {:name "Railgun"})
                 skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
+                skill-query/skill-display-name (fn [_] "Railgun")
                 cd-data/in-cooldown? (fn [_ _ _] false)
                 cd-data/get-remaining (fn [_ _ _] 0)
                 dstate/delegate-state-for-slot (fn [_ _ _ _] {:state :idle :alpha 1.0 :glow-color nil :sin-effect? false})]
@@ -100,6 +102,19 @@
       (is (= 1 (count slots)))
       (is (= "Railgun" (:skill-name first-slot)))
       (is (= "textures/skills/railgun.png" (:skill-icon first-slot))))))
+
+(deftest build-skill-slot-shape-accepts-list-pair-test
+  (with-redefs [skill-query/get-skill-by-controllable (fn [_ _] :arc-gen)
+                skill-registry/raw-skill (fn [_] {:id :arc-gen})
+                skill-registry/get-skill (fn [_] {:id :arc-gen})
+                skill-query/get-skill-icon-path (fn [_] "textures/skills/arc_gen.png")
+                skill-query/skill-display-name (fn [_] "Arc Gen")]
+    (let [shapes (hud/build-skill-slot-shape
+                  {:active-slots [(list :electromaster :arc-gen) nil nil nil]}
+                  320 180)]
+      (is (= 1 (count shapes)))
+      (is (= :arc-gen (:skill-id (first shapes))))
+      (is (= "Arc Gen" (:skill-name (first shapes)))))))
 
 (deftest cooldown-wipe-divides-by-the-applied-duration-test
   ;; Upstream KeyHintUI: prog = tickLeft / maxTick. The HUD used to recompute
