@@ -381,6 +381,82 @@
                   (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
                   (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")])))
 
+(defn- node-editor-golden-file
+  []
+  (first (filter #(.isFile ^java.io.File %)
+                 [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")
+                  (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")
+                  (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")])))
+
+(defn- node-editor-smoke-state
+  [expanded?]
+  {:title "Node Editor"
+   :phase-label "Phase: default"
+   :phase-tabs []
+   :palette-query ""
+   :palette-clear-label "Clear"
+   :palette-rows []
+   :canvas [{:kind :quad :nid "first" :x 10.0 :y 10.0 :w 20.0 :h 20.0
+             :local-x 0.0 :local-y 0.0 :rgba 0xFFFFFFFF}
+            {:kind :quad :nid "second" :x 60.0 :y 10.0 :w 20.0 :h 20.0
+             :local-x 0.0 :local-y 0.0 :rgba 0xFFFFFFFF}]
+   :selected-label "(nothing selected)"
+   :selected-params []
+   :diagnostics []
+   :cost-label "complexity=0 host-cmds=0"
+   :zoom-label "Zoom 100%"
+   :zoom-reset-label "Reset zoom"
+   :canvas-viewport? expanded?
+   :canvas-compact-visible? (not expanded?)
+   :canvas-viewport-visible? expanded?
+   :canvas-viewport-label (if expanded? "Close viewport (Esc)" "Expand canvas")
+   :canvas-viewport-title "Canvas viewport"
+   :preview-label "Preview off"
+   :preview-toggle-label "Preview"
+   :reload-label "Reload from disk"
+   :save-label "Save to workspace"
+   :export-label "Export to source"
+   :undo-label "Undo"
+   :redo-label "Redo"
+   :status ""})
+
+(deftest compiled-node-editor-routes-compact-and-viewport-item-hits
+  (let [art-file (node-editor-golden-file)]
+    (is (some? art-file) "node-editor golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          seen (atom [])
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/node-editor
+                      :artifact artifact
+                      :state (node-editor-smoke-state false)
+                      :reduce (fn [state action payload]
+                                (swap! seen conj [action payload])
+                                {:state state :event-result :consume})})]
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 480 360 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
+                   :mounts first :commands)]
+        (is (pos? (.count dl)) "compact node editor must paint")
+        (is (= 10.0 (double (aget (.geom dl) 24)))
+            "compact node body is painted at its item wrapper x"))
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 18 :y 108 :button 0})
+      (is (= :editor/canvas-press (ffirst @seen)))
+      (is (= "first" (get-in (last @seen) [1 :item :nid])))
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :up :x 18 :y 108 :button 0})
+      (runtime/present! rt mount (node-editor-smoke-state true))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
+                   :mounts first :commands)]
+        (is (pos? (.count dl)) "viewport node editor must paint")
+        (is (= 10.0 (double (aget (.geom dl) 12)))
+            "viewport node body is painted at its own wrapper x"))
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 18 :y 74 :button 0})
+      (is (= :editor/canvas-press (ffirst @seen)))
+      (is (= "first" (get-in (last @seen) [1 :item :nid]))))))
 (defn- hist-quad
   [h]
   {:kind :quad :x 22.4 :y (- 79.2 h) :w 6.4 :h (double h)

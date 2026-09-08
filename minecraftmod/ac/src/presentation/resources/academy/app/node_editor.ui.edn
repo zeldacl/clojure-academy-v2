@@ -12,6 +12,7 @@
  :root {:type :stack :key :node-editor/root :layout {:x 8 :y 8 :width 464 :height 344}
         :children
         [{:type :column :key :node-editor/base :layout {:width 464 :height 344}
+          :bind {:visible [:state :canvas-compact-visible?]}
           :children
           [{:type :text :key :node-editor/title :layout {:height 16}
           :bind {:text [:state :title]} :semantics {:role :heading}}

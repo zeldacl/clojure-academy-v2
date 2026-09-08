@@ -442,6 +442,8 @@
     (is (= :stack (:type (:root ui)))
         "root must stack the fixed-height editor base and viewport overlay")
     (is base "base column keeps compact/editor controls in normal flow")
+    (is (= [:state :canvas-compact-visible?] (get-in base [:bind :visible]))
+        "viewport mode hides the covered base controls from paint/hit/focus")
     (is (<= (double base-flow-height) (double (get-in base [:layout :height])))
         "compact controls must fit inside the fixed base column")
     (is viewport "viewport overlay must remain an explicit absolute child")
