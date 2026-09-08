@@ -11,7 +11,7 @@
 | Blueprint | 执行流与数据流分层、语义 pin、可移动节点、可平移画布 | 不引入无类型的任意连线 |
 | Niagara | 模块栈、参数面板、预览与生产运行时隔离 | 当前没有 `:emitters` 内容时不虚构发射器编辑器 |
 
-当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量）、法术合成器的有界参数校验、独立场景预览和工作区/导出双路径。
+当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量）、法术合成器的有界参数校验、两个编辑器可提交的 repeater 草稿、独立场景预览和工作区/导出双路径。
 
 ## 2. 复核后纠正的矛盾
 
@@ -27,7 +27,7 @@
 1. 保留 `node_editor_reactive.clj` 的参数字段模型、解析、提交和非法值状态反馈。
 2. 保留 `node_editor.ui.edn` 的选中节点参数滚动面板；小屏幕只显示有限高度，超出内容滚动。
 3. 保留测试：插入 palette 节点、编辑数值 literal、提交后重建 graph/document、dirty 状态和状态文案。
-4. 门禁：`compilePresentationViews`、节点编辑器定向测试、全量 `ability-runtime`/`ac` Clojure 测试。
+4. 门禁：`compilePresentationViews`、节点编辑器和法术合成器定向测试、全量 `ability-runtime`/`ac` Clojure 测试。
 
 ### P1：提高编辑效率（不改变文档契约，已完成）
 

@@ -112,6 +112,8 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
   映射到选中节点的参数检查器，可编辑 `literal`、向量字面量和映射字面量，并在提交
   前按 `double/int/bool/keyword/vec3` 做解析和有限值校验。由其他节点、sigil 或调用
   驱动的输入保持只读，必须通过语义连线修改，避免检查器悄悄改变图的拓扑。
+  两个编辑器的 repeater 文本输入都通过独立 `draft-key` 回写 view state，字符输入、退格
+  和 Enter 提交不会读取旧快照。
 - **场景效果准星定位**：场景模式已有 Preview/Stop 生命周期，使用独立的
   `client-vfx-v2` runtime、只读场景输入并在 screen tick 中推进，关闭窗口会清理
   owner；它不会污染生产 runtime。当前仍未绑定玩家准星，因为仓库没有可复用的

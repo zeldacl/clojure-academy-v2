@@ -166,6 +166,7 @@
       (mapv (fn [[key descriptor]]
               {:effect-index selected-effect
                :param-key key
+               :draft-key (keyword (str "composer-param-" selected-effect "-" (name key)))
                :label (str (name key) " [" (:min descriptor) ".." (:max descriptor) "]")
                :value (str (get param-drafts [selected-effect key]
                                 (get-in group [:params key])))})
@@ -223,15 +224,21 @@
 
 (defn- render-state [state]
   (let [{:keys [catalog form effect-groups selected-effect status busy?]} state
+        selected-params (selected-param-fields state)
+        draft-state (into {}
+                          (keep (fn [{:keys [draft-key value]}]
+                                  (when draft-key [draft-key (str value)])))
+                          selected-params)
         forms (filter #(= :form (:kind %)) catalog)
         effects (filter #(= :effect (:kind %)) catalog)
         augments (filter #(= :augment (:kind %)) catalog)]
-    {:title "Spell Composer"
+    (merge draft-state
+           {:title "Spell Composer"
      :form-palette (mapv palette-item (filter :admissible? forms))
      :effect-palette (mapv palette-item (filter :admissible? effects))
      :augment-palette (mapv palette-item (filter :admissible? augments))
      :form-label (if form (glyph-str (:glyph form)) "(none)")
-     :selected-param-fields (selected-param-fields state)
+     :selected-param-fields selected-params
      :effect-slots
      (mapv (fn [idx {:keys [glyph augments]}]
              {:index idx :label (str (inc idx) ". " (glyph-str glyph))
@@ -245,7 +252,7 @@
      :busy? (boolean busy?)
      :status (or status "")
      :cast-label (if busy? "Casting..." "Cast")
-     :clear-label "Clear"}))
+     :clear-label "Clear"})))
 
 ;; --- input handling ------------------------------------------------------
 

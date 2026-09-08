@@ -93,5 +93,5 @@
     (is (= 7.5 (get-in submitted [:effect-groups 0 :params :amount])))
     (is (= 7.5 (get-in rejected [:effect-groups 0 :params :amount])))
     (is (.contains ^String (:status rejected) "exceeds"))
-    (is (= [{:effect-index 0 :param-key :amount :label "amount [0.0..20.0]" :value "7.5"}]
+    (is (= [{:effect-index 0 :param-key :amount :draft-key :composer-param-0-amount :label "amount [0.0..20.0]" :value "7.5"}]
            (#'composer/selected-param-fields submitted)))))
