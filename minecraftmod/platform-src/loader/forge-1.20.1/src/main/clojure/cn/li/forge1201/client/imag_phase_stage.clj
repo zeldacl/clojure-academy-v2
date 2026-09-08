@@ -22,6 +22,7 @@
   while the terrain's render state is still active, the main target otherwise)
   so the flash composites over the surface and is blitted with it."
   (:require [cn.li.platform.neutral.world-render-stage :as world-render-stage]
+            [cn.li.mc1201.client.player-state-core :as player-state]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
@@ -46,21 +47,20 @@
   ;; content installs a drain, every one of them has nothing to do.
   (when (and (world-render-stage/installed?) (stage-eligible? evt))
     (try
-      (let [^Minecraft mc (Minecraft/getInstance)
-            camera (.getMainCamera (.gameRenderer mc))
-            cam (.getPosition camera)
-            buffer-source (.bufferSource (.renderBuffers mc))]
-        ;; Flush only when a queue actually had items — the stage fires
-        ;; twice per frame and the second fire finds them empty (drained
-        ;; at the first), so its flush would be a pointless no-op.
-        (when (pos? (world-render-stage/drain-all!
-                      {:pose-stack (.getPoseStack evt)
-                       :buffer-source buffer-source
-                       :camera-pos {:x (.x cam) :y (.y cam) :z (.z cam)}}))
-          ;; See the ns docstring: the batch must draw NOW, while the current
-          ;; output target is still the right one (the translucent target
-          ;; under FABULOUS, the main target under FANCY).
-          (.endBatch buffer-source)))
+      (when-let [^Minecraft mc (Minecraft/getInstance)]
+        (when-let [camera-pos (player-state/camera-position)]
+          (let [buffer-source (.bufferSource (.renderBuffers mc))]
+            ;; Flush only when a queue actually had items — the stage fires
+            ;; twice per frame and the second fire finds them empty (drained
+            ;; at the first), so its flush would be a pointless no-op.
+            (when (pos? (world-render-stage/drain-all!
+                          {:pose-stack (.getPoseStack evt)
+                           :buffer-source buffer-source
+                           :camera-pos camera-pos}))
+              ;; See the ns docstring: the batch must draw NOW, while the
+              ;; current output target is still the right one (the translucent
+              ;; target under FABULOUS, the main target under FANCY).
+              (.endBatch buffer-source)))))
       (catch Exception e
         (log/debug "Post-translucent world render stage failed:" (ex-message e))))))
 

@@ -17,6 +17,7 @@
             [cn.li.fabric1201.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.presentation-world-renderer :as presentation-world-renderer]
+            [cn.li.fabric1201.client.imag-phase-stage :as imag-phase-stage]
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
             [cn.li.fabric1201.client.obj-model-registration :as obj-models]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
@@ -276,6 +277,7 @@
   (presentation-hud-renderer/init!)
   (hand-effect-renderer/init!)
   (presentation-world-renderer/init!)
+  (imag-phase-stage/init!)
   (msdf-setup/init!)
   (media-playback-bridge/install-media-playback-bridge!)
   (log/info "Fabric client initialization complete"))
