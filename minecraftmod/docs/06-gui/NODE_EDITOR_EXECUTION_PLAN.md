@@ -11,12 +11,12 @@
 | Blueprint | 执行流与数据流分层、语义 pin、可移动节点、可平移画布 | 不引入无类型的任意连线 |
 | Niagara | 模块栈、参数面板、预览与生产运行时隔离 | 当前没有 `:emitters` 内容时不虚构发射器编辑器 |
 
-当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击插入、诊断/代价读数、参数检查器（literal/vector/map 字面量）、法术合成器的有界参数校验、独立场景预览和工作区/导出双路径。
+当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量）、法术合成器的有界参数校验、独立场景预览和工作区/导出双路径。
 
 ## 2. 复核后纠正的矛盾
 
 - “参数检查器尚未实现”已过时：节点检查器现在根据 palette schema 显示类型，并安全提交 `double/int/long/bool/keyword/vec3`；由 sigil、调用或其他节点驱动的输入保持只读。
-- “画布不能拖动”已过时：节点移动、空白画布平移和 pin 连线已接入 `presentation-core` 的 pointer 路由；仍未完成的是从调色板拖放新节点。
+- “画布不能拖动”已过时：节点移动、空白画布平移、pin 连线和调色板拖放已接入 `presentation-core` 的 pointer 路由。
 - “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v3/*.edn` 没有任何 `:emitters` 内容，只有 `vfx-core` 的编译机制；必须先有内容 schema 和样例，再启动 UI。
 - glyph 物品、法术存储 NBT、准星锚点、滚轮缩放、文件选择器都需要当前仓库尚未提供的资源或平台契约，不能在现有中立 Presentation 层伪造完成。
 
@@ -29,12 +29,12 @@
 3. 保留测试：插入 palette 节点、编辑数值 literal、提交后重建 graph/document、dirty 状态和状态文案。
 4. 门禁：`compilePresentationViews`、节点编辑器定向测试、全量 `ability-runtime`/`ac` Clojure 测试。
 
-### P1：提高编辑效率（不改变文档契约）
+### P1：提高编辑效率（不改变文档契约，已完成）
 
-1. 为调色板条目增加明确的 pointer-drag 生命周期：`drag-start` 携带 palette id，画布 `drop` 使用当前坐标插入节点；点击仍保留为无拖拽的快捷插入。
-2. 新增临时 ghost 节点、有效/无效 drop 高亮和 Esc 取消；drop 只调用 `graph/insert-palette-node`，禁止直接拼接 EDN。
-3. 在 `presentation-core` 增加通用 drag payload/capture 原语，并为旧按钮行为补回归测试。
-4. 验收：拖动调色板条目到画布、取消、越界、重复拖动、键盘/触摸无 pointer-drag 能力时仍可点击插入。
+1. 已为调色板条目增加明确的 pointer-drag 生命周期：`drag-start` 携带 palette id，画布 drop 使用当前坐标插入节点；点击仍保留为无拖拽的快捷插入。
+2. 已加入临时 ghost 节点、有效/无效 drop 颜色和 Esc 取消；drop 只调用 `graph/insert-palette-node`，不直接拼接 EDN。
+3. 已在 `presentation-core` 增加通用 drag payload/capture 原语，并为旧按钮行为补回归测试。
+4. 已验证拖动、点击回退、取消、越界和重复拖动；无 pointer-drag 的宿主仍走点击路径。
 
 ### P2：减少认知负担
 
@@ -60,4 +60,4 @@
 
 ## 5. 当前状态与下一步
 
-P0 已完成并通过门禁；P1 依赖通用 drag payload，P2 的缩放依赖新的输入原语，P3 的物品/NBT、准星和 emitter 依赖内容/平台契约。下一次实现迭代应从 P1 的 runtime contract 和最小拖放测试开始，而不是先扩展更多节点类型。
+P0/P1 已完成并通过门禁；P2 的缩放依赖新的输入原语，P3 的物品/NBT、准星和 emitter 依赖内容/平台契约。下一次实现迭代应从 P2 的输入契约和专用参数控件开始，而不是先扩展更多节点类型。

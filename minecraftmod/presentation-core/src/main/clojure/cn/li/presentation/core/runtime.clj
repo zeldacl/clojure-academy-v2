@@ -750,7 +750,7 @@
                                    (content-rect-of instance) (view-transform-of instance))
               px (float px) py (float py)
               event (assoc event :x px :y py)
-              ^HitKernel$Hit hit (when (and (>= root 0) (#{:down :drag :up} (:event-type event)))
+              ^HitKernel$Hit hit (when (and (>= root 0) (or (#{:down :drag :up} (:event-type event)) (and (= :move (:event-type event)) (:drag-start-action capture))))
                                    (HitKernel/topmostAt table arena resolver root px py))
               ^HitKernel$Hit hover (when (and (>= root 0) (= :move (:event-type event)))
                                      (HitKernel/topmostAt table arena resolver root px py))
@@ -763,10 +763,49 @@
                              (or (:action hover-target) (:action previous)))]
           (cond
             (= :up (:event-type event))
-            {:action :input/pointer :pointer-capture nil
-             :payload (cond-> event
-                       hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit)))}
+            (if-let [drag-action (:drag-start-action capture)]
+              (let [sx (double (or (:start-x capture) px))
+                    sy (double (or (:start-y capture) py))
+                    moved? (or (> (Math/abs (- (double px) sx)) 3.0)
+                               (> (Math/abs (- (double py) sy)) 3.0))
+                    origin-item (:drag-item capture)
+                    origin-on (:drag-on capture)]
+                (if moved?
+                  {:action :input/pointer :pointer-capture nil
+                   :payload (cond-> (assoc event :drag? true
+                                           :drag-item origin-item
+                                           :drag-origin (:drag-origin capture))
+                              hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit) :drop-zone (:drop-zone (nth semantics-maps hit-node nil))))}
+                  {:action (or (:activate origin-on) drag-action)
+                   :pointer-capture nil
+                   :payload (assoc event :item origin-item :index 0)}))
+              {:action :input/pointer :pointer-capture nil
+               :payload (cond-> event
+                         hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit)))})
 
+            (and (= :down (:event-type event)) hit
+                 (get-in (nth on-maps hit-node nil) [:drag-start]))
+            (let [on-map (nth on-maps hit-node nil)
+                  drag-action (:drag-start on-map)]
+              {:action drag-action
+               :pointer-capture {:drag-start-action drag-action
+                                 :drag-item (.item hit)
+                                 :drag-origin (node-key table hit-node)
+                                 :drag-on on-map
+                                 :start-x px :start-y py}
+               :payload {:target (node-key table hit-node)
+                         :item (.item hit) :index (.itemIndex hit)
+                         :x (double px) :y (double py)}})
+
+            (and (#{:drag :move} (:event-type event))
+                 (:drag-start-action capture))
+            {:action :input/pointer
+             :pointer-capture capture
+             :payload (assoc event
+                             :drag? true
+                             :drag-item (:drag-item capture)
+                             :drag-origin (:drag-origin capture)
+                             :drop-zone (:drop-zone (when hit (nth semantics-maps hit-node nil))))}
             ;; mouseDragged is not always delivered (some hosts only get mouseMoved
             ;; while the button is held). Keep scrollbar dragging alive on :move too.
             (and (#{:drag :move} (:event-type event)) (:scrollbar? capture))
@@ -873,6 +912,8 @@
         :key (let [key-code (int (or (:key-code event) -1))
                   submit-action (get-in focus [:on :submit])]
               (cond
+                (= key-code 256)
+                {:action :input/key :pointer-capture nil :payload event}
                 (and (= key-code 257) submit-action)
                 {:action submit-action
                  :payload (cond-> {:value (let [path (:path focus)]
@@ -1058,7 +1099,7 @@
                              (when (and (= :pointer (:type event))
                                         (#{:drag :move} (:event-type event)))
                                (:pointer-capture instance)))]
-                 (if (:scrollbar? cap) :capture-pointer base))]
+                 (if (or (:scrollbar? cap) (:drag-start-action cap)) :capture-pointer base))]
     (present! runtime mount next-state)
     (doseq [effect effects]
       (try

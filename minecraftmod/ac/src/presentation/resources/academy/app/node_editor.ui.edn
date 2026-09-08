@@ -18,14 +18,17 @@
                                   :semantics {:role :button}}]}]}
          {:type :scroll :key :node-editor/palette :layout {:height 46}
           :bind {:items [:state :palette]} :semantics {:role :list}
-          :children [{:type :button :layout {:height 14 :width 440} :bind {:text [:item :label]} :on {:activate :editor/add-palette-node} :semantics {:role :button}}]}
+          :children [{:type :button :layout {:height 14 :width 440} :bind {:text [:item :label]} :on {:activate :editor/add-palette-node :drag-start :editor/palette-drag-start} :semantics {:role :button}}]}
          {:type :absolute :key :node-editor/canvas :layout {:height 140}
           :children
-          [{:type :repeater :layout {:width 464 :height 140}
+          [{:type :box :layout {:width 464 :height 140}
+            :on {:drop :editor/palette-drop}
+            :semantics {:role :generic :drop-zone :node-editor/canvas}}
+           {:type :repeater :layout {:width 464 :height 140}
             :bind {:items [:state :canvas]}
             :children [{:type :composite :bind {:item [:state :item]}
                         :on {:activate :editor/canvas-press}
-                        :semantics {:role :button}}]}]}
+                        :semantics {:role :button :drop-zone :node-editor/canvas}}]}]}
          {:type :text :key :node-editor/selected :layout {:height 20}
           :bind {:text [:state :selected-label]} :semantics {:role :generic}}
          {:type :scroll :key :node-editor/params :layout {:height 32}

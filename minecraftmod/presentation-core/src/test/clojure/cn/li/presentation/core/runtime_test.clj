@@ -736,3 +736,26 @@
           (is (not= offset-after off-strip)
               (str "captured thumb drag must keep updating off-strip, mid=" offset-after
                    " after=" off-strip)))))))
+
+(deftest custom-drag-capture-preserves-click-fallback
+  (let [rt (runtime/create-runtime)
+        actions (atom [])
+        artifact (ta/build :academy/test/custom-drag
+                           {:key :root :flags #{:hit-testable} :width [:fixed 80.0] :height [:fixed 20.0]
+                            :on {:activate :demo/activate :drag-start :demo/drag-start}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state { }
+                                  :reduce (fn [state action payload]
+                                            (swap! actions conj [action payload])
+                                            {:state state :event-result :pass})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 80 20 1.0))
+    (is (= :capture-pointer
+           (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})))
+    (is (= :demo/drag-start (first (first @actions))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 20 :y 5 :button 0})
+    (is (= :input/pointer (first (last @actions))))
+    (is (true? (:drag? (second (last @actions)))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 20 :y 5 :button 0})
+    (is (= :input/pointer (first (last @actions))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 5 :y 5 :button 0})
+    (is (= :demo/activate (first (last @actions))))))

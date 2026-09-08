@@ -300,3 +300,26 @@
       (is (= 3.5 (get-in @state* [:graph :nodes data-nid :value])))
       (is (true? (get-in @state* [:document :dirty?])))
       (is (.contains ^String (:status @state*) "Updated")))))
+(deftest palette-drag-drop-inserts-at-canvas-and-cancel-clears-ghost-test
+  (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
+        entry (first (:palette @state*))
+        item {:id (:id entry) :label "dragged"}
+        before (count (get-in @state* [:graph :order]))]
+    (#'node-editor/handle-action state* :editor/palette-drag-start
+     {:item item :x 40.0 :y 110.0})
+    (is (= (:id entry) (get-in @state* [:palette-drag :id])))
+    (is (= (:id entry) (get-in @state* [:ghost :id])))
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :drag :drag? true :drag-item item :x 52.0 :y 124.0 :drop-zone :node-editor/canvas})
+    (is (= 52.0 (get-in @state* [:ghost :x])))
+    (is (true? (get-in @state* [:ghost :valid?])))
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :up :drag? true :drag-item item :x 52.0 :y 124.0
+      :drop-zone :node-editor/canvas})
+    (is (= (inc before) (count (get-in @state* [:graph :order]))))
+    (is (nil? (:ghost @state*)))
+    (#'node-editor/handle-action state* :editor/palette-drag-start
+     {:item item :x 40.0 :y 110.0})
+    (#'node-editor/handle-action state* :input/key {:key-code 256})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))))

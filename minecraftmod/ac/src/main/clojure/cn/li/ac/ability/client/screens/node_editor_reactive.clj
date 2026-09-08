@@ -22,9 +22,9 @@
       pins can be dragged to update expression references.
     - Node MOVE (drag), SELECT, and canvas PAN (empty-canvas drag, via
       cn.li.ability.editor.hit's :panning mode, offsetting :viewport --
-      see pan-canvas-items) are wired. Palette clicks now insert a call plus
-      default literal inputs; true drag-and-drop placement remains a follow-up
-      because it needs a richer inspector for required inputs. No ZOOM:
+      see pan-canvas-items) are wired. Palette clicks and drag-and-drop now
+      insert a call plus default literal inputs; a ghost/drop-zone state gives
+      feedback and a click with no movement remains the shortcut. No ZOOM:
       unlike pan, nothing in presentation-core exposes a scroll-wheel or
       pinch input primitive to drive it yet.
     - open! takes an EXPLICIT absolute file path from the caller, not a
@@ -243,6 +243,8 @@
                                       :legacy-fields (select-keys wrapper-doc [:program :scene])})))
          :selected-nid nil
          :param-drafts {}
+         :palette-drag nil
+         :ghost nil
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
@@ -326,11 +328,9 @@
   {:code (str (:code d)) :message (:message d) :nid (str (:nid d)) :line (str (or (:line d) "-"))})
 
 (defn- palette-item
-  "One cn.li.ability.editor.palette/build entry -> a display row. No
-   drag-to-canvas yet (see this namespace's own scope note) -- this is a
-   real, useful reference panel on its own (browse every node/op/fn this
-   mode's vocab offers, its cost, its category) even before drag-and-drop
-   lands. Category is folded INTO the label text (\"[targeting] target/
+  "One cn.li.ability.editor.palette/build entry -> a display row. The same
+   row is both a browseable reference and a drag source for canvas insertion.
+   Category is folded INTO the label text (\"[targeting] target/
    raycast (cost 2)\") rather than rendered as separate collapsible
    sections -- there is no section-header widget in this UI schema, and
    the list is already sorted by (:category :id) (palette/build's own
@@ -353,15 +353,18 @@
   [items {:keys [x y]}]
   (mapv (fn [item] (-> item (update :x + x) (update :y + y))) items))
 
+(declare ghost-items)
+
 (defn- render-state [state]
-  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport]} state
+  (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport ghost]} state
         selected (selected-node-info state)]
     {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
      :phase-label (str "Phase: " (name (or phase :default)))
      :phase-tabs (mapv (fn [p] {:phase (name p) :action-label (if (= p phase) "Selected" (name p))}) phases)
      :palette (mapv palette-item palette)
-     :canvas (pan-canvas-items (render/graph->composite-items graph (:layout state)) viewport)
+     :canvas (into (pan-canvas-items (render/graph->composite-items graph (:layout state)) viewport)
+                         (when ghost (ghost-items ghost)))
      :selected-label (if selected (:text selected) "(nothing selected)")
      :selected-params (selected-param-fields state)
      :diagnostics (mapv diagnostic-item diagnostics)
@@ -466,6 +469,38 @@
         (swap! state* (fn [s] (-> s
                                    (update :param-drafts dissoc [nid key])
                                    (assoc :status (str "Updated " (name key) ".")))))))))
+(defn- ghost-items [{:keys [id label x y valid?]}]
+  (let [x (double (or x 0.0)) y (double (or y 0.0))]
+    [{:kind :quad :role :ghost :x x :y y :w 220.0 :h 16.0 :rgba (if valid? 0xAA4CAF50 0xAAE0A23B)}
+     {:kind :text :role :ghost-label :x (+ x 4.0) :y (+ y 3.0)
+      :text (str "[drop] " (or label id)) :rgba 0xFFFFFFFF}]))
+
+(defn- palette-drop! [state* payload]
+  (let [item (:drag-item payload)
+        id (:id item)
+        drop-zone (:drop-zone payload)]
+    (cond
+      (nil? id) (swap! state* assoc :status "Palette drag lost its source.")
+      (not= :node-editor/canvas drop-zone)
+      (swap! state* assoc :status "Drop the palette item on the canvas.")
+      :else
+      (try
+        (let [entry (palette/find-by-id (:palette @state*) id)
+              prefix (str "palette-" (System/nanoTime))
+              {:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)
+              x (double (or (:x payload) 0.0))
+              y (double (or (:y payload) 0.0))]
+          (install-graph! state* graph)
+          (swap! state* (fn [s] (-> s
+                                    (assoc :selected-nid nid
+                                           :palette-drag nil
+                                           :ghost nil
+                                           :status (str "Added " id "."))
+                                    (assoc-in [:layout nid] {:x x :y y}))))
+          nil)
+        (catch Throwable error
+          (swap! state* assoc :palette-drag nil :ghost nil
+                 :status (str "Cannot add node: " (.getMessage error))))))))
 (defn- handle-action [state* action payload]
   (case action
     ;; A composite item's :down (:target/:item/:index only -- this
@@ -482,32 +517,59 @@
       nil)
 
     :input/pointer
-    (let [{:keys [event-type drag-x drag-y]} payload
+    (let [{:keys [event-type drag-x drag-y drag? drag-item drop-zone x y]} payload
           drag-mode (:mode (:drag @state*))]
-      (case event-type
-        :drag (case drag-mode
-                :dragging-node (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0))
-                ;; Empty-canvas press classifies as :panning (hit/on-down)
-                ;; -- previously nothing consumed that mode, so dragging
-                ;; empty canvas was a silent no-op. Same per-frame
-                ;; incremental :drag-x/:drag-y contract as node move.
-                :panning (swap! state* update :viewport
-                                (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
-                nil)
-        :up
-        (let [{:keys [hit-item]} payload
-              {:keys [state action]} (hit/on-up (:drag @state*)
-                                                (item->hit hit-item)
-                                                (double (or (:x payload) 0.0))
-                                                (double (or (:y payload) 0.0)))]
-          (when (= :connect-wire (:kind action))
-            (try
-              (install-graph! state* (graph/connect-wire (:graph @state*) action))
-              (catch Throwable error
-                (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
-          (swap! state* assoc :drag state))        nil)
-      nil)
+      (cond
+        (and drag? drag-item (= :up event-type))
+        (do
+          (if (= :node-editor/canvas drop-zone)
+            (palette-drop! state* payload)
+            (swap! state* assoc :palette-drag nil :ghost nil
+                   :status "Drop the palette item on the canvas."))
+          nil)
 
+        (and drag? drag-item)
+        (let [entry (palette/find-by-id (:palette @state*) (:id drag-item))]
+          (swap! state* assoc
+                 :palette-drag {:id (:id drag-item) :x x :y y}
+                 :ghost {:id (:id drag-item) :label (:label (palette-item entry)) :x x :y y
+                 :valid? (= :node-editor/canvas (:drop-zone payload))}))
+
+        :else
+        (case event-type
+          :drag (case drag-mode
+                  :dragging-node (nudge-node-layout! state* (:nid (:drag @state*)) (or drag-x 0.0) (or drag-y 0.0))
+                  :panning (swap! state* update :viewport
+                                  (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
+                  nil)
+          :up
+          (let [{:keys [hit-item]} payload
+                {:keys [state action]} (hit/on-up (:drag @state*)
+                                                  (item->hit hit-item)
+                                                  (double (or (:x payload) 0.0))
+                                                  (double (or (:y payload) 0.0)))]
+            (when (= :connect-wire (:kind action))
+              (try
+                (install-graph! state* (graph/connect-wire (:graph @state*) action))
+                (catch Throwable error
+                  (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
+            (swap! state* assoc :drag state))
+          nil)))
+
+    :editor/palette-drag-start
+    (let [item (:item payload)]
+      (swap! state* assoc
+             :palette-drag {:id (:id item) :x (:x payload) :y (:y payload)}
+             :ghost {:id (:id item) :label (:label item) :x (:x payload) :y (:y payload) :valid? false}
+             :status (str "Dragging " (:id item) ".")))
+
+    :editor/palette-drop
+    (palette-drop! state* (assoc payload :drop-zone :node-editor/canvas))
+
+    :input/key
+    (if (= 256 (int (or (:key-code payload) -1)))
+      (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled.")
+      nil)
     :editor/toggle-preview
     (if (not= :scene (:mode @state*))
       (swap! state* assoc :status "Preview is available for VFX scene mode only.")
@@ -531,7 +593,7 @@
         (try
           (let [{:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)]
             (install-graph! state* graph)
-            (swap! state* assoc :selected-nid nid :status (str "Added " (:id entry) ".")))
+            (swap! state* assoc :selected-nid nid :palette-drag nil :ghost nil :status (str "Added " (:id entry) ".")))
           (catch Throwable error
             (swap! state* assoc :status (str "Cannot add node: " (.getMessage error)))))))
 
