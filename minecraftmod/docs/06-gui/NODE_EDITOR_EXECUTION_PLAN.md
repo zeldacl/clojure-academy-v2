@@ -18,7 +18,7 @@
 - “参数检查器尚未实现”已过时：节点检查器现在根据 palette schema 显示类型，并安全提交 `double/int/long/bool/keyword/vec3`；由 sigil、调用或其他节点驱动的输入保持只读。
 - “画布不能拖动”已过时：节点移动、空白画布平移、pin 连线和调色板拖放已接入 `presentation-core` 的 pointer 路由。
 - “法术合成器只维护数据、不展示分组细节”已过时：效果行现在显示并可单独删除已添加的 augment；效果重排/删除会同步重映射参数草稿，未完成或越界的草稿不能进入施法请求。
-- “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空，只有 `vfx-core` 的编译机制；必须先有内容 schema 和非空样例，再启动 UI。
+- “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空；部分 `:system :render` 虽然已有 `:component :emitter` 调用，但这不是可供模块栈编辑器直接编辑的 emitter 数据。仍须先有内容 schema 和非空顶层样例，再启动 UI。
 - glyph 物品、法术存储 NBT、准星锚点和文件选择器都需要当前仓库尚未提供的资源或平台契约，不能在现有中立 Presentation 层伪造完成；滚轮缩放已使用现有 `:scroll`，只有 pinch 仍等待独立手势契约。
 
 ## 3. 可执行阶段

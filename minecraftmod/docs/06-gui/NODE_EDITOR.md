@@ -2,7 +2,8 @@
 
 三个规划中的可视化编辑器（技能/VFX 图编辑器、玩家法术合成器、粒子发射器编辑器）
 里，前两个已实现；第三个按设计文档自己的决策点评估后暂不做（`ac/vfx-v3/*.edn`
-里没有任何一个文件包含非空的顶层 `:emitters`，见下）。设计过程记录在
+里没有任何一个文件包含非空的顶层 `:emitters`（system render 内的 `:component :emitter`
+调用不等同于顶层 emitter 模块数据，见下）。设计过程记录在
 `C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
 
 语言层规格见 [NODE_LANGUAGE.md](../04-systems/NODE_LANGUAGE.md)（尤其是其中
@@ -104,7 +105,8 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
   在任何物品上；服务端提交/校验/派发路径（`MSG-REQ-SPELL-SUBMIT` →
   `combat-runtime/dispatch-player-spell!`）本身已经完整可用。
 - **粒子发射器编辑器**：`vfx-core/compile.clj` 的 Niagara 式模块栈机制存在且
-  有测试，但 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空——这个编辑器服务的是
+  有测试，但 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空（system render 内的
+  `:component :emitter` 只是调用）——这个编辑器服务的是
   尚不存在的内容。按设计文档自己定的决策点：没有真实 `:emitters` 内容就不做，
   不是欠债。
 - **参数编辑边界（基础版已完成）**：法术合成器提供基于 glyph schema 的有界数值输入（非法、越界和
