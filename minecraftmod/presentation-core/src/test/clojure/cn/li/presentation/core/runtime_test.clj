@@ -446,6 +446,29 @@
       (is (= "first" (get-in (last @seen) [1 :item :nid])))
       (runtime/dispatch! rt mount
                           {:type :pointer :event-type :up :x 18 :y 108 :button 0})
+      ;; Canvas and node wrappers expose a palette-drop action for releases;
+      ;; runtime must preserve the origin item so the controller can split
+      ;; palette insertion from ordinary node movement/panning.
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 18 :y 108 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :drag :x 22 :y 112
+                           :drag-x 4.0 :drag-y 4.0 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :up :x 22 :y 112 :button 0})
+      (is (= :editor/palette-drop (first (last @seen))))
+      (is (= "first" (get-in (last @seen) [1 :drag-item :nid])))
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 200 :y 190 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :drag :x 204 :y 194
+                           :drag-x 4.0 :drag-y 4.0 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :up :x 204 :y 194 :button 0})
+      (is (= :editor/palette-drop (first (last @seen))))
+      (is (nil? (get-in (last @seen) [1 :drag-item])))
       (runtime/present! rt mount (node-editor-smoke-state true))
       (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
                    :mounts first :commands)]
@@ -457,6 +480,26 @@
                           {:type :pointer :event-type :down :x 18 :y 74 :button 0})
       (is (= :editor/canvas-press (ffirst @seen)))
       (is (= "first" (get-in (last @seen) [1 :item :nid]))))))
+(deftest compiled-node-editor-paints-in-320x240-host
+  (let [art-file (node-editor-golden-file)]
+    (is (some? art-file) "node-editor golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/node-editor
+                      :artifact artifact
+                      :state (node-editor-smoke-state false)
+                      :reduce (fn [state _action _payload]
+                                {:state state :event-result :consume})})]
+      ;; The node editor is designed at 480x360; this host exercises the
+      ;; fit transform at 320x240 without launching a game client.
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 320 240 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 320 :height 240})
+                   :mounts first :commands)]
+        (is (pos? (.count dl))
+            "compiled node editor must paint in a 320x240 host")))))
+
 (defn- spell-composer-golden-file
   []
   (first (filter #(.isFile ^java.io.File %)
@@ -515,7 +558,43 @@
        (runtime/dispatch! rt mount
                            {:type :pointer :event-type :down :x 288 :y 55 :button 0})
        (is (= :composer/remove-augment (ffirst @seen)))
-       (is (= 0 (get-in (last @seen) [1 :item :augment-index]))))))
+       (is (= 0 (get-in (last @seen) [1 :item :augment-index])))
+       ;; Eight augment rows exceed the 36px effect-slot viewport. Scroll the
+       ;; compiled repeater to its maximum, then hit the now-visible final
+       ;; row; this proves the runtime applies scroll offsets before nested
+       ;; item hit-testing rather than merely painting an oversized list.
+       (reset! seen [])
+       (runtime/dispatch! rt mount
+                          {:type :scroll :x 220 :y 50 :delta -8.0})
+       (is (pos? (double (or (get-in (runtime/instance! rt mount)
+                                    [:scroll-offsets :composer/effect-slots])
+                             0.0)))
+           "effect-slot repeater must scroll when eight augments exceed its viewport")
+       (reset! seen [])
+       (runtime/dispatch! rt mount
+                           {:type :pointer :event-type :down :x 288 :y 55 :button 0})
+       (is (= :composer/remove-augment (ffirst @seen)))
+       (is (= 7 (get-in (last @seen) [1 :item :augment-index]))))))
+(deftest compiled-spell-composer-paints-in-320x240-host
+  (let [art-file (spell-composer-golden-file)]
+    (is (some? art-file) "spell-composer golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/spell-composer
+                      :artifact artifact
+                      :state (spell-composer-smoke-state)
+                      :reduce (fn [state _action _payload]
+                                {:state state :event-result :consume})})]
+      ;; The design is 480x320; this host exercises the fit transform at
+      ;; 320x240 without launching a game client.
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 320 240 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 320 :height 240})
+                   :mounts first :commands)]
+        (is (pos? (.count dl))
+            "compiled spell composer must paint in a 320x240 host")))))
+
 (defn- hist-quad
   [h]
   {:kind :quad :x 22.4 :y (- 79.2 h) :w 6.4 :h (double h)

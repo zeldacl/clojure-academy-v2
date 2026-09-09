@@ -87,6 +87,13 @@
     (is (= "Save to workspace" (:save-label rendered)))
     (is (= "Export to source" (:export-label rendered)))))
 
+(deftest long-editor-display-labels-are-bounded-without-mutating-source-text-test
+  (let [long-text (apply str (repeat 200 "very-long-node-label/"))
+        clipped (#'node-editor/ui-label long-text 40.0)]
+    (is (<= (count clipped) (count long-text)))
+    (is (.endsWith ^String clipped "..."))
+    (is (= long-text (str long-text)))))
+
 (deftest item->hit-classifies-nid-bearing-items-as-node-hits-test
   (is (= {:target :node :nid "n3"} (#'node-editor/item->hit {:kind :quad :role :node-body :nid "n3"})))
   (is (= {:target :node :nid "n3"} (#'node-editor/item->hit {:kind :text :role :node-label :nid "n3"})))
@@ -165,6 +172,27 @@
     (is (= {:x 13.0 :y 5.0} (:viewport @state*))
         "viewport accumulates per-frame drag deltas the same way node layout does")
     (#'node-editor/handle-action state* :input/pointer {:event-type :up})
+    (is (= :idle (:mode (:drag @state*))))))
+
+(deftest canvas-drop-action-finishes-non-palette-drag-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))
+        nid (first (get-in @state* [:graph :order]))]
+    ;; The compiled canvas wrapper routes every release through its :drop
+    ;; action. A normal empty-canvas pan must therefore still close the hit
+    ;; state when the drag item is nil.
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {}})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :drag :drag? true :drag-x 3.0 :drag-y 2.0})
+    (#'node-editor/handle-action state* :editor/palette-drop
+     {:drag-item nil :x 3.0 :y 2.0})
+    (is (= :idle (:mode (:drag @state*))))
+    ;; The same route must close a captured node drag without claiming that
+    ;; its node payload is a palette entry.
+    (#'node-editor/handle-action state* :editor/canvas-press {:item {:nid nid}})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :drag :drag? true :drag-item {:nid nid} :drag-x 3.0 :drag-y 2.0})
+    (#'node-editor/handle-action state* :editor/palette-drop
+     {:drag-item {:nid nid} :hit-item {:nid nid} :x 3.0 :y 2.0})
     (is (= :idle (:mode (:drag @state*))))))
 
 (deftest render-state-canvas-reflects-the-accumulated-viewport-test
@@ -285,6 +313,44 @@
     (is (some? (:selected-nid @state*)))
     (is (.contains ^String (:status @state*) "Added"))))
 
+(deftest malformed-node-payloads-do-not-pollute-editor-state-test
+  (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
+        phase (:phase @state*)
+        drafts (:param-drafts @state*)]
+    (#'node-editor/handle-action state* :editor/param-change
+     {:nid :missing-node :param-key :value :value "3"})
+    (is (= drafts (:param-drafts @state*)))
+    (#'node-editor/handle-action state* :editor/param-axis-change
+     {:item {:nid :missing-node :param-key :value :axis :x} :value "3"})
+    (is (= drafts (:param-drafts @state*)))
+    (#'node-editor/handle-action state* :editor/select-phase {:phase 99})
+    (is (= phase (:phase @state*)))
+    (is (= "Select a valid phase." (:status @state*)))))
+
+(deftest phase-tab-reads-repeater-item-payload-test
+  (let [state* (atom (node-editor/open-document railgun-path :skill))
+        target (second (:phases @state*))]
+    (#'node-editor/handle-action state* :editor/select-phase
+     {:item {:phase (name target)}})
+    (is (= target (:phase @state*)))))
+
+(deftest vec3-axis-change-accepts-only-an-existing-literal-input-test
+  (let [state* (atom {:graph {:nodes {:n {:stmt :call :args {:position :d}}
+                                  :d {:kind :data :expr :vec-lit :value [1.0 2.0 3.0]}}}
+                       :param-drafts {}})]
+    (#'node-editor/handle-action state* :editor/param-axis-change
+     {:item {:nid :n :param-key :position :axis :x} :value "4.5"})
+    (is (= "4.5" (get-in @state* [:param-drafts [:n :position :x]])))))
+
+(deftest vec3-axis-change-rejects-malformed-existing-vector-test
+  (let [state* (atom {:graph {:nodes {:n {:stmt :call :args {:position :d}}
+                                  :d {:kind :data :expr :vec-lit :value [1.0 2.0]}}}
+                       :param-drafts {}})]
+    (#'node-editor/handle-action state* :editor/param-axis-change
+     {:item {:nid :n :param-key :position :axis :x} :value "4.5"})
+    (is (= {} (:param-drafts @state*))
+        "a malformed existing vector must not create an axis draft")))
+
 
 (deftest node-inspector-edits-literal-parameter-and-rebuilds-document-test
   (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
@@ -304,6 +370,35 @@
       (is (= 3.5 (get-in @state* [:graph :nodes data-nid :value])))
       (is (true? (get-in @state* [:document :dirty?])))
       (is (.contains ^String (:status @state*) "Updated")))))
+
+(deftest node-inspector-rejects-out-of-range-schema-value-test
+  (let [base-state (node-editor/open-document v3-thunder-bolt-path :skill)
+        base-entry (some (fn [candidate]
+                           (when (some (fn [[_ descriptor]]
+                                         (#{:double :float :int :long} (:type descriptor)))
+                                       (:params candidate))
+                             candidate))
+                         (:palette base-state))
+        [param-key param-descriptor] (first (filter (fn [[_ descriptor]]
+                                                      (#{:double :float :int :long} (:type descriptor)))
+                                                    (:params base-entry)))
+        entry (assoc-in base-entry [:params param-key]
+                        (assoc param-descriptor :min 0.0 :max 1.0))
+        state* (atom (assoc base-state
+                            :palette (mapv #(if (= (:id %) (:id entry)) entry %) (:palette base-state))))]
+    (is entry "fixture palette must expose a numeric parameter")
+    (#'node-editor/handle-action state* :editor/add-palette-node {:item {:id (:id entry)}})
+    (let [field (some #(when (and (:editable? %)
+                               (#{:double :float :int :long} (:type %))) %)
+                      (:selected-params (#'node-editor/render-state @state*)))
+          data-nid (:data-nid field)
+          before (get-in @state* [:graph :nodes data-nid :value])
+          descriptor (get-in entry [:params (:param-key field)])
+          too-large "2"]
+      (is field "bounded numeric parameter must render as an editable field")
+      (#'node-editor/handle-action state* :editor/param-submit (assoc field :value too-large))
+      (is (= before (get-in @state* [:graph :nodes data-nid :value])))
+      (is (.contains ^String (:status @state*) "outside the allowed range")))))
 (deftest palette-drag-drop-inserts-at-canvas-and-cancel-clears-ghost-test
   (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
         entry (first (:palette @state*))
@@ -315,8 +410,8 @@
     (is (= (:id entry) (get-in @state* [:ghost :id])))
     (#'node-editor/handle-action state* :input/pointer
      {:event-type :drag :drag? true :drag-item item :x 52.0 :y 124.0 :drop-zone :node-editor/canvas})
-    (is (= 52.0 (get-in @state* [:ghost :x])))
-    (is (= 44.0 (get-in @state* [:ghost :y])))
+    (is (= 44.0 (get-in @state* [:ghost :x])))
+    (is (= 36.0 (get-in @state* [:ghost :y])))
     (is (true? (get-in @state* [:ghost :valid?])))
     (#'node-editor/handle-action state* :input/pointer
      {:event-type :up :drag? true :drag-item item :x 52.0 :y 124.0
@@ -328,6 +423,74 @@
     (#'node-editor/handle-action state* :input/key {:key-code 256})
     (is (nil? (:palette-drag @state*)))
     (is (nil? (:ghost @state*)))))
+
+(deftest palette-drop-without-a-source-clears-preview-state-test
+  (let [state* (atom (assoc (node-editor/open-document thunder-bolt-path :skill)
+                            :palette-drag {:id :missing :x 4.0 :y 5.0}
+                            :ghost {:id :missing :x 4.0 :y 5.0 :valid? false}))]
+    (#'node-editor/handle-action state* :editor/palette-drag-start
+     {:item nil :x 20.0 :y 30.0})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))
+    (#'node-editor/handle-action state* :editor/palette-drag-start
+     {:item {:id :missing} :x 20.0 :y 30.0})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))
+    (swap! state* assoc
+           :palette-drag {:id :missing :x 4.0 :y 5.0}
+           :ghost {:id :missing :x 4.0 :y 5.0 :valid? false})
+    (#'node-editor/handle-action state* :editor/palette-drop
+     {:drag-item {:label "expired-direct"} :x 20.0 :y 30.0})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))
+    (swap! state* assoc
+           :palette-drag {:id :missing :x 4.0 :y 5.0}
+           :ghost {:id :missing :x 4.0 :y 5.0 :valid? false})
+    (#'node-editor/handle-action state* :editor/palette-drop
+     {:drag-item nil :x 20.0 :y 30.0})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))
+    (#'node-editor/handle-action state* :editor/palette-drag-start
+     {:item {:id (-> @state* :palette first :id)} :x 20.0 :y 30.0})
+    (is (some? (:ghost @state*)))
+    (#'node-editor/handle-action state* :editor/palette-drop
+     {:drag-item {:id (-> @state* :palette first :id)}
+      :drop-zone :node-editor/selected
+      :x 20.0 :y 30.0})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Drop the palette item on the canvas." (:status @state*)))
+    (swap! state* assoc
+           :palette-drag {:id :missing :x 4.0 :y 5.0}
+           :ghost {:id :missing :x 4.0 :y 5.0 :valid? false})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :drag :drag? true :drag-item {:label "missing-id"}
+      :x 20.0 :y 30.0 :drop-zone :node-editor/canvas})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))
+    (swap! state* assoc
+           :palette-drag {:id :missing :x 4.0 :y 5.0}
+           :ghost {:id :missing :x 4.0 :y 5.0 :valid? false})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :up :drag? true :drag-item {:label "expired"}
+      :x 20.0 :y 30.0 :drop-zone :node-editor/canvas})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))
+    (swap! state* assoc
+           :palette-drag {:id :missing :x 4.0 :y 5.0}
+           :ghost {:id :missing :x 4.0 :y 5.0 :valid? false})
+    (#'node-editor/handle-action state* :input/pointer
+     {:event-type :up :drag? true :drag-item nil
+      :x 20.0 :y 30.0 :drop-zone :node-editor/canvas})
+    (is (nil? (:palette-drag @state*)))
+    (is (nil? (:ghost @state*)))
+    (is (= "Palette drag lost its source." (:status @state*)))))
 
 (deftest palette-search-category-collapse-and-recent-rows-test
   (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
@@ -348,16 +511,36 @@
     (is (= (:id first-entry) (:id (some #(when (:recent? %) %) recent))))))
 (deftest zoom-is-clamped-and-keeps-pointer-anchor-test
   (let [state* (atom {:zoom 1.0 :viewport {:x 0.0 :y 0.0}})]
-    (#'node-editor/zoom-canvas! state* {:delta 1.0 :x 100.0 :y 130.0})
+    (#'node-editor/zoom-canvas! state* {:delta 1.0 :x 108.0 :y 138.0})
     (is (= 11 (Math/round (* 10.0 (:zoom @state*))))
         "one wheel notch should apply the stable 1.1 zoom step")
     (is (= -10 (Math/round (:x (:viewport @state*))))
         "the cursor x coordinate remains the zoom anchor")
     (is (= -5 (Math/round (:y (:viewport @state*)))))
-    (#'node-editor/zoom-canvas! state* {:delta 100.0 :x 100.0 :y 130.0})
+    (#'node-editor/zoom-canvas! state* {:delta 100.0 :x 108.0 :y 138.0})
     (is (= 2.0 (:zoom @state*)) "zoom has a 200% upper bound")
     (#'node-editor/handle-action state* :editor/reset-zoom nil)
     (is (= 1.0 (:zoom @state*)))) )
+
+(deftest unknown-scroll-only-zooms-over-active-canvas-test
+  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
+    (#'node-editor/handle-action state* :input/unknown
+     {:type :scroll :delta 1.0 :x 20.0 :y 40.0})
+    (is (= 1.0 (:zoom @state*))
+        "scrolling the title/controls must not zoom the canvas")
+    (#'node-editor/handle-action state* :input/unknown
+     {:type :scroll :delta 1.0 :x 20.0 :y 100.0})
+    (is (= 11 (Math/round (* 10.0 (:zoom @state*))))
+        "an unclaimed scroll inside compact canvas zooms the graph")
+    (#'node-editor/handle-action state* :editor/toggle-canvas-viewport nil)
+    (#'node-editor/handle-action state* :input/unknown
+     {:type :scroll :delta 1.0 :x 20.0 :y 40.0})
+    (is (= 11 (Math/round (* 10.0 (:zoom @state*))))
+        "viewport header is not part of the graph canvas")
+    (#'node-editor/handle-action state* :input/unknown
+     {:type :scroll :delta 1.0 :x 20.0 :y 100.0})
+    (is (= 12 (Math/round (* 10.0 (:zoom @state*)))))
+    ))
 
 (deftest undo-and-redo-rebuild-the-editor-graph-test
   (let [state* (atom (node-editor/open-document v3-thunder-bolt-path :skill))
@@ -376,9 +559,9 @@
         state* (atom (assoc state :zoom 2.0 :viewport {:x 10.0 :y 20.0}))
         item {:id (:id entry) :label "screen-space"}]
     (#'node-editor/handle-action state* :editor/palette-drag-start
-     {:item item :x 110.0 :y 220.0})
+     {:item item :x 118.0 :y 228.0})
     (#'node-editor/handle-action state* :input/pointer
-     {:event-type :up :drag? true :drag-item item :x 110.0 :y 220.0
+     {:event-type :up :drag? true :drag-item item :x 118.0 :y 228.0
       :drop-zone :node-editor/canvas})
     (let [nid (:selected-nid @state*)
           pos (get-in @state* [:layout nid])]
@@ -389,9 +572,17 @@
                      :canvas-viewport? true
                      :zoom 2.0
                      :viewport {:x 10.0 :y 20.0})
-        point (#'node-editor/screen->canvas-point state 110.0 146.0)]
+        point (#'node-editor/screen->canvas-point state 118.0 154.0)]
     (is (= 50 (Math/round (:x point))))
     (is (= 40 (Math/round (:y point))))))
+
+(deftest canvas-screen-origin-includes-root-inset-test
+  (let [compact (node-editor/open-document v3-thunder-bolt-path :skill)
+        viewport (assoc compact :canvas-viewport? true)]
+    (is (= {:x 10.0 :y 10.0}
+           (#'node-editor/screen->canvas-point compact 18.0 98.0)))
+    (is (= {:x 10.0 :y 10.0}
+           (#'node-editor/screen->canvas-point viewport 18.0 64.0)))))
 
 (deftest zoomed-node-drag-converts-screen-delta-to-graph-delta-test
   (let [state (node-editor/open-document v3-thunder-bolt-path :skill)

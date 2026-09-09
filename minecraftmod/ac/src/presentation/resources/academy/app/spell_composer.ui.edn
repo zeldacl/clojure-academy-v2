@@ -36,11 +36,11 @@
                     :on {:activate :composer/select-effect}
                     :semantics {:role :button}}
                    {:type :button :layout {:width 22 :height 14}
-                    :bind {:text [:item :up-label]}
+                    :bind {:text [:item :up-label] :visible [:item :can-move-up?]}
                     :on {:activate :composer/move-effect-up}
                     :semantics {:role :button}}
                    {:type :button :layout {:width 22 :height 14}
-                    :bind {:text [:item :down-label]}
+                    :bind {:text [:item :down-label] :visible [:item :can-move-down?]}
                     :on {:activate :composer/move-effect-down}
                     :semantics {:role :button}}
                    {:type :button :layout {:width 22 :height 14}

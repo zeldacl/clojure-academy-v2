@@ -13,6 +13,8 @@
 
 当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量及 schema 驱动控件）、法术合成器的有界参数校验、两个编辑器可提交的 repeater 草稿、独立场景预览和工作区/导出双路径。节点编辑器还提供可由按钮或 Esc 关闭的 viewport 画布层，将有限的 128px 画布扩展为独立的 464×278px 操作区，同时保留原有缩放/平移相机；法术合成器的 effect slot 会按 augment 数量动态增高，augment 纵向堆叠并逐行删除，避免横向溢出固定控制区。
 
+固定宽度的节点、调色板、诊断、glyph、参数和状态标签现在在控制器的显示模型层按实际字体宽度（无字体时用确定性回退）加省略号；原始节点文本、诊断数据和参数草稿不被截断。Presentation V3 的通用 `:ellipsize` 仍是独立能力，未被伪装成已实现。
+
 ## 2. 复核后纠正的矛盾
 
 - “参数检查器尚未实现”已过时：节点检查器现在根据 palette schema 显示类型，并安全提交 `double/int/long/bool/keyword/vec3`；由 sigil、调用或其他节点驱动的输入保持只读。
@@ -42,7 +44,8 @@
 1. 调色板改为“搜索 + 分类折叠 + 最近使用”三层结构；保留当前按 category/id 的稳定排序作为无搜索回退。
 2. 画布缩放基础版已使用 Presentation 既有的中立 `:scroll` 事件，实现 50%–200% 限幅、以光标为中心缩放和缩放复位；viewport 模式用覆盖层提供大画布，Esc 可退出且不改变图坐标；pinch 仍等待独立的中立手势契约。
 3. 节点检查器已按类型提供 bool 切换、数值 stepper；schema 提供 `:choices` 时 keyword 使用循环选择，vec3 字面量使用 x/y/z 三轴输入；无元数据时仍保留安全文本回退。
-4. 验收：键盘可达（运行时支持 Tab/Shift-Tab 环回，覆盖 repeater 实例）、非法值不污染 graph、撤销/重做边界明确、缩放不改变保存坐标语义。
+4. 合成器的效果重排按钮在首/末项通过 `:visible` 绑定隐藏，避免显示点击后无效的边界控制；施法按钮保持可见，由 action 校验并就地显示缺失表单、参数或服务端拒绝原因。
+5. 验收：键盘可达（运行时支持 Tab/Shift-Tab 环回，覆盖 repeater 实例）、非法值和非法索引 payload 不污染 graph/组合状态（包括 phase、参数/vec3 轴草稿、glyph、effect 选择和 augment 删除）、节点编辑器撤销/重做边界明确；合成器本轮明确只提供 Clear 重置，不伪造跨会话 undo/redo、缩放不改变保存坐标语义。
 
 ### P3：内容与游戏集成
 
@@ -60,7 +63,7 @@ P3 的执行顺序固定为“契约 → 中立实现 → 平台适配 → UI �
 | E：发射器编辑器 | 至少一个真实 V3 `:emitters` fixture，且能通过 schema/compile | emitter/module 树、参数检查器、独立 preview、诊断 | fixture round-trip、编译错误就地显示、预览停止不残留生产实体 |
 | F：文件选择 | 确认允许根目录、扩展名和外部修改检测策略 | 安全路径校验器、文件选择 UI、caller-supplied fallback | 路径穿越/越权扩展名拒绝；外部修改提示覆盖/另存；无选择器平台仍可编辑 |
 
-当前网络协议已有 AC protocol v2；S 工作包默认增加独立的 `spell-schema-version`，只有在改变现有 wire envelope 时才升级协议版本，并同时提供兼容窗口和拒绝原因。这样避免把“已有 v2”与“需要版本号”误写成互相矛盾的要求。
+版本边界需要明确区分：`ac/ability/messages.clj` 的 AC 运行时消息目录声明的是 Protocol v2；`mcmod/runtime/fixed_channel.clj` 的二进制帧头当前仍是独立的 `protocol-version 1`。S 工作包默认新增独立的 `spell-schema-version`，只有改变固定帧 envelope 时才升级后者，并同时提供兼容窗口和拒绝原因。这样不会把“消息目录 v2”“固定帧 v1”和“法术数据 schema 版本”误写成同一个版本号。
 
 ## 4. 每阶段统一验收清单
 
@@ -72,17 +75,44 @@ P3 的执行顺序固定为“契约 → 中立实现 → 平台适配 → UI �
 
 ## 5. 当前状态与下一步
 
-P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 控件、Tab/Shift-Tab 焦点遍历和 viewport 大画布模式已完成并有回归测试，剩余是 pinch 和真实游戏人机评估。P3 的物品/NBT、准星和 emitter 仍依赖内容/平台契约；这些不是 UI 层可以单方面“补齐”的项目，必须按上面的前置契约逐项解锁。
+P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 控件、Tab/Shift-Tab 焦点遍历和 viewport 大画布模式已完成并有回归测试，剩余是 pinch 和真实游戏人机评估。P3 的物品/NBT、准星和 emitter 仍依赖内容/平台契约；这些不是 UI 层可以单方面“补齐”的项目，必须按上面的前置契约逐项解锁。这里将“本轮 UI 代码交付”与“产品发布验收”分开：前者以步骤 1–4 和工作区边界为准，后者再叠加步骤 5；P3 是后续独立里程碑，不阻塞本轮编辑器代码交付。
+
+为避免把“离线验证通过”误写成“整体验收完成”，当前执行状态明确如下：
+
+| 步骤 | 状态 | 证据/输出 | 仍需动作 |
+| --- | --- | --- | --- |
+| 1 源码/视图收束 | 已完成 | viewport、坐标逆变换、repeater 命中包装器、phase item payload 均有源码和回归覆盖 | 无 |
+| 2 视图产物 | 已完成 | `:ac:compilePresentationViews`、`verifyPresentationGoldenArtifacts` 通过；golden 已同步 | 无 |
+| 3 定向回归 | 已完成 | AC 定向 69/279、Presentation core 45/168，均 0 failures/0 errors；含 schema 标量越界拒绝、未知/缺少 palette id 的 pointer 拖拽清理、空 drag-item 清理、错误 drop-zone 拒绝、画布外滚轮不缩放、固定宽度长标签显示省略、无 effect 时 Cast 的本地拒绝，compiled smoke 和 320×240 压力测试覆盖 canvas/node `:drop` 统一路由、普通节点拖拽、空画布平移释放、过期 palette 来源清理和非法 vec3 草稿 | 无 |
+| 4 全量门禁 | 已完成 | node-core 121/311、ability-runtime 78/173、combat-core 56/178、vfx-core 39/121、Presentation core 45/168、AC 661/7558（均 0 failures/0 errors），且 `verifyCurrentPlatforms` 通过 | 无 |
+| 5 真实游戏验收 | 待外部 | 本轮遵守“不跑 `runClient`”，没有伪造画面/手感结论 | 由具备游戏窗口的验收者按第 5 步记录可复现结果 |
+| 6 提交边界 | 待提交 | 相关源码、视图、测试、文档和 golden 已限定；无关未跟踪文件保留 | 提交时只选择本计划涉及文件 |
 
 ## 6. 当前工作树的可执行收束步骤
 
 以下步骤是把本次复核后的实现安全交付的最短路径；每一步失败都应先修复再进入下一步：
 
-1. **源码/视图收束**：确认 `node_editor_reactive.clj` 的 viewport 状态、按钮 action、Esc 关闭和旧 canvas 拖拽分支同时存在；确认 `node_editor.ui.edn` 用 `:stack` 将固定高度的 `:node-editor/base` 列与 464×278 viewport 覆盖层分离，紧凑画布、覆盖层及状态绑定成对出现，避免隐藏 overlay 仍参与 column 流布局；画布 repeater 必须使用 `:direction :none`，并以条目自身的 x/y/w/h 作为绝对命中包装器，composite 使用局部偏移；屏幕指针进入拖放、ghost 和滚轮缩放前必须扣除当前画布起点并按 zoom 逆变换，节点拖动增量也必须换算回图坐标；同时确认基础列声明高度不小于所有固定行高度之和。
+1. **源码/视图收束**：确认 `node_editor_reactive.clj` 的 viewport 状态、按钮 action、Esc 关闭和旧 canvas 拖拽分支同时存在；phase tab action 必须同时兼容顶层和 repeater `:item` payload；确认 `node_editor.ui.edn` 用 `:stack` 将固定高度的 `:node-editor/base` 列与 464×278 viewport 覆盖层分离，紧凑画布、覆盖层及状态绑定成对出现，避免隐藏 overlay 仍参与 column 流布局；画布 repeater 必须使用 `:direction :none`，并以条目自身的 x/y/w/h 作为绝对命中包装器，composite 使用局部偏移；屏幕指针进入拖放、ghost 和滚轮缩放前必须扣除当前画布起点并按 zoom 逆变换，节点拖动增量也必须换算回图坐标。坐标审计要以运行时全局 design-space 为准：根布局的 `{:x 8 :y 8}` 必须计入，紧凑画布起点为 `{:x 8 :y 88}`，viewport 内层画布起点为 `{:x 8 :y 54}`；同时确认基础列声明高度不小于所有固定行高度之和。
 2. **视图产物**：运行 `cmd /c gradlew.bat :ac:compilePresentationViews --quiet`，将 `build/neutral/ac/generated/resources/presentation/assets` 下的变更同步到 `docs/06-gui/presentation/golden/assets`，再运行 `cmd /c gradlew.bat :verifyPresentationGoldenArtifacts --quiet`。
-3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、紧凑/viewport 屏幕坐标逆变换、缩放锚点、缩放后拖动和保存坐标，以及法术效果/augment 重排、增幅纵向布局与独立删除命中、参数草稿、非法值拒绝和法术合成器 320×240 布局边界。随后运行 Presentation core 测试中的 compiled node-editor 与 spell-composer smoke，分别覆盖实际 golden artifact 的绘制、8 个 augment 最大列表的滚动布局和关键条目命中。
+3. **定向回归**：运行 `cmd /c "gradlew.bat -Dac.test.only=cn.li.ac.ability.client.screens.node-editor-reactive-test,cn.li.ac.ability.client.screens.spell-composer-reactive-test :ac:runAcClojureTestsFast --quiet"`；必须覆盖 viewport 展开/渲染可见性/Esc 关闭、节点拖拽不产生 palette ghost、紧凑/viewport 屏幕坐标逆变换、缩放锚点、缩放后拖动和保存坐标，以及法术效果/augment 重排、增幅纵向布局与独立删除命中、参数草稿、非法值拒绝和法术合成器在 320×240 宿主窗口下的布局边界。随后运行 Presentation core 测试中的 compiled node-editor 与 spell-composer smoke，覆盖实际 golden artifact：节点编辑器在 480×360 与 320×240 宿主下的绘制/命中，法术合成器在 480×320 设计尺寸与 320×240 宿主缩放下的绘制，以及 8 个 augment 最大列表的滚动布局和第 8 行关键条目命中。
 4. **全量门禁**：依次运行 `cmd /c gradlew.bat :node-core:runNodeCoreClojureTests --quiet`、`cmd /c gradlew.bat :ability-runtime:runAbilityClojureTests --quiet`、`cmd /c gradlew.bat :combat-core:runCombatClojureTests --quiet`、`cmd /c gradlew.bat :vfx-core:runVfxClojureTests --quiet`、`cmd /c gradlew.bat :presentation-core:runCoreClojureTests --quiet`、`cmd /c gradlew.bat :ac:runAcClojureTests --quiet` 和 `cmd /c gradlew.bat verifyCurrentPlatforms --stacktrace`；任一失败不得以“与本改动无关”跳过，需记录失败测试和回归范围。
-5. **真实游戏验收（外部人工步骤）**：在 480×360 与 320×240 两种窗口验证默认紧凑模式、viewport 打开/关闭、拖拽/滚轮缩放、Tab 焦点和文本截断；记录帧时间与命中问题，只有真实宿主缺陷才进入 pinch/SPI/P3 队列。本轮按用户约束不启动 `runClient`，因此此项保持“待外部验收”而不是伪造完成；具备游戏窗口的验收者应按此清单执行并回填记录。
+5. **真实游戏验收（外部人工步骤）**：在 480×360 与 320×240 两种宿主窗口验证节点编辑器默认紧凑模式、viewport 打开/关闭、拖拽/滚轮缩放、Tab 焦点和文本截断；在 320×240 宿主窗口额外验证 480×320 设计的法术合成器是否可滚动且不遮挡提交控件。记录帧时间与命中问题，只有真实宿主缺陷才进入 pinch/SPI/P3 队列。本轮按用户约束不启动 `runClient`，因此此项保持“待外部验收”而不是伪造完成；具备游戏窗口的验收者应按此清单执行并回填记录。
 6. **提交边界**：只提交本计划涉及的源码、视图、测试、文档和 golden；保留工作区中与本任务无关的生成目录/脚本，不做清理或 reset。
 
-完成定义：步骤 1–4 全部通过，步骤 5 有可复现记录，且 P3 的每个工作包都具备“先决条件—交付物—验收门槛”三项信息后，才可将本轮重构标记为完成。
+### 6.1 外部验收记录模板
+
+具备游戏窗口的验收者按下表逐行填写；“证据”应是截图、录屏时间点或可复现操作描述，不能只写“正常”。
+
+| 宿主尺寸 | 编辑器/模式 | 操作 | 预期结果 | 实际结果/证据 | 结论 |
+| --- | --- | --- | --- | --- | --- |
+| 480×360 | 节点/紧凑 | 选节点、拖动节点、空白处拖动 | 节点/视口分别移动，释放后不残留 ghost |  |  |
+| 480×360 | 节点/viewport | 打开、平移、滚轮缩放、Esc 关闭 | 画布扩大；缩放以指针为锚；关闭后 layout 不变 |  |  |
+| 320×240 | 节点/紧凑+viewport | Tab/Shift-Tab、长文本、参数滚动 | 焦点环回，文本可辨识，底部操作不被遮挡 |  |  |
+| 480×320 | 法术合成器 | 添加 8 个 augment、滚动、删除第 8 行 | augment 纵向排列，滚动后命中正确，Cast/Clear 可见 |  |  |
+| 320×240 | 法术合成器 | 重复上述操作并提交非法参数 | 宿主缩放不破坏命中；非法值就地拒绝且不改变已提交值 |  |  |
+
+完成定义分两层，避免把无法在当前环境执行的动作误报为已完成：
+
+- **本轮 UI 代码交付完成**：步骤 1–4 全部通过；`git diff --check` 通过；只保留本计划涉及的源码、视图、测试、文档和 golden 变更；不运行 `runClient` 也可以据此交付代码。
+- **产品发布验收完成**：在代码交付完成的基础上，步骤 5 具有可复现记录。真实游戏验收由具备游戏窗口的验收者执行，本轮不因用户明确禁止 `runClient` 而伪造该记录。
+- **P3 工作包完成**：S/C/E/F 各自满足“先决条件—交付物—验收门槛”，作为后续版本里程碑，不回填为本轮 UI 已完成项。

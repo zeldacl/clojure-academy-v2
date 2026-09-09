@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.screens.spell-composer-reactive
   "Presentation Runtime controller for the player spell composer
-   (node-editor plan Phase 5). Follows preset-editor-reactive's
+   editor execution plan. Follows preset-editor-reactive's
    self-contained active-mounts pattern, same as the node editor screen.
 
    State is shaped so ordinary UI actions cannot create an INVALID glyph sequence
@@ -20,7 +20,7 @@
    finiteness and descriptor min/max before the spell can be cast.
 
    Physical glyph items / a spell-storage item's NBT (the plan's other
-   Phase 5 deliverable) are NOT part of this pass either -- both need a
+   P3 storage deliverable) is NOT part of this pass either -- both need a
    texture, a model json, and creative-tab placement this environment
    cannot create or visually verify, and neither is on the critical path
    for the compose-and-cast LOOP to work end to end (this screen can be
@@ -43,6 +43,27 @@
    own sigil-classification code warns about for the identical reason."
   [kw]
   (subs (str kw) 1))
+
+(defn- ui-label
+  "Keep single-line composer labels inside their fixed layout box.
+
+   Presentation V3 currently clips but does not implement generic text
+   ellipsizing.  Only derived display labels are shortened here; glyph data,
+   status state and parameter drafts remain lossless."
+  [value max-width]
+  (let [s (str (or value ""))
+        measure (fn [text]
+                  (double (or (bridge/font-width-optional text)
+                              (* 4.8 (count text)))))]
+    (if (or (str/blank? s) (<= (measure s) (double max-width)))
+      s
+      (let [suffix "..."]
+        (loop [n (count s)]
+          (let [candidate (str (subs s 0 n) suffix)]
+            (cond
+              (<= (measure candidate) (double max-width)) candidate
+              (zero? n) suffix
+              :else (recur (dec n)))))))))
 
 ;; NOT routed through the mod's i18n/datagen translation system (checked
 ;; before writing this: every existing reactive controller's dynamic
@@ -110,10 +131,11 @@
 
 (defn- add-augment [state glyph-kw]
   (let [idx (:selected-effect state)
-        groups (:effect-groups state)]
+        groups (:effect-groups state)
+        valid-index? (and (integer? idx) (<= 0 idx) (< idx (count groups)))]
     (cond
       (nil? (:form state)) (assoc state :status "Pick a form first.")
-      (nil? idx) (assoc state :status "Select an effect first.")
+      (not valid-index?) (assoc state :status "Select an effect first.")
       (not= :augment (:kind (descriptor-for state glyph-kw)))
       (assoc state :status "Choose an augment glyph.")
       (>= (count (get-in groups [idx :augments])) 8)
@@ -145,6 +167,13 @@
                   :else [effect-idx key])
                 value]))
         (or drafts {})))
+(defn- select-effect [state idx]
+  (if (and (integer? idx)
+           (<= 0 idx)
+           (< idx (count (:effect-groups state))))
+    (assoc state :selected-effect idx)
+    (assoc state :status "Select a valid effect.")))
+
 (defn- remove-effect [state idx]
   (if (and (integer? idx) (< -1 idx) (< idx (count (:effect-groups state))))
     (let [groups (vec (concat (subvec (:effect-groups state) 0 idx)
@@ -156,24 +185,33 @@
     state))
 
 (defn- move-effect [state idx delta]
-  (let [groups (:effect-groups state) target (+ idx delta)]
-    (if (and (integer? idx) (integer? delta) (<= 0 idx) (< idx (count groups))
-             (<= 0 target) (< target (count groups)))
-      (let [item (nth groups idx)
-            reordered (-> groups vec
-                          (assoc idx (nth groups target))
-                          (assoc target item))]
-        (assoc state :effect-groups reordered
-               :param-drafts (remap-drafts-after-swap (:param-drafts state) idx target)
-               :selected-effect target))
-      state)))
+  (let [groups (:effect-groups state)]
+    (if-not (and (integer? idx) (integer? delta))
+      state
+      (let [target (+ idx delta)]
+        (if (and (<= 0 idx) (< idx (count groups))
+                 (<= 0 target) (< target (count groups)))
+          (let [item (nth groups idx)
+                reordered (-> groups vec
+                              (assoc idx (nth groups target))
+                              (assoc target item))]
+            (assoc state :effect-groups reordered
+                   :param-drafts (remap-drafts-after-swap (:param-drafts state) idx target)
+                   :selected-effect target))
+          state)))))
 
 (defn- remove-augment [state effect-idx augment-idx]
-  (if (and (<= 0 effect-idx) (< effect-idx (count (:effect-groups state)))
-           (<= 0 augment-idx) (< augment-idx (count (get-in state [:effect-groups effect-idx :augments]))))
-    (update-in state [:effect-groups effect-idx :augments]
-               #(vec (concat (subvec % 0 augment-idx) (subvec % (inc augment-idx)))))
-    state))
+  (let [groups (:effect-groups state)
+        valid-effect? (and (integer? effect-idx)
+                           (<= 0 effect-idx)
+                           (< effect-idx (count groups)))
+        augments (when valid-effect? (get-in groups [effect-idx :augments]))]
+    (if (and (integer? augment-idx)
+             (<= 0 augment-idx)
+             (< augment-idx (count augments)))
+      (update-in state [:effect-groups effect-idx :augments]
+                 #(vec (concat (subvec % 0 augment-idx) (subvec % (inc augment-idx)))))
+      state)))
 
 (defn- clear-composition [state]
   (assoc state :form nil :effect-groups [] :selected-effect nil :param-drafts {} :busy? false :status "Cleared."))
@@ -192,7 +230,7 @@
               {:effect-index selected-effect
                :param-key key
                :draft-key (keyword (str "composer-param-" selected-effect "-" (name key)))
-               :label (str (name key) " [" (:min descriptor) ".." (:max descriptor) "]")
+               :label (ui-label (str (name key) " [" (:min descriptor) ".." (:max descriptor) "]") 126.0)
                :value (str (get param-drafts [selected-effect key]
                                 (get-in group [:params key])))})
             params))
@@ -209,10 +247,15 @@
    descriptor bounds. Invalid drafts never become part of the spell payload."
   [{:keys [param-drafts effect-groups glyph-specs]}]
   (every? (fn [[[idx key] raw]]
-            (let [glyph (get-in effect-groups [idx :glyph])
-                  descriptor (get-in glyph-specs [glyph :params key])
+            (let [valid-index? (and (integer? idx)
+                                   (<= 0 idx)
+                                   (< idx (count effect-groups)))
+                  glyph (when valid-index? (get-in effect-groups [idx :glyph]))
+                  descriptor (when (and valid-index? (keyword? key))
+                               (get-in glyph-specs [glyph :params key]))
                   value (parse-finite-number raw)]
-              (and descriptor
+              (and valid-index?
+                   descriptor
                    (some? value)
                    (>= value (double (:min descriptor)))
                    (<= value (double (:max descriptor))))))
@@ -224,8 +267,15 @@
   (let [item (:item payload)
         idx (payload-index payload :effect-index)
         key (:param-key item)
+        groups (:effect-groups state)
+        glyph (when (and (integer? idx)
+                         (<= 0 idx)
+                         (< idx (count groups)))
+                (get-in groups [idx :glyph]))
+        descriptor (when (and glyph (keyword? key))
+                     (get-in (:glyph-specs state) [glyph :params key]))
         value (or (:value payload) (:value item) (:text payload))]
-    (if (and (integer? idx) (keyword? key))
+    (if (and descriptor (some? value))
       (assoc-in state [:param-drafts [idx key]] (str value))
       state)))
 
@@ -233,11 +283,16 @@
   (let [item (:item payload)
         idx (payload-index payload :effect-index)
         key (:param-key item)
-        glyph (get-in state [:effect-groups idx :glyph])
-        descriptor (get-in state [:glyph-specs glyph :params key])
+        effect-groups (:effect-groups state)
+        valid-index? (and (integer? idx)
+                           (<= 0 idx)
+                           (< idx (count effect-groups)))
+        glyph (when valid-index? (get-in effect-groups [idx :glyph]))
+        descriptor (when (and valid-index? (keyword? key))
+                     (get-in (:glyph-specs state) [glyph :params key]))
         value (parse-finite-number (or (:value payload) (:value item) (:text payload)))]
     (cond
-      (not (and (integer? idx) (keyword? key) descriptor))
+      (not (and valid-index? (keyword? key) descriptor))
       (assoc state :status "Unknown parameter.")
       (nil? value)
       (assoc state :status (str "Enter a finite number for " (name key) "."))
@@ -250,13 +305,12 @@
           (assoc-in [:effect-groups idx :params key] (coerce-param-value descriptor value))
           (update :param-drafts dissoc [idx key])
           (assoc :status (str "Updated " (name key) "."))))))
-
 ;; --- render-state ------------------------------------------------------
 
 (defn- palette-item [{:keys [glyph kind cost admissible? params]}]
   {:glyph (glyph-str glyph) :kind (name kind)
    :cost (double cost)
-   :label (str (glyph-str glyph) " (cost " cost ")")
+   :label (ui-label (str (glyph-str glyph) " (cost " cost ")") 202.0)
    :params params
    :admissible? admissible?})
 
@@ -275,12 +329,12 @@
      :form-palette (mapv palette-item (filter :admissible? forms))
      :effect-palette (mapv palette-item (filter :admissible? effects))
      :augment-palette (mapv palette-item (filter :admissible? augments))
-     :form-label (if form (glyph-str (:glyph form)) "(none)")
+     :form-label (ui-label (if form (glyph-str (:glyph form)) "(none)") 182.0)
      :selected-param-fields selected-params
      :effect-slots
      (mapv (fn [idx {:keys [glyph augments]}]
              (let [augment-height (* 14 (count augments))]
-               {:index idx :label (str (inc idx) ". " (glyph-str glyph))
+               {:index idx :label (ui-label (str (inc idx) ". " (glyph-str glyph)) 86.0)
                 :selected? (= idx selected-effect)
                 ;; The slot row grows with its augment list. Augments are
                 ;; rendered as a vertical set of removable rows so eight
@@ -292,7 +346,7 @@
                 :augments (mapv (fn [augment-index a]
                                   {:effect-index idx
                                    :augment-index augment-index
-                                   :label (str "+ " (glyph-str (:glyph a)))
+                                   :label (ui-label (str "+ " (glyph-str (:glyph a))) 84.0)
                                    :remove-label "X"})
                                 (range) augments)
                 :can-move-up? (pos? idx)
@@ -302,7 +356,7 @@
      :can-cast? (boolean (and (not busy?) form (seq effect-groups)
                               (valid-param-drafts? state)))
      :busy? (boolean busy?)
-     :status (or status "")
+     :status (ui-label (or status "") 456.0)
      :cast-label (if busy? "Casting..." "Cast")
      :clear-label "Clear"})))
 
@@ -312,19 +366,25 @@
   (let [value (or (get payload key) (get-in payload [:item key]))]
     (if (string? value) (try (Long/parseLong value) (catch Exception _ -1)) value)))
 
+(defn- payload-keyword [value]
+  (cond
+    (keyword? value) value
+    (string? value) (when (seq value) (keyword value))
+    :else nil))
+
 (defn- handle-action [state* owner action payload]
   (case action
     :composer/pick-form
-    (swap! state* pick-form (keyword (:glyph (:item payload))))
+    (swap! state* pick-form (payload-keyword (:glyph (:item payload))))
 
     :composer/add-effect
-    (swap! state* add-effect (keyword (:glyph (:item payload))))
+    (swap! state* add-effect (payload-keyword (:glyph (:item payload))))
 
     :composer/add-augment
-    (swap! state* add-augment (keyword (:glyph (:item payload))))
+    (swap! state* add-augment (payload-keyword (:glyph (:item payload))))
 
     :composer/select-effect
-    (swap! state* assoc :selected-effect (payload-index payload :index))
+    (swap! state* select-effect (payload-index payload :index))
 
     :composer/remove-effect
     (swap! state* remove-effect (payload-index payload :index))
@@ -354,7 +414,8 @@
           glyphs (composed-glyphs snapshot)]
       (cond
         (:busy? snapshot) nil
-        (not glyphs) (swap! state* assoc :status "Pick a form and at least one effect first.")
+        (not (and (:form snapshot) (seq (:effect-groups snapshot))))
+        (swap! state* assoc :status "Pick a form and at least one effect first.")
         (not (valid-param-drafts? snapshot))
         (swap! state* assoc :status "Finish valid parameter edits before casting.")
         :else

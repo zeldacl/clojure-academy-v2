@@ -285,4 +285,7 @@ through compile-time `:include` + named `:slot`s. Contract:
   today (the HUD renderer doesn't pass a `:backend-context`, and the only
   existing VFX draw-batch consumer is 3D-world-space only), so this would be
   building a new capability, not moving code.
-- Editor tooling, hot reload, in-game inspector (plan Phase 7): not started.
+- Generic Presentation editor tooling, hot reload, and in-game inspector
+  (the separate engine plan's Phase 7) are not started. The AC-specific node
+  editor and spell composer are tracked separately in
+  `docs/06-gui/NODE_EDITOR_EXECUTION_PLAN.md`.

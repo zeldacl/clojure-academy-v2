@@ -6,8 +6,8 @@
 >
 > 本文档描述的是 2026-09 重写后的语言（surface DSL + 扁平 IR + 分型寄存器），**不是**
 > 旧的"节点树 + `:component`/`:bind`/`{:ref [:local ...]}`"设计——本文早前的版本描述的
-> 是那套旧设计，已整篇替换。设计过程记录在
-> `C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
+> 是那套旧设计，已整篇替换。编辑器设计结论与执行步骤见
+> [NODE_EDITOR_EXECUTION_PLAN.md](../06-gui/NODE_EDITOR_EXECUTION_PLAN.md)。
 
 ## 0. 当前状态：执行引擎与内容元数据加载都已切到新格式；旧目录已删除
 
@@ -320,7 +320,8 @@ host 好查，"调用"就是"往这帧的 outbox 追加一条 draw/audio/camera 
   dispatch-player-spell!`，desugar/compile/admit 全部服务端权威）。仍然缺的是
   **物品层**——存法术数据的 Minecraft 物品、拾取/合成 glyph 物品、右键施法——
   需要贴图/模型/合成表，是平台层内容，本次没有做（这个环境做不出、也验证不了
-  贴图和模型），今天这个屏幕靠直接调用 `open!` 打开，不挂在任何物品上。
+  贴图和模型）。当前合成器可由 K 键和 `spell_composer_dev_tool` 开发道具打开，
+  不依赖 glyph 或存储物品。
 - 节点图编辑器（技能 + VFX 场景两种模式）已实现，见
   [NODE_EDITOR.md](../06-gui/NODE_EDITOR.md)——本节描述的语言本身现在具备被
   图形化编辑的性质：`cn.li.node.nid`（跨编辑稳定的节点 id）、`:doc` 数据字段

@@ -1,6 +1,6 @@
 (ns cn.li.ac.item.spell-composer-dev-tool
   "spell_composer_dev_tool: a creative-mode-only item whose sole purpose is
-   opening the player spell composer (node-editor plan) -- mirrors
+   opening the player spell composer (see the editor execution plan) -- mirrors
    cn.li.ac.item.editor-dev-tool exactly, just targeting spell-composer/open!
    instead of the node editor (the K keybind, cn.li.ac.input-ids, is this
    screen's other entry point). Reuses developer_portable's icon (a real,

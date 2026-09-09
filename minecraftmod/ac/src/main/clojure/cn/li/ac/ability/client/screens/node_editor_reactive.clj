@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.screens.node-editor-reactive
-  "Presentation Runtime controller for the node editor -- BOTH the skill
-   mode (Phase 3) and the scene/VFX mode (Phase 4). Follows preset-
+  "Presentation Runtime controller for the node editor -- both the skill
+   mode and the scene/VFX mode. Follows preset-
    editor-reactive's simpler self-contained pattern (an active-mounts
    atom keyed by player-uuid), not skill-tree's managed-screens/
    read-model machinery -- this is a standalone dev tool, not tied to
@@ -9,7 +9,7 @@
    The skill/scene difference is entirely in mode-opts below: a small
    table of {:vocab :capabilities :fns :field}. Everything else in this
    namespace (graph rendering, drag, save, diagnostics) is mode-agnostic
-   -- Phase 4's real deliverable is proving that claim, not new plumbing.
+   -- the scene/VFX mode's deliverable is proving that claim, not new plumbing.
    Scene mode's :capabilities is PER-FILE (an effect's own :inputs :spawn
    declaration merged with vfx-core's universal :age/:progress -- see
    vfx-api's scene-capabilities-for), unlike skill mode's fixed table, so
@@ -63,8 +63,7 @@
 (defonce ^:private active-mounts (atom {}))
 
 (defn default-sample-skill-resource-path
-  "A classpath-relative V3 content resource (e.g. \"ac/skills-v3/thunder-
-   edn\") -> its absolute on-disk path, or nil. Public because there is
+  "A classpath-relative V3 content resource (e.g. \"ac/skills-v3/thunder-bolt.edn\") -> its absolute on-disk path, or nil. Public because there is
    no in-game file-picker UI yet (a real follow-up, not part of this
    screen's own scope) -- both the G keybind (cn.li.ac.input-ids) and
    the editor_dev_tool item share this to pick a fixed default file to
@@ -281,6 +280,12 @@
     :vfx! (:fields node)
     {}))
 
+(defn- payload-keyword [value]
+  (cond
+    (keyword? value) value
+    (string? value) (when (seq value) (keyword value))
+    :else nil))
+
 (defn- vec3-values [value]
   (let [v (cond
             (and (map? value) (vector? (:vec3 value))) (:vec3 value)
@@ -381,10 +386,59 @@
             (catch Exception _ nil))
           (when (seq text) (keyword text)))
       (try (read-edn) (catch Exception _ nil)))))
+
+(defn- editor-value-within-bounds?
+  "Return true when an already parsed editor value satisfies the optional
+   numeric bounds carried by its schema descriptor. Scalar numbers and vec3
+   components use the same min/max contract; non-numeric values are valid
+   only when the descriptor does not declare numeric bounds. Keeping this
+   check after parsing prevents NaN/infinite or out-of-range values from
+   reaching graph/document mutation."
+  [descriptor value]
+  (let [min-value (:min descriptor)
+        max-value (:max descriptor)
+        values (cond
+                 (number? value) [value]
+                 (and (vector? value) (every? number? value)) value
+                 :else nil)
+        has-bounds? (or (number? min-value) (number? max-value))]
+    (if (seq values)
+      (and (or (not (number? min-value))
+               (every? #(>= (double %) (double min-value)) values))
+           (or (not (number? max-value))
+               (every? #(<= (double %) (double max-value)) values)))
+      (not has-bounds?))))
 ;; --- render-state (map -> what the .ui.edn's :state-schema binds) ------
 
+(declare ui-label)
+
 (defn- diagnostic-item [d]
-  {:code (str (:code d)) :message (:message d) :nid (str (:nid d)) :line (str (or (:line d) "-"))})
+  {:code (ui-label (:code d) 82.0)
+   :message (ui-label (:message d) 292.0)
+   :nid (str (:nid d)) :line (str (or (:line d) "-"))})
+
+(defn- ui-label
+  "Keep single-line editor labels inside their fixed layout box.
+
+   Presentation V3 currently clips but does not implement generic text
+   ellipsizing.  The two editors therefore bound only display labels here;
+   source text, diagnostics data and input drafts remain lossless in state.
+   Use the installed font bridge when available and a deterministic fallback
+   for headless tests."
+  [value max-width]
+  (let [s (str (or value ""))
+        measure (fn [text]
+                  (double (or (bridge/font-width-optional text)
+                              (* 4.8 (count text)))))]
+    (if (or (str/blank? s) (<= (measure s) (double max-width)))
+      s
+      (let [suffix "..."]
+        (loop [n (count s)]
+          (let [candidate (str (subs s 0 n) suffix)]
+            (cond
+              (<= (measure candidate) (double max-width)) candidate
+              (zero? n) suffix
+              :else (recur (dec n)))))))))
 
 (defn- palette-item
   "One cn.li.ability.editor.palette/build entry -> a display row. The same
@@ -394,7 +448,7 @@
    palette/build's stable (:category :id) ordering."
   [{:keys [id category cost source]}]
   {:id id :source source
-   :label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")")})
+   :label (ui-label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")") 432.0)})
 
 (defn- palette-search-text [entry]
   (str/lower-case
@@ -417,7 +471,7 @@
    :entry? false
    :toggleable? true
    :collapsed? collapsed
-   :header-label (str (if collapsed "▶ " "▼ ") (name category) " (" count ")")})
+             :header-label (ui-label (str (if collapsed "▶ " "▼ ") (name category) " (" count ")") 432.0)})
 
 (defn- palette-rows
   "Build the compact palette presentation model: optional recent group,
@@ -520,7 +574,7 @@
      :canvas-viewport-visible? canvas-viewport?
      :canvas-viewport-label (if canvas-viewport? "Close viewport (Esc)" "Expand canvas")
      :canvas-viewport-title "Canvas viewport"
-     :selected-label (if selected (:text selected) "(nothing selected)")
+     :selected-label (ui-label (if selected (:text selected) "(nothing selected)") 456.0)
      :selected-params selected-params
      :diagnostics (mapv diagnostic-item diagnostics)
      :diagnostic-count (double (count diagnostics))
@@ -530,7 +584,7 @@
                    "(compile errors -- see diagnostics)")
      :zoom-label (format "Zoom %.0f%%" (* 100.0 (double (or zoom 1.0))))
      :zoom-reset-label "Reset zoom"
-     :status (or status "")
+     :status (ui-label (or status "") 456.0)
      :preview-active? (boolean (:preview-active? state))
      :preview-label (or (:preview-label state) "Preview off")
      :preview-toggle-label (if (:preview-active? state) "Stop preview" "Preview")
@@ -621,6 +675,8 @@
       (and (seq (:choices descriptor))
            (not (some #(= parsed %) (:choices descriptor))))
       (swap! state* assoc :status (str "Choose one of the allowed values for " (name key) "."))
+      (not (editor-value-within-bounds? descriptor parsed))
+      (swap! state* assoc :status (str "Value for " (name key) " is outside the allowed range."))
       :else
       (do
         (install-graph! state* (assoc-in (:graph @state*) [:nodes data-nid]
@@ -682,8 +738,17 @@
         nid (or (:nid item) (:selected-nid @state*))
         key (:param-key item)
         axis (:axis item)
-        value (or (:value payload) (:value item) (:text payload))]
-    (when (and nid key (contains? #{:x :y :z} axis))
+        value (or (:value payload) (:value item) (:text payload))
+        node (get-in @state* [:graph :nodes nid])
+        refs (node-input-refs node)
+        data-nid (get refs key)
+        data (get-in @state* [:graph :nodes data-nid])]
+    (when (and node key (contains? refs key)
+               (contains? #{:x :y :z} axis)
+               (= :data (:kind data))
+               (contains? #{:literal :vec-lit :map-lit} (:expr data))
+               (some? (vec3-values (:value data)))
+               (some? value))
       (swap! state* assoc-in [:param-drafts [nid key axis]] (str value)))))
 
 (defn- param-axis-submit [state* payload]
@@ -708,19 +773,31 @@
         (swap! state* update :param-drafts dissoc [nid key axis])))))
 (defn- canvas-origin
   "Design-space origin of the active canvas inside node-editor.ui.edn.
-   Compact mode follows the fixed controls (16+16+16+32 = 80px); the
-   viewport overlay starts at 24px and its inner canvas at 22px. Keeping
-   this explicit makes screen->canvas-point the inverse of the UI layout
-   instead of treating the whole screen as graph space."
+   The root stack has an 8px inset on both axes. Compact mode then follows
+   the fixed controls (16+16+16+32 = 80px); the viewport overlay starts at
+   24px and its inner canvas at 22px. Keeping the full global origin here
+   makes screen->canvas-point the inverse of the UI layout, including the
+   root inset used by runtime pointer events."
   [state]
   (if (:canvas-viewport? state)
-    {:x 0.0 :y 46.0}
-    {:x 0.0 :y 80.0}))
-
+    {:x 8.0 :y 54.0}
+    {:x 8.0 :y 88.0}))
 (defn- screen->camera-point [state x y]
   (let [{ox :x oy :y} (canvas-origin state)]
     {:x (- (double (or x ox)) (double ox))
      :y (- (double (or y oy)) (double oy))}))
+
+(defn- canvas-pointer?
+  "True when a design-space pointer coordinate is inside the active canvas.
+   Scroll events outside scroll containers arrive as :input/unknown; they
+   must not zoom the graph merely because the host has no other scroll target."
+  [state x y]
+  (let [{ox :x oy :y} (canvas-origin state)
+        width 464.0
+        height (if (:canvas-viewport? state) 278.0 128.0)]
+    (and (number? x) (number? y)
+         (<= ox (double x) (+ ox width))
+         (<= oy (double y) (+ oy height)))))
 
 (defn- screen->canvas-point [state x y]
   (let [zoom (double (or (:zoom state) 1.0))
@@ -749,9 +826,11 @@
         id (:id item)
         drop-zone (:drop-zone payload)]
     (cond
-      (nil? id) (swap! state* assoc :status "Palette drag lost its source.")
+      (nil? id) (swap! state* assoc :palette-drag nil :ghost nil
+                       :status "Palette drag lost its source.")
       (not= :node-editor/canvas drop-zone)
-      (swap! state* assoc :status "Drop the palette item on the canvas.")
+      (swap! state* assoc :palette-drag nil :ghost nil
+             :status "Drop the palette item on the canvas.")
       :else
       (try
         (let [entry (palette/find-by-id (:palette @state*) id)
@@ -810,6 +889,29 @@
                (let [next-doc ((if (= direction :undo) document/undo document/redo) (:document s))]
                  (recompute (assoc s :document next-doc
                                       :status (if (= direction :undo) "Undid edit." "Redid edit.")))))))))
+(defn- select-phase [state raw-phase]
+  (let [phase (payload-keyword raw-phase)]
+    (if (and phase (some #{phase} (:phases state)))
+      (recompute (assoc state :phase phase :selected-nid nil))
+      (assoc state :status "Select a valid phase."))))
+
+(defn- finish-pointer-drag! [state* payload]
+  "Finish a node/pin/empty-canvas drag routed through a canvas :drop.
+   Canvas wrappers also carry the palette drop action, so the controller
+   must close the pure hit state for non-palette drags instead of treating
+   them as a missing palette source."
+  (let [{:keys [hit-item]} payload
+        {:keys [state action]} (hit/on-up (:drag @state*)
+                                          (item->hit hit-item)
+                                          (double (or (:x payload) 0.0))
+                                          (double (or (:y payload) 0.0)))]
+    (when (= :connect-wire (:kind action))
+      (try
+        (install-graph! state* (graph/connect-wire (:graph @state*) action))
+        (catch Throwable error
+          (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
+    (swap! state* assoc :drag state)))
+
 (defn- handle-action [state* action payload]
   (case action
     ;; A composite item's :down (:target/:item/:index only -- this
@@ -827,9 +929,13 @@
 
     :input/pointer
     (let [{:keys [event-type drag-x drag-y drag? drag-item drop-zone x y]} payload
-          drag-mode (:mode (:drag @state*))]
+          drag-mode (:mode (:drag @state*))
+          palette-preview? (or (some? (:palette-drag @state*))
+                               (some? (:ghost @state*)))]
       (cond
-        (and drag? drag-item (= :up event-type) (not (:nid drag-item)))
+        (and drag? (= :up event-type)
+             (or (and (map? drag-item) (nil? (:nid drag-item)))
+                 (and (nil? drag-item) palette-preview?)))
         (do
           (if (= :node-editor/canvas drop-zone)
             (palette-drop! state* payload)
@@ -837,14 +943,19 @@
                    :status "Drop the palette item on the canvas."))
           nil)
 
-        (and drag? drag-item (not (:nid drag-item)))
-        (let [entry (palette/find-by-id (:palette @state*) (:id drag-item))
-              point (screen->canvas-point @state* x y)]
-          (swap! state* assoc
-                 :palette-drag (assoc point :id (:id drag-item))
-                 :ghost {:id (:id drag-item) :label (:label (palette-item entry))
-                         :x (:x point) :y (:y point)
-                         :valid? (= :node-editor/canvas (:drop-zone payload))}))
+        (and drag? (or (and (map? drag-item) (nil? (:nid drag-item)))
+                       (and (nil? drag-item) palette-preview?)))
+        (if-not (and (map? drag-item) (some? (:id drag-item))
+                     (palette/find-by-id (:palette @state*) (:id drag-item)))
+          (swap! state* assoc :palette-drag nil :ghost nil
+                 :status "Palette drag lost its source.")
+          (let [entry (palette/find-by-id (:palette @state*) (:id drag-item))
+                point (screen->canvas-point @state* x y)]
+            (swap! state* assoc
+                   :palette-drag (assoc point :id (:id drag-item))
+                   :ghost {:id (:id drag-item) :label (:label (palette-item entry))
+                           :x (:x point) :y (:y point)
+                           :valid? (= :node-editor/canvas (:drop-zone payload))})))
 
         :else
         (case (if (= :move event-type) :drag event-type)
@@ -855,29 +966,32 @@
                                   (fn [{:keys [x y]}] {:x (+ x (or drag-x 0.0)) :y (+ y (or drag-y 0.0))}))
                   nil)
           :up
-          (let [{:keys [hit-item]} payload
-                {:keys [state action]} (hit/on-up (:drag @state*)
-                                                  (item->hit hit-item)
-                                                  (double (or (:x payload) 0.0))
-                                                  (double (or (:y payload) 0.0)))]
-            (when (= :connect-wire (:kind action))
-              (try
-                (install-graph! state* (graph/connect-wire (:graph @state*) action))
-                (catch Throwable error
-                  (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
-            (swap! state* assoc :drag state))
+          (finish-pointer-drag! state* payload)
           nil)))
 
     :editor/palette-drag-start
     (let [item (:item payload)
+          entry (when (and (map? item) (some? (:id item)))
+                  (palette/find-by-id (:palette @state*) (:id item)))
           point (screen->canvas-point @state* (:x payload) (:y payload))]
-      (swap! state* assoc
-             :palette-drag (assoc point :id (:id item))
-             :ghost {:id (:id item) :label (:label item) :x (:x point) :y (:y point) :valid? false}
-             :status (str "Dragging " (:id item) ".")))
+      (if entry
+        (swap! state* assoc
+               :palette-drag (assoc point :id (:id item))
+               :ghost {:id (:id item) :label (:label (palette-item entry))
+                       :x (:x point) :y (:y point) :valid? false}
+               :status (str "Dragging " (:id item) "."))
+        (swap! state* assoc :palette-drag nil :ghost nil
+               :status "Palette drag lost its source.")))
 
     :editor/palette-drop
-    (palette-drop! state* (assoc payload :drop-zone :node-editor/canvas))
+    (let [item (:drag-item payload)]
+      (if (or (some? (:palette-drag @state*))
+              (some? (:ghost @state*))
+              (and (map? item) (nil? (:nid item))))
+        (palette-drop! state* (if (contains? payload :drop-zone)
+                                payload
+                                (assoc payload :drop-zone :node-editor/canvas)))
+        (finish-pointer-drag! state* payload)))
 
     :editor/palette-search-change
     (swap! state* assoc :palette-query (str (or (:value payload) (:text payload) "")))
@@ -914,7 +1028,8 @@
     (history-action! state* :redo)
 
     :input/unknown
-    (when (= :scroll (:type payload))
+    (when (and (= :scroll (:type payload))
+               (canvas-pointer? @state* (:x payload) (:y payload)))
       (zoom-canvas! state* payload))
 
     :input/scroll
@@ -976,16 +1091,18 @@
 
     :editor/param-change
     (let [item (or (:item payload) payload)
-        nid (or (:nid item) (:selected-nid @state*))
+          nid (or (:nid item) (:selected-nid @state*))
           key (:param-key item)
-          value (or (:value payload) (:value item) (:text payload))]
-      (when (and nid key)
+          value (or (:value payload) (:value item) (:text payload))
+          node (get-in @state* [:graph :nodes nid])
+          refs (node-input-refs node)]
+      (when (and node key (contains? refs key) (some? value))
         (swap! state* assoc-in [:param-drafts [nid key]] (str value))))
 
     :editor/param-submit
     (param-submit state* payload)
     :editor/select-phase
-    (swap! state* (fn [s] (recompute (assoc s :phase (keyword (:phase payload)) :selected-nid nil))))
+    (swap! state* select-phase (or (:phase payload) (get-in payload [:item :phase])))
 
     ;; Re-reads `path` from disk and rebuilds the whole editor state,
     ;; discarding any in-memory edit that was never saved -- an honest

@@ -3,8 +3,8 @@
 三个规划中的可视化编辑器（技能/VFX 图编辑器、玩家法术合成器、粒子发射器编辑器）
 里，前两个已实现；第三个按设计文档自己的决策点评估后暂不做（`ac/vfx-v3/*.edn`
 里没有任何一个文件包含非空的顶层 `:emitters`（system render 内的 `:component :emitter`
-调用不等同于顶层 emitter 模块数据，见下）。设计过程记录在
-`C:\Users\lxy\.claude\plans\vfx-psi-hex-casting-ars-nouveau-niagara-tidy-puffin.md`。
+调用不等同于顶层 emitter 模块数据，见下）。设计结论、复核结果和可执行步骤统一记录在
+[NODE_EDITOR_EXECUTION_PLAN.md](NODE_EDITOR_EXECUTION_PLAN.md)；不依赖工作区外的个人计划文件。
 
 语言层规格见 [NODE_LANGUAGE.md](../04-systems/NODE_LANGUAGE.md)（尤其是其中
 `:nid` 稳定性契约那一节）——本文档只描述编辑器本身。
@@ -20,7 +20,7 @@ Brigadier 命令，而这两个屏幕的 `open!` 挂载的是客户端 Presentat
 没有现成桥（也没打算建，属于新平台面、这个环境验证不了，见上面几节同类判断的
 一贯标准）。现有入口都是纯客户端事件，照抄 `preset-editor` 绑 `N` 键的先例：
 
-- **G 键**——打开节点编辑器（技能模式，固定加载 `ac/skills-v3/thunder_bolt.edn`
+- **G 键**——打开节点编辑器（技能模式，固定加载 `ac/skills-v3/thunder-bolt.edn`
   作为示例文件；目前没有文件选择 UI，是后续增量，不是这次遗漏）。
 - **K 键**——打开玩家法术合成器（不需要文件参数）。
 - **`editor_dev_tool` 道具**——右键效果同 G 键；图标复用 `developer_portable`
@@ -52,7 +52,7 @@ ac/src/main/clojure/cn/li/ac/ability/client/screens/
 
 ac/src/presentation/resources/academy/app/
     node_editor.ui.edn       480×360
-    spell_composer.ui.edn    320×240
+    spell_composer.ui.edn    480×320（另有 320×240 宿主窗口压力测试）
 ```
 
 `verifyContentModuleCoreIsolation` 允许 `ac` 直接 require 的核心命名空间里，
@@ -100,10 +100,11 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
   声明参数的字面量数据节点；拖拽期间显示 ghost，释放位置有有效/无效反馈，Esc 可取消，
   无移动的点击仍走快捷插入。执行链节点移动、选择、空白画布平移，以及表达式输出到语句
   输入的语义连线也已实现。若 schema 提供 `:choices`，keyword 使用循环选择；vec3 字面量显示 x/y/z 三轴输入；无元数据时仍保留文本回退。法术合成器的效果行会显示并可删除 augment，重排/删除效果不会错配参数草稿。后续体验迭代是 pinch 缩放和真实游戏人机评估。
+  固定宽度的显示标签会在控制器层按字体宽度加省略号，完整值仍保留在状态和文档中；这不等同于 Presentation V3 尚未提供的通用 `:ellipsize`。
 - **玩家法术的 glyph 物品 / 法术存储物品 NBT**：需要贴图、模型 json、合成表，
-  这个环境创建不了也验证不了。法术合成器屏幕今天靠直接调用 `open!` 打开，不挂
-  在任何物品上；服务端提交/校验/派发路径（`MSG-REQ-SPELL-SUBMIT` →
-  `combat-runtime/dispatch-player-spell!`）本身已经完整可用。
+  这个环境创建不了也验证不了。当前合成器由 K 键和
+  `spell_composer_dev_tool` 开发道具打开，不依赖 glyph 或存储物品；服务端提交/校验/派发路径
+  （`MSG-REQ-SPELL-SUBMIT` → `combat-runtime/dispatch-player-spell!`）本身已经完整可用。
 - **粒子发射器编辑器**：`vfx-core/compile.clj` 的 Niagara 式模块栈机制存在且
   有测试，但 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空（system render 内的
   `:component :emitter` 只是调用）——这个编辑器服务的是
@@ -112,7 +113,7 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 - **参数编辑边界（基础版已完成）**：法术合成器提供基于 glyph schema 的有界数值输入（非法、越界和
   非有限值会保留旧值并给出状态提示）；技能/场景节点检查器也已把 palette schema
   映射到选中节点的参数检查器，可编辑 `literal`、向量字面量和映射字面量，并在提交
-  前按 `double/int/bool/keyword/vec3` 做解析和有限值校验。由其他节点、sigil 或调用
+  前按 `double/int/bool/keyword/vec3` 做解析、有限值和 schema `min/max` 校验。由其他节点、sigil 或调用
   驱动的输入保持只读，必须通过语义连线修改，避免检查器悄悄改变图的拓扑。
   两个编辑器的 repeater 文本输入都通过独立 `draft-key` 回写 view state，字符输入、退格
   和 Enter 提交不会读取旧快照。
@@ -134,5 +135,5 @@ neoforge-1.21.1）、单元测试（`node-core`/`ability-runtime`/`combat-core`/
 `case` 会在点击节点标签时抛异常、`(name :form/self)` 会悄悄丢掉命名空间）。
 
 **没有验证、也无法在这个环境里验证的**：画面实际渲染效果、点击/拖拽的手感、
-480×360 / 320×240 这两个设计尺寸下四个面板是否真的挤得下。这部分需要在真实
+480×360（节点编辑器设计尺寸）与 320×240（缩放后的宿主窗口）下四个面板是否真的挤得下。这部分需要在真实
 游戏里试。

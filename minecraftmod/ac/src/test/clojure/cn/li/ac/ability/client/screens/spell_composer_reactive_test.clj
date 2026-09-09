@@ -66,6 +66,18 @@
     (is (true? (:can-cast? rendered)))
     (is (false? (:busy? rendered)))))
 
+(deftest long-composer-display-labels-are-bounded-test
+  (let [long-glyph (apply str (repeat 200 "effect/very-long-name/"))
+        clipped (#'composer/ui-label long-glyph 40.0)]
+    (is (<= (count clipped) (count long-glyph)))
+    (is (.endsWith ^String clipped "..."))))
+
+(deftest cast-with-form-but-no-effect-is-rejected-locally-test
+  (let [state* (atom (#'composer/pick-form (#'composer/initial-state) :form/self))]
+    (#'composer/handle-action state* nil :composer/cast nil)
+    (is (= "Pick a form and at least one effect first." (:status @state*)))
+    (is (false? (:busy? @state*)))))
+
 (deftest composer-enforces-eight-effect-and-eight-augment-bounds-test
   (let [base (-> (#'composer/initial-state) (#'composer/pick-form :form/self))
         effects (reduce (fn [s _] (#'composer/add-effect s :effect/damage)) base (range 9))
@@ -74,6 +86,42 @@
                          aug-base (range 8))]
     (is (= 8 (count (:effect-groups effects))))
     (is (= 8 (count (get-in augments [:effect-groups 7 :augments]))))))
+
+(deftest malformed-index-actions-are-safe-noops-test
+  (let [state (-> (#'composer/initial-state)
+                  (#'composer/pick-form :form/self)
+                  (#'composer/add-effect :effect/damage))
+        groups (:effect-groups state)]
+    (is (= state (#'composer/move-effect state nil -1)))
+    (is (= state (#'composer/move-effect state 0 nil)))
+    (is (= state (#'composer/remove-augment state nil 0)))
+    (is (= state (#'composer/remove-augment state 99 0)))
+    (let [invalid-selected (assoc state :selected-effect 99)
+          result (#'composer/add-augment invalid-selected :augment/amplify)]
+      (is (= groups (:effect-groups result)))
+      (is (= "Select an effect first." (:status result))))))
+
+(deftest malformed-parameter-index-actions-are-safe-noops-test
+  (let [state (-> (#'composer/initial-state)
+                  (#'composer/pick-form :form/self)
+                  (#'composer/add-effect :effect/damage))
+        malformed-nil (#'composer/param-submit state {:item {:effect-index nil :param-key :amount}
+                                               :value "2"})
+        malformed-string (#'composer/param-submit state {:item {:effect-index "bad" :param-key :amount}
+                                                  :value "2"})
+        malformed-change (#'composer/param-change state {:item {:effect-index 99 :param-key :amount}
+                                                         :value "2"})
+        malformed-select (#'composer/select-effect state 99)
+        malformed-drafts (assoc state :param-drafts {["bad" :amount] "2"})
+        state* (atom state)
+        groups (:effect-groups state)]
+    (is (= "Unknown parameter." (:status malformed-nil)))
+    (is (= "Unknown parameter." (:status malformed-string)))
+    (is (= state malformed-change))
+    (is (= "Select a valid effect." (:status malformed-select)))
+    (is (false? (#'composer/valid-param-drafts? malformed-drafts)))
+    (#'composer/handle-action state* nil :composer/add-effect {:item {:glyph 99}})
+    (is (= groups (:effect-groups @state*)))))
 
 (deftest palette-splits-forms-effects-and-augments-test
   (let [rendered (#'composer/render-state (#'composer/initial-state))]
@@ -106,15 +154,15 @@
         drafted (-> base
                      (#'composer/param-change {:item {:effect-index 0 :param-key :amount}
                                                :value "3.0"})
-                     (#'composer/param-change {:item {:effect-index 1 :param-key :distance}
+                     (#'composer/param-change {:item {:effect-index 1 :param-key :strength}
                                                :value "4.0"}))
         moved (#'composer/move-effect drafted 1 -1)
         removed (#'composer/remove-effect moved 0)]
     (is (= "3.0" (get-in moved [:param-drafts [1 :amount]])))
-    (is (= "4.0" (get-in moved [:param-drafts [0 :distance]])))
+    (is (= "4.0" (get-in moved [:param-drafts [0 :strength]])))
     (is (nil? (get-in moved [:param-drafts [0 :amount]])))
     (is (= "3.0" (get-in removed [:param-drafts [0 :amount]])))
-    (is (nil? (get-in removed [:param-drafts [0 :distance]])))))
+    (is (nil? (get-in removed [:param-drafts [0 :strength]])))))
 
 (deftest invalid-in-progress-draft-cannot-be-cast-test
   (let [state (-> (#'composer/initial-state)
@@ -176,3 +224,18 @@
         "composer root must fit its declared design height")
     (is (<= right 320.0) (str "composer right edge exceeds 320px: " right))
     (is (<= bottom 240.0) (str "composer bottom edge exceeds 240px: " bottom))))
+
+
+(deftest effect-reorder-controls-bind-boundary-visibility-test
+  (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))
+        buttons (filter #(and (= :button (:type %))
+                              (contains? #{:composer/move-effect-up
+                                           :composer/move-effect-down}
+                                         (get-in % [:on :activate])))
+                        (tree-seq coll? seq ui))
+        by-action (into {} (map (fn [button] [(get-in button [:on :activate]) button]) buttons))]
+    (is (= 2 (count buttons)))
+    (is (= [:item :can-move-up?]
+           (get-in by-action [:composer/move-effect-up :bind :visible])))
+    (is (= [:item :can-move-down?]
+           (get-in by-action [:composer/move-effect-down :bind :visible])))))

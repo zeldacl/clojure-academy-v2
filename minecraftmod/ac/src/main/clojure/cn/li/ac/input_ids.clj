@@ -71,12 +71,11 @@
     (runtime-hooks/toggle-debug-overlay-state!)))
 
 (defn- on-open-node-editor
-  "Handle the node editor dev-tool key (G, upstream: none -- this screen
-   has no in-game entry point otherwise, see NODE_EDITOR.md). Opens the
-   shared sample skill (thunder_bolt) in skill mode: there is no
-   file-picker UI yet (a real follow-up, not part of wiring an entry
-   point at all), so this is a fixed, documented default (shared with
-   the editor_dev_tool item, see node-editor's own docstring on why)."
+  "Handle the node editor dev-tool key (G, upstream: none). This key and
+   editor_dev_tool are supported client entry points. Opens the shared
+   sample skill (thunder-bolt) in skill mode: there is no file-picker UI
+   yet, so this is a fixed, documented default shared with the item.
+   The missing file-picker is a separate follow-up, not an entry-point gap."
   [{:keys [player-uuid]}]
   (when (and (content-key-allowed?) player-uuid)
     (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
@@ -164,9 +163,8 @@
                    :category "keybind.category.content"}
      :handler #'on-toggle-terminal}
 
-    ;; G — open the node editor dev tool (node-editor plan). No upstream
-    ;; equivalent; this screen previously had no in-game entry point at
-    ;; all (see NODE_EDITOR.md).
+    ;; G — open the node editor dev tool. This is the shared fixed-sample
+    ;; entry point; the creative editor_dev_tool item targets the same screen.
     :content/open-node-editor
     {:input-id :content/open-node-editor
      :scheme :alternative
@@ -177,8 +175,8 @@
                    :category "keybind.category.content"}
      :handler #'on-open-node-editor}
 
-    ;; K — open the player spell composer dev tool (node-editor plan
-    ;; Phase 5). Same "no in-game entry point yet" gap as the node editor.
+    ;; K — open the player spell composer dev tool. The creative
+    ;; spell_composer_dev_tool item targets the same screen.
     :content/open-spell-composer
     {:input-id :content/open-spell-composer
      :scheme :alternative
