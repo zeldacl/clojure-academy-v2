@@ -26,8 +26,9 @@
                 (contains? #{:context-ref :parameter-ref :state-ref :local-get} (:type n))
                 {:pre [] :form (ref-form n)}
                 (= :component (:type n))
-                (let [parts (for [[p _] (:inputs n) :let [l (data-link links nid p)] :when l]
-                              [p (expr ctx (first (:from l)))])
+                (let [parts (for [[p v] (:inputs n)
+                                  :let [l (data-link links nid p) x (if l (expr ctx (first (:from l))) {:pre [] :form v})]]
+                              [p x])
                       ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
                       pre (vec (mapcat (comp :pre second) parts))
                       s (symbol (str "__v4_" (name nid)))
@@ -39,7 +40,12 @@
         (swap! cache assoc nid v) v))))
 
 (defn port-expr [ctx nid port]
-  (if-let [l (data-link (:links ctx) nid port)] (expr ctx (first (:from l))) {:pre [] :form nil}))
+  (if-let [l (data-link (:links ctx) nid port)]
+    (expr ctx (first (:from l)))
+    ;; V4 permits an input slot to carry an inline literal.  Preserve that
+    ;; value when no data wire is present; otherwise every migrated component
+    ;; with a constant option would silently receive nil at runtime.
+    {:pre [] :form (get-in ctx [:nodes nid :inputs port])}))
 
 (defn statement [ctx nid]
   (let [n (get (:nodes ctx) nid)]

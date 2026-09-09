@@ -77,3 +77,14 @@
         {:keys [ir diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {}}}} :collect)]
     (is (empty? diagnostics))
     (is (map? ir))))
+
+(deftest preserves-inline-component-inputs
+  (let [d (assoc skill :graphs {:default {:on :activation/start
+                                          :nodes {:n/start (n :n/start :start)
+                                                  :n/action (n :n/action :component :component :test/do
+                                                                  :inputs {:amount 3})
+                                                  :n/end (n :n/end :end)}
+                                          :links [(e :e/aaa :exec [:n/start :out] [:n/action :in])
+                                                  (e :e/bbb :exec [:n/action :out] [:n/end :in])]}})
+        {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {:amount {:type :long}}}}} :collect)]
+    (is (empty? diagnostics))))
