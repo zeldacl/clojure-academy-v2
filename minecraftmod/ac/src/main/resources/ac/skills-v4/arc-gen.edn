@@ -343,7 +343,7 @@
        :n053 {:type :component, :component :pair/first, :nid :n/n053},
        :n--entry--default-7-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--default-7-then-1,
         :inputs
         {:effect-id :beam-arc-fade,

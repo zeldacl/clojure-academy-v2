@@ -1,7 +1,8 @@
 (ns cn.li.node.graph-compile
   "V4 graph lowering.  The persisted graph is authoritative; this small
    adapter emits neutral surface forms with stable node metadata and delegates
-   register allocation/type checking to cn.li.node.compile.")
+   register allocation/type checking to cn.li.node.compile."
+  (:require [cn.li.node.ops :as ops]))
 
 (defn- fail [m d] (throw (ex-info m d)))
 (defn- stamp [f nid] (if (seq? f) (with-meta f {:nid (str (namespace nid) "/" (name nid))}) f))
@@ -30,6 +31,32 @@
                      (:links ctx))]
     (vec (distinct (concat inline linked)))))
 
+(defn- component-call
+  "Build the surface call for a component node.  Vocabulary nodes consume a
+   single keyword map, while node-core pure operators use positional args
+   (their signatures are ordered).  Keeping that distinction here prevents
+   migrated graph nodes such as :value/eq from being compiled as a one-arg map
+   call and preserves the editor's named input slots at the graph boundary."
+  [component ins fns]
+  (cond
+    ;; A value/map node is a data constructor, not a callable vocabulary
+    ;; operation.  Returning the assembled map lets compile-form emit the
+    ;; normal :map-lit instruction while still resolving linked input slots.
+    (= :value/map component) ins
+    (= :value/field component) (list (get ins :field) (get ins :value))
+    (= :effect/vfx component) (list 'vfx! ins)
+    (= :event/emit component) (list 'event! ins)
+    (= :state/set component) (list 'state! (get ins :key) (get ins :value))
+    (ops/known-op? component)
+    (let [params (:params (ops/signature component))]
+      (apply list (head component) (map #(get ins %) params)))
+    ;; Composite functions are supplied by the caller's compile options and
+    ;; use positional arguments declared by their :params vector.
+    (contains? fns component)
+    (apply list (head component)
+           (map #(get ins (:name %)) (:params (get fns component))))
+    :else (list (head component) ins)))
+
 (declare expr)
 (defn expr [ctx nid]
   (let [{:keys [nodes links cache]} ctx]
@@ -48,9 +75,7 @@
                       ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
                       pre (vec (mapcat (comp :pre second) parts))
                       s (symbol (str "__v4_" (name nid)))
-                      call (if (= :value/field (:component n))
-                             (list (get ins :field) (get ins :value))
-                             (list (head (:component n)) ins))]
+                      call (component-call (:component n) ins (:fns ctx))]
                   {:pre (conj pre (stamp (list 'let s call) nid)) :form s})
                 :else (fail "unsupported V4 expression node" {:nid nid :type (:type n)}))]
         (swap! cache assoc nid v) v))))
@@ -72,14 +97,25 @@
                     [p x])
             ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
             pre (vec (mapcat (comp :pre second) parts))
-            call (if (= :value/field (:component n)) (list (get ins :field) (get ins :value))
-                   (list (head (:component n)) ins))]
+            ;; V4 persists visual effects as a fixed :effect/vfx component
+            ;; node so the editor can expose its parameter slots.  The core
+            ;; surface compiler represents the same operation with the
+            ;; dedicated vfx! statement (rather than a vocabulary call),
+            ;; which appends a signal to the frame outbox and requires a
+            ;; literal :effect-id.  Lower this one component explicitly;
+            ;; all other component nodes remain ordinary DSL calls.
+            call (component-call (:component n) ins (:fns ctx))]
         {:pre pre :form (stamp call nid)})
       :local-set
       (let [{:keys [pre form]} (port-expr ctx nid :value)]
         {:pre pre :form (list (if (= :define (:operation n)) 'let 'set!)
                               (symbol (name (:key n))) form)})
-      :end {:pre [] :form (stamp (list 'finish (or (:result n) {})) nid)}
+      ;; V4 editors persist end-node fields in the visible :inputs map,
+      ;; while a hand-authored document may also provide :result.  Merge
+      ;; both so the lowered finish retains outcomes such as :started and
+      ;; :insufficient-resource instead of silently compiling an empty map.
+      :end {:pre [] :form (stamp (list 'finish (merge (or (:inputs n) {})
+                                                      (or (:result n) {}))) nid)}
       (fail "unsupported V4 statement node" {:nid nid :type (:type n)}))))
 
 (defn collect [ctx start stops]
@@ -99,11 +135,22 @@
                 fr (collect ctx (target (:links ctx) nid :false) stops)
                 tn (:next tr)
                 false-next (:next fr)
-                _ (when (not= tn false-next)
-                    (fail "V4 branch arms must both terminate or converge at the same merge node"
-                          {:nid nid :true-next tn :false-next false-next}))
-                f (list* 'if (:form c) (:forms tr) (:forms fr))]
-            (recur (when tn (target (:links ctx) tn :out))
+                ;; An arm may terminate at :end while the other continues;
+                ;; this is not a fan-in and therefore does not need a merge.
+                ;; If both arms continue, they must meet at the same explicit
+                ;; :merge node so the persisted graph never hides a join.
+                join (cond
+                       (= tn false-next) tn
+                       (nil? tn) false-next
+                       (nil? false-next) tn
+                       :else (fail "V4 branch arms must both terminate or converge at the same merge node"
+                                   {:nid nid :true-next tn :false-next false-next}))
+                ;; compile-if consumes two explicit body vectors.  Do not use
+                ;; list* here: splicing the false-arm vector turns a single
+                ;; statement into bare symbols (for example `event!`) and
+                ;; makes the lowered program malformed.
+                f (list 'if (:form c) (:forms tr) (:forms fr))]
+            (recur (when join (target (:links ctx) join :out))
                    (into out (concat (:pre c) [f]))
                    (conj seen nid)))
           (contains? #{:foreach :repeat} t)
@@ -125,30 +172,37 @@
             (if (= :end t) {:forms (into out (concat pre [form])) :next nil}
               (recur nx (into out (concat pre [form])) (conj seen nid)))))))))
 
-(defn graph-entry [g]
-  (let [ctx {:nodes (:nodes g) :links (:links g) :cache (atom {})}
-        start (some (fn [[id n]] (when (= :start (:type n)) id)) (:nodes g))]
-    (:forms (collect ctx start #{}))))
+(defn graph-entry
+  ([g] (graph-entry g {}))
+  ([g opts]
+   (let [ctx {:nodes (:nodes g) :links (:links g)
+              :fns (or (:fns opts) {}) :cache (atom {})}
+         start (some (fn [[id n]] (when (= :start (:type n)) id)) (:nodes g))]
+     (:forms (collect ctx start #{})))))
 
-(defn skill->core [document]
+(defn skill->core
+  ([document] (skill->core document {}))
+  ([document opts]
   ((requiring-resolve 'cn.li.node.graph-document/validate-document!) document)
   (when-not (= :ac/skill-v4 (:schema document)) (fail "expected :ac/skill-v4" {:schema (:schema document)}))
   {:kind :ability :id (:id document) :activation (get-in document [:activation :mode])
    :tunables (into {} (map (fn [[k v]] [k {:type (:type v)}]) (:parameters document)))
    :state (into {} (map (fn [[k v]] [k (select-keys v [:type :default])]) (:state document)))
    :entry-triggers (into {} (map (fn [[k v]] [k (:on v)]) (:graphs document)))
-   :entries (into {} (map (fn [[k v]] [k (graph-entry v)]) (:graphs document)))})
+   :entries (into {} (map (fn [[k v]] [k (graph-entry v opts)]) (:graphs document)))}))
 
-(defn vfx->core [document]
-  ((requiring-resolve 'cn.li.node.graph-document/validate-document!) document)
-  (when-not (= :ac/vfx-v4 (:schema document)) (fail "expected :ac/vfx-v4" {:schema (:schema document)}))
-  {:kind :ability :id (:id document) :activation :instant
-   :tunables (into {} (map (fn [[k v]] [k {:type (:type v)}]) (or (:inputs document) (:parameters document))))
-   :state {} :entry-triggers {:render :vfx/render}
-   :entries {:render (graph-entry (or (get-in document [:graphs :render]) (val (first (:graphs document)))) )}})
+(defn vfx->core
+  ([document] (vfx->core document {}))
+  ([document opts]
+   ((requiring-resolve 'cn.li.node.graph-document/validate-document!) document)
+   (when-not (= :ac/vfx-v4 (:schema document)) (fail "expected :ac/vfx-v4" {:schema (:schema document)}))
+   {:kind :ability :id (:id document) :activation :instant
+    :tunables (into {} (map (fn [[k v]] [k {:type (:type v)}]) (or (:inputs document) (:parameters document))))
+    :state {} :entry-triggers {:render :vfx/render}
+    :entries {:render (graph-entry (or (get-in document [:graphs :render]) (val (first (:graphs document)))) opts)}}))
 
 (defn compile-skill! [document opts mode]
-  ((requiring-resolve 'cn.li.node.compile/compile-program) (skill->core document) opts mode))
+  ((requiring-resolve 'cn.li.node.compile/compile-program) (skill->core document opts) opts mode))
 
 (defn compile-vfx! [document opts mode]
-  ((requiring-resolve 'cn.li.node.compile/compile-program) (vfx->core document) opts mode))
+  ((requiring-resolve 'cn.li.node.compile/compile-program) (vfx->core document opts) opts mode))

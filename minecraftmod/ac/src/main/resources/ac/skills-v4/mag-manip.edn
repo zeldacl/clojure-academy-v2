@@ -81,7 +81,7 @@
        {:type :local-get, :key :normal-metal-blocks, :nid :n/n010},
        :n--entry--start-9-then-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-7,
         :inputs
         {:effect-id :arc-channel-session,
@@ -260,7 +260,7 @@
        :n037 {:type :local-get, :key :metal-blocks, :nid :n/n037},
        :n--entry--start-9-else-1-then-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-else-1-then-7,
         :inputs
         {:effect-id :arc-channel-session,
@@ -304,7 +304,7 @@
         :nid :n/n--entry--start-9-then-2},
        :n--entry--start-9-else-1-then-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-else-1-then-8,
         :inputs
         {:effect-id :audio-loop-session,
@@ -414,7 +414,7 @@
          :barrier? true}},
        :n--entry--start-9-then-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-8,
         :inputs
         {:effect-id :audio-loop-session,
@@ -908,7 +908,7 @@
         :nid :n/n--entry--pulse-9-then-0},
        :n--entry--pulse-9-else-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-9-else-2,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1027,7 +1027,7 @@
         :nid :n/n059},
        :n--entry--pulse-9-then-15
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-9-then-15,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1058,7 +1058,7 @@
         :nid :n/n--entry--pulse-9-then-1},
        :n--entry--pulse-9-else-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-9-else-1,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1071,7 +1071,7 @@
         :nid :n/n060},
        :n--entry--pulse-9-then-14
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-9-then-14,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1494,7 +1494,7 @@
        {:type :branch, :nid :n/n--entry--release-10-c8911a2},
        :n--entry--release-10-d0534d49
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-d0534d49,
         :inputs
         {:effect-id :audio-one-shot,
@@ -1587,7 +1587,7 @@
         :nid :n/n--entry--release-10-then-3},
        :n--entry--release-10-a8925507
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-a8925507,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1611,7 +1611,7 @@
         :inputs {:arg1 0.0, :arg2 1.0}},
        :n--entry--release-10-895934c
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-895934c,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1637,7 +1637,7 @@
         :nid :n/n--entry--release-2},
        :n--entry--release-10-d6aa916d
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-d6aa916d,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1710,7 +1710,7 @@
         :inputs {:place-when-collide? true}},
        :n--entry--release-10-7bf59998
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-7bf59998,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1773,7 +1773,7 @@
         :inputs {:type :score/mark}},
        :n--entry--release-10-4f3cee9b
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-4f3cee9b,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1792,7 +1792,7 @@
        {:type :local-get, :key :targeting-throw-range, :nid :n/n162},
        :n--entry--release-10-else-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-else-1,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1807,7 +1807,7 @@
        {:type :context-ref, :key :caster/creative?, :nid :n/n113},
        :n--entry--release-10-bbd68f60
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-bbd68f60,
         :inputs
         {:effect-id :beam-arc-fade,
@@ -1896,7 +1896,7 @@
         :nid :n/n--entry--release-10-then-1},
        :n--entry--release-10-else-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-else-2,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1916,7 +1916,7 @@
         :nid :n/n--entry--release-10-1721f3dd},
        :n--entry--release-10-9147991b
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10-9147991b,
         :inputs
         {:effect-id :arc-channel-session,
@@ -2441,7 +2441,7 @@
        :n186 {:type :local-get, :key :body-id, :nid :n/n186},
        :n--entry--abort-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-3,
         :inputs
         {:effect-id :arc-channel-session,
@@ -2450,7 +2450,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--abort-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-4,
         :inputs
         {:effect-id :audio-loop-session,

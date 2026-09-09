@@ -186,7 +186,7 @@
        :n037 {:type :component, :component :bool/not, :nid :n/n037},
        :n--entry--default-4--3251fe3b
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--default-4--3251fe3b,
         :inputs
         {:effect-id :audio-one-shot,

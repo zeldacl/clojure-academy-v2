@@ -57,7 +57,6 @@
             [cn.li.combat.api :as combat-api]
             [cn.li.ability.client-vfx-v2 :as vfx-client]
             [cn.li.node.api :as node-api]
-            [cn.li.node.cost :as node-cost]
             [cn.li.node.ops :as ops]
             [cn.li.vfx.api :as vfx-api])
   (:import [java.nio.file Files StandardCopyOption]))
@@ -205,7 +204,7 @@
                                                      (node-api/compile-v4-skill-document! form opts :collect))]
                      {:diagnostics (vec diagnostics)
                       :cost-summary (when (empty? diagnostics)
-                                      (node-cost/analyze ir (:vocab opts)))})
+                                      (node-api/cost-summary ir (:vocab opts)))})
                    (catch Throwable error
                      {:diagnostics [{:code :v4-graph-invalid
                                      :message (.getMessage error)

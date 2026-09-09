@@ -9,7 +9,9 @@
                     {:sentinels ["arc-gen.edn" "arc-gen.edn"]}))]
     (is (contains? names "ac/skills-v4/arc-gen.edn"))
     (is (contains? names "ac/skills-v4/arc-gen.edn"))
-    (is (<= 51 (count names)))))
+    ;; V4 is the sole shipped skill catalog; removing the obsolete V3
+    ;; resources intentionally reduces this discovery floor by one.
+    (is (<= 50 (count names)))))
 
 (deftest edn-names-from-file-url-lists-siblings
   "Loom often only exposes a file URL for a single EDN entry; sibling walk

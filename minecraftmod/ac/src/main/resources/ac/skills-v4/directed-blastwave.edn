@@ -82,7 +82,7 @@
         :nid :n/n--entry--start-2},
        :n--entry--start-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-3,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -190,7 +190,7 @@
        :n012 {:type :local-get, :key :punch-ticks-next, :nid :n/n012},
        :n--entry--pulse-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-8,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -225,7 +225,7 @@
        :n016 {:type :local-get, :key :timed-out?, :nid :n/n016},
        :n--entry--pulse-10-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-then-0,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -255,7 +255,7 @@
        :n022 {:type :local-get, :key :punch-done?, :nid :n/n022},
        :n--entry--pulse-10-e-d08da605
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-e-d08da605,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -467,7 +467,7 @@
        :n083
        {:type :parameter-ref, :key :break-probability, :nid :n/n083},
        :n--entry--release-2--ad806f0e
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--release-2--ad806f0e},
        :n036 {:type :context-ref, :key :caster/eye, :nid :n/n036},
@@ -486,7 +486,7 @@
         :nid :n/n--entry--release-2--2e7c52ef},
        :n--entry--release-2-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2-else-0,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -540,7 +540,7 @@
        {:type :component, :component :vec3/normalize, :nid :n/n057},
        :n--entry--release-2--a036ef3e
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2--a036ef3e,
         :inputs
         {:effect-id :audio-one-shot,
@@ -604,7 +604,7 @@
        {:type :context-ref, :key :progression/mastery, :nid :n/n040},
        :n--entry--release-2--63c750a4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2--63c750a4,
         :inputs
         {:effect-id :directed-blastwave-wave,
@@ -758,7 +758,7 @@
        {:type :context-ref, :key :progression/miss, :nid :n/n107},
        :n--entry--release-2--e25ca3f2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2--e25ca3f2,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -800,7 +800,7 @@
        :n067 {:type :component, :component :math/select, :nid :n/n067},
        :n--entry--release-2--bd5c9a05
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2--bd5c9a05,
         :inputs
         {:effect-id :directed-blastwave-charge,
@@ -1417,7 +1417,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :directed-blastwave-charge,

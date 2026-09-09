@@ -78,7 +78,7 @@
         :nid :n/n--entry--start-2},
        :n--entry--start-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-3,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -192,7 +192,7 @@
        :n012 {:type :local-get, :key :punched?, :nid :n/n012},
        :n--entry--pulse-7-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-7-then-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -207,7 +207,7 @@
           :duration-ticks 6}}},
        :n--entry--pulse-7-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-7-else-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -239,7 +239,7 @@
         :nid :n/n017},
        :n--entry--pulse-9-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-9-then-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -270,7 +270,7 @@
        {:type :local-get, :key :punch-animation-ticks, :nid :n/n023},
        :n--entry--pulse-9-else-1-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-9-else-1-then-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -576,7 +576,7 @@
         :inputs {:arg1 nil}},
        :n--entry--release-3-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3-else-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -690,7 +690,7 @@
        :n108 {:type :local-get, :key :body, :nid :n/n108},
        :n--entry--release-3--ba61d9e1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--ba61d9e1,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -716,7 +716,7 @@
        :n121 {:type :merge, :nid :n/n121},
        :n--entry--release-3--8c982363
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--8c982363,
         :inputs
         {:effect-id :audio-one-shot,
@@ -855,7 +855,7 @@
         :nid :n/n--entry--release-3--67e5709c},
        :n--entry--release-3--77925a42
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--77925a42,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -896,7 +896,7 @@
         :inputs {:damage-type :skill, :damage-pipeline :skill}},
        :n--entry--release-3--3d500c34
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--3d500c34,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -915,7 +915,7 @@
         :nid :n/n--entry--release-3-then-1},
        :n--entry--release-3--97dd0ebd
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--97dd0ebd,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -1571,7 +1571,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :first-person-motion-session,

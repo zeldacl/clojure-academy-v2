@@ -175,7 +175,7 @@
        :n019 {:type :local-get, :key :aim, :nid :n/n019},
        :n--entry--start-8-then-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-8-then-6,
         :inputs
         {:effect-id :beam-session,
@@ -201,7 +201,7 @@
           :bounds-radius 0.6}}},
        :n--entry--start-8-then-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-8-then-7,
         :inputs
         {:effect-id :block-progress-session,
@@ -222,7 +222,7 @@
           :pulse-period 0.3}}},
        :n--entry--start-8-then-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-8-then-8,
         :inputs
         {:effect-id :audio-loop-session,
@@ -244,7 +244,7 @@
           :pitch 1.0}}},
        :n--entry--start-8-then-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-8-then-9,
         :inputs
         {:effect-id :audio-one-shot,
@@ -554,7 +554,7 @@
        :n026 {:type :state-ref, :key :overload-floor, :nid :n/n026},
        :n--entry--pulse-10-e-a68e0438
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-e-a68e0438,
         :inputs
         {:effect-id :particle-burst,
@@ -597,7 +597,7 @@
         :inputs {:arg1 :applied}},
        :n--entry--pulse-10-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-then-1,
         :inputs
         {:effect-id :block-progress-session,
@@ -652,7 +652,7 @@
         :nid :n/n--entry--pulse-3},
        :n--entry--pulse-10-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-else-0,
         :inputs
         {:effect-id :beam-session,
@@ -758,7 +758,7 @@
         :inputs {:field :hardness}},
        :n--entry--pulse-10-e-b227b639
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-e-b227b639,
         :inputs
         {:effect-id :block-progress-session,
@@ -803,7 +803,7 @@
        {:type :branch, :nid :n/n--entry--pulse-10-else-5},
        :n--entry--pulse-10-else-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-else-1,
         :inputs
         {:effect-id :audio-loop-session,
@@ -939,7 +939,7 @@
        :n060 {:type :local-get, :key :new-hardness, :nid :n/n060},
        :n--entry--pulse-10-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-then-0,
         :inputs
         {:effect-id :beam-session,
@@ -972,7 +972,7 @@
        :n075 {:type :local-get, :key :new-hardness, :nid :n/n075},
        :n--entry--pulse-10-then-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-then-2,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1559,7 +1559,7 @@
    #:n{:start-release {:type :start, :nid :n/start-release},
        :n--entry--release-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-0,
         :inputs
         {:effect-id :beam-session,
@@ -1568,7 +1568,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--release-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1,
         :inputs
         {:effect-id :block-progress-session,
@@ -1577,7 +1577,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--release-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1640,7 +1640,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :beam-session,
@@ -1649,7 +1649,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--abort-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1,
         :inputs
         {:effect-id :block-progress-session,
@@ -1658,7 +1658,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--abort-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-2,
         :inputs
         {:effect-id :audio-loop-session,

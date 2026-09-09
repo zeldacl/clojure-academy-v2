@@ -82,7 +82,7 @@
         :nid :n/n--entry--start-5},
        :n--entry--start-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-6,
         :inputs
         {:effect-id :trajectory-ribbon-session,
@@ -307,7 +307,7 @@
        :n040 {:type :local-get, :key :init-vel, :nid :n/n040},
        :n--entry--pulse-15
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-15,
         :inputs
         {:effect-id :trajectory-ribbon-session,
@@ -647,7 +647,7 @@
        {:type :parameter-ref, :key :cooldown-ticks, :nid :n/n055},
        :n--entry--release-4--b0e526e8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-4--b0e526e8,
         :inputs
         {:effect-id :audio-one-shot,
@@ -661,7 +661,7 @@
           :pitch 1.0}}},
        :n--entry--release-4--3b5cd14a
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-4--3b5cd14a,
         :inputs
         {:effect-id :trajectory-ribbon-session,
@@ -675,7 +675,7 @@
         :inputs {:outcome :launched}},
        :n--entry--release-4--7f819cf6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-4--7f819cf6,
         :inputs
         {:effect-id :trajectory-ribbon-session,
@@ -689,7 +689,7 @@
         :inputs {:outcome :insufficient-resource}},
        :n--entry--release-4-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-4-else-0,
         :inputs
         {:effect-id :trajectory-ribbon-session,
@@ -840,7 +840,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :trajectory-ribbon-session,

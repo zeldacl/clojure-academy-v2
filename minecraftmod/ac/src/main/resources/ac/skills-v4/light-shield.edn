@@ -205,7 +205,7 @@
        :n022 {:type :local-get, :key :spawn-result, :nid :n/n022},
        :n--entry--start-2-then-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-10,
         :inputs
         {:effect-id :audio-one-shot,
@@ -220,7 +220,7 @@
           :pitch 1.0}}},
        :n--entry--start-2-then-11
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-11,
         :inputs
         {:effect-id :billboard-session,
@@ -237,7 +237,7 @@
           :half-size 1.15}}},
        :n--entry--start-2-then-12
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-12,
         :inputs
         {:effect-id :particle-session,
@@ -258,7 +258,7 @@
            :velocity {:x 0.02, :y 0.02, :z 0.02}}}}},
        :n--entry--start-2-then-13
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-13,
         :inputs
         {:effect-id :audio-loop-session,
@@ -487,7 +487,7 @@
        :n035 {:type :local-get, :key :next-active-ticks, :nid :n/n035},
        :n--entry--pulse-4-else-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-6,
         :inputs
         {:effect-id :billboard-session,
@@ -544,7 +544,7 @@
         :inputs {:type :score/mark, :tag :touch}},
        :n--entry--pulse-4-then-13
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-13,
         :inputs
         {:effect-id :audio-loop-session,
@@ -570,7 +570,7 @@
        {:type :context-ref, :key :progression/tick, :nid :n/n054},
        :n--entry--pulse-4-th-c2079d3a
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-c2079d3a,
         :inputs
         {:effect-id :particle-session,
@@ -580,7 +580,7 @@
        :n056 {:type :component, :component :math/gt, :nid :n/n056},
        :n--entry--pulse-4-th-af6ad888
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-af6ad888,
         :inputs
         {:effect-id :billboard-session,
@@ -651,7 +651,7 @@
        :n034 {:type :local-get, :key :active-ticks, :nid :n/n034},
        :n--entry--pulse-4-else-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-7,
         :inputs
         {:effect-id :particle-session,
@@ -674,7 +674,7 @@
        {:type :parameter-ref, :key :slowness-amplifier, :nid :n/n061},
        :n--entry--pulse-4-then-11
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-11,
         :inputs
         {:effect-id :billboard-session,
@@ -766,7 +766,7 @@
         :inputs {:name :deactivate}},
        :n--entry--pulse-4-else-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-8,
         :inputs
         {:effect-id :audio-loop-session,
@@ -803,7 +803,7 @@
         :nid :n/n--entry--pulse-4-then-6},
        :n027 {:type :local-get, :key :tick-budget, :nid :n/n027},
        :n--entry--pulse-4-then-8
-       {:type :foreach, :limit 256, :nid :n/n--entry--pulse-4-then-8},
+       {:type :foreach, :as :target, :limit 256, :nid :n/n--entry--pulse-4-then-8},
        :n--entry--pulse-4-then-9
        {:type :local-set,
         :operation :define,
@@ -826,7 +826,7 @@
        :n025 {:type :context-ref, :key :budget/tick, :nid :n/n025},
        :n--entry--pulse-4-th-95eb6b61
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-95eb6b61,
         :inputs
         {:effect-id :audio-loop-session,
@@ -838,7 +838,7 @@
        :n043 {:type :component, :component :cost/spend, :nid :n/n043},
        :n--entry--pulse-4-then-12
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-12,
         :inputs
         {:effect-id :particle-session,
@@ -1331,7 +1331,7 @@
        {:type :local-get, :key :deactivate-cooldown, :nid :n/n081},
        :n--entry--release-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-6,
         :inputs
         {:effect-id :billboard-session,
@@ -1340,7 +1340,7 @@
          :payload {}}},
        :n--entry--release-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-7,
         :inputs
         {:effect-id :particle-session,
@@ -1349,7 +1349,7 @@
          :payload {}}},
        :n--entry--release-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-8,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1483,7 +1483,7 @@
        {:type :local-get, :key :deactivate-cooldown, :nid :n/n088},
        :n--entry--abort-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-6,
         :inputs
         {:effect-id :billboard-session,
@@ -1492,7 +1492,7 @@
          :payload {}}},
        :n--entry--abort-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-7,
         :inputs
         {:effect-id :particle-session,
@@ -1501,7 +1501,7 @@
          :payload {}}},
        :n--entry--abort-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-8,
         :inputs
         {:effect-id :audio-loop-session,

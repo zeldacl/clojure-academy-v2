@@ -127,7 +127,7 @@
        {:type :parameter-ref, :key :blindness-amplifier, :nid :n/n022},
        :n--entry--default-9-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--default-9-then-1,
         :inputs
         {:effect-id :block-scan-transient,

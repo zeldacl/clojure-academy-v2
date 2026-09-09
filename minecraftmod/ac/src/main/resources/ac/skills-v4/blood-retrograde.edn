@@ -58,7 +58,7 @@
         :nid :n/n--entry--start-0},
        :n--entry--start-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-1,
         :inputs
         {:effect-id :blood-retrograde-charge,
@@ -91,7 +91,7 @@
        :n029 {:type :context-ref, :key :rng/seed, :nid :n/n029},
        :n--entry--pulse-6-th-cc9b1959
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-6-th-cc9b1959,
         :inputs
         {:effect-id :audio-one-shot,
@@ -222,7 +222,7 @@
         :inputs {:field :entity-id}},
        :n--entry--pulse-6-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-6-then-0,
         :inputs
         {:effect-id :blood-retrograde-charge,
@@ -291,7 +291,7 @@
         :inputs {:min 0, :max 3}},
        :n--entry--pulse-6-th-b209a240
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-6-th-b209a240,
         :inputs
         {:effect-id :blood-retrograde-impact,
@@ -357,7 +357,7 @@
        {:type :parameter-ref, :key :fx-ratio-ticks, :nid :n/n008},
        :n--entry--pulse-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4,
         :inputs
         {:effect-id :blood-retrograde-charge,
@@ -738,7 +738,7 @@
    #:n{:start-release {:type :start, :nid :n/start-release},
        :n--entry--release-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-0,
         :inputs
         {:effect-id :blood-retrograde-charge,
@@ -919,7 +919,7 @@
        :n080 {:type :local-get, :key :splash-roll, :nid :n/n080},
        :n--entry--release-5--e62d8635
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-5--e62d8635,
         :inputs
         {:effect-id :blood-retrograde-impact,
@@ -965,7 +965,7 @@
            :ref [:parameter :fallback-width]}}}},
        :n--entry--release-5--c6dcd4dd
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-5--c6dcd4dd,
         :inputs
         {:effect-id :audio-one-shot,
@@ -1235,7 +1235,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :blood-retrograde-charge,

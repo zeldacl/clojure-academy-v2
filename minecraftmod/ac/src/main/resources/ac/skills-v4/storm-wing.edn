@@ -386,7 +386,7 @@
        :n029 {:type :context-ref, :key :rng/seed, :nid :n/n029},
        :n--entry--start-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9,
         :inputs
         {:effect-id :vortex-column-session,
@@ -423,7 +423,7 @@
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-10,
         :inputs
         {:effect-id :vortex-column-session,
@@ -465,7 +465,7 @@
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-11
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-11,
         :inputs
         {:effect-id :vortex-column-session,
@@ -507,7 +507,7 @@
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-12
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-12,
         :inputs
         {:effect-id :vortex-column-session,
@@ -549,7 +549,7 @@
           :spacing {:min 0.18, :max 0.32}}}},
        :n--entry--start-13
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-13,
         :inputs
         {:effect-id :particle-session,
@@ -576,7 +576,7 @@
            :spread {:x 8.0, :y 8.0, :z 8.0}}}}},
        :n--entry--start-14
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-14,
         :inputs
         {:effect-id :audio-loop-session,
@@ -912,7 +912,7 @@
        :n048 {:type :local-get, :key :main-cooldown, :nid :n/n048},
        :n--entry--abort-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-4,
         :inputs
         {:effect-id :vortex-column-session,
@@ -921,7 +921,7 @@
          :payload {:fade-ticks 15}}},
        :n--entry--abort-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-5,
         :inputs
         {:effect-id :vortex-column-session,
@@ -930,7 +930,7 @@
          :payload {:fade-ticks 15}}},
        :n--entry--abort-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-6,
         :inputs
         {:effect-id :vortex-column-session,
@@ -939,7 +939,7 @@
          :payload {:fade-ticks 15}}},
        :n--entry--abort-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-7,
         :inputs
         {:effect-id :vortex-column-session,
@@ -948,7 +948,7 @@
          :payload {:fade-ticks 15}}},
        :n--entry--abort-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-8,
         :inputs
         {:effect-id :particle-session,
@@ -957,7 +957,7 @@
          :payload {}}},
        :n--entry--abort-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-9,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1071,7 +1071,7 @@
         :nid :n/n084},
        :n--entry--pulse-11-else-13-do-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-13-do-8,
         :inputs
         {:effect-id :particle-session,
@@ -1099,7 +1099,7 @@
         :nid :n/n--entry--pulse-0},
        :n--entry--pulse-11-else-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-7,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1138,7 +1138,7 @@
        :n078 {:type :local-get, :key :mastery, :nid :n/n078},
        :n--entry--pulse-11-then-3-do-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-then-3-do-9,
         :inputs
         {:effect-id :particle-session,
@@ -1158,7 +1158,7 @@
        :n127 {:type :parameter-ref, :key :charge-time, :nid :n/n127},
        :n--entry--pulse-11-else-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-6,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1189,7 +1189,7 @@
        :n088 {:type :local-get, :key :move-direction, :nid :n/n088},
        :n--entry--pulse-11-else-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-9,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1220,7 +1220,7 @@
        :n054 {:type :context-ref, :key :movement/right, :nid :n/n054},
        :n--entry--pulse-11-else-13-do-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-13-do-9,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1299,7 +1299,7 @@
         :inputs {:name :main}},
        :n--entry--pulse-11-then-3-do-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-then-3-do-6,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1349,7 +1349,7 @@
        :n074 {:type :component, :component :pair/first, :nid :n/n074},
        :n--entry--pulse-11-else-13-do-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-13-do-4,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1378,7 +1378,7 @@
        :n069 {:type :component, :component :pair/first, :nid :n/n069},
        :n--entry--pulse-11-then-3-do-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-then-3-do-5,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1449,7 +1449,7 @@
        :n--entry--pulse-7 {:type :branch, :nid :n/n--entry--pulse-7},
        :n--entry--pulse-11-then-3-do-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-then-3-do-10,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1483,7 +1483,7 @@
        :n134 {:type :local-get, :key :scale, :nid :n/n134},
        :n--entry--pulse-11-else-13-do-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-13-do-6,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1555,7 +1555,7 @@
         :inputs {:value 1}},
        :n--entry--pulse-11-else-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-8,
         :inputs
         {:effect-id :particle-session,
@@ -1567,7 +1567,7 @@
            :ref [:local :body]}}}},
        :n--entry--pulse-11-else-13-do-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-13-do-7,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1576,7 +1576,7 @@
          :payload {:fade-ticks 15}}},
        :n--entry--pulse-11-else-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-4,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1613,7 +1613,7 @@
        {:type :context-ref, :key :progression/mastery, :nid :n/n051},
        :n--entry--pulse-11-then-3-do-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-then-3-do-8,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1654,7 +1654,7 @@
        :n060 {:type :local-get, :key :body, :nid :n/n060},
        :n--entry--pulse-11-then-3-do-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-then-3-do-7,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1696,7 +1696,7 @@
         :nid :n/n--entry--pulse-11-else-12},
        :n--entry--pulse-11-else-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-5,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1735,7 +1735,7 @@
         :nid :n/n075},
        :n--entry--pulse-11-else-13-do-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-11-else-13-do-5,
         :inputs
         {:effect-id :vortex-column-session,

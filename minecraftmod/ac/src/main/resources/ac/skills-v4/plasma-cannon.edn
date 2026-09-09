@@ -247,7 +247,7 @@
         :nid :n/n--entry--start-12-then-6},
        :n--entry--start-12-then-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-12-then-7,
         :inputs
         {:effect-id :energy-orb-session,
@@ -272,7 +272,7 @@
            :ref [:local :charge-position]}}}},
        :n--entry--start-12-then-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-12-then-8,
         :inputs
         {:effect-id :vortex-column-session,
@@ -299,7 +299,7 @@
            :ref [:local :seed]}}}},
        :n--entry--start-12-then-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-12-then-9,
         :inputs
         {:effect-id :audio-loop-session,
@@ -628,7 +628,7 @@
         :nid :n/n--entry--pulse-0},
        :n--entry--pulse-5-el-6c0aa8b3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-6c0aa8b3,
         :inputs
         {:effect-id :audio-loop-session,
@@ -667,7 +667,7 @@
        :n046 {:type :context-ref, :key :budget/charging, :nid :n/n046},
        :n--entry--pulse-5-el-8629b4cb
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-8629b4cb,
         :inputs
         {:effect-id :vortex-column-session,
@@ -684,7 +684,7 @@
        :n116 {:type :local-get, :key :sync-ticks-next, :nid :n/n116},
        :n--entry--pulse-5-th-95eddb1e
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-th-95eddb1e,
         :inputs
         {:effect-id :audio-loop-session,
@@ -737,7 +737,7 @@
         :inputs {:resource :overload}},
        :n--entry--pulse-5-el-6230c4a1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-6230c4a1,
         :inputs
         {:effect-id :energy-orb-session,
@@ -752,7 +752,7 @@
        :n055 {:type :state-ref, :key :destination, :nid :n/n055},
        :n--entry--pulse-5-th-b7f1b0d4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-th-b7f1b0d4,
         :inputs
         {:effect-id :vortex-column-session,
@@ -846,7 +846,7 @@
        {:type :parameter-ref, :key :explosion-radius, :nid :n/n094},
        :n--entry--pulse-5-th-eb6103f0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-th-eb6103f0,
         :inputs
         {:effect-id :energy-orb-session,
@@ -885,7 +885,7 @@
        :n037 {:type :state-ref, :key :mode, :nid :n/n037},
        :n--entry--pulse-5-el-1c360664
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-1c360664,
         :inputs
         {:effect-id :audio-loop-session,
@@ -954,7 +954,7 @@
        {:type :context-ref, :key :progression/fire, :nid :n/n095},
        :n--entry--pulse-5-el-16348d62
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-16348d62,
         :inputs
         {:effect-id :vortex-column-session,
@@ -980,7 +980,7 @@
         :inputs {:arg1 1}},
        :n--entry--pulse-5-el-e580e155
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-e580e155,
         :inputs
         {:effect-id :endpoint-burst,
@@ -1057,7 +1057,7 @@
         :nid :n/n--entry--pulse-5-else-0-then-9},
        :n--entry--pulse-5-el-26a7647d
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-el-26a7647d,
         :inputs
         {:effect-id :energy-orb-session,
@@ -1796,7 +1796,7 @@
        :n146 {:type :local-get, :key :main-cooldown, :nid :n/n146},
        :n--entry--release-3--80125e3c
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--80125e3c,
         :inputs
         {:effect-id :energy-orb-session,
@@ -1813,7 +1813,7 @@
              :ref [:local :destination]}}}}}},
        :n--entry--release-3--a6e709a5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--a6e709a5,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1830,7 +1830,7 @@
              :ref [:local :destination]}}}}}},
        :n--entry--release-3--7f93adc9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--7f93adc9,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1852,7 +1852,7 @@
         :inputs {:outcome :released}},
        :n--entry--release-3--93baaaf
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--93baaaf,
         :inputs
         {:effect-id :energy-orb-session,
@@ -1861,7 +1861,7 @@
          :payload {:fade-ticks 8}}},
        :n--entry--release-3--6bdfd710
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--6bdfd710,
         :inputs
         {:effect-id :vortex-column-session,
@@ -1870,7 +1870,7 @@
          :payload {:fade-ticks 8}}},
        :n--entry--release-3--1acbe61
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--1acbe61,
         :inputs
         {:effect-id :audio-loop-session,
@@ -2122,7 +2122,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :energy-orb-session,
@@ -2131,7 +2131,7 @@
          :payload {:fade-ticks 8}}},
        :n--entry--abort-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1,
         :inputs
         {:effect-id :vortex-column-session,
@@ -2140,7 +2140,7 @@
          :payload {:fade-ticks 8}}},
        :n--entry--abort-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-2,
         :inputs
         {:effect-id :audio-loop-session,

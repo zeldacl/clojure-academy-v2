@@ -89,7 +89,7 @@
        :n005 {:type :local-get, :key :sufficient?, :nid :n/n005},
        :n--entry--start-3-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-3-then-0,
         :inputs
         {:effect-id :ring-particle-field,
@@ -217,7 +217,7 @@
         :inputs {:resource :overload}},
        :n--entry--pulse-4-th-6c2012e3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-6c2012e3,
         :inputs
         {:effect-id :ring-fade-audio,
@@ -412,7 +412,7 @@
          :include-blocks? true}},
        :n--entry--pulse-4-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-0,
         :inputs
         {:effect-id :ring-particle-field,
@@ -420,7 +420,7 @@
          :instance-key [:activation :vec-reflection],
          :payload {}}},
        :n--entry--pulse-4-then-4
-       {:type :foreach, :limit 256, :nid :n/n--entry--pulse-4-then-4},
+       {:type :foreach, :as :projectile, :limit 256, :nid :n/n--entry--pulse-4-then-4},
        :n--entry--pulse-4-then-4-do-2
        {:type :local-set,
         :operation :define,
@@ -738,7 +738,7 @@
    #:n{:start-release {:type :start, :nid :n/start-release},
        :n--entry--release-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-0,
         :inputs
         {:effect-id :ring-particle-field,
@@ -765,7 +765,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :ring-particle-field,
