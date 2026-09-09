@@ -12,6 +12,7 @@
   (:require [cn.li.node.digest :as digest]
             [cn.li.node.document :as document]
             [cn.li.node.graph-document :as graph-document]
+            [cn.li.node.graph-compile :as graph-compile]
             [cn.li.node.document-compile :as document-compile]
             [cn.li.node.schema-export :as schema-export]
             [cn.li.node.scope :as scope]
@@ -39,6 +40,8 @@
   (graph-document/kind value))
 (defn v4-document-semantic-digest [value]
   (digest/content-hash (graph-document/semantic-document value)))
+(defn compile-v4-skill-document! [value opts mode]
+  (graph-compile/compile-skill! value opts mode))
 
 ;; ---- structural validation ----
 (defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))

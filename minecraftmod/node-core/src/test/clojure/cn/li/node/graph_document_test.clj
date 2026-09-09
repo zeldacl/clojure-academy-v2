@@ -1,6 +1,7 @@
 (ns cn.li.node.graph-document-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.node.graph-document :as doc]))
+            [cn.li.node.graph-document :as doc]
+            [cn.li.node.graph-compile :as graph-compile]))
 
 (defn- n [id type & kvs]
   (into {:nid id :type type} (apply hash-map kvs)))
@@ -65,3 +66,14 @@
           false
           (catch clojure.lang.ExceptionInfo e
             (re-find #"true and false" (.getMessage e)))))))
+
+(deftest compiles-minimal-v4-graph
+  (let [d (assoc skill :graphs {:default {:on :activation/start
+                                          :nodes {:n/start (n :n/start :start)
+                                                  :n/action (n :n/action :component :component :test/do)
+                                                  :n/end (n :n/end :end :result {:outcome :done})}
+                                          :links [(e :e/link-a :exec [:n/start :out] [:n/action :in])
+                                                  (e :e/link-b :exec [:n/action :out] [:n/end :in])]}})
+        {:keys [ir diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {}}}} :collect)]
+    (is (empty? diagnostics))
+    (is (map? ir))))
