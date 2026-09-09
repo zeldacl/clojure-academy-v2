@@ -955,7 +955,7 @@
         data-types #{:literal :context-ref :parameter-ref :state-ref :local-get}
         output? (= :out from-pin)
         input? (= :in to-pin)
-        kind (if (contains? data-types (:type from)) :data :exec)
+        kind (if (or (contains? data-types (:type from)) (= :value from-key)) :data :exec)
         link-id (keyword "e" (str "editor-" (System/nanoTime)))]
     (when-not (and from to output? input?)
       (throw (ex-info "V4 wire endpoints must be output to input" {:from from-nid :to to-nid})))

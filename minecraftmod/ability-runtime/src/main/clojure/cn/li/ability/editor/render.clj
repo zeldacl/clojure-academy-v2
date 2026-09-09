@@ -222,7 +222,10 @@
                                                     :branch [:true :false]
                                                     #{:foreach :repeat} [:body :completed]
                                                     :loop-end [:continue]
-                                                    [:exec])))))))
+                                                    [:exec]))))
+                                  (when (= :component (:type n))
+                                    [{:kind :quad :role :pin :target :pin :nid nid :pin :out :key :value
+                                      :x (+ x node-box-width) :y (+ y (- h 8.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]))))
                              nodes)
           data-items (mapcat (fn [[nid n]]
                                (let [{:keys [x y]} (get layout nid)]
