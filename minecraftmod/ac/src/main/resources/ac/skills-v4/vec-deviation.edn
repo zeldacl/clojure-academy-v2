@@ -243,7 +243,7 @@
         :inputs {:field :living?}},
        :n035 {:type :component, :component :bool/not, :nid :n/n035},
        :n--entry--pulse-2-then-5
-       {:type :foreach, :limit 256, :nid :n/n--entry--pulse-2-then-5},
+       {:type :foreach, :as :projectile, :limit 256, :nid :n/n--entry--pulse-2-then-5},
        :n078 {:type :merge, :nid :n/n078},
        :n--entry--pulse-2-th-1a8486de
        {:type :component,
@@ -417,7 +417,7 @@
        :n034 {:type :component, :component :bool/and, :nid :n/n034},
        :n--entry--pulse-2-th-cb5bc5c6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-2-th-cb5bc5c6,
         :inputs
         {:effect-id :ring-fade-audio,

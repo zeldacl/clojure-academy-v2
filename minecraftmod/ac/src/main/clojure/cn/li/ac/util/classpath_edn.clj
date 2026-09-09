@@ -15,7 +15,6 @@
 (defn- classloaders []
   (->> [(try (.getContextClassLoader (Thread/currentThread)) (catch Throwable _ nil))
         (try (clojure.lang.RT/baseLoader) (catch Throwable _ nil))
-        (try (.getClassLoader (Class/forName "clojure.lang.RT")) (catch Throwable _ nil))
         (try (ClassLoader/getSystemClassLoader) (catch Throwable _ nil))]
        (remove nil?)
        distinct

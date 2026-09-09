@@ -108,7 +108,7 @@
        :n010 {:type :local-get, :key :target-position, :nid :n/n010},
        :n--entry--start-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-8,
         :inputs
         {:effect-id :ring-particle-field,
@@ -270,7 +270,7 @@
         :inputs {:arg1 1}},
        :n--entry--pulse-1-el-7a780a46
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-el-7a780a46,
         :inputs
         {:effect-id :arc-channel-session,
@@ -319,7 +319,7 @@
        :n056 {:type :local-get, :key :segment, :nid :n/n056},
        :n--entry--pulse-1-else-1-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-else-1-then-1,
         :inputs
         {:effect-id :particle-session,
@@ -340,7 +340,7 @@
        :n015 {:type :context-ref, :key :caster/aim, :nid :n/n015},
        :n--entry--pulse-1-else-1-then-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-else-1-then-4,
         :inputs
         {:effect-id :screen-flash-session,
@@ -390,7 +390,7 @@
          :requires-ability :rad-intensify}},
        :n--entry--pulse-1-else-1-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-else-1-then-0,
         :inputs
         {:effect-id :arc-channel-session,
@@ -404,7 +404,7 @@
         :inputs {:include-entities? true, :include-blocks? false}},
        :n--entry--pulse-1-el-10bd3fc
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-el-10bd3fc,
         :inputs
         {:effect-id :screen-flash-session,
@@ -443,7 +443,7 @@
         :nid :n/n--entry--pulse-1-then-3},
        :n--entry--pulse-1-el-59c995cf
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-el-59c995cf,
         :inputs
         {:effect-id :billboard-session,
@@ -478,7 +478,7 @@
        :n081 {:type :local-get, :key :next-position, :nid :n/n081},
        :n--entry--pulse-1-else-1-then-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-else-1-then-2,
         :inputs
         {:effect-id :billboard-session,
@@ -538,7 +538,7 @@
         :inputs {:arg0 1.0E-5}},
        :n--entry--pulse-1-then-7-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-then-7-else-0,
         :inputs
         {:effect-id :ring-particle-field,
@@ -547,7 +547,7 @@
          :payload {}}},
        :n--entry--pulse-1-el-a3cdef90
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-el-a3cdef90,
         :inputs
         {:effect-id :particle-session,
@@ -621,7 +621,7 @@
        {:type :context-ref, :key :context/resources, :nid :n/n024},
        :n--entry--pulse-1-else-1-then-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-else-1-then-3,
         :inputs
         {:effect-id :ring-particle-field,
@@ -642,7 +642,7 @@
        :n043 {:type :component, :component :vec3/add, :nid :n/n043},
        :n--entry--pulse-1-then-7-then-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-then-7-then-4,
         :inputs
         {:effect-id :ring-particle-field,
@@ -1283,7 +1283,7 @@
         :nid :n/n--entry--release-1--7f97c18f},
        :n--entry--release-1--c97db0e5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--c97db0e5,
         :inputs
         {:effect-id :ring-particle-field,
@@ -1292,7 +1292,7 @@
          :payload {}}},
        :n--entry--release-1--a7d7ddf5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--a7d7ddf5,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1326,7 +1326,7 @@
           :visual-max-ticks 20}}},
        :n--entry--release-1--6f1bb165
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--6f1bb165,
         :inputs
         {:effect-id :particle-session,
@@ -1353,7 +1353,7 @@
            :velocity {:x 0.02, :y 0.02, :z 0.02}}}}},
        :n--entry--release-1--63a43012
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--63a43012,
         :inputs
         {:effect-id :billboard-session,
@@ -1377,7 +1377,7 @@
           :half-size 1.0}}},
        :n--entry--release-1--20427a24
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--20427a24,
         :inputs
         {:effect-id :ring-particle-field,
@@ -1401,7 +1401,7 @@
            :color [214 248 255 200]}}}},
        :n--entry--release-1--ac59c1da
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--ac59c1da,
         :inputs
         {:effect-id :screen-flash-session,
@@ -1441,7 +1441,7 @@
         :inputs {:outcome :triggering}},
        :n--entry--release-1--a33a82ef
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--a33a82ef,
         :inputs
         {:effect-id :ring-particle-field,
@@ -1682,7 +1682,7 @@
        :n108 {:type :local-get, :key :phase, :nid :n/n108},
        :n--entry--abort-1-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1-then-0,
         :inputs
         {:effect-id :arc-channel-session,
@@ -1691,7 +1691,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--abort-1-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1-then-1,
         :inputs
         {:effect-id :particle-session,
@@ -1700,7 +1700,7 @@
          :payload {}}},
        :n--entry--abort-1-then-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1-then-2,
         :inputs
         {:effect-id :billboard-session,
@@ -1709,7 +1709,7 @@
          :payload {}}},
        :n--entry--abort-1-then-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1-then-3,
         :inputs
         {:effect-id :ring-particle-field,
@@ -1718,7 +1718,7 @@
          :payload {}}},
        :n--entry--abort-1-then-4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1-then-4,
         :inputs
         {:effect-id :screen-flash-session,
@@ -1732,7 +1732,7 @@
         :inputs {:outcome :aborted, :end-ability? true}},
        :n--entry--abort-1-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1-else-0,
         :inputs
         {:effect-id :ring-particle-field,

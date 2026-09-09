@@ -91,7 +91,7 @@
        :n009 {:type :local-get, :key :trace, :nid :n/n009},
        :n--entry--start-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-5,
         :inputs
         {:effect-id :target-box-session,
@@ -296,7 +296,7 @@
        :n027 {:type :local-get, :key :trace, :nid :n/n027},
        :n--entry--pulse-3-then-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-3-then-5,
         :inputs
         {:effect-id :target-box-session,
@@ -355,7 +355,7 @@
         :inputs {:outcome :continue}},
        :n--entry--pulse-3-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-3-else-0,
         :inputs
         {:effect-id :target-box-session,
@@ -614,7 +614,7 @@
        :n053 {:type :local-get, :key :main-cooldown, :nid :n/n053},
        :n--entry--release-1--6d16cb8c
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--6d16cb8c,
         :inputs
         {:effect-id :particle-burst,
@@ -639,7 +639,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-1--9d22e8f5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--9d22e8f5,
         :inputs
         {:effect-id :audio-one-shot,
@@ -659,7 +659,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-1--6ce3caa3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--6ce3caa3,
         :inputs
         {:effect-id :target-box-session,
@@ -673,7 +673,7 @@
         :inputs {:outcome :performed, :end-ability? true}},
        :n--entry--release-1--eb48d02b
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--eb48d02b,
         :inputs
         {:effect-id :particle-burst,
@@ -698,7 +698,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-1--c315ae04
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--c315ae04,
         :inputs
         {:effect-id :audio-one-shot,
@@ -718,7 +718,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-1--3910ea8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--3910ea8,
         :inputs
         {:effect-id :target-box-session,
@@ -732,7 +732,7 @@
         :inputs {:outcome :insufficient-resource, :end-ability? true}},
        :n--entry--release-1-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-0,
         :inputs
         {:effect-id :target-box-session,
@@ -741,7 +741,7 @@
          :payload {}}},
        :n--entry--release-1-else-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-1,
         :inputs
         {:effect-id :audio-one-shot,
@@ -987,7 +987,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :target-box-session,

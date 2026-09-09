@@ -178,7 +178,7 @@
        :n070 {:type :local-get, :key :target-type, :nid :n/n070},
        :n--entry--default-2-then-16
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--default-2-then-16,
         :inputs
         {:effect-id :arc-strike-transient,
@@ -214,7 +214,7 @@
        :n063 {:type :parameter-ref, :key :aoe-damage, :nid :n/n063},
        :n076 {:type :merge, :nid :n/n076},
        :n--entry--default-2-then-14
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--default-2-then-14},
        :n057 {:type :merge, :nid :n/n057},

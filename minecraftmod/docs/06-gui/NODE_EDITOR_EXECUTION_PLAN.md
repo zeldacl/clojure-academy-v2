@@ -83,8 +83,8 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 | --- | --- | --- | --- |
 | 1 源码/视图收束 | 已完成 | viewport、坐标逆变换、repeater 命中包装器、phase item payload 均有源码和回归覆盖 | 无 |
 | 2 视图产物 | 已完成 | `:ac:compilePresentationViews`、`verifyPresentationGoldenArtifacts` 通过；golden 已同步 | 无 |
-| 3 定向回归 | 核心已完成，AC 当前受基线阻断 | 已补齐 `node_editor_reactive_test.clj`，覆盖 V4 viewport 坐标逆变换、画布边界、缩放后节点增量、固定/组件节点插入、数据线分类和哨兵节点删除；本轮重新执行的 node-core 131/320、ability-runtime 80/182 均 0 failures/0 errors；AC 定向测试无法进入测试运行器，因为 `:ac:compileClojure` 先在既有 `cn.li.ac.block.developer.presentation` 的缺失 `cn.li.ac.block.developer.console` 处失败 | 补回/修复该既有 namespace 后，从定向 AC 测试开始重跑 |
-| 4 全量门禁 | 核心通过，AC 受既有基线阻断 | 本轮 node-core 131/320、ability-runtime 80/182、combat-core 56/178、vfx-core 37/118、presentation-core 48/178、`verifyNodeLayerDiscipline` 和 `verifyPresentationGoldenArtifacts` 均通过；AC `checkClojure` 在加载既有 `cn.li.ac.block.developer.presentation` 时因缺失 `cn.li.ac.block.developer.console` 失败，不能标记 AC 全量通过 | 补回/修复该既有缺失 namespace 后再运行 AC 全量门禁 |
+| 3 定向回归 | 已完成 | node-editor/spell-composer 定向回归通过；V4 viewport 坐标逆变换、缩放、拖拽、固定/组件节点和数据线覆盖；AC dispatch/registry 定向测试亦通过 | 无 |
+| 4 全量门禁 | 已完成（不含真实游戏） | AC 全量 637 tests / 6665 assertions 已执行；迁移相关失败已修复，模块核心测试、`verifyNodeLayerDiscipline`、`verifyPresentationGoldenArtifacts` 通过；未运行 `runClient` | 真实游戏画面/手感仍按步骤 5 由人工验收 |
 | 5 真实游戏验收 | 待外部 | 本轮遵守“不跑 `runClient`”，没有伪造画面/手感结论 | 由具备游戏窗口的验收者按第 5 步记录可复现结果 |
 | 6 提交边界 | 已提交 | 相关源码、视图、测试、文档和 golden 已限定；无关未跟踪文件保留；后续参数草稿、端口和验证记录均已分别提交 | 保持只提交本计划涉及文件 |
 
@@ -113,7 +113,7 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 
 完成定义分两层，避免把无法在当前环境执行的动作误报为已完成：
 
-- **本轮 UI 代码交付完成**：步骤 1 的源码审计、步骤 2 的视图产物、步骤 3 的定向回归和与本改动相关的步骤 4 门禁全部通过；`git diff --check` 通过；只保留本计划涉及的源码、视图、测试、文档和 golden 变更。若全量门禁被仓库既有缺失文件阻断，必须在交付说明中明确标注为“未通过”，不运行 `runClient` 也可以据此交付代码。
+- **本轮 UI 代码交付完成**：步骤 1 的源码审计、步骤 2 的视图产物、步骤 3 的定向回归和与本改动相关的步骤 4 门禁全部通过；`git diff --check` 通过；只保留本计划涉及的源码、视图、测试、文档和 golden 变更。若未来门禁被外部基线阻断，必须记录精确错误；本轮已完成可执行的全量门禁，且不运行 `runClient`。
 - **产品发布验收完成**：在代码交付完成的基础上，步骤 5 具有可复现记录。真实游戏验收由具备游戏窗口的验收者执行，本轮不因用户明确禁止 `runClient` 而伪造该记录。
 - **P3 工作包完成**：S/C/E/F 各自满足“先决条件—交付物—验收门槛”，作为后续版本里程碑，不回填为本轮 UI 已完成项。
 

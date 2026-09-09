@@ -237,6 +237,16 @@
 
 (defn production-runtime [] @production-runtime*)
 
+(defn reset-production-runtime-for-test!
+  "Clear the process-local production runtime between isolated test
+   Framework lifetimes.  The runtime snapshots capability handlers at
+   installation time, so retaining it after a test Framework is replaced
+   would dispatch against stale handlers (or return no result when the
+   companion AC runtime atom was reset)."
+  []
+  (reset! production-runtime* nil)
+  nil)
+
 (defn dispatch-production! [owner ability-id frame]
   (if-let [runtime @production-runtime*]
     (dispatch! runtime ability-id (assoc frame :owner owner))

@@ -116,7 +116,7 @@
        :n011 {:type :context-ref, :key :caster/eye, :nid :n/n011},
        :n--entry--start-2-then-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-6,
         :inputs
         {:effect-id :particle-session,
@@ -132,7 +132,7 @@
           {:material :additive, :life-ticks 10, :speed 0.04}}}},
        :n--entry--start-2-then-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-7,
         :inputs
         {:effect-id :audio-one-shot,
@@ -271,7 +271,7 @@
         :nid :n/n--entry--pulse-0},
        :n--entry--pulse-2-else-2-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-2-else-2-else-0,
         :inputs
         {:effect-id :particle-session,
@@ -283,7 +283,7 @@
        :n035 {:type :component, :component :math/lt, :nid :n/n035},
        :n--entry--pulse-2-el-8339f816
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-2-el-8339f816,
         :inputs
         {:effect-id :particle-session,
@@ -303,7 +303,7 @@
         :nid :n/n--entry--pulse-2-then-0},
        :n--entry--pulse-2-el-d415cbcc
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-2-el-d415cbcc,
         :inputs
         {:effect-id :particle-session,
@@ -378,7 +378,7 @@
         :nid :n/n--entry--pulse-2-el-f074cc97},
        :n--entry--pulse-2-then-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-2-then-3,
         :inputs
         {:effect-id :particle-session,
@@ -982,7 +982,7 @@
          :limit 64}},
        :n--entry--release-9-do-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-9-do-6,
         :inputs
         {:effect-id :beam-fade-audio,
@@ -1025,7 +1025,7 @@
            :ref [:local :destination]},
           :fade-from-tick 4}}},
        :n--entry--release-9
-       {:type :foreach, :limit 256, :nid :n/n--entry--release-9},
+       {:type :foreach, :as :ball, :limit 256, :nid :n/n--entry--release-9},
        :n066 {:type :state-ref, :key :ball-ids, :nid :n/n066},
        :n094
        {:type :component,
@@ -1040,7 +1040,7 @@
        :n082 {:type :local-get, :key :skill-exp, :nid :n/n082},
        :n--entry--release-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10,
         :inputs
         {:effect-id :particle-session,
@@ -1464,7 +1464,7 @@
            :ref [:local :ball-ids]}}}},
        :n114 {:type :parameter-ref, :key :max-balls, :nid :n/n114},
        :n--entry--abort-5
-       {:type :foreach, :limit 256, :nid :n/n--entry--abort-5},
+       {:type :foreach, :as :ball, :limit 256, :nid :n/n--entry--abort-5},
        :n115 {:type :local-get, :key :remaining-balls, :nid :n/n115},
        :n--entry--abort-5-do-0
        {:type :component,
@@ -1475,7 +1475,7 @@
        :n118 {:type :loop-end, :nid :n/n118},
        :n--entry--abort-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-6,
         :inputs
         {:effect-id :particle-session,

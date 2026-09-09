@@ -1681,7 +1681,11 @@
    this BEFORE its first v2 dispatch, or the fake never reaches an
    already-cached snapshot left behind by an earlier, unrelated test."
   []
-  (reset! final-runtime-v2* nil))
+  (reset! final-runtime-v2* nil)
+  ;; Clear the Framework-scoped install marker as well, so the next lazy
+  ;; install rebuilds both the runtime and its capability snapshot.
+  (install/reset-framework-once-flag-for-test! ::final-runtime-v2-installed?)
+  (final-runtime-v2/reset-production-runtime-for-test!))
 
 
 

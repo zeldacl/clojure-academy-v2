@@ -77,7 +77,7 @@
         :nid :n/n--entry--start-0},
        :n--entry--start-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-1,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -150,7 +150,7 @@
        :n004 {:type :local-get, :key :charge-ticks-next, :nid :n/n004},
        :n--entry--pulse-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-3,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -178,7 +178,7 @@
        :n008 {:type :local-get, :key :timed-out?, :nid :n/n008},
        :n--entry--pulse-5-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-5-then-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -288,7 +288,7 @@
         :nid :n/n--entry--release-3--31b89329},
        :n--entry--release-3--cfa3e132
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--cfa3e132,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -303,7 +303,7 @@
        :n010 {:type :state-ref, :key :charge-ticks, :nid :n/n010},
        :n--entry--release-3--89751c6a
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--89751c6a,
         :inputs
         {:effect-id :terrain-shockwave-transient,
@@ -378,7 +378,7 @@
             {:nid :n/n--entry--release-3--eb044da9,
              :ref [:local :entity-velocity]}}}]}},
        :n--entry--release-3--e077bc65
-       {:type :foreach,
+       {:type :foreach, :as :mastery-block,
         :limit 256,
         :nid :n/n--entry--release-3--e077bc65},
        :n--entry--release-3-then-2
@@ -415,7 +415,7 @@
         :inputs {:field :expected-block-ids}},
        :n--entry--release-3-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3-else-0,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -466,7 +466,7 @@
         :nid :n/n048},
        :n--entry--release-3--9d08d24d
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--9d08d24d,
         :inputs
         {:effect-id :first-person-motion-session,
@@ -491,7 +491,7 @@
         :key :owner,
         :nid :n/n--entry--release-0},
        :n--entry--release-3--20717362
-       {:type :foreach,
+       {:type :foreach, :as :transform,
         :limit 256,
         :nid :n/n--entry--release-3--20717362},
        :n009
@@ -598,7 +598,7 @@
         :nid :n/n--entry--release-3--441c8811},
        :n027 {:type :local-get, :key :body, :nid :n/n027},
        :n--entry--release-3--9a9863a2
-       {:type :foreach,
+       {:type :foreach, :as :entity,
         :limit 256,
         :nid :n/n--entry--release-3--9a9863a2},
        :n067
@@ -657,7 +657,7 @@
         :key :seed,
         :nid :n/n--entry--release-3--f47b7685},
        :n--entry--release-3--a5f405e8
-       {:type :foreach,
+       {:type :foreach, :as :broken,
         :limit 256,
         :nid :n/n--entry--release-3--a5f405e8},
        :n--entry--release-3-then-1
@@ -1169,7 +1169,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :first-person-motion-session,

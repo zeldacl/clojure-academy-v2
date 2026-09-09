@@ -1259,7 +1259,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -1508,7 +1508,7 @@
        {:type :parameter-ref, :key :max-active-ticks, :nid :n/n143},
        :n--entry--pulse-1-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-then-0,
         :inputs
         {:effect-id :teleport-marker,

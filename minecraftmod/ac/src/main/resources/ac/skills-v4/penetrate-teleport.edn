@@ -131,7 +131,7 @@
        :n023 {:type :local-get, :key :can-teleport?, :nid :n/n023},
        :n--entry--start-10-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-10-then-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -154,7 +154,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--start-10-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-10-else-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -440,7 +440,7 @@
        :n047 {:type :local-get, :key :can-teleport?, :nid :n/n047},
        :n--entry--pulse-10-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-then-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -463,7 +463,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--pulse-10-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-10-else-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -681,7 +681,7 @@
        {:type :branch, :nid :n/n--entry--release-11-then-2},
        :n--entry--release-11-4f9ca53f
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-11-4f9ca53f,
         :inputs
         {:effect-id :teleport-marker,
@@ -802,7 +802,7 @@
         :inputs {:type :score/mark}},
        :n--entry--release-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-10,
         :inputs
         {:effect-id :audio-one-shot,
@@ -822,7 +822,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-11-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-11-else-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -862,7 +862,7 @@
        :n051 {:type :context-ref, :key :caster/aim, :nid :n/n051},
        :n--entry--release-11-ccb1424
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-11-ccb1424,
         :inputs
         {:effect-id :teleport-marker,
@@ -1150,7 +1150,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :teleport-marker,

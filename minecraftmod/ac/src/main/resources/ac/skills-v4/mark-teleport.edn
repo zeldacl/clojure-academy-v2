@@ -133,7 +133,7 @@
        :n020 {:type :local-get, :key :destination, :nid :n/n020},
        :n--entry--start-9-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-do-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -394,7 +394,7 @@
        :n040 {:type :local-get, :key :destination, :nid :n/n040},
        :n--entry--pulse-8-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-8-do-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -657,7 +657,7 @@
        :n061 {:type :local-get, :key :main-cooldown, :nid :n/n061},
        :n--entry--release-2--a05802f4
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2--a05802f4,
         :inputs
         {:effect-id :arc-ring-fade-audio,
@@ -716,7 +716,7 @@
          :audience {:type :nearby, :radius 64.0}}},
        :n--entry--release-2--c7b910b1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2--c7b910b1,
         :inputs
         {:effect-id :teleport-marker,
@@ -735,7 +735,7 @@
         :inputs {:outcome :insufficient-resource, :end-ability? true}},
        :n--entry--release-2-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-2-else-0,
         :inputs
         {:effect-id :teleport-marker,
@@ -910,7 +910,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :teleport-marker,

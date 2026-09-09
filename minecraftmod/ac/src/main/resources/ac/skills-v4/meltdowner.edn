@@ -131,7 +131,7 @@
        :n010 {:type :context-ref, :key :caster/body, :nid :n/n010},
        :n--entry--start-2-then-5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-5,
         :inputs
         {:effect-id :audio-loop-session,
@@ -146,7 +146,7 @@
           :pitch 1.0}}},
        :n--entry--start-2-then-6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-6,
         :inputs
         {:effect-id :particle-session,
@@ -166,7 +166,7 @@
            :spread {:x 0.7, :y 0.7, :z 0.7}}}}},
        :n--entry--start-2-then-7
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-2-then-7,
         :inputs
         {:effect-id :camera-fov-session,
@@ -297,7 +297,7 @@
        :n030 {:type :local-get, :key :next-hold-ticks, :nid :n/n030},
        :n--entry--pulse-4-else-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-2,
         :inputs
         {:effect-id :camera-fov-session,
@@ -335,7 +335,7 @@
         :nid :n/n--entry--pulse-4-then-1},
        :n--entry--pulse-4-then-13
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-13,
         :inputs
         {:effect-id :camera-fov-session,
@@ -370,7 +370,7 @@
         :nid :n/n--entry--pulse-3},
        :n--entry--pulse-4-th-24801c14
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-24801c14,
         :inputs
         {:effect-id :audio-loop-session,
@@ -398,7 +398,7 @@
        :n034 {:type :local-get, :key :charge-min-ticks, :nid :n/n034},
        :n--entry--pulse-4-else-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-1,
         :inputs
         {:effect-id :particle-session,
@@ -407,7 +407,7 @@
          :payload {}}},
        :n--entry--pulse-4-then-11
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-11,
         :inputs
         {:effect-id :particle-session,
@@ -437,7 +437,7 @@
         :nid :n/n--entry--pulse-4-then-3},
        :n--entry--pulse-4-then-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-10,
         :inputs
         {:effect-id :audio-loop-session,
@@ -449,7 +449,7 @@
            :ref [:local :body]}}}},
        :n--entry--pulse-4-th-c82df8ef
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-c82df8ef,
         :inputs
         {:effect-id :particle-session,
@@ -491,7 +491,7 @@
        {:type :parameter-ref, :key :charge-time-rate, :nid :n/n024},
        :n--entry--pulse-4-th-6e589d0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-th-6e589d0,
         :inputs
         {:effect-id :camera-fov-session,
@@ -513,7 +513,7 @@
        :n014 {:type :component, :component :cost/spend, :nid :n/n014},
        :n--entry--pulse-4-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-4-else-0,
         :inputs
         {:effect-id :audio-loop-session,
@@ -799,7 +799,7 @@
        :n064 {:type :parameter-ref, :key :beam-radius, :nid :n/n064},
        :n083 {:type :context-ref, :key :progression/use, :nid :n/n083},
        :n--entry--release-1-else-7
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--release-1-else-7},
        :n--entry--release-1-else-15
@@ -845,7 +845,7 @@
        :n055 {:type :component, :component :math/mul, :nid :n/n055},
        :n--entry--release-1--ef7c426d
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1--ef7c426d,
         :inputs
         {:effect-id :ray-beam-transient,
@@ -877,7 +877,7 @@
           :bounds-radius 0.4}}},
        :n--entry--release-1-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-then-1,
         :inputs
         {:effect-id :particle-session,
@@ -887,7 +887,7 @@
        :n047 {:type :state-ref, :key :hold-ticks, :nid :n/n047},
        :n--entry--release-1-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-then-0,
         :inputs
         {:effect-id :audio-loop-session,
@@ -907,7 +907,7 @@
        :n048 {:type :component, :component :math/lt, :nid :n/n048},
        :n--entry--release-1-else-10
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-10,
         :inputs
         {:effect-id :beam-arc-fade,
@@ -958,7 +958,7 @@
         :inputs {:arg2 0.05}},
        :n--entry--release-1-else-11
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-11,
         :inputs
         {:effect-id :audio-one-shot,
@@ -1005,7 +1005,7 @@
        :n082 {:type :local-get, :key :main-cooldown, :nid :n/n082},
        :n--entry--release-1-else-17
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-17,
         :inputs
         {:effect-id :particle-session,
@@ -1017,7 +1017,7 @@
        {:type :parameter-ref, :key :beam-query-radius, :nid :n/n065},
        :n--entry--release-1-else-16
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-16,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1039,7 +1039,7 @@
        :n073 {:type :merge, :nid :n/n073},
        :n--entry--release-1-then-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-then-2,
         :inputs
         {:effect-id :camera-fov-session,
@@ -1054,7 +1054,7 @@
        :n067 {:type :local-get, :key :reflection-policy, :nid :n/n067},
        :n--entry--release-1-else-18
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-1-else-18,
         :inputs
         {:effect-id :camera-fov-session,
@@ -1376,7 +1376,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :audio-loop-session,
@@ -1385,7 +1385,7 @@
          :payload {:fade-ticks 0}}},
        :n--entry--abort-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-1,
         :inputs
         {:effect-id :particle-session,
@@ -1394,7 +1394,7 @@
          :payload {}}},
        :n--entry--abort-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-2,
         :inputs
         {:effect-id :camera-fov-session,

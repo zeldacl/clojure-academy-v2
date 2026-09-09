@@ -139,9 +139,7 @@ V4 图的固定节点集合为 `start`、`component`、`branch`、`merge`、`for
 核心架构/AOT 门禁、`compilePresentationViews`、node-core 与 ability-runtime 定向
 测试已通过，且在开发过程中真的抓到过几个实质 bug（`:semantics {:role :status}`
 不是合法角色、一个没有默认分支的 `case` 会在点击节点标签时抛异常、
-`(name :form/self)` 会悄悄丢掉命名空间）。本轮重新执行 `verifyCurrentPlatforms`
-时被仓库既有的 `cn.li.ac.block.developer.console` 缺失阻断；因此 AC 全量测试和
-架构总门禁不能标记为“全部通过”，需修复该基线缺失后再运行。
+`(name :form/self)` 会悄悄丢掉命名空间）。developer console namespace 已恢复；本轮 AC 全量测试与相关架构门禁已重新执行并通过。
 
 **没有验证、也无法在这个环境里验证的**：画面实际渲染效果、点击/拖拽的手感、
 480×360（节点编辑器设计尺寸）与 320×240（缩放后的宿主窗口）下四个面板是否真的挤得下。这部分需要在真实

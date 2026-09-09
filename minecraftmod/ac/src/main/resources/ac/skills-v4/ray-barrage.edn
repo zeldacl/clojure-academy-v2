@@ -147,7 +147,7 @@
         :inputs {:outcome :insufficient-resource}},
        :n045 {:type :parameter-ref, :key :plain-damage, :nid :n/n045},
        :n--entry--start-9-then-6-then-5
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--start-9-then-6-then-5},
        :n021
@@ -166,7 +166,7 @@
        :n047 {:type :merge, :nid :n/n047},
        :n--entry--start-9-then-6-then-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-6-then-2,
         :inputs
         {:effect-id :audio-one-shot,
@@ -190,7 +190,7 @@
         :inputs {:outcome :performed}},
        :n--entry--start-9-then-6-then-8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-6-then-8,
         :inputs
         {:effect-id :ray-fan-transient,
@@ -285,7 +285,7 @@
        :n005 {:type :context-ref, :key :rng/seed, :nid :n/n005},
        :n--entry--start-9-then-6-then-1
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-6-then-1,
         :inputs
         {:effect-id :ray-beam-transient,
@@ -360,7 +360,7 @@
         :nid :n/n--entry--start-5},
        :n--entry--start-9-then-6-else-2
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-6-else-2,
         :inputs
         {:effect-id :ray-beam-transient,
@@ -393,7 +393,7 @@
        :n011 {:type :local-get, :key :sufficient?, :nid :n/n011},
        :n--entry--start-9-then-6-then-9
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-6-then-9,
         :inputs
         {:effect-id :audio-one-shot,
@@ -429,7 +429,7 @@
         :inputs {:field :behavior-hit?}},
        :n--entry--start-9-then-6-else-3
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-9-then-6-else-3,
         :inputs
         {:effect-id :audio-one-shot,

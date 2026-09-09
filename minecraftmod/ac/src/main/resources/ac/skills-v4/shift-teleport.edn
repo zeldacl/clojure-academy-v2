@@ -178,7 +178,7 @@
        :n029 {:type :local-get, :key :trace, :nid :n/n029},
        :n--entry--start-12-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-12-then-0,
         :inputs
         {:effect-id :target-box-session,
@@ -198,11 +198,11 @@
           :height 1.2,
           :color [139 139 139 180]}}},
        :n--entry--start-12-then-1
-       {:type :foreach, :limit 256, :nid :n/n--entry--start-12-then-1},
+       {:type :foreach, :as :target, :limit 256, :nid :n/n--entry--start-12-then-1},
        :n030 {:type :local-get, :key :targets, :nid :n/n030},
        :n--entry--start-12-then-1-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-12-then-1-do-0,
         :inputs
         {:effect-id :target-box-session,
@@ -467,11 +467,11 @@
         :nid :n/n--entry--pulse-0},
        :n032 {:type :state-ref, :key :targets, :nid :n/n032},
        :n--entry--pulse-1
-       {:type :foreach, :limit 256, :nid :n/n--entry--pulse-1},
+       {:type :foreach, :as :target, :limit 256, :nid :n/n--entry--pulse-1},
        :n033 {:type :local-get, :key :targets-to-clear, :nid :n/n033},
        :n--entry--pulse-1-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-1-do-0,
         :inputs
         {:effect-id :target-box-session,
@@ -625,7 +625,7 @@
        :n063 {:type :local-get, :key :trace, :nid :n/n063},
        :n--entry--pulse-14-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-14-then-0,
         :inputs
         {:effect-id :target-box-session,
@@ -645,11 +645,11 @@
           :height 1.2,
           :color [139 139 139 180]}}},
        :n--entry--pulse-14-then-1
-       {:type :foreach, :limit 256, :nid :n/n--entry--pulse-14-then-1},
+       {:type :foreach, :as :target, :limit 256, :nid :n/n--entry--pulse-14-then-1},
        :n064 {:type :local-get, :key :targets, :nid :n/n064},
        :n--entry--pulse-14-then-1-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-14-then-1-do-0,
         :inputs
         {:effect-id :target-box-session,
@@ -699,7 +699,7 @@
         :inputs {:outcome :continue}},
        :n--entry--pulse-14-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-14-else-0,
         :inputs
         {:effect-id :target-box-session,
@@ -958,7 +958,7 @@
        :n084 {:type :parameter-ref, :key :damage, :nid :n/n084},
        :n--entry--release-3--1c7bbf74
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--1c7bbf74,
         :inputs
         {:effect-id :target-box-session,
@@ -1006,7 +1006,7 @@
        :start-release {:type :start, :nid :n/start-release},
        :n--entry--release-3-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3-else-0,
         :inputs
         {:effect-id :target-box-session,
@@ -1015,7 +1015,7 @@
          :payload {}}},
        :n071 {:type :local-get, :key :hand-item, :nid :n/n071},
        :n--entry--release-3--db8646d0
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--release-3--db8646d0},
        :n--entry--release-3-then-3
@@ -1029,7 +1029,7 @@
         :nid :n/n--entry--release-2},
        :n--entry--release-3--639f1b1e
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--639f1b1e,
         :inputs
         {:effect-id :target-box-session,
@@ -1052,7 +1052,7 @@
         :nid :n/n--entry--release-3-then-0},
        :n--entry--release-3-else-1-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3-else-1-do-0,
         :inputs
         {:effect-id :target-box-session,
@@ -1088,7 +1088,7 @@
         :nid :n/n--entry--release-3--b635993d},
        :n--entry--release-3--5ed0f6f8
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--5ed0f6f8,
         :inputs
         {:effect-id :target-box-session,
@@ -1119,7 +1119,7 @@
        :n079 {:type :component, :component :cost/spend, :nid :n/n079},
        :n069 {:type :component, :component :bool/and, :nid :n/n069},
        :n--entry--release-3--b04fef61
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--release-3--b04fef61},
        :n--entry--release-3--43e51e9a
@@ -1129,7 +1129,7 @@
         :inputs {:outcome :performed, :end-ability? true}},
        :n--entry--release-3--b950223b
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--b950223b,
         :inputs
         {:effect-id :target-box-session,
@@ -1160,7 +1160,7 @@
        :n105 {:type :loop-end, :nid :n/n105},
        :n102 {:type :local-get, :key :weight-value, :nid :n/n102},
        :n--entry--release-3-else-1
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--release-3-else-1},
        :n104 {:type :local-get, :key :targets, :nid :n/n104},
@@ -1171,7 +1171,7 @@
         :nid :n/n--entry--release-3--6f049d80,
         :inputs {:damage-type :magic}},
        :n--entry--release-3--2576eaa9
-       {:type :foreach,
+       {:type :foreach, :as :target,
         :limit 256,
         :nid :n/n--entry--release-3--2576eaa9},
        :n107 {:type :loop-end, :nid :n/n107},
@@ -1196,7 +1196,7 @@
        :n109 {:type :loop-end, :nid :n/n109},
        :n--entry--release-3--1e5dc060
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-3--1e5dc060,
         :inputs
         {:effect-id :particle-trail-audio-transient,
@@ -1604,7 +1604,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :target-box-session,
@@ -1618,11 +1618,11 @@
         :nid :n/n--entry--abort-1},
        :n110 {:type :state-ref, :key :targets, :nid :n/n110},
        :n--entry--abort-2
-       {:type :foreach, :limit 256, :nid :n/n--entry--abort-2},
+       {:type :foreach, :as :target, :limit 256, :nid :n/n--entry--abort-2},
        :n111 {:type :local-get, :key :targets-to-clear, :nid :n/n111},
        :n--entry--abort-2-do-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-2-do-0,
         :inputs
         {:effect-id :target-box-session,

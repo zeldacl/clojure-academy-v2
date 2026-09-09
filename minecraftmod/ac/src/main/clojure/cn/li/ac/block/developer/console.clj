@@ -12,7 +12,7 @@
    longer existed. This is that state machine restored from
    console_reactive.clj's final revision (b29dbc810, i.e. including its three
    later bug fixes: no duplicate prompt echo, no Requesting/Progress flicker, no
-   trailing blank line from the localized strings), with every UiRt / node /
+   trailing blank line from the localized strings), with every presentation runtime / node /
    signal concern removed.
 
    Nothing here touches rendering, layout or the network. The screen

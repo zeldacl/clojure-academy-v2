@@ -119,7 +119,7 @@
        :n011 {:type :local-get, :key :hand-item, :nid :n/n011},
        :n--entry--start-6-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--start-6-then-0,
         :inputs
         {:effect-id :target-box-session,
@@ -353,7 +353,7 @@
        :n028 {:type :local-get, :key :ok?, :nid :n/n028},
        :n--entry--pulse-8-then-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-8-then-0,
         :inputs
         {:effect-id :target-box-session,
@@ -416,7 +416,7 @@
         :inputs {:outcome :continue}},
        :n--entry--pulse-8-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--pulse-8-else-0,
         :inputs
         {:effect-id :target-box-session,
@@ -698,7 +698,7 @@
         :nid :n/n--entry--release-0},
        :n--entry--release-8-else-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-8-else-0,
         :inputs
         {:effect-id :target-box-session,
@@ -721,7 +721,7 @@
        :n034 {:type :local-get, :key :trace, :nid :n/n034},
        :n--entry--release-8--6df13df5
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-8--6df13df5,
         :inputs
         {:effect-id :target-box-session,
@@ -787,7 +787,7 @@
        :n067 {:type :local-get, :key :trace, :nid :n/n067},
        :n--entry--release-8--a31d3fcc
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-8--a31d3fcc,
         :inputs
         {:effect-id :target-box-session,
@@ -826,7 +826,7 @@
        {:type :branch, :nid :n/n--entry--release-8},
        :n--entry--release-8--7b5f3ff6
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--release-8--7b5f3ff6,
         :inputs
         {:effect-id :teleport-trail-transient,
@@ -1257,7 +1257,7 @@
    #:n{:start-abort {:type :start, :nid :n/start-abort},
        :n--entry--abort-0
        {:type :component,
-        :component :vfx/emit,
+        :component :effect/vfx,
         :nid :n/n--entry--abort-0,
         :inputs
         {:effect-id :target-box-session,

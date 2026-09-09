@@ -5,6 +5,7 @@
             [cn.li.node.graph-compile :as graph-compile]
             [cn.li.node.schema-export :as schema-export]
             [cn.li.node.scope :as scope]
+            [cn.li.node.cost :as cost]
             [cn.li.node.validate :as validate]
             [cn.li.node.environment :as environment]))
 (defn content-hash [value] (digest/content-hash value))
@@ -16,6 +17,7 @@
 (defn v4-document-semantic-digest [value] (document-semantic-digest value))
 (defn compile-v4-skill-document! [value opts mode] (graph-compile/compile-skill! value opts mode))
 (defn compile-v4-vfx-document! [value opts mode] (graph-compile/compile-vfx! value opts mode))
+(defn cost-summary [ir vocab] (cost/analyze ir vocab))
 (defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))
 (defn check-scope-in-environment! [node-environment program] (scope/check-in-environment! node-environment program))
 (defn export-schema [node-environment] (schema-export/export-environment node-environment))
