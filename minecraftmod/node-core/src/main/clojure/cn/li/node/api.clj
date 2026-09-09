@@ -15,6 +15,7 @@
 (defn v4-document-kind [value] (document-kind value))
 (defn v4-document-semantic-digest [value] (document-semantic-digest value))
 (defn compile-v4-skill-document! [value opts mode] (graph-compile/compile-skill! value opts mode))
+(defn compile-v4-vfx-document! [value opts mode] (graph-compile/compile-vfx! value opts mode))
 (defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))
 (defn check-scope-in-environment! [node-environment program] (scope/check-in-environment! node-environment program))
 (defn export-schema [node-environment] (schema-export/export-environment node-environment))

@@ -56,6 +56,8 @@
             [cn.li.ability.editor.palette :as palette]
             [cn.li.combat.api :as combat-api]
             [cn.li.ability.client-vfx-v2 :as vfx-client]
+            [cn.li.node.api :as node-api]
+            [cn.li.node.cost :as node-cost]
             [cn.li.node.ops :as ops]
             [cn.li.vfx.api :as vfx-api])
   (:import [java.nio.file Files StandardCopyOption]))
@@ -194,8 +196,23 @@
   "Refresh graph state from either a V4 persisted graph or legacy surface form."
   [{:keys [document opts] :as state}]
   (if (:v4? document)
-    (let [graphs (:graphs (:form document)) phase (or (:phase state) (first (keys graphs)))]
-      (assoc state :phase phase :phases (vec (keys graphs)) :graph (get graphs phase) :diagnostics [] :cost-summary nil))
+    (let [form (:form document)
+          graphs (:graphs form)
+          phase (or (:phase state) (first (keys graphs)))
+          result (try
+                   (let [{:keys [ir diagnostics]} (if (= :ac/vfx-v4 (:schema form))
+                                                     (node-api/compile-v4-vfx-document! form opts :collect)
+                                                     (node-api/compile-v4-skill-document! form opts :collect))]
+                     {:diagnostics (vec diagnostics)
+                      :cost-summary (when (empty? diagnostics)
+                                      (node-cost/analyze ir (:vocab opts)))})
+                   (catch Throwable error
+                     {:diagnostics [{:code :v4-graph-invalid
+                                     :message (.getMessage error)
+                                     :nid nil}]
+                      :cost-summary nil}))]
+      (assoc state :phase phase :phases (vec (keys graphs)) :graph (get graphs phase)
+             :diagnostics (:diagnostics result) :cost-summary (:cost-summary result)))
     (let [entries (entries-of (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
       (assoc state :phase phase :phases (vec (keys entries)) :graph (graph/form->graph stmts)
              :diagnostics (check/diagnostics (:form document) opts) :cost-summary (check/cost-summary (:form document) opts)))))
