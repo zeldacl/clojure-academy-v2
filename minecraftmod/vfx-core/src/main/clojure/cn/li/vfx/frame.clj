@@ -73,6 +73,17 @@
            :material (:material op)}
     :quad {:operation :draw-batch :stage :world-after-translucent :primitive :quad
            :geometry (:geometry op) :material (:material op)}
+    :arc {:operation :draw-batch :stage :world-after-translucent :primitive :quad
+          :geometry {:kind :arc
+                     :start (:start op) :end (:end op)
+                     :pattern (or (:pattern op) :weak)
+                     :seed (or (:seed op) 0)
+                     :life-ratio (double (or (:life-ratio op) 0.0))
+                     :hand-origin? (boolean (:hand-origin? op))
+                     :source-player-id (:source-player-id op)}
+          :material {:texture "academy:textures/effects/arc/line_segment.png"
+                     :color [255 255 255 255]
+                     :alpha (double (or (:alpha op) 1.0))}}
     :emitter {:operation :draw-batch :stage :world-translucent :primitive :quad
               :geometry {:kind :emitter :anchor (:anchor op) :rate-per-tick (:rate-per-tick op)
                         :limit (:limit op) :particle (:particle op)}

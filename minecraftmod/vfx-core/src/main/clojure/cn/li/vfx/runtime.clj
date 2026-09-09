@@ -144,9 +144,13 @@
   (into {}
         (map (fn [[k instance]]
                [k {:scene (when-let [program (:scene-program instance)]
-                           (scene/sample! program {:capabilities (assoc (:user instance)
-                                                                        :age (double (:age instance))
-                                                                        :progress (progress-of instance))}))
+                           (scene/sample! program
+                                          {:capabilities
+                                           (assoc (:user instance)
+                                                  :age (double (:age instance))
+                                                  :progress (progress-of instance)
+                                                  :seed (long (or (:seed instance) 0))
+                                                  :source-player-id (:owner instance))}))
                   :emitters (mapv #(select-keys % [:layout :buffer]) (:emitters instance))}]))
         @(:instances store)))
 
@@ -239,7 +243,8 @@
                 instance (or existing
                              (when create?
                                (ensure! rt instance-key
-                                        (assoc signal :seed (or seed 0) :user params))))]
+                                        (assoc signal :seed (long (or seed event-seq 0))
+                                               :user params))))]
             (when instance
               (let [event-new? (> event-seq (long (or (:event-seq instance) -1)))
                     state-new? (> state-seq (long (or (:state-seq instance) -1)))]

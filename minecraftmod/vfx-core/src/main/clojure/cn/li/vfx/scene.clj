@@ -26,7 +26,7 @@
   "Present on every scene sample regardless of which effect declared what.
    :user's own per-effect param types (?start, ?end, ...) are supplied by
    the caller at compile time and merged with these -- see compile-doc!."
-  {:age :double :progress :double})
+  {:age :double :progress :double :seed :long :source-player-id :any})
 
 (defn capabilities-for
   "user-types ({capability-key type}, an effect's own :inputs :spawn

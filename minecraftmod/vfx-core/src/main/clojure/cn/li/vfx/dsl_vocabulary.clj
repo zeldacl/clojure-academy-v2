@@ -33,7 +33,7 @@
 ;; deriving from a namespace that does not exist.
 (def ^:private category-by-id
   {:ring :geometry :beam :geometry :ray-beam :geometry :line :geometry
-   :quad :geometry :emitter :geometry
+   :quad :geometry :arc :geometry :emitter :geometry
    :audio-one-shot :audio :audio-loop :audio
    :camera-fov :camera :camera-shake :camera :post-process :camera})
 
@@ -68,6 +68,14 @@
    (node {:from (p* :vec3) :to (p* :vec3) :color (opt :any nil) :material (opt :any nil)})
    :quad
    (node {:geometry (p) :material (opt :any nil)})
+   ;; Zigzag lightning bolt (main arc-gen / EntityArc). Expanded to textured
+   ;; segment quads by cn.li.platform.neutral.arc-geometry — not a no-op emitter.
+   :arc
+   (node {:start (p* :vec3) :end (p* :vec3)
+          :pattern (opt :any :weak) :seed (opt :long 0)
+          :life-ratio (opt :double 0.0) :alpha (opt :double 1.0)
+          :hand-origin? (opt :boolean false)
+          :source-player-id (opt :any nil)})
    ;; :vfx/emitter is a single
    ;; declarative "spawn an emitter here" draw-batch op per sample, not a
    ;; per-particle simulation -- the actual particle stepping happens

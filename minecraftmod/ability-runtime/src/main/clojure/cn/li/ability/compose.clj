@@ -95,16 +95,27 @@
    the previous int-then-stringify encoding never matched that string set,
    so no VFX draw batch this fold produced ever reached a renderer."
   [^VfxBatch batch]
-  (RenderCommand$Batch. (or (get vfx-stage->render-stage (.stage batch)) RenderStage/WORLD_AFTER_TRANSLUCENT)
-                        (.primitive batch) (str (.materialId batch)) "vfx"
-                        0 (long (.instanceCount batch)) "stable" (.payload batch)))
+  (let [primitive (.primitive batch)]
+    (when (or (nil? primitive) (zero? (count primitive)))
+      (throw (ex-info "VfxBatch missing primitive name"
+                      {:stage (.stage batch) :material-id (.materialId batch)})))
+    (RenderCommand$Batch. (or (get vfx-stage->render-stage (.stage batch))
+                              RenderStage/WORLD_AFTER_TRANSLUCENT)
+                          primitive (str (.materialId batch)) "vfx"
+                          0 (long (.instanceCount batch)) "stable" (.payload batch))))
 
-(defn- vfx-output-command [^VfxOutput output]
-  (case (.kind output)
+(defn- vfx-output-command
+  "Map a VfxOutput to a RenderCommand. Uses `condp =` (not `case`) so Java
+   enum constants compare by value — `case` on enums has bitten this fold
+   before by falling through to nil, which then NPE'd inside RenderPass's
+   List.copyOf."
+  [^VfxOutput output]
+  (condp = (.kind output)
     VfxOutputKind/AUDIO (RenderCommand$AudioContribution. (or (.resourceId output) "") (.amount output) 1.0)
     VfxOutputKind/CAMERA (RenderCommand$CameraContribution. (.amount output) 0.0 0.0 0.0)
     VfxOutputKind/SCREEN (RenderCommand$PostProcess. (.value output) (.amount output))
-    nil))
+    (throw (ex-info "unsupported VfxOutputKind"
+                    {:kind (.kind output) :resource-id (.resourceId output)}))))
 
 (def ^:private vfx-output->render-stage
   {VfxOutputKind/AUDIO RenderStage/AUDIO
@@ -137,20 +148,28 @@
   (if (nil? vfx)
     ui-packet
     (let [vfx-pairs (concat
-                     (map (fn [^VfxBatch batch]
-                            [(get vfx-stage->render-stage (.stage batch)) (vfx-command batch)])
-                          (.batches vfx))
+                     (keep (fn [^VfxBatch batch]
+                             (when-let [stage (get vfx-stage->render-stage (.stage batch))]
+                               [stage (vfx-command batch)]))
+                           (.batches vfx))
                      (keep (fn [^VfxOutput output]
                              (when-let [stage (get vfx-output->render-stage (.kind output))]
                                [stage (vfx-output-command output)]))
                            (.outputs vfx)))
           commands-by-stage (reduce (fn [acc [stage command]]
-                                      (if stage (update acc stage (fnil conj []) command) acc))
+                                      (when (nil? command)
+                                        (throw (ex-info "VFX fold produced a nil RenderCommand"
+                                                        {:stage stage})))
+                                      (if stage
+                                        (update acc stage (fnil conj []) command)
+                                        acc))
                                     {} vfx-pairs)
           passes (->> render-stage-order
                       (keep (fn [stage]
-                              (when-let [commands (seq (get commands-by-stage stage))]
-                                (RenderPass. stage commands))))
+                              (when-let [commands (not-empty (get commands-by-stage stage))]
+                                ;; vec (not seq): List.copyOf rejects null elements and
+                                ;; PersistentVector is a reliable java.util.List.
+                                (RenderPass. stage (vec commands)))))
                       vec)]
       (FramePacket. (.frameId ui-packet) (.uiByStage ui-packet) passes))))
 

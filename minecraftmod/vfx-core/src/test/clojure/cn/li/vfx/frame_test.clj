@@ -51,6 +51,23 @@
                                                     :end {:vec3 [1.0 0.0 0.0]}
                                                     :layers "bad"}])))))
 
+(deftest arc-op-becomes-a-quad-primitive-batch-test
+  "Regression: main arc-gen zigzag bolts must cross the frame ABI as :quad
+   batches with geometry :kind :arc for the neutral render plan to expand."
+  (let [f (frame/->java-frame 1 0 (one-instance
+                                    [{:kind :arc
+                                      :start {:x 0.0 :y 1.0 :z 0.0}
+                                      :end {:x 0.0 :y 1.0 :z 5.0}
+                                      :pattern :weak :seed 3
+                                      :life-ratio 0.1 :alpha 1.0}]))
+        batch (first (.batches f))]
+    (is (= 1 (count (.batches f))))
+    (is (= "quad" (.primitive batch)))
+    (is (= :arc (get-in (.payload batch) [:geometry :kind])))
+    (is (= :weak (get-in (.payload batch) [:geometry :pattern])))
+    (is (= "academy:textures/effects/arc/line_segment.png"
+           (get-in (.payload batch) [:material :texture])))))
+
 (deftest quad-op-passes-geometry-and-material-through-test
   (let [f (frame/->java-frame 1 0 (one-instance
                                     [{:kind :quad :geometry {:p0 :a :p1 :b :p2 :c :p3 :d}

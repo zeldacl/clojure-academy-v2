@@ -20,7 +20,8 @@
   :end {:type :vec3},
   :fade-from-tick {:type :int},
   :ring-color {:type :any},
-  :ring-segments {:type :int}},
+  :ring-segments {:type :int},
+  :arc-pattern {:type :any}},
  :graphs
  {:render
   {:nodes
@@ -39,6 +40,23 @@
        :n006 {:type :context-ref, :key :grow-ticks, :nid :n/n006},
        :n007 {:type :context-ref, :key :layers, :nid :n/n007},
        :n008 {:type :merge, :nid :n/n008},
+       :n--entry--arc-0
+       {:type :branch, :nid :n/n--entry--arc-0},
+       :n050 {:type :component, :component :math/gte, :nid :n/n050},
+       :n051 {:type :context-ref, :key :age, :nid :n/n051},
+       :n052 {:type :context-ref, :key :arc-at, :nid :n/n052},
+       :n--entry--arc-0-do-0
+       {:type :component,
+        :component :arc,
+        :nid :n/n--entry--arc-0-do-0,
+        :inputs {:pattern :weak, :hand-origin? true}},
+       :n053 {:type :context-ref, :key :start, :nid :n/n053},
+       :n054 {:type :context-ref, :key :end, :nid :n/n054},
+       :n055 {:type :context-ref, :key :seed, :nid :n/n055},
+       :n056 {:type :context-ref, :key :progress, :nid :n/n056},
+       :n057 {:type :context-ref, :key :arc-pattern, :nid :n/n057},
+       :n059 {:type :context-ref, :key :source-player-id, :nid :n/n059},
+       :n058 {:type :merge, :nid :n/n058},
        :n--entry--default-1
        {:type :branch, :nid :n/n--entry--default-1},
        :n009 {:type :component, :component :math/gte, :nid :n/n009},
@@ -142,6 +160,58 @@
      :kind :exec,
      :from [:n/n--entry--default-0 :false],
      :to [:n/n008 :in]}
+    {:id :e/link050,
+     :kind :data,
+     :from [:n/n051 :value],
+     :to [:n/n050 :arg0]}
+    {:id :e/link051,
+     :kind :data,
+     :from [:n/n052 :value],
+     :to [:n/n050 :arg1]}
+    {:id :e/link052,
+     :kind :data,
+     :from [:n/n050 :value],
+     :to [:n/n--entry--arc-0 :condition]}
+    {:id :e/link053,
+     :kind :data,
+     :from [:n/n053 :value],
+     :to [:n/n--entry--arc-0-do-0 :start]}
+    {:id :e/link054,
+     :kind :data,
+     :from [:n/n054 :value],
+     :to [:n/n--entry--arc-0-do-0 :end]}
+    {:id :e/link055,
+     :kind :data,
+     :from [:n/n055 :value],
+     :to [:n/n--entry--arc-0-do-0 :seed]}
+    {:id :e/link056,
+     :kind :data,
+     :from [:n/n056 :value],
+     :to [:n/n--entry--arc-0-do-0 :life-ratio]}
+    {:id :e/link057,
+     :kind :data,
+     :from [:n/n057 :value],
+     :to [:n/n--entry--arc-0-do-0 :pattern]}
+    {:id :e/link062,
+     :kind :data,
+     :from [:n/n059 :value],
+     :to [:n/n--entry--arc-0-do-0 :source-player-id]}
+    {:id :e/link058,
+     :kind :exec,
+     :from [:n/n--entry--arc-0 :true],
+     :to [:n/n--entry--arc-0-do-0 :in]}
+    {:id :e/link059,
+     :kind :exec,
+     :from [:n/n--entry--arc-0-do-0 :out],
+     :to [:n/n058 :in]}
+    {:id :e/link060,
+     :kind :exec,
+     :from [:n/n--entry--arc-0 :false],
+     :to [:n/n058 :in]}
+    {:id :e/link061,
+     :kind :exec,
+     :from [:n/n008 :out],
+     :to [:n/n--entry--arc-0 :in]}
     {:id :e/link011,
      :kind :data,
      :from [:n/n010 :value],
@@ -268,7 +338,7 @@
      :to [:n/n030 :in]}
     {:id :e/link037,
      :kind :exec,
-     :from [:n/n008 :out],
+     :from [:n/n058 :out],
      :to [:n/n--entry--default-1 :in]}
     {:id :e/link038,
      :kind :exec,
