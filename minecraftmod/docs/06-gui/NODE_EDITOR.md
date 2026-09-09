@@ -64,8 +64,8 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 ## 保存：结构化 V4 文档
 
 `ac/skills-v4/*.edn` 与 `ac/vfx-v4/*.edn` 都是完整的结构化 V4 map，节点、阶段、
-参数和 `:nid` 同时属于持久化模型。编辑器通过 `document/open-v3` 解析并调用
-`node.document/validate-document!`，保存时由 `editor.v3/form->document` 重建 map，
+参数和 `:nid` 同时属于持久化模型。编辑器通过 `document/open-v4` 解析并调用
+`node.api/validate-v4-document!`，保存时由 `editor.document/save` 校验并重建 map，
 再以 EDN 序列化写入工作区或显式导出路径。工作区与源文件写入使用临时文件 + 原子替换；
 导出前比较打开时的源文件指纹，外部修改会阻止覆盖并要求 Reload。不存在旧的 `:program`/`:scene` 字符串
 读取器，也不存在字节 splice；因此不会出现“运行时读取一套、编辑器保存另一套”的
@@ -75,7 +75,7 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 目录，禁止新增裸 EDN 注释；这使得编辑器保存、目录扫描和运行时加载都遵循同一份
 结构化数据契约。
 
-技能目录由 `skills-catalog-v3` 扫描，VFX 目录由 `fx-catalog-v3` 扫描；目录中的每个
+技能目录由 `skills-catalog` 扫描，VFX 目录由 `fx-catalog` 扫描；目录中的每个
 文件都必须通过 V4 schema、节点唯一性和对应 capability 编译校验。编辑器 corpus
 测试会逐个打开全部 50 个技能和 36 个 VFX 文件，确保真实内容与 UI 入口使用同一条
 读取路径。

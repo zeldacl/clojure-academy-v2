@@ -187,15 +187,31 @@
           incoming (group-by #(second (:to %)) (filter #(= :data (:kind %)) links))
           exec-node? #(contains? #{:start :component :branch :merge :foreach :repeat :loop-end :end :local-set} (:type %))
           data-node? #(contains? #{:literal :context-ref :parameter-ref :state-ref :local-get} (:type %))
-          node-height (fn [n]
-                        (+ 30.0 (* 14.0 (count (or (:inputs n) {})))))
+          fixed-data-inputs (fn [type]
+                              (case type
+                                :branch [:condition]
+                                :foreach [:collection]
+                                :repeat [:count]
+                                :local-set [:value]
+                                []))
+          input-ports* (fn [nid n]
+                         (vec (distinct
+                               (concat (fixed-data-inputs (:type n))
+                                       (keys (or (:inputs n) {}))
+                                       (keep (fn [l]
+                                               (when (and (= :data (:kind l))
+                                                          (= nid (first (:to l))))
+                                                 (second (:to l))))
+                                             links)))))
+          node-height (fn [nid n]
+                        (+ 30.0 (* 14.0 (count (input-ports* nid n)))))
           title (fn [n]
                   (let [t (:type n)]
                     (if (= :component t) (str (:component n)) (name t))))
           node-items (mapcat (fn [[nid n]]
                                (let [{:keys [x y]} (get layout nid)
-                                     h (node-height n)
-                                     input-ports (keys (or (:inputs n) {}))]
+                                     h (node-height nid n)
+                                     input-ports (input-ports* nid n)]
                                  (concat
                                   [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h h
                                     :rgba (box-color (if (= :component (:type n)) :call (:type n)))}
@@ -240,7 +256,7 @@
                                      pa (get layout from) pb (get layout to)
                                      src-right (+ (:x pa) (if (data-node? (get nodes from)) expr-box-width node-box-width))
                                      dst-left (- (:x pb) 5.0)
-                                     sy (+ (:y pa) (if (data-node? (get nodes from)) 14.0 (/ (node-height (get nodes from)) 2.0)))
+                                     sy (+ (:y pa) (if (data-node? (get nodes from)) 14.0 (/ (node-height from (get nodes from)) 2.0)))
                                      dy (+ (:y pb) 32.0)]
                                  (map #(assoc % :role (if (= :data (:kind l)) :value-wire :exec-wire)
                                                 :from from :to to :from-port from-port :to-port to-port)

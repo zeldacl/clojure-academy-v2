@@ -363,9 +363,25 @@
   (if-let [node (get-in graph [:nodes selected-nid])]
     (if (= :component (:type node))
       (let [entry (some #(when (= (:component node) (:id %)) %) palette)
-            specs (:params entry)]
-        (mapv (fn [[key value]]
-                (let [descriptor (or (get specs key)
+            specs (:params entry)
+            links (:links graph)
+            port-keys (vec (distinct
+                            (concat (keys (or (:inputs node) {}))
+                                    (keep (fn [l]
+                                            (when (and (= :data (:kind l))
+                                                       (= selected-nid (first (:to l))))
+                                              (second (:to l))))
+                                          links))))
+            wired? (fn [key]
+                     (boolean (some (fn [l]
+                                      (and (= :data (:kind l))
+                                           (= selected-nid (first (:to l)))
+                                           (= key (second (:to l)))))
+                                    links)))]
+        (mapv (fn [key]
+                (let [value (get-in node [:inputs key])
+                      wired (wired? key)
+                      descriptor (or (get specs key)
                                      {:type (cond (number? value) :double
                                                   (boolean? value) :boolean
                                                   (string? value) :string
@@ -375,15 +391,15 @@
                       draft-key (keyword (str "node-editor-param-" (name selected-nid) "-" (name key)))]
                   {:nid selected-nid :param-key key :data-nid nil :draft-key draft-key
                    :type type :label (str (name key) (when type (str " [" (name type) "]")))
-                   :value (or (get param-drafts [selected-nid key]) (pr-str value))
-                   :editable? true :toggle? (and (contains? #{:bool :boolean} type) (empty? choices))
+                   :value (if wired "wired" (or (get param-drafts [selected-nid key]) (pr-str value)))
+                   :editable? (not wired) :toggle? (and (not wired) (contains? #{:bool :boolean} type) (empty? choices))
                    :choice? (seq choices) :choices choices :choice-next-label "Next"
-                   :text-editor? (not (or (contains? #{:bool :boolean} type) (seq choices)))
+                   :text-editor? (and (not wired) (not (or (contains? #{:bool :boolean} type) (seq choices))))
                    :vec3-editor? false :vec3-components []
-                   :stepper? (and (contains? #{:int :long :float :double} type) (number? value))
+                   :stepper? (and (not wired) (contains? #{:int :long :float :double} type) (number? value))
                    :control-label (if (= true value) "On" "Off")
                    :decrement-label "−" :increment-label "+"}))
-              (:inputs node)))
+              port-keys))
       (legacy-selected-param-fields {:graph graph :selected-nid selected-nid :palette palette :param-drafts param-drafts}))
     []))
 (defn- parse-editor-value [descriptor raw]
@@ -958,14 +974,21 @@
         output? (= :out from-pin)
         input? (= :in to-pin)
         kind (if (or (contains? data-types (:type from)) (= :value from-key)) :data :exec)
+        from-port (or from-key :exec)
+        to-port (or to-key :in)
+        valid-data-target? (case (:type to)
+                             :component true
+                             :branch (= :condition to-port)
+                             :foreach (= :collection to-port)
+                             :repeat (= :count to-port)
+                             :local-set (= :value to-port)
+                             false)
         link-id (keyword "e" (str "editor-" (System/nanoTime)))]
     (when-not (and from to output? input?)
       (throw (ex-info "V4 wire endpoints must be output to input" {:from from-nid :to to-nid})))
-    (when (and (= :data kind) (contains? data-types (:type to)))
-      (throw (ex-info "V4 data output cannot target a data node" {:to to-nid})))
-    (let [from-port (or from-key :exec)
-          to-port (or to-key :in)
-          links (vec (remove #(and (= kind (:kind %)) (= [to-nid to-port] (:to %))) (:links graph)))]
+    (when (and (= :data kind) (not valid-data-target?))
+      (throw (ex-info "V4 data output must target a declared data input" {:to to-nid :port to-port})))
+    (let [links (vec (remove #(and (= kind (:kind %)) (= [to-nid to-port] (:to %))) (:links graph)))]
       (assoc graph :links (conj links {:id link-id :kind kind
                                        :from [from-nid from-port] :to [to-nid to-port]})))))
 (defn- finish-pointer-drag! [state* payload]

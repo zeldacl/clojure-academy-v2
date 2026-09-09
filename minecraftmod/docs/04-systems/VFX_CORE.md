@@ -33,8 +33,8 @@ Minecraft 渲染状态；真正的渲染由 `platform-src` 的 loader 消费这�
 
 ## 内容加载：现在跟执行引擎读同一套内容
 
-VFX 生产资源只来自 `ac/vfx-v4/*.edn`，由 `fx-catalog-v3` 扫描并校验；技能元数据
-由 `skills-catalog-v3` 扫描 `ac/skills-v4/*.edn`。旧 manifest、旧 effect 目录和
+VFX 生产资源只来自 `ac/vfx-v4/*.edn`，由 `fx-catalog` 扫描并校验；技能元数据
+由 `skills-catalog` 扫描 `ac/skills-v4/*.edn`。旧 manifest、旧 effect 目录和
 旧 composite 资源均已删除，V4 不再存在第二条内容读取路径。
 ## 历史记录：旧引擎里约一半的组件种类从未真正渲染过（S6 转换决策依据）
 

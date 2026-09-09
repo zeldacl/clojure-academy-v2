@@ -1187,7 +1187,7 @@ tasks.register("verifyNodeLayerDiscipline") {
             } else {
                 fileTree(root) { include "*.edn" }.files.each { File doc ->
                     def text = doc.text
-                    if (!(text =~ /:schema\s+:ac\/(?:skill|vfx)-v3/)) {
+                    if (!(text =~ /:schema\s+:ac\/(?:skill|vfx)-v4/)) {
                         violations << "${doc}: missing :ac/skill-v4 or :ac/vfx-v4 schema"
                     }
                 }

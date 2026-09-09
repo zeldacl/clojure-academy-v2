@@ -15,6 +15,20 @@
 (defn- exec-link [links nid port]
   (some #(when (and (= :exec (:kind %)) (= nid (first (:from %))) (= port (second (:from %)))) %) links))
 (defn- target [links nid port] (some-> (exec-link links nid port) :to first))
+(defn- component-input-ports
+  "Return every component input slot declared inline or addressed by a data wire.
+   Migrated V4 graphs may omit an :inputs map for pure calls and rely on the
+   destination port carried by the link, so compilation must not discard those
+   values."
+  [ctx nid]
+  (let [n (get-in ctx [:nodes nid])
+        inline (keys (or (:inputs n) {}))
+        linked (keep (fn [l]
+                       (when (and (= :data (:kind l))
+                                  (= nid (first (:to l))))
+                         (second (:to l))))
+                     (:links ctx))]
+    (vec (distinct (concat inline linked)))))
 
 (declare expr)
 (defn expr [ctx nid]
@@ -26,8 +40,10 @@
                 (contains? #{:context-ref :parameter-ref :state-ref :local-get} (:type n))
                 {:pre [] :form (ref-form n)}
                 (= :component (:type n))
-                (let [parts (for [[p v] (:inputs n)
-                                  :let [l (data-link links nid p) x (if l (expr ctx (first (:from l))) {:pre [] :form v})]]
+                (let [parts (for [p (component-input-ports ctx nid)
+                                  :let [l (data-link links nid p)
+                                        v (get-in n [:inputs p])
+                                        x (if l (expr ctx (first (:from l))) {:pre [] :form v})]]
                               [p x])
                       ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
                       pre (vec (mapcat (comp :pre second) parts))
@@ -51,7 +67,9 @@
   (let [n (get (:nodes ctx) nid)]
     (case (:type n)
       :component
-      (let [parts (for [[p _] (:inputs n) :let [x (port-expr ctx nid p)]] [p x])
+      (let [parts (for [p (component-input-ports ctx nid)
+                        :let [x (port-expr ctx nid p)]]
+                    [p x])
             ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
             pre (vec (mapcat (comp :pre second) parts))
             call (if (= :value/field (:component n)) (list (get ins :field) (get ins :value))

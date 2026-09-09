@@ -48,7 +48,7 @@ passive-effects、activation-context 的 bindings/presentation）现在直接读
 `the ac/skills-v4 directory`），与 dispatch/伤害拦截读的是**同一套内容**——不再有
 第二条内容加载路径。旧 manifest/composite 资源和对应读取器已删除；生产内容只从
 `ac/skills-v4/*.edn` 与 `ac/vfx-v4/*.edn` 进入 V4 catalog。V4 文档由
-`skills-catalog-v3`/`fx-catalog-v3` 解析、校验并编译，运行时只消费编译后的 IR。
+`skills-catalog`/`fx-catalog` 解析、校验并编译 V4 图文档，运行时只消费编译后的 IR。
 `node-core` 的 schema/export API 仅作为编辑器基础设施保留，不读取
 任何旧生产资源。
 ## 新引擎（`cn.li.combat.run`）的模块边界

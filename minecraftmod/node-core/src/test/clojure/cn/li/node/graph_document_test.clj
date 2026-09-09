@@ -103,3 +103,15 @@
                                                   (e :e/bbb :exec [:n/action :out] [:n/end :in])]}})
         {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {:amount {:type :long}}}}} :collect)]
     (is (empty? diagnostics))))
+
+(deftest compiles-component-inputs-addressed-only-by-data-links
+  (let [d (assoc skill :graphs {:default {:on :activation/start
+                                          :nodes {:n/start (n :n/start :start)
+                                                  :n/value (n :n/value :literal :value 3)
+                                                  :n/action (n :n/action :component :component :test/do)
+                                                  :n/end (n :n/end :end)}
+                                          :links [(e :e/exec-a :exec [:n/start :out] [:n/action :in])
+                                                  (e :e/data-a :data [:n/value :value] [:n/action :amount])
+                                                  (e :e/exec-b :exec [:n/action :out] [:n/end :in])]}})
+        {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {:amount {:type :long}}}}} :collect)]
+    (is (empty? diagnostics))))
