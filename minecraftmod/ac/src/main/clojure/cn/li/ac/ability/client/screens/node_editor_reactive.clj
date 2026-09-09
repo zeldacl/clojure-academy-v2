@@ -199,6 +199,12 @@
     (let [entries (entries-of (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
       (assoc state :phase phase :phases (vec (keys entries)) :graph (graph/form->graph stmts)
              :diagnostics (check/diagnostics (:form document) opts) :cost-summary (check/cost-summary (:form document) opts)))))
+(def ^:private v4-fixed-palette
+  (mapv (fn [type]
+          {:id (keyword "node" (name type)) :fixed-type type :params {}
+           :category :control :label (name type) :source :fixed})
+        [:start :component :branch :merge :foreach :repeat :loop-end :end
+         :literal :context-ref :parameter-ref :state-ref :local-get :local-set]))
 (defn open-document
   "path (absolute file path), mode (:skill or :scene) -> a fresh editor
    state. `path` is always the identity used for the layout/workspace
@@ -225,8 +231,8 @@
     (-> {:path path
          :mode mode
          :opts opts
-         :palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
-                                  :category-for (:category-for opts)})
+         :palette (vec (concat v4-fixed-palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
+                                  :category-for (:category-for opts)})))
          :document (cond
                      (document/v4-document? wrapper-doc) (document/open-v4 raw)
                      :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
@@ -866,7 +872,7 @@
                                                          (:bool :boolean) false
                                                          :vec3 [0.0 0.0 0.0]
                                                          nil))]) (:params entry)))
-        node {:nid nid :type :component :component (:id entry) :inputs defaults}]
+        node (if-let [fixed (:fixed-type entry)] {:nid nid :type fixed} {:nid nid :type :component :component (:id entry) :inputs defaults})]
     {:graph (assoc-in graph [:nodes nid] node) :nid nid}))
 (defn- palette-drop! [state* payload]
   (let [item (:drag-item payload)
