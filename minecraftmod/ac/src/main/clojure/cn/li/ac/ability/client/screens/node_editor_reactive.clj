@@ -229,7 +229,6 @@
                                   :category-for (:category-for opts)})
          :document (cond
                      (document/v4-document? wrapper-doc) (document/open-v4 raw)
-                     (document/v4-document? wrapper-doc) (document/open-v4 raw)
                      :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
          :selected-nid nil
          :param-drafts {}
@@ -1178,6 +1177,7 @@
      (bridge/call-adapter :presentation-open-screen!
                           (:mount vm) "Node Editor" on-close)
      vm)))
+
 
 
 
