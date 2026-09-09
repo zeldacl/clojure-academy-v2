@@ -67,6 +67,21 @@
           (catch clojure.lang.ExceptionInfo e
             (re-find #"true and false" (.getMessage e)))))))
 
+(deftest rejects-implicit-multiway-convergence
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/branch (n :n/branch :branch)
+                       :n/join (n :n/join :component :component :test/do)
+                       :n/end (n :n/end :end)}
+               :links [(e :e/one :exec [:n/start :out] [:n/branch :in])
+                       (e :e/t :exec [:n/branch :true] [:n/join :in])
+                       (e :e/f :exec [:n/branch :false] [:n/join :in])
+                       (e :e/out :exec [:n/join :out] [:n/end :in])] }]
+    (is (try
+          (doc/validate-graph! graph [:graphs :default])
+          false
+          (catch clojure.lang.ExceptionInfo e
+            (re-find #"V4" (.getMessage e)))))))
+
 (deftest compiles-minimal-v4-graph
   (let [d (assoc skill :graphs {:default {:on :activation/start
                                           :nodes {:n/start (n :n/start :start)

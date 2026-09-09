@@ -185,12 +185,22 @@
             (require! (= :loop-back (second (:to (first outs))))
                       "V4 loop-end must connect to a loop-back input" {:node nid}))
           (= :end type)
-          (require! (empty? outs) "V4 end cannot have an exec successor" {:node nid})
+          (do
+            (require! (empty? outs) "V4 end cannot have an exec successor" {:node nid})
+            (require! (<= (count ins) 1)
+                      "V4 end cannot merge multiple predecessors without a merge node"
+                      {:node nid}))
           :else
           ;; component/local-set and data nodes are ordinary execution nodes
           ;; only when connected to the exec graph; the compiler validates
-          ;; descriptor-specific execution requirements.
-          (require! (<= (count outs) 1) "V4 ordinary node may have one successor" {:node nid})))
+          ;; descriptor-specific execution requirements.  A node may not be
+          ;; an implicit fan-in point: all multi-way convergence must be
+          ;; represented by an explicit :merge node.
+          (do
+            (require! (<= (count outs) 1) "V4 ordinary node may have one successor" {:node nid})
+            (require! (<= (count ins) 1)
+                      "V4 ordinary node cannot merge multiple predecessors without a merge node"
+                      {:node nid}))))
       (let [data-ins (incoming links nid :data)
             by-port (vals (group-by #(second (:to %)) data-ins))]
         (doseq [port-links by-port]
