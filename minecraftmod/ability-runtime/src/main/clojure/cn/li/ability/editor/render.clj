@@ -146,41 +146,93 @@
             :text text :rgba 0xFFFFFFFF}]
           pins))))
 
-(defn graph->composite-items
-   "graph (cn.li.ability.editor.graph/form->graph's output), stored-layout
-    -> a flat composite-item vector for a :repeater-bound canvas. Execution
-    statements remain the primary top-to-bottom chain; expression nodes are
-    rendered in a secondary column with semantic output/input pins, so wires
-    can be edited without connecting an exec node to an expression slot."
+(defn- graph->composite-items*
+  "Render a legacy surface graph using the existing composite geometry."
   [graph stored-layout]
-   (let [flat (graph/exec-flatten graph)
-         exec-ids (mapv :nid flat)
-         data-ids (->> (:nodes graph) (keep (fn [[nid node]] (when (= :data (:kind node)) nid))) vec)
-         layout (merge (exec-default-layout flat) (expr-default-layout data-ids) stored-layout)
-         nodes (:nodes graph)
-         node-items (mapcat (fn [{:keys [nid]}] (node-composite-items nodes nid (get layout nid))) flat)
-         expr-items (mapcat (fn [nid] (expr-composite-items nodes nid (get layout nid))) data-ids)
-         flow-wires (mapcat (fn [[{a :nid} {b :nid}]]
-                              (let [pa (get layout a) pb (get layout b)]
-                                (wire-quads (+ (:x pa) (/ node-box-width 2.0)) (+ (:y pa) node-box-height)
-                                            (+ (:x pb) (/ node-box-width 2.0)) (:y pb)
-                                            wire-thickness 0xFFAAAAAA)))
-                            (partition 2 1 flat))
-         value-wires (mapcat (fn [{:keys [nid] :as node}]
-                               (mapcat (fn [[key src]]
-                                         (when (contains? nodes src)
-                                           (let [pa (get layout src) pb (get layout nid)]
-                                             (map #(assoc % :role :value-wire :to-key key)
-                                                  (wire-quads (+ (:x pa) expr-box-width) (+ (:y pa) 8.0)
-                                                              (- (:x pb) 5.0) (+ (:y pb) 8.0)
-                                                              wire-thickness 0xFF66CCFF)))))
-                                       (exec-inputs node)))
-                             (map #(get nodes %) exec-ids))]
-     ;; Presentation hit-testing is rectangle based. Keep the authored canvas
-     ;; coordinates in :x/:y for the camera transform, while marking the
-     ;; composite payload as local to the per-item hit wrapper. The UI binds
-     ;; that wrapper to each item's own x/y/w/h, so nodes/pins no longer all
-     ;; occupy the full canvas and the topmost repeater item cannot swallow
-     ;; every click.
-     (mapv #(assoc % :local-x 0.0 :local-y 0.0)
-           (concat expr-items node-items value-wires flow-wires))))
+  (let [flat (graph/exec-flatten graph)
+        exec-ids (mapv :nid flat)
+        data-ids (->> (:nodes graph) (keep (fn [[nid node]] (when (= :data (:kind node)) nid))) vec)
+        layout (merge (exec-default-layout flat) (expr-default-layout data-ids) stored-layout)
+        nodes (:nodes graph)
+        node-items (mapcat (fn [{:keys [nid]}] (node-composite-items nodes nid (get layout nid))) flat)
+        expr-items (mapcat (fn [nid] (expr-composite-items nodes nid (get layout nid))) data-ids)
+        flow-wires (mapcat (fn [[{a :nid} {b :nid}]]
+                             (let [pa (get layout a) pb (get layout b)]
+                               (wire-quads (+ (:x pa) (/ node-box-width 2.0)) (+ (:y pa) node-box-height)
+                                           (+ (:x pb) (/ node-box-width 2.0)) (:y pb)
+                                           wire-thickness 0xFFAAAAAA)))
+                           (partition 2 1 flat))
+        value-wires (mapcat (fn [{:keys [nid] :as node}]
+                              (mapcat (fn [[key src]]
+                                        (when (contains? nodes src)
+                                          (let [pa (get layout src) pb (get layout nid)]
+                                            (map #(assoc % :role :value-wire :to-key key)
+                                                 (wire-quads (+ (:x pa) expr-box-width) (+ (:y pa) 8.0)
+                                                             (- (:x pb) 5.0) (+ (:y pb) 8.0)
+                                                             wire-thickness 0xFF66CCFF)))))
+                                      (exec-inputs node)))
+                            (map #(get nodes %) exec-ids))]
+    (mapv #(assoc % :local-x 0.0 :local-y 0.0)
+          (concat expr-items node-items value-wires flow-wires))))
+
+(defn graph->composite-items
+  "Render both legacy surface graphs and persisted V4 node/link graphs."
+  [graph stored-layout]
+  (if (:order graph)
+    (graph->composite-items* graph stored-layout)
+    (let [nodes (:nodes graph)
+          nids (vec (keys nodes))
+          layout (resolve-layout stored-layout nids)
+          links (:links graph)
+          incoming (group-by #(second (:to %)) (filter #(= :data (:kind %)) links))
+          exec-node? #(contains? #{:start :component :branch :merge :foreach :repeat :loop-end :end :local-set} (:type %))
+          data-node? #(contains? #{:literal :context-ref :parameter-ref :state-ref :local-get} (:type %))
+          node-height (fn [n]
+                        (+ 30.0 (* 14.0 (count (or (:inputs n) {})))))
+          title (fn [n]
+                  (let [t (:type n)]
+                    (if (= :component t) (str (:component n)) (name t))))
+          node-items (mapcat (fn [[nid n]]
+                               (let [{:keys [x y]} (get layout nid)
+                                     h (node-height n)
+                                     input-ports (keys (or (:inputs n) {}))]
+                                 (concat
+                                  [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h h
+                                    :rgba (box-color (if (= :component (:type n)) :call (:type n)))}
+                                   {:kind :text :role :node-label :nid nid :x (+ x 6.0) :y (+ y 5.0)
+                                    :text (title n) :rgba 0xFFFFFFFF}
+                                   {:kind :text :role :node-type :nid nid :x (+ x 6.0) :y (+ y 18.0)
+                                    :text (str "[" (name (:type n)) "]") :rgba 0xFFB8C7D9}]
+                                  (map-indexed (fn [i p]
+                                                 [{:kind :text :role :param-label :nid nid :key p
+                                                   :x (+ x 14.0) :y (+ y 32.0 (* i 14.0))
+                                                   :text (str (name p) " = …") :rgba 0xFFD5E6F2}
+                                                  {:kind :quad :role :pin :target :pin :nid nid :pin :in :key p
+                                                   :x (- x 5.0) :y (+ y 31.0 (* i 14.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}])
+                                               input-ports)
+                                  (when (exec-node? n)
+                                    [{:kind :quad :role :pin :target :pin :nid nid :pin :out :key :exec
+                                      :x (+ x node-box-width) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))))
+                             nodes)
+          data-items (mapcat (fn [[nid n]]
+                               (let [{:keys [x y]} (get layout nid)]
+                                 [{:kind :quad :role :data-body :nid nid :x x :y y :w expr-box-width :h 34.0 :rgba 0xFF34495E}
+                                  {:kind :text :role :data-label :nid nid :x (+ x 6.0) :y (+ y 6.0)
+                                   :text (str (name (:type n)) " " (or (:key n) (:value n) "")) :rgba 0xFFE8F1F8}
+                                  {:kind :quad :role :pin :target :pin :nid nid :pin :out :key :value
+                                   :x (+ x expr-box-width) :y (+ y 14.0) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))
+                            (filter (fn [[_ n]] (data-node? n)) nodes))
+          wire-items (mapcat (fn [l]
+                               (let [[from from-port] (:from l) [to to-port] (:to l)
+                                     pa (get layout from) pb (get layout to)
+                                     src-right (+ (:x pa) (if (data-node? (get nodes from)) expr-box-width node-box-width))
+                                     dst-left (- (:x pb) 5.0)
+                                     sy (+ (:y pa) (if (data-node? (get nodes from)) 14.0 (/ (node-height (get nodes from)) 2.0)))
+                                     dy (+ (:y pb) 32.0)]
+                                 (map #(assoc % :role (if (= :data (:kind l)) :value-wire :exec-wire)
+                                                :from from :to to :from-port from-port :to-port to-port)
+                                      (wire-quads src-right sy dst-left dy wire-thickness
+                                                  (if (= :data (:kind l)) 0xFF66CCFF 0xFFAAAAAA)))))
+                             links)]
+      (mapv #(assoc % :local-x 0.0 :local-y 0.0)
+            (concat node-items data-items wire-items)))))

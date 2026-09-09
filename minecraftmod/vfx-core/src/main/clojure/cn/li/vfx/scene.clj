@@ -63,7 +63,7 @@
 (defn compile-v4-document!
   "Compile persisted :ac/vfx-v4 graph documents."
   [document]
-  (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)]) (:parameters document)))
+  (let [input-types (into {} (map (fn [[k spec]] [k (:type spec)]) (or (:inputs document) (:parameters document))))
         {:keys [ir diagnostics]} (graph-compile/compile-vfx! document {:vocab vocab/nodes :capabilities (capabilities-for input-types) :fns {}} :throw)]
     (when (seq diagnostics) (throw (ex-info "V4 VFX graph compilation failed" {:diagnostics diagnostics})))
     (compile-program ir)))
