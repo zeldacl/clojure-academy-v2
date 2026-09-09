@@ -704,13 +704,15 @@
         nid (or (:nid item) (:selected-nid @state* ))
         key (:param-key item)
         raw (or (:value payload) (:value item) (:text payload))
-        node (get-in @state* [:graph :nodes nid])]
+        node (get-in @state* [:graph :nodes nid])
+        linked? (some #(and (= :data (:kind %)) (= [nid key] (:to %))) (get-in @state* [:graph :links]))]
     (if (= :component (:type node))
       (let [entry (some #(when (= (:component node) (:id %)) %) (:palette @state*))
             descriptor (or (get-in entry [:params key]) {:type :any})
             parsed (parse-editor-value descriptor raw)]
         (cond
           (nil? key) (swap! state* assoc :status "Unknown node parameter.")
+          linked? (swap! state* assoc :status "This input is driven by a data wire; edit the source node instead.")
           (nil? parsed) (swap! state* assoc :status (str "Invalid " (name key) " value."))
           (and (seq (:choices descriptor)) (not (some #(= parsed %) (:choices descriptor))))
           (swap! state* assoc :status (str "Choose one of the allowed values for " (name key) "."))
