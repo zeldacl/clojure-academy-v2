@@ -222,6 +222,16 @@
            :category :control :label (name type) :source :fixed})
         [:start :branch :merge :foreach :repeat :loop-end :end
          :literal :context-ref :parameter-ref :state-ref :local-get :local-set]))
+(def ^:private v4-fixed-param-specs
+  {:foreach {:limit {:type :int :default 256}}
+   :repeat {:count {:type :int :default 1}}
+   :literal {:value {:type :any :default nil}}
+   :context-ref {:key {:type :keyword :default :value}}
+   :parameter-ref {:key {:type :keyword :default :value}}
+   :state-ref {:key {:type :keyword :default :value}}
+   :local-get {:key {:type :keyword :default :value}}
+   :local-set {:key {:type :keyword :default :value}
+               :operation {:type :keyword :default :assign :choices [:define :assign]}}})
 (defn open-document
   "path (absolute file path), mode (:skill or :scene) -> a fresh editor
    state. `path` is always the identity used for the layout/workspace
@@ -417,7 +427,22 @@
                    :control-label (if (= true value) "On" "Off")
                    :decrement-label "−" :increment-label "+"}))
               port-keys))
-      (legacy-selected-param-fields {:graph graph :selected-nid selected-nid :palette palette :param-drafts param-drafts}))
+      (if-let [fixed-specs (get v4-fixed-param-specs (:type node))]
+        (mapv (fn [[key descriptor]]
+                (let [value (get node key)
+                      type (:type descriptor)
+                      choices (vec (filter keyword? (:choices descriptor)))
+                      draft-key (keyword (str "node-editor-param-" (name selected-nid) "-" (name key)))]
+                  {:nid selected-nid :param-key key :data-nid nil :draft-key draft-key
+                   :type type :label (str (name key) (when type (str " [" (name type) "]")))
+                   :value (or (get param-drafts [selected-nid key]) (pr-str value))
+                   :editable? true :toggle? false
+                   :choice? (seq choices) :choices choices :choice-next-label "Next"
+                   :text-editor? (not (seq choices)) :vec3-editor? false :vec3-components []
+                   :stepper? (and (contains? #{:int :long :float :double} type) (number? value))
+                   :control-label "" :decrement-label "−" :increment-label "+"}))
+              fixed-specs)
+        (legacy-selected-param-fields {:graph graph :selected-nid selected-nid :palette palette :param-drafts param-drafts})))
     []))
 (defn- parse-editor-value [descriptor raw]
   (let [type (:type descriptor)
@@ -763,17 +788,34 @@
                   (install-graph! state* (assoc-in (:graph @state*) [:nodes nid :inputs key] parsed))
                   (swap! state* (fn [s] (-> s (update :param-drafts dissoc [nid key])
                                                 (assoc :status (str "Updated " (name key) "."))))))))
-      (legacy-param-submit state* payload))))
+       (if-let [descriptor (and (:v4? (:document @state*))
+                                (get-in v4-fixed-param-specs [(:type node) key]))]
+         (let [parsed (parse-editor-value descriptor raw)]
+           (cond
+             (nil? key) (swap! state* assoc :status "Unknown node parameter.")
+             (nil? parsed) (swap! state* assoc :status (str "Invalid " (name key) " value."))
+             (and (seq (:choices descriptor))
+                  (not (some #(= parsed %) (:choices descriptor))))
+             (swap! state* assoc :status (str "Choose one of the allowed values for " (name key) "."))
+             :else (do
+                     (install-graph! state* (assoc-in (:graph @state*) [:nodes nid key] parsed))
+                     (swap! state* (fn [s] (-> s (update :param-drafts dissoc [nid key])
+                                                   (assoc :status (str "Updated " (name key) "."))))))))
+          (legacy-param-submit state* payload)))))
 (defn- param-step [state* payload direction]
   (let [item (or (:item payload) payload)
         nid (or (:nid item) (:selected-nid @state*))
         key (:param-key item)
+        node (get-in @state* [:graph :nodes nid])
+        fixed-descriptor (and (:v4? (:document @state*))
+                              (get-in v4-fixed-param-specs [(:type node) key]))
         data-nid (or (:data-nid item) (get-in @state* [:graph :nodes nid :args key]))
         data (get-in @state* [:graph :nodes data-nid])
-        entry (some #(when (= (node-op-id (get-in @state* [:graph :nodes nid])) (:id %)) %) (:palette @state*))
-        descriptor (get-in entry [:params key])
+        entry (some #(when (= (node-op-id node) (:id %)) %) (:palette @state*))
+        descriptor (or fixed-descriptor (get-in entry [:params key]))
         type (:type descriptor)
-        current (when (number? (:value data)) (double (:value data)))
+        current-value (if fixed-descriptor (get node key) (:value data))
+        current (when (number? current-value) (double current-value))
         step (if (contains? #{:float :double} type) 0.1 1.0)
         raw-next (when (some? current) (+ current (* direction step)))
         next-value (cond-> raw-next
@@ -799,12 +841,14 @@
         nid (or (:nid item) (:selected-nid @state*))
         key (:param-key item)
         node (get-in @state* [:graph :nodes nid])
+        fixed-descriptor (and (:v4? (:document @state*))
+                              (get-in v4-fixed-param-specs [(:type node) key]))
         ref (get (node-input-refs node) key)
         data (get-in @state* [:graph :nodes ref])
         entry (some #(when (= (node-op-id node) (:id %)) %) (:palette @state*))
-        descriptor (get-in entry [:params key])
+        descriptor (or fixed-descriptor (get-in entry [:params key]))
         choices (vec (filter keyword? (:choices descriptor)))
-        current (parse-editor-value descriptor (or (:value item) (:value data)))
+        current (parse-editor-value descriptor (if fixed-descriptor (get node key) (or (:value item) (:value data))))
         index (or (first (keep-indexed (fn [i v] (when (= current v) i)) choices)) -1)
         next-value (when (seq choices) (nth choices (mod (+ index direction) (count choices))))]
     (if next-value
@@ -907,7 +951,16 @@
                                                          (:bool :boolean) false
                                                          :vec3 [0.0 0.0 0.0]
                                                          nil))]) (:params entry)))
-        node (if-let [fixed (:fixed-type entry)] {:nid nid :type fixed} {:nid nid :type :component :component (:id entry) :inputs defaults})]
+        node (if-let [fixed (:fixed-type entry)]
+               (merge {:nid nid :type fixed}
+                      (case fixed
+                        :foreach {:limit 256 :as :item}
+                        :repeat {:count 1}
+                        :literal {:value nil}
+                        (:context-ref :parameter-ref :state-ref :local-get) {:key :value}
+                        :local-set {:key :value :operation :assign}
+                        {}))
+               {:nid nid :type :component :component (:id entry) :inputs defaults})]
     {:graph (assoc-in graph [:nodes nid] node) :nid nid}))
 (defn- palette-drop! [state* payload]
   (let [item (:drag-item payload)

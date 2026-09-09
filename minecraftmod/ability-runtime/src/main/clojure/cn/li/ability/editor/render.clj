@@ -207,7 +207,15 @@
                         (+ 30.0 (* 14.0 (count (input-ports* nid n)))))
           title (fn [n]
                   (let [t (:type n)]
-                    (if (= :component t) (str (:component n)) (name t))))
+                    (cond
+                      (= :component t) (str (:component n))
+                      (= :foreach t) (str "foreach (limit " (:limit n) ")")
+                      (= :repeat t) (str "repeat (count " (:count n) ")")
+                      (contains? #{:context-ref :parameter-ref :state-ref :local-get} t)
+                      (str (name t) " " (:key n))
+                      (= :local-set t) (str "local-set " (:key n))
+                      (= :literal t) (str "literal " (pr-str (:value n)))
+                      :else (name t))))
           node-items (mapcat (fn [[nid n]]
                                (let [{:keys [x y]} (get layout nid)
                                      h (node-height nid n)
