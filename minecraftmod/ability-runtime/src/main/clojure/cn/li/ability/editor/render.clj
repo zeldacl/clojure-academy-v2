@@ -293,4 +293,7 @@
                                                   (if (= :data (:kind l)) 0xFF66CCFF 0xFFAAAAAA)))))
                              links)]
       (mapv #(assoc % :local-x 0.0 :local-y 0.0)
-            (concat node-items data-items wire-items)))))
+            ;; Paint wires first so crossings never obscure node bodies or
+            ;; parameter slots, matching the Blueprint/Niagara convention
+            ;; while retaining the same hit-test geometry.
+            (concat wire-items node-items data-items)))))
