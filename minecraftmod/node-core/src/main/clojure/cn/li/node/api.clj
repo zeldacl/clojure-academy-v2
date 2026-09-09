@@ -11,6 +11,7 @@
    validation), not speculative coverage."
   (:require [cn.li.node.digest :as digest]
             [cn.li.node.document :as document]
+            [cn.li.node.graph-document :as graph-document]
             [cn.li.node.document-compile :as document-compile]
             [cn.li.node.schema-export :as schema-export]
             [cn.li.node.scope :as scope]
@@ -27,6 +28,17 @@
   (digest/content-hash (document/semantic-document value)))
 (defn compile-skill-document! [value opts mode]
   (document-compile/compile-skill! value opts mode))
+
+;; ---- V4 graph documents -------------------------------------------------
+;; Kept additive while the catalog cutover is in progress.  The old facade
+;; remains available until all resources have been converted; no runtime
+;; caller should depend on these transitional names after cutover.
+(defn validate-v4-document! [value]
+  (graph-document/validate-document! value))
+(defn v4-document-kind [value]
+  (graph-document/kind value))
+(defn v4-document-semantic-digest [value]
+  (digest/content-hash (graph-document/semantic-document value)))
 
 ;; ---- structural validation ----
 (defn validate-in-environment! [node-environment program] (validate/validate-in-environment! node-environment program))
