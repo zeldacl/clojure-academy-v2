@@ -71,6 +71,12 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 读取器，也不存在字节 splice；因此不会出现“运行时读取一套、编辑器保存另一套”的
 双格式问题。
 
+V4 图的固定节点集合为 `start`、`component`、`branch`、`merge`、`foreach`、
+`repeat`、`loop-end`、`end`、`literal`、`context-ref`、`parameter-ref`、
+`state-ref`、`local-get`、`local-set`。其中数据节点只提供 `value` 输出；
+组件的数据输入由 inline `:inputs` 或数据线目标端口声明。所有固定端口、循环边和
+分支收敛由 node-core validator 与 graph compiler 双重检查。
+
 作者说明放在 `:doc` 数据字段中。`verifyContentEdnNoRawComments` 会扫描两个 V4
 目录，禁止新增裸 EDN 注释；这使得编辑器保存、目录扫描和运行时加载都遵循同一份
 结构化数据契约。
@@ -88,11 +94,13 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 `if` 最初被想当然地认为很少见、准备跳过不支持，结果发现 50 个技能文件里 31 个
 用了它，于是老老实实实现了，不是留一个"documented gap"。`ac/.../editor_corpus_test.clj` 会打开全部 50 个技能与 36 个场景效果，验证结构化 V4 schema、节点 ID 唯一性和编辑器读取路径，这是真实 corpus 校验，不是挑几个样例文件自证。
 
-`render.clj` 以 exec 语句链为主视图（每条语句一个方框，标签是
-`graph/stmt-text`——`pr-str` 该语句的表层 form，保证画布上看到的文字永远和保存
-会写出的内容一致），并在右侧显示被引用的纯表达式节点。表达式节点提供输出引脚，
-语句节点提供语义输入引脚，连接后通过 `graph->form` 重建真实表单；这是 Blueprint
-数据连线能力的收敛版本，而不是把所有控制流拆成难读的大图。
+`render.clj` 对生产用 V4 文档直接绘制自由二维节点图：执行节点、数据节点和两类
+语义连线分别渲染，节点位置来自 layout sidecar，节点内部显示实际参数槽和 wired
+状态；viewport 只是同一张图的放大操作层，不改变文档坐标。旧的
+`graph/exec-flatten`/`graph->form` 双向转换仍只服务法术合成器和兼容的表层 DSL，
+不会把 V4 图重新压扁成一条执行链。V4 节点通过固定端口约束连接：普通执行节点
+最多一个后继，branch 只有 true/false，foreach/repeat 有 body/completed，所有
+多路汇合必须显式经过 merge；保存和编译都会再次校验这些约束。
 
 ## 已知边界与后续工作（不是遗漏）
 

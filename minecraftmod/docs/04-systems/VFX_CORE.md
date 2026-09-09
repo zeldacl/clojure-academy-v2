@@ -27,7 +27,7 @@ Minecraft 渲染状态；真正的渲染由 `platform-src` 的 loader 消费这�
 | 客户端实例存储 | `cn.li.vfx.runtime`（`create-client-runtime`/`dispatch-signal!`/`client-tick!`/`sample-client-frame!`）——复刻了旧 `final-client` 的 event-seq/state-seq 去重 + tombstone + 帧池化语义，键控在 `instance-key` 上而非旧引擎自己的合成 id，`instance-for-owner` 之外全是 O(1) |
 | Java 帧投影 | `cn.li.vfx.frame/->java-frame`：把 `scene/sample!` 的 op 翻译成旧引擎曾经产出的同一套 `VfxBatch`/`VfxOutput`/`VfxFrame`（`legacy-op` 表，字段映射对照真实内容核实过，不是猜的），下游渲染桥接（`ability-runtime` 的 `compose.clj`、每个 loader 的 `presentation_world_renderer.clj`）零改动 |
 | 客户端组合根 | `cn.li.ability.client-vfx-v2`（`ability-runtime`），真实调用点：`ac/content/ability_client.clj` 的 `init-client-fx!`、`ac/client/vfx_host.clj` 的 `install!`、`ac/gui/reactive/register.clj` 的 `sampled-vfx-frame!`、`ac/ability/client/reactive_hud.clj` 的 storm-wing/flashing 状态读取 |
-| 内容资源 | `ac/vfx-v4/*.edn`（每个文件都是可校验的 `:ac/vfx-v4` map，阶段位于 `:system`） |
+| 内容资源 | `ac/vfx-v4/*.edn`（每个文件都是可校验的 `:ac/vfx-v4` map，执行图位于 `:graphs :render`） |
 | 复用单元 | 无（36 个真实效果都不需要跨效果复用；见 NODE_LANGUAGE.md §8） |
 | 粒子模拟 | `cn.li.vfx.compile`（Niagara 模块栈 + SoA 布局）证明了模型，但没有真实内容在用它 |
 
@@ -39,7 +39,7 @@ VFX 生产资源只来自 `ac/vfx-v4/*.edn`，由 `fx-catalog` 扫描并校验�
 ## 历史记录：旧引擎里约一半的组件种类从未真正渲染过（S6 转换决策依据）
 
 `cn.li.vfx.final-engine`/`final_catalog.clj` 均已删除；本节保留作为
-`ac/vfx-v4/*.edn` 里为什么某些效果的 `:scene` 是诚实的空场景的历史依据，不再
+`ac/vfx-v4/*.edn` 里为什么某些效果的 `:graphs :render` 是诚实的空图的历史依据，不再
 描述任何仍在运行的代码。`cn.li.vfx.final-engine/sample-node`（已删除）的
 `case` 分支只覆盖：`:vfx/let :vfx/repeat
 :vfx/timeline :vfx/group :vfx/branch :vfx/fade :vfx/ring :vfx/beam :vfx/ray-beam
@@ -54,8 +54,8 @@ VFX 生产资源只来自 `ac/vfx-v4/*.edn`，由 `fx-catalog` 扫描并校验�
 `arc-field`。
 
 V4 不再保留零调用的 composite 文件，也不存在旧的 `load-vfx` 读取路径。需要复用的
-场景结构直接写入 `ac/vfx-v4/*.edn` 的 `:scene`，运行时由 V4 compiler 生成统一 IR；
-无渲染效果使用诚实的空场景。通用 schema/export 代码只服务于编辑器元数据导出，
+场景结构直接写入 `ac/vfx-v4/*.edn` 的 `:graphs :render`，运行时由 V4 graph compiler 生成统一 IR；
+无渲染效果使用诚实的空 render graph。通用 schema/export 代码只服务于编辑器元数据导出，
 不参与生产内容加载。
 ## 场景 DSL 的模块边界（新引擎）
 

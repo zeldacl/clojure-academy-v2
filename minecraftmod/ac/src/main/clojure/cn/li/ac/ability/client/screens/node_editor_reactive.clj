@@ -1291,8 +1291,12 @@
           key (:param-key item)
           value (or (:value payload) (:value item) (:text payload))
           node (get-in @state* [:graph :nodes nid])
-          refs (node-input-refs node)]
-      (when (and node key (contains? refs key) (some? value))
+          refs (node-input-refs node)
+          v4-editable? (and (:v4? (:document @state*))
+                            (or (= :component (:type node))
+                                (contains? v4-fixed-param-specs (:type node))))]
+      (when (and node key (some? value)
+                 (or (contains? refs key) v4-editable?))
         (swap! state* assoc-in [:param-drafts [nid key]] (str value))))
 
     :editor/param-submit
