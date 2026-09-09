@@ -223,8 +223,8 @@
         [:start :branch :merge :foreach :repeat :loop-end :end
          :literal :context-ref :parameter-ref :state-ref :local-get :local-set]))
 (def ^:private v4-fixed-param-specs
-  {:foreach {:limit {:type :int :default 256}}
-   :repeat {:count {:type :int :default 1}}
+  {:foreach {:limit {:type :int :default 256 :min 1 :max 256}}
+   :repeat {:count {:type :int :default 1 :min 1 :max 256}}
    :literal {:value {:type :any :default nil}}
    :context-ref {:key {:type :keyword :default :value}}
    :parameter-ref {:key {:type :keyword :default :value}}
@@ -797,6 +797,8 @@
              (and (seq (:choices descriptor))
                   (not (some #(= parsed %) (:choices descriptor))))
              (swap! state* assoc :status (str "Choose one of the allowed values for " (name key) "."))
+             (not (editor-value-within-bounds? descriptor parsed))
+             (swap! state* assoc :status (str "Value for " (name key) " is outside the allowed range."))
              :else (do
                      (install-graph! state* (assoc-in (:graph @state*) [:nodes nid key] parsed))
                      (swap! state* (fn [s] (-> s (update :param-drafts dissoc [nid key])

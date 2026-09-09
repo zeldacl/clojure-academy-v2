@@ -94,3 +94,16 @@
     (is (some #(and (= :out (:pin %)) (= :data (:kind (get (:nodes g) (:nid %))))) pins))
     (is (some #(= :in (:pin %)) pins))
     (is (seq value-wires))))
+
+(deftest v4-loop-nodes-render-body-and-completed-pins-test
+  (let [g {:nodes {:n/start {:nid :n/start :type :start}
+                   :n/each {:nid :n/each :type :foreach :limit 8}
+                   :n/repeat {:nid :n/repeat :type :repeat :count 2}
+                   :n/end {:nid :n/end :type :end}}
+          :links []}
+        items (render/graph->composite-items g {})
+        pins (filter #(and (= :pin (:role %)) (= :out (:pin %))) items)]
+    (is (some #(and (= :n/each (:nid %)) (= :body (:key %))) pins))
+    (is (some #(and (= :n/each (:nid %)) (= :completed (:key %))) pins))
+    (is (some #(and (= :n/repeat (:nid %)) (= :body (:key %))) pins))
+    (is (some #(and (= :n/repeat (:nid %)) (= :completed (:key %))) pins))))
