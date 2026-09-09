@@ -107,3 +107,17 @@
     (is (some #(and (= :n/each (:nid %)) (= :completed (:key %))) pins))
     (is (some #(and (= :n/repeat (:nid %)) (= :body (:key %))) pins))
     (is (some #(and (= :n/repeat (:nid %)) (= :completed (:key %))) pins))))
+(deftest v4-sentinel-pins-match-execution-contract-test
+  (let [g {:nodes {:n/start {:nid :n/start :type :start}
+                   :n/end {:nid :n/end :type :end}}
+           :links []}
+        pins (filter #(and (= :pin (:role %)) (= :exec (:kind %)))
+                     (render/graph->composite-items g {}))]
+    ;; Start is a source-only sentinel; end is a sink-only sentinel.  The
+    ;; renderer must not expose phantom ports that the graph validator
+    ;; rejects, otherwise users see an apparently connectable but invalid
+    ;; endpoint in the Blueprint-style canvas.
+    (is (some #(and (= :n/start (:nid %)) (= :out (:pin %)) (= :out (:key %))) pins))
+    (is (not-any? #(and (= :n/start (:nid %)) (= :in (:pin %))) pins))
+    (is (some #(and (= :n/end (:nid %)) (= :in (:pin %))) pins))
+    (is (not-any? #(and (= :n/end (:nid %)) (= :out (:pin %))) pins))))

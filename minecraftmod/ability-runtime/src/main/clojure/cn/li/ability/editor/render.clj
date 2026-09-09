@@ -186,6 +186,21 @@
           links (:links graph)
           incoming (group-by #(second (:to %)) (filter #(= :data (:kind %)) links))
           exec-node? #(contains? #{:start :component :branch :merge :foreach :repeat :loop-end :end :local-set} (:type %))
+          ;; Keep the visual pin contract identical to graph-document's
+          ;; validator.  Sentinels deliberately have asymmetric ports:
+          ;; start has only an output and end has only an input.  Rendering a
+          ;; phantom end output makes the editor suggest an edge that can
+          ;; never be persisted or compiled.
+          exec-input? #(contains? #{:component :branch :merge :foreach :repeat :loop-end :end :local-set} (:type %))
+          exec-outputs {:start [:out]
+                        :component [:out]
+                        :branch [:true :false]
+                        :merge [:out]
+                        :foreach [:body :completed]
+                        :repeat [:body :completed]
+                        :loop-end [:continue]
+                        :local-set [:out]
+                        :end []}
           data-node? #(contains? #{:literal :context-ref :parameter-ref :state-ref :local-get} (:type %))
           fixed-data-inputs (fn [type]
                               (case type
@@ -241,18 +256,14 @@
                                                 (map-indexed vector input-ports))
                                   (when (exec-node? n)
                                     (concat
-                                     [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key :in
-                                       :x (- x 5.0) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]
+                                     (when (exec-input? n)
+                                       [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key :in
+                                         :x (- x 5.0) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}])
                                      (map-indexed (fn [i port]
                                                     {:kind :quad :role :pin :target :pin :nid nid :pin :out :key port
                                                      :x (+ x node-box-width) :y (+ y 12.0 (* i 12.0))
                                                      :w 5.0 :h 5.0 :rgba 0xFFFFCC66})
-                                                  (case (:type n)
-                                                    :branch [:true :false]
-                                     :foreach [:body :completed]
-                                     :repeat [:body :completed]
-                                                    :loop-end [:continue]
-                                                    [:exec]))))
+                                                  (get exec-outputs (:type n) []))))
                                   (when (= :component (:type n))
                                     [{:kind :quad :role :pin :target :pin :nid nid :pin :out :key :value
                                       :x (+ x node-box-width) :y (+ y (- h 8.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]))))

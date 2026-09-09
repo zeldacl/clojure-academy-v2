@@ -946,13 +946,20 @@
 
 (defn- insert-v4-palette-node [graph entry prefix]
   (let [nid (keyword "n" (str prefix "-call"))
+        fixed (:fixed-type entry)
+        ;; A V4 document has exactly one start sentinel. Rejecting a second
+        ;; one at insertion time keeps the editor from creating a graph that
+        ;; can only ever report a validation error on save/compile.
+        _ (when (and (= :start fixed)
+                     (some #(= :start (:type %)) (vals (:nodes graph))))
+            (throw (ex-info "V4 graph already has a start node" {})))
         defaults (into {} (map (fn [[k d]] [k (or (:default d)
                                                    (case (:type d) (:float :double) 0.0
                                                          (:int :long) 0
                                                          (:bool :boolean) false
                                                          :vec3 [0.0 0.0 0.0]
                                                          nil))]) (:params entry)))
-        node (if-let [fixed (:fixed-type entry)]
+        node (if fixed
                (merge {:nid nid :type fixed}
                       (case fixed
                         :foreach {:limit 256 :as :item}
