@@ -3,7 +3,7 @@
 > 语言本体见 [NODE_LANGUAGE.md](NODE_LANGUAGE.md) §7（场景 DSL）——本文只讲
 > vfx-core 如何使用它、模块边界、以及排障。VFX 的**执行**侧（采样/实例生命周期/
 > 渲染）和**内容元数据加载**侧（`combat-catalog.clj`，读 skill tree UI/trigger
-> 需要的字段）现在都只读 `ac/vfx-v3/*.edn`——旧内容目录
+> 需要的字段）现在都只读 `ac/vfx-v4/*.edn`——旧内容目录
 > （`旧 VFX effect 目录`/`ac/vfx/manifest.edn`）和旧加载器
 > （`ac/ability/final_catalog.clj`、`vfx-core/vocabulary.clj`/
 > `system_compiler.clj`）**已全部删除**，见下方"内容加载侧"一节。
@@ -27,19 +27,19 @@ Minecraft 渲染状态；真正的渲染由 `platform-src` 的 loader 消费这�
 | 客户端实例存储 | `cn.li.vfx.runtime`（`create-client-runtime`/`dispatch-signal!`/`client-tick!`/`sample-client-frame!`）——复刻了旧 `final-client` 的 event-seq/state-seq 去重 + tombstone + 帧池化语义，键控在 `instance-key` 上而非旧引擎自己的合成 id，`instance-for-owner` 之外全是 O(1) |
 | Java 帧投影 | `cn.li.vfx.frame/->java-frame`：把 `scene/sample!` 的 op 翻译成旧引擎曾经产出的同一套 `VfxBatch`/`VfxOutput`/`VfxFrame`（`legacy-op` 表，字段映射对照真实内容核实过，不是猜的），下游渲染桥接（`ability-runtime` 的 `compose.clj`、每个 loader 的 `presentation_world_renderer.clj`）零改动 |
 | 客户端组合根 | `cn.li.ability.client-vfx-v2`（`ability-runtime`），真实调用点：`ac/content/ability_client.clj` 的 `init-client-fx!`、`ac/client/vfx_host.clj` 的 `install!`、`ac/gui/reactive/register.clj` 的 `sampled-vfx-frame!`、`ac/ability/client/reactive_hud.clj` 的 storm-wing/flashing 状态读取 |
-| 内容资源 | `ac/vfx-v3/*.edn`（每个文件都是可校验的 `:ac/vfx-v3` map，阶段位于 `:system`） |
+| 内容资源 | `ac/vfx-v4/*.edn`（每个文件都是可校验的 `:ac/vfx-v4` map，阶段位于 `:system`） |
 | 复用单元 | 无（36 个真实效果都不需要跨效果复用；见 NODE_LANGUAGE.md §8） |
 | 粒子模拟 | `cn.li.vfx.compile`（Niagara 模块栈 + SoA 布局）证明了模型，但没有真实内容在用它 |
 
 ## 内容加载：现在跟执行引擎读同一套内容
 
-VFX 生产资源只来自 `ac/vfx-v3/*.edn`，由 `fx-catalog-v3` 扫描并校验；技能元数据
-由 `skills-catalog-v3` 扫描 `ac/skills-v3/*.edn`。旧 manifest、旧 effect 目录和
-旧 composite 资源均已删除，V3 不再存在第二条内容读取路径。
+VFX 生产资源只来自 `ac/vfx-v4/*.edn`，由 `fx-catalog-v3` 扫描并校验；技能元数据
+由 `skills-catalog-v3` 扫描 `ac/skills-v4/*.edn`。旧 manifest、旧 effect 目录和
+旧 composite 资源均已删除，V4 不再存在第二条内容读取路径。
 ## 历史记录：旧引擎里约一半的组件种类从未真正渲染过（S6 转换决策依据）
 
 `cn.li.vfx.final-engine`/`final_catalog.clj` 均已删除；本节保留作为
-`ac/vfx-v3/*.edn` 里为什么某些效果的 `:scene` 是诚实的空场景的历史依据，不再
+`ac/vfx-v4/*.edn` 里为什么某些效果的 `:scene` 是诚实的空场景的历史依据，不再
 描述任何仍在运行的代码。`cn.li.vfx.final-engine/sample-node`（已删除）的
 `case` 分支只覆盖：`:vfx/let :vfx/repeat
 :vfx/timeline :vfx/group :vfx/branch :vfx/fade :vfx/ring :vfx/beam :vfx/ray-beam
@@ -53,8 +53,8 @@ VFX 生产资源只来自 `ac/vfx-v3/*.edn`，由 `fx-catalog-v3` 扫描并校�
 `trajectory-ribbon`/`humanoid-marker`/`beam-arc-fade`/`arc-strike`/`ray-fan`/
 `arc-field`。
 
-V3 不再保留零调用的 composite 文件，也不存在旧的 `load-vfx` 读取路径。需要复用的
-场景结构直接写入 `ac/vfx-v3/*.edn` 的 `:scene`，运行时由 V3 compiler 生成统一 IR；
+V4 不再保留零调用的 composite 文件，也不存在旧的 `load-vfx` 读取路径。需要复用的
+场景结构直接写入 `ac/vfx-v4/*.edn` 的 `:scene`，运行时由 V4 compiler 生成统一 IR；
 无渲染效果使用诚实的空场景。通用 schema/export 代码只服务于编辑器元数据导出，
 不参与生产内容加载。
 ## 场景 DSL 的模块边界（新引擎）
@@ -68,15 +68,15 @@ V3 不再保留零调用的 composite 文件，也不存在旧的 `load-vfx` 读
   这次采样产出的 op 向量）。
 - `vfx-core/src/main/clojure/cn/li/vfx/layout.clj` + `compile.clj`：Niagara
   模块栈机制，粒子属性 → SoA 列布局 → 编译好的逐粒子闭包。目前没有真实
-  `ac/vfx-v3/*.edn` 内容在用；是给未来需要真正 CPU 端逐粒子模拟的内容留的
+  `ac/vfx-v4/*.edn` 内容在用；是给未来需要真正 CPU 端逐粒子模拟的内容留的
   能力，不是当前 36 个效果缺的东西。
 
 ## 内容加载侧的模块边界
 
-- `ac/src/main/clojure/cn/li/ac/vfx/fx_catalog.clj`：扫描 `ac/vfx-v3/*.edn`，是
+- `ac/src/main/clojure/cn/li/ac/vfx/fx_catalog.clj`：扫描 `ac/vfx-v4/*.edn`，是
   VFX 执行引擎唯一的内容来源。
 - `ac/src/main/clojure/cn/li/ac/ability/service/combat_catalog.clj`：技能元数据
-  侧读 `ac/skills-v3/*.edn`，不再走独立 manifest 或旧 composite 加载路径。
+  侧读 `ac/skills-v4/*.edn`，不再走独立 manifest 或旧 composite 加载路径。
 - `vfx-core/src/main/clojure/cn/li/vfx/dsl_vocabulary.clj` 与
   `node-core` composite/schema 命名空间仍是编辑器 schema-export 基础设施，
   但不读取任何旧生产资源。
@@ -92,7 +92,7 @@ V3 不再保留零调用的 composite 文件，也不存在旧的 `load-vfx` 读
 
 ## 排障手册
 
-- 一份 `ac/vfx-v3/*.edn` 效果编译报 `unknown-node` → 对照 `dsl_vocabulary.clj`
+- 一份 `ac/vfx-v4/*.edn` 效果编译报 `unknown-node` → 对照 `dsl_vocabulary.clj`
   声明的叶子节点名字/字段。
 - 需要按 `:progress`/年龄插值的字段（旧的 `{:from :to}` 隐式 lerp）→ 显式写
   `(math/lerp from to ?progress)`，见 NODE_LANGUAGE.md §7。`cn.li.vfx.runtime/
@@ -124,3 +124,4 @@ ac:runAcClojureTests   （包含 cn.li.ac.vfx.fx-test，36/36 效果的 compile+
 实机渲染效果本身（画面是否好看、粒子数值是否合适）不在任何自动化验收范围
 内——这些门禁证明的是"编译通过、数据形状正确、翻译桥接产出跟旧引擎相同的
 Java 类型"，不是"游戏里看起来对"。
+

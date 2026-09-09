@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.service.combat-runtime-dispatch-intent-v2-test
   "S8: end-to-end proof cn.li.ac.ability.service.combat-runtime/dispatch-
-   intent-v2! actually dispatches a real ac/skills-v3/*.edn ability through
+   intent-v2! actually dispatches a real ac/skills-v4/*.edn ability through
    the new engine, with the SAME pre-dispatch orchestration (cooldown
    pre-check, toggle close-edge, session open/close) dispatch-intent!
    already has for the old engine -- not a fake host, not a synthetic
@@ -132,3 +132,4 @@
                     nil))]
     (is (= :default (@#'combat-runtime/resolve-program-entry :arc-gen {:op :start})))
     (is (= :start (@#'combat-runtime/resolve-program-entry :vec-reflection {:op :start})))))
+

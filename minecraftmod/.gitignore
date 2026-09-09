@@ -46,3 +46,6 @@ gradle
 platform-src/**/.clj-kondo/
 .lsp
 _upstream
+
+# Local V4 node-editor drafts/layouts
+.ac-editor/

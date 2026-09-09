@@ -18,7 +18,7 @@
   Safe to call multiple times.
 
   VFX cutover: installs the new engine's runtime (cn.li.ability.client-
-  vfx-v2, the indexed V3 documents from fx-catalog) as the real client dispatch
+  vfx-v2, the indexed V4 documents from fx-catalog) as the real client dispatch
   path -- the old engine's own client-vfx composition root is no longer
   installed from here, only exercised directly by its own test suite."
   []
@@ -36,3 +36,4 @@
   []
   (install/reset-framework-once-flag-for-test! ::fx-initialized?)
   nil)
+

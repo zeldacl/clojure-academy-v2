@@ -76,11 +76,12 @@
                 m (or (:next tr) (:next fr))
                 f (list* 'if (:form c) (:forms tr) (:forms fr))]
             (recur (when m (target (:links ctx) m :out)) (into out (concat (:pre c) [f])) (conj seen nid)))
-          (= :foreach t)
-          (let [c (port-expr ctx nid :collection)
-                body (collect ctx (target (:links ctx) nid :body) (conj stops nid))
-                b (symbol (name (or (:as n) :item)))
-                f (list* 'each b (:form c) (:forms body))]
+          (contains? #{:foreach :repeat} t)
+           (let [c (port-expr ctx nid (if (= :foreach t) :collection :count))
+                 body (collect ctx (target (:links ctx) nid :body) (conj stops nid))
+                 b (symbol (name (or (:as n) :item)))
+                 coll (if (= :foreach t) (:form c) (list 'range (:form c)))
+                 f (list* 'each b coll (:forms body))]
             (recur (target (:links ctx) nid :completed) (into out (concat (:pre c) [f])) (conj seen nid)))
           :else
           (let [{:keys [pre form]} (statement ctx nid)

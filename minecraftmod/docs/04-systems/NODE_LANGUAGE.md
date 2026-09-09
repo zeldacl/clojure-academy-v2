@@ -12,7 +12,7 @@
 ## 0. 当前状态：执行引擎与内容元数据加载都已切到新格式；旧目录已删除
 
 **战斗/技能 dispatch、VFX 执行、内容元数据加载三条路径现在全部读同一套
-`ac/skills-v3/*.edn`/`ac/vfx-v3/*.edn` 内容**——旧执行引擎、旧内容加载器、旧内容
+`ac/skills-v4/*.edn`/`ac/vfx-v4/*.edn` 内容**——旧执行引擎、旧内容加载器、旧内容
 目录都已删除（不是"不再调用但留着"，是文件/目录本身不存在了）：
 
 - **战斗/技能 dispatch**：`cn.li.ac.ability.service.combat-runtime/dispatch-
@@ -20,18 +20,18 @@
   `location_teleport_rpc.clj`、以及 `combat_runtime.clj` 自己的
   `dispatch-trigger!`/`dispatch-event!`/`pulse-active-sessions!` 全部调用它，
   内部走本文其余章节描述的 surface DSL → `node-core` IR → `cn.li.mcmod.
-  runtime.effect-emit` 闭包流水线，读取 `ac/skills-v3/*.edn`（50/50，经
+  runtime.effect-emit` 闭包流水线，读取 `ac/skills-v4/*.edn`（50/50，经
   `cn.li.ac.ability.skills-catalog` 加载）。旧的 `dispatch-intent!`/`cn.li.
   ability.engine`、combat-core 的 `final_engine.clj`/`final_compiler.clj`、
   node-core 的 `kernel.clj`，连同它们各自专属的测试，**已全部删除**。
 - **VFX 执行**：`cn.li.vfx.runtime` + `cn.li.vfx.frame` +
-  `cn.li.ability.client-vfx-v2` 是唯一渲染路径，读取 `ac/vfx-v3/*.edn`
+  `cn.li.ability.client-vfx-v2` 是唯一渲染路径，读取 `ac/vfx-v4/*.edn`
   （36/36）。`vfx-core/final_engine.clj`、`vfx-core/final_client.clj`、
   `ability-runtime/client_vfx.clj` 连同它们各自专属的测试**已删除**——详见
   [VFX_CORE.md](VFX_CORE.md)。
 - **内容元数据加载**：`cn.li.ac.ability.service.combat-catalog`（真实生产启动
   时调用，被测试套件广泛依赖）现在直接读 `cn.li.ac.ability.skills-catalog/
-  assemble` 的输出（`ac/skills-v3/*.edn` + `the ac/skills-v3 directory`）——跟
+  assemble` 的输出（`ac/skills-v4/*.edn` + `the ac/skills-v4 directory`）——跟
   dispatch 引擎读的是**同一份内容**，只取其中 dispatch 不需要的字段
   （`name-key`/`icon`/`actions`/`category-id`/`passive-effects`/
   `external-triggers`/registration `:bindings`）。`ac/ability/
@@ -53,12 +53,12 @@
 - **编辑器 schema 基础设施**：`combat.vocabulary`/`combat.kernels`/
   `vfx.vocabulary`、`scope`/`validate`/`environment`/`flow`/`descriptor`/
   `schema-export`/`node-core/api.clj` 仍用于编辑器 palette、类型和静态校验。
-  旧的 composite 展开器、manifest reader 及其测试已删除；V3 文档直接进入
-  `document`/`document-compile`，不会再经过旧资源读取链。
+  旧的 composite 展开器、manifest reader 及其测试已删除；V4 文档直接进入
+  V4 图验证与图编译入口，不会再经过旧资源读取链。
 
 修改本文档或新增新语言内容前，请先确认自己在哪一侧工作：**执行引擎**（已经
 只有一套）还是**内容元数据加载**（`combat-catalog.clj`，现在跟执行引擎读同一
-份内容），两者现在共享同一套 `ac/skills-v3/*.edn`/`ac/vfx-v3/*.edn` 内容，不会
+份内容），两者现在共享同一套 `ac/skills-v4/*.edn`/`ac/vfx-v4/*.edn` 内容，不会
 再有"两个目录、两份真相"的问题。
 
 ## 1. Surface DSL：纯 EDN，无 eval
@@ -119,7 +119,7 @@
   composite 宏替换时代那样意外读到调用方的动态作用域）。
 - `compile-fn-call` 把整个函数体**内联**到调用点，不是运行时函数调用边界——一个
   `:defn` 体内的 `finish` 会终止调用方自己的 block，就像直接写在调用点一样（见
-  `combat-core/lib/blink_release.edn`，已由 `ac/skills-v3/flashing.edn` 的真实 dispatch
+  `combat-core/lib/blink_release.edn`，已由 `ac/skills-v4/flashing.edn` 的真实 dispatch
   测试验证）。
 - 库文件是**显式文件名列表**（`combat-core/lib.clj`/`combat-core/dsl_vocabulary.clj`
   同级），不是目录扫描——一个文件不在列表里就永远不可达，这是设计选择：12 个文件量级
@@ -294,14 +294,14 @@ host 好查，"调用"就是"往这帧的 outbox 追加一条 draw/audio/camera 
 后处理唯一的真正落点）。
 
 `cn.li.vfx.compile`（Niagara 风格的模块栈 + 粒子 SoA 布局）是另一套独立机制，给
-真正需要 CPU 端逐粒子模拟的**未来**内容用的——36 个已转换的 `ac/vfx-v3/*.edn`
+真正需要 CPU 端逐粒子模拟的**未来**内容用的——36 个已转换的 `ac/vfx-v4/*.edn`
 效果一个都不需要它：旧引擎里"发射器"类效果本质上也只是**每帧一条声明式绘制指令**
 （真正的逐粒子演化在客户端渲染器里做，不在这层图里），跟 `:ring`/`:beam` 这些
 叶子节点是同一类东西，不是需要模块栈的那类内容。
 
 ## 8. 迁移状态与已知空缺
 
-- `ac/skills-v3/*.edn`（50/50）、`ac/vfx-v3/*.edn`（36/36）已全部转换并有真实
+- `ac/skills-v4/*.edn`（50/50）、`ac/vfx-v4/*.edn`（36/36）已全部转换并有真实
   compile+dispatch 测试覆盖，`ac/src/test/clojure/cn/li/ac/ability/editor/editor_corpus_test.clj`
   / `ac/src/test/clojure/cn/li/ac/ability/editor/editor_corpus_test.clj`。
 - 旧引擎里约 17 个 VFX 组件种类（`charge-slow`/`charge-ring`/`directional-wave`/
@@ -311,7 +311,7 @@ host 好查，"调用"就是"往这帧的 outbox 追加一条 draw/audio/camera 
   `arc-field`）在 `final_engine.clj` 的 `sample-node` 里根本没有对应分支，落进一个
   同样画不出来的 `:typed-vfx` 兜底——这些组件今天在游戏里本来就不产生任何真实像素
   （`:vfx/beam-arc-fade`/`:vfx/humanoid-marker` 是例外：它们是**composite**，会在
-  加载期被展开成真正能画的子树；展开细节见各自 `ac/vfx-v3/*.edn` 文件自己的
+  加载期被展开成真正能画的子树；展开细节见各自 `ac/vfx-v4/*.edn` 文件自己的
   docstring）。新版本据实转换：确认无渲染的组件对应一个诚实的空 `:scene`，不是
   发明新的视觉设计。
 - `combat-core/player.clj`（S7）已实现并测试，现在有一个真实的合成/提交交互层：
@@ -330,3 +330,5 @@ host 好查，"调用"就是"往这帧的 outbox 追加一条 draw/audio/camera 
 - 旧路径的删除、`verifyNodeKernelSingleSource` 之类门禁的改写、真正把 `cn.li.
   combat.api`/AC composition root 切到新引擎上，是独立的、有意留待以后做的一步，
   §0 已经说明原因。
+
+

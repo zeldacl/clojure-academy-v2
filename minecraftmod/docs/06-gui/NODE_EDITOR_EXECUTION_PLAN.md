@@ -11,16 +11,16 @@
 | Blueprint | 执行流与数据流分层、语义 pin、可移动节点、可平移画布 | 不引入无类型的任意连线 |
 | Niagara | 模块栈、参数面板、预览与生产运行时隔离 | 当前没有 `:emitters` 内容时不虚构发射器编辑器 |
 
-当前代码已经具备：V3 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量及 schema 驱动控件）、法术合成器的有界参数校验、两个编辑器可提交的 repeater 草稿、独立场景预览和工作区/导出双路径。节点编辑器还提供可由按钮或 Esc 关闭的 viewport 画布层，将有限的 128px 画布扩展为独立的 464×278px 操作区，同时保留原有缩放/平移相机；法术合成器的 effect slot 会按 augment 数量动态增高，augment 纵向堆叠并逐行删除，避免横向溢出固定控制区。
+当前代码已经具备：V4 文档读写、执行/数据图、语义连线、节点移动与画布平移、调色板点击/拖放插入、ghost 与 drop 校验、诊断/代价读数、参数检查器（literal/vector/map 字面量及 schema 驱动控件）、法术合成器的有界参数校验、两个编辑器可提交的 repeater 草稿、独立场景预览和工作区/导出双路径。节点编辑器还提供可由按钮或 Esc 关闭的 viewport 画布层，将有限的 128px 画布扩展为独立的 464×278px 操作区，同时保留原有缩放/平移相机；法术合成器的 effect slot 会按 augment 数量动态增高，augment 纵向堆叠并逐行删除，避免横向溢出固定控制区。
 
-固定宽度的节点、调色板、诊断、glyph、参数和状态标签现在在控制器的显示模型层按实际字体宽度（无字体时用确定性回退）加省略号；原始节点文本、诊断数据和参数草稿不被截断。Presentation V3 的通用 `:ellipsize` 仍是独立能力，未被伪装成已实现。
+固定宽度的节点、调色板、诊断、glyph、参数和状态标签现在在控制器的显示模型层按实际字体宽度（无字体时用确定性回退）加省略号；原始节点文本、诊断数据和参数草稿不被截断。Presentation V4 的通用 `:ellipsize` 仍是独立能力，未被伪装成已实现。
 
 ## 2. 复核后纠正的矛盾
 
 - “参数检查器尚未实现”已过时：节点检查器现在根据 palette schema 显示类型，并安全提交 `double/int/long/bool/keyword/vec3`；由 sigil、调用或其他节点驱动的输入保持只读。
 - “画布不能拖动”已过时：节点移动、空白画布平移、pin 连线和调色板拖放已接入 `presentation-core` 的 pointer 路由。
 - “法术合成器只维护数据、不展示分组细节”已过时：效果行现在显示并可单独删除已添加的 augment；效果重排/删除会同步重映射参数草稿，未完成或越界的草稿不能进入施法请求。
-- “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v3/*.edn` 的顶层 `:emitters` 全部为空；部分 `:system :render` 虽然已有 `:component :emitter` 调用，但这不是可供模块栈编辑器直接编辑的 emitter 数据。仍须先有内容 schema 和非空顶层样例，再启动 UI。
+- “粒子编辑器延期”不是实现遗漏：当前 `ac/vfx-v4/*.edn` 的顶层 `:emitters` 全部为空；部分 `:system :render` 虽然已有 `:component :emitter` 调用，但这不是可供模块栈编辑器直接编辑的 emitter 数据。仍须先有内容 schema 和非空顶层样例，再启动 UI。
 - glyph 物品、法术存储 NBT、准星锚点和文件选择器都需要当前仓库尚未提供的资源或平台契约，不能在现有中立 Presentation 层伪造完成；滚轮缩放已使用现有 `:scroll`，只有 pinch 仍等待独立手势契约。
 
 ## 3. 可执行阶段
@@ -51,7 +51,7 @@
 
 1. 先定义 spell-storage 数据组件和网络版本号，再实现 glyph 物品、模型/贴图、配方和 NBT 迁移；客户端界面只提交 canonical glyph vector，服务端继续作为最终校验者。
 2. 定义客户端相机/准星锚点 SPI（位置、方向、生命周期、无玩家时的降级），再把场景预览的目标点绑定到该 SPI；预览 runtime 与生产 runtime 继续隔离。
-3. 当首个 V3 场景真正包含 `:emitters`、模块参数和可编译样例后，建立粒子发射器编辑器：emitter/module 树、参数面板、独立 preview、编译诊断。
+3. 当首个 V4 场景真正包含 `:emitters`、模块参数和可编译样例后，建立粒子发射器编辑器：emitter/module 树、参数面板、独立 preview、编译诊断。
 4. 增加文件选择器前，先定义允许目录、扩展名、路径穿越防护、外部修改指纹和失败回退；现有 caller-supplied path 作为安全后备。
 
 P3 的执行顺序固定为“契约 → 中立实现 → 平台适配 → UI 接入 → 迁移/回滚”，不得跳过契约直接在编辑器里写临时格式：
@@ -60,7 +60,7 @@ P3 的执行顺序固定为“契约 → 中立实现 → 平台适配 → UI �
 | --- | --- | --- | --- |
 | S：法术存储 | 选定数据 owner；确认物品生命周期 | `spell-schema-version`、canonical glyph codec、物品读写适配、迁移器、配方和模型 | 旧 NBT 可读、新旧版本可回滚；客户端只发 canonical vector；服务端拒绝未知 glyph/超长参数 |
 | C：相机锚点 | 平台能提供位置、方向、生命周期和无玩家降级 | 中立 `camera-anchor` SPI、Minecraft 适配、预览 target binding | 无相机时预览仍可打开但显示明确降级状态；生产 runtime 不依赖预览实例 |
-| E：发射器编辑器 | 至少一个真实 V3 `:emitters` fixture，且能通过 schema/compile | emitter/module 树、参数检查器、独立 preview、诊断 | fixture round-trip、编译错误就地显示、预览停止不残留生产实体 |
+| E：发射器编辑器 | 至少一个真实 V4 `:emitters` fixture，且能通过 schema/compile | emitter/module 树、参数检查器、独立 preview、诊断 | fixture round-trip、编译错误就地显示、预览停止不残留生产实体 |
 | F：文件选择 | 确认允许根目录、扩展名和外部修改检测策略 | 安全路径校验器、文件选择 UI、caller-supplied fallback | 路径穿越/越权扩展名拒绝；外部修改提示覆盖/另存；无选择器平台仍可编辑 |
 
 版本边界需要明确区分：`ac/ability/messages.clj` 的 AC 运行时消息目录声明的是 Protocol v2；`mcmod/runtime/fixed_channel.clj` 的二进制帧头当前仍是独立的 `protocol-version 1`。S 工作包默认新增独立的 `spell-schema-version`，只有改变固定帧 envelope 时才升级后者，并同时提供兼容窗口和拒绝原因。这样不会把“消息目录 v2”“固定帧 v1”和“法术数据 schema 版本”误写成同一个版本号。
@@ -69,7 +69,7 @@ P3 的执行顺序固定为“契约 → 中立实现 → 平台适配 → UI �
 
 - 纯函数层：graph round-trip、pin 方向、稳定 `:nid`、非法引用诊断。
 - Presentation 层：view schema、focus/submit/change、pointer capture、Esc、scroll 不回归。
-- 内容层：全量技能/VFX corpus 能打开、保存后仍通过 V3 schema 和 catalog 校验。
+- 内容层：全量技能/VFX corpus 能打开、保存后仍通过 V4 schema 和 catalog 校验。
 - 运行时层：编辑器预览不写生产 runtime；服务端拒绝非法法术和超限参数。
 - 人机评估：真实游戏中验证 480×360/320×240 的文字截断、滚动、点击命中、拖拽手感和帧时间；这些不能由当前离线门禁替代。
 
@@ -116,3 +116,4 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 - **本轮 UI 代码交付完成**：步骤 1–4 全部通过；`git diff --check` 通过；只保留本计划涉及的源码、视图、测试、文档和 golden 变更；不运行 `runClient` 也可以据此交付代码。
 - **产品发布验收完成**：在代码交付完成的基础上，步骤 5 具有可复现记录。真实游戏验收由具备游戏窗口的验收者执行，本轮不因用户明确禁止 `runClient` 而伪造该记录。
 - **P3 工作包完成**：S/C/E/F 各自满足“先决条件—交付物—验收门槛”，作为后续版本里程碑，不回填为本轮 UI 已完成项。
+
