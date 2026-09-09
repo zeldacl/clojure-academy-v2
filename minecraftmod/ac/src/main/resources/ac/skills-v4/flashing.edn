@@ -1,0 +1,2310 @@
+{:schema :ac/skill-v4,
+ :id :flashing,
+ :skill {:category :migrated, :level 1},
+ :activation {:mode :toggle},
+ :parameters
+ {:blink-distance {:type :double, :default nil},
+  :activate-cp {:type :double, :default nil},
+  :activate-overload {:type :double, :default nil},
+  :max-active-ticks {:type :double, :default nil},
+  :blink-cp {:type :double, :default nil},
+  :blink-overload {:type :double, :default nil},
+  :post-blink-fall-protect-ticks {:type :double, :default nil}},
+ :state
+ {:destination {:type :any, :default nil},
+  :active-ticks {:type :long, :default 0},
+  :fall-protect-ticks {:type :long, :default 0},
+  :overload-floor {:type :double, :default 0.0}},
+ :description-key "ability.skill.teleporter.flashing.desc",
+ :name-key "ability.skill.teleporter.flashing",
+ :cooldown
+ {:deactivate
+  {:ticks {:ref [:input :tunables :deactivate-cooldown-ticks]}}},
+ :costs nil,
+ :mark-policies nil,
+ :requires
+ [:caster/eye
+  :caster/body
+  :caster/aim
+  :caster/id
+  :caster/creative?
+  :world/id],
+ :tunables
+ {:blink-distance {:curve :mastery-lerp},
+  :blink-interval-ticks {:curve :mastery-lerp},
+  :max-active-ticks {:curve :mastery-lerp},
+  :post-blink-fall-protect-ticks {:curve :mastery-lerp},
+  :activate-overload {:curve :mastery-lerp},
+  :activate-cp {:curve :mastery-lerp},
+  :blink-cp {:curve :mastery-lerp},
+  :blink-overload {:curve :mastery-lerp},
+  :deactivate-cooldown-ticks {:curve :mastery-lerp},
+  :exp-per-blink {:curve :const}},
+ :invariants nil,
+ :progression
+ {:blink {:per-mark {:ref [:input :tunables :exp-per-blink]}}},
+ :graphs
+ {:movement/right-press
+  {:on :phase/right-press,
+   :nodes
+   #:n{:start-right-press {:type :start, :nid :n/start-right-press},
+       :n--entry--movement-r-885ad0d9
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-r-885ad0d9},
+       :n001 {:type :context-ref, :key :caster/id, :nid :n/n001},
+       :n--entry--movement-r-e7b77521
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-r-e7b77521},
+       :n002 {:type :context-ref, :key :caster/body, :nid :n/n002},
+       :n--entry--movement-r-2f324359
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-r-2f324359},
+       :n003 {:type :context-ref, :key :caster/aim, :nid :n/n003},
+       :n--entry--movement-r-29121d4a
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-r-29121d4a},
+       :n004 {:type :context-ref, :key :caster/eye-y, :nid :n/n004},
+       :n--entry--movement-r-b2b147bb
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-r-b2b147bb},
+       :n005
+       {:type :context-ref, :key :caster/creative?, :nid :n/n005},
+       :n--entry--movement-r-266649b
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-r-266649b,
+        :inputs {:arg4 :right, :arg8 :spawn}},
+       :n006 {:type :local-get, :key :owner-id, :nid :n/n006},
+       :n007 {:type :local-get, :key :body, :nid :n/n007},
+       :n008 {:type :local-get, :key :aim, :nid :n/n008},
+       :n009 {:type :local-get, :key :eye-y, :nid :n/n009},
+       :n010
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n010},
+       :n011 {:type :parameter-ref, :key :blink-cp, :nid :n/n011},
+       :n012 {:type :local-get, :key :creative?, :nid :n/n012},
+       :n013 {:type :end, :result {:outcome :ended}, :nid :n/n013}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--movement-r-885ad0d9 :value]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--movement-r-e7b77521 :value]}
+    {:id :e/link003,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-885ad0d9 :out],
+     :to [:n/n--entry--movement-r-e7b77521 :in]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--movement-r-2f324359 :value]}
+    {:id :e/link005,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-e7b77521 :out],
+     :to [:n/n--entry--movement-r-2f324359 :in]}
+    {:id :e/link006,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--movement-r-29121d4a :value]}
+    {:id :e/link007,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-2f324359 :out],
+     :to [:n/n--entry--movement-r-29121d4a :in]}
+    {:id :e/link008,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n--entry--movement-r-b2b147bb :value]}
+    {:id :e/link009,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-29121d4a :out],
+     :to [:n/n--entry--movement-r-b2b147bb :in]}
+    {:id :e/link010,
+     :kind :data,
+     :from [:n/n006 :value],
+     :to [:n/n--entry--movement-r-266649b :arg0]}
+    {:id :e/link011,
+     :kind :data,
+     :from [:n/n007 :value],
+     :to [:n/n--entry--movement-r-266649b :arg1]}
+    {:id :e/link012,
+     :kind :data,
+     :from [:n/n008 :value],
+     :to [:n/n--entry--movement-r-266649b :arg2]}
+    {:id :e/link013,
+     :kind :data,
+     :from [:n/n009 :value],
+     :to [:n/n--entry--movement-r-266649b :arg3]}
+    {:id :e/link014,
+     :kind :data,
+     :from [:n/n010 :value],
+     :to [:n/n--entry--movement-r-266649b :arg5]}
+    {:id :e/link015,
+     :kind :data,
+     :from [:n/n011 :value],
+     :to [:n/n--entry--movement-r-266649b :arg6]}
+    {:id :e/link016,
+     :kind :data,
+     :from [:n/n012 :value],
+     :to [:n/n--entry--movement-r-266649b :arg7]}
+    {:id :e/link017,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-b2b147bb :out],
+     :to [:n/n--entry--movement-r-266649b :in]}
+    {:id :e/link018,
+     :kind :exec,
+     :from [:n/start-right-press :out],
+     :to [:n/n--entry--movement-r-885ad0d9 :in]}
+    {:id :e/link019,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-266649b :out],
+     :to [:n/n013 :in]}]},
+  :movement/back-press
+  {:on :phase/back-press,
+   :nodes
+   #:n{:start-back-press {:type :start, :nid :n/start-back-press},
+       :n--entry--movement-back-press-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-back-press-0},
+       :n014 {:type :context-ref, :key :caster/id, :nid :n/n014},
+       :n--entry--movement-back-press-1
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-back-press-1},
+       :n015 {:type :context-ref, :key :caster/body, :nid :n/n015},
+       :n--entry--movement-back-press-2
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-back-press-2},
+       :n016 {:type :context-ref, :key :caster/aim, :nid :n/n016},
+       :n--entry--movement-back-press-3
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-back-press-3},
+       :n017 {:type :context-ref, :key :caster/eye-y, :nid :n/n017},
+       :n--entry--movement-back-press-4
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-back-press-4},
+       :n018
+       {:type :context-ref, :key :caster/creative?, :nid :n/n018},
+       :n--entry--movement-back-press-5
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-back-press-5,
+        :inputs {:arg4 :back, :arg8 :spawn}},
+       :n019 {:type :local-get, :key :owner-id, :nid :n/n019},
+       :n020 {:type :local-get, :key :body, :nid :n/n020},
+       :n021 {:type :local-get, :key :aim, :nid :n/n021},
+       :n022 {:type :local-get, :key :eye-y, :nid :n/n022},
+       :n023
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n023},
+       :n024 {:type :parameter-ref, :key :blink-cp, :nid :n/n024},
+       :n025 {:type :local-get, :key :creative?, :nid :n/n025},
+       :n026 {:type :end, :result {:outcome :ended}, :nid :n/n026}},
+   :links
+   [{:id :e/link020,
+     :kind :data,
+     :from [:n/n014 :value],
+     :to [:n/n--entry--movement-back-press-0 :value]}
+    {:id :e/link021,
+     :kind :data,
+     :from [:n/n015 :value],
+     :to [:n/n--entry--movement-back-press-1 :value]}
+    {:id :e/link022,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-press-0 :out],
+     :to [:n/n--entry--movement-back-press-1 :in]}
+    {:id :e/link023,
+     :kind :data,
+     :from [:n/n016 :value],
+     :to [:n/n--entry--movement-back-press-2 :value]}
+    {:id :e/link024,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-press-1 :out],
+     :to [:n/n--entry--movement-back-press-2 :in]}
+    {:id :e/link025,
+     :kind :data,
+     :from [:n/n017 :value],
+     :to [:n/n--entry--movement-back-press-3 :value]}
+    {:id :e/link026,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-press-2 :out],
+     :to [:n/n--entry--movement-back-press-3 :in]}
+    {:id :e/link027,
+     :kind :data,
+     :from [:n/n018 :value],
+     :to [:n/n--entry--movement-back-press-4 :value]}
+    {:id :e/link028,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-press-3 :out],
+     :to [:n/n--entry--movement-back-press-4 :in]}
+    {:id :e/link029,
+     :kind :data,
+     :from [:n/n019 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg0]}
+    {:id :e/link030,
+     :kind :data,
+     :from [:n/n020 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg1]}
+    {:id :e/link031,
+     :kind :data,
+     :from [:n/n021 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg2]}
+    {:id :e/link032,
+     :kind :data,
+     :from [:n/n022 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg3]}
+    {:id :e/link033,
+     :kind :data,
+     :from [:n/n023 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg5]}
+    {:id :e/link034,
+     :kind :data,
+     :from [:n/n024 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg6]}
+    {:id :e/link035,
+     :kind :data,
+     :from [:n/n025 :value],
+     :to [:n/n--entry--movement-back-press-5 :arg7]}
+    {:id :e/link036,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-press-4 :out],
+     :to [:n/n--entry--movement-back-press-5 :in]}
+    {:id :e/link037,
+     :kind :exec,
+     :from [:n/start-back-press :out],
+     :to [:n/n--entry--movement-back-press-0 :in]}
+    {:id :e/link038,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-press-5 :out],
+     :to [:n/n026 :in]}]},
+  :movement/back-release
+  {:on :phase/back-release,
+   :nodes
+   #:n{:start-back-release {:type :start, :nid :n/start-back-release},
+       :n--entry--movement-b-ab560f6f
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-b-ab560f6f},
+       :n027 {:type :context-ref, :key :caster/id, :nid :n/n027},
+       :n--entry--movement-b-1ca9fb1d
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-b-1ca9fb1d},
+       :n028 {:type :context-ref, :key :caster/body, :nid :n/n028},
+       :n--entry--movement-b-fcdafd96
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-b-fcdafd96},
+       :n029 {:type :context-ref, :key :caster/aim, :nid :n/n029},
+       :n--entry--movement-b-ae0bd0d5
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-b-ae0bd0d5},
+       :n030 {:type :context-ref, :key :caster/eye-y, :nid :n/n030},
+       :n--entry--movement-b-a5d488c9
+       {:type :local-set,
+        :operation :define,
+        :key :wid,
+        :nid :n/n--entry--movement-b-a5d488c9},
+       :n031 {:type :context-ref, :key :world/id, :nid :n/n031},
+       :n--entry--movement-b-149b0b8a
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-b-149b0b8a},
+       :n032
+       {:type :context-ref, :key :caster/creative?, :nid :n/n032},
+       :n--entry--movement-b-23a4747f
+       {:type :local-set,
+        :operation :define,
+        :key :blink-progression,
+        :nid :n/n--entry--movement-b-23a4747f},
+       :n033
+       {:type :context-ref, :key :progression/blink, :nid :n/n033},
+       :n--entry--movement-b-ff67bf1f
+       {:type :component,
+        :component :combat/blink-release,
+        :nid :n/n--entry--movement-b-ff67bf1f,
+        :inputs {:arg5 :back}},
+       :n034 {:type :local-get, :key :owner-id, :nid :n/n034},
+       :n035 {:type :local-get, :key :body, :nid :n/n035},
+       :n036 {:type :local-get, :key :aim, :nid :n/n036},
+       :n037 {:type :local-get, :key :eye-y, :nid :n/n037},
+       :n038 {:type :local-get, :key :wid, :nid :n/n038},
+       :n039
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n039},
+       :n040 {:type :parameter-ref, :key :blink-cp, :nid :n/n040},
+       :n041
+       {:type :parameter-ref, :key :blink-overload, :nid :n/n041},
+       :n042 {:type :local-get, :key :creative?, :nid :n/n042},
+       :n043
+       {:type :parameter-ref,
+        :key :post-blink-fall-protect-ticks,
+        :nid :n/n043},
+       :n044 {:type :local-get, :key :blink-progression, :nid :n/n044},
+       :n045 {:type :end, :result {:outcome :ended}, :nid :n/n045}},
+   :links
+   [{:id :e/link039,
+     :kind :data,
+     :from [:n/n027 :value],
+     :to [:n/n--entry--movement-b-ab560f6f :value]}
+    {:id :e/link040,
+     :kind :data,
+     :from [:n/n028 :value],
+     :to [:n/n--entry--movement-b-1ca9fb1d :value]}
+    {:id :e/link041,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-ab560f6f :out],
+     :to [:n/n--entry--movement-b-1ca9fb1d :in]}
+    {:id :e/link042,
+     :kind :data,
+     :from [:n/n029 :value],
+     :to [:n/n--entry--movement-b-fcdafd96 :value]}
+    {:id :e/link043,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-1ca9fb1d :out],
+     :to [:n/n--entry--movement-b-fcdafd96 :in]}
+    {:id :e/link044,
+     :kind :data,
+     :from [:n/n030 :value],
+     :to [:n/n--entry--movement-b-ae0bd0d5 :value]}
+    {:id :e/link045,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-fcdafd96 :out],
+     :to [:n/n--entry--movement-b-ae0bd0d5 :in]}
+    {:id :e/link046,
+     :kind :data,
+     :from [:n/n031 :value],
+     :to [:n/n--entry--movement-b-a5d488c9 :value]}
+    {:id :e/link047,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-ae0bd0d5 :out],
+     :to [:n/n--entry--movement-b-a5d488c9 :in]}
+    {:id :e/link048,
+     :kind :data,
+     :from [:n/n032 :value],
+     :to [:n/n--entry--movement-b-149b0b8a :value]}
+    {:id :e/link049,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-a5d488c9 :out],
+     :to [:n/n--entry--movement-b-149b0b8a :in]}
+    {:id :e/link050,
+     :kind :data,
+     :from [:n/n033 :value],
+     :to [:n/n--entry--movement-b-23a4747f :value]}
+    {:id :e/link051,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-149b0b8a :out],
+     :to [:n/n--entry--movement-b-23a4747f :in]}
+    {:id :e/link052,
+     :kind :data,
+     :from [:n/n034 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg0]}
+    {:id :e/link053,
+     :kind :data,
+     :from [:n/n035 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg1]}
+    {:id :e/link054,
+     :kind :data,
+     :from [:n/n036 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg2]}
+    {:id :e/link055,
+     :kind :data,
+     :from [:n/n037 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg3]}
+    {:id :e/link056,
+     :kind :data,
+     :from [:n/n038 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg4]}
+    {:id :e/link057,
+     :kind :data,
+     :from [:n/n039 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg6]}
+    {:id :e/link058,
+     :kind :data,
+     :from [:n/n040 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg7]}
+    {:id :e/link059,
+     :kind :data,
+     :from [:n/n041 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg8]}
+    {:id :e/link060,
+     :kind :data,
+     :from [:n/n042 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg9]}
+    {:id :e/link061,
+     :kind :data,
+     :from [:n/n043 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg10]}
+    {:id :e/link062,
+     :kind :data,
+     :from [:n/n044 :value],
+     :to [:n/n--entry--movement-b-ff67bf1f :arg11]}
+    {:id :e/link063,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-23a4747f :out],
+     :to [:n/n--entry--movement-b-ff67bf1f :in]}
+    {:id :e/link064,
+     :kind :exec,
+     :from [:n/start-back-release :out],
+     :to [:n/n--entry--movement-b-ab560f6f :in]}
+    {:id :e/link065,
+     :kind :exec,
+     :from [:n/n--entry--movement-b-ff67bf1f :out],
+     :to [:n/n045 :in]}]},
+  :movement/right-tick
+  {:on :phase/right-tick,
+   :nodes
+   #:n{:start-right-tick {:type :start, :nid :n/start-right-tick},
+       :n--entry--movement-right-tick-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-right-tick-0},
+       :n046 {:type :context-ref, :key :caster/id, :nid :n/n046},
+       :n--entry--movement-right-tick-1
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-right-tick-1},
+       :n047 {:type :context-ref, :key :caster/body, :nid :n/n047},
+       :n--entry--movement-right-tick-2
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-right-tick-2},
+       :n048 {:type :context-ref, :key :caster/aim, :nid :n/n048},
+       :n--entry--movement-right-tick-3
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-right-tick-3},
+       :n049 {:type :context-ref, :key :caster/eye-y, :nid :n/n049},
+       :n--entry--movement-right-tick-4
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-right-tick-4},
+       :n050
+       {:type :context-ref, :key :caster/creative?, :nid :n/n050},
+       :n--entry--movement-right-tick-5
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-right-tick-5,
+        :inputs {:arg4 :right, :arg8 :update}},
+       :n051 {:type :local-get, :key :owner-id, :nid :n/n051},
+       :n052 {:type :local-get, :key :body, :nid :n/n052},
+       :n053 {:type :local-get, :key :aim, :nid :n/n053},
+       :n054 {:type :local-get, :key :eye-y, :nid :n/n054},
+       :n055
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n055},
+       :n056 {:type :parameter-ref, :key :blink-cp, :nid :n/n056},
+       :n057 {:type :local-get, :key :creative?, :nid :n/n057},
+       :n058 {:type :end, :result {:outcome :ended}, :nid :n/n058}},
+   :links
+   [{:id :e/link066,
+     :kind :data,
+     :from [:n/n046 :value],
+     :to [:n/n--entry--movement-right-tick-0 :value]}
+    {:id :e/link067,
+     :kind :data,
+     :from [:n/n047 :value],
+     :to [:n/n--entry--movement-right-tick-1 :value]}
+    {:id :e/link068,
+     :kind :exec,
+     :from [:n/n--entry--movement-right-tick-0 :out],
+     :to [:n/n--entry--movement-right-tick-1 :in]}
+    {:id :e/link069,
+     :kind :data,
+     :from [:n/n048 :value],
+     :to [:n/n--entry--movement-right-tick-2 :value]}
+    {:id :e/link070,
+     :kind :exec,
+     :from [:n/n--entry--movement-right-tick-1 :out],
+     :to [:n/n--entry--movement-right-tick-2 :in]}
+    {:id :e/link071,
+     :kind :data,
+     :from [:n/n049 :value],
+     :to [:n/n--entry--movement-right-tick-3 :value]}
+    {:id :e/link072,
+     :kind :exec,
+     :from [:n/n--entry--movement-right-tick-2 :out],
+     :to [:n/n--entry--movement-right-tick-3 :in]}
+    {:id :e/link073,
+     :kind :data,
+     :from [:n/n050 :value],
+     :to [:n/n--entry--movement-right-tick-4 :value]}
+    {:id :e/link074,
+     :kind :exec,
+     :from [:n/n--entry--movement-right-tick-3 :out],
+     :to [:n/n--entry--movement-right-tick-4 :in]}
+    {:id :e/link075,
+     :kind :data,
+     :from [:n/n051 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg0]}
+    {:id :e/link076,
+     :kind :data,
+     :from [:n/n052 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg1]}
+    {:id :e/link077,
+     :kind :data,
+     :from [:n/n053 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg2]}
+    {:id :e/link078,
+     :kind :data,
+     :from [:n/n054 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg3]}
+    {:id :e/link079,
+     :kind :data,
+     :from [:n/n055 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg5]}
+    {:id :e/link080,
+     :kind :data,
+     :from [:n/n056 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg6]}
+    {:id :e/link081,
+     :kind :data,
+     :from [:n/n057 :value],
+     :to [:n/n--entry--movement-right-tick-5 :arg7]}
+    {:id :e/link082,
+     :kind :exec,
+     :from [:n/n--entry--movement-right-tick-4 :out],
+     :to [:n/n--entry--movement-right-tick-5 :in]}
+    {:id :e/link083,
+     :kind :exec,
+     :from [:n/start-right-tick :out],
+     :to [:n/n--entry--movement-right-tick-0 :in]}
+    {:id :e/link084,
+     :kind :exec,
+     :from [:n/n--entry--movement-right-tick-5 :out],
+     :to [:n/n058 :in]}]},
+  :start
+  {:on :phase/start,
+   :nodes
+   #:n{:start-start {:type :start, :nid :n/start-start},
+       :n--entry--start-0
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--start-0},
+       :n059
+       {:type :context-ref, :key :caster/creative?, :nid :n/n059},
+       :n--entry--start-1
+       {:type :local-set,
+        :operation :define,
+        :key :required-cp,
+        :nid :n/n--entry--start-1},
+       :n060
+       {:type :component,
+        :component :math/select,
+        :nid :n/n060,
+        :inputs {:arg1 0.0}},
+       :n061 {:type :local-get, :key :creative?, :nid :n/n061},
+       :n062 {:type :parameter-ref, :key :activate-cp, :nid :n/n062},
+       :n--entry--start-2
+       {:type :local-set,
+        :operation :define,
+        :key :required-overload,
+        :nid :n/n--entry--start-2},
+       :n063
+       {:type :component,
+        :component :math/select,
+        :nid :n/n063,
+        :inputs {:arg1 0.0}},
+       :n064 {:type :local-get, :key :creative?, :nid :n/n064},
+       :n065
+       {:type :parameter-ref, :key :activate-overload, :nid :n/n065},
+       :n--entry--start-3
+       {:type :local-set,
+        :operation :define,
+        :key :start-resources,
+        :nid :n/n--entry--start-3},
+       :n066
+       {:type :context-ref, :key :context/resources, :nid :n/n066},
+       :n--entry--start-4
+       {:type :local-set,
+        :operation :define,
+        :key :sufficient?,
+        :nid :n/n--entry--start-4},
+       :n067
+       {:type :component,
+        :component :cost/spend,
+        :nid :n/n067,
+        :inputs
+        {:budget
+         {:resources
+          {:cp
+           {:nid :n/n--entry--start-4-va-ed089fff,
+            :ref [:local :required-cp]},
+           :overload
+           {:nid :n/n--entry--start-4-va-ee9abdc8,
+            :ref [:local :required-overload]}}}}},
+       :n--entry--start-5 {:type :branch, :nid :n/n--entry--start-5},
+       :n068 {:type :local-get, :key :sufficient?, :nid :n/n068},
+       :n--entry--start-5-then-0
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :active-ticks, :value 0},
+        :nid :n/n--entry--start-5-then-0},
+       :n--entry--start-5-then-1
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :fall-protect-ticks, :value 0},
+        :nid :n/n--entry--start-5-then-1},
+       :n--entry--start-5-then-2
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :overload-floor},
+        :nid :n/n--entry--start-5-then-2},
+       :n069
+       {:type :component,
+        :component :math/max,
+        :nid :n/n069,
+        :inputs {:arg0 0.0}},
+       :n070 {:type :component, :component :math/sub, :nid :n/n070},
+       :n071
+       {:type :component,
+        :component :value/field,
+        :nid :n/n071,
+        :inputs {:field :overload}},
+       :n072 {:type :local-get, :key :start-resources, :nid :n/n072},
+       :n073 {:type :local-get, :key :required-overload, :nid :n/n073},
+       :n--entry--start-5-then-3
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--start-5-then-3,
+        :inputs {:outcome :started}},
+       :n--entry--start-5-else-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--start-5-else-0,
+        :inputs
+        {:outcome :insufficient-resource, :end-ability? true}}},
+   :links
+   [{:id :e/link085,
+     :kind :data,
+     :from [:n/n059 :value],
+     :to [:n/n--entry--start-0 :value]}
+    {:id :e/link086,
+     :kind :data,
+     :from [:n/n061 :value],
+     :to [:n/n060 :arg0]}
+    {:id :e/link087,
+     :kind :data,
+     :from [:n/n062 :value],
+     :to [:n/n060 :arg2]}
+    {:id :e/link088,
+     :kind :data,
+     :from [:n/n060 :value],
+     :to [:n/n--entry--start-1 :value]}
+    {:id :e/link089,
+     :kind :exec,
+     :from [:n/n--entry--start-0 :out],
+     :to [:n/n--entry--start-1 :in]}
+    {:id :e/link090,
+     :kind :data,
+     :from [:n/n064 :value],
+     :to [:n/n063 :arg0]}
+    {:id :e/link091,
+     :kind :data,
+     :from [:n/n065 :value],
+     :to [:n/n063 :arg2]}
+    {:id :e/link092,
+     :kind :data,
+     :from [:n/n063 :value],
+     :to [:n/n--entry--start-2 :value]}
+    {:id :e/link093,
+     :kind :exec,
+     :from [:n/n--entry--start-1 :out],
+     :to [:n/n--entry--start-2 :in]}
+    {:id :e/link094,
+     :kind :data,
+     :from [:n/n066 :value],
+     :to [:n/n--entry--start-3 :value]}
+    {:id :e/link095,
+     :kind :exec,
+     :from [:n/n--entry--start-2 :out],
+     :to [:n/n--entry--start-3 :in]}
+    {:id :e/link096,
+     :kind :data,
+     :from [:n/n067 :value],
+     :to [:n/n--entry--start-4 :value]}
+    {:id :e/link097,
+     :kind :exec,
+     :from [:n/n--entry--start-3 :out],
+     :to [:n/n--entry--start-4 :in]}
+    {:id :e/link098,
+     :kind :data,
+     :from [:n/n068 :value],
+     :to [:n/n--entry--start-5 :condition]}
+    {:id :e/link099,
+     :kind :exec,
+     :from [:n/n--entry--start-5-then-0 :out],
+     :to [:n/n--entry--start-5-then-1 :in]}
+    {:id :e/link100,
+     :kind :data,
+     :from [:n/n072 :value],
+     :to [:n/n071 :value]}
+    {:id :e/link101,
+     :kind :data,
+     :from [:n/n071 :value],
+     :to [:n/n070 :arg0]}
+    {:id :e/link102,
+     :kind :data,
+     :from [:n/n073 :value],
+     :to [:n/n070 :arg1]}
+    {:id :e/link103,
+     :kind :data,
+     :from [:n/n070 :value],
+     :to [:n/n069 :arg1]}
+    {:id :e/link104,
+     :kind :data,
+     :from [:n/n069 :value],
+     :to [:n/n--entry--start-5-then-2 :value]}
+    {:id :e/link105,
+     :kind :exec,
+     :from [:n/n--entry--start-5-then-1 :out],
+     :to [:n/n--entry--start-5-then-2 :in]}
+    {:id :e/link106,
+     :kind :exec,
+     :from [:n/n--entry--start-5-then-2 :out],
+     :to [:n/n--entry--start-5-then-3 :in]}
+    {:id :e/link107,
+     :kind :exec,
+     :from [:n/n--entry--start-5 :true],
+     :to [:n/n--entry--start-5-then-0 :in]}
+    {:id :e/link108,
+     :kind :exec,
+     :from [:n/n--entry--start-5 :false],
+     :to [:n/n--entry--start-5-else-0 :in]}
+    {:id :e/link109,
+     :kind :exec,
+     :from [:n/n--entry--start-4 :out],
+     :to [:n/n--entry--start-5 :in]}
+    {:id :e/link110,
+     :kind :exec,
+     :from [:n/start-start :out],
+     :to [:n/n--entry--start-0 :in]}]},
+  :release
+  {:on :phase/release,
+   :nodes
+   #:n{:start-release {:type :start, :nid :n/start-release},
+       :n--entry--release-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-0,
+        :inputs {:outcome :continue}}},
+   :links
+   [{:id :e/link111,
+     :kind :exec,
+     :from [:n/start-release :out],
+     :to [:n/n--entry--release-0 :in]}]},
+  :movement/back-tick
+  {:on :phase/back-tick,
+   :nodes
+   #:n{:start-back-tick {:type :start, :nid :n/start-back-tick},
+       :n--entry--movement-back-tick-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-back-tick-0},
+       :n074 {:type :context-ref, :key :caster/id, :nid :n/n074},
+       :n--entry--movement-back-tick-1
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-back-tick-1},
+       :n075 {:type :context-ref, :key :caster/body, :nid :n/n075},
+       :n--entry--movement-back-tick-2
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-back-tick-2},
+       :n076 {:type :context-ref, :key :caster/aim, :nid :n/n076},
+       :n--entry--movement-back-tick-3
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-back-tick-3},
+       :n077 {:type :context-ref, :key :caster/eye-y, :nid :n/n077},
+       :n--entry--movement-back-tick-4
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-back-tick-4},
+       :n078
+       {:type :context-ref, :key :caster/creative?, :nid :n/n078},
+       :n--entry--movement-back-tick-5
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-back-tick-5,
+        :inputs {:arg4 :back, :arg8 :update}},
+       :n079 {:type :local-get, :key :owner-id, :nid :n/n079},
+       :n080 {:type :local-get, :key :body, :nid :n/n080},
+       :n081 {:type :local-get, :key :aim, :nid :n/n081},
+       :n082 {:type :local-get, :key :eye-y, :nid :n/n082},
+       :n083
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n083},
+       :n084 {:type :parameter-ref, :key :blink-cp, :nid :n/n084},
+       :n085 {:type :local-get, :key :creative?, :nid :n/n085},
+       :n086 {:type :end, :result {:outcome :ended}, :nid :n/n086}},
+   :links
+   [{:id :e/link112,
+     :kind :data,
+     :from [:n/n074 :value],
+     :to [:n/n--entry--movement-back-tick-0 :value]}
+    {:id :e/link113,
+     :kind :data,
+     :from [:n/n075 :value],
+     :to [:n/n--entry--movement-back-tick-1 :value]}
+    {:id :e/link114,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-tick-0 :out],
+     :to [:n/n--entry--movement-back-tick-1 :in]}
+    {:id :e/link115,
+     :kind :data,
+     :from [:n/n076 :value],
+     :to [:n/n--entry--movement-back-tick-2 :value]}
+    {:id :e/link116,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-tick-1 :out],
+     :to [:n/n--entry--movement-back-tick-2 :in]}
+    {:id :e/link117,
+     :kind :data,
+     :from [:n/n077 :value],
+     :to [:n/n--entry--movement-back-tick-3 :value]}
+    {:id :e/link118,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-tick-2 :out],
+     :to [:n/n--entry--movement-back-tick-3 :in]}
+    {:id :e/link119,
+     :kind :data,
+     :from [:n/n078 :value],
+     :to [:n/n--entry--movement-back-tick-4 :value]}
+    {:id :e/link120,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-tick-3 :out],
+     :to [:n/n--entry--movement-back-tick-4 :in]}
+    {:id :e/link121,
+     :kind :data,
+     :from [:n/n079 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg0]}
+    {:id :e/link122,
+     :kind :data,
+     :from [:n/n080 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg1]}
+    {:id :e/link123,
+     :kind :data,
+     :from [:n/n081 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg2]}
+    {:id :e/link124,
+     :kind :data,
+     :from [:n/n082 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg3]}
+    {:id :e/link125,
+     :kind :data,
+     :from [:n/n083 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg5]}
+    {:id :e/link126,
+     :kind :data,
+     :from [:n/n084 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg6]}
+    {:id :e/link127,
+     :kind :data,
+     :from [:n/n085 :value],
+     :to [:n/n--entry--movement-back-tick-5 :arg7]}
+    {:id :e/link128,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-tick-4 :out],
+     :to [:n/n--entry--movement-back-tick-5 :in]}
+    {:id :e/link129,
+     :kind :exec,
+     :from [:n/start-back-tick :out],
+     :to [:n/n--entry--movement-back-tick-0 :in]}
+    {:id :e/link130,
+     :kind :exec,
+     :from [:n/n--entry--movement-back-tick-5 :out],
+     :to [:n/n086 :in]}]},
+  :movement/left-release
+  {:on :phase/left-release,
+   :nodes
+   #:n{:start-left-release {:type :start, :nid :n/start-left-release},
+       :n--entry--movement-l-c2845e00
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-l-c2845e00},
+       :n087 {:type :context-ref, :key :caster/id, :nid :n/n087},
+       :n--entry--movement-l-a6a40653
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-l-a6a40653},
+       :n088 {:type :context-ref, :key :caster/body, :nid :n/n088},
+       :n--entry--movement-l-8da4226b
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-l-8da4226b},
+       :n089 {:type :context-ref, :key :caster/aim, :nid :n/n089},
+       :n--entry--movement-l-6ffcae96
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-l-6ffcae96},
+       :n090 {:type :context-ref, :key :caster/eye-y, :nid :n/n090},
+       :n--entry--movement-l-896b84e0
+       {:type :local-set,
+        :operation :define,
+        :key :wid,
+        :nid :n/n--entry--movement-l-896b84e0},
+       :n091 {:type :context-ref, :key :world/id, :nid :n/n091},
+       :n--entry--movement-l-d129d6d6
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-l-d129d6d6},
+       :n092
+       {:type :context-ref, :key :caster/creative?, :nid :n/n092},
+       :n--entry--movement-l-92e291ef
+       {:type :local-set,
+        :operation :define,
+        :key :blink-progression,
+        :nid :n/n--entry--movement-l-92e291ef},
+       :n093
+       {:type :context-ref, :key :progression/blink, :nid :n/n093},
+       :n--entry--movement-l-9e91585c
+       {:type :component,
+        :component :combat/blink-release,
+        :nid :n/n--entry--movement-l-9e91585c,
+        :inputs {:arg5 :left}},
+       :n094 {:type :local-get, :key :owner-id, :nid :n/n094},
+       :n095 {:type :local-get, :key :body, :nid :n/n095},
+       :n096 {:type :local-get, :key :aim, :nid :n/n096},
+       :n097 {:type :local-get, :key :eye-y, :nid :n/n097},
+       :n098 {:type :local-get, :key :wid, :nid :n/n098},
+       :n099
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n099},
+       :n100 {:type :parameter-ref, :key :blink-cp, :nid :n/n100},
+       :n101
+       {:type :parameter-ref, :key :blink-overload, :nid :n/n101},
+       :n102 {:type :local-get, :key :creative?, :nid :n/n102},
+       :n103
+       {:type :parameter-ref,
+        :key :post-blink-fall-protect-ticks,
+        :nid :n/n103},
+       :n104 {:type :local-get, :key :blink-progression, :nid :n/n104},
+       :n105 {:type :end, :result {:outcome :ended}, :nid :n/n105}},
+   :links
+   [{:id :e/link131,
+     :kind :data,
+     :from [:n/n087 :value],
+     :to [:n/n--entry--movement-l-c2845e00 :value]}
+    {:id :e/link132,
+     :kind :data,
+     :from [:n/n088 :value],
+     :to [:n/n--entry--movement-l-a6a40653 :value]}
+    {:id :e/link133,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-c2845e00 :out],
+     :to [:n/n--entry--movement-l-a6a40653 :in]}
+    {:id :e/link134,
+     :kind :data,
+     :from [:n/n089 :value],
+     :to [:n/n--entry--movement-l-8da4226b :value]}
+    {:id :e/link135,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-a6a40653 :out],
+     :to [:n/n--entry--movement-l-8da4226b :in]}
+    {:id :e/link136,
+     :kind :data,
+     :from [:n/n090 :value],
+     :to [:n/n--entry--movement-l-6ffcae96 :value]}
+    {:id :e/link137,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-8da4226b :out],
+     :to [:n/n--entry--movement-l-6ffcae96 :in]}
+    {:id :e/link138,
+     :kind :data,
+     :from [:n/n091 :value],
+     :to [:n/n--entry--movement-l-896b84e0 :value]}
+    {:id :e/link139,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-6ffcae96 :out],
+     :to [:n/n--entry--movement-l-896b84e0 :in]}
+    {:id :e/link140,
+     :kind :data,
+     :from [:n/n092 :value],
+     :to [:n/n--entry--movement-l-d129d6d6 :value]}
+    {:id :e/link141,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-896b84e0 :out],
+     :to [:n/n--entry--movement-l-d129d6d6 :in]}
+    {:id :e/link142,
+     :kind :data,
+     :from [:n/n093 :value],
+     :to [:n/n--entry--movement-l-92e291ef :value]}
+    {:id :e/link143,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-d129d6d6 :out],
+     :to [:n/n--entry--movement-l-92e291ef :in]}
+    {:id :e/link144,
+     :kind :data,
+     :from [:n/n094 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg0]}
+    {:id :e/link145,
+     :kind :data,
+     :from [:n/n095 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg1]}
+    {:id :e/link146,
+     :kind :data,
+     :from [:n/n096 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg2]}
+    {:id :e/link147,
+     :kind :data,
+     :from [:n/n097 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg3]}
+    {:id :e/link148,
+     :kind :data,
+     :from [:n/n098 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg4]}
+    {:id :e/link149,
+     :kind :data,
+     :from [:n/n099 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg6]}
+    {:id :e/link150,
+     :kind :data,
+     :from [:n/n100 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg7]}
+    {:id :e/link151,
+     :kind :data,
+     :from [:n/n101 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg8]}
+    {:id :e/link152,
+     :kind :data,
+     :from [:n/n102 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg9]}
+    {:id :e/link153,
+     :kind :data,
+     :from [:n/n103 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg10]}
+    {:id :e/link154,
+     :kind :data,
+     :from [:n/n104 :value],
+     :to [:n/n--entry--movement-l-9e91585c :arg11]}
+    {:id :e/link155,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-92e291ef :out],
+     :to [:n/n--entry--movement-l-9e91585c :in]}
+    {:id :e/link156,
+     :kind :exec,
+     :from [:n/start-left-release :out],
+     :to [:n/n--entry--movement-l-c2845e00 :in]}
+    {:id :e/link157,
+     :kind :exec,
+     :from [:n/n--entry--movement-l-9e91585c :out],
+     :to [:n/n105 :in]}]},
+  :movement/forward-tick
+  {:on :phase/forward-tick,
+   :nodes
+   #:n{:start-forward-tick {:type :start, :nid :n/start-forward-tick},
+       :n--entry--movement-f-3608ec14
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-f-3608ec14},
+       :n106 {:type :context-ref, :key :caster/id, :nid :n/n106},
+       :n--entry--movement-f-b4c233b7
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-f-b4c233b7},
+       :n107 {:type :context-ref, :key :caster/body, :nid :n/n107},
+       :n--entry--movement-f-b769f993
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-f-b769f993},
+       :n108 {:type :context-ref, :key :caster/aim, :nid :n/n108},
+       :n--entry--movement-f-bec501d0
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-f-bec501d0},
+       :n109 {:type :context-ref, :key :caster/eye-y, :nid :n/n109},
+       :n--entry--movement-f-a41b80df
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-f-a41b80df},
+       :n110
+       {:type :context-ref, :key :caster/creative?, :nid :n/n110},
+       :n--entry--movement-f-ca3572a8
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-f-ca3572a8,
+        :inputs {:arg4 :forward, :arg8 :update}},
+       :n111 {:type :local-get, :key :owner-id, :nid :n/n111},
+       :n112 {:type :local-get, :key :body, :nid :n/n112},
+       :n113 {:type :local-get, :key :aim, :nid :n/n113},
+       :n114 {:type :local-get, :key :eye-y, :nid :n/n114},
+       :n115
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n115},
+       :n116 {:type :parameter-ref, :key :blink-cp, :nid :n/n116},
+       :n117 {:type :local-get, :key :creative?, :nid :n/n117},
+       :n118 {:type :end, :result {:outcome :ended}, :nid :n/n118}},
+   :links
+   [{:id :e/link158,
+     :kind :data,
+     :from [:n/n106 :value],
+     :to [:n/n--entry--movement-f-3608ec14 :value]}
+    {:id :e/link159,
+     :kind :data,
+     :from [:n/n107 :value],
+     :to [:n/n--entry--movement-f-b4c233b7 :value]}
+    {:id :e/link160,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-3608ec14 :out],
+     :to [:n/n--entry--movement-f-b4c233b7 :in]}
+    {:id :e/link161,
+     :kind :data,
+     :from [:n/n108 :value],
+     :to [:n/n--entry--movement-f-b769f993 :value]}
+    {:id :e/link162,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-b4c233b7 :out],
+     :to [:n/n--entry--movement-f-b769f993 :in]}
+    {:id :e/link163,
+     :kind :data,
+     :from [:n/n109 :value],
+     :to [:n/n--entry--movement-f-bec501d0 :value]}
+    {:id :e/link164,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-b769f993 :out],
+     :to [:n/n--entry--movement-f-bec501d0 :in]}
+    {:id :e/link165,
+     :kind :data,
+     :from [:n/n110 :value],
+     :to [:n/n--entry--movement-f-a41b80df :value]}
+    {:id :e/link166,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-bec501d0 :out],
+     :to [:n/n--entry--movement-f-a41b80df :in]}
+    {:id :e/link167,
+     :kind :data,
+     :from [:n/n111 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg0]}
+    {:id :e/link168,
+     :kind :data,
+     :from [:n/n112 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg1]}
+    {:id :e/link169,
+     :kind :data,
+     :from [:n/n113 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg2]}
+    {:id :e/link170,
+     :kind :data,
+     :from [:n/n114 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg3]}
+    {:id :e/link171,
+     :kind :data,
+     :from [:n/n115 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg5]}
+    {:id :e/link172,
+     :kind :data,
+     :from [:n/n116 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg6]}
+    {:id :e/link173,
+     :kind :data,
+     :from [:n/n117 :value],
+     :to [:n/n--entry--movement-f-ca3572a8 :arg7]}
+    {:id :e/link174,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-a41b80df :out],
+     :to [:n/n--entry--movement-f-ca3572a8 :in]}
+    {:id :e/link175,
+     :kind :exec,
+     :from [:n/start-forward-tick :out],
+     :to [:n/n--entry--movement-f-3608ec14 :in]}
+    {:id :e/link176,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-ca3572a8 :out],
+     :to [:n/n118 :in]}]},
+  :abort
+  {:on :phase/abort,
+   :nodes
+   #:n{:start-abort {:type :start, :nid :n/start-abort},
+       :n--entry--abort-0
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--abort-0,
+        :inputs
+        {:effect-id :teleport-marker,
+         :operation :destroy,
+         :instance-key [:activation :teleport-marker],
+         :payload {}}},
+       :n--entry--abort-1
+       {:type :local-set,
+        :operation :define,
+        :key :deactivate-cooldown,
+        :nid :n/n--entry--abort-1},
+       :n119
+       {:type :context-ref, :key :cooldown/deactivate, :nid :n/n119},
+       :n--entry--abort-2
+       {:type :component,
+        :component :cooldown/start,
+        :nid :n/n--entry--abort-2,
+        :inputs {:name :deactivate}},
+       :n120
+       {:type :local-get, :key :deactivate-cooldown, :nid :n/n120},
+       :n--entry--abort-3
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--abort-3,
+        :inputs {:outcome :aborted, :end-ability? true}}},
+   :links
+   [{:id :e/link177,
+     :kind :data,
+     :from [:n/n119 :value],
+     :to [:n/n--entry--abort-1 :value]}
+    {:id :e/link178,
+     :kind :exec,
+     :from [:n/n--entry--abort-0 :out],
+     :to [:n/n--entry--abort-1 :in]}
+    {:id :e/link179,
+     :kind :data,
+     :from [:n/n120 :value],
+     :to [:n/n--entry--abort-2 :ticks]}
+    {:id :e/link180,
+     :kind :exec,
+     :from [:n/n--entry--abort-1 :out],
+     :to [:n/n--entry--abort-2 :in]}
+    {:id :e/link181,
+     :kind :exec,
+     :from [:n/n--entry--abort-2 :out],
+     :to [:n/n--entry--abort-3 :in]}
+    {:id :e/link182,
+     :kind :exec,
+     :from [:n/start-abort :out],
+     :to [:n/n--entry--abort-0 :in]}]},
+  :movement/forward-release
+  {:on :phase/forward-release,
+   :nodes
+   #:n{:start-forward-release
+       {:type :start, :nid :n/start-forward-release},
+       :n--entry--movement-f-583b6890
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-f-583b6890},
+       :n121 {:type :context-ref, :key :caster/id, :nid :n/n121},
+       :n--entry--movement-f-35147466
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-f-35147466},
+       :n122 {:type :context-ref, :key :caster/body, :nid :n/n122},
+       :n--entry--movement-f-3491b78a
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-f-3491b78a},
+       :n123 {:type :context-ref, :key :caster/aim, :nid :n/n123},
+       :n--entry--movement-f-f823b884
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-f-f823b884},
+       :n124 {:type :context-ref, :key :caster/eye-y, :nid :n/n124},
+       :n--entry--movement-f-82138909
+       {:type :local-set,
+        :operation :define,
+        :key :wid,
+        :nid :n/n--entry--movement-f-82138909},
+       :n125 {:type :context-ref, :key :world/id, :nid :n/n125},
+       :n--entry--movement-f-6cc48887
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-f-6cc48887},
+       :n126
+       {:type :context-ref, :key :caster/creative?, :nid :n/n126},
+       :n--entry--movement-f-22b7df0d
+       {:type :local-set,
+        :operation :define,
+        :key :blink-progression,
+        :nid :n/n--entry--movement-f-22b7df0d},
+       :n127
+       {:type :context-ref, :key :progression/blink, :nid :n/n127},
+       :n--entry--movement-f-89ca7ceb
+       {:type :component,
+        :component :combat/blink-release,
+        :nid :n/n--entry--movement-f-89ca7ceb,
+        :inputs {:arg5 :forward}},
+       :n128 {:type :local-get, :key :owner-id, :nid :n/n128},
+       :n129 {:type :local-get, :key :body, :nid :n/n129},
+       :n130 {:type :local-get, :key :aim, :nid :n/n130},
+       :n131 {:type :local-get, :key :eye-y, :nid :n/n131},
+       :n132 {:type :local-get, :key :wid, :nid :n/n132},
+       :n133
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n133},
+       :n134 {:type :parameter-ref, :key :blink-cp, :nid :n/n134},
+       :n135
+       {:type :parameter-ref, :key :blink-overload, :nid :n/n135},
+       :n136 {:type :local-get, :key :creative?, :nid :n/n136},
+       :n137
+       {:type :parameter-ref,
+        :key :post-blink-fall-protect-ticks,
+        :nid :n/n137},
+       :n138 {:type :local-get, :key :blink-progression, :nid :n/n138},
+       :n139 {:type :end, :result {:outcome :ended}, :nid :n/n139}},
+   :links
+   [{:id :e/link183,
+     :kind :data,
+     :from [:n/n121 :value],
+     :to [:n/n--entry--movement-f-583b6890 :value]}
+    {:id :e/link184,
+     :kind :data,
+     :from [:n/n122 :value],
+     :to [:n/n--entry--movement-f-35147466 :value]}
+    {:id :e/link185,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-583b6890 :out],
+     :to [:n/n--entry--movement-f-35147466 :in]}
+    {:id :e/link186,
+     :kind :data,
+     :from [:n/n123 :value],
+     :to [:n/n--entry--movement-f-3491b78a :value]}
+    {:id :e/link187,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-35147466 :out],
+     :to [:n/n--entry--movement-f-3491b78a :in]}
+    {:id :e/link188,
+     :kind :data,
+     :from [:n/n124 :value],
+     :to [:n/n--entry--movement-f-f823b884 :value]}
+    {:id :e/link189,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-3491b78a :out],
+     :to [:n/n--entry--movement-f-f823b884 :in]}
+    {:id :e/link190,
+     :kind :data,
+     :from [:n/n125 :value],
+     :to [:n/n--entry--movement-f-82138909 :value]}
+    {:id :e/link191,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-f823b884 :out],
+     :to [:n/n--entry--movement-f-82138909 :in]}
+    {:id :e/link192,
+     :kind :data,
+     :from [:n/n126 :value],
+     :to [:n/n--entry--movement-f-6cc48887 :value]}
+    {:id :e/link193,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-82138909 :out],
+     :to [:n/n--entry--movement-f-6cc48887 :in]}
+    {:id :e/link194,
+     :kind :data,
+     :from [:n/n127 :value],
+     :to [:n/n--entry--movement-f-22b7df0d :value]}
+    {:id :e/link195,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-6cc48887 :out],
+     :to [:n/n--entry--movement-f-22b7df0d :in]}
+    {:id :e/link196,
+     :kind :data,
+     :from [:n/n128 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg0]}
+    {:id :e/link197,
+     :kind :data,
+     :from [:n/n129 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg1]}
+    {:id :e/link198,
+     :kind :data,
+     :from [:n/n130 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg2]}
+    {:id :e/link199,
+     :kind :data,
+     :from [:n/n131 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg3]}
+    {:id :e/link200,
+     :kind :data,
+     :from [:n/n132 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg4]}
+    {:id :e/link201,
+     :kind :data,
+     :from [:n/n133 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg6]}
+    {:id :e/link202,
+     :kind :data,
+     :from [:n/n134 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg7]}
+    {:id :e/link203,
+     :kind :data,
+     :from [:n/n135 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg8]}
+    {:id :e/link204,
+     :kind :data,
+     :from [:n/n136 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg9]}
+    {:id :e/link205,
+     :kind :data,
+     :from [:n/n137 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg10]}
+    {:id :e/link206,
+     :kind :data,
+     :from [:n/n138 :value],
+     :to [:n/n--entry--movement-f-89ca7ceb :arg11]}
+    {:id :e/link207,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-22b7df0d :out],
+     :to [:n/n--entry--movement-f-89ca7ceb :in]}
+    {:id :e/link208,
+     :kind :exec,
+     :from [:n/start-forward-release :out],
+     :to [:n/n--entry--movement-f-583b6890 :in]}
+    {:id :e/link209,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-89ca7ceb :out],
+     :to [:n/n139 :in]}]},
+  :pulse
+  {:on :phase/pulse,
+   :nodes
+   #:n{:start-pulse {:type :start, :nid :n/start-pulse},
+       :n--entry--pulse-0
+       {:type :local-set,
+        :operation :define,
+        :key :active-ticks-check,
+        :nid :n/n--entry--pulse-0},
+       :n140 {:type :state-ref, :key :active-ticks, :nid :n/n140},
+       :n--entry--pulse-1 {:type :branch, :nid :n/n--entry--pulse-1},
+       :n141 {:type :component, :component :math/gt, :nid :n/n141},
+       :n142
+       {:type :local-get, :key :active-ticks-check, :nid :n/n142},
+       :n143
+       {:type :parameter-ref, :key :max-active-ticks, :nid :n/n143},
+       :n--entry--pulse-1-then-0
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--pulse-1-then-0,
+        :inputs
+        {:effect-id :teleport-marker,
+         :operation :destroy,
+         :instance-key [:activation :teleport-marker],
+         :payload {}}},
+       :n--entry--pulse-1-then-1
+       {:type :local-set,
+        :operation :define,
+        :key :deactivate-cooldown,
+        :nid :n/n--entry--pulse-1-then-1},
+       :n144
+       {:type :context-ref, :key :cooldown/deactivate, :nid :n/n144},
+       :n--entry--pulse-1-then-2
+       {:type :component,
+        :component :cooldown/start,
+        :nid :n/n--entry--pulse-1-then-2,
+        :inputs {:name :deactivate}},
+       :n145
+       {:type :local-get, :key :deactivate-cooldown, :nid :n/n145},
+       :n--entry--pulse-1-then-3
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--pulse-1-then-3,
+        :inputs {:outcome :expired, :end-ability? true}},
+       :n--entry--pulse-1-else-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--pulse-1-else-0},
+       :n146 {:type :context-ref, :key :caster/id, :nid :n/n146},
+       :n--entry--pulse-1-else-1
+       {:type :local-set,
+        :operation :define,
+        :key :overload-floor,
+        :nid :n/n--entry--pulse-1-else-1},
+       :n147 {:type :state-ref, :key :overload-floor, :nid :n/n147},
+       :n--entry--pulse-1-else-2
+       {:type :local-set,
+        :operation :define,
+        :key :fall-protect-ticks,
+        :nid :n/n--entry--pulse-1-else-2},
+       :n148
+       {:type :state-ref, :key :fall-protect-ticks, :nid :n/n148},
+       :n--entry--pulse-1-else-3
+       {:type :component,
+        :component :resource/enforce-floor,
+        :nid :n/n--entry--pulse-1-else-3,
+        :inputs {:resource :overload}},
+       :n149 {:type :local-get, :key :overload-floor, :nid :n/n149},
+       :n--entry--pulse-1-else-4
+       {:type :branch, :nid :n/n--entry--pulse-1-else-4},
+       :n150
+       {:type :component,
+        :component :math/gt,
+        :nid :n/n150,
+        :inputs {:arg1 0}},
+       :n151
+       {:type :local-get, :key :fall-protect-ticks, :nid :n/n151},
+       :n--entry--pulse-1-else-4-do-0
+       {:type :component,
+        :component :entity/reset-fall-damage,
+        :nid :n/n--entry--pulse-1-else-4-do-0},
+       :n152 {:type :local-get, :key :owner-id, :nid :n/n152},
+       :n153 {:type :merge, :nid :n/n153},
+       :n--entry--pulse-1-else-5
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :active-ticks},
+        :nid :n/n--entry--pulse-1-else-5},
+       :n154
+       {:type :component,
+        :component :long/add,
+        :nid :n/n154,
+        :inputs {:arg1 1}},
+       :n155
+       {:type :local-get, :key :active-ticks-check, :nid :n/n155},
+       :n--entry--pulse-1-else-6
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :fall-protect-ticks},
+        :nid :n/n--entry--pulse-1-else-6},
+       :n156
+       {:type :component,
+        :component :long/max,
+        :nid :n/n156,
+        :inputs {:arg0 0}},
+       :n157
+       {:type :component,
+        :component :long/sub,
+        :nid :n/n157,
+        :inputs {:arg1 1}},
+       :n158
+       {:type :local-get, :key :fall-protect-ticks, :nid :n/n158},
+       :n--entry--pulse-1-else-7
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--pulse-1-else-7,
+        :inputs {:outcome :continue}}},
+   :links
+   [{:id :e/link210,
+     :kind :data,
+     :from [:n/n140 :value],
+     :to [:n/n--entry--pulse-0 :value]}
+    {:id :e/link211,
+     :kind :data,
+     :from [:n/n142 :value],
+     :to [:n/n141 :arg0]}
+    {:id :e/link212,
+     :kind :data,
+     :from [:n/n143 :value],
+     :to [:n/n141 :arg1]}
+    {:id :e/link213,
+     :kind :data,
+     :from [:n/n141 :value],
+     :to [:n/n--entry--pulse-1 :condition]}
+    {:id :e/link214,
+     :kind :data,
+     :from [:n/n144 :value],
+     :to [:n/n--entry--pulse-1-then-1 :value]}
+    {:id :e/link215,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-then-0 :out],
+     :to [:n/n--entry--pulse-1-then-1 :in]}
+    {:id :e/link216,
+     :kind :data,
+     :from [:n/n145 :value],
+     :to [:n/n--entry--pulse-1-then-2 :ticks]}
+    {:id :e/link217,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-then-1 :out],
+     :to [:n/n--entry--pulse-1-then-2 :in]}
+    {:id :e/link218,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-then-2 :out],
+     :to [:n/n--entry--pulse-1-then-3 :in]}
+    {:id :e/link219,
+     :kind :data,
+     :from [:n/n146 :value],
+     :to [:n/n--entry--pulse-1-else-0 :value]}
+    {:id :e/link220,
+     :kind :data,
+     :from [:n/n147 :value],
+     :to [:n/n--entry--pulse-1-else-1 :value]}
+    {:id :e/link221,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-0 :out],
+     :to [:n/n--entry--pulse-1-else-1 :in]}
+    {:id :e/link222,
+     :kind :data,
+     :from [:n/n148 :value],
+     :to [:n/n--entry--pulse-1-else-2 :value]}
+    {:id :e/link223,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-1 :out],
+     :to [:n/n--entry--pulse-1-else-2 :in]}
+    {:id :e/link224,
+     :kind :data,
+     :from [:n/n149 :value],
+     :to [:n/n--entry--pulse-1-else-3 :minimum]}
+    {:id :e/link225,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-2 :out],
+     :to [:n/n--entry--pulse-1-else-3 :in]}
+    {:id :e/link226,
+     :kind :data,
+     :from [:n/n151 :value],
+     :to [:n/n150 :arg0]}
+    {:id :e/link227,
+     :kind :data,
+     :from [:n/n150 :value],
+     :to [:n/n--entry--pulse-1-else-4 :condition]}
+    {:id :e/link228,
+     :kind :data,
+     :from [:n/n152 :value],
+     :to [:n/n--entry--pulse-1-else-4-do-0 :target]}
+    {:id :e/link229,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-4 :true],
+     :to [:n/n--entry--pulse-1-else-4-do-0 :in]}
+    {:id :e/link230,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-4-do-0 :out],
+     :to [:n/n153 :in]}
+    {:id :e/link231,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-4 :false],
+     :to [:n/n153 :in]}
+    {:id :e/link232,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-3 :out],
+     :to [:n/n--entry--pulse-1-else-4 :in]}
+    {:id :e/link233,
+     :kind :data,
+     :from [:n/n155 :value],
+     :to [:n/n154 :arg0]}
+    {:id :e/link234,
+     :kind :data,
+     :from [:n/n154 :value],
+     :to [:n/n--entry--pulse-1-else-5 :value]}
+    {:id :e/link235,
+     :kind :exec,
+     :from [:n/n153 :out],
+     :to [:n/n--entry--pulse-1-else-5 :in]}
+    {:id :e/link236,
+     :kind :data,
+     :from [:n/n158 :value],
+     :to [:n/n157 :arg0]}
+    {:id :e/link237,
+     :kind :data,
+     :from [:n/n157 :value],
+     :to [:n/n156 :arg1]}
+    {:id :e/link238,
+     :kind :data,
+     :from [:n/n156 :value],
+     :to [:n/n--entry--pulse-1-else-6 :value]}
+    {:id :e/link239,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-5 :out],
+     :to [:n/n--entry--pulse-1-else-6 :in]}
+    {:id :e/link240,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1-else-6 :out],
+     :to [:n/n--entry--pulse-1-else-7 :in]}
+    {:id :e/link241,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1 :true],
+     :to [:n/n--entry--pulse-1-then-0 :in]}
+    {:id :e/link242,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1 :false],
+     :to [:n/n--entry--pulse-1-else-0 :in]}
+    {:id :e/link243,
+     :kind :exec,
+     :from [:n/n--entry--pulse-0 :out],
+     :to [:n/n--entry--pulse-1 :in]}
+    {:id :e/link244,
+     :kind :exec,
+     :from [:n/start-pulse :out],
+     :to [:n/n--entry--pulse-0 :in]}]},
+  :movement/forward-press
+  {:on :phase/forward-press,
+   :nodes
+   #:n{:start-forward-press
+       {:type :start, :nid :n/start-forward-press},
+       :n--entry--movement-f-d5b516db
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-f-d5b516db},
+       :n159 {:type :context-ref, :key :caster/id, :nid :n/n159},
+       :n--entry--movement-f-dede2b53
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-f-dede2b53},
+       :n160 {:type :context-ref, :key :caster/body, :nid :n/n160},
+       :n--entry--movement-f-3069b32c
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-f-3069b32c},
+       :n161 {:type :context-ref, :key :caster/aim, :nid :n/n161},
+       :n--entry--movement-f-ca995d2f
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-f-ca995d2f},
+       :n162 {:type :context-ref, :key :caster/eye-y, :nid :n/n162},
+       :n--entry--movement-f-c281e4a0
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-f-c281e4a0},
+       :n163
+       {:type :context-ref, :key :caster/creative?, :nid :n/n163},
+       :n--entry--movement-f-900bc585
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-f-900bc585,
+        :inputs {:arg4 :forward, :arg8 :spawn}},
+       :n164 {:type :local-get, :key :owner-id, :nid :n/n164},
+       :n165 {:type :local-get, :key :body, :nid :n/n165},
+       :n166 {:type :local-get, :key :aim, :nid :n/n166},
+       :n167 {:type :local-get, :key :eye-y, :nid :n/n167},
+       :n168
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n168},
+       :n169 {:type :parameter-ref, :key :blink-cp, :nid :n/n169},
+       :n170 {:type :local-get, :key :creative?, :nid :n/n170},
+       :n171 {:type :end, :result {:outcome :ended}, :nid :n/n171}},
+   :links
+   [{:id :e/link245,
+     :kind :data,
+     :from [:n/n159 :value],
+     :to [:n/n--entry--movement-f-d5b516db :value]}
+    {:id :e/link246,
+     :kind :data,
+     :from [:n/n160 :value],
+     :to [:n/n--entry--movement-f-dede2b53 :value]}
+    {:id :e/link247,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-d5b516db :out],
+     :to [:n/n--entry--movement-f-dede2b53 :in]}
+    {:id :e/link248,
+     :kind :data,
+     :from [:n/n161 :value],
+     :to [:n/n--entry--movement-f-3069b32c :value]}
+    {:id :e/link249,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-dede2b53 :out],
+     :to [:n/n--entry--movement-f-3069b32c :in]}
+    {:id :e/link250,
+     :kind :data,
+     :from [:n/n162 :value],
+     :to [:n/n--entry--movement-f-ca995d2f :value]}
+    {:id :e/link251,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-3069b32c :out],
+     :to [:n/n--entry--movement-f-ca995d2f :in]}
+    {:id :e/link252,
+     :kind :data,
+     :from [:n/n163 :value],
+     :to [:n/n--entry--movement-f-c281e4a0 :value]}
+    {:id :e/link253,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-ca995d2f :out],
+     :to [:n/n--entry--movement-f-c281e4a0 :in]}
+    {:id :e/link254,
+     :kind :data,
+     :from [:n/n164 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg0]}
+    {:id :e/link255,
+     :kind :data,
+     :from [:n/n165 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg1]}
+    {:id :e/link256,
+     :kind :data,
+     :from [:n/n166 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg2]}
+    {:id :e/link257,
+     :kind :data,
+     :from [:n/n167 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg3]}
+    {:id :e/link258,
+     :kind :data,
+     :from [:n/n168 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg5]}
+    {:id :e/link259,
+     :kind :data,
+     :from [:n/n169 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg6]}
+    {:id :e/link260,
+     :kind :data,
+     :from [:n/n170 :value],
+     :to [:n/n--entry--movement-f-900bc585 :arg7]}
+    {:id :e/link261,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-c281e4a0 :out],
+     :to [:n/n--entry--movement-f-900bc585 :in]}
+    {:id :e/link262,
+     :kind :exec,
+     :from [:n/start-forward-press :out],
+     :to [:n/n--entry--movement-f-d5b516db :in]}
+    {:id :e/link263,
+     :kind :exec,
+     :from [:n/n--entry--movement-f-900bc585 :out],
+     :to [:n/n171 :in]}]},
+  :movement/left-tick
+  {:on :phase/left-tick,
+   :nodes
+   #:n{:start-left-tick {:type :start, :nid :n/start-left-tick},
+       :n--entry--movement-left-tick-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-left-tick-0},
+       :n172 {:type :context-ref, :key :caster/id, :nid :n/n172},
+       :n--entry--movement-left-tick-1
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-left-tick-1},
+       :n173 {:type :context-ref, :key :caster/body, :nid :n/n173},
+       :n--entry--movement-left-tick-2
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-left-tick-2},
+       :n174 {:type :context-ref, :key :caster/aim, :nid :n/n174},
+       :n--entry--movement-left-tick-3
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-left-tick-3},
+       :n175 {:type :context-ref, :key :caster/eye-y, :nid :n/n175},
+       :n--entry--movement-left-tick-4
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-left-tick-4},
+       :n176
+       {:type :context-ref, :key :caster/creative?, :nid :n/n176},
+       :n--entry--movement-left-tick-5
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-left-tick-5,
+        :inputs {:arg4 :left, :arg8 :update}},
+       :n177 {:type :local-get, :key :owner-id, :nid :n/n177},
+       :n178 {:type :local-get, :key :body, :nid :n/n178},
+       :n179 {:type :local-get, :key :aim, :nid :n/n179},
+       :n180 {:type :local-get, :key :eye-y, :nid :n/n180},
+       :n181
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n181},
+       :n182 {:type :parameter-ref, :key :blink-cp, :nid :n/n182},
+       :n183 {:type :local-get, :key :creative?, :nid :n/n183},
+       :n184 {:type :end, :result {:outcome :ended}, :nid :n/n184}},
+   :links
+   [{:id :e/link264,
+     :kind :data,
+     :from [:n/n172 :value],
+     :to [:n/n--entry--movement-left-tick-0 :value]}
+    {:id :e/link265,
+     :kind :data,
+     :from [:n/n173 :value],
+     :to [:n/n--entry--movement-left-tick-1 :value]}
+    {:id :e/link266,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-tick-0 :out],
+     :to [:n/n--entry--movement-left-tick-1 :in]}
+    {:id :e/link267,
+     :kind :data,
+     :from [:n/n174 :value],
+     :to [:n/n--entry--movement-left-tick-2 :value]}
+    {:id :e/link268,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-tick-1 :out],
+     :to [:n/n--entry--movement-left-tick-2 :in]}
+    {:id :e/link269,
+     :kind :data,
+     :from [:n/n175 :value],
+     :to [:n/n--entry--movement-left-tick-3 :value]}
+    {:id :e/link270,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-tick-2 :out],
+     :to [:n/n--entry--movement-left-tick-3 :in]}
+    {:id :e/link271,
+     :kind :data,
+     :from [:n/n176 :value],
+     :to [:n/n--entry--movement-left-tick-4 :value]}
+    {:id :e/link272,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-tick-3 :out],
+     :to [:n/n--entry--movement-left-tick-4 :in]}
+    {:id :e/link273,
+     :kind :data,
+     :from [:n/n177 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg0]}
+    {:id :e/link274,
+     :kind :data,
+     :from [:n/n178 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg1]}
+    {:id :e/link275,
+     :kind :data,
+     :from [:n/n179 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg2]}
+    {:id :e/link276,
+     :kind :data,
+     :from [:n/n180 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg3]}
+    {:id :e/link277,
+     :kind :data,
+     :from [:n/n181 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg5]}
+    {:id :e/link278,
+     :kind :data,
+     :from [:n/n182 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg6]}
+    {:id :e/link279,
+     :kind :data,
+     :from [:n/n183 :value],
+     :to [:n/n--entry--movement-left-tick-5 :arg7]}
+    {:id :e/link280,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-tick-4 :out],
+     :to [:n/n--entry--movement-left-tick-5 :in]}
+    {:id :e/link281,
+     :kind :exec,
+     :from [:n/start-left-tick :out],
+     :to [:n/n--entry--movement-left-tick-0 :in]}
+    {:id :e/link282,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-tick-5 :out],
+     :to [:n/n184 :in]}]},
+  :movement/left-press
+  {:on :phase/left-press,
+   :nodes
+   #:n{:start-left-press {:type :start, :nid :n/start-left-press},
+       :n--entry--movement-left-press-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-left-press-0},
+       :n185 {:type :context-ref, :key :caster/id, :nid :n/n185},
+       :n--entry--movement-left-press-1
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-left-press-1},
+       :n186 {:type :context-ref, :key :caster/body, :nid :n/n186},
+       :n--entry--movement-left-press-2
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-left-press-2},
+       :n187 {:type :context-ref, :key :caster/aim, :nid :n/n187},
+       :n--entry--movement-left-press-3
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-left-press-3},
+       :n188 {:type :context-ref, :key :caster/eye-y, :nid :n/n188},
+       :n--entry--movement-left-press-4
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-left-press-4},
+       :n189
+       {:type :context-ref, :key :caster/creative?, :nid :n/n189},
+       :n--entry--movement-left-press-5
+       {:type :component,
+        :component :combat/blink-preview,
+        :nid :n/n--entry--movement-left-press-5,
+        :inputs {:arg4 :left, :arg8 :spawn}},
+       :n190 {:type :local-get, :key :owner-id, :nid :n/n190},
+       :n191 {:type :local-get, :key :body, :nid :n/n191},
+       :n192 {:type :local-get, :key :aim, :nid :n/n192},
+       :n193 {:type :local-get, :key :eye-y, :nid :n/n193},
+       :n194
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n194},
+       :n195 {:type :parameter-ref, :key :blink-cp, :nid :n/n195},
+       :n196 {:type :local-get, :key :creative?, :nid :n/n196},
+       :n197 {:type :end, :result {:outcome :ended}, :nid :n/n197}},
+   :links
+   [{:id :e/link283,
+     :kind :data,
+     :from [:n/n185 :value],
+     :to [:n/n--entry--movement-left-press-0 :value]}
+    {:id :e/link284,
+     :kind :data,
+     :from [:n/n186 :value],
+     :to [:n/n--entry--movement-left-press-1 :value]}
+    {:id :e/link285,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-press-0 :out],
+     :to [:n/n--entry--movement-left-press-1 :in]}
+    {:id :e/link286,
+     :kind :data,
+     :from [:n/n187 :value],
+     :to [:n/n--entry--movement-left-press-2 :value]}
+    {:id :e/link287,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-press-1 :out],
+     :to [:n/n--entry--movement-left-press-2 :in]}
+    {:id :e/link288,
+     :kind :data,
+     :from [:n/n188 :value],
+     :to [:n/n--entry--movement-left-press-3 :value]}
+    {:id :e/link289,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-press-2 :out],
+     :to [:n/n--entry--movement-left-press-3 :in]}
+    {:id :e/link290,
+     :kind :data,
+     :from [:n/n189 :value],
+     :to [:n/n--entry--movement-left-press-4 :value]}
+    {:id :e/link291,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-press-3 :out],
+     :to [:n/n--entry--movement-left-press-4 :in]}
+    {:id :e/link292,
+     :kind :data,
+     :from [:n/n190 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg0]}
+    {:id :e/link293,
+     :kind :data,
+     :from [:n/n191 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg1]}
+    {:id :e/link294,
+     :kind :data,
+     :from [:n/n192 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg2]}
+    {:id :e/link295,
+     :kind :data,
+     :from [:n/n193 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg3]}
+    {:id :e/link296,
+     :kind :data,
+     :from [:n/n194 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg5]}
+    {:id :e/link297,
+     :kind :data,
+     :from [:n/n195 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg6]}
+    {:id :e/link298,
+     :kind :data,
+     :from [:n/n196 :value],
+     :to [:n/n--entry--movement-left-press-5 :arg7]}
+    {:id :e/link299,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-press-4 :out],
+     :to [:n/n--entry--movement-left-press-5 :in]}
+    {:id :e/link300,
+     :kind :exec,
+     :from [:n/start-left-press :out],
+     :to [:n/n--entry--movement-left-press-0 :in]}
+    {:id :e/link301,
+     :kind :exec,
+     :from [:n/n--entry--movement-left-press-5 :out],
+     :to [:n/n197 :in]}]},
+  :movement/right-release
+  {:on :phase/right-release,
+   :nodes
+   #:n{:start-right-release
+       {:type :start, :nid :n/start-right-release},
+       :n--entry--movement-r-e01d6688
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--movement-r-e01d6688},
+       :n198 {:type :context-ref, :key :caster/id, :nid :n/n198},
+       :n--entry--movement-r-c64ecb89
+       {:type :local-set,
+        :operation :define,
+        :key :body,
+        :nid :n/n--entry--movement-r-c64ecb89},
+       :n199 {:type :context-ref, :key :caster/body, :nid :n/n199},
+       :n--entry--movement-r-59797014
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--movement-r-59797014},
+       :n200 {:type :context-ref, :key :caster/aim, :nid :n/n200},
+       :n--entry--movement-r-dc6c0a56
+       {:type :local-set,
+        :operation :define,
+        :key :eye-y,
+        :nid :n/n--entry--movement-r-dc6c0a56},
+       :n201 {:type :context-ref, :key :caster/eye-y, :nid :n/n201},
+       :n--entry--movement-r-66aed1c1
+       {:type :local-set,
+        :operation :define,
+        :key :wid,
+        :nid :n/n--entry--movement-r-66aed1c1},
+       :n202 {:type :context-ref, :key :world/id, :nid :n/n202},
+       :n--entry--movement-r-4654f547
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--movement-r-4654f547},
+       :n203
+       {:type :context-ref, :key :caster/creative?, :nid :n/n203},
+       :n--entry--movement-r-70cef893
+       {:type :local-set,
+        :operation :define,
+        :key :blink-progression,
+        :nid :n/n--entry--movement-r-70cef893},
+       :n204
+       {:type :context-ref, :key :progression/blink, :nid :n/n204},
+       :n--entry--movement-r-b7ec8699
+       {:type :component,
+        :component :combat/blink-release,
+        :nid :n/n--entry--movement-r-b7ec8699,
+        :inputs {:arg5 :right}},
+       :n205 {:type :local-get, :key :owner-id, :nid :n/n205},
+       :n206 {:type :local-get, :key :body, :nid :n/n206},
+       :n207 {:type :local-get, :key :aim, :nid :n/n207},
+       :n208 {:type :local-get, :key :eye-y, :nid :n/n208},
+       :n209 {:type :local-get, :key :wid, :nid :n/n209},
+       :n210
+       {:type :parameter-ref, :key :blink-distance, :nid :n/n210},
+       :n211 {:type :parameter-ref, :key :blink-cp, :nid :n/n211},
+       :n212
+       {:type :parameter-ref, :key :blink-overload, :nid :n/n212},
+       :n213 {:type :local-get, :key :creative?, :nid :n/n213},
+       :n214
+       {:type :parameter-ref,
+        :key :post-blink-fall-protect-ticks,
+        :nid :n/n214},
+       :n215 {:type :local-get, :key :blink-progression, :nid :n/n215},
+       :n216 {:type :end, :result {:outcome :ended}, :nid :n/n216}},
+   :links
+   [{:id :e/link302,
+     :kind :data,
+     :from [:n/n198 :value],
+     :to [:n/n--entry--movement-r-e01d6688 :value]}
+    {:id :e/link303,
+     :kind :data,
+     :from [:n/n199 :value],
+     :to [:n/n--entry--movement-r-c64ecb89 :value]}
+    {:id :e/link304,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-e01d6688 :out],
+     :to [:n/n--entry--movement-r-c64ecb89 :in]}
+    {:id :e/link305,
+     :kind :data,
+     :from [:n/n200 :value],
+     :to [:n/n--entry--movement-r-59797014 :value]}
+    {:id :e/link306,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-c64ecb89 :out],
+     :to [:n/n--entry--movement-r-59797014 :in]}
+    {:id :e/link307,
+     :kind :data,
+     :from [:n/n201 :value],
+     :to [:n/n--entry--movement-r-dc6c0a56 :value]}
+    {:id :e/link308,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-59797014 :out],
+     :to [:n/n--entry--movement-r-dc6c0a56 :in]}
+    {:id :e/link309,
+     :kind :data,
+     :from [:n/n202 :value],
+     :to [:n/n--entry--movement-r-66aed1c1 :value]}
+    {:id :e/link310,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-dc6c0a56 :out],
+     :to [:n/n--entry--movement-r-66aed1c1 :in]}
+    {:id :e/link311,
+     :kind :data,
+     :from [:n/n203 :value],
+     :to [:n/n--entry--movement-r-4654f547 :value]}
+    {:id :e/link312,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-66aed1c1 :out],
+     :to [:n/n--entry--movement-r-4654f547 :in]}
+    {:id :e/link313,
+     :kind :data,
+     :from [:n/n204 :value],
+     :to [:n/n--entry--movement-r-70cef893 :value]}
+    {:id :e/link314,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-4654f547 :out],
+     :to [:n/n--entry--movement-r-70cef893 :in]}
+    {:id :e/link315,
+     :kind :data,
+     :from [:n/n205 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg0]}
+    {:id :e/link316,
+     :kind :data,
+     :from [:n/n206 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg1]}
+    {:id :e/link317,
+     :kind :data,
+     :from [:n/n207 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg2]}
+    {:id :e/link318,
+     :kind :data,
+     :from [:n/n208 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg3]}
+    {:id :e/link319,
+     :kind :data,
+     :from [:n/n209 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg4]}
+    {:id :e/link320,
+     :kind :data,
+     :from [:n/n210 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg6]}
+    {:id :e/link321,
+     :kind :data,
+     :from [:n/n211 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg7]}
+    {:id :e/link322,
+     :kind :data,
+     :from [:n/n212 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg8]}
+    {:id :e/link323,
+     :kind :data,
+     :from [:n/n213 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg9]}
+    {:id :e/link324,
+     :kind :data,
+     :from [:n/n214 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg10]}
+    {:id :e/link325,
+     :kind :data,
+     :from [:n/n215 :value],
+     :to [:n/n--entry--movement-r-b7ec8699 :arg11]}
+    {:id :e/link326,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-70cef893 :out],
+     :to [:n/n--entry--movement-r-b7ec8699 :in]}
+    {:id :e/link327,
+     :kind :exec,
+     :from [:n/start-right-release :out],
+     :to [:n/n--entry--movement-r-e01d6688 :in]}
+    {:id :e/link328,
+     :kind :exec,
+     :from [:n/n--entry--movement-r-b7ec8699 :out],
+     :to [:n/n216 :in]}]}}}

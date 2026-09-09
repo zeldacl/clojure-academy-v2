@@ -1,0 +1,364 @@
+{:schema :ac/skill-v4,
+ :id :mine-detect,
+ :skill {:category :migrated, :level 1},
+ :activation {:mode :instant},
+ :parameters
+ {:blindness-duration-ticks {:type :long, :default nil},
+  :blindness-amplifier {:type :long, :default nil},
+  :targeting-range {:type :double, :default nil},
+  :cooldown-endpoints {:type :any, :default nil},
+  :exp-cast {:type :double, :default nil}},
+ :state {},
+ :description-key "ability.skill.electromaster.mine_detect.desc",
+ :name-key "ability.skill.electromaster.mine_detect",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :costs
+ {:activate
+  {:resources
+   {:cp {:ref [:input :tunables :cost-down-cp]},
+    :overload {:ref [:input :tunables :cost-down-overload]}}}},
+ :mark-policies nil,
+ :requires
+ [:caster/id
+  :caster/eye
+  :world/id
+  :progression/mastery
+  :progression/level
+  :rng/seed],
+ :tunables
+ {:targeting-range {:curve :mastery-lerp},
+  :blindness-duration-ticks {:curve :const, :type :int},
+  :blindness-amplifier {:curve :const, :type :int},
+  :cost-down-cp {:curve :mastery-lerp},
+  :cost-down-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :cooldown-endpoints {:curve :pair},
+  :exp-cast {:curve :const}},
+ :invariants nil,
+ :progression {:cast {:per-mark {:ref [:input :tunables :exp-cast]}}},
+ :graphs
+ {:default
+  {:on :activation/start,
+   :nodes
+   #:n{:start-default {:type :start, :nid :n/start-default},
+       :n--entry--default-0
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :caster/id, :nid :n/n001},
+       :n--entry--default-1
+       {:type :local-set,
+        :operation :define,
+        :key :eye,
+        :nid :n/n--entry--default-1},
+       :n002 {:type :context-ref, :key :caster/eye, :nid :n/n002},
+       :n--entry--default-2
+       {:type :local-set,
+        :operation :define,
+        :key :mastery,
+        :nid :n/n--entry--default-2},
+       :n003
+       {:type :context-ref, :key :progression/mastery, :nid :n/n003},
+       :n--entry--default-3
+       {:type :local-set,
+        :operation :define,
+        :key :level,
+        :nid :n/n--entry--default-3},
+       :n004
+       {:type :context-ref, :key :progression/level, :nid :n/n004},
+       :n--entry--default-4
+       {:type :local-set,
+        :operation :define,
+        :key :cast-progression,
+        :nid :n/n--entry--default-4},
+       :n005
+       {:type :context-ref, :key :progression/cast, :nid :n/n005},
+       :n--entry--default-5
+       {:type :local-set,
+        :operation :define,
+        :key :cooldown-exp-next,
+        :nid :n/n--entry--default-5},
+       :n006 {:type :component, :component :math/add, :nid :n/n006},
+       :n007 {:type :local-get, :key :mastery, :nid :n/n007},
+       :n008 {:type :parameter-ref, :key :exp-cast, :nid :n/n008},
+       :n--entry--default-6
+       {:type :local-set,
+        :operation :define,
+        :key :cooldown-ticks-next,
+        :nid :n/n--entry--default-6},
+       :n009
+       {:type :component, :component :math/floor-long, :nid :n/n009},
+       :n010 {:type :component, :component :math/lerp, :nid :n/n010},
+       :n011 {:type :component, :component :pair/first, :nid :n/n011},
+       :n012
+       {:type :parameter-ref, :key :cooldown-endpoints, :nid :n/n012},
+       :n013 {:type :component, :component :pair/second, :nid :n/n013},
+       :n014
+       {:type :parameter-ref, :key :cooldown-endpoints, :nid :n/n014},
+       :n015 {:type :local-get, :key :cooldown-exp-next, :nid :n/n015},
+       :n--entry--default-7
+       {:type :local-set,
+        :operation :define,
+        :key :activate-budget,
+        :nid :n/n--entry--default-7},
+       :n016 {:type :context-ref, :key :budget/activate, :nid :n/n016},
+       :n--entry--default-8
+       {:type :local-set,
+        :operation :define,
+        :key :sufficient?,
+        :nid :n/n--entry--default-8},
+       :n017 {:type :component, :component :cost/spend, :nid :n/n017},
+       :n018 {:type :local-get, :key :activate-budget, :nid :n/n018},
+       :n--entry--default-9
+       {:type :branch, :nid :n/n--entry--default-9},
+       :n019 {:type :local-get, :key :sufficient?, :nid :n/n019},
+       :n--entry--default-9-then-0
+       {:type :component,
+        :component :combat/status,
+        :nid :n/n--entry--default-9-then-0,
+        :inputs {:status-id :blindness}},
+       :n020 {:type :local-get, :key :owner-id, :nid :n/n020},
+       :n021
+       {:type :parameter-ref,
+        :key :blindness-duration-ticks,
+        :nid :n/n021},
+       :n022
+       {:type :parameter-ref, :key :blindness-amplifier, :nid :n/n022},
+       :n--entry--default-9-then-1
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--default-9-then-1,
+        :inputs
+        {:effect-id :block-scan-transient,
+         :operation :spawn,
+         :instance-key [:activation :scan],
+         :audience {:type :owner},
+         :payload
+         {:life-ticks 100,
+          :rescan-interval 5,
+          :max-results 8400,
+          :max-range
+          {:nid :n/n--entry--default-9--b799fb3a,
+           :ref [:parameter :targeting-range]},
+          :filter
+          {:include-suffixes ["_ore"],
+           :include-substrings ["ancient_debris"],
+           :include-tags ["forge:ores"]},
+          :origin
+          {:nid :n/n--entry--default-9--2338f38f, :ref [:local :eye]},
+          :tier-colors
+          [{:harvest-level 0, :color [161 181 188 165]}
+           {:harvest-level 1, :color [87 231 248 190]}
+           {:harvest-level 2, :color [97 204 94 210]}
+           {:harvest-level 3, :color [235 109 84 225]}],
+          :base-color [220 235 255 185],
+          :texture "academy:textures/effects/mineview.png",
+          :advanced?
+          {:nid :n/n--entry--default-9--1dd1fce9,
+           :component :bool/and,
+           :args
+           [{:nid :n/n--entry--default-9--cd23ee31,
+             :component :math/gt,
+             :args
+             [{:nid :n/n--entry--default-9--217a270,
+               :ref [:local :mastery]}
+              0.5]}
+            {:nid :n/n--entry--default-9--4d2392c9,
+             :component :math/gte,
+             :args
+             [{:nid :n/n--entry--default-9--aa144f56,
+               :ref [:local :level]}
+              4]}]},
+          :range
+          {:nid :n/n--entry--default-9--d551c6ea,
+           :ref [:parameter :targeting-range]}}}},
+       :n--entry--default-9-then-2
+       {:type :component,
+        :component :event/emit,
+        :nid :n/n--entry--default-9-then-2,
+        :inputs {:type :score/mark}},
+       :n023 {:type :local-get, :key :owner-id, :nid :n/n023},
+       :n024 {:type :local-get, :key :cast-progression, :nid :n/n024},
+       :n--entry--default-9-then-3
+       {:type :component,
+        :component :cooldown/start,
+        :nid :n/n--entry--default-9-then-3,
+        :inputs {:name :main}},
+       :n025
+       {:type :local-get, :key :cooldown-ticks-next, :nid :n/n025},
+       :n--entry--default-9-then-4
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-9-then-4,
+        :inputs {:outcome :performed}},
+       :n--entry--default-9-else-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-9-else-0,
+        :inputs {:outcome :insufficient-resource}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :value]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--default-1 :value]}
+    {:id :e/link003,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--default-2 :value]}
+    {:id :e/link005,
+     :kind :exec,
+     :from [:n/n--entry--default-1 :out],
+     :to [:n/n--entry--default-2 :in]}
+    {:id :e/link006,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--default-3 :value]}
+    {:id :e/link007,
+     :kind :exec,
+     :from [:n/n--entry--default-2 :out],
+     :to [:n/n--entry--default-3 :in]}
+    {:id :e/link008,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n--entry--default-4 :value]}
+    {:id :e/link009,
+     :kind :exec,
+     :from [:n/n--entry--default-3 :out],
+     :to [:n/n--entry--default-4 :in]}
+    {:id :e/link010,
+     :kind :data,
+     :from [:n/n007 :value],
+     :to [:n/n006 :arg0]}
+    {:id :e/link011,
+     :kind :data,
+     :from [:n/n008 :value],
+     :to [:n/n006 :arg1]}
+    {:id :e/link012,
+     :kind :data,
+     :from [:n/n006 :value],
+     :to [:n/n--entry--default-5 :value]}
+    {:id :e/link013,
+     :kind :exec,
+     :from [:n/n--entry--default-4 :out],
+     :to [:n/n--entry--default-5 :in]}
+    {:id :e/link014,
+     :kind :data,
+     :from [:n/n012 :value],
+     :to [:n/n011 :arg0]}
+    {:id :e/link015,
+     :kind :data,
+     :from [:n/n011 :value],
+     :to [:n/n010 :arg0]}
+    {:id :e/link016,
+     :kind :data,
+     :from [:n/n014 :value],
+     :to [:n/n013 :arg0]}
+    {:id :e/link017,
+     :kind :data,
+     :from [:n/n013 :value],
+     :to [:n/n010 :arg1]}
+    {:id :e/link018,
+     :kind :data,
+     :from [:n/n015 :value],
+     :to [:n/n010 :arg2]}
+    {:id :e/link019,
+     :kind :data,
+     :from [:n/n010 :value],
+     :to [:n/n009 :arg0]}
+    {:id :e/link020,
+     :kind :data,
+     :from [:n/n009 :value],
+     :to [:n/n--entry--default-6 :value]}
+    {:id :e/link021,
+     :kind :exec,
+     :from [:n/n--entry--default-5 :out],
+     :to [:n/n--entry--default-6 :in]}
+    {:id :e/link022,
+     :kind :data,
+     :from [:n/n016 :value],
+     :to [:n/n--entry--default-7 :value]}
+    {:id :e/link023,
+     :kind :exec,
+     :from [:n/n--entry--default-6 :out],
+     :to [:n/n--entry--default-7 :in]}
+    {:id :e/link024,
+     :kind :data,
+     :from [:n/n018 :value],
+     :to [:n/n017 :budget]}
+    {:id :e/link025,
+     :kind :data,
+     :from [:n/n017 :value],
+     :to [:n/n--entry--default-8 :value]}
+    {:id :e/link026,
+     :kind :exec,
+     :from [:n/n--entry--default-7 :out],
+     :to [:n/n--entry--default-8 :in]}
+    {:id :e/link027,
+     :kind :data,
+     :from [:n/n019 :value],
+     :to [:n/n--entry--default-9 :condition]}
+    {:id :e/link028,
+     :kind :data,
+     :from [:n/n020 :value],
+     :to [:n/n--entry--default-9-then-0 :target]}
+    {:id :e/link029,
+     :kind :data,
+     :from [:n/n021 :value],
+     :to [:n/n--entry--default-9-then-0 :duration-ticks]}
+    {:id :e/link030,
+     :kind :data,
+     :from [:n/n022 :value],
+     :to [:n/n--entry--default-9-then-0 :amplifier]}
+    {:id :e/link031,
+     :kind :exec,
+     :from [:n/n--entry--default-9-then-0 :out],
+     :to [:n/n--entry--default-9-then-1 :in]}
+    {:id :e/link032,
+     :kind :data,
+     :from [:n/n023 :value],
+     :to [:n/n--entry--default-9-then-2 :owner]}
+    {:id :e/link033,
+     :kind :data,
+     :from [:n/n024 :value],
+     :to [:n/n--entry--default-9-then-2 :progression]}
+    {:id :e/link034,
+     :kind :exec,
+     :from [:n/n--entry--default-9-then-1 :out],
+     :to [:n/n--entry--default-9-then-2 :in]}
+    {:id :e/link035,
+     :kind :data,
+     :from [:n/n025 :value],
+     :to [:n/n--entry--default-9-then-3 :ticks]}
+    {:id :e/link036,
+     :kind :exec,
+     :from [:n/n--entry--default-9-then-2 :out],
+     :to [:n/n--entry--default-9-then-3 :in]}
+    {:id :e/link037,
+     :kind :exec,
+     :from [:n/n--entry--default-9-then-3 :out],
+     :to [:n/n--entry--default-9-then-4 :in]}
+    {:id :e/link038,
+     :kind :exec,
+     :from [:n/n--entry--default-9 :true],
+     :to [:n/n--entry--default-9-then-0 :in]}
+    {:id :e/link039,
+     :kind :exec,
+     :from [:n/n--entry--default-9 :false],
+     :to [:n/n--entry--default-9-else-0 :in]}
+    {:id :e/link040,
+     :kind :exec,
+     :from [:n/n--entry--default-8 :out],
+     :to [:n/n--entry--default-9 :in]}
+    {:id :e/link041,
+     :kind :exec,
+     :from [:n/start-default :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

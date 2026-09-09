@@ -1,0 +1,56 @@
+{:schema :ac/vfx-v4,
+ :id :teleport-marker,
+ :lifecycle {:mode :session},
+ :inputs
+ {:owner {:type :entity-ref},
+  :position {:type :vec3},
+  :color {:type :any},
+  :particle-chance {:type :float}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :component,
+        :component :emitter,
+        :nid :n/n--entry--default-0,
+        :inputs
+        {:rate-per-tick 1.0,
+         :limit 256,
+         :particle
+         {:life-ticks 12,
+          :color
+          {:nid :n/n--entry--default-0--1ed94c68,
+           :ref [:context :color]},
+          :spread {:x 1.0, :y 1.4, :z 1.0},
+          :speed 0.08,
+          :fade-in-ticks 5,
+          :size {:min 0.1, :max 0.2},
+          :material :additive,
+          :alpha {:min 153, :max 204},
+          :fade-out-ticks 20,
+          :velocity {:x 0.03, :y 0.05, :z 0.03}}}},
+       :n001 {:type :context-ref, :key :position, :nid :n/n001},
+       :n002 {:type :context-ref, :key :particle-chance, :nid :n/n002},
+       :n--entry--default-1
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-1,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :anchor]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--default-0 :chance]}
+    {:id :e/link003,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}
+    {:id :e/link004,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

@@ -1,0 +1,29 @@
+{:schema :ac/vfx-v4,
+ :id :block-scan-transient,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:life-ticks {:type :int},
+  :rescan-interval {:type :int},
+  :max-results {:type :int},
+  :max-range {:type :float},
+  :filter {:type :any},
+  :origin {:type :vec3},
+  :tier-colors {:type :any},
+  :base-color {:type :any},
+  :texture {:type :string},
+  :advanced? {:type :bool},
+  :range {:type :float}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-0,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

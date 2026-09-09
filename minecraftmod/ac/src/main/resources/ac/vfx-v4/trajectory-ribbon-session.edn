@@ -1,0 +1,31 @@
+{:schema :ac/vfx-v4,
+ :id :trajectory-ribbon-session,
+ :lifecycle {:mode :session},
+ :inputs
+ {:lateral-offset {:type :float},
+  :look-dir {:type :vec3},
+  :can-perform? {:type :bool},
+  :dt {:type :float},
+  :vertical-offset {:type :float},
+  :width {:type :float},
+  :segments {:type :int},
+  :gravity {:type :float},
+  :forward-offset {:type :float},
+  :style {:type :any},
+  :init-vel {:type :vec3},
+  :origin {:type :vec3},
+  :drag {:type :float}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-0,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

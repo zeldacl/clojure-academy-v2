@@ -1,0 +1,30 @@
+{:schema :ac/vfx-v4,
+ :id :particle-burst-trail-transient,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:count-limit {:type :int},
+  :life-ticks {:type :int},
+  :fade-out {:type :int},
+  :start {:type :vec3},
+  :radius {:type :any},
+  :size {:type :any},
+  :alpha {:type :any},
+  :end {:type :vec3},
+  :velocity {:type :any},
+  :texture {:type :string},
+  :spacing {:type :any},
+  :fade-in {:type :int}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-0,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

@@ -191,9 +191,12 @@
           ;; only when connected to the exec graph; the compiler validates
           ;; descriptor-specific execution requirements.
           (require! (<= (count outs) 1) "V4 ordinary node may have one successor" {:node nid})))
-      (let [data-ins (incoming links nid :data)]
-        (require! (<= (count data-ins) 1)
-                  "V4 data input may have only one predecessor" {:node nid})))
+      (let [data-ins (incoming links nid :data)
+            by-port (vals (group-by #(second (:to %)) data-ins))]
+        (doseq [port-links by-port]
+          (require! (<= (count port-links) 1)
+                    "V4 data input may have only one predecessor"
+                    {:node nid :port (second (:to (first port-links)))}))))
     (let [loop-edges (filter #(= :loop-back (second (:to %))) links)]
       (doseq [link loop-edges]
         (let [controller (first (:to link))

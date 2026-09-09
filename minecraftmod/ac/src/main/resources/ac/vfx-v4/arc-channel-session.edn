@@ -1,0 +1,27 @@
+{:schema :ac/vfx-v4,
+ :id :arc-channel-session,
+ :lifecycle {:mode :session},
+ :inputs
+ {:block-bounds {:type :any},
+  :charge-ticks {:type :int},
+  :mode {:type :resource-id},
+  :style {:type :any},
+  :good? {:type :bool},
+  :target {:type :any},
+  :caster {:type :vec3},
+  :block-pos {:type :any},
+  :visual-max-ticks {:type :int}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-0,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

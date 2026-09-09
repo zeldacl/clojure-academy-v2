@@ -1,0 +1,97 @@
+{:schema :ac/vfx-v4,
+ :id :ring-particle-field,
+ :lifecycle {:mode :session},
+ :inputs
+ {:position {:type :vec3},
+  :ring-from {:type :float},
+  :ring-to {:type :float},
+  :segments {:type :int},
+  :ring-color {:type :any},
+  :rate-per-tick {:type :int},
+  :limit {:type :int},
+  :particle {:type :any}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :component,
+        :component :ring,
+        :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :position, :nid :n/n001},
+       :n002 {:type :component, :component :math/lerp, :nid :n/n002},
+       :n003 {:type :context-ref, :key :ring-from, :nid :n/n003},
+       :n004 {:type :context-ref, :key :ring-to, :nid :n/n004},
+       :n005 {:type :context-ref, :key :progress, :nid :n/n005},
+       :n006 {:type :context-ref, :key :segments, :nid :n/n006},
+       :n007 {:type :context-ref, :key :ring-color, :nid :n/n007},
+       :n--entry--default-1
+       {:type :component,
+        :component :emitter,
+        :nid :n/n--entry--default-1},
+       :n008 {:type :context-ref, :key :position, :nid :n/n008},
+       :n009 {:type :context-ref, :key :rate-per-tick, :nid :n/n009},
+       :n010 {:type :context-ref, :key :limit, :nid :n/n010},
+       :n011 {:type :context-ref, :key :particle, :nid :n/n011},
+       :n--entry--default-2
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-2,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :center]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n002 :arg0]}
+    {:id :e/link003,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n002 :arg1]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n002 :arg2]}
+    {:id :e/link005,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--default-0 :radius]}
+    {:id :e/link006,
+     :kind :data,
+     :from [:n/n006 :value],
+     :to [:n/n--entry--default-0 :segments]}
+    {:id :e/link007,
+     :kind :data,
+     :from [:n/n007 :value],
+     :to [:n/n--entry--default-0 :color]}
+    {:id :e/link008,
+     :kind :data,
+     :from [:n/n008 :value],
+     :to [:n/n--entry--default-1 :anchor]}
+    {:id :e/link009,
+     :kind :data,
+     :from [:n/n009 :value],
+     :to [:n/n--entry--default-1 :rate-per-tick]}
+    {:id :e/link010,
+     :kind :data,
+     :from [:n/n010 :value],
+     :to [:n/n--entry--default-1 :limit]}
+    {:id :e/link011,
+     :kind :data,
+     :from [:n/n011 :value],
+     :to [:n/n--entry--default-1 :particle]}
+    {:id :e/link012,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}
+    {:id :e/link013,
+     :kind :exec,
+     :from [:n/n--entry--default-1 :out],
+     :to [:n/n--entry--default-2 :in]}
+    {:id :e/link014,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}
