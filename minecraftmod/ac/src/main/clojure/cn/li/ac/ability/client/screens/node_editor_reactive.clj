@@ -1267,15 +1267,18 @@
     ;; so both survive closing and reopening this screen. Previously this
     ;; action only mutated the in-memory atom and claimed "Saved to
     ;; workspace" without writing anything -- a real, now-fixed bug.
-    :editor/save
-    (swap! state*
-           (fn [s]
-             (let [doc (document/save (:document s) (fn [form] (pr-str form)))
-                   ^java.io.File ws (workspace-path-for (:path s))]
-                (atomic-write! ws (:file-text doc))
-               (save-layout! (:path s) (:layout s))
-               (recompute (assoc s :document doc :workspace-signature (file-signature ws)
-                                  :status (str "Saved to " ws))))))
+     :editor/save
+     (try
+       (swap! state*
+              (fn [s]
+                (let [doc (document/save (:document s) (fn [form] (pr-str form)))
+                      ^java.io.File ws (workspace-path-for (:path s))]
+                  (atomic-write! ws (:file-text doc))
+                  (save-layout! (:path s) (:layout s))
+                  (recompute (assoc s :document doc :workspace-signature (file-signature ws)
+                                     :status (str "Saved to " ws))))))
+       (catch Throwable error
+         (swap! state* assoc :status (str "Cannot save: " (.getMessage error)))))
 
     ;; The other half of document/save's own documented two-path design
     ;; (see that docstring): overwrites the REAL source-tree file at
@@ -1287,15 +1290,18 @@
     ;; handle-action case instead, same shape as :editor/save, so it is
     ;; both reachable from the screen's action row and directly testable
     ;; the same way.
-    :editor/export
-    (swap! state*
-           (fn [s]
-             (if (not= (:source-signature s) (file-signature (:path s)))
-               (assoc s :status "Source changed on disk; reload before export.")
-               (let [doc (document/save (:document s) (fn [form] (pr-str form)))]
-                 (atomic-write! (io/file (:path s)) (:file-text doc))
-                 (recompute (assoc s :document doc :source-signature (file-signature (:path s))
-                                   :status (str "Exported to " (:path s))))))))
+     :editor/export
+     (try
+       (swap! state*
+              (fn [s]
+                (if (not= (:source-signature s) (file-signature (:path s)))
+                  (assoc s :status "Source changed on disk; reload before export.")
+                  (let [doc (document/save (:document s) (fn [form] (pr-str form)))]
+                    (atomic-write! (io/file (:path s)) (:file-text doc))
+                    (recompute (assoc s :document doc :source-signature (file-signature (:path s))
+                                      :status (str "Exported to " (:path s))))))))
+       (catch Throwable error
+         (swap! state* assoc :status (str "Cannot export: " (.getMessage error)))))
     nil)
   (render-state @state*))
 
