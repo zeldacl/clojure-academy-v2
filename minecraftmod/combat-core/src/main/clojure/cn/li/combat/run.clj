@@ -9,7 +9,7 @@
    runtime/dispatch-intent-v2!. No legacy graph engine is loaded or retained;
    this single V3 path is exercised by the catalog/runtime test suite -- see
    NODE_LANGUAGE.md §0 for the language boundary. All AC V3 skills
-   (ac/skills-v3/*.edn) compile through this path.
+   (ac/skills-v4/*.edn) compile through this path.
 
    capability-type is a FUNCTION, not a static map: ?budget/fire,
    ?cooldown/main, ?progression/effective etc are named per-ability by its
@@ -123,3 +123,4 @@
    cn.li.mcmod.runtime.effect.ExecutionFrame's docstring."
   [program entry input]
   (emit/dispatch! program entry (emit/new-frame program input)))
+
