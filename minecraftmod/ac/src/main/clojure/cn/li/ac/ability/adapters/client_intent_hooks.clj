@@ -50,22 +50,36 @@
 (defn send-combat-intent! [player-uuid slot op]
   (let [intent-id (swap! intent-seq* inc)
         key (slot-key player-uuid slot)
-        edge (case op :start :press :release :release :abort :abort)]
+        edge (case op :start :press :release :release :abort :abort)
+        ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
     (case op
       :start (swap! active-slots* conj key)
       (:release :abort) (swap! active-slots* disj key)
       nil)
-    (net-client/send-to-server
-     (client-owner player-uuid) messages/MSG-COMBAT-INTENT
-     {:wire (fixed-channel/encode-intent
-             {:seq intent-id :control-id (long slot) :edge edge
-              :choice nil
-              :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))})}
-     ;; VFX arrives exclusively through the MSG-COMBAT-VFX push channel now
-     ;; (audience-routed on the server, self or nearby-broadcast) -- the RPC
-     ;; reply itself never carries :vfx-signals, so there is nothing to
-     ;; dispatch from this callback.
-     nil)
+    (try
+      (net-client/send-to-server
+       (client-owner player-uuid) messages/MSG-COMBAT-INTENT
+       {:wire (fixed-channel/encode-intent
+               {:seq intent-id :control-id (long slot) :edge edge
+                :choice nil
+                :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))})}
+       ;; VFX arrives exclusively through the MSG-COMBAT-VFX push channel now
+       ;; (audience-routed on the server, self or nearby-broadcast) -- the RPC
+       ;; reply itself never carries :vfx-signals, so there is nothing to
+       ;; dispatch from this callback.
+       nil)
+      (when (= :start op)
+        (log/debug "Combat intent sent"
+                   {:uuid (str player-uuid)
+                    :slot slot
+                    :op op
+                    :ability-id ability-id
+                    :intent-id intent-id}))
+      (catch Throwable e
+        (log/stacktrace "Combat intent send failed" e)
+        (reactive-hud/show-combat-notice!
+         :combat-critical
+         {:text (str "Combat send failed: " (or (ex-message e) (.getClass e)))})))
     intent-id))
 
 (defn- send-choice-intent! [player-uuid slot choice]

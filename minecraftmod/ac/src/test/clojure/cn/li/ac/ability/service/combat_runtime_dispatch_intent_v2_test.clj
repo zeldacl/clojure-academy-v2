@@ -36,18 +36,14 @@
            (combat-runtime/reset-final-runtime-v2-for-test!)))))))
 
 (defn- flush-with-resources! [owner]
-  ;; :max-overload 1000.0 (not the smoke test's own default-100.0 pattern):
-  ;; vec-reflection's real :activation-overload tunable (mastery-lerp,
-  ;; untrained skill-exp=0 in a fresh test player) resolves to 350.0 --
-  ;; a real config value discovered by actually running this test, not
-  ;; guessed -- so the smoke test's own 100.0 default is insufficient
-  ;; here specifically.
+  ;; High CP; cur-overload may stay 0 — overload cost is heat ADDED on cast,
+  ;; not a pool that must already be filled (see :cost/spend in combat-runtime).
   (runtime-store/get-or-create-player-state! player-state-support/test-session-id owner)
   (let [state (runtime-store/get-player-state player-state-support/test-session-id owner)]
     (runtime-store/set-player-state!
      player-state-support/test-session-id owner
      (update state :resource-data merge
-             {:cur-cp 1.0e9 :cur-overload 1000.0 :max-overload 1000.0
+             {:cur-cp 1.0e9 :cur-overload 0.0 :max-overload 1000.0
               :overload-fine true :activated true}))))
 
 (deftest cooldown-pre-check-rejects-without-a-real-dispatch-test
@@ -90,6 +86,25 @@
       (is (true? (:finish-ability? result)))
       (is (nil? (combat-sessions/session :ac owner))))))
 
+(deftest overload-cost-is-heat-not-pool-test
+  "Fresh players have cur-overload 0. Overload budget must ADD heat, not
+   require an already-filled overload pool (that false gate blocked casts)."
+  (let [owner "v2-overload-heat-owner"]
+    (flush-with-resources! owner)
+    (let [before (get-in (runtime-store/get-player-state
+                          player-state-support/test-session-id owner)
+                         [:resource-data :cur-overload])
+          ;; vec-reflection needs no world raycast host in this suite.
+          result (combat-runtime/dispatch-intent-v2! owner {:op :start :ability-id :vec-reflection})
+          after (get-in (runtime-store/get-player-state
+                         player-state-support/test-session-id owner)
+                        [:resource-data :cur-overload])]
+      (is (= 0.0 (double before)))
+      (is (= :accepted (:status result)))
+      (is (= :started (:outcome result)))
+      (is (pos? (double after))
+          "successful cast should raise overload heat"))))
+
 (deftest unknown-ability-reject-carries-feedback-test
   "engine-v2 returns :reason without :feedback; AC must attach feedback so
    the network path can push a visible reject to the client."
@@ -129,6 +144,40 @@
                   (case ability-id
                     :arc-gen {:default :activation/start}
                     :vec-reflection {:start :phase/start}
+                    nil))
+                cn.li.ac.ability.service.combat-runtime/known-program-entries
+                (fn [ability-id]
+                  (case ability-id
+                    :arc-gen #{:default}
+                    :vec-reflection #{:start :pulse :release :abort}
                     nil))]
     (is (= :default (@#'combat-runtime/resolve-program-entry :arc-gen {:op :start})))
-    (is (= :start (@#'combat-runtime/resolve-program-entry :vec-reflection {:op :start})))))
+    (is (= :start (@#'combat-runtime/resolve-program-entry :vec-reflection {:op :start})))
+    (is (nil? (@#'combat-runtime/resolve-program-entry :arc-gen {:op :release}))
+        "instant skills have no release entry; must not fall back to :release")))
+
+(deftest start-without-entry-triggers-does-not-guess-test
+  "Missing V3 :entry-triggers must fail closed — never invent :default."
+  (with-redefs [cn.li.ac.ability.service.combat-runtime/entry-triggers-for
+                (constantly nil)
+                cn.li.ac.ability.service.combat-runtime/known-program-entries
+                (fn [ability-id]
+                  (when (= ability-id :arc-gen) #{:default}))]
+    (is (nil? (@#'combat-runtime/resolve-program-entry :arc-gen {:op :start})))))
+
+(deftest real-arc-gen-entry-resolution-and-release-noop-test
+  "Regression for in-game 'no such program entry': arc-gen's only entry is
+   :default (:on :activation/start). Client key-up still sends :release;
+   that must noop instead of dispatching a literal :release entry."
+  (let [runtime (combat-runtime/initialize-final-runtime-v2!)
+        triggers (get-in runtime [:catalog :by-id :arc-gen :ir :entry-triggers])
+        known (set (keys (get-in runtime [:catalog :by-id :arc-gen :ir :entries])))
+        owner "v2-arc-gen-release-owner"]
+    (is (= {:default :activation/start} triggers))
+    (is (= #{:default} known))
+    (is (= :default (@#'combat-runtime/resolve-program-entry :arc-gen {:op :start})))
+    (is (nil? (@#'combat-runtime/resolve-program-entry :arc-gen {:op :release})))
+    (flush-with-resources! owner)
+    (let [result (combat-runtime/dispatch-intent-v2! owner {:op :release :ability-id :arc-gen})]
+      (is (= :accepted (:status result)))
+      (is (= :noop (:outcome result))))))

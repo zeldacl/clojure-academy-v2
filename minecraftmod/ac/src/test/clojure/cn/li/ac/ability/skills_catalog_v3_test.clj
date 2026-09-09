@@ -15,4 +15,10 @@
     (is (= :ac.test/catalog-smoke (:id skill)))
     (is (= {:activate :activation/start}
            (:entry-triggers (:ir skill))))
+    (is (= (set (keys (:entry-triggers (:ir skill))))
+           (set (keys (:entries (:ir skill))))))
+    (let [arc (get by-id :arc-gen)]
+      (when arc
+        (is (= {:default :activation/start}
+               (:entry-triggers (:ir arc))))))
     (is (string? (:semantic-digest skill)))))

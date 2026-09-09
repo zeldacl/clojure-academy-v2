@@ -26,6 +26,8 @@
 
 (defn- blocked-notice [reason]
   {:text (case reason
+           :unbound "No skill bound to this key"
+           :inactive "Activate ability mode first (V)"
            :cooldown "Skill on cooldown"
            :unusable "Cannot use ability (overload/interference)"
            (str "Skill blocked: " (pr-str reason)))})
@@ -37,21 +39,33 @@
   player-uuid: string"
   [event player-uuid]
   (when (and event player-uuid)
-    (let [{:keys [transition delegate reason]} event]
+    (let [{:keys [transition delegate reason key-idx]} event]
       (case transition
-        :press   (when-let [f (:on-key-down  delegate)] (f player-uuid))
+        :press   (if-let [f (:on-key-down delegate)]
+                   (f player-uuid)
+                   (do (log/warn "Skill key press has no on-key-down"
+                                 {:uuid (str player-uuid)
+                                  :skill-id (:skill-id delegate)
+                                  :key-idx key-idx})
+                       (runtime-hooks/client-show-combat-notice!
+                        :combat-critical
+                        {:text "Skill key handler missing"})))
         :tick    (when-let [f (:on-key-tick  delegate)] (f player-uuid))
         :release (when-let [f (:on-key-up    delegate)] (f player-uuid))
         :abort   (when-let [f (:on-key-abort delegate)] (f player-uuid))
-        :blocked (do (log/info "Skill key press blocked"
+        :blocked (do (log/warn "Skill key press blocked"
                                {:uuid (str player-uuid)
                                 :skill-id (:skill-id delegate)
+                                :key-idx key-idx
                                 :reason reason})
                      ;; Avoid requiring reactive-hud (cycle via keybinds).
                      (runtime-hooks/client-show-combat-notice!
                       :combat-critical
                       (blocked-notice reason)))
-        nil)))
+        (log/warn "Unknown skill key transition"
+                  {:uuid (str player-uuid)
+                   :transition transition
+                   :skill-id (:skill-id delegate)}))))
   nil)
 
 ;; ============================================================================

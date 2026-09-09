@@ -296,6 +296,19 @@
                                                  (some-> player-uuid str))]
     (read-model/get-player-state [session-id :keybinds player-uuid*])))
 
+(defn- player-state-for-input
+  "Same activated truth as the combat HUD: prefer the V-key client overlay
+   over resource-data so skill keys work before the server sync round-trip.
+   Without this, CP/slots appear (overlay) while LMB is silently dropped
+   (resource-data still false)."
+  [player-uuid]
+  (let [state (or (get-client-player-state player-uuid) {})
+        overlay (client-bridge/client-overlay-activated-override
+                  {:player-uuid player-uuid})]
+    (if (some? overlay)
+      (assoc-in state [:resource-data :activated] (boolean overlay))
+      state)))
+
 (defn key-state-snapshot
   ([]
   (into {} (.keyStates (client-keybind-runtime))))
@@ -341,8 +354,9 @@
   [:forward :back :left :right])
 
 (defn- activated?
+  "Ability mode for input — same overlay-first truth as the combat HUD."
   [player-uuid]
-  (boolean (get-in (get-client-player-state player-uuid) [:resource-data :activated])))
+  (boolean (get-in (player-state-for-input player-uuid) [:resource-data :activated])))
 
 (defn- has-category?
   "Check if player has learned a category (original AcademyCraft: aData.hasCategory())."
@@ -404,7 +418,7 @@
    (when-let [player-uuid (get-client-player-uuid)]
      (let [owner        (current-client-owner player-uuid)
            key-state    (key-state-snapshot owner)
-           player-state (get-client-player-state player-uuid)
+           player-state (player-state-for-input player-uuid)
            was-down     (boolean (get-in key-state [:skill-keys key-idx] false))
            delegate     (ensure-delegate-for-key! player-uuid key-idx)
            event        (sm/compute-skill-key-event key-state player-state key-idx is-down delegate)]
@@ -476,10 +490,13 @@
    (when-let [player-uuid (or player-uuid (get-client-player-uuid))]
      ;; hasCategory check matching original: aData.hasCategory()
      (if-not (has-category? player-uuid)
-       (log/debug "[V-TRACE][AC][CLIENT][NO-CATEGORY]"
-                 {:uuid (str player-uuid)
-                  :session-id (current-client-session-id)
-                  :state-keys (some-> (get-client-player-state player-uuid) keys vec)})
+       (do (log/warn "V-key ignored: no learned category"
+                     {:uuid (str player-uuid)
+                      :session-id (current-client-session-id)
+                      :state-keys (some-> (get-client-player-state player-uuid) keys vec)})
+           (runtime-hooks/client-show-combat-notice!
+            :combat-critical
+            {:text "No ability category learned"}))
       ;; Determine whether abort handler will match BEFORE running the stack.
       ;; When has-active-delegates? is true, the priority-10 abort-delegates
        ;; handler will fire → aborts contexts WITHOUT toggling activation.
@@ -540,7 +557,7 @@
      (activated? player-uuid)
      (into (into []
                  (keep (fn [idx]
-                         (when (get-delegate-for-key idx)
+                         (when (ensure-delegate-for-key! player-uuid idx)
                            ;; Live KeyMapping binding in AC convention (mouse
                            ;; buttons -100+value) — the config value is only
                            ;; the initial seed and goes stale on rebind.

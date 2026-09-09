@@ -97,6 +97,23 @@
          ids (map :id skills)]
      (when-not (= (count ids) (count (set ids)))
        (throw (ex-info "AC V3 skill ids must be unique" {:ids ids})))
+     (doseq [{:keys [id ir document]} skills]
+       (let [triggers (:entry-triggers ir)
+             ir-entries (set (keys (:entries ir)))
+             doc-entries (set (keys (:entries document)))]
+         (when-not (seq triggers)
+           (throw (ex-info "AC V3 skill IR missing :entry-triggers"
+                           {:id id :ir-entries (vec ir-entries)})))
+         (when-not (= (set (keys triggers)) ir-entries)
+           (throw (ex-info "AC V3 :entry-triggers keys must match IR :entries"
+                           {:id id
+                            :triggers (vec (keys triggers))
+                            :ir-entries (vec ir-entries)})))
+         (when-not (= ir-entries doc-entries)
+           (throw (ex-info "AC V3 IR :entries keys must match document :entries"
+                           {:id id
+                            :ir-entries (vec ir-entries)
+                            :document-entries (vec doc-entries)})))))
      {:skills skills
       :registrations skills
       :sources (into {} (map (juxt :id :document) skills))

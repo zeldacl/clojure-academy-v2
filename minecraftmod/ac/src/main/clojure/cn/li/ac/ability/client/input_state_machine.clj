@@ -13,12 +13,12 @@
      :gui-keys      {:skill-tree bool :preset-editor bool}}
 
   Action shapes returned:
-    nil                                    — nothing to do
+    nil                                    — nothing to do (hold ticks while inactive)
     {:transition :press/:tick/:release     — skill key
      :delegate   delegate-map}
     {:transition :blocked                  — rising-edge press rejected
-     :reason     :unusable/:cooldown
-     :delegate   delegate-map}
+     :reason     :unbound/:inactive/:unusable/:cooldown
+     :delegate   delegate-map-or-nil}
     {:transition :abort
      :delegate   delegate-map}
     {:transition :press/:tick/:release     — movement key
@@ -63,18 +63,32 @@
   [key-state player-state key-idx is-down delegate]
   (let [was-down    (get-in key-state [:skill-keys key-idx] false)
         transition  (sampling/key-transition was-down is-down)]
-    (when (and delegate (not= :noop transition))
+    (when (not= :noop transition)
       (let [res-data (or (:resource-data player-state) {})
             cd-data  (or (:cooldown-data player-state) {})
             ctrl-id  (or (:ctrl-id delegate) (:skill-id delegate))
             activated? (sampling/activated? res-data)
-            block-reason (sampling/block-reason res-data cd-data ctrl-id)]
+            block-reason (when delegate
+                           (sampling/block-reason res-data cd-data ctrl-id))]
         (cond
+          ;; Rising edge with no bound skill: never swallow — caller must warn.
+          (and (= :press transition) (nil? delegate))
+          {:transition :blocked :reason :unbound :delegate nil :key-idx key-idx}
+
+          (nil? delegate)
+          nil
+
           ;; If release: always forward the release (clean up even if not activated)
           (= :release transition)
           {:transition :release :delegate delegate}
 
-          ;; Ability mode off: ignore press/tick.
+          ;; Ability mode off: rising-edge press is visible (HUD may already
+          ;; show CP from the V-key overlay while resource-data lags; callers
+          ;; must merge overlay into player-state before invoking this).
+          (and (= :press transition) (not activated?))
+          {:transition :blocked :reason :inactive :delegate delegate}
+
+          ;; Ability mode off: ignore hold ticks.
           (not activated?)
           nil
 

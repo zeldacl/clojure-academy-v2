@@ -9,12 +9,29 @@
    :on-key-up identity
    :on-key-abort identity})
 
+(deftest skill-key-blocks-press-when-unbound
+  (testing "rising-edge with no delegate is blocked, not silent nil"
+    (let [key-state sm/default-key-state
+          player-state {:resource-data {:activated true :overload-fine true}
+                        :cooldown-data {}}
+          event (sm/compute-skill-key-event key-state player-state 0 true nil)]
+      (is (= :blocked (:transition event)))
+      (is (= :unbound (:reason event)))
+      (is (= 0 (:key-idx event)))))
+  (testing "hold ticks with no delegate stay quiet"
+    (let [key-state (sm/next-skill-key-state sm/default-key-state 0 true)
+          player-state {:resource-data {:activated true :overload-fine true}
+                        :cooldown-data {}}]
+      (is (nil? (sm/compute-skill-key-event key-state player-state 0 true nil))))))
+
 (deftest skill-key-ignores-press-when-deactivated
-  (testing "ability mode off must not synthesize :abort on press/tick"
+  (testing "ability mode off blocks press with a visible reason (not silent nil)"
     (let [key-state (sm/next-skill-key-state sm/default-key-state 0 false)
           player-state {:resource-data {:activated false :overload-fine true}
-                        :cooldown-data {}}]
-      (is (nil? (sm/compute-skill-key-event key-state player-state 0 true delegate)))
+                        :cooldown-data {}}
+          event (sm/compute-skill-key-event key-state player-state 0 true delegate)]
+      (is (= :blocked (:transition event)))
+      (is (= :inactive (:reason event)))
       (is (nil? (sm/compute-skill-key-event
                  (sm/next-skill-key-state key-state 0 true)
                  player-state 0 true delegate)))))
