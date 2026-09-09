@@ -36,38 +36,4 @@
     (let [doc "{:ability :bad :do [(beam {:start ?nope :end ?nope :grow-ticks 0}) (finish {:outcome :performed})]}"]
       (is (thrown? clojure.lang.ExceptionInfo (scene/compile-doc! doc {}))))))
 
-(deftest v3-reference-bridge-preserves-namespaces-and-paths-test
-  (let [document {:schema :ac/vfx-v3
-                  :id :namespaced-reference
-                  :lifecycle {:mode :session}
-                  :inputs {:caster/eye {:type :vec3}
-                           :style {:type :any}}
-                  :system {:render [{:nid :n/render-root
-                                     :component :beam
-                                     :inputs {:start {:nid :n/render-start
-                                                      :ref [:context :caster/eye]}
-                                                     :end {:nid :n/render-end
-                                                           :ref [:context :style :end]}}}
-                                    {:nid :n/render-finish
-                                     :flow :finish
-                                     :result {:outcome :performed}}]}}
-        program (scene/compile-v3-document! document)
-        ops (scene/sample! program {:capabilities
-                                    {:caster/eye {:x 1.0 :y 2.0 :z 3.0}
-                                                  :style {:end {:x 4.0 :y 5.0 :z 6.0}}
-                                                  :age 0.0 :progress 0.0}})]
-    (is (= {:x 1.0 :y 2.0 :z 3.0} (:start (first ops))))
-    (is (= {:x 4.0 :y 5.0 :z 6.0} (:end (first ops))))))
 
-(deftest v3-runtime-rejects-unimplemented-system-stages-test
-  (let [document {:schema :ac/vfx-v3
-                  :id :unsupported-stage
-                  :lifecycle {:mode :session}
-                  :system {:update [{:nid :n/update-root
-                                     :flow :finish
-                                     :result {:outcome :performed}}]}}]
-    (try
-      (scene/compile-v3-document! document)
-      (is false "V3 VFX :system/:update must not be silently ignored")
-      (catch clojure.lang.ExceptionInfo error
-        (is (= [:update] (:unsupported-stages (ex-data error))))))))

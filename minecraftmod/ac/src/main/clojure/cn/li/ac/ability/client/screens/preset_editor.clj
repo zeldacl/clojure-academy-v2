@@ -61,7 +61,7 @@
     :else x))
 
 (defn- skill-id-aliases
-  "skills-v3 renamed ids (arc_gen → arc-gen). Accept both spellings, plus
+  "skills-v4 renamed ids (arc_gen → arc-gen). Accept both spellings, plus
    qualified/unqualified forms, so learned sets and slot ctrl-ids still match."
   [skill-id]
   (when-let [sid (as-keyword skill-id)]
@@ -329,3 +329,4 @@
   "Close preset editor screen."
   ([owner]
    (managed-screens/clear-screen-state! screen-id (editor-owner-key owner))))
+

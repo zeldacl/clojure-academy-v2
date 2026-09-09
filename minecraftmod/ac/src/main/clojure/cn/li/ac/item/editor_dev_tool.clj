@@ -22,9 +22,9 @@
   (when (= side :client)
     (if-let [player-uuid (uuid/player-uuid player)]
       (try
-        (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
+        (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v4/thunder-bolt.edn")]
           (node-editor/open! player-uuid path :skill)
-          (log/warn "editor_dev_tool: ac/skills-v3/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))
+          (log/warn "editor_dev_tool: ac/skills-v4/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))
         (catch Throwable e
           (log/stacktrace "editor_dev_tool: node editor failed to open" e)))
       (log/warn "editor_dev_tool: could not resolve a player UUID")))
@@ -46,3 +46,4 @@
                       :model-texture "developer_portable_full"}
          :on-right-click open-editor-dev-tool!}))
     (log/debug "Editor dev tool item registered"))))
+

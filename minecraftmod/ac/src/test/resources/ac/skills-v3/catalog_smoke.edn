@@ -1,8 +1,0 @@
-{:schema :ac/skill-v3
- :id :ac.test/catalog-smoke
- :skill {:category :test :level 1}
- :activation {:mode :instant}
- :entries {:activate {:on :activation/start
-                      :do [{:nid :n/finish
-                            :flow :finish
-                            :result {:outcome :performed}}]}}}

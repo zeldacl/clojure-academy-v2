@@ -1,1 +1,0 @@
-{:schema :ac/vfx-v3, :id :screen-flash-session, :lifecycle {:mode :transient}, :inputs {:alpha {:type :float}, :duration-ticks {:type :int}, :color {:type :any}}, :state {:age {:type :float, :default nil}}, :system {:render [{:nid :n/n--entry--default-0, :flow :finish, :result {:outcome :performed}}]}, :emitters []}

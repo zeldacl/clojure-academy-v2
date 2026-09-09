@@ -24,7 +24,7 @@
    arbitrarily deep pure-expression trees. `if` was initially assumed
    rare and left unsupported in a first draft of this namespace; a grep
    of the real corpus before writing graph_test.clj's round-trip test
-   found it in 31 of 39 ac/skills-v3/*.edn files, so it is implemented, not
+   found it in 31 of 39 ac/skills-v4/*.edn files, so it is implemented, not
    documented as a gap -- see ac's editor_corpus_test.clj for the
    round-trip assertion over the full real corpus, which is what actually
    proves this namespace's coverage claims rather than a hand-picked
@@ -504,3 +504,4 @@
             {:code :order-refers-to-missing-node :nid nid})
           (for [[nid node] nodes ref (refs node) :when (not (contains? ids ref))]
             {:code :dangling-reference :nid nid :ref ref})))))
+

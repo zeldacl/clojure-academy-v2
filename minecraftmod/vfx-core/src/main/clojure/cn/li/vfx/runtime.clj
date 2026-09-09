@@ -46,7 +46,7 @@
    is a natural follow-up this pass does not implement or claim to."
   [decl {:keys [user] :as _spawn}]
   (let [scene-program (cond
-                        (:document decl) (scene/compile-v3-document! (:document decl))
+                        (:document decl) (scene/compile-v4-document! (:document decl))
                         (:scene decl) (scene/compile-program
                                        (scene/compile-doc! (:scene decl) (:user-types decl {})))
                         :else nil)
@@ -123,7 +123,7 @@
 (defn- progress-of
   "age/duration-ticks, clamped to [0,1] -- the exact computation cn.li.
    vfx.final-engine's own sample-node used for :progress (its context's
-   :progress key), reproduced here since every real ac/vfx-v3/*.edn
+   :progress key), reproduced here since every real ac/vfx-v4/*.edn
    effect reads ?progress as a universal capability (cn.li.vfx.scene's
    own universal-capabilities). duration comes from the instance's own
    :user (a real spawn-declared field, e.g. arc_ring_session.edn's own
@@ -326,3 +326,5 @@
 (defn resource-generation [rt] @(:generation rt))
 (defn reload-resources! [rt generation] (reset! (:generation rt) generation) generation)
 (defn registered-effects [rt] (set (keys (:registry rt))))
+
+

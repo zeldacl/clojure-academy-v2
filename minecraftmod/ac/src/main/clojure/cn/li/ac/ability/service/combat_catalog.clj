@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.service.combat-catalog
   "Read-only metadata projection for skill UI, trigger resolution and
-   passive effects. The V3 document is the single source of truth; no
+   passive effects. The V4 graph document is the single source of truth; no
    manifest/source indirection is reconstructed here."
   (:require [clojure.string :as str]
             [cn.li.ac.ability.skills-catalog :as skills-catalog]
@@ -173,3 +173,4 @@
              :translations (normalize-translations (:translations ability))
              :cooldown {:mode :default} :execution :final}))
         (sort-by first (get-in @state* [:combat :abilities]))))
+

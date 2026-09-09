@@ -63,7 +63,7 @@
 (defonce ^:private active-mounts (atom {}))
 
 (defn default-sample-skill-resource-path
-  "A classpath-relative V3 content resource (e.g. \"ac/skills-v3/thunder-bolt.edn\") -> its absolute on-disk path, or nil. Public because there is
+  "A classpath-relative V4 content resource (e.g. \"ac/skills-v4/thunder-bolt.edn\") -> its absolute on-disk path, or nil. Public because there is
    no in-game file-picker UI yet (a real follow-up, not part of this
    screen's own scope) -- both the G keybind (cn.li.ac.input-ids) and
    the editor_dev_tool item share this to pick a fixed default file to
@@ -85,7 +85,7 @@
       (.getAbsolutePath (io/as-file url)))))
 
 (defn- mode-opts
-  "mode (:skill or :scene), document (the just-opened V3 map, needed for
+  "mode (:skill or :scene), document (the just-opened V4 map, needed for
    scene mode's per-file capabilities) -> {:vocab :capabilities :fns
    :category-for}."
   [mode wrapper-doc]
@@ -107,7 +107,7 @@
             :fns {}
             :category-for nil}))
 
-;; --- layout sidecar (ac/skills-v3/layout/<id>.layout.edn, VFX-同构) ---------
+;; --- layout sidecar (ac/skills-v4/layout/<id>.layout.edn, VFX-同构) ---------
 ;;
 ;; Deliberately a SIBLING file next to the opened document, derived only
 ;; from `path` (which the caller already resolved -- see this namespace's
@@ -210,7 +210,7 @@
    reverting to stale source on the next open (document/save's own
    docstring calls this out as the intended two-path design: workspace
    write by default, explicit :editor/export publishes to source).
-   Structured V3 documents are opened as whole maps. The production editor
+   Structured V4 documents are opened as whole maps. The production editor
    intentionally rejects legacy :program/:scene wrappers; migration is an
    explicit offline step, never an implicit editor fallback. Also loads the layout sidecar
    (node positions from a prior session, if any) and builds the mode's
@@ -229,7 +229,7 @@
                                   :category-for (:category-for opts)})
          :document (cond
                      (document/v4-document? wrapper-doc) (document/open-v4 raw)
-                     (document/v3-document? wrapper-doc) (document/open-v3 raw)
+                     (document/v4-document? wrapper-doc) (document/open-v4 raw)
                      :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
          :selected-nid nil
          :param-drafts {}
@@ -411,7 +411,7 @@
 (defn- ui-label
   "Keep single-line editor labels inside their fixed layout box.
 
-   Presentation V3 currently clips but does not implement generic text
+   Presentation V4 currently clips but does not implement generic text
    ellipsizing.  The two editors therefore bound only display labels here;
    source text, diagnostics data and input drafts remain lossless in state.
    Use the installed font bridge when available and a deterministic fallback
@@ -619,7 +619,7 @@
 
 
 (defn- install-graph!
-  "Replace the active phase with graph->form output, preserving the V3
+  "Replace the active phase with graph->form output, preserving the V4
    document envelope and history. Invalid temporary wires stay in-memory
    only and are surfaced as status instead of corrupting source."
   [state* edited-graph]
@@ -1178,6 +1178,7 @@
      (bridge/call-adapter :presentation-open-screen!
                           (:mount vm) "Node Editor" on-close)
      vm)))
+
 
 
 

@@ -127,7 +127,7 @@
 
   Category comes from skill-definitions when present so preset bind requests
   match server resolution even if the live registry still carries :migrated
-  from skills-v3 EDN."
+  from skills-v4 EDN."
   [skill-id]
   (let [sid (as-kw skill-id)
         aliases (or (skill-id-aliases sid) #{})
@@ -170,3 +170,4 @@
         (when-let [defn (definition-for ctrl-id)]
           (when (= category-id (as-kw (:category-id defn)))
             (:id defn))))))
+
