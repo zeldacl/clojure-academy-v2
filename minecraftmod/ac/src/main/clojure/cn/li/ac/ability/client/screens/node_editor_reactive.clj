@@ -645,9 +645,11 @@
                   flat (graph/exec-flatten current-graph)
                   data-ids (->> (:nodes current-graph)
                                 (keep (fn [[id node]] (when (= :data (:kind node)) id))))
-                  base (merge (render/exec-default-layout flat)
-                              (render/expr-default-layout data-ids)
-                              layout)
+                  base (if (:v4? (:document @state*))
+                         (render/resolve-layout layout (keys (:nodes current-graph)))
+                         (merge (render/exec-default-layout flat)
+                                (render/expr-default-layout data-ids)
+                                layout))
                   cur (get base nid {:x 0.0 :y 0.0})]
                (assoc layout nid {:x (+ (:x cur) (double dx)) :y (+ (:y cur) (double dy))})))))
 
