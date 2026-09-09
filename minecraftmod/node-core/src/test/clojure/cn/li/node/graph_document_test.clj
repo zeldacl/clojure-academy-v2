@@ -115,3 +115,20 @@
                                                   (e :e/exec-b :exec [:n/action :out] [:n/end :in])]}})
         {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {:amount {:type :long}}}}} :collect)]
     (is (empty? diagnostics))))
+
+(deftest compiles-loop-end-as-foreach-body-terminator
+  (let [d (assoc skill :graphs {:default {:on :activation/start
+                                          :nodes {:n/start (n :n/start :start)
+                                                  :n/items (n :n/items :literal :value [1 2])
+                                                  :n/each (n :n/each :foreach :limit 8 :as :item)
+                                                  :n/action (n :n/action :component :component :test/do)
+                                                  :n/loop (n :n/loop :loop-end)
+                                                  :n/end (n :n/end :end)}
+                                          :links [(e :e/start :exec [:n/start :out] [:n/each :in])
+                                                  (e :e/items :data [:n/items :value] [:n/each :collection])
+                                                  (e :e/body :exec [:n/each :body] [:n/action :in])
+                                                  (e :e/action :exec [:n/action :out] [:n/loop :in])
+                                                  (e :e/continue :exec [:n/loop :continue] [:n/each :loop-back])
+                                                  (e :e/completed :exec [:n/each :completed] [:n/end :in])]}})
+        {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {}}}} :collect)]
+    (is (empty? diagnostics))))

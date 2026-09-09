@@ -107,6 +107,12 @@
                  coll (if (= :foreach t) (:form c) (list 'range (:form c)))
                  f (list* 'each b coll (:forms body))]
             (recur (target (:links ctx) nid :completed) (into out (concat (:pre c) [f])) (conj seen nid)))
+          (= :loop-end t)
+          ;; A loop-end is a structural terminator for the current each body;
+          ;; its continue edge is represented by the enclosing foreach/repeat
+          ;; form and must never become a normal statement or an ordinary
+          ;; graph cycle in the lowered surface program.
+          {:forms out :next ::loop-end}
           :else
           (let [{:keys [pre form]} (statement ctx nid)
                 nx (target (:links ctx) nid :out)]
