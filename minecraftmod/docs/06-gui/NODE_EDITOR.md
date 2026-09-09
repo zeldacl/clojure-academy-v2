@@ -97,9 +97,9 @@ V4 图的固定节点集合为 `start`、`component`、`branch`、`merge`、`for
 
 `render.clj` 对生产用 V4 文档直接绘制自由二维节点图：执行节点、数据节点和两类
 语义连线分别渲染，节点位置来自 layout sidecar，节点内部显示实际参数槽和 wired
-状态；viewport 只是同一张图的放大操作层，不改变文档坐标。旧的
-`graph/exec-flatten`/`graph->form` 双向转换仍只服务法术合成器和兼容的表层 DSL，
-不会把 V4 图重新压扁成一条执行链。V4 节点通过固定端口约束连接：普通执行节点
+状态；viewport 只是同一张图的放大操作层，不改变文档坐标。`graph/exec-flatten`/
+`graph->form` 只属于中立表层 DSL 编译器的内部测试/降级路径，不读取或写入 V4
+技能文档，也不是 V3 编辑器回退；生产编辑器不会把 V4 图重新压扁成一条执行链。V4 节点通过固定端口约束连接：普通执行节点
 最多一个后继，branch 只有 true/false，foreach/repeat 有 body/completed，所有
 多路汇合必须显式经过 merge；保存和编译都会再次校验这些约束。
 
