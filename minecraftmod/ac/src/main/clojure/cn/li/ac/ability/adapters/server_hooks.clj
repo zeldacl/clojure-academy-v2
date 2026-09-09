@@ -7,6 +7,7 @@
 [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.model.resource :as rdata]
+            [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.server.network :as network]
@@ -41,11 +42,13 @@
   [player-uuid state]
   (let [state* (or state {})
         session-id (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+        preset (when (contains? state* :preset-data)
+                 (preset-data/normalize-preset-data (:preset-data state*)))
         hydrate-cmd (cond-> {:command :hydrate-player-state}
                       (contains? state* :ability-data) (assoc :ability-data (:ability-data state*))
                       (contains? state* :resource-data) (assoc :resource-data (:resource-data state*))
                       (contains? state* :cooldown-data) (assoc :cooldown-data (:cooldown-data state*))
-                      (contains? state* :preset-data) (assoc :preset-data (:preset-data state*))
+                      (contains? state* :preset-data) (assoc :preset-data preset)
                       (contains? state* :develop-data) (assoc :develop-data (:develop-data state*))
                       (contains? state* :runtime) (assoc :runtime-data (:runtime state*))
                       (contains? state* :dirty?) (assoc :dirty? (:dirty? state*)))]

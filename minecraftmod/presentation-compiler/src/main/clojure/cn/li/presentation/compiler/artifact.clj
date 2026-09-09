@@ -241,12 +241,17 @@
    otherwise compile to flags=0 — HitKernel then never sees them, so hover and
    activate silently no-op (pre-rewrite hit-action keyed off :on directly).
    Scrollbar tracks also need hit-testable so drag/click can drive the linked
-   :scroll offset."
+   :scroll offset.
+   Nodes with :change / :submit (terminal-style catchers, not only :text-input)
+   are also focusable so key/character routing can target them."
   [physical]
-  (cond-> physical
-    (seq (:on physical)) (update :flags (fnil conj #{}) :hit-testable)
-    (map? (:scrollbar physical))
-    (-> (update :flags (fnil conj #{}) :hit-testable :scrollbar))))
+  (let [on (:on physical)
+        text-edit? (or (contains? on :change) (contains? on :submit))]
+    (cond-> physical
+      (seq on) (update :flags (fnil conj #{}) :hit-testable)
+      text-edit? (update :flags (fnil conj #{}) :focusable)
+      (map? (:scrollbar physical))
+      (-> (update :flags (fnil conj #{}) :hit-testable :scrollbar)))))
 
 (defn- lower-node [source]
   (let [physical (base-fields source)

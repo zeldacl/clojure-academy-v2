@@ -13,6 +13,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
             [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.ability.service.combat-catalog :as combat-catalog]
             [cn.li.ac.ability.messages :as messages]
@@ -30,7 +31,12 @@
 (defonce ^:private active-slots* (atom #{}))
 (defonce ^:private handlers-registered?* (atom false))
 (defn- current-session []
-  (or keybinds/*client-session-id* (runtime-hooks/client-session-id)))
+  (or keybinds/*client-session-id*
+      (runtime-hooks/client-session-id)
+      ;; Same session the preset editor / HUD read via default-client-owner.
+      ;; Network push threads may lack ThreadLocal client-ctx; without this
+      ;; fallback hydrate lands nowhere and :learned-skills stays empty.
+      (:client-session-id (runtime-hooks/default-client-owner))))
 
 (defn- client-owner [player-uuid]
   (owner/require-client-owner
@@ -99,8 +105,7 @@
       intent-id)))
 
 (defn- combat-slot? [player-uuid slot]
-  (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
-    (boolean (and ability-id (combat-catalog/available? ability-id)))))
+  (some? (keybinds/get-skill-id-for-slot-public player-uuid slot)))
 
 (defn- runtime-sync-resets-input?
   [old-ability-data new-ability-data]
@@ -125,6 +130,7 @@
         (when (and (bytes? wire)
                    (client-bridge/local-player-uuid))
           (let [remote (fixed-channel/decode-catalog-hello wire)
+                _ (combat-catalog/ensure-ready!)
                 local (select-keys (combat-catalog/catalog)
                                    [:schema-version :content-hash])
                 accepted? (= local (select-keys remote
@@ -146,7 +152,14 @@
               (doseq [feedback (:feedback result)]
                 (reactive-hud/show-combat-notice!
                  :combat-critical
-                 (or feedback {:text "Combat rejected"}))))
+                 (cond
+                   (string? (:text feedback)) feedback
+                   (keyword? (:reason feedback))
+                   {:text (str "Combat rejected: " (name (:reason feedback)))}
+                   (keyword? (:type feedback))
+                   {:text (str "Combat rejected: " (name (:type feedback)))}
+                   :else
+                   (or feedback {:text "Combat rejected"})))))
             (catch Throwable error
               (log/warn "Rejected malformed fixed combat feedback packet"
                         {:error (.getMessage error)}))))))
@@ -166,9 +179,9 @@
 
 (defn- hydrate! [player-uuid domain value]
   (command-runtime/run-command-in-session!
-   (or keybinds/*client-session-id* (runtime-hooks/client-session-id))
-    (str player-uuid)
-    {:command :hydrate-player-state domain value}))
+   (current-session)
+   (str player-uuid)
+   {:command :hydrate-player-state domain value}))
 
 (defn- apply-client-runtime-v2!
   [{:keys [version opcode uuid revision dirty-mask] :as payload}]
@@ -189,11 +202,18 @@
                         (not (zero? (bit-and mask store/cooldown-data-mask)))
                         (assoc :cooldown-data (:cooldown-data payload))
                         (not (zero? (bit-and mask store/preset-data-mask)))
-                        (assoc :preset-data (:preset-data payload))
+                        (assoc :preset-data
+                               (preset-data/normalize-preset-data (:preset-data payload)))
                         (not (zero? (bit-and mask store/develop-data-mask)))
                         (assoc :develop-data (:develop-data payload)))]
           (command-runtime/run-command-in-session!
            (current-session) uuid command {:mark-dirty? false})
+          ;; Mirror server activation into the platform overlay atom so HUD
+          ;; refresh does not depend on a successful V-key write alone.
+          (when-not (zero? (bit-and mask store/resource-data-mask))
+            (runtime-hooks/set-client-overlay-activated!
+             uuid
+             (boolean (get-in payload [:resource-data :activated]))))
           (when (and (not (zero? (bit-and mask store/ability-data-mask)))
                      (runtime-sync-resets-input? (:ability-data old-state)
                                                  (:ability-data payload)))
@@ -203,7 +223,17 @@
                                                     (:resource-data payload)))
             (clear-owner-state! uuid))
           (when-not (zero? (bit-and mask store/preset-data-mask))
-            (keybinds/update-default-group! uuid)
+            (keybinds/update-default-group! uuid))
+          ;; Entering ability mode: rebuild slot delegates even when preset
+          ;; dirty-mask was empty (e.g. prior sync failed to register them).
+          (when (and (not (zero? (bit-and mask store/resource-data-mask)))
+                     (boolean (get-in payload [:resource-data :activated]))
+                     (not (boolean (get-in old-state [:resource-data :activated]))))
+            (keybinds/update-default-group! uuid))
+          ;; learn_all / learn-skill dirty ability-data only; without a refresh
+          ;; an open selector keeps a stale empty skill grid.
+          (when (or (not (zero? (bit-and mask store/ability-data-mask)))
+                    (not (zero? (bit-and mask store/preset-data-mask))))
             (preset-editor-reactive/refresh-active-screen! uuid)))))))
 
 (defn- slot-visual-state [player-uuid slot]
@@ -235,9 +265,26 @@
    :client-on-slot-key-down!
    (fn [player-uuid slot]
      (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
-       (if (= :location-teleport ability-id)
+       (cond
+         (= :location-teleport ability-id)
          (location-teleport/open! (client-bridge/get-client-player))
-         (when (combat-slot? player-uuid slot)
+
+         (nil? ability-id)
+         (do (log/warn "Skill slot press ignored: no bound skill"
+                       {:uuid (str player-uuid) :slot slot})
+             (reactive-hud/show-combat-notice!
+              :combat-critical {:text "No skill bound to this key"}))
+
+         :else
+         (do
+           (when-not (combat-catalog/available? ability-id)
+             (log/warn "Local combat catalog missing bound skill; sending anyway"
+                       {:uuid (str player-uuid)
+                        :slot slot
+                        :ability-id ability-id
+                        :catalog-status (:status (combat-catalog/catalog))
+                        :catalog-count (count (get-in (combat-catalog/catalog)
+                                                      [:combat :abilities]))}))
            (send-combat-intent! player-uuid slot :start)))))
    :client-on-slot-key-tick! (fn [_ _] nil)
    :client-on-slot-key-up!
@@ -292,13 +339,11 @@
    :client-req-set-activated!
    (fn [p active callback]
      (client-api/req-set-activated! (client-owner p) active callback))
-   ;; V-key immediate HUD feedback: write the platform overlay atom that
-   ;; reactive-hud/build-snapshot reads via client-overlay-activated-override.
+   ;; V-key / resource-sync HUD feedback: platform overlay atom only
+   ;; (no AC-local activated override). Hot-path setter — not call-adapter.
    :set-client-overlay-activated!
    (fn [player-uuid activated]
-     (client-bridge/call-adapter :set-client-activated-overlay!
-                                 {:player-uuid player-uuid}
-                                 (boolean activated)))
+     (client-bridge/set-client-activated-overlay! player-uuid (boolean activated)))
    :client-req-set-preset-slot!
    (fn [p preset key category ctrl callback]
      (client-api/req-set-preset-slot! (client-owner p) preset key category ctrl callback))

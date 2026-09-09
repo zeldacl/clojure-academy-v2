@@ -41,6 +41,23 @@
   (sk/register-skill! (minimal-skill :mine :electromaster :arc-gen))
   (is (= :mine (skill-query/get-skill-by-controllable :electromaster :arc-gen))))
 
+(deftest get-skill-by-controllable-definitions-fallback-test
+  "Picker synthesizes from skill-definitions when registry is empty; bind must
+   still resolve electromaster/arc-gen without a live registry entry."
+  (is (= :arc-gen (skill-query/get-skill-by-controllable :electromaster :arc-gen)))
+  (is (nil? (skill-query/get-skill-by-controllable :migrated :arc-gen))))
+
+(deftest get-skill-by-controllable-migrated-registry-category-test
+  "Registry may still carry EDN :migrated; definitions category wins."
+  (sk/register-skill! (minimal-skill :arc-gen :migrated :arc-gen :level 1))
+  (is (= :arc-gen (skill-query/get-skill-by-controllable :electromaster :arc-gen)))
+  (is (= [:electromaster :arc-gen] (skill-query/controllable-key :arc-gen))))
+
+(deftest install-empty-skill-runtime-does-not-clobber-test
+  (sk/register-skill! (minimal-skill :keep :electromaster :keep :level 1))
+  (sk/install-skill-registry-runtime! (sk/create-skill-registry-runtime))
+  (is (= :keep (:id (sk/raw-skill :keep)))))
+
 (deftest controllable-and-icon-test
   (sk/register-skill! (-> (minimal-skill :x :c :x)
                           (assoc :enabled false)))
@@ -49,7 +66,14 @@
   (is (false? (skill-query/can-control? :y)))
   (sk/register-skill! (assoc (minimal-skill :z :c :z2) :icon "path/to/icon.png"))
   ;; bare paths are resolved against the mod namespace
-  (is (= "academy:path/to/icon.png" (skill-query/get-skill-icon-path :z))))
+  (is (= "academy:path/to/icon.png" (skill-query/get-skill-icon-path :z)))
+  ;; EDN without :icon still resolves via category/skills/<stem>.png convention
+  (sk/register-skill! (dissoc (minimal-skill :railgun :electromaster :railgun) :icon))
+  (is (= "academy:textures/abilities/electromaster/skills/railgun.png"
+         (skill-query/get-skill-icon-path :railgun)))
+  (sk/register-skill! (dissoc (minimal-skill :shift-teleport :teleporter :shift-teleport) :icon))
+  (is (= "academy:textures/abilities/teleporter/skills/shift_tp.png"
+         (skill-query/get-skill-icon-path :shift-teleport))))
 
 (deftest learning-cost-and-developer-type-test
   (is (= 5.0 (progression/learning-cost 2))) ;; 3 + 2²×0.5

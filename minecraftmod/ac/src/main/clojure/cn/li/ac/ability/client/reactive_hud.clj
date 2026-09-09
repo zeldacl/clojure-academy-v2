@@ -470,7 +470,9 @@
          vec)))
 
 (defn- build-hud-model [player-state activated?]
-  (when player-state
+  ;; Always produce a model when activated so CP/overload bars appear even if
+  ;; player-state has not hydrated yet (overlay can lead the first frames).
+  (when (or player-state activated?)
     (let [resource-data (:resource-data player-state)
           ability-data (:ability-data player-state)
           preset-data-map (:preset-data player-state)
@@ -524,6 +526,9 @@
                                   :g (double (nth cat-color 1))
                                   :b (double (nth cat-color 2))
                                   :a 0.35}
+      ;; Activated without a resolved category color still needs a visible cue;
+      ;; otherwise a missing tint + missing CP textures looks like "no HUD".
+      activated? {:r 0.12 :g 0.45 :b 0.70 :a 0.28}
       :else {:r 0.0 :g 0.0 :b 0.0 :a 0.0})))
 
 (defonce ^:private ^HashMap snapshot-cache-by-owner (HashMap.))
@@ -692,7 +697,7 @@
                      ;; Explicit opts win (tests / forced frames).
                      (contains? opts :activated-override)
                      (boolean (:activated-override opts))
-                     ;; Immediate client feedback from V-key (set before server sync).
+                     ;; Immediate client feedback from V-key (platform overlay).
                      :else
                      (let [overlay (bridge/client-overlay-activated-override
                                      {:player-uuid player-uuid})]

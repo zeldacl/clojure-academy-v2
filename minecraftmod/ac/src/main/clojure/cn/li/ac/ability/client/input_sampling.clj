@@ -36,11 +36,22 @@
 ;; Combined pre-check
 ;; ============================================================================
 
+(defn block-reason
+  "Why a skill key press must not start. nil when the press may proceed.
+
+  :unusable — activated but overload recovery / interference
+  :cooldown — ctrl-id still on main cooldown"
+  [resource-data cooldown-data ctrl-id]
+  (cond
+    (not (activated? resource-data)) nil
+    (not (can-use? resource-data)) :unusable
+    (on-cooldown? cooldown-data ctrl-id) :cooldown
+    :else nil))
+
 (defn should-abort?
   "True when a skill key press/tick should be aborted (not usable or on cooldown)."
   [resource-data cooldown-data ctrl-id]
-  (or (not (can-use? resource-data))
-      (on-cooldown? cooldown-data ctrl-id)))
+  (some? (block-reason resource-data cooldown-data ctrl-id)))
 
 ;; ============================================================================
 ;; Key transition

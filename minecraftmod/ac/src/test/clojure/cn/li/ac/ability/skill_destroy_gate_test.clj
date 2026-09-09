@@ -7,15 +7,19 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.registry.skill :as skill-reg]))
 
+;; Reset through reset-skill-registry-for-test!, not through installing a fresh
+;; empty runtime: install-skill-registry-runtime! deliberately refuses to let an
+;; empty seed clobber a populated registry (runtime-hooks install an empty
+;; container before content load, and a second install would wipe skills), so it
+;; is no longer a reset. Without an explicit reset the first deftest's
+;; :test-skill survives into the second and the destroy gate reads stale config.
 (defn- with-skill [skill-id spec f]
-  (skill-reg/install-skill-registry-runtime!
-    (skill-reg/create-skill-registry-runtime))
+  (skill-reg/reset-skill-registry-for-test!)
   (skill-reg/register-skill! spec)
   (try
     (f)
     (finally
-      (skill-reg/install-skill-registry-runtime!
-        (skill-reg/create-skill-registry-runtime)))))
+      (skill-reg/reset-skill-registry-for-test!))))
 
 (deftest skill-destroy-allowed-defaults-to-true-test
   (with-skill :test-skill {:id :test-skill :category-id :test-cat :level 1 :pattern :instant :actions {:perform! (fn [& _] nil)}}

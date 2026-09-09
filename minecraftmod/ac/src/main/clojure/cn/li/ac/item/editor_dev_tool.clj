@@ -21,9 +21,12 @@
   [{:keys [player side]}]
   (when (= side :client)
     (if-let [player-uuid (uuid/player-uuid player)]
-      (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
-        (node-editor/open! player-uuid path :skill)
-        (log/warn "editor_dev_tool: ac/skills-v3/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))
+      (try
+        (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
+          (node-editor/open! player-uuid path :skill)
+          (log/warn "editor_dev_tool: ac/skills-v3/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))
+        (catch Throwable e
+          (log/stacktrace "editor_dev_tool: node editor failed to open" e)))
       (log/warn "editor_dev_tool: could not resolve a player UUID")))
   ;; :consume? true short-circuits the interaction (InteractionResult.
   ;; SUCCESS), matching tutorial_item.clj/energy_items.clj's own

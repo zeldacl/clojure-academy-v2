@@ -2,9 +2,11 @@
   "Read-only metadata projection for skill UI, trigger resolution and
    passive effects. The V3 document is the single source of truth; no
    manifest/source indirection is reconstructed here."
-  (:require [cn.li.ac.ability.skills-catalog :as skills-catalog]
+  (:require [clojure.string :as str]
+            [cn.li.ac.ability.skills-catalog :as skills-catalog]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.node.digest :as digest]))
+            [cn.li.node.digest :as digest]
+            [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private state* (atom {:status :cold}))
 (def ^:const schema-version 1)
@@ -56,30 +58,61 @@
   ([] (initialize! (skills-catalog/assemble)))
   ([assembled]
    (let [abilities (ability-map assembled)
-         trigger-index (reduce (fn [index source]
-                                 (reduce (fn [result trigger]
-                                           (if (and (:source trigger) (:dispatch trigger))
-                                             (update result (:source trigger) (fnil conj []) trigger)
-                                             result))
-                                         index (:external-triggers source)))
-                               {} (vals (source-map assembled)))
-         combat {:sources (source-map assembled)
-                 :registrations (:registrations assembled)
-                 :abilities abilities
-                 :by-id (registration-map assembled)
-                 :trigger-index trigger-index
-                 :errors {}}
-         value {:status :ready
-                :schema-version schema-version
-                :content-hash (content-hash assembled)
-                :combat combat}]
-     (reset! state* value)
-     value)))
+         current (get-in @state* [:combat :abilities])]
+     (if (and (empty? abilities) (seq current))
+       (do (log/warn "Refusing to replace populated combat catalog with empty assemble"
+                     {:incoming 0 :current (count current)})
+           @state*)
+       (let [trigger-index (reduce (fn [index source]
+                                     (reduce (fn [result trigger]
+                                               (if (and (:source trigger) (:dispatch trigger))
+                                                 (update result (:source trigger) (fnil conj []) trigger)
+                                                 result))
+                                             index (:external-triggers source)))
+                                   {} (vals (source-map assembled)))
+             combat {:sources (source-map assembled)
+                     :registrations (:registrations assembled)
+                     :abilities abilities
+                     :by-id (registration-map assembled)
+                     :trigger-index trigger-index
+                     :errors {}}
+             value {:status :ready
+                    :schema-version schema-version
+                    :content-hash (content-hash assembled)
+                    :combat combat}]
+         (reset! state* value)
+         (let [payload {:abilities (count abilities)
+                        :arc-gen? (contains? abilities :arc-gen)
+                        :status :ready}]
+           (if (zero? (count abilities))
+             (log/warn "Combat catalog ready but empty" payload)
+             (log/info "Combat catalog ready" payload)))
+         value)))))
 
-(defn state [] @state*)
-(defn catalog [] @state*)
+(defn ensure-ready!
+  "Initialize the catalog if it is still cold or has no abilities."
+  []
+  (when (or (not= :ready (:status @state*))
+            (empty? (get-in @state* [:combat :abilities])))
+    (initialize!))
+  @state*)
+
+(defn state [] (ensure-ready!))
+(defn catalog [] (ensure-ready!))
+
+(defn- ability-key-aliases [ability-id]
+  (when ability-id
+    (let [id (if (keyword? ability-id) ability-id (keyword (str ability-id)))
+          n (name id)
+          ns (namespace id)]
+      (cond-> #{id}
+        (str/includes? n "_") (conj (keyword ns (str/replace n "_" "-")))
+        (str/includes? n "-") (conj (keyword ns (str/replace n "-" "_")))))))
+
 (defn available? [ability-id]
-  (contains? (get-in @state* [:combat :abilities]) ability-id))
+  (ensure-ready!)
+  (let [abilities (get-in @state* [:combat :abilities] {})]
+    (boolean (some #(contains? abilities %) (ability-key-aliases ability-id)))))
 (defn ui-state [ability-id]
   {:ability-id ability-id :available? (available? ability-id) :enabled? (available? ability-id)})
 
@@ -96,7 +129,8 @@
         (get-in @state* [:combat :trigger-index source])))
 
 (defn require-available [ability-id]
-  (or (get-in @state* [:combat :abilities ability-id])
+  (ensure-ready!)
+  (or (some #(get-in @state* [:combat :abilities %]) (ability-key-aliases ability-id))
       (throw (ex-info "ability is unavailable" {:reason :ability-unavailable :ability-id ability-id}))))
 
 (defn apply-passive-resource-modifiers [ability-data values]

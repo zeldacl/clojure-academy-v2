@@ -1561,6 +1561,11 @@ if (target.loader != "none") {
             "${dir.absolutePath.replace("\\", "/")}=cn.li"
         }.join(";")
         systemProperty "platform.test.allow-empty", discoveredTestFiles.isEmpty().toString()
+        // Forward -Dplatform.test.only / -Pplatform.test.only into the test JVM.
+        def onlyNs = System.getProperty("platform.test.only") ?: findProperty("platform.test.only")
+        if (onlyNs) {
+            systemProperty "platform.test.only", onlyNs.toString()
+        }
         args "-m", "cn.li.test-support.auto-test-runner"
     }
 

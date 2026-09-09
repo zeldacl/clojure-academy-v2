@@ -18,6 +18,7 @@
             [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-transmitter]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-input]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap TreeMap Map$Entry]))
@@ -92,11 +93,13 @@
         (.values (.descendingMap activate-handlers))))
 
 (defn get-activate-hint
-  "Get the hint string from the active handler, or nil."
+  "Get the translated V-key hint from the active handler, or nil."
   [player-uuid]
   (when-let [h (get-active-handler player-uuid)]
     (when-let [hint-fn (:hint-fn h)]
-      (hint-fn player-uuid))))
+      (let [key-or-text (hint-fn player-uuid)]
+        (when key-or-text
+          (or (i18n/translate key-or-text) key-or-text))))))
 
 ;; ============================================================================
 ;; Key Group System
@@ -190,6 +193,18 @@
         :on-key-up    (fn [uuid] (runtime/on-slot-key-up! uuid idx))
         :on-key-abort (fn [uuid] (runtime/on-slot-key-abort! uuid idx))}))))
 
+(defn- ensure-delegate-for-key!
+  "Return the slot delegate, rebuilding :default from preset when missing.
+
+  Preset sync may hydrate player-state on a network thread whose session
+  resolution used to fail before delegates were registered, while the HUD
+  still paints slots from the same preset. Rebuild lazily on first use so
+  LMB/RMB cast cannot stay silently unbound after a successful bind."
+  [player-uuid key-idx]
+  (or (get-delegate-for-key key-idx)
+      (do (update-default-group! player-uuid)
+          (get-delegate-for-key key-idx))))
+
 ;; State tracking for key transitions
 (def ^:private default-key-state
   {:skill-keys [false false false false]
@@ -239,7 +254,12 @@
 
 (defn- current-client-session-id
   []
-  (or *client-session-id* (runtime-hooks/client-session-id)))
+  (or *client-session-id*
+      (runtime-hooks/client-session-id)
+      ;; Network push threads that hydrate preset/resource often lack
+      ;; ThreadLocal client-ctx; without this fallback update-default-group!
+      ;; throws and slot delegates stay empty while the HUD still paints.
+      (:client-session-id (runtime-hooks/default-client-owner))))
 
 (defn- require-client-owner-value
   [owner label value]
@@ -343,14 +363,19 @@
    :player-uuid player-uuid})
 
 (defn- has-active-delegates?
-  "Check if any skill delegate key is currently held (upstream
-  ClientRuntime.hasActiveDelegate semantics).
-  V-key short-press aborts only while a delegate key is down; otherwise it
-  toggles activation even if stale/alive contexts still exist."
+  "True when a skill slot key that actually has a delegate is held.
+
+  Upstream ClientRuntime.hasActiveDelegate: V short-press aborts only while a
+  bound skill key is down. Checking raw key state alone made the V hint flip
+  to abort (and swallowed mode toggle) whenever LMB was held even if no
+  delegate was registered — the exact silent-fail after bind."
   [player-uuid]
   (let [owner (current-client-owner player-uuid)
         skill-keys (:skill-keys (key-state-snapshot owner))]
-    (boolean (some true? skill-keys))))
+    (boolean (some (fn [idx]
+                     (and (nth skill-keys idx false)
+                          (get-delegate-for-key idx)))
+                   (range 4)))))
 
 (defn on-skill-key-event
   "Handle skill key state change. Uses delegate system with pre-checks.
@@ -381,7 +406,7 @@
            key-state    (key-state-snapshot owner)
            player-state (get-client-player-state player-uuid)
            was-down     (boolean (get-in key-state [:skill-keys key-idx] false))
-           delegate     (get-delegate-for-key key-idx)
+           delegate     (ensure-delegate-for-key! player-uuid key-idx)
            event        (sm/compute-skill-key-event key-state player-state key-idx is-down delegate)]
        (cond
          ;; Screen opened while this skill key was held: abort the held

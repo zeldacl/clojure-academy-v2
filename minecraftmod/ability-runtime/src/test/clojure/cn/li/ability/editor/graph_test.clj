@@ -130,6 +130,19 @@
         first-nid (first (:order g))]
     (is (= (pr-str (first (graph/graph->form g))) (graph/stmt-text (:nodes g) first-nid)))))
 
+(deftest stmt-label-is-short-and-not-raw-dsl-test
+  (let [g (graph/form->graph (:do (surface/read-doc
+                                    "{:ability :t :do
+                                       [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
+                                        (when (:entity-id hit)
+                                          (combat/damage {:target (:entity-id hit) :amount $damage}))
+                                        (finish {:outcome :performed})]}")))
+        nodes (:nodes g)
+        labels (mapv #(graph/stmt-label nodes (:nid %)) (graph/exec-flatten g))]
+    (is (= ["bind hit" "when" "damage" "finish"] labels))
+    (is (every? #(<= (count %) 28) labels))
+    (is (not-any? #(re-find #"^\(let " %) labels))))
+
 (deftest exec-flatten-walks-nested-bodies-with-increasing-depth-test
   (let [g (graph/form->graph (:do (surface/read-doc
                                     "{:ability :t :do

@@ -78,9 +78,14 @@
    The missing file-picker is a separate follow-up, not an entry-point gap."
   [{:keys [player-uuid]}]
   (when (and (content-key-allowed?) player-uuid)
-    (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
-      (node-editor/open! player-uuid path :skill)
-      (log/warn "Node editor: ac/skills-v3/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))))
+    (try
+      (if-let [path (node-editor/default-sample-skill-resource-path "ac/skills-v3/thunder-bolt.edn")]
+        (do
+          (log/debug "Opening node editor" {:path path :uuid player-uuid})
+          (node-editor/open! player-uuid path :skill))
+        (log/warn "Node editor: ac/skills-v3/thunder-bolt.edn is not on-disk (packaged jar?) -- no writable path to open"))
+      (catch Throwable e
+        (log/stacktrace "Node editor failed to open" e)))))
 
 (defn- on-open-spell-composer
   "Handle the spell composer dev-tool key (K, upstream: none). Unlike

@@ -6,14 +6,43 @@
   (:require [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.screens.preset-editor :as editor]
+            [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.client.toast :as toast]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
 
 (defonce ^:private active-mounts (atom {}))
 (defonce ^:private screen-tick* (atom nil))
+
+(defn- try-present!
+  "Present only while the Presentation mount is still registered.
+
+  Minecraft Screen onClose unmounts the handle; async preset responses and
+  carousel ticks must not throw `unknown Presentation mount` after that."
+  [present!]
+  (when present!
+    (try
+      (present!)
+      (catch clojure.lang.ExceptionInfo e
+        (if (= "unknown Presentation mount" (ex-message e))
+          (log/debug "preset editor present skipped; mount already unmounted")
+          (throw e)))))
+  nil)
+
+(defn- present-active-for-owner!
+  "Refresh the currently open editor for this owner, if any.
+
+  Do not close over a specific open!'s present! — reopening replaces the
+  mount while an in-flight set-preset response may still arrive."
+  [owner]
+  (when-let [uuid (some-> (editor/editor-owner-key owner) (nth 2) str)]
+    (when-let [{:keys [present!]} (get @active-mounts uuid)]
+      (try-present! present!))))
 
 ;; ---------------------------------------------------------------------------
 ;; Carousel constants (main PresetEditUI.java)
@@ -55,6 +84,17 @@
 (def ^:private sel-step (+ sel-size 3.0))
 (def ^:private cancel-tex
   (str "academy:textures/guis/preset_settings/cancel.png"))
+
+(def ^:private missing-tex
+  (modid/asset-path "textures" "missing.png"))
+
+(defn- skill-icon-or-missing
+  "Match main PresetEditUI: empty skill :icon still shows a placeholder so
+   learned controllable skills stay visible in the selector / slot rows."
+  [skill-id preferred]
+  (let [src (or (when (seq (str preferred)) (str preferred))
+                (when skill-id (skill-query/get-skill-icon-path skill-id)))]
+    (if (seq (str src)) src missing-tex)))
 
 (defn- now-sec []
   (/ (double (System/currentTimeMillis)) 1000.0))
@@ -179,17 +219,24 @@
   (let [s (double scale)
         skill-id (:skill-id slot)
         icon-sz (* icon-s s)
-        icon-src (when skill-id (skill-query/get-skill-icon-path skill-id))
+        icon-src (when skill-id
+                   (skill-icon-or-missing skill-id (:skill-icon slot)))
         icon (icon-item icon-src icon-sz icon-sz alpha)
         selected? (= selected-slot [preset-index slot-index])
         sw (* slot-w s)
-        sh (* slot-h s)]
+        sh (* slot-h s)
+        skill-name (or (:skill-name slot)
+                       (some-> skill-id name)
+                       "")]
     {:kind :slot
      :preset-index preset-index
      :slot-index slot-index
      :index preset-index
      :skill-id skill-id
-     :skill-name (or (:skill-name slot) "")
+     :skill-name skill-name
+     ;; Nested icon map for composite :item [:item :slot-icon] bind.
+     :slot-icon icon
+     :has-icon? (boolean icon)
      :icon-items (if icon [icon] [])
      :selected? selected?
      :tint tint
@@ -230,61 +277,123 @@
         y (max 16.0 (min (- design-h h pad) (double y)))]
     [x y]))
 
+(defn- fit-content-origin
+  "Match presentation-core content-rect for full-screen :fit hosts."
+  []
+  (let [sz (bridge/get-window-size)
+        sw (double (cond (vector? sz) (nth sz 0 design-w)
+                         (map? sz) (or (:width sz) design-w)
+                         :else design-w))
+        sh (double (cond (vector? sz) (nth sz 1 design-h)
+                         (map? sz) (or (:height sz) design-h)
+                         :else design-h))]
+    [(float (quot (- (int sw) (int design-w)) 2))
+     (float (quot (- (int sh) (int design-h)) 2))]))
+
+(defn- design-xy-from-payload
+  "Activate payload x/y are layout-absolute (same space as HitKernel).
+   Selector state is design-local under the centered 540×280 root."
+  [payload]
+  (let [[ox oy] (fit-content-origin)
+        px (double (or (:x payload) (+ ox (/ design-w 2.0))))
+        py (double (or (:y payload) (+ oy (/ design-h 2.0))))]
+    [(- px ox) (- py oy)]))
+
+(defn- tip-width-for [text sel-w]
+  (let [raw (+ 6.0 (double (or (bridge/font-width-optional (str text))
+                               (* 5.0 (count (str text))))))]
+    (max 20.0 (min (double sel-w) raw))))
+
+(defn- selector-empty-hint
+  "Visible in-game proof when the picker has only cancel (or nothing)."
+  [debug]
+  (let [learned (long (or (:learned-count debug) -1))
+        resolved (long (or (:resolved-count debug) -1))
+        bindable (long (or (:bindable-count debug) -1))
+        assigned (long (or (:assigned-count debug) -1))
+        avail (long (or (:available-count debug) 0))
+        cat (or (:category-id debug) "?")]
+    (str "empty L=" learned " R=" resolved " B=" bindable
+         " As=" assigned " A=" avail " cat=" cat)))
+
 (defn- selector-grid
-  "Main Selector: cancel + learned skills as a compact icon grid at (mx, my).
-   Each grid cell is a CompositeSpec map (paint + hit share the same 15×15 box)."
-  [skills mx my]
-  (let [raw (into [{:remove? true
-                    :label (local-key "cancel")
-                    :src cancel-tex}]
-                  (map (fn [skill]
-                         (let [icon-src (or (:skill-icon skill)
-                                            (when-let [sid (:skill-id skill)]
-                                              (skill-query/get-skill-icon-path sid)))]
-                           {:remove? false
-                            :skill-id (:skill-id skill)
-                            :cat-id (:cat-id skill)
-                            :ctrl-id (:ctrl-id skill)
-                            :label (str (or (:skill-name skill) "?"))
-                            :src (str (or icon-src ""))}))
-                       skills))
-        ;; Drop entries with no drawable src except cancel (always has tex)
-        items (vec (filter (fn [it] (or (:remove? it) (seq (:src it)))) raw))
-        n (count items)
-        rows (int (Math/ceil (/ (double (max 1 n)) sel-max-per-row)))
-        cols (min (max 1 n) sel-max-per-row)
-        sel-w (+ (* 2.0 sel-margin) (* sel-step (double (dec cols))) sel-size)
-        sel-h (+ (* 2.0 sel-margin) (* sel-step (double (dec rows))) sel-size)
-        [sx sy] (clamp-selector-pos mx my sel-w sel-h)
-        hint (local-skill-hint)
-        ;; Cap tip to grid width so a long i18n string cannot look like a wide panel.
-        raw-hint-w (+ 6.0 (double (or (bridge/font-width-optional (str hint))
-                                      (* 5.0 (count (str hint))))))
-        hint-w (max 20.0 (min (double sel-w) raw-hint-w))
-        placed (mapv (fn [i item]
-                       (let [row (quot i sel-max-per-row)
-                             col (rem i sel-max-per-row)
-                             cx (+ sel-margin (* col sel-step))
-                             cy (+ sel-margin (* row sel-step))]
-                         (merge item
-                                {:kind :image
+  "Main Selector: cancel + learned skills as a 15×15 icon grid at mouse (mx, my).
+   Names live in the hover tip (and :label), not as cell text — matching
+   PresetEditUI / main `build-selector!` (SIZE=15, STEP=18, MAX_PER_ROW=4)."
+  ([skills mx my] (selector-grid skills mx my nil))
+  ([skills mx my debug]
+   (let [items (into [{:remove? true
+                       :label (local-key "cancel")
+                       :src cancel-tex}]
+                     (map (fn [skill]
+                            {:remove? false
+                             :skill-id (:skill-id skill)
+                             :cat-id (:cat-id skill)
+                             :ctrl-id (:ctrl-id skill)
+                             :label (str (or (:skill-name skill) "?"))
+                             :src (skill-icon-or-missing (:skill-id skill)
+                                                         (:skill-icon skill))})
+                          skills))
+         n (count items)
+         rows (int (Math/ceil (/ (double (max 1 n)) sel-max-per-row)))
+         cols (min (max 1 n) sel-max-per-row)
+         sel-w (+ (* 2.0 sel-margin) (* sel-step (double (dec cols))) sel-size)
+         sel-h (+ (* 2.0 sel-margin) (* sel-step (double (dec rows))) sel-size)
+         [sx sy] (clamp-selector-pos mx my sel-w sel-h)
+         hint (if (seq skills)
+                (local-skill-hint)
+                (selector-empty-hint debug))
+         hint-w (tip-width-for hint (max sel-w 120.0))
+         placed (mapv (fn [i item]
+                        (let [row (quot i sel-max-per-row)
+                              col (rem i sel-max-per-row)
+                              cx (+ sel-margin (* col sel-step))
+                              cy (+ sel-margin (* row sel-step))]
+                          (assoc item
+                                 :kind :image
                                  :x 0.0 :y 0.0
                                  :w sel-size :h sel-size
                                  :rgba (icon-rgba 1.0)
-                                 :cell-x cx
-                                 :cell-y cy
-                                 :index i})))
-                     (range n) items)]
-    {:selector-visible? true
-     :selector-x (double sx)
-     :selector-y (double sy)
-     :selector-w (double sel-w)
-     :selector-h (double sel-h)
-     :selector-tip-x (double sx)
-     :selector-tip-y (double (- sy 13.5))
-     :selector-hint hint
-     :selector-hint-w (double hint-w)
-     :selector-skills placed}))
+                                 :cell-x cx :cell-y cy :index i)))
+                      (range n) items)]
+     {:selector-visible? true
+      :selector-x (double sx)
+      :selector-y (double sy)
+      :selector-w (double sel-w)
+      :selector-h (double sel-h)
+      :selector-tip-x (double sx)
+      :selector-tip-y (double (- sy 13.5))
+      :selector-hint hint
+      :selector-hint-w (double hint-w)
+      :selector-skills placed})))
+
+(defn- with-selector-hint
+  "Update tip text/width for the currently open selector (hover)."
+  [selector hint]
+  (let [hint (str (or hint (local-skill-hint)))
+        sel-w (double (or (:selector-w selector) sel-size))]
+    (assoc selector
+           :selector-hint hint
+           :selector-hint-w (tip-width-for hint sel-w))))
+
+(defn- as-kw
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    (symbol? x) (keyword (name x))
+    :else x))
+
+(defn- assign-controllable
+  "Resolve [cat-id ctrl-id] from a selector item (or skill-id fallback)."
+  [item]
+  (let [cat (as-kw (:cat-id item))
+        ctrl (as-kw (:ctrl-id item))]
+    (cond
+      (and cat ctrl) [cat ctrl]
+      (:skill-id item)
+      (skill-query/controllable-key (as-kw (:skill-id item)))
+      :else nil)))
 
 (defn- closed-selector []
   {:selector-visible? false
@@ -321,13 +430,92 @@
                :cards cards}]
      (merge base (or selector (closed-selector))))))
 
-(defn refresh-ui! [mount owner]
-  (when-let [{:keys [present!]} (get @active-mounts mount)]
-    (present!)))
+(defn- apply-server-preset-data!
+  "Replace the client preset projection with the server-authoritative snapshot.
+   Never invent local slot writes — only hydrate what the server returned."
+  [owner preset-data]
+  (when (map? preset-data)
+    (let [owner-key (editor/editor-owner-key owner)
+          pd (preset-data/normalize-preset-data preset-data)]
+      (read-model/with-player-state-owner owner-key
+        (fn [session-id player-uuid]
+          (command-rt/run-command-in-session!
+           session-id player-uuid
+           {:command :hydrate-player-state :preset-data pd}
+           {:mark-dirty? false})))))
+  nil)
+
+(defn- show-preset-reject!
+  "Surface server/network rejection so binds never fail silently."
+  [resp]
+  (let [message-key (or (:message-key resp)
+                        (when (:error resp) "ac.ability.preset.reject.handler_error")
+                        "ac.ability.preset.reject.unknown")
+        detail (or (:detail resp) (:error resp))
+        args (cond-> []
+               (seq (str detail)) (conj (str detail)))
+        translated (apply i18n/translate message-key args)
+        ;; If the lang key is missing, i18n returns the key itself — show a
+        ;; readable fallback that still includes the server detail.
+        text (if (or (nil? translated) (= translated message-key))
+               (str (or (some-> (:reason resp) name) "preset-rejected")
+                    (when (seq (str detail)) (str ": " detail)))
+               translated)]
+    (toast/show-toast! {:message-key message-key
+                        :args args
+                        :text text
+                        :duration-ms 3500}))
+  nil)
+
+(defn- on-server-preset-response!
+  [owner resp]
+  (cond
+    (not (map? resp))
+    (do (show-preset-reject! {:reason :empty-response
+                              :message-key "ac.ability.preset.reject.empty_response"})
+        (present-active-for-owner! owner))
+
+    ;; Transport/handler exception envelope from network.server
+    (false? (:success resp))
+    (do (show-preset-reject! {:reason :network-error
+                              :message-key "ac.ability.preset.reject.handler_error"
+                              :detail (:error resp)})
+        (when (contains? resp :preset-data)
+          (apply-server-preset-data! owner (:preset-data resp)))
+        (present-active-for-owner! owner))
+
+    (false? (:ok resp))
+    (do (show-preset-reject! resp)
+        (when (contains? resp :preset-data)
+          (apply-server-preset-data! owner (:preset-data resp)))
+        (present-active-for-owner! owner))
+
+    :else
+    (do (when (contains? resp :preset-data)
+          (apply-server-preset-data! owner (:preset-data resp)))
+        (present-active-for-owner! owner)))
+  nil)
+
+(defn refresh-ui!
+  "Re-present the open preset editor for this player uuid (or mount entry).
+   Rebuilds an open skill selector from fresh ability-data (learn_all sync)."
+  [player-uuid-or-mount]
+  (when-let [{:keys [present! owner selected-slot* selector* anim*]}
+             (or (get @active-mounts (str player-uuid-or-mount))
+                 (get @active-mounts player-uuid-or-mount))]
+    (when (and owner selector* selected-slot* (:selector-visible? @selector*))
+      (let [[_p _s] @selected-slot*
+            data (or (editor/build-preset-editor-render-data owner) {})
+            skills (vec (or (:available-skills data) []))
+            sx (double (or (:selector-x @selector*) 0.0))
+            sy (double (or (:selector-y @selector*) 0.0))]
+        (reset! selector* (selector-grid skills sx sy (:debug data)))))
+    (try-present! present!)))
 
 (defn refresh-active-screen! [player-uuid]
-  (when-let [{:keys [mount owner]} (get @active-mounts (str player-uuid))]
-    (refresh-ui! mount owner)))
+  ;; active-mounts is keyed by player-uuid string (see open!). Looking up by
+  ;; mount token silently no-oped after preset sync — reopen was required.
+  (refresh-ui! player-uuid))
 
 (defn create-runtime [owner]
   {:owner owner :state (atom (render-state owner nil))})
@@ -355,6 +543,7 @@
         anim* (atom (fresh-anim (int (or (:selected-preset data0) 0))))
         on-close (fn []
                    (reset! screen-tick* nil)
+                   (reset! mount* nil)
                    (swap! active-mounts dissoc (str player-uuid))
                    (editor/close-screen! owner))
         present! (fn []
@@ -370,7 +559,6 @@
                 (fn [action payload _current]
                   (let [item (:item payload)
                         anim @anim*
-                        refresh (fn [] (present!) nil)
                         close-sel! (fn []
                                      (reset! selector* (closed-selector))
                                      (reset! selected-slot* nil))]
@@ -389,43 +577,70 @@
                       (let [p (int (:preset-index item
                                                   (:index item 0)))
                             s (int (:slot-index item 0))
-                            mx (double (or (:x payload) (/ design-w 2.0)))
-                            my (double (or (:y payload) (/ design-h 2.0)))]
+                            ;; Main HintHandler: selector top-left at mouse.
+                            [mx my] (design-xy-from-payload payload)]
                         (when-not (:transiting? anim)
                           (if (not= p (long (:active anim)))
                             (do (close-sel!)
                                 (start-transit! anim* p)
                                 (editor/on-preset-tab-click owner p)
                                 (render-state owner nil @anim* @selector*))
-                            ;; Active page: toggle selector at pointer (main HintHandler)
+                            ;; Active page: toggle selector at pointer
                             (if (and @selected-slot*
                                      (= @selected-slot* [p s])
                                      (:selector-visible? @selector*))
                               (do (close-sel!)
                                   (render-state owner nil @anim* @selector*))
                               (let [data (or (editor/build-preset-editor-render-data owner) {})
-                                    grid (selector-grid (:available-skills data) mx my)]
+                                    skills (vec (or (:available-skills data) []))
+                                    grid (selector-grid skills mx my (:debug data))]
                                 (editor/on-preset-tab-click owner p)
                                 (reset! selected-slot* [p s])
                                 (reset! selector* grid)
                                 (render-state owner @selected-slot* @anim* grid))))))
 
+                      :preset/skill-hover
+                      (when (:selector-visible? @selector*)
+                        (let [hint (if (:hover? payload)
+                                     (or (:label item)
+                                         (some-> (:skill-id item) skill-query/skill-display-name)
+                                         (local-skill-hint))
+                                     (local-skill-hint))
+                              next (with-selector-hint @selector* hint)]
+                          (reset! selector* next)
+                          (render-state owner @selected-slot* @anim* next)))
+
+                      :preset/selector-bg
+                      ;; Absorb clicks on grid chrome; keep selector open.
+                      (render-state owner @selected-slot* @anim* @selector*)
+
+                      :preset/selector-dismiss
+                      ;; Full-screen blocker behind the popup: outside click closes
+                      ;; without activating the carousel slot underneath.
+                      (do (close-sel!)
+                          (render-state owner nil @anim* @selector*))
+
                       :preset/assign
                       (when-let [[p s] @selected-slot*]
                         (cond
                           (:remove? item)
-                          (api/req-set-preset-slot! owner p s nil nil
-                                                    (fn [_]
-                                                      (close-sel!)
-                                                      (refresh)))
+                          (do (close-sel!)
+                              (api/req-set-preset-slot!
+                               owner p s nil nil
+                               (fn [resp] (on-server-preset-response! owner resp)))
+                              (render-state owner nil @anim* @selector*))
 
-                          (:ctrl-id item)
-                          (api/req-set-preset-slot! owner p s
-                                                    (:cat-id item) (:ctrl-id item)
-                                                    (fn [_]
-                                                      (close-sel!)
-                                                      (refresh))))
-                        (render-state owner @selected-slot* @anim* @selector*))
+                          :else
+                          (if-let [[cat ctrl] (assign-controllable item)]
+                            (do (close-sel!)
+                                (api/req-set-preset-slot!
+                                 owner p s cat ctrl
+                                 (fn [resp] (on-server-preset-response! owner resp)))
+                                (render-state owner nil @anim* @selector*))
+                            (do (show-preset-reject!
+                                 {:reason :invalid-item
+                                  :message-key "ac.ability.preset.reject.invalid_item"})
+                                (render-state owner @selected-slot* @anim* @selector*)))))
 
                       :preset/previous
                       (let [selected (long (:active @anim*))
@@ -447,10 +662,11 @@
                 :on-close on-close})]
       (reset! mount* vm)
       (reset! screen-tick*
-              (fn [] (advance-and-present! anim* selected-slot* selector* present!)))
+              (fn [] (advance-and-present! anim* selected-slot* selector*
+                                           #(try-present! present!))))
       (swap! active-mounts assoc (str player-uuid)
              {:mount (:mount vm) :owner owner :selected-slot* selected-slot*
-              :selector* selector* :anim* anim* :present! present!})
+              :selector* selector* :anim* anim* :present! #(try-present! present!)})
       (bridge/call-adapter :presentation-open-screen!
                            (:mount vm) "Preset Editor" on-close)
       vm)))

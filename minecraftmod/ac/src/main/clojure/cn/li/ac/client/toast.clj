@@ -29,10 +29,14 @@
 ;; ============================================================================
 
 (defn show-toast!
-  "Queue a toast notification for rendering."
-  ([{:keys [message-key args duration-ms]}]
-   (when message-key
+  "Queue a toast notification for rendering.
+
+  Prefer :message-key (i18n). :text is a literal fallback for server-provided
+  rejection reasons when no translation key is available."
+  ([{:keys [message-key args duration-ms text]}]
+   (when (or message-key (seq (str text)))
      (let [entry {:message-key message-key
+                  :text (when (seq (str text)) (str text))
                   :args (vec (or args []))
                   :start-ms (now-ms)
                   :end-ms (+ (now-ms) (long (or duration-ms default-duration-ms)))}]
@@ -91,7 +95,14 @@
       (let [box-h 32
             pad-x 16
             gap 4
-            messages (mapv #(i18n/translate (:message-key %)) active)
+            messages (mapv (fn [toast]
+                             (or (when (seq (:text toast)) (:text toast))
+                                 (when (:message-key toast)
+                                   (apply i18n/translate
+                                          (:message-key toast)
+                                          (:args toast)))
+                                 ""))
+                           active)
             max-text-w (long (apply max 0 (map #(client-bridge/font-width %) messages)))
             box-w (+ max-text-w (* 2 pad-x))
             x (int (- (/ screen-width 2) (/ box-w 2)))]

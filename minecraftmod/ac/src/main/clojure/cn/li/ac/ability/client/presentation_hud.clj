@@ -10,9 +10,66 @@
    are flattened into :composite-list items — {:kind :quad|:image|:text ...}
    maps that the neutral Presentation painter consumes as typed UI IR, so this
    namespace stays the only place that understands what any of these fields mean."
-  (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+  (:require [cn.li.ac.ability.client.hud :as hud]
+            [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.gui.presentation :as presentation])
 )
+
+;; Upstream CPBar.cpColors / overrideColors (reactive_overlay on main).
+(def ^:private cp-color-stops [[0.0 240 103 103] [0.35 255 174 68] [1.0 255 255 255]])
+(def ^:private overload-preview-stops
+  [[0.0 10 223 223 223] [0.55 35 240 212 157] [1.0 80 245 100 100]])
+
+(defn- sample-rgb-stops
+  "3-stop [pos r g b] lerp for CP fill tint. t in [0,1]."
+  [stops ^double t]
+  (let [n (count stops)
+        t (max 0.0 (min 1.0 t))]
+    (loop [i 0]
+      (if (>= i (dec n))
+        (let [[_ r g b] (nth stops (dec n))] [(int r) (int g) (int b)])
+        (let [[p0 r0 g0 b0] (nth stops i)
+              [p1 r1 g1 b1] (nth stops (inc i))]
+          (if (<= t (double p1))
+            (let [span (- (double p1) (double p0))
+                  u (if (pos? span) (/ (- t (double p0)) span) 0.0)
+                  lerp (fn [a b] (int (+ a (* u (- b a)))))]
+              [(lerp r0 r1) (lerp g0 g1) (lerp b0 b1)])
+            (recur (inc i))))))))
+
+(defn- sample-argb-stops
+  "3-stop [pos a r g b] lerp for overload-preview tint. t in [0,1]."
+  [stops ^double t]
+  (let [n (count stops)
+        t (max 0.0 (min 1.0 t))]
+    (loop [i 0]
+      (if (>= i (dec n))
+        (let [[_ a r g b] (nth stops (dec n))] [(int a) (int r) (int g) (int b)])
+        (let [[p0 a0 r0 g0 b0] (nth stops i)
+              [p1 a1 r1 g1 b1] (nth stops (inc i))]
+          (if (<= t (double p1))
+            (let [span (- (double p1) (double p0))
+                  u (if (pos? span) (/ (- t (double p0)) span) 0.0)
+                  lerp (fn [a b] (int (+ a (* u (- b a)))))]
+              [(lerp a0 a1) (lerp r0 r1) (lerp g0 g1) (lerp b0 b1)])
+            (recur (inc i))))))))
+
+(defn- right-fill
+  "Right-anchored fill rect + UV crop inside a lane, matching dsl/progress
+   :anchor :right (and optional :fill-remap [base span])."
+  [{:keys [x y w h]} pct u0 v0 u1 v1 fill-remap]
+  (let [pct (max 0.0 (min 1.0 (double pct)))
+        remapped (if fill-remap
+                   (let [[base span] fill-remap]
+                     (+ (double base) (* pct (double span))))
+                   pct)
+        fill-w (* (double w) remapped)
+        fill-x (+ (double x) (- (double w) fill-w))
+        u-span (- (double u1) (double u0))
+        fill-u0 (+ (double u0) (* u-span (- 1.0 remapped)))]
+    {:x fill-x :y (double y) :w fill-w :h (double h)
+     :u0 fill-u0 :v0 (double v0) :u1 (double u1) :v1 (double v1)}))
+
 
 ;; ---------------------------------------------------------------------------
 ;; Color packing — reactive-hud/hud.clj builders use two conventions
@@ -71,23 +128,30 @@
 ;; :rgba} / {:kind :text :text :x :y :rgba}).
 ;; ---------------------------------------------------------------------------
 
-(defn- background-mask-rect [snapshot]
+(defn- background-mask-rect
+  "Upstream AC screen vignette: screen_mask.png is white+alpha on the rim and
+   transparent in the center. Emit as a composite IMAGE (same path as CP bar
+   icons). Alpha must stay at mask.a — boosting it makes mid-feather pixels
+   readable and the rim looks far thicker than main."
+  [snapshot]
   (when-let [mask (:background-mask snapshot)]
-    (when (pos? (double (:a mask 0.0)))
-      {:kind :quad
-       :x 0.0 :y 0.0
-       :w (double (or (:screen-w snapshot) 427.0))
-       :h (double (or (:screen-h snapshot) 240.0))
-       :rgba (argb01 mask)})))
+    (let [a (double (:a mask 0.0))]
+      (when (pos? a)
+        {:kind :image
+         :src "academy:textures/effects/screen_mask.png"
+         :x 0.0 :y 0.0
+         :w (double (or (:screen-w snapshot) 427.0))
+         :h (double (or (:screen-h snapshot) 240.0))
+         ;; Main: RGB = category tint, A = mask.a (typically 0.35). Texture
+         ;; alpha alone confines color to the outer rim.
+         :rgba (argb01 mask)}))))
 
 (defn- cp-full-glow-items [snapshot]
   (let [cp-bar (:cp-bar snapshot)
         screen-w (double (or (:screen-w snapshot) 427.0))
-        bar-w 193.0
-        bar-h 29.0
-        x (- screen-w bar-w 8.0)]
+        frame (:frame (hud/cpbar-layout screen-w))]
     (when (:full-glow? cp-bar)
-      [{:kind :quad :x x :y 8.0 :w bar-w :h bar-h
+      [{:kind :quad :x (:x frame) :y (:y frame) :w (:w frame) :h (:h frame)
         :rgba (unchecked-int 0x66FFFFFF)}])))
 
 (defn- skill-slot-items
@@ -267,10 +331,11 @@
 
 (defn- overload-pulse-items [snapshot]
   (let [ol-bar (:overload-bar snapshot)
-        intensity (:overload-pulse-intensity snapshot)]
+        intensity (:overload-pulse-intensity snapshot)
+        screen-w (double (or (:screen-w snapshot) 427.0))
+        active (:overload-active (hud/cpbar-layout screen-w))]
     (when (and ol-bar intensity (pos? (double intensity)))
-      [{:kind :quad :x (:x ol-bar 8) :y (:y ol-bar 22)
-        :w (:width ol-bar 100) :h (:height ol-bar 10)
+      [{:kind :quad :x (:x active) :y (:y active) :w (:w active) :h (:h active)
         :rgba (argb255 [255 60 60] (Math/round (min 200.0 (* 200.0 (double intensity)))))}])))
 
 (defn- screen-flash-rect [snapshot]
@@ -283,37 +348,85 @@
     [{:kind :quad :x 4 :y 34 :w 6 :h 6 :rgba (unchecked-int 0xFFDD3333)}
      {:kind :text :text "interfered" :x 14 :y 34 :rgba (unchecked-int 0xFFFF6666)}]))
 
-(defn- cp-bar-items [snapshot]
+(defn- cp-bar-items
+  "Match main reactive_overlay CPBar template: one 964×147@0.2 frame,
+   overload-preview (mask, right-grow) XOR overload-active (front_overload),
+   then CP fill in :cp-lane with fill-remap [0.16 0.8] anchored right.
+   No second stacked bar under the frame."
+  [snapshot]
   (let [cp (:cp-bar snapshot)
-        overload (:overload-bar snapshot)
-        screen-w (double (or (:screen-w snapshot) 427.0))
-        ;; Top-right CP cluster (~193×29 ≈ 0.2×964 upstream art).
-        bar-w 193.0
-        bar-h 29.0
-        x (- screen-w bar-w 8.0)
-        y 8.0
-        cp-pct (double (or (:percent cp) (:cp-ratio snapshot) 0.0))
-        ol-pct (double (or (:percent overload) (:overload-ratio snapshot) 0.0))]
-    (cond-> []
-      cp
-      (into [{:kind :image
-              :src (or (:bg-texture cp) "academy:textures/guis/cpbar/back_normal.png")
-              :x x :y y :w bar-w :h bar-h
-              :rgba (unchecked-int 0xFFFFFFFF)}
-             {:kind :image
-              :src (or (:fg-texture cp) "academy:textures/guis/cpbar/cp.png")
-              :x x :y y :w (* bar-w (max 0.0 (min 1.0 cp-pct))) :h bar-h
-              :rgba (unchecked-int 0xFFFFFFFF)}])
-      overload
-      (into [{:kind :image
-              :src (or (:bg-texture overload) "academy:textures/guis/cpbar/back_normal.png")
-              :x x :y (+ y bar-h 4.0) :w bar-w :h (* bar-h 0.55)
-              :rgba (unchecked-int 0xFFFFFFFF)}
-             {:kind :image
-              :src (or (:fg-texture overload) "academy:textures/guis/cpbar/front_overload.png")
-              :x x :y (+ y bar-h 4.0)
-              :w (* bar-w (max 0.0 (min 1.0 ol-pct))) :h (* bar-h 0.55)
-              :rgba (unchecked-int 0xFFFFFFFF)}]))))
+        overload (:overload-bar snapshot)]
+    (when cp
+      (let [screen-w (double (or (:screen-w snapshot) 427.0))
+            layout (hud/cpbar-layout screen-w)
+            frame (:frame layout)
+            preview (:overload-preview layout)
+            active (:overload-active layout)
+            lane (:cp-lane layout)
+            icon (:category-icon layout)
+            overloaded? (boolean (:overloaded overload))
+            cp-pct (double (or (:percent cp) (:cp-ratio snapshot) 0.0))
+            ol-pct (double (or (:percent overload) (:overload-ratio snapshot) 0.0))
+            hint-pct (:hint-percent cp)
+            display-pct (double (or hint-pct cp-pct))
+            [cr cg cb] (sample-rgb-stops cp-color-stops display-pct)
+            cp-fill (right-fill lane display-pct
+                                (/ 47.0 964.0) (/ 30.0 147.0)
+                                (/ 930.0 964.0) (/ 114.0 147.0)
+                                [0.16 0.8])
+            bg-src (or (:bg-texture overload)
+                       (:bg-texture cp)
+                       "academy:textures/guis/cpbar/back_normal.png")
+            items (transient
+                   [{:kind :image
+                     :src bg-src
+                     :x (:x frame) :y (:y frame) :w (:w frame) :h (:h frame)
+                     :rgba (argb255 [255 255 255] 204)}])]
+        (when (and overload (not overloaded?))
+          (let [[a r g b] (sample-argb-stops overload-preview-stops ol-pct)
+                fill (right-fill preview ol-pct
+                                 0.0 (/ 21.0 147.0)
+                                 (/ 943.0 964.0) (/ 125.0 147.0)
+                                 nil)]
+            (conj! items {:kind :image
+                          :src "academy:textures/guis/cpbar/mask.png"
+                          :x (:x fill) :y (:y fill) :w (:w fill) :h (:h fill)
+                          :u0 (:u0 fill) :v0 (:v0 fill) :u1 (:u1 fill) :v1 (:v1 fill)
+                          :rgba (argb255 [r g b] a)})))
+        (when (and overload overloaded?)
+          (let [scroll (mod (double (or (:scroll-offset overload) 0.0)) 1.0)
+                u0 (+ (/ 30.0 974.0) scroll)
+                u1 (+ (/ 944.0 974.0) scroll)]
+            (conj! items {:kind :image
+                          :src (or (:fg-texture overload)
+                                   "academy:textures/guis/cpbar/front_overload.png")
+                          :x (:x active) :y (:y active) :w (:w active) :h (:h active)
+                          :u0 u0 :v0 0.0 :u1 u1 :v1 1.0
+                          :rgba (unchecked-int 0xFFFFFFFF)})))
+        (when (and hint-pct (pos? cp-pct))
+          (let [ghost (right-fill lane cp-pct
+                                  (/ 47.0 964.0) (/ 30.0 147.0)
+                                  (/ 930.0 964.0) (/ 114.0 147.0)
+                                  [0.16 0.8])
+                [gr gg gb] (sample-rgb-stops cp-color-stops cp-pct)]
+            (conj! items {:kind :image
+                          :src (or (:fg-texture cp) "academy:textures/guis/cpbar/cp.png")
+                          :x (:x ghost) :y (:y ghost) :w (:w ghost) :h (:h ghost)
+                          :u0 (:u0 ghost) :v0 (:v0 ghost) :u1 (:u1 ghost) :v1 (:v1 ghost)
+                          :rgba (argb255 [gr gg gb] 64)})))
+        (conj! items {:kind :image
+                      :src (or (:fg-texture cp) "academy:textures/guis/cpbar/cp.png")
+                      :x (:x cp-fill) :y (:y cp-fill) :w (:w cp-fill) :h (:h cp-fill)
+                      :u0 (:u0 cp-fill) :v0 (:v0 cp-fill) :u1 (:u1 cp-fill) :v1 (:v1 cp-fill)
+                      :rgba (argb255 [cr cg cb])})
+        (when-let [icon-src (:category-icon cp)]
+          (conj! items {:kind :image
+                        :src icon-src
+                        :x (+ (:x lane) (double (:x-offset icon)))
+                        :y (+ (:y lane) (double (:y-offset icon)))
+                        :w (double (:w icon)) :h (double (:h icon))
+                        :rgba (unchecked-int 0xFFFFFFFF)}))
+        (persistent! items)))))
 
 (defn- composite-items
   "Flatten every dynamic HUD projection into shared Presentation composite nodes."

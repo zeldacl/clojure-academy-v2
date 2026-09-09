@@ -244,7 +244,12 @@
     (attribute [_ node attr item]
       (let [bind-map (nth bind-maps node nil)]
         (case (int attr)
-          11 (composite-spec resource-index default-namespace item)
+          11 (let [path (:item bind-map)
+                   bound (when path (state-value state item path))
+                   ;; Prefer an explicit :item bind (e.g. [:item :slot-icon]);
+                   ;; fall back to the arena/repeater item (combat-hud / selector).
+                   it (if (map? bound) bound item)]
+               (composite-spec resource-index default-namespace it))
           4 (let [v (state-value state item (:items bind-map))]
               (when (sequential? v) (vec v)))
           1 (when-let [path (:text bind-map)] (item-label (state-value state item path)))
@@ -1005,10 +1010,14 @@
                 {:action :input/key :pointer-capture nil :payload event}
                 (and (= key-code 257) submit-action)
                 {:action submit-action
-                 :payload (cond-> {:value (let [path (:path focus)]
-                                            (get-in (:view-state instance)
-                                                    (if (and (vector? path) (= :state (first path)))
-                                                      (subvec path 1) path)))}
+                 ;; (get-in m nil) returns m — never call get-in without a
+                 ;; real text path (terminal catchers have :submit but no :text).
+                 :payload (cond-> {:value (when-let [path (:path focus)]
+                                            (when (vector? path)
+                                              (get-in (:view-state instance)
+                                                      (if (= :state (first path))
+                                                        (subvec path 1)
+                                                        path))))}
                             (:field focus) (assoc :field (:field focus)))}
                 (= key-code 259)
                 (let [change (get-in focus [:on :change])]

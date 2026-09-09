@@ -72,12 +72,14 @@
          (player-hooks/on-player-logout! uuid)))))
 
 (defn on-server-stop!
-  [server {:keys [cleanup-session!]}]
+  [server {:keys [cleanup-session! save-all-players!]}]
   (when server
     (let [owner (server-owner server)
           session-id (:server-session-id owner)]
       (with-player-state-owner owner
         #(do
+           (when save-all-players!
+             (save-all-players! server))
            (player-hooks/on-server-stop! session-id)
            (when cleanup-session!
              (cleanup-session! session-id))))

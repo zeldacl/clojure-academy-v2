@@ -374,6 +374,31 @@
     (is (= :second (:field (:focus (runtime/instance! rt mount)))))
     (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258 :shift? true})))
     (is (= :first (:field (:focus (runtime/instance! rt mount)))))))
+(deftest submit-without-text-path-does-not-dump-view-state
+  "Terminal-style catchers (:submit, no :text bind) must not put the entire
+   view-state into :value — (get-in m nil) returns m."
+  (let [seen (atom [])
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/catcher
+                           {:key :root :flags #{:hit-testable :focusable}
+                            :width [:fixed 100.0] :height [:fixed 40.0]
+                            :on {:change :term/change :submit :term/submit}
+                            :semantics {:role :textbox :field :term}})
+        artifact (assoc artifact :node/semantics [{:role :textbox :field :term}])
+        mount (runtime/mount!
+                rt {:host {:stage :screen} :artifact artifact
+                    :state {:wireless-password "" :other 1}
+                    :reduce (fn [state action payload]
+                              (swap! seen conj [action payload])
+                              {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 10 :button 0})
+    (runtime/dispatch! rt mount {:type :key :key-code 257 :pressed? true})
+    (let [[action payload] (last @seen)]
+      (is (= :term/submit action))
+      (is (nil? (:value payload)))
+      (is (not (map? (:value payload)))))))
+
 (defn- wireless-node-golden-file
   []
   (first (filter #(.isFile ^java.io.File %)

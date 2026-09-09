@@ -433,10 +433,21 @@
                      :presentation-wireless-state wireless*
                      :presentation-refresh! (fn []
                        (when-let [refresh @refresh*] (refresh))))
+        ;; Keep developer (and peers) live-container atom pointing at the
+        ;; menu-bound map so C2S action-payload sees container-id.
+        _ (when-let [live* (:presentation-live-container container)]
+            (reset! live* container))
         layout (or (slot-schema/get-slot-layout schema-id) {:slots []})
         slot-count (count (:slots layout))
-        base-anchors (into (tile-slot-anchors layout)
-                           (player-inventory-anchors slot-count))
+        inv-mode (keyword (or (:player-inventory-mode layout)
+                              (:default-player-inventory-mode container)
+                              :full))
+        base-anchors (cond-> (vec (tile-slot-anchors layout))
+                       (not= inv-mode :none)
+                       (into (if (= inv-mode :hotbar-only)
+                               (filterv #(>= (:slot-index %) (+ slot-count 27))
+                                        (player-inventory-anchors slot-count))
+                               (player-inventory-anchors slot-count))))
         bridge (menu-bridge/create (or (:container-type container) schema-id)
                                    base-anchors
                                    #{:container/click-slot :container/quick-move
@@ -576,9 +587,11 @@
                                  (when-let [button (:button-click-fn container)]
                                    (button container (:button-id payload) player)))))))]
     {:type :presentation-container-screen
-     ;; Match TechUI host design so leftPos/topPos align with Presentation :fit.
-     :image-width techui-image-width
-     :image-height techui-image-height
+     ;; Default TechUI 290×187; developer (and similar non-TechUI hosts) may
+     ;; override via :presentation-image-width/height on the container so
+     ;; leftPos/topPos match the Presentation design canvas.
+     :image-width (int (or (:presentation-image-width container) techui-image-width))
+     :image-height (int (or (:presentation-image-height container) techui-image-height))
      :template-id template-id
      :container container
      :menu menu

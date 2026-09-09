@@ -290,6 +290,59 @@
   [nodes nid]
   (pr-str (node->stmt-form nodes nid)))
 
+(defn- short-sym
+  "keyword/symbol/string -> a short display token (name segment only)."
+  [x]
+  (cond
+    (keyword? x) (name x)
+    (symbol? x) (name x)
+    (string? x) x
+    (nil? x) "?"
+    :else (let [s (pr-str x)]
+            (if (> (count s) 16) (str (subs s 0 13) "...") s))))
+
+(defn- call-label
+  "op symbol/keyword -> short verb-ish label from the last path segment
+   (combat/damage -> \"damage\", cooldown/start -> \"start\")."
+  [op]
+  (let [raw (if (or (keyword? op) (symbol? op)) (str op) (str op))
+        ;; strip leading ':' if keyword was stringified oddly
+        raw (if (.startsWith ^String raw ":") (subs raw 1) raw)
+        bare (last (.split ^String raw "/"))]
+    (-> (str bare)
+        (.replace \- \space)
+        (.replace \_ \space))))
+
+(def ^:private label-max 28)
+
+(defn- clip-label
+  [^String s]
+  (if (<= (count s) label-max)
+    s
+    (str (subs s 0 (- label-max 3)) "...")))
+
+(defn stmt-label
+  "nodes, nid -> a SHORT plain-language canvas label (not raw DSL).
+   Full form text stays available via stmt-text for inspectors. Kept in
+   this namespace (not render) so tests can assert labeling without a
+   paint dependency."
+  [nodes nid]
+  (let [node (get nodes nid)
+        stmt (:stmt node)
+        raw (case stmt
+              :let (str "bind " (short-sym (:bind node)))
+              :call (call-label (:op node))
+              :when "when"
+              :if "if"
+              :each (str "each " (short-sym (:binding node)))
+              :finish "finish"
+              :state! (str "state " (short-sym (:key node)))
+              :set! (str "set " (short-sym (:sym node)))
+              :event! (str "event " (short-sym (:type node)))
+              :vfx! (str "vfx " (short-sym (:effect-id node)))
+              (or (some-> stmt name) "?"))]
+    (clip-label raw)))
+
 (defn expr-text
   "nodes, nid -> the same idea as stmt-text, for an expression-position
    node (used for e.g. showing a `when`/`if`'s condition as a label)."

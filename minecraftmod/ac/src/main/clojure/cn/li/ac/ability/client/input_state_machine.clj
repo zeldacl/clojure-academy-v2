@@ -16,6 +16,9 @@
     nil                                    — nothing to do
     {:transition :press/:tick/:release     — skill key
      :delegate   delegate-map}
+    {:transition :blocked                  — rising-edge press rejected
+     :reason     :unusable/:cooldown
+     :delegate   delegate-map}
     {:transition :abort
      :delegate   delegate-map}
     {:transition :press/:tick/:release     — movement key
@@ -64,18 +67,26 @@
       (let [res-data (or (:resource-data player-state) {})
             cd-data  (or (:cooldown-data player-state) {})
             ctrl-id  (or (:ctrl-id delegate) (:skill-id delegate))
-            activated? (sampling/activated? res-data)]
+            activated? (sampling/activated? res-data)
+            block-reason (sampling/block-reason res-data cd-data ctrl-id)]
         (cond
           ;; If release: always forward the release (clean up even if not activated)
           (= :release transition)
           {:transition :release :delegate delegate}
 
-          ;; Not activated at all: treat as abort (guards lingering holds)
+          ;; Ability mode off: ignore press/tick.
           (not activated?)
-          {:transition :abort :delegate delegate}
+          nil
 
-          ;; Activated: check abort conditions
-          (sampling/should-abort? res-data cd-data ctrl-id)
+          ;; Rising edge while unusable/cooldown: do NOT synthesize :abort —
+          ;; that sent abort intents for skills that never started, and the
+          ;; top-left V-hint already says \"abort\" whenever the skill key is
+          ;; held, which made blocked casts look like an abort outcome.
+          (and (= :press transition) block-reason)
+          {:transition :blocked :reason block-reason :delegate delegate}
+
+          ;; Held tick while unusable/cooldown: abort a running skill session.
+          (and (= :tick transition) block-reason)
           {:transition :abort :delegate delegate}
 
           :else

@@ -39,18 +39,45 @@
   []
   (:client-activated-overlay* (current-overlay-state-runtime)))
 
+(defn resolve-client-owner
+  "Coerce a uuid string, {:player-uuid ...}, or full session owner into a
+   client owner map with :client-session-id. AC's V-key hook historically
+   passed only {:player-uuid ...}; owner-key requires both fields and would
+   throw, so the combat HUD never saw the immediate overlay activate."
+  [owner]
+  (cond
+    (and (map? owner)
+         (:client-session-id owner)
+         (:player-uuid owner))
+    owner
+
+    (map? owner)
+    (or (client-session/owner-for-player-uuid
+          (or (:player-uuid owner) (:uuid owner)))
+        (client-session/current-local-player-owner))
+
+    (some? owner)
+    (or (client-session/owner-for-player-uuid owner)
+        (client-session/current-local-player-owner))
+
+    :else
+    (client-session/current-local-player-owner)))
+
 (defn get-client-activated
   [owner]
-  (get @(client-activated-overlay-atom) (client-session/owner-key owner)))
+  (when-let [o (resolve-client-owner owner)]
+    (get @(client-activated-overlay-atom) (client-session/owner-key o))))
 
 (defn set-client-activated!
   [owner v]
-  (swap! (client-activated-overlay-atom) assoc (client-session/owner-key owner) (boolean v))
+  (when-let [o (resolve-client-owner owner)]
+    (swap! (client-activated-overlay-atom) assoc (client-session/owner-key o) (boolean v)))
   nil)
 
 (defn clear-client-activated!
   [owner]
-  (swap! (client-activated-overlay-atom) dissoc (client-session/owner-key owner))
+  (when-let [o (resolve-client-owner owner)]
+    (swap! (client-activated-overlay-atom) dissoc (client-session/owner-key o)))
   nil)
 
 ;; ============================================================================

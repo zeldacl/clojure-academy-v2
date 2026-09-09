@@ -6,13 +6,16 @@
 
    SCOPE for this visual iteration (graph->composite-items):
    renders the EXEC statement chain as the primary top-to-bottom flow and
-   renders every referenced pure expression in a secondary column. Statement
-   boxes remain readable one-line DSL summaries; expression boxes expose an
-   output pin and statement boxes expose semantic input pins, so value wires
-   are structurally editable without pretending an exec node is an expression.
-   The view is intentionally hybrid rather than a full Blueprint canvas: it
-   keeps the common control-flow path compact while making data dependencies
-   visible and testable."
+   renders every referenced pure expression in a secondary column. Expression
+   boxes expose an output pin and statement boxes expose semantic input pins,
+   so value wires are structurally editable without pretending an exec node is
+   an expression. The view is intentionally hybrid rather than a full Blueprint
+   canvas: it keeps the common control-flow path compact while making data
+   dependencies visible and testable.
+
+   Canvas labels use graph/stmt-label (short plain words like bind hit /
+   damage), not raw DSL. Full stmt-text remains for inspectors that need the
+   exact printable form."
   (:require [cn.li.ability.editor.graph :as graph]))
 
 (defn wire-quads
@@ -132,8 +135,8 @@
 (defn- node-composite-items [nodes nid pos]
   (let [{:keys [stmt]} (get nodes nid)
         x (:x pos) y (:y pos)
-        text (graph/stmt-text nodes nid)
-        text (if (> (count text) 64) (str (subs text 0 61) "...") text)
+        ;; stmt-label already clips to graph/label-max, so no truncation here.
+        text (graph/stmt-label nodes nid)
         pins (map (fn [pin] (assoc pin :x (+ x (:x pin)) :y (+ y (:y pin))))
                   (exec-pin-items (assoc (get nodes nid) :nid nid)))]
     (vec (concat
@@ -142,7 +145,7 @@
            {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
             :text text :rgba 0xFFFFFFFF}]
           pins))))
- 
+
 (defn graph->composite-items
    "graph (cn.li.ability.editor.graph/form->graph's output), stored-layout
     -> a flat composite-item vector for a :repeater-bound canvas. Execution

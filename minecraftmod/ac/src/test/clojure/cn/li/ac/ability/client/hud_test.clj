@@ -36,6 +36,24 @@
     (is (= "academy:textures/guis/cpbar/cp.png" (:fg-texture data)))
     (is (nil? (:bar-color data)))))
 
+(deftest cpbar-layout-matches-upstream-scaled-coordinates-test
+  (let [layout (hud/cpbar-layout 320)
+        hint-box (hud/cpbar-activation-hint-box 320 44.0)]
+    (is (< (Math/abs (- 115.2 (get-in layout [:frame :x]))) 1.0e-9))
+    (is (= 12.0 (get-in layout [:frame :y])))
+    (is (= 192.8 (get-in layout [:frame :w])))
+    (is (< (Math/abs (- 124.6 (get-in layout [:cp-lane :x]))) 1.0e-9))
+    (is (= {:x-offset 162.0 :y-offset 2.6 :w 13.0 :h 13.0}
+           (:category-icon layout)))
+    (is (= 8.0 (get-in layout [:cp-numbers :font-size])))
+    (is (< (Math/abs (- 231.2 (get-in layout [:preset-row :x]))) 1.0e-9))
+    (is (< (Math/abs (- 39.2 (get-in layout [:preset-row :y]))) 1.0e-9))
+    (is (< (Math/abs (- 169.6 (:x hint-box))) 1.0e-9))
+    (is (< (Math/abs (- 38.4 (:y hint-box))) 1.0e-9))
+    (is (< (Math/abs (- 47.2 (:w hint-box))) 1.0e-9))
+    (is (= 12.0 (:h hint-box)))
+    (is (= 1.0 (:glow-size hint-box)))))
+
 (deftest cp-bar-consumption-hint-reports-original-and-predicted-levels-test
   (let [data (hud/build-cp-bar-render-data
               {:cp {:cur 80.0 :max 100.0}
@@ -68,7 +86,9 @@
   (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [])
                 skill-query/get-skill-by-controllable (fn [_ _] :railgun)
                 skill-registry/get-skill (fn [_] {:name "Railgun"})
+                skill-registry/raw-skill (fn [_] {:name "Railgun"})
                 skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
+                skill-query/skill-display-name (fn [_] "Railgun")
                 cd-data/in-cooldown? (fn [_ _ _] false)
                 cd-data/get-remaining (fn [_ _ _] 0)
                 dstate/delegate-state-for-slot (fn [_ _ _ _] {:state :idle :alpha 1.0 :glow-color nil :sin-effect? false})]
@@ -82,6 +102,19 @@
       (is (= 1 (count slots)))
       (is (= "Railgun" (:skill-name first-slot)))
       (is (= "textures/skills/railgun.png" (:skill-icon first-slot))))))
+
+(deftest build-skill-slot-shape-accepts-list-pair-test
+  (with-redefs [skill-query/get-skill-by-controllable (fn [_ _] :arc-gen)
+                skill-registry/raw-skill (fn [_] {:id :arc-gen})
+                skill-registry/get-skill (fn [_] {:id :arc-gen})
+                skill-query/get-skill-icon-path (fn [_] "textures/skills/arc_gen.png")
+                skill-query/skill-display-name (fn [_] "Arc Gen")]
+    (let [shapes (hud/build-skill-slot-shape
+                  {:active-slots [(list :electromaster :arc-gen) nil nil nil]}
+                  320 180)]
+      (is (= 1 (count shapes)))
+      (is (= :arc-gen (:skill-id (first shapes))))
+      (is (= "Arc Gen" (:skill-name (first shapes)))))))
 
 (deftest cooldown-wipe-divides-by-the-applied-duration-test
   ;; Upstream KeyHintUI: prog = tickLeft / maxTick. The HUD used to recompute

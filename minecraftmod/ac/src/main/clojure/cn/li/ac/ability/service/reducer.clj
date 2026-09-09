@@ -287,12 +287,22 @@
     :key-idx      int (0-3)
     :controllable [cat-id ctrl-id] or nil"
   [player-state {:keys [player-uuid preset-idx key-idx controllable]}]
-  (let [
-      preset-data (:preset-data player-state)
+  (let [preset-data (:preset-data player-state)
         new-preset-data (pdata/set-slot preset-data preset-idx key-idx controllable)]
     (ok (assoc player-state :preset-data new-preset-data)
-      [(evt/make-preset-update-event player-uuid preset-idx key-idx controllable)]
-        [{:effect/type :persist-state :domain :preset-data}])))
+        [(evt/make-preset-update-event player-uuid preset-idx key-idx controllable)]
+        ;; player-uuid is required — execute-persist-state! no-ops without it,
+        ;; so slots never reached NBT and vanished after restart.
+        [{:effect/type :persist-state
+          :player-uuid player-uuid
+          :domain :preset-data}
+         {:effect/type :network-send
+          :player-uuid player-uuid
+          :channel :ability/preset-updated
+          :payload {:player-uuid player-uuid
+                    :preset-idx preset-idx
+                    :key-idx key-idx
+                    :controllable controllable}}])))
 
 (defn- cmd-switch-preset
   "Switch to a different preset.
@@ -301,11 +311,15 @@
     :player-uuid  UUID-string
     :preset-idx   int (0-3)"
   [player-state {:keys [player-uuid preset-idx]}]
-    (let [preset-data (:preset-data player-state)
-      old-preset (:active-preset preset-data 0)
+  (let [preset-data (:preset-data player-state)
+        old-preset (:active-preset preset-data 0)
         new-preset-data (pdata/set-active-preset preset-data preset-idx)
-      events [(evt/make-preset-switch-event player-uuid old-preset preset-idx)]
-        effects [{:effect/type :network-send
+        events [(evt/make-preset-switch-event player-uuid old-preset preset-idx)]
+        effects [{:effect/type :persist-state
+                  :player-uuid player-uuid
+                  :domain :preset-data}
+                 {:effect/type :network-send
+                  :player-uuid player-uuid
                   :channel :ability/preset-switched
                   :payload {:player-uuid player-uuid :preset-idx preset-idx}}]]
     (ok (assoc player-state :preset-data new-preset-data) events effects)))

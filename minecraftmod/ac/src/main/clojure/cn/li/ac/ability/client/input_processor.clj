@@ -16,25 +16,41 @@
             [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.ac.ability.client.runtime :as runtime]))
+            [cn.li.ac.ability.client.runtime :as runtime]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Skill key execution
 ;; ============================================================================
 
+(defn- blocked-notice [reason]
+  {:text (case reason
+           :cooldown "Skill on cooldown"
+           :unusable "Cannot use ability (overload/interference)"
+           (str "Skill blocked: " (pr-str reason)))})
+
 (defn execute-skill-key-event!
   "Execute the action described by a skill key event map.
 
-  event shape: {:transition :press/:tick/:release/:abort :delegate delegate-map}
+  event shape: {:transition :press/:tick/:release/:abort/:blocked :delegate ...}
   player-uuid: string"
   [event player-uuid]
   (when (and event player-uuid)
-    (let [{:keys [transition delegate]} event]
+    (let [{:keys [transition delegate reason]} event]
       (case transition
         :press   (when-let [f (:on-key-down  delegate)] (f player-uuid))
         :tick    (when-let [f (:on-key-tick  delegate)] (f player-uuid))
         :release (when-let [f (:on-key-up    delegate)] (f player-uuid))
         :abort   (when-let [f (:on-key-abort delegate)] (f player-uuid))
+        :blocked (do (log/info "Skill key press blocked"
+                               {:uuid (str player-uuid)
+                                :skill-id (:skill-id delegate)
+                                :reason reason})
+                     ;; Avoid requiring reactive-hud (cycle via keybinds).
+                     (runtime-hooks/client-show-combat-notice!
+                      :combat-critical
+                      (blocked-notice reason)))
         nil)))
   nil)
 
