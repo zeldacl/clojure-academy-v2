@@ -225,7 +225,7 @@
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 20 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 75 :y 10 :button 0})))
-    (is (= [:demo/right {:target :right}] @seen))))
+    (is (= [:demo/right {:target :right}] (update @seen 1 #(select-keys % [:target]))))))
 
 (deftest pointer-coordinates-are-offset-by-a-nonzero-host-origin
   ;; A HUD overlay mounted at a nonzero screen origin gets mount-local
@@ -244,7 +244,7 @@
     (runtime/update-host! rt mount (HostGeometry. 50.0 60.0 100 100 1.0))
     ;; mount-local (5,5) + origin (50,60) = absolute (55,65), inside the 50,60..70,80 button rect.
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
-    (is (= [:demo/go {:target :btn}] @seen))))
+    (is (= [:demo/go {:target :btn}] (update @seen 1 #(select-keys % [:target]))))))
 
 (deftest viewport-space-pointer-events-skip-the-origin-offset
   (let [seen (atom nil)
@@ -261,7 +261,50 @@
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0 :space :viewport})
     (is (= :input/pointer (first @seen)) "a viewport-space click at (5,5) misses the button, which is at absolute (50,60)")
     (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 55 :y 65 :button 0 :space :viewport})
-    (is (= [:demo/go {:target :btn}] @seen))))
+    (is (= [:demo/go {:target :btn}] (update @seen 1 #(select-keys % [:target]))))))
+
+(deftest item-sized-composite-repeater-routes-hit-to-the-item-under-pointer
+  (let [seen (atom nil)
+        rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/repeater-hit
+                           {:key :root :width [:fixed 100.0] :height [:fixed 100.0]
+                            :children [{:key :canvas
+                                       :flags #{:is-collection :has-direction}
+                                       :direction :none
+                                       :width [:fixed 100.0] :height [:fixed 100.0]
+                                       :bind {:items [:state :items]}
+                                       :children [{:key :item-wrapper
+                                                  :flags #{:hit-testable}
+                                                  :bind {:x [:item :x] :y [:item :y]
+                                                         :width [:item :w] :height [:item :h]}
+                                                  :on {:activate :demo/hit}
+                                                  :children [{:op UiOp/COMPOSITE
+                                                              :bind {:item [:state :item]
+                                                                     :width [:item :w]
+                                                                     :height [:item :h]}}]}]}]})
+        mount (runtime/mount! rt {:host {:stage :screen}
+                                  :view-id :academy/test/repeater-hit
+                                  :artifact artifact
+                                  :state {:items [{:nid "first" :x 10.0 :y 10.0 :w 20.0 :h 20.0
+                                                    :kind :quad :local-x 0.0 :local-y 0.0}
+                                                   {:nid "second" :x 60.0 :y 10.0 :w 20.0 :h 20.0
+                                                    :kind :quad :local-x 0.0 :local-y 0.0}]}
+                                  :reduce (fn [state action payload]
+                                            (reset! seen [action (get-in payload [:item :nid])])
+                                            {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 100 1.0))
+    (let [dl (-> (runtime/extract-stage! rt :screen {:width 100 :height 100})
+                 :mounts first :commands)]
+      (is (= 10.0 (double (aget (.geom dl) 0)))
+          "first composite paints at its wrapper x, not wrapper x plus item x")
+      (is (= 60.0 (double (aget (.geom dl) 4)))
+          "second composite paints at its own wrapper x"))
+    (is (= :consume (runtime/dispatch! rt mount
+                                       {:type :pointer :event-type :down :x 15 :y 15 :button 0})))
+    (is (= [:demo/hit "first"] @seen))
+    (is (= :consume (runtime/dispatch! rt mount
+                                       {:type :pointer :event-type :down :x 65 :y 15 :button 0})))
+    (is (= [:demo/hit "second"] @seen))))
 
 (deftest pointer-down-in-a-repeater-carries-item-and-index
   (let [seen (atom nil)
@@ -280,7 +323,7 @@
                                             {:state state :event-result :consume})})]
     (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 100 40 1.0))
     (is (= :consume (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 10 :y 30 :button 0})))
-    (is (= [:demo/item {:target :row/action :item {:label "Two"} :index 1}] @seen))))
+    (is (= [:demo/item {:target :row/action :item {:label "Two"} :index 1}] (update @seen 1 #(select-keys % [:target :item :index]))))))
 
 (deftest text-input-focuses-on-click-and-accepts-typed-characters
   (let [seen (atom [])
@@ -305,6 +348,32 @@
     (is (= "hi" (get-in (runtime/instance! rt mount) [:view-state :query])))
     (is (= :query (:field (second (last @seen)))))))
 
+(deftest tab-and-shift-tab-cycle-focusable-controls
+  (let [rt (runtime/create-runtime)
+        artifact (ta/build :academy/test/tab-focus
+                           {:key :root :direction :row :flags #{:has-direction}
+                            :width [:fixed 120.0] :height [:fixed 20.0]
+                            :children
+                            [{:key :first :flags #{:hit-testable :focusable}
+                              :width [:fixed 60.0] :height [:fixed 20.0]
+                              :bind {:text [:state :first]}
+                              :semantics {:role :textbox :field :first}}
+                             {:key :second :flags #{:hit-testable :focusable}
+                              :width [:fixed 60.0] :height [:fixed 20.0]
+                              :bind {:text [:state :second]}
+                              :semantics {:role :textbox :field :second}}]})
+        artifact (assoc artifact :node/semantics [nil {:role :textbox :field :first}
+                                                   {:role :textbox :field :second}])
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact
+                                  :state {:first "" :second ""}
+                                  :reduce (fn [state _ _] {:state state :event-result :consume})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 120 20 1.0))
+    (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258})))
+    (is (= :first (:field (:focus (runtime/instance! rt mount)))))
+    (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258})))
+    (is (= :second (:field (:focus (runtime/instance! rt mount)))))
+    (is (= :consume (runtime/dispatch! rt mount {:type :key :key-code 258 :shift? true})))
+    (is (= :first (:field (:focus (runtime/instance! rt mount)))))))
 (deftest submit-without-text-path-does-not-dump-view-state
   "Terminal-style catchers (:submit, no :text bind) must not put the entire
    view-state into :value — (get-in m nil) returns m."
@@ -336,6 +405,220 @@
                  [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
                   (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")
                   (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/wireless-node.uic.edn")])))
+
+(defn- node-editor-golden-file
+  []
+  (first (filter #(.isFile ^java.io.File %)
+                 [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")
+                  (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")
+                  (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")])))
+
+(defn- node-editor-smoke-state
+  [expanded?]
+  {:title "Node Editor"
+   :phase-label "Phase: default"
+   :phase-tabs []
+   :palette-query ""
+   :palette-clear-label "Clear"
+   :palette-rows []
+   :canvas [{:kind :quad :nid "first" :x 10.0 :y 10.0 :w 20.0 :h 20.0
+             :local-x 0.0 :local-y 0.0 :rgba 0xFFFFFFFF}
+            {:kind :quad :nid "second" :x 60.0 :y 10.0 :w 20.0 :h 20.0
+             :local-x 0.0 :local-y 0.0 :rgba 0xFFFFFFFF}]
+   :selected-label "(nothing selected)"
+   :selected-params []
+   :diagnostics []
+   :cost-label "complexity=0 host-cmds=0"
+   :zoom-label "Zoom 100%"
+   :zoom-reset-label "Reset zoom"
+   :canvas-viewport? expanded?
+   :canvas-compact-visible? (not expanded?)
+   :canvas-viewport-visible? expanded?
+   :canvas-viewport-label (if expanded? "Close viewport (Esc)" "Expand canvas")
+   :canvas-viewport-title "Canvas viewport"
+   :preview-label "Preview off"
+   :preview-toggle-label "Preview"
+   :reload-label "Reload from disk"
+   :save-label "Save to workspace"
+   :export-label "Export to source"
+   :undo-label "Undo"
+   :redo-label "Redo"
+   :status ""})
+
+(deftest compiled-node-editor-routes-compact-and-viewport-item-hits
+  (let [art-file (node-editor-golden-file)]
+    (is (some? art-file) "node-editor golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          seen (atom [])
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/node-editor
+                      :artifact artifact
+                      :state (node-editor-smoke-state false)
+                      :reduce (fn [state action payload]
+                                (swap! seen conj [action payload])
+                                {:state state :event-result :consume})})]
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 480 360 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
+                   :mounts first :commands)]
+        (is (pos? (.count dl)) "compact node editor must paint")
+        (is (= 10.0 (double (aget (.geom dl) 24)))
+            "compact node body is painted at its item wrapper x"))
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 18 :y 108 :button 0})
+      (is (= :editor/canvas-press (ffirst @seen)))
+      (is (= "first" (get-in (last @seen) [1 :item :nid])))
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :up :x 18 :y 108 :button 0})
+      ;; Canvas and node wrappers expose a palette-drop action for releases;
+      ;; runtime must preserve the origin item so the controller can split
+      ;; palette insertion from ordinary node movement/panning.
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 18 :y 108 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :drag :x 22 :y 112
+                           :drag-x 4.0 :drag-y 4.0 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :up :x 22 :y 112 :button 0})
+      (is (= :editor/palette-drop (first (last @seen))))
+      (is (= "first" (get-in (last @seen) [1 :drag-item :nid])))
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 200 :y 190 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :drag :x 204 :y 194
+                           :drag-x 4.0 :drag-y 4.0 :button 0})
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :up :x 204 :y 194 :button 0})
+      (is (= :editor/palette-drop (first (last @seen))))
+      (is (nil? (get-in (last @seen) [1 :drag-item])))
+      (runtime/present! rt mount (node-editor-smoke-state true))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
+                   :mounts first :commands)]
+        (is (pos? (.count dl)) "viewport node editor must paint")
+        (is (= 10.0 (double (aget (.geom dl) 12)))
+            "viewport node body is painted at its own wrapper x"))
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 18 :y 74 :button 0})
+      (is (= :editor/canvas-press (ffirst @seen)))
+      (is (= "first" (get-in (last @seen) [1 :item :nid]))))))
+(deftest compiled-node-editor-paints-in-320x240-host
+  (let [art-file (node-editor-golden-file)]
+    (is (some? art-file) "node-editor golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/node-editor
+                      :artifact artifact
+                      :state (node-editor-smoke-state false)
+                      :reduce (fn [state _action _payload]
+                                {:state state :event-result :consume})})]
+      ;; The node editor is designed at 480x360; this host exercises the
+      ;; fit transform at 320x240 without launching a game client.
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 320 240 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 320 :height 240})
+                   :mounts first :commands)]
+        (is (pos? (.count dl))
+            "compiled node editor must paint in a 320x240 host")))))
+
+(defn- spell-composer-golden-file
+  []
+  (first (filter #(.isFile ^java.io.File %)
+                 [(io/file "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")
+                  (io/file ".." "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")
+                  (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")])))
+
+(defn- spell-composer-smoke-state
+  []
+  {:title "Spell Composer"
+   :form-palette [{:id :form/projectile :label "Projectile"}]
+   :effect-palette [{:id :effect/damage :label "Damage"}]
+   :augment-palette [{:id :augment/amplify :label "Amplify"}]
+   :form-label "Form"
+   :selected-param-fields []
+   :effect-slots [{:index 0 :label "1. effect/damage"
+                   :row-height 128 :augment-height 112
+                   :augments (mapv (fn [augment-index]
+                               {:effect-index 0 :augment-index augment-index
+                                :label "+ augment/amplify" :remove-label "X"})
+                             (range 8))
+                   :can-move-up? false :can-move-down? false
+                   :up-label "UP" :down-label "DN" :remove-label "X"}]
+   :can-cast? true
+   :busy? false
+   :status ""
+   :cast-label "Cast"
+   :clear-label "Clear"})
+
+(deftest compiled-spell-composer-paints-and-routes-effect-palette-hit
+  (let [art-file (spell-composer-golden-file)]
+    (is (some? art-file) "spell-composer golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          seen (atom [])
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/spell-composer
+                      :artifact artifact
+                      :state (spell-composer-smoke-state)
+                      :reduce (fn [state action payload]
+                                (swap! seen conj [action payload])
+                                {:state state :event-result :consume})})]
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 480 320 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 320})
+                   :mounts first :commands)]
+        (is (pos? (.count dl)) "compiled spell composer must paint"))
+      ;; The effect palette begins below title/form/parameter rows at y=128;
+      ;; its first button is the 142..158 row in the 480x320 design space.
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 20 :y 150 :button 0})
+      (is (= :composer/add-effect (ffirst @seen)))
+       (is (= :effect/damage (get-in (last @seen) [1 :item :id])))
+       (reset! seen [])
+       ;; The first augment row has its own remove button at x280..296, y48..62.
+       (runtime/dispatch! rt mount
+                           {:type :pointer :event-type :down :x 288 :y 55 :button 0})
+       (is (= :composer/remove-augment (ffirst @seen)))
+       (is (= 0 (get-in (last @seen) [1 :item :augment-index])))
+       ;; Eight augment rows exceed the 36px effect-slot viewport. Scroll the
+       ;; compiled repeater to its maximum, then hit the now-visible final
+       ;; row; this proves the runtime applies scroll offsets before nested
+       ;; item hit-testing rather than merely painting an oversized list.
+       (reset! seen [])
+       (runtime/dispatch! rt mount
+                          {:type :scroll :x 220 :y 50 :delta -8.0})
+       (is (pos? (double (or (get-in (runtime/instance! rt mount)
+                                    [:scroll-offsets :composer/effect-slots])
+                             0.0)))
+           "effect-slot repeater must scroll when eight augments exceed its viewport")
+       (reset! seen [])
+       (runtime/dispatch! rt mount
+                           {:type :pointer :event-type :down :x 288 :y 55 :button 0})
+       (is (= :composer/remove-augment (ffirst @seen)))
+       (is (= 7 (get-in (last @seen) [1 :item :augment-index]))))))
+(deftest compiled-spell-composer-paints-in-320x240-host
+  (let [art-file (spell-composer-golden-file)]
+    (is (some? art-file) "spell-composer golden artifact must be on disk")
+    (let [artifact (edn/read-string (slurp art-file))
+          rt (runtime/create-runtime)
+          mount (runtime/mount!
+                  rt {:host {:stage :screen}
+                      :view-id :academy.app/spell-composer
+                      :artifact artifact
+                      :state (spell-composer-smoke-state)
+                      :reduce (fn [state _action _payload]
+                                {:state state :event-result :consume})})]
+      ;; The design is 480x320; this host exercises the fit transform at
+      ;; 320x240 without launching a game client.
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 320 240 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 320 :height 240})
+                   :mounts first :commands)]
+        (is (pos? (.count dl))
+            "compiled spell composer must paint in a 320x240 host")))))
 
 (defn- hist-quad
   [h]
@@ -761,3 +1044,44 @@
           (is (not= offset-after off-strip)
               (str "captured thumb drag must keep updating off-strip, mid=" offset-after
                    " after=" off-strip)))))))
+
+(deftest custom-drag-capture-preserves-click-fallback
+  (let [rt (runtime/create-runtime)
+        actions (atom [])
+        artifact (ta/build :academy/test/custom-drag
+                           {:key :root :flags #{:hit-testable} :width [:fixed 80.0] :height [:fixed 20.0]
+                            :on {:activate :demo/activate :drag-start :demo/drag-start}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state { }
+                                  :reduce (fn [state action payload]
+                                            (swap! actions conj [action payload])
+                                            {:state state :event-result :pass})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 80 20 1.0))
+    (is (= :capture-pointer
+           (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})))
+    (is (= :demo/drag-start (first (first @actions))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 20 :y 5 :button 0})
+    (is (= :input/pointer (first (last @actions))))
+    (is (true? (:drag? (second (last @actions)))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 20 :y 5 :button 0})
+    (is (= :input/pointer (first (last @actions))))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 5 :y 5 :button 0})
+    (is (= :demo/activate (first (last @actions))))))
+
+(deftest custom-drag-drop-action-routes-to-hit-target
+  (let [rt (runtime/create-runtime)
+        actions (atom [])
+        artifact (ta/build :academy/test/custom-drop
+                           {:key :root :flags #{:hit-testable} :width [:fixed 80.0] :height [:fixed 20.0]
+                            :on {:drag-start :demo/drag-start :drop :demo/drop}
+                            :semantics {:role :generic :drop-zone :demo/canvas}})
+        mount (runtime/mount! rt {:host {:stage :screen} :artifact artifact :state { }
+                                  :reduce (fn [state action payload]
+                                            (swap! actions conj [action payload])
+                                            {:state state :event-result :pass})})]
+    (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 80 20 1.0))
+    (runtime/dispatch! rt mount {:type :pointer :event-type :down :x 5 :y 5 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :move :x 20 :y 5 :button 0})
+    (runtime/dispatch! rt mount {:type :pointer :event-type :up :x 20 :y 5 :button 0})
+    (is (= :demo/drop (first (last @actions))))
+    (is (true? (:drag? (second (last @actions)))))))

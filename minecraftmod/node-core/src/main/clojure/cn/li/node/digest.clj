@@ -3,7 +3,7 @@
 
    Lifted from vfx-core's effect_schema.clj, which already had this right
    (SHA-256 over a canonicalized, deterministically-ordered structure) --
-   unlike the pre-V3 catalog implementation, which fed the same kind of value into
+   unlike the pre-migration catalog implementation, which fed the same kind of value into
    clojure.core/hash, a JVM-LOCAL hash whose result is meaningless across
    two different JVM processes (two players' clients, or a client and a
    server) even though it was being used for exactly that: a network/build

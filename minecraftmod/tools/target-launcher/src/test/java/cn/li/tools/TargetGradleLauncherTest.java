@@ -12,7 +12,36 @@ public final class TargetGradleLauncherTest {
         windowsBatchWrapperUsesCommandProcessor();
         requestedTaskDoesNotAddPlatformBuild();
         optionsOnlyDefaultToPlatformBuild();
+        gradleOptsDropsDaemonAndJvmargsOnly();
         System.out.println("TargetGradleLauncher regression tests passed.");
+    }
+
+    /**
+     * GRADLE_OPTS -D properties outrank gradle.properties, so an inherited
+     * org.gradle.daemon / org.gradle.jvmargs silently overrides the build's tuning.
+     * Those two must be dropped; everything else the developer set must survive.
+     */
+    private static void gradleOptsDropsDaemonAndJvmargsOnly() {
+        assertEquals(
+                "",
+                TargetGradleLauncher.sanitizeGradleOpts(
+                        "-Dorg.gradle.jvmargs=\"-Xmx2048m\" -Dorg.gradle.daemon=false"),
+                "machine-scope opts are fully stripped");
+        // A jvmargs value containing spaces must not be split mid-value.
+        assertEquals(
+                "-Dfoo=bar",
+                TargetGradleLauncher.sanitizeGradleOpts(
+                        "-Dorg.gradle.jvmargs=\"-Xmx2g -Xms1g\" -Dfoo=bar"),
+                "quoted multi-arg jvmargs removed as one unit");
+        assertEquals(
+                "-Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080",
+                TargetGradleLauncher.sanitizeGradleOpts(
+                        "-Dhttp.proxyHost=proxy -Dorg.gradle.daemon=false -Dhttp.proxyPort=8080"),
+                "unrelated options are preserved");
+        // assertEquals dereferences `expected`, so check the null case directly.
+        if (TargetGradleLauncher.sanitizeGradleOpts(null) != null) {
+            throw new AssertionError("null GRADLE_OPTS must pass through unchanged");
+        }
     }
 
     private static void sameNamedComponentDoesNotShadowTarget() {

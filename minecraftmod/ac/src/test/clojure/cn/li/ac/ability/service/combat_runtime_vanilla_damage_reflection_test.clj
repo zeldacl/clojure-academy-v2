@@ -30,7 +30,7 @@
             [cn.li.ac.test.support.player-state :as player-state-support]))
 
 ;; A raw catalog source's :damage-policies entry (the shape every real
-;; ac/skills-v3/*.edn source carries directly, e.g. vec_reflection.edn's own
+;; ac/skills-v4/*.edn source carries directly, e.g. vec_reflection.edn's own
 ;; :damage-policies -- see final-damage-policies-v2's own docstring in
 ;; combat_runtime.clj) rather than the old catalog's pre-lowering
 ;; :reactions wrapper, which nothing compiles into :damage-policies any
@@ -211,4 +211,5 @@
                           {:attacker-front? true :damage-type :mob})]
             (is (= 10.0 residual))
             (is (empty? @seen))))))))
+
 

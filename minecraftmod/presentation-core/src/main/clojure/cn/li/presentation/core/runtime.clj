@@ -206,7 +206,11 @@
   [resource-index default-namespace item]
   (when (map? item)
     (let [kind (:kind item)
-          ix (float (or (:x item) 0.0)) iy (float (or (:y item) 0.0))
+          ;; A composite may be hosted by an item-sized absolute hit wrapper.
+          ;; :local-x/:local-y keep its visual primitive local to that wrapper;
+          ;; legacy composite payloads continue to use :x/:y directly.
+          ix (float (or (:local-x item) (:x item) 0.0))
+          iy (float (or (:local-y item) (:y item) 0.0))
           iw (float (or (:w item) 0.0)) ih (float (or (:h item) 0.0))
           color (runtime-rgba (:rgba item) 0xFFFFFFFF)
           u0 (float (or (:u0 item) 0.0))
@@ -548,6 +552,81 @@
       (some? (:item src))
       (assoc :item (:item src) :index (:index src)))))
 
+(declare instance-item-index resolve-focus-instance)
+
+(defn- focus-for-instance
+  "Build the same focus descriptor used by pointer hit-testing for an arranged
+   focusable instance. Keeping this in the runtime also covers repeater
+   expansions, whose node id is shared by every row."
+  [instance inst]
+  (let [^NodeTable table (:table instance)
+        ^LayoutArena arena (:arena instance)
+        bind-maps (:bind-maps instance)
+        on-maps (:on-maps instance)
+        semantics-maps (:semantics-maps instance)
+        node (aget ^ints (.-nodeOf arena) (int inst))
+        sem (nth semantics-maps node nil)
+        bind (nth bind-maps node nil)
+        text-path (or (:text bind)
+                      (loop [c (aget ^ints (.-firstChild table) (int node))]
+                        (when (>= c 0)
+                          (or (:text (nth bind-maps c nil))
+                              (recur (aget ^ints (.-nextSibling table) (int c)))))))
+        item (aget ^objects (.-itemOf arena) (int inst))
+        item-index (instance-item-index arena inst)
+        draft-key (when (map? item) (:draft-key item))
+        field (or (:field sem)
+                  (when (map? item) (:id item))
+                  (when (and (vector? text-path) (seq text-path))
+                    (peek text-path)))
+        focus-text-path (if (and (vector? text-path)
+                                 (= :item (first text-path))
+                                 (keyword? draft-key))
+                          [:state draft-key]
+                          text-path)]
+    (cond-> {:key (node-key table node)
+             :node (int node)
+             :instance (int inst)
+             :path focus-text-path
+             :on (nth on-maps node nil)
+             :field field}
+      (keyword? draft-key) (assoc :draft-key draft-key)
+      (map? item) (assoc :item item)
+      (>= item-index 0) (assoc :item-index item-index))))
+
+(defn- focusable-instances
+  "Return visible, arranged focusable instances in deterministic pre-order."
+  [instance]
+  (let [^NodeTable table (:table instance)
+        ^LayoutArena arena (:arena instance)
+        n (int (.-n arena))]
+    (->> (range n)
+         (filter (fn [inst]
+                   (let [node (aget ^ints (.-nodeOf arena) (int inst))]
+                     (and (.has table node NodeFlags/FOCUSABLE)
+                          (pos? (aget ^ints (.-visible arena) (int inst)))
+                          (pos? (.w arena (int inst)))
+                          (pos? (.h arena (int inst)))))))
+         vec)))
+
+(defn- next-focus
+  "Resolve Tab/Shift-Tab against the current arranged focusable instances."
+  [instance shift?]
+  (let [candidates (focusable-instances instance)
+        current (:focus instance)
+        current-inst (when current
+                       (let [resolved (resolve-focus-instance (:arena instance) current)]
+                         (when (some #(= (int %) (int resolved)) candidates)
+                           (int resolved))))]
+    (when (seq candidates)
+      (let [last-idx (dec (count candidates))
+            idx (if (nil? current-inst)
+                  (if shift? last-idx 0)
+                  (let [at (.indexOf ^java.util.List candidates (int current-inst))]
+                    (if shift?
+                      (mod (dec at) (count candidates))
+                      (mod (inc at) (count candidates)))))]
+        (focus-for-instance instance (nth candidates idx))))))
 (defn- event-point
   "Version hosts normally provide mount-local coordinates. Explicit
    :viewport coordinates are accepted for overlays whose origin is nonzero.
@@ -755,7 +834,7 @@
                                    (content-rect-of instance) (view-transform-of instance))
               px (float px) py (float py)
               event (assoc event :x px :y py)
-              ^HitKernel$Hit hit (when (and (>= root 0) (#{:down :drag} (:event-type event)))
+              ^HitKernel$Hit hit (when (and (>= root 0) (or (#{:down :drag :up} (:event-type event)) (and (= :move (:event-type event)) (:drag-start-action capture))))
                                    (HitKernel/topmostAt table arena resolver root px py))
               ^HitKernel$Hit hover (when (and (>= root 0) (= :move (:event-type event)))
                                      (HitKernel/topmostAt table arena resolver root px py))
@@ -768,8 +847,51 @@
                              (or (:action hover-target) (:action previous)))]
           (cond
             (= :up (:event-type event))
-            {:action :input/pointer :pointer-capture nil :payload event}
+            (if-let [drag-action (:drag-start-action capture)]
+              (let [sx (double (or (:start-x capture) px))
+                    sy (double (or (:start-y capture) py))
+                    moved? (or (> (Math/abs (- (double px) sx)) 3.0)
+                               (> (Math/abs (- (double py) sy)) 3.0))
+                    origin-item (:drag-item capture)
+                    origin-on (:drag-on capture)]
+                (if moved?
+                  {:action (or (get-in (nth on-maps hit-node nil) [:drop]) :input/pointer)
+                   :pointer-capture nil
+                   :payload (cond-> (assoc event :drag? true
+                                           :drag-item origin-item
+                                           :drag-origin (:drag-origin capture))
+                              hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit)
+                                         :drop-zone (:drop-zone (nth semantics-maps hit-node nil))))}
+                  {:action (or (:activate origin-on) drag-action)
+                   :pointer-capture nil
+                   :payload (assoc event :item origin-item :index 0)}))
+              {:action :input/pointer :pointer-capture nil
+               :payload (cond-> event
+                         hit (assoc :hit-item (.item hit) :hit-index (.itemIndex hit)))})
 
+            (and (= :down (:event-type event)) hit
+                 (get-in (nth on-maps hit-node nil) [:drag-start]))
+            (let [on-map (nth on-maps hit-node nil)
+                  drag-action (:drag-start on-map)]
+              {:action drag-action
+               :pointer-capture {:drag-start-action drag-action
+                                 :drag-item (.item hit)
+                                 :drag-origin (node-key table hit-node)
+                                 :drag-on on-map
+                                 :start-x px :start-y py}
+               :payload {:target (node-key table hit-node)
+                         :item (.item hit) :index (.itemIndex hit)
+                         :x (double px) :y (double py)}})
+
+            (and (#{:drag :move} (:event-type event))
+                 (:drag-start-action capture))
+            {:action :input/pointer
+             :pointer-capture capture
+             :payload (assoc event
+                             :drag? true
+                             :drag-item (:drag-item capture)
+                             :drag-origin (:drag-origin capture)
+                             :drop-zone (:drop-zone (when hit (nth semantics-maps hit-node nil))))}
             ;; mouseDragged is not always delivered (some hosts only get mouseMoved
             ;; while the button is held). Keep scrollbar dragging alive on :move too.
             (and (#{:drag :move} (:event-type event)) (:scrollbar? capture))
@@ -837,7 +959,7 @@
 
             ;; Prefer an explicit scrollbar under the pointer even when topmostAt
             ;; landed on a non-scrollbar sibling (thin thumb next to markdown).
-            (and (#{:down :drag} (:event-type event))
+            (and (#{:down :drag :up} (:event-type event))
                  (or (and hit (scrollbar-node? table scrollbar-maps hit-node))
                      (some? (find-scrollbar-under instance arena px py))))
             (or (scrollbar-route instance table arena hit-node hit px py (:event-type event) event)
@@ -876,6 +998,16 @@
         :key (let [key-code (int (or (:key-code event) -1))
                   submit-action (get-in focus [:on :submit])]
               (cond
+                (= key-code 258)
+                (if-let [next (next-focus instance (true? (:shift? event)))]
+                  {:focus next
+                   :focus-navigation? true
+                   :action :input/focus
+                   :payload (assoc event :focus-navigation? true
+                                         :target (:key next))}
+                  {:action :input/key :payload event})
+                (= key-code 256)
+                {:action :input/key :pointer-capture nil :payload event}
                 (and (= key-code 257) submit-action)
                 {:action submit-action
                  ;; (get-in m nil) returns m — never call get-in without a
@@ -1053,19 +1185,21 @@
         ;; press/drag while a scrollbar capture is armed.
         result (let [base (or (:event-result response) :pass)
                      editing? (some? (focus-path focus))
-                     base (if (and editing?
+                     base (if (:focus-navigation? routed)
+                            :consume
+                            (if (and editing?
                                    (or (= action :input/key)
                                        (= action :input/backspace)
                                        (= action :input/character)
                                        (= action (get-in focus [:on :change]))
                                        (= action (get-in focus [:on :submit]))))
                             :consume
-                            base)
+                            base))
                      cap (or (:pointer-capture routed)
                              (when (and (= :pointer (:type event))
                                         (#{:drag :move} (:event-type event)))
                                (:pointer-capture instance)))]
-                 (if (:scrollbar? cap) :capture-pointer base))]
+                 (if (or (:scrollbar? cap) (:drag-start-action cap)) :capture-pointer base))]
     (present! runtime mount next-state)
     (doseq [effect effects]
       (try

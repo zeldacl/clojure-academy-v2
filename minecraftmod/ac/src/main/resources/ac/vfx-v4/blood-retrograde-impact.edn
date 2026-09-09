@@ -1,0 +1,33 @@
+{:schema :ac/vfx-v4,
+ :id :blood-retrograde-impact,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:spray-duplicates {:type :int},
+  :spray-life-ticks {:type :int},
+  :look-dir {:type :vec3},
+  :splash-frame-count {:type :int},
+  :splash-frame-duration-ms {:type :int},
+  :splash-texture-pattern {:type :string},
+  :splash-life-ticks {:type :int},
+  :target-height {:type :float},
+  :seed {:type :int},
+  :spray-textures {:type :any},
+  :origin {:type :vec3},
+  :surface-hits {:type :any},
+  :splash-count {:type :int},
+  :splash-size {:type :float},
+  :target-width {:type :float}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-0,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

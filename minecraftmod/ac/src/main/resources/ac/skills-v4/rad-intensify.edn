@@ -1,0 +1,105 @@
+{:schema :ac/skill-v4,
+ :id :rad-intensify,
+ :skill {:category :migrated, :level 1},
+ :activation {:mode :passive},
+ :parameters
+ {:damage-rate {:type :double, :default nil},
+  :mark-duration-ticks {:type :long, :default nil},
+  :mastery-denominator {:type :double, :default nil}},
+ :state {},
+ :description-key "ability.skill.meltdowner.rad_intensify.desc",
+ :name-key "ability.skill.meltdowner.rad_intensify",
+ :cooldown nil,
+ :costs nil,
+ :mark-policies
+ [{:mark-type :radiation,
+   :requires-ability :rad-intensify,
+   :duration-ticks {:ref [:input :tunables :mark-duration-ticks]},
+   :vfx
+   {:effect-id :target-mark-session,
+    :operation :spawn,
+    :audience {:type :nearby, :radius 32.0},
+    :offset {:vec3 [0.0 0.8 0.0]},
+    :payload
+    {:position {:ref [:mark :target-position]},
+     :ttl-ticks {:ref [:input :tunables :mark-duration-ticks]},
+     :seed {:ref [:input :context :activation-seed]},
+     :count 3,
+     :radius 0.35,
+     :color [236 170 93 180]}}}],
+ :requires [:world/id],
+ :tunables
+ {:damage-rate {:curve :pair},
+  :mark-duration-ticks {:curve :const, :type :int},
+  :mastery-denominator {:curve :const}},
+ :invariants nil,
+ :damage-policies
+ [{:on :combat/damage,
+   :priority 100,
+   :mark-type :radiation,
+   :when
+   {:expr :bool/and,
+    :args
+    [{:ref [:input :context :mark?]}
+     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   :program
+   {:component :damage/multiply,
+    :multiplier {:ref [:input :context :mark :rate]}}}],
+ :progression nil,
+ :graphs
+ {:start
+  {:on :phase/start,
+   :nodes
+   #:n{:start-start {:type :start, :nid :n/start-start},
+       :n--entry--start-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--start-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start-start :out],
+     :to [:n/n--entry--start-0 :in]}]},
+  :pulse
+  {:on :phase/pulse,
+   :nodes
+   #:n{:start-pulse {:type :start, :nid :n/start-pulse},
+       :n--entry--pulse-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--pulse-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link002,
+     :kind :exec,
+     :from [:n/start-pulse :out],
+     :to [:n/n--entry--pulse-0 :in]}]},
+  :release
+  {:on :phase/release,
+   :nodes
+   #:n{:start-release {:type :start, :nid :n/start-release},
+       :n--entry--release-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link003,
+     :kind :exec,
+     :from [:n/start-release :out],
+     :to [:n/n--entry--release-0 :in]}]},
+  :abort
+  {:on :phase/abort,
+   :nodes
+   #:n{:start-abort {:type :start, :nid :n/start-abort},
+       :n--entry--abort-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--abort-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link004,
+     :kind :exec,
+     :from [:n/start-abort :out],
+     :to [:n/n--entry--abort-0 :in]}]}}}

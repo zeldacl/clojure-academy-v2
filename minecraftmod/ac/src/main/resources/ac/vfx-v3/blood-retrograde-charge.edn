@@ -1,1 +1,0 @@
-{:schema :ac/vfx-v3, :id :blood-retrograde-charge, :lifecycle {:mode :session}, :inputs {:speed {:type :float}}, :state {:age {:type :float, :default nil}, :seed {:type :int, :default nil}}, :system {:render [{:nid :n/n--entry--default-0, :flow :finish, :result {:outcome :performed}}]}, :emitters []}

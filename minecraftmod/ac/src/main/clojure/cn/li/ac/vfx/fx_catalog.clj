@@ -1,8 +1,4 @@
 (ns cn.li.ac.vfx.fx-catalog
-  "Public VFX catalog facade. Production content is the directory-backed V3
-   catalog; the old manifest loader is intentionally removed from runtime."
-  (:require [cn.li.ac.vfx.fx-catalog-v3 :as v3]))
-
-(defn assemble
-  ([] (v3/assemble))
-  ([opts] (v3/assemble opts)))
+  "Public VFX catalog facade backed by V4 free-form graphs."
+  (:require [cn.li.ac.vfx.fx-catalog-v4 :as v4]))
+(defn assemble ([] (v4/assemble)) ([opts] (v4/assemble opts)))

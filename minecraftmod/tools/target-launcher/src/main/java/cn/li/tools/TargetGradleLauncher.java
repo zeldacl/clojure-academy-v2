@@ -28,8 +28,39 @@ public final class TargetGradleLauncher {
                 wrapper, gradleArgs, isWindows(), System.getenv("ComSpec"));
         ProcessBuilder process = new ProcessBuilder(command).directory(root.toFile()).inheritIO();
         process.environment().put("JAVA_HOME", javaHome);
+        applySanitizedGradleOpts(process.environment());
         int exit = process.start().waitFor();
         System.exit(exit);
+    }
+
+    /**
+     * gradlew forwards GRADLE_OPTS to the launcher JVM, where -D system properties
+     * outrank the project's gradle.properties. A machine- or user-scope GRADLE_OPTS
+     * carrying org.gradle.daemon or org.gradle.jvmargs therefore silently overrides
+     * the build's own tuning -- seen in practice as daemon=false (every build forks a
+     * single-use JVM and discards it) and a reduced heap, which the Clojure AOT needs.
+     *
+     * Dropping just those two properties here covers every OS frontend at once, so
+     * target-gradle.ps1 / .cmd / .sh do not each need their own string surgery.
+     */
+    static void applySanitizedGradleOpts(Map<String, String> environment) {
+        String sanitized = sanitizeGradleOpts(environment.get("GRADLE_OPTS"));
+        if (sanitized == null || sanitized.isEmpty()) {
+            environment.remove("GRADLE_OPTS");
+        } else {
+            environment.put("GRADLE_OPTS", sanitized);
+        }
+    }
+
+    /** Remove org.gradle.daemon / org.gradle.jvmargs, preserving any other options. */
+    static String sanitizeGradleOpts(String gradleOpts) {
+        if (gradleOpts == null || gradleOpts.isBlank()) return gradleOpts;
+        // The jvmargs value may itself contain spaces (-Dorg.gradle.jvmargs="-Xmx2g
+        // -Xms1g"), so match a quoted value before falling back to a bare token.
+        return gradleOpts
+                .replaceAll("-Dorg\\.gradle\\.(?:daemon|jvmargs)=(?:\"[^\"]*\"|\\S*)", "")
+                .replaceAll("\\s{2,}", " ")
+                .trim();
     }
 
     static List<String> gradleArguments(Path root, String target, String[] args, int start) {

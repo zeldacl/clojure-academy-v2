@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.client.screens.spell-composer-reactive
   "Presentation Runtime controller for the player spell composer
-   (node-editor plan Phase 5). Follows preset-editor-reactive's
+   editor execution plan. Follows preset-editor-reactive's
    self-contained active-mounts pattern, same as the node editor screen.
 
-   State is shaped to make an INVALID glyph sequence unrepresentable
-   rather than caught after the fact: the combat player-spell desugar
+   State is shaped so ordinary UI actions cannot create an INVALID glyph sequence
+   while the combat layer still validates every packet at the server boundary: the combat player-spell desugar
    step requires the first glyph to be a :form/* and throws otherwise
    (an ex-info that would propagate uncaught through the compile-and-
    admit/dispatch path if it ever reached the server that way -- not
@@ -14,21 +14,20 @@
    slot picked before any :effects/:augments can be added, not a flat
    list a player could reorder into something illegal.
 
-   The composed glyphs carry only DEFAULT params (:amount 2.0, :range
-   16.0, etc -- the same fallbacks the combat player-spell form/effect
-   statement builders already use) -- no per-glyph parameter tuning UI
-   in this pass. A reasonable follow-up once the basic compose-and-cast
-   loop has been used in-game, not a silent gap: the composer works
-   completely without it today, just with fixed glyph strengths.
+   The composed glyphs start with safe DEFAULT params (:amount 2.0, :range
+   16.0, etc) and expose bounded numeric fields for the selected effect.
+   Draft text is kept separate from committed params; submit validates
+   finiteness and descriptor min/max before the spell can be cast.
 
    Physical glyph items / a spell-storage item's NBT (the plan's other
-   Phase 5 deliverable) are NOT part of this pass either -- both need a
+   P3 storage deliverable) is NOT part of this pass either -- both need a
    texture, a model json, and creative-tab placement this environment
    cannot create or visually verify, and neither is on the critical path
    for the compose-and-cast LOOP to work end to end (this screen can be
    opened directly, e.g. from a command, with no physical item
    involved). Deferred as a real, separate content-integration task."
-  (:require [cn.li.ac.gui.presentation :as presentation]
+  (:require [clojure.string :as str]
+            [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
@@ -45,11 +44,26 @@
   [kw]
   (subs (str kw) 1))
 
-(defn- glyph-short
-  "UI chip label: the name segment only (\"touch\"), keeping the
-   namespace visible in the composition pane via glyph-str."
-  [kw]
-  (name kw))
+(defn- ui-label
+  "Keep single-line composer labels inside their fixed layout box.
+
+   Presentation V4 currently clips but does not implement generic text
+   ellipsizing.  Only derived display labels are shortened here; glyph data,
+   status state and parameter drafts remain lossless."
+  [value max-width]
+  (let [s (str (or value ""))
+        measure (fn [text]
+                  (double (or (bridge/font-width-optional text)
+                              (* 4.8 (count text)))))]
+    (if (or (str/blank? s) (<= (measure s) (double max-width)))
+      s
+      (let [suffix "..."]
+        (loop [n (count s)]
+          (let [candidate (str (subs s 0 n) suffix)]
+            (cond
+              (<= (measure candidate) (double max-width)) candidate
+              (zero? n) suffix
+              :else (recur (dec n)))))))))
 
 ;; NOT routed through the mod's i18n/datagen translation system (checked
 ;; before writing this: every existing reactive controller's dynamic
@@ -66,155 +80,366 @@
 (def ^:private reject-labels
   {:over-complexity "Spell is too complex for your current mastery."
    :forbidden-effect "Spell uses an effect players are not allowed to cast."
-   :over-budget "Spell exceeds the host-command/iteration budget."})
-
-(def ^:private kind-rgba
-  {:form [0.55 0.85 1.0 1.0]
-   :effect [1.0 1.0 1.0 1.0]
-   :augment [0.7 1.0 0.65 1.0]})
-
-(def ^:private selected-rgba [1.0 1.0 0.55 1.0])
-(def ^:private idle-rgba [0.92 0.92 0.92 1.0])
-(def ^:private muted-rgba [0.45 0.45 0.48 0.7])
-(def ^:private cast-ready-rgba [0.55 1.0 0.55 1.0])
-(def ^:private cast-blocked-rgba [0.45 0.45 0.45 0.55])
-
+    :over-budget "Spell exceeds the host-command/iteration budget."
+    :invalid-glyph "Spell contains invalid glyph data."})
 (defn- owner-for [player-uuid]
   (read-model/local-client-owner player-uuid "spell-composer"))
 
 ;; --- pure state ------------------------------------------------------------
 
 (defn- initial-state []
-  {:catalog (combat-api/player-glyph-catalog)
-   :form nil
-   :effects []
-   :status "Pick a form, then add effects, then Cast."})
+  (let [catalog (combat-api/player-glyph-catalog)
+        specs (combat-api/player-glyph-specs)]
+    {:catalog catalog
+     :glyph-specs specs
+     :form nil
+     :effect-groups []
+     :selected-effect nil
+     :busy? false
+     :status "Pick a form, then add effects and cast."}))
+
+(defn- defaults-for [spec]
+  (into {} (map (fn [[k descriptor]] [k (:default descriptor)])
+                (:params spec))))
+
+(defn- descriptor-for [state glyph]
+  (get (:glyph-specs state) glyph))
+
+(defn- glyph-entry [state glyph]
+  (let [spec (descriptor-for state glyph)]
+    {:glyph glyph :params (defaults-for spec)}))
 
 (defn- pick-form [state glyph-kw]
-  (assoc state :form {:glyph glyph-kw} :status (str "Form: " (glyph-str glyph-kw))))
+  (if (= :form (:kind (descriptor-for state glyph-kw)))
+    (assoc state :form (glyph-entry state glyph-kw)
+           :status (str "Form: " (glyph-str glyph-kw)))
+    (assoc state :status "Choose a form glyph.")))
 
 (defn- add-effect [state glyph-kw]
-  (if (:form state)
-    (update state :effects conj {:glyph glyph-kw})
-    (assoc state :status "Pick a form first.")))
+  (cond
+    (not (:form state)) (assoc state :status "Pick a form first.")
+    (not= :effect (:kind (descriptor-for state glyph-kw)))
+    (assoc state :status "Choose an effect glyph.")
+    (>= (count (:effect-groups state)) 8)
+    (assoc state :status "Maximum 8 effects per spell.")
+    :else
+    (let [group (assoc (glyph-entry state glyph-kw) :augments [])]
+      (-> state
+          (update :effect-groups conj group)
+          (assoc :selected-effect (count (:effect-groups state))
+                 :status (str "Added " (glyph-str glyph-kw) "."))))))
+
+(defn- add-augment [state glyph-kw]
+  (let [idx (:selected-effect state)
+        groups (:effect-groups state)
+        valid-index? (and (integer? idx) (<= 0 idx) (< idx (count groups)))]
+    (cond
+      (nil? (:form state)) (assoc state :status "Pick a form first.")
+      (not valid-index?) (assoc state :status "Select an effect first.")
+      (not= :augment (:kind (descriptor-for state glyph-kw)))
+      (assoc state :status "Choose an augment glyph.")
+      (>= (count (get-in groups [idx :augments])) 8)
+      (assoc state :status "Maximum 8 augments on one effect.")
+      :else
+      (-> state
+          (update-in [:effect-groups idx :augments] conj (glyph-entry state glyph-kw))
+          (assoc :status (str "Added " (glyph-str glyph-kw) " to effect " (inc idx) "."))))))
+
+(defn- remap-drafts-after-remove
+  "Drop drafts for effect IDX and shift later effect indices left."
+  [drafts idx]
+  (into {}
+        (keep (fn [[[effect-idx key] value]]
+                (cond
+                  (= effect-idx idx) nil
+                  (> effect-idx idx) [[(dec effect-idx) key] value]
+                  :else [[effect-idx key] value])))
+        (or drafts {})))
+
+(defn- remap-drafts-after-swap
+  "Swap draft indices together with two reordered effect groups."
+  [drafts idx target]
+  (into {}
+        (map (fn [[[effect-idx key] value]]
+               [(cond
+                  (= effect-idx idx) [target key]
+                  (= effect-idx target) [idx key]
+                  :else [effect-idx key])
+                value]))
+        (or drafts {})))
+(defn- select-effect [state idx]
+  (if (and (integer? idx)
+           (<= 0 idx)
+           (< idx (count (:effect-groups state))))
+    (assoc state :selected-effect idx)
+    (assoc state :status "Select a valid effect.")))
+
+(defn- remove-effect [state idx]
+  (if (and (integer? idx) (< -1 idx) (< idx (count (:effect-groups state))))
+    (let [groups (vec (concat (subvec (:effect-groups state) 0 idx)
+                               (subvec (:effect-groups state) (inc idx))))]
+      (assoc state :effect-groups groups
+             :param-drafts (remap-drafts-after-remove (:param-drafts state) idx)
+             :selected-effect (when (seq groups) (min idx (dec (count groups))))
+             :status "Effect removed."))
+    state))
+
+(defn- move-effect [state idx delta]
+  (let [groups (:effect-groups state)]
+    (if-not (and (integer? idx) (integer? delta))
+      state
+      (let [target (+ idx delta)]
+        (if (and (<= 0 idx) (< idx (count groups))
+                 (<= 0 target) (< target (count groups)))
+          (let [item (nth groups idx)
+                reordered (-> groups vec
+                              (assoc idx (nth groups target))
+                              (assoc target item))]
+            (assoc state :effect-groups reordered
+                   :param-drafts (remap-drafts-after-swap (:param-drafts state) idx target)
+                   :selected-effect target))
+          state)))))
+
+(defn- remove-augment [state effect-idx augment-idx]
+  (let [groups (:effect-groups state)
+        valid-effect? (and (integer? effect-idx)
+                           (<= 0 effect-idx)
+                           (< effect-idx (count groups)))
+        augments (when valid-effect? (get-in groups [effect-idx :augments]))]
+    (if (and (integer? augment-idx)
+             (<= 0 augment-idx)
+             (< augment-idx (count augments)))
+      (update-in state [:effect-groups effect-idx :augments]
+                 #(vec (concat (subvec % 0 augment-idx) (subvec % (inc augment-idx)))))
+      state)))
 
 (defn- clear-composition [state]
-  (assoc state :form nil :effects [] :status "Cleared."))
+  (assoc state :form nil :effect-groups [] :selected-effect nil :param-drafts {} :busy? false :status "Cleared."))
 
-(defn- composed-glyphs [{:keys [form effects]}]
-  (when form (into [form] effects)))
+(defn- composed-glyphs [{:keys [form effect-groups]}]
+  (when form
+    (into [form]
+          (mapcat (fn [group] (cons (dissoc group :augments) (:augments group)))
+                  effect-groups))))
 
-(defn- catalog-by-glyph [catalog]
-  (into {} (map (juxt :glyph identity) catalog)))
+(declare payload-index)
+(defn- selected-param-fields [{:keys [effect-groups selected-effect param-drafts glyph-specs]}]
+  (if-let [group (and (integer? selected-effect) (get effect-groups selected-effect))]
+    (let [params (:params (get glyph-specs (:glyph group)))]
+      (mapv (fn [[key descriptor]]
+              {:effect-index selected-effect
+               :param-key key
+               :draft-key (keyword (str "composer-param-" selected-effect "-" (name key)))
+               :label (ui-label (str (name key) " [" (:min descriptor) ".." (:max descriptor) "]") 126.0)
+               :value (str (get param-drafts [selected-effect key]
+                                (get-in group [:params key])))})
+            params))
+    []))
 
-(defn- total-cost [state]
-  (let [by (catalog-by-glyph (:catalog state))
-        glyphs (or (composed-glyphs state) [])]
-    (reduce (fn [^double acc g]
-              (+ acc (double (or (:cost (by (:glyph g))) 0.0))))
-            0.0
-            glyphs)))
+(defn- parse-finite-number [value]
+  (try
+    (let [n (Double/parseDouble (str/trim (str value)))]
+      (when (Double/isFinite n) n))
+    (catch Exception _ nil)))
 
+(defn- valid-param-drafts?
+  "True when every in-progress parameter draft is finite and within its
+   descriptor bounds. Invalid drafts never become part of the spell payload."
+  [{:keys [param-drafts effect-groups glyph-specs]}]
+  (every? (fn [[[idx key] raw]]
+            (let [valid-index? (and (integer? idx)
+                                   (<= 0 idx)
+                                   (< idx (count effect-groups)))
+                  glyph (when valid-index? (get-in effect-groups [idx :glyph]))
+                  descriptor (when (and valid-index? (keyword? key))
+                               (get-in glyph-specs [glyph :params key]))
+                  value (parse-finite-number raw)]
+              (and valid-index?
+                   descriptor
+                   (some? value)
+                   (>= value (double (:min descriptor)))
+                   (<= value (double (:max descriptor))))))
+          (or param-drafts {})))
+(defn- coerce-param-value [descriptor n]
+  (if (= :int (:type descriptor)) (long (Math/round (double n))) (double n)))
+
+(defn- param-change [state payload]
+  (let [item (:item payload)
+        idx (payload-index payload :effect-index)
+        key (:param-key item)
+        groups (:effect-groups state)
+        glyph (when (and (integer? idx)
+                         (<= 0 idx)
+                         (< idx (count groups)))
+                (get-in groups [idx :glyph]))
+        descriptor (when (and glyph (keyword? key))
+                     (get-in (:glyph-specs state) [glyph :params key]))
+        value (or (:value payload) (:value item) (:text payload))]
+    (if (and descriptor (some? value))
+      (assoc-in state [:param-drafts [idx key]] (str value))
+      state)))
+
+(defn- param-submit [state payload]
+  (let [item (:item payload)
+        idx (payload-index payload :effect-index)
+        key (:param-key item)
+        effect-groups (:effect-groups state)
+        valid-index? (and (integer? idx)
+                           (<= 0 idx)
+                           (< idx (count effect-groups)))
+        glyph (when valid-index? (get-in effect-groups [idx :glyph]))
+        descriptor (when (and valid-index? (keyword? key))
+                     (get-in (:glyph-specs state) [glyph :params key]))
+        value (parse-finite-number (or (:value payload) (:value item) (:text payload)))]
+    (cond
+      (not (and valid-index? (keyword? key) descriptor))
+      (assoc state :status "Unknown parameter.")
+      (nil? value)
+      (assoc state :status (str "Enter a finite number for " (name key) "."))
+      (< value (double (:min descriptor)))
+      (assoc state :status (str (name key) " is below its minimum."))
+      (> value (double (:max descriptor)))
+      (assoc state :status (str (name key) " exceeds its maximum."))
+      :else
+      (-> state
+          (assoc-in [:effect-groups idx :params key] (coerce-param-value descriptor value))
+          (update :param-drafts dissoc [idx key])
+          (assoc :status (str "Updated " (name key) "."))))))
 ;; --- render-state ------------------------------------------------------
 
-(defn- form-palette-item [entry selected-glyph]
-  (let [g (:glyph entry)
-        selected? (= g selected-glyph)]
-    {:glyph (glyph-str g)
-     :kind "form"
-     :cost (double (:cost entry))
-     :label (str (if selected? "▶ " "  ") (glyph-short g)
-                 "  (" (:cost entry) ")")
-     :rgba (if selected? selected-rgba idle-rgba)
-     :admissible? (:admissible? entry)}))
-
-(defn- effect-palette-item [entry form?]
-  (let [g (:glyph entry)
-        kind (:kind entry)]
-    {:glyph (glyph-str g)
-     :kind (name kind)
-     :cost (double (:cost entry))
-     :label (str "+ " (glyph-short g)
-                 (when (pos? (double (:cost entry)))
-                   (str "  (" (:cost entry) ")")))
-     :rgba (if form?
-             (get kind-rgba kind idle-rgba)
-             muted-rgba)
-     :admissible? (:admissible? entry)}))
-
-(defn- composition-row [i {:keys [glyph]} kind]
-  {:index i
-   :label (str (inc i) ". [" (name kind) "] " (glyph-str glyph))
-   :rgba (get kind-rgba kind idle-rgba)})
+(defn- palette-item [{:keys [glyph kind cost admissible? params]}]
+  {:glyph (glyph-str glyph) :kind (name kind)
+   :cost (double cost)
+   :label (ui-label (str (glyph-str glyph) " (cost " cost ")") 202.0)
+   :params params
+   :admissible? admissible?})
 
 (defn- render-state [state]
-  (let [{:keys [catalog form effects status]} state
-        selected-glyph (when form (:glyph form))
+  (let [{:keys [catalog form effect-groups selected-effect status busy?]} state
+        selected-params (selected-param-fields state)
+        draft-state (into {}
+                          (keep (fn [{:keys [draft-key value]}]
+                                  (when draft-key [draft-key (str value)])))
+                          selected-params)
         forms (filter #(= :form (:kind %)) catalog)
-        others (remove #(= :form (:kind %)) catalog)
-        form? (some? form)
-        can-cast? (boolean (and form (seq effects)))
-        composition (vec
-                     (concat
-                      (when form
-                        [(composition-row 0 form :form)])
-                      (map-indexed
-                       (fn [i g]
-                         (let [entry (get (catalog-by-glyph catalog) (:glyph g))
-                               kind (or (:kind entry) :effect)]
-                           (composition-row (inc i) g kind)))
-                       effects)))]
-    {:title "Spell Composer"
-     :form-header "Form (pick one)"
-     :effect-header "Effects / Augments"
-     :spell-header "Composition"
-     :form-palette (mapv #(form-palette-item % selected-glyph)
-                         (filter :admissible? forms))
-     :effect-palette (mapv #(effect-palette-item % form?)
-                           (filter :admissible? others))
-     :composition (if (seq composition)
-                    composition
-                    [{:label "(empty — pick a form)"
-                      :rgba muted-rgba}])
-     :cost-label (str "Cost: " (total-cost state))
-     :can-cast? can-cast?
-     :cast-rgba (if can-cast? cast-ready-rgba cast-blocked-rgba)
-     :status (or status "")
-     :cast-label "Cast"
-     :clear-label "Clear"}))
+        effects (filter #(= :effect (:kind %)) catalog)
+        augments (filter #(= :augment (:kind %)) catalog)]
+    (merge draft-state
+           {:title "Spell Composer"
+     :form-palette (mapv palette-item (filter :admissible? forms))
+     :effect-palette (mapv palette-item (filter :admissible? effects))
+     :augment-palette (mapv palette-item (filter :admissible? augments))
+     :form-label (ui-label (if form (glyph-str (:glyph form)) "(none)") 182.0)
+     :selected-param-fields selected-params
+     :effect-slots
+     (mapv (fn [idx {:keys [glyph augments]}]
+             (let [augment-height (* 14 (count augments))]
+               {:index idx :label (ui-label (str (inc idx) ". " (glyph-str glyph)) 86.0)
+                :selected? (= idx selected-effect)
+                ;; The slot row grows with its augment list. Augments are
+                ;; rendered as a vertical set of removable rows so eight
+                ;; augments cannot overflow the fixed effect controls.
+                :row-height (+ 16 augment-height)
+                :augment-height augment-height
+                :augment-label (when (seq augments)
+                                 (str/join " " (map #(str "+" (glyph-str (:glyph %))) augments)))
+                :augments (mapv (fn [augment-index a]
+                                  {:effect-index idx
+                                   :augment-index augment-index
+                                   :label (ui-label (str "+ " (glyph-str (:glyph a))) 84.0)
+                                   :remove-label "X"})
+                                (range) augments)
+                :can-move-up? (pos? idx)
+                :can-move-down? (< idx (dec (count effect-groups)))
+                :up-label "UP" :down-label "DN" :remove-label "X"}))
+           (range) effect-groups)
+     :can-cast? (boolean (and (not busy?) form (seq effect-groups)
+                              (valid-param-drafts? state)))
+     :busy? (boolean busy?)
+     :status (ui-label (or status "") 456.0)
+     :cast-label (if busy? "Casting..." "Cast")
+     :clear-label "Clear"})))
 
 ;; --- input handling ------------------------------------------------------
+
+(defn- payload-index [payload key]
+  (let [value (or (get payload key) (get-in payload [:item key]))]
+    (if (string? value) (try (Long/parseLong value) (catch Exception _ -1)) value)))
+
+(defn- payload-keyword [value]
+  (cond
+    (keyword? value) value
+    (string? value) (when (seq value) (keyword value))
+    :else nil))
 
 (defn- handle-action [state* owner action payload]
   (case action
     :composer/pick-form
-    (swap! state* pick-form (keyword (:glyph (:item payload))))
+    (swap! state* pick-form (payload-keyword (:glyph (:item payload))))
 
     :composer/add-effect
-    (swap! state* add-effect (keyword (:glyph (:item payload))))
+    (swap! state* add-effect (payload-keyword (:glyph (:item payload))))
+
+    :composer/add-augment
+    (swap! state* add-augment (payload-keyword (:glyph (:item payload))))
+
+    :composer/select-effect
+    (swap! state* select-effect (payload-index payload :index))
+
+    :composer/remove-effect
+    (swap! state* remove-effect (payload-index payload :index))
+
+    :composer/move-effect-up
+    (swap! state* move-effect (payload-index payload :index) -1)
+
+    :composer/move-effect-down
+    (swap! state* move-effect (payload-index payload :index) 1)
+
+    :composer/remove-augment
+    (swap! state* remove-augment
+           (payload-index payload :effect-index)
+           (payload-index payload :augment-index))
+
+     :composer/param-change
+     (swap! state* param-change payload)
+
+     :composer/param-submit
+     (swap! state* param-submit payload)
 
     :composer/clear
     (swap! state* clear-composition)
 
     :composer/cast
-    (let [glyphs (composed-glyphs @state*)]
-      (if-not (and glyphs (seq (rest glyphs)))
+    (let [snapshot @state*
+          glyphs (composed-glyphs snapshot)]
+      (cond
+        (:busy? snapshot) nil
+        (not (and (:form snapshot) (seq (:effect-groups snapshot))))
         (swap! state* assoc :status "Pick a form and at least one effect first.")
-        (do
-          (swap! state* assoc :status "Casting...")
-          (api/req-submit-spell!
-           owner glyphs
-           (fn [result]
-             (swap! state* assoc :status
-                    (case (:status result)
-                      :accepted "Spell cast!"
-                      :rejected (get reject-labels (:reason result)
-                                     (str "Spell rejected: " (:reason result)))
-                      (str "Unexpected result: " result))))))))
+        (not (valid-param-drafts? snapshot))
+        (swap! state* assoc :status "Finish valid parameter edits before casting.")
+        :else
+        (let [analysis (combat-api/analyze-player-spell glyphs combat-api/player-spell-complexity-cap)]
+          (if-not (:ok analysis)
+            (swap! state* assoc :status
+                   (get reject-labels (:reject analysis)
+                        (str "Spell rejected: " (:reject analysis))))
+            (do
+              (swap! state* assoc :busy? true :status "Casting...")
+              (api/req-submit-spell!
+               owner glyphs
+               (fn [result]
+                 (swap! state* assoc :busy? false :status
+                        (case (:status result)
+                          :accepted "Spell cast!"
+                          :rejected (get reject-labels (:reason result)
+                                         (str "Spell rejected: " (:reason result)))
+                          (str "Unexpected result: " result))))))))))
 
     nil)
   (render-state @state*))
 
+;; --- mount ---------------------------------------------------------------
 ;; --- mount ---------------------------------------------------------------
 
 (defn open! [player-uuid]
@@ -231,3 +456,4 @@
     (bridge/call-adapter :presentation-open-screen!
                          (:mount vm) "Spell Composer" on-close)
     vm))
+

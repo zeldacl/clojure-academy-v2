@@ -1,1 +1,0 @@
-{:schema :ac/vfx-v3, :id :block-progress-session, :lifecycle {:mode :session}, :inputs {:target {:type :vec3}, :progress {:type :float}, :color {:type :any}, :pulse-period {:type :float}}, :state {:age {:type :float, :default nil}, :seed {:type :int, :default nil}}, :system {:render [{:nid :n/n--entry--default-0, :flow :finish, :result {:outcome :performed}}]}, :emitters []}

@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.service.combat-runtime-dispatch-intent-v2-test
   "S8: end-to-end proof cn.li.ac.ability.service.combat-runtime/dispatch-
-   intent-v2! actually dispatches a real ac/skills-v3/*.edn ability through
+   intent-v2! actually dispatches a real ac/skills-v4/*.edn ability through
    the new engine, with the SAME pre-dispatch orchestration (cooldown
    pre-check, toggle close-edge, session open/close) dispatch-intent!
    already has for the old engine -- not a fake host, not a synthetic
@@ -157,7 +157,7 @@
         "instant skills have no release entry; must not fall back to :release")))
 
 (deftest start-without-entry-triggers-does-not-guess-test
-  "Missing V3 :entry-triggers must fail closed — never invent :default."
+  "Missing V4 :entry-triggers must fail closed — never invent :default."
   (with-redefs [cn.li.ac.ability.service.combat-runtime/entry-triggers-for
                 (constantly nil)
                 cn.li.ac.ability.service.combat-runtime/known-program-entries

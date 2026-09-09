@@ -1,0 +1,133 @@
+{:schema :ac/skill-v4,
+ :id :space-fluct,
+ :skill {:category :migrated, :level 1},
+ :activation {:mode :passive},
+ :parameters
+ {:damage-multipliers {:type :any, :default nil},
+  :level0-probability {:type :double, :default nil},
+  :level1-probability {:type :double, :default nil},
+  :level2-probability {:type :double, :default nil},
+  :exp-critical {:type :double, :default nil}},
+ :state {},
+ :tunables
+ {:damage-multipliers
+  {:curve :pair, :source-skill-id :dim-folding-theorem},
+  :level0-probability {:curve :mastery-lerp},
+  :level1-probability {:curve :mastery-lerp},
+  :level2-probability {:curve :mastery-lerp},
+  :exp-critical {:curve :const}},
+ :costs nil,
+ :invariants nil,
+ :progression nil,
+ :requires [:world/id :rng/seed],
+ :damage-policies
+ [{:on :combat/damage,
+   :priority 200,
+   :when
+   {:expr :bool/and,
+    :args
+    [{:ref [:input :context :source-learned?]}
+     {:expr :bool/not, :args [{:ref [:input :context :reflected?]}]}
+     {:expr :math/gt, :args [{:ref [:input :request :base]} 0.0]}]},
+   :program
+   {:damage-types [:magic :skill],
+    :progression-mode :fixed,
+    :feedback
+    {:message-key "ability.teleporter.critical_hit",
+     :args [{:ref [:input :context :critical-multiplier]}],
+     :translate? true},
+    :progression-per-level {:ref [:input :tunables :exp-critical]},
+    :events
+    [{:type :achievement/trigger,
+      :payload {:id "teleporter.critical_attack"}}],
+    :component :damage/critical,
+    :levels
+    [{:level 0,
+      :probability {:ref [:input :tunables :level0-probability]},
+      :multiplier {:ref [:input :tunables :damage-multipliers 0]}}
+     {:level 1,
+      :probability {:ref [:input :tunables :level1-probability]},
+      :multiplier {:ref [:input :tunables :damage-multipliers 1]}}
+     {:level 2,
+      :probability {:ref [:input :tunables :level2-probability]},
+      :multiplier {:ref [:input :tunables :damage-multipliers 2]}}],
+    :vfx
+    {:effect-id :particle-burst-trail-transient,
+     :instance-key [:combat :critical],
+     :audience {:type :nearby, :radius 64.0},
+     :payload
+     {:count-limit 8,
+      :life-ticks 15,
+      :fade-out 20,
+      :start {:ref [:input :context :target-position]},
+      :radius {:min 0.3, :max 0.42},
+      :size {:min 1.0, :max 1.7},
+      :alpha {:min 152, :max 255},
+      :end {:ref [:input :context :target-position]},
+      :velocity {:min -0.03, :max 0.03},
+      :texture "academy:textures/effects/formula/0.png",
+      :spacing {:min 0.0, :max 0.0},
+      :fade-in 2}},
+    :events-by-level
+    {:level-2
+     [{:type :achievement/trigger,
+       :payload {:id "teleporter.mastery"}}]}}}],
+ :cooldown nil,
+ :mark-policies nil,
+ :graphs
+ {:start
+  {:on :phase/start,
+   :nodes
+   #:n{:start-start {:type :start, :nid :n/start-start},
+       :n--entry--start-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--start-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start-start :out],
+     :to [:n/n--entry--start-0 :in]}]},
+  :pulse
+  {:on :phase/pulse,
+   :nodes
+   #:n{:start-pulse {:type :start, :nid :n/start-pulse},
+       :n--entry--pulse-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--pulse-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link002,
+     :kind :exec,
+     :from [:n/start-pulse :out],
+     :to [:n/n--entry--pulse-0 :in]}]},
+  :release
+  {:on :phase/release,
+   :nodes
+   #:n{:start-release {:type :start, :nid :n/start-release},
+       :n--entry--release-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link003,
+     :kind :exec,
+     :from [:n/start-release :out],
+     :to [:n/n--entry--release-0 :in]}]},
+  :abort
+  {:on :phase/abort,
+   :nodes
+   #:n{:start-abort {:type :start, :nid :n/start-abort},
+       :n--entry--abort-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--abort-0,
+        :inputs {:outcome :passive}}},
+   :links
+   [{:id :e/link004,
+     :kind :exec,
+     :from [:n/start-abort :out],
+     :to [:n/n--entry--abort-0 :in]}]}}}

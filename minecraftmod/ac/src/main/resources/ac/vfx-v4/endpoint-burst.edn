@@ -1,0 +1,111 @@
+{:schema :ac/vfx-v4,
+ :id :endpoint-burst,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:sound-pitch {:type :float},
+  :limit {:type :int},
+  :duration-ticks {:type :int},
+  :sound-volume {:type :float},
+  :sound-id {:type :string},
+  :particle {:type :any},
+  :from {:type :vec3},
+  :rate-per-tick {:type :int},
+  :to {:type :vec3}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :component,
+        :component :emitter,
+        :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :from, :nid :n/n001},
+       :n002 {:type :context-ref, :key :rate-per-tick, :nid :n/n002},
+       :n003 {:type :context-ref, :key :limit, :nid :n/n003},
+       :n004 {:type :context-ref, :key :particle, :nid :n/n004},
+       :n--entry--default-1
+       {:type :component,
+        :component :emitter,
+        :nid :n/n--entry--default-1},
+       :n005 {:type :context-ref, :key :to, :nid :n/n005},
+       :n006 {:type :context-ref, :key :rate-per-tick, :nid :n/n006},
+       :n007 {:type :context-ref, :key :limit, :nid :n/n007},
+       :n008 {:type :context-ref, :key :particle, :nid :n/n008},
+       :n--entry--default-2
+       {:type :component,
+        :component :audio-one-shot,
+        :nid :n/n--entry--default-2},
+       :n009 {:type :context-ref, :key :sound-id, :nid :n/n009},
+       :n010 {:type :context-ref, :key :sound-volume, :nid :n/n010},
+       :n011 {:type :context-ref, :key :sound-pitch, :nid :n/n011},
+       :n012 {:type :context-ref, :key :to, :nid :n/n012},
+       :n--entry--default-3
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-3,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :anchor]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--default-0 :rate-per-tick]}
+    {:id :e/link003,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--default-0 :limit]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--default-0 :particle]}
+    {:id :e/link005,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n--entry--default-1 :anchor]}
+    {:id :e/link006,
+     :kind :data,
+     :from [:n/n006 :value],
+     :to [:n/n--entry--default-1 :rate-per-tick]}
+    {:id :e/link007,
+     :kind :data,
+     :from [:n/n007 :value],
+     :to [:n/n--entry--default-1 :limit]}
+    {:id :e/link008,
+     :kind :data,
+     :from [:n/n008 :value],
+     :to [:n/n--entry--default-1 :particle]}
+    {:id :e/link009,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}
+    {:id :e/link010,
+     :kind :data,
+     :from [:n/n009 :value],
+     :to [:n/n--entry--default-2 :sound-id]}
+    {:id :e/link011,
+     :kind :data,
+     :from [:n/n010 :value],
+     :to [:n/n--entry--default-2 :volume]}
+    {:id :e/link012,
+     :kind :data,
+     :from [:n/n011 :value],
+     :to [:n/n--entry--default-2 :pitch]}
+    {:id :e/link013,
+     :kind :data,
+     :from [:n/n012 :value],
+     :to [:n/n--entry--default-2 :position]}
+    {:id :e/link014,
+     :kind :exec,
+     :from [:n/n--entry--default-1 :out],
+     :to [:n/n--entry--default-2 :in]}
+    {:id :e/link015,
+     :kind :exec,
+     :from [:n/n--entry--default-2 :out],
+     :to [:n/n--entry--default-3 :in]}
+    {:id :e/link016,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

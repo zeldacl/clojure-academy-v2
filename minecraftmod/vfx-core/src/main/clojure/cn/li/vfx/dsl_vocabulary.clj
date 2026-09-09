@@ -68,13 +68,13 @@
    (node {:from (p* :vec3) :to (p* :vec3) :color (opt :any nil) :material (opt :any nil)})
    :quad
    (node {:geometry (p) :material (opt :any nil)})
-   ;; V3 :vfx/emitter is a single
+   ;; :vfx/emitter is a single
    ;; declarative "spawn an emitter here" draw-batch op per sample, not a
    ;; per-particle simulation -- the actual particle stepping happens
    ;; client-side off the :particle description, same as every other
    ;; scene leaf here. Unrelated to cn.li.vfx.compile's Niagara module-
    ;; stack machinery (that proves out real CPU particle simulation for
-   ;; FUTURE richer content; none of the 36 real ac/vfx-v3 effects need it,
+   ;; FUTURE richer content; none of the 36 real ac/vfx-v4 effects need it,
    ;; since none of them do per-particle server/headless simulation).
    :emitter
    (node {:anchor (p* :vec3) :rate-per-tick (opt :double nil) :limit (opt :long nil)
@@ -96,3 +96,4 @@
    (node {:effect (p* :keyword)})})
 
 (def nodes (attach-presentation raw-nodes))
+

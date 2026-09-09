@@ -1,4 +1,4 @@
-;; Port of the old v2/v3 :target/directional-destination composite into the
+;; Port of the old directional-destination composite into the
 ;; new surface-DSL :defn shape. Straight one-call wrapper: the composite's
 ;; only job was renaming its own :inputs onto :target/directional-destination-
 ;; query's :params 1:1, which a plain param list already does.

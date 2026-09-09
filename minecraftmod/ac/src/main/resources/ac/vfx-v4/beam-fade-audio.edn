@@ -1,0 +1,269 @@
+{:schema :ac/vfx-v4,
+ :id :beam-fade-audio,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:sound-position {:type :vec3},
+  :fade-at {:type :int},
+  :sound-pitch {:type :float},
+  :duration-ticks {:type :int},
+  :sound-volume {:type :float},
+  :fade-layers {:type :any},
+  :beam-at {:type :int},
+  :start {:type :vec3},
+  :sound-id {:type :string},
+  :fade-to-tick {:type :int},
+  :fade-from-alpha {:type :float},
+  :layers {:type :any},
+  :grow-ticks {:type :int},
+  :fade-to-alpha {:type :float},
+  :end {:type :vec3},
+  :fade-from-tick {:type :int}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :branch, :nid :n/n--entry--default-0},
+       :n001 {:type :component, :component :math/gte, :nid :n/n001},
+       :n002 {:type :context-ref, :key :age, :nid :n/n002},
+       :n003 {:type :context-ref, :key :beam-at, :nid :n/n003},
+       :n--entry--default-0-do-0
+       {:type :component,
+        :component :beam,
+        :nid :n/n--entry--default-0-do-0},
+       :n004 {:type :context-ref, :key :start, :nid :n/n004},
+       :n005 {:type :context-ref, :key :end, :nid :n/n005},
+       :n006 {:type :context-ref, :key :grow-ticks, :nid :n/n006},
+       :n007 {:type :context-ref, :key :layers, :nid :n/n007},
+       :n008 {:type :merge, :nid :n/n008},
+       :n--entry--default-1
+       {:type :component,
+        :component :audio-one-shot,
+        :nid :n/n--entry--default-1},
+       :n009 {:type :context-ref, :key :sound-id, :nid :n/n009},
+       :n010 {:type :context-ref, :key :sound-volume, :nid :n/n010},
+       :n011 {:type :context-ref, :key :sound-pitch, :nid :n/n011},
+       :n012 {:type :context-ref, :key :sound-position, :nid :n/n012},
+       :n--entry--default-2
+       {:type :branch, :nid :n/n--entry--default-2},
+       :n013 {:type :component, :component :math/gte, :nid :n/n013},
+       :n014 {:type :context-ref, :key :age, :nid :n/n014},
+       :n015 {:type :context-ref, :key :fade-at, :nid :n/n015},
+       :n--entry--default-2-do-0
+       {:type :local-set,
+        :operation :define,
+        :key :fade-p,
+        :nid :n/n--entry--default-2-do-0},
+       :n016
+       {:type :component,
+        :component :math/clamp,
+        :nid :n/n016,
+        :inputs {:arg1 0.0, :arg2 1.0}},
+       :n017 {:type :component, :component :math/div, :nid :n/n017},
+       :n018 {:type :component, :component :math/sub, :nid :n/n018},
+       :n019 {:type :context-ref, :key :age, :nid :n/n019},
+       :n020 {:type :context-ref, :key :fade-from-tick, :nid :n/n020},
+       :n021
+       {:type :component,
+        :component :math/max,
+        :nid :n/n021,
+        :inputs {:arg0 1.0}},
+       :n022 {:type :component, :component :math/sub, :nid :n/n022},
+       :n023 {:type :context-ref, :key :fade-to-tick, :nid :n/n023},
+       :n024 {:type :context-ref, :key :fade-from-tick, :nid :n/n024},
+       :n--entry--default-2-do-1
+       {:type :local-set,
+        :operation :define,
+        :key :fade-alpha,
+        :nid :n/n--entry--default-2-do-1},
+       :n025 {:type :component, :component :math/lerp, :nid :n/n025},
+       :n026 {:type :context-ref, :key :fade-from-alpha, :nid :n/n026},
+       :n027 {:type :context-ref, :key :fade-to-alpha, :nid :n/n027},
+       :n028 {:type :local-get, :key :fade-p, :nid :n/n028},
+       :n--entry--default-2-do-2
+       {:type :component,
+        :component :beam,
+        :nid :n/n--entry--default-2-do-2},
+       :n029 {:type :context-ref, :key :start, :nid :n/n029},
+       :n030 {:type :context-ref, :key :end, :nid :n/n030},
+       :n031 {:type :context-ref, :key :fade-layers, :nid :n/n031},
+       :n032 {:type :local-get, :key :fade-alpha, :nid :n/n032},
+       :n033 {:type :merge, :nid :n/n033},
+       :n--entry--default-3
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-3,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n001 :arg0]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n001 :arg1]}
+    {:id :e/link003,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :condition]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--default-0-do-0 :start]}
+    {:id :e/link005,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n--entry--default-0-do-0 :end]}
+    {:id :e/link006,
+     :kind :data,
+     :from [:n/n006 :value],
+     :to [:n/n--entry--default-0-do-0 :grow-ticks]}
+    {:id :e/link007,
+     :kind :data,
+     :from [:n/n007 :value],
+     :to [:n/n--entry--default-0-do-0 :layers]}
+    {:id :e/link008,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :true],
+     :to [:n/n--entry--default-0-do-0 :in]}
+    {:id :e/link009,
+     :kind :exec,
+     :from [:n/n--entry--default-0-do-0 :out],
+     :to [:n/n008 :in]}
+    {:id :e/link010,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :false],
+     :to [:n/n008 :in]}
+    {:id :e/link011,
+     :kind :data,
+     :from [:n/n009 :value],
+     :to [:n/n--entry--default-1 :sound-id]}
+    {:id :e/link012,
+     :kind :data,
+     :from [:n/n010 :value],
+     :to [:n/n--entry--default-1 :volume]}
+    {:id :e/link013,
+     :kind :data,
+     :from [:n/n011 :value],
+     :to [:n/n--entry--default-1 :pitch]}
+    {:id :e/link014,
+     :kind :data,
+     :from [:n/n012 :value],
+     :to [:n/n--entry--default-1 :position]}
+    {:id :e/link015,
+     :kind :exec,
+     :from [:n/n008 :out],
+     :to [:n/n--entry--default-1 :in]}
+    {:id :e/link016,
+     :kind :data,
+     :from [:n/n014 :value],
+     :to [:n/n013 :arg0]}
+    {:id :e/link017,
+     :kind :data,
+     :from [:n/n015 :value],
+     :to [:n/n013 :arg1]}
+    {:id :e/link018,
+     :kind :data,
+     :from [:n/n013 :value],
+     :to [:n/n--entry--default-2 :condition]}
+    {:id :e/link019,
+     :kind :data,
+     :from [:n/n019 :value],
+     :to [:n/n018 :arg0]}
+    {:id :e/link020,
+     :kind :data,
+     :from [:n/n020 :value],
+     :to [:n/n018 :arg1]}
+    {:id :e/link021,
+     :kind :data,
+     :from [:n/n018 :value],
+     :to [:n/n017 :arg0]}
+    {:id :e/link022,
+     :kind :data,
+     :from [:n/n023 :value],
+     :to [:n/n022 :arg0]}
+    {:id :e/link023,
+     :kind :data,
+     :from [:n/n024 :value],
+     :to [:n/n022 :arg1]}
+    {:id :e/link024,
+     :kind :data,
+     :from [:n/n022 :value],
+     :to [:n/n021 :arg1]}
+    {:id :e/link025,
+     :kind :data,
+     :from [:n/n021 :value],
+     :to [:n/n017 :arg1]}
+    {:id :e/link026,
+     :kind :data,
+     :from [:n/n017 :value],
+     :to [:n/n016 :arg0]}
+    {:id :e/link027,
+     :kind :data,
+     :from [:n/n016 :value],
+     :to [:n/n--entry--default-2-do-0 :value]}
+    {:id :e/link028,
+     :kind :data,
+     :from [:n/n026 :value],
+     :to [:n/n025 :arg0]}
+    {:id :e/link029,
+     :kind :data,
+     :from [:n/n027 :value],
+     :to [:n/n025 :arg1]}
+    {:id :e/link030,
+     :kind :data,
+     :from [:n/n028 :value],
+     :to [:n/n025 :arg2]}
+    {:id :e/link031,
+     :kind :data,
+     :from [:n/n025 :value],
+     :to [:n/n--entry--default-2-do-1 :value]}
+    {:id :e/link032,
+     :kind :exec,
+     :from [:n/n--entry--default-2-do-0 :out],
+     :to [:n/n--entry--default-2-do-1 :in]}
+    {:id :e/link033,
+     :kind :data,
+     :from [:n/n029 :value],
+     :to [:n/n--entry--default-2-do-2 :start]}
+    {:id :e/link034,
+     :kind :data,
+     :from [:n/n030 :value],
+     :to [:n/n--entry--default-2-do-2 :end]}
+    {:id :e/link035,
+     :kind :data,
+     :from [:n/n031 :value],
+     :to [:n/n--entry--default-2-do-2 :layers]}
+    {:id :e/link036,
+     :kind :data,
+     :from [:n/n032 :value],
+     :to [:n/n--entry--default-2-do-2 :alpha]}
+    {:id :e/link037,
+     :kind :exec,
+     :from [:n/n--entry--default-2-do-1 :out],
+     :to [:n/n--entry--default-2-do-2 :in]}
+    {:id :e/link038,
+     :kind :exec,
+     :from [:n/n--entry--default-2 :true],
+     :to [:n/n--entry--default-2-do-0 :in]}
+    {:id :e/link039,
+     :kind :exec,
+     :from [:n/n--entry--default-2-do-2 :out],
+     :to [:n/n033 :in]}
+    {:id :e/link040,
+     :kind :exec,
+     :from [:n/n--entry--default-2 :false],
+     :to [:n/n033 :in]}
+    {:id :e/link041,
+     :kind :exec,
+     :from [:n/n--entry--default-1 :out],
+     :to [:n/n--entry--default-2 :in]}
+    {:id :e/link042,
+     :kind :exec,
+     :from [:n/n033 :out],
+     :to [:n/n--entry--default-3 :in]}
+    {:id :e/link043,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

@@ -7,7 +7,7 @@
    these ids (execute!/run-sequence/run-branch/...), on the theory that
    combat-core and vfx-core would dispatch through it instead of each
    implementing their own :flow/sequence etc. case branch. Neither ever
-   did -- each domain V3 runtime owns its inline handling (with real,
+   did -- each domain runtime owns its inline handling (with real,
    differences: combat's :flow/foreach reads :limit as a raw field with a
    contracts/budgets-derived default and doesn't restore locals after the
    loop; this namespace's old run-foreach resolved :limit and always

@@ -5,8 +5,8 @@
    details are intentionally excluded from the visual editor schema.
 
    export-descriptor/export-environment below serve the descriptor
-   environment system used by the V3 editor palette.
-   V3 content consumes this export directly; no legacy catalog reader remains.
+   environment system used by the V4 editor palette.
+   V4 content consumes this export directly; no legacy catalog reader remains.
    The remaining descriptor consumers are schema/export callers, not
    runtime resource loaders.
 
@@ -23,7 +23,7 @@
   (reduce-kv (fn [acc k spec]
                (if (= false (:editor-visible? spec))
                  acc
-                 (assoc acc k (select-keys spec [:type :min :max :default :doc :scope]))))
+               (assoc acc k (select-keys spec [:type :min :max :default :choices :doc :scope]))))
              {} fields))
 
 (defn export-descriptor [d]
@@ -64,8 +64,12 @@
 ;; which exists specifically so the editor's grey-out list and the server's
 ;; actual admission rule can never drift apart).
 
-(defn- export-param [{:keys [type default]}]
-  (cond-> {:type type} (some? default) (assoc :default default)))
+(defn- export-param [{:keys [type min max default choices]}]
+  (cond-> {:type type}
+    (some? min) (assoc :min min)
+    (some? max) (assoc :max max)
+    (some? choices) (assoc :choices (vec choices))
+    (some? default) (assoc :default default)))
 
 (defn export-vocab-node [id spec]
   {:id id

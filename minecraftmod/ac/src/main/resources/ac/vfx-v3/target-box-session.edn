@@ -1,1 +1,0 @@
-{:schema :ac/vfx-v3, :id :target-box-session, :lifecycle {:mode :session}, :inputs {:position {:type :vec3}, :width {:type :float}, :height {:type :float}, :color {:type :any}}, :state {:age {:type :float, :default nil}, :seed {:type :int, :default nil}}, :system {:render [{:nid :n/n--entry--default-0, :flow :finish, :result {:outcome :performed}}]}, :emitters []}

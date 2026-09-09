@@ -319,7 +319,7 @@
         registration (get (:by-id catalog) ability-id)
         source-id (or (:source-id registration) ability-id)
         source (get sources source-id)]
-    ;; V3 keeps activation extensible for editor metadata (`{:mode ...}`),
+    ;; V4 keeps activation extensible for editor metadata (`{:mode ...}`),
     ;; while the dispatch ABI consumes the scalar mode. Normalize it once at
     ;; the catalog boundary so toggle/session orchestration and all future
     ;; callers observe the same runtime shape.
@@ -340,23 +340,29 @@
    need
    them): install-runtime-adapters!'s own :cost/spend/:cooldown/start
    handlers already commit their effect immediately, as ordinary host
-   actions, the moment a graph reaches them."
-  []
-  (install/framework-once!
-   ::final-runtime-v2-installed?
-   (fn []
-     (install-runtime-adapters!)
-     (let [runtime (final-runtime-v2/install-production!
-                    {:catalog-compile skills-catalog/assemble
-                     :commit-ability-state! (fn [owner patches]
-                                        (when (seq patches)
-                                          (combat-sessions/apply-actions!
-                                           content-id (str owner)
-                                           [{:type :session-patch :entries patches}])))
-                     :remove-ability-state! (fn [owner]
-                                        (combat-sessions/remove! content-id (str owner)))})]
-       (reset! final-runtime-v2* runtime))))
-  @final-runtime-v2*)
+   actions, the moment a graph reaches them.
+
+   The one-arg form supplies the catalog-compile fn. Assembling the V4 catalog
+   parses, validates and node-compiles every shipped skill document, so a caller
+   that also needs the assembled catalog (cn.li.ac.core.init does) can assemble
+   once and pass (constantly assembled) instead of paying for it twice."
+  ([] (initialize-final-runtime-v2! skills-catalog/assemble))
+  ([catalog-compile]
+   (install/framework-once!
+    ::final-runtime-v2-installed?
+    (fn []
+      (install-runtime-adapters!)
+      (let [runtime (final-runtime-v2/install-production!
+                     {:catalog-compile catalog-compile
+                      :commit-ability-state! (fn [owner patches]
+                                               (when (seq patches)
+                                                 (combat-sessions/apply-actions!
+                                                  content-id (str owner)
+                                                  [{:type :session-patch :entries patches}])))
+                      :remove-ability-state! (fn [owner]
+                                               (combat-sessions/remove! content-id (str owner)))})]
+        (reset! final-runtime-v2* runtime))))
+   @final-runtime-v2*))
 
 (defn final-runtime-v2 [] @final-runtime-v2*)
 
@@ -432,7 +438,7 @@
       (resolve-slot owner intent)))
 
 (defn- entry-triggers-for
-  "Map of entry-name -> :on trigger from the installed skill-v3 IR.
+  "Map of entry-name -> :on trigger from the installed skill-v4 IR.
 
   Assemble refuses skills without `:entry-triggers`. Do not reconstruct or
   guess entries here — missing triggers means a broken install."
@@ -450,7 +456,7 @@
         (not-empty (set (keys (entry-triggers-for ability-id)))))))
 
 (defn- op-trigger-candidates
-  "Intent :op values map onto one or more skill-v3 :on triggers. Instant
+  "Intent :op values map onto one or more skill-v4 :on triggers. Instant
    skills typically use :activation/start (entry often named :default);
    session/toggle skills use :phase/start (entry often named :start)."
   [op]
@@ -462,9 +468,9 @@
     nil))
 
 (defn- resolve-program-entry
-  "Translate an intent's :op/:event into the skill-v3 program entry key.
+  "Translate an intent's :op/:event into the skill-v4 program entry key.
 
-  V3 only: entries are named freely; the document/IR `:entry-triggers`
+  V4 only: entries are named freely; the document/IR `:entry-triggers`
   map (entry → `:on`) is the sole authority. Intent ops map through
   `op-trigger-candidates` onto those `:on` values — never invent an entry
   name, never pass the raw `:op` through to the emitter.
@@ -631,7 +637,7 @@
 ;; resolver -- it covers exactly the
 ;; {:ref [:input :tunables k]} / {:ref [:input :context k]} / {:ref
 ;; [:state k]} / {:expr :math/mul|:math/sub|:math/select :args [...]}
-;; shapes every real ac/skills-v3/*.edn :costs/:cooldown/:progression/
+;; shapes every real ac/skills-v4/*.edn :costs/:cooldown/:progression/
 ;; :invariants declaration actually uses (grep-confirmed across all 39
 ;; files before writing this, not assumed complete).
 (defn- resolve-final-formula-v2
@@ -665,7 +671,7 @@
    params, a completely different input shape belonging to the damage-
    reaction pipeline (damage.clj's own reaction resolution, already
    engine-agnostic and unaffected by S8), not this ability's own dispatch-
-   time capabilities. Confirmed by grep: no real ac/skills-v3/*.edn :program
+   time capabilities. Confirmed by grep: no real ac/skills-v4/*.edn :program
    ever reads ?progression/damaged (or any other :params-backed entry) as
    a plain capability sigil -- if a name is never read that way, silently
    NOT materializing it as a capability is correct, not a gap; throwing
@@ -681,7 +687,7 @@
           declarations)))
 
 (defn final-capabilities-v2
-  "owner, ability-id, intent, seed, source (an ac/skills-v3/*.edn raw doc,
+  "owner, ability-id, intent, seed, source (an ac/skills-v4/*.edn raw doc,
    cn.li.ac.ability.skills-catalog's own :sources entry shape) -> the
    full ?capability -> value map the new engine's own dispatch expects
    as :capabilities, merging caster-facade's own caster/world/movement/
@@ -955,7 +961,7 @@
    helpers (toggle-close-edge?/should-open-session?/cooldown-active?/
    generate-activation-seed/edn-ability-id/combat-source) that are pure
    functions of owner/ability-id/session data, engine-agnostic by
-   construction. Program entry keys are resolved via skill-v3 :on
+   construction. Program entry keys are resolved via skill-v4 :on
    triggers (resolve-program-entry) so instant skills whose entry is
    named :default still receive :op :start intents.
 
@@ -1064,16 +1070,7 @@
               (combat-sessions/start! content-id (str owner) ability-id prepared))
             result))))))
 
-(def ^:private player-spell-complexity-cap
-  "S7: no player-spell-specific progression stat exists yet (unlike
-   skill-exp, which every catalog ability already has) to derive a
-   scaling cap from, so this is a fixed, conservative constant instead
-   of a formula -- enough for a real [form effect augment*] cast (a
-   handful of :pure/:query/:action instructions) but far below what
-   :costs/:cooldown/:progression-declaring catalog abilities can reach.
-   Linking this to a real player-progression stat is separate future
-   work, not part of wiring the admit mechanism itself."
-  20)
+(def player-spell-complexity-cap combat-api/player-spell-complexity-cap)
 
 (defn dispatch-player-spell!
   "owner, glyphs ([{:glyph kw :params {...}} ...], the desugar-ready
@@ -1486,7 +1483,7 @@
    :sources]), against the new catalog's :sources instead. :damage-
    policies is a non-:program top-level key, byte-identical (as data,
    modulo pretty-printing whitespace) between an ac/combat/abilities/
-   *.edn V3 source -- the same S6
+   *.edn V4 source -- the same S6
    guarantee combat-source's own docstring already relies on. Computed
    fresh per call rather than cached: a damage event is not a per-frame
    hot path, and this avoids a second piece of mutable state to keep in
@@ -1733,6 +1730,7 @@
    already-cached snapshot left behind by an earlier, unrelated test."
   []
   (reset! final-runtime-v2* nil))
+
 
 
 

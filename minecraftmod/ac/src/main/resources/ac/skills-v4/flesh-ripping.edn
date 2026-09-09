@@ -1,0 +1,1010 @@
+{:schema :ac/skill-v4,
+ :id :flesh-ripping,
+ :skill {:category :migrated, :level 1},
+ :activation {:mode :session},
+ :parameters
+ {:targeting-range {:type :double, :default nil},
+  :release-cp {:type :double, :default nil},
+  :damage {:type :double, :default nil},
+  :nausea-chance {:type :double, :default nil},
+  :nausea-duration-ticks {:type :long, :default nil},
+  :nausea-amplifier {:type :long, :default nil}},
+ :state {:trace {:type :any, :default nil}},
+ :description-key "ability.skill.teleporter.flesh_ripping.desc",
+ :name-key "ability.skill.teleporter.flesh_ripping",
+ :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},
+ :costs
+ {:release
+  {:resources
+   {:cp {:ref [:input :tunables :release-cp]},
+    :overload {:ref [:input :tunables :release-overload]}}}},
+ :mark-policies nil,
+ :requires
+ [:caster/id
+  :caster/eye
+  :caster/aim
+  :caster/creative?
+  :world/id
+  :rng/seed],
+ :tunables
+ {:targeting-range {:curve :mastery-lerp},
+  :damage {:curve :mastery-lerp},
+  :nausea-chance {:curve :const},
+  :nausea-duration-ticks {:curve :const, :type :int},
+  :nausea-amplifier {:curve :const, :type :int},
+  :release-cp {:curve :mastery-lerp},
+  :release-overload {:curve :mastery-lerp},
+  :cooldown-ticks {:curve :mastery-lerp, :type :int},
+  :exp-hit {:curve :const}},
+ :invariants nil,
+ :progression {:hit {:per-mark {:ref [:input :tunables :exp-hit]}}},
+ :graphs
+ {:start
+  {:on :phase/start,
+   :nodes
+   #:n{:start-start {:type :start, :nid :n/start-start},
+       :n--entry--start-0
+       {:type :local-set,
+        :operation :define,
+        :key :eye,
+        :nid :n/n--entry--start-0},
+       :n001 {:type :context-ref, :key :caster/eye, :nid :n/n001},
+       :n--entry--start-1
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--start-1},
+       :n002 {:type :context-ref, :key :caster/aim, :nid :n/n002},
+       :n--entry--start-2
+       {:type :local-set,
+        :operation :define,
+        :key :trace,
+        :nid :n/n--entry--start-2},
+       :n003
+       {:type :component,
+        :component :target/raycast,
+        :nid :n/n003,
+        :inputs
+        {:include-entities? true,
+         :include-blocks? false,
+         :living-only? true}},
+       :n004 {:type :local-get, :key :eye, :nid :n/n004},
+       :n005 {:type :local-get, :key :aim, :nid :n/n005},
+       :n006
+       {:type :parameter-ref, :key :targeting-range, :nid :n/n006},
+       :n--entry--start-3
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :trace},
+        :nid :n/n--entry--start-3},
+       :n007 {:type :local-get, :key :trace, :nid :n/n007},
+       :n--entry--start-4
+       {:type :local-set,
+        :operation :define,
+        :key :attacked?,
+        :nid :n/n--entry--start-4},
+       :n008
+       {:type :component,
+        :component :value/field,
+        :nid :n/n008,
+        :inputs {:field :attacked?}},
+       :n009 {:type :local-get, :key :trace, :nid :n/n009},
+       :n--entry--start-5
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--start-5,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :spawn,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload
+         {:position
+          {:nid :n/n--entry--start-5-in-d90e0f86,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--start-5-in-a9c063ee,
+             :ref [:local :trace]}}},
+          :width
+          {:nid :n/n--entry--start-5-in-edcd065,
+           :component :math/select,
+           :args
+           [{:nid :n/n--entry--start-5-in-935fb5ae,
+             :ref [:local :attacked?]}
+            {:nid :n/n--entry--start-5-in-6f052302,
+             :component :value/field,
+             :inputs
+             {:field :target-width,
+              :value
+              {:nid :n/n--entry--start-5-in-1a71bd34,
+               :ref [:local :trace]}}}
+            1.0]},
+          :height
+          {:nid :n/n--entry--start-5-in-49822ca,
+           :component :math/select,
+           :args
+           [{:nid :n/n--entry--start-5-in-c845b140,
+             :ref [:local :attacked?]}
+            {:nid :n/n--entry--start-5-in-fbf9d6f7,
+             :component :value/field,
+             :inputs
+             {:field :target-height,
+              :value
+              {:nid :n/n--entry--start-5-in-99d36473,
+               :ref [:local :trace]}}}
+            1.0]},
+          :color
+          {:nid :n/n--entry--start-5-in-3d0b8fa8,
+           :component :math/select,
+           :args
+           [{:nid :n/n--entry--start-5-in-3bbf95b4,
+             :ref [:local :attacked?]}
+            [185 25 25 180]
+            [74 74 74 160]]}},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--start-6
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--start-6,
+        :inputs {:outcome :started}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--start-0 :value]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--start-1 :value]}
+    {:id :e/link003,
+     :kind :exec,
+     :from [:n/n--entry--start-0 :out],
+     :to [:n/n--entry--start-1 :in]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n003 :origin]}
+    {:id :e/link005,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n003 :direction]}
+    {:id :e/link006,
+     :kind :data,
+     :from [:n/n006 :value],
+     :to [:n/n003 :distance]}
+    {:id :e/link007,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--start-2 :value]}
+    {:id :e/link008,
+     :kind :exec,
+     :from [:n/n--entry--start-1 :out],
+     :to [:n/n--entry--start-2 :in]}
+    {:id :e/link009,
+     :kind :data,
+     :from [:n/n007 :value],
+     :to [:n/n--entry--start-3 :value]}
+    {:id :e/link010,
+     :kind :exec,
+     :from [:n/n--entry--start-2 :out],
+     :to [:n/n--entry--start-3 :in]}
+    {:id :e/link011,
+     :kind :data,
+     :from [:n/n009 :value],
+     :to [:n/n008 :value]}
+    {:id :e/link012,
+     :kind :data,
+     :from [:n/n008 :value],
+     :to [:n/n--entry--start-4 :value]}
+    {:id :e/link013,
+     :kind :exec,
+     :from [:n/n--entry--start-3 :out],
+     :to [:n/n--entry--start-4 :in]}
+    {:id :e/link014,
+     :kind :exec,
+     :from [:n/n--entry--start-4 :out],
+     :to [:n/n--entry--start-5 :in]}
+    {:id :e/link015,
+     :kind :exec,
+     :from [:n/n--entry--start-5 :out],
+     :to [:n/n--entry--start-6 :in]}
+    {:id :e/link016,
+     :kind :exec,
+     :from [:n/start-start :out],
+     :to [:n/n--entry--start-0 :in]}]},
+  :pulse
+  {:on :phase/pulse,
+   :nodes
+   #:n{:start-pulse {:type :start, :nid :n/start-pulse},
+       :n--entry--pulse-0
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--pulse-0},
+       :n010
+       {:type :context-ref, :key :caster/creative?, :nid :n/n010},
+       :n--entry--pulse-1
+       {:type :local-set,
+        :operation :define,
+        :key :context-resources,
+        :nid :n/n--entry--pulse-1},
+       :n011
+       {:type :context-ref, :key :context/resources, :nid :n/n011},
+       :n--entry--pulse-2
+       {:type :local-set,
+        :operation :define,
+        :key :can-afford?,
+        :nid :n/n--entry--pulse-2},
+       :n012 {:type :component, :component :bool/or, :nid :n/n012},
+       :n013 {:type :local-get, :key :creative?, :nid :n/n013},
+       :n014 {:type :component, :component :math/gte, :nid :n/n014},
+       :n015
+       {:type :component,
+        :component :value/field,
+        :nid :n/n015,
+        :inputs {:field :cp}},
+       :n016 {:type :local-get, :key :context-resources, :nid :n/n016},
+       :n017 {:type :parameter-ref, :key :release-cp, :nid :n/n017},
+       :n--entry--pulse-3 {:type :branch, :nid :n/n--entry--pulse-3},
+       :n018 {:type :local-get, :key :can-afford?, :nid :n/n018},
+       :n--entry--pulse-3-then-0
+       {:type :local-set,
+        :operation :define,
+        :key :eye,
+        :nid :n/n--entry--pulse-3-then-0},
+       :n019 {:type :context-ref, :key :caster/eye, :nid :n/n019},
+       :n--entry--pulse-3-then-1
+       {:type :local-set,
+        :operation :define,
+        :key :aim,
+        :nid :n/n--entry--pulse-3-then-1},
+       :n020 {:type :context-ref, :key :caster/aim, :nid :n/n020},
+       :n--entry--pulse-3-then-2
+       {:type :local-set,
+        :operation :define,
+        :key :trace,
+        :nid :n/n--entry--pulse-3-then-2},
+       :n021
+       {:type :component,
+        :component :target/raycast,
+        :nid :n/n021,
+        :inputs
+        {:include-entities? true,
+         :include-blocks? false,
+         :living-only? true}},
+       :n022 {:type :local-get, :key :eye, :nid :n/n022},
+       :n023 {:type :local-get, :key :aim, :nid :n/n023},
+       :n024
+       {:type :parameter-ref, :key :targeting-range, :nid :n/n024},
+       :n--entry--pulse-3-then-3
+       {:type :component,
+        :component :state/set,
+        :inputs {:key :trace},
+        :nid :n/n--entry--pulse-3-then-3},
+       :n025 {:type :local-get, :key :trace, :nid :n/n025},
+       :n--entry--pulse-3-then-4
+       {:type :local-set,
+        :operation :define,
+        :key :attacked?,
+        :nid :n/n--entry--pulse-3-then-4},
+       :n026
+       {:type :component,
+        :component :value/field,
+        :nid :n/n026,
+        :inputs {:field :attacked?}},
+       :n027 {:type :local-get, :key :trace, :nid :n/n027},
+       :n--entry--pulse-3-then-5
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--pulse-3-then-5,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :update,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload
+         {:position
+          {:nid :n/n--entry--pulse-3-th-a68efb,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--pulse-3-th-e002896d,
+             :ref [:local :trace]}}},
+          :width
+          {:nid :n/n--entry--pulse-3-th-add71519,
+           :component :math/select,
+           :args
+           [{:nid :n/n--entry--pulse-3-th-f7e62de0,
+             :ref [:local :attacked?]}
+            {:nid :n/n--entry--pulse-3-th-73ca1ea6,
+             :component :value/field,
+             :inputs
+             {:field :target-width,
+              :value
+              {:nid :n/n--entry--pulse-3-th-48c0ca80,
+               :ref [:local :trace]}}}
+            1.0]},
+          :height
+          {:nid :n/n--entry--pulse-3-th-b9704fa7,
+           :component :math/select,
+           :args
+           [{:nid :n/n--entry--pulse-3-th-63d72521,
+             :ref [:local :attacked?]}
+            {:nid :n/n--entry--pulse-3-th-dbafd867,
+             :component :value/field,
+             :inputs
+             {:field :target-height,
+              :value
+              {:nid :n/n--entry--pulse-3-th-50112971,
+               :ref [:local :trace]}}}
+            1.0]},
+          :color
+          {:nid :n/n--entry--pulse-3-th-9a55b09,
+           :component :math/select,
+           :args
+           [{:nid :n/n--entry--pulse-3-th-d241de56,
+             :ref [:local :attacked?]}
+            [185 25 25 180]
+            [74 74 74 160]]}},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--pulse-3-then-6
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--pulse-3-then-6,
+        :inputs {:outcome :continue}},
+       :n--entry--pulse-3-else-0
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--pulse-3-else-0,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :destroy,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload {}}},
+       :n--entry--pulse-3-else-1
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--pulse-3-else-1,
+        :inputs
+        {:outcome :insufficient-resource, :end-ability? true}}},
+   :links
+   [{:id :e/link017,
+     :kind :data,
+     :from [:n/n010 :value],
+     :to [:n/n--entry--pulse-0 :value]}
+    {:id :e/link018,
+     :kind :data,
+     :from [:n/n011 :value],
+     :to [:n/n--entry--pulse-1 :value]}
+    {:id :e/link019,
+     :kind :exec,
+     :from [:n/n--entry--pulse-0 :out],
+     :to [:n/n--entry--pulse-1 :in]}
+    {:id :e/link020,
+     :kind :data,
+     :from [:n/n013 :value],
+     :to [:n/n012 :arg0]}
+    {:id :e/link021,
+     :kind :data,
+     :from [:n/n016 :value],
+     :to [:n/n015 :value]}
+    {:id :e/link022,
+     :kind :data,
+     :from [:n/n015 :value],
+     :to [:n/n014 :arg0]}
+    {:id :e/link023,
+     :kind :data,
+     :from [:n/n017 :value],
+     :to [:n/n014 :arg1]}
+    {:id :e/link024,
+     :kind :data,
+     :from [:n/n014 :value],
+     :to [:n/n012 :arg1]}
+    {:id :e/link025,
+     :kind :data,
+     :from [:n/n012 :value],
+     :to [:n/n--entry--pulse-2 :value]}
+    {:id :e/link026,
+     :kind :exec,
+     :from [:n/n--entry--pulse-1 :out],
+     :to [:n/n--entry--pulse-2 :in]}
+    {:id :e/link027,
+     :kind :data,
+     :from [:n/n018 :value],
+     :to [:n/n--entry--pulse-3 :condition]}
+    {:id :e/link028,
+     :kind :data,
+     :from [:n/n019 :value],
+     :to [:n/n--entry--pulse-3-then-0 :value]}
+    {:id :e/link029,
+     :kind :data,
+     :from [:n/n020 :value],
+     :to [:n/n--entry--pulse-3-then-1 :value]}
+    {:id :e/link030,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-then-0 :out],
+     :to [:n/n--entry--pulse-3-then-1 :in]}
+    {:id :e/link031,
+     :kind :data,
+     :from [:n/n022 :value],
+     :to [:n/n021 :origin]}
+    {:id :e/link032,
+     :kind :data,
+     :from [:n/n023 :value],
+     :to [:n/n021 :direction]}
+    {:id :e/link033,
+     :kind :data,
+     :from [:n/n024 :value],
+     :to [:n/n021 :distance]}
+    {:id :e/link034,
+     :kind :data,
+     :from [:n/n021 :value],
+     :to [:n/n--entry--pulse-3-then-2 :value]}
+    {:id :e/link035,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-then-1 :out],
+     :to [:n/n--entry--pulse-3-then-2 :in]}
+    {:id :e/link036,
+     :kind :data,
+     :from [:n/n025 :value],
+     :to [:n/n--entry--pulse-3-then-3 :value]}
+    {:id :e/link037,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-then-2 :out],
+     :to [:n/n--entry--pulse-3-then-3 :in]}
+    {:id :e/link038,
+     :kind :data,
+     :from [:n/n027 :value],
+     :to [:n/n026 :value]}
+    {:id :e/link039,
+     :kind :data,
+     :from [:n/n026 :value],
+     :to [:n/n--entry--pulse-3-then-4 :value]}
+    {:id :e/link040,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-then-3 :out],
+     :to [:n/n--entry--pulse-3-then-4 :in]}
+    {:id :e/link041,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-then-4 :out],
+     :to [:n/n--entry--pulse-3-then-5 :in]}
+    {:id :e/link042,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-then-5 :out],
+     :to [:n/n--entry--pulse-3-then-6 :in]}
+    {:id :e/link043,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3-else-0 :out],
+     :to [:n/n--entry--pulse-3-else-1 :in]}
+    {:id :e/link044,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3 :true],
+     :to [:n/n--entry--pulse-3-then-0 :in]}
+    {:id :e/link045,
+     :kind :exec,
+     :from [:n/n--entry--pulse-3 :false],
+     :to [:n/n--entry--pulse-3-else-0 :in]}
+    {:id :e/link046,
+     :kind :exec,
+     :from [:n/n--entry--pulse-2 :out],
+     :to [:n/n--entry--pulse-3 :in]}
+    {:id :e/link047,
+     :kind :exec,
+     :from [:n/start-pulse :out],
+     :to [:n/n--entry--pulse-0 :in]}]},
+  :release
+  {:on :phase/release,
+   :nodes
+   #:n{:start-release {:type :start, :nid :n/start-release},
+       :n--entry--release-0
+       {:type :local-set,
+        :operation :define,
+        :key :trace,
+        :nid :n/n--entry--release-0},
+       :n028 {:type :state-ref, :key :trace, :nid :n/n028},
+       :n--entry--release-1
+       {:type :branch, :nid :n/n--entry--release-1},
+       :n029
+       {:type :component,
+        :component :value/field,
+        :nid :n/n029,
+        :inputs {:field :attacked?}},
+       :n030 {:type :local-get, :key :trace, :nid :n/n030},
+       :n--entry--release-1-then-0
+       {:type :local-set,
+        :operation :define,
+        :key :release-budget,
+        :nid :n/n--entry--release-1-then-0},
+       :n031 {:type :context-ref, :key :budget/release, :nid :n/n031},
+       :n--entry--release-1-then-1
+       {:type :local-set,
+        :operation :define,
+        :key :creative?,
+        :nid :n/n--entry--release-1-then-1},
+       :n032
+       {:type :context-ref, :key :caster/creative?, :nid :n/n032},
+       :n--entry--release-1-then-2
+       {:type :local-set,
+        :operation :define,
+        :key :spend-scale,
+        :nid :n/n--entry--release-1-then-2},
+       :n033
+       {:type :component,
+        :component :math/select,
+        :nid :n/n033,
+        :inputs {:arg1 0.0, :arg2 1.0}},
+       :n034 {:type :local-get, :key :creative?, :nid :n/n034},
+       :n--entry--release-1-then-3
+       {:type :local-set,
+        :operation :define,
+        :key :sufficient?,
+        :nid :n/n--entry--release-1-then-3},
+       :n035 {:type :component, :component :cost/spend, :nid :n/n035},
+       :n036 {:type :local-get, :key :release-budget, :nid :n/n036},
+       :n037 {:type :local-get, :key :spend-scale, :nid :n/n037},
+       :n--entry--release-1-then-4
+       {:type :branch, :nid :n/n--entry--release-1-then-4},
+       :n038 {:type :local-get, :key :sufficient?, :nid :n/n038},
+       :n--entry--release-1--f631a579
+       {:type :local-set,
+        :operation :define,
+        :key :owner-id,
+        :nid :n/n--entry--release-1--f631a579},
+       :n039 {:type :context-ref, :key :caster/id, :nid :n/n039},
+       :n--entry--release-1--9830d05e
+       {:type :local-set,
+        :operation :define,
+        :key :hit-progression,
+        :nid :n/n--entry--release-1--9830d05e},
+       :n040 {:type :context-ref, :key :progression/hit, :nid :n/n040},
+       :n--entry--release-1--50df101b
+       {:type :local-set,
+        :operation :define,
+        :key :main-cooldown,
+        :nid :n/n--entry--release-1--50df101b},
+       :n041 {:type :context-ref, :key :cooldown/main, :nid :n/n041},
+       :n--entry--release-1--9649e2be
+       {:type :component,
+        :component :combat/damage,
+        :nid :n/n--entry--release-1--9649e2be,
+        :inputs {:damage-type :magic}},
+       :n042
+       {:type :component,
+        :component :value/field,
+        :nid :n/n042,
+        :inputs {:field :target-id}},
+       :n043 {:type :local-get, :key :trace, :nid :n/n043},
+       :n044 {:type :parameter-ref, :key :damage, :nid :n/n044},
+       :n--entry--release-1--f6754142
+       {:type :local-set,
+        :operation :define,
+        :key :nausea-roll?,
+        :nid :n/n--entry--release-1--f6754142},
+       :n045
+       {:type :component, :component :random/chance, :nid :n/n045},
+       :n046 {:type :parameter-ref, :key :nausea-chance, :nid :n/n046},
+       :n--entry--release-1--9d32e9b
+       {:type :branch, :nid :n/n--entry--release-1--9d32e9b},
+       :n047 {:type :local-get, :key :nausea-roll?, :nid :n/n047},
+       :n--entry--release-1--904e70a7
+       {:type :component,
+        :component :combat/status,
+        :nid :n/n--entry--release-1--904e70a7,
+        :inputs {:status-id :nausea}},
+       :n048 {:type :local-get, :key :owner-id, :nid :n/n048},
+       :n049
+       {:type :parameter-ref,
+        :key :nausea-duration-ticks,
+        :nid :n/n049},
+       :n050
+       {:type :parameter-ref, :key :nausea-amplifier, :nid :n/n050},
+       :n051 {:type :merge, :nid :n/n051},
+       :n--entry--release-1--3ab13c4e
+       {:type :component,
+        :component :event/emit,
+        :nid :n/n--entry--release-1--3ab13c4e,
+        :inputs {:type :score/mark}},
+       :n052 {:type :local-get, :key :hit-progression, :nid :n/n052},
+       :n--entry--release-1--a27b6600
+       {:type :component,
+        :component :cooldown/start,
+        :nid :n/n--entry--release-1--a27b6600,
+        :inputs {:name :main}},
+       :n053 {:type :local-get, :key :main-cooldown, :nid :n/n053},
+       :n--entry--release-1--6d16cb8c
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1--6d16cb8c,
+        :inputs
+        {:effect-id :particle-burst,
+         :operation :spawn,
+         :payload
+         {:position
+          {:nid :n/n--entry--release-1--a389c820,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-1--9f9650ca,
+             :ref [:local :trace]}}},
+          :rate-per-tick 6,
+          :limit 6,
+          :particle
+          {:material :additive,
+           :color [180 20 20 230],
+           :life-ticks 10,
+           :speed 0.08,
+           :spread {:x 0.35, :y 0.55, :z 0.35}}},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--release-1--9d22e8f5
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1--9d22e8f5,
+        :inputs
+        {:effect-id :audio-one-shot,
+         :operation :spawn,
+         :payload
+         {:position
+          {:nid :n/n--entry--release-1--602e8a4b,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-1--1da606b3,
+             :ref [:local :trace]}}},
+          :sound-id "academy:tp.guts",
+          :volume 0.6,
+          :pitch 1.0},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--release-1--6ce3caa3
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1--6ce3caa3,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :destroy,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload {}}},
+       :n--entry--release-1--fce22908
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-1--fce22908,
+        :inputs {:outcome :performed, :end-ability? true}},
+       :n--entry--release-1--eb48d02b
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1--eb48d02b,
+        :inputs
+        {:effect-id :particle-burst,
+         :operation :spawn,
+         :payload
+         {:position
+          {:nid :n/n--entry--release-1--b2d7d4ef,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-1--30a1a05,
+             :ref [:local :trace]}}},
+          :rate-per-tick 6,
+          :limit 6,
+          :particle
+          {:material :additive,
+           :color [180 20 20 230],
+           :life-ticks 10,
+           :speed 0.08,
+           :spread {:x 0.35, :y 0.55, :z 0.35}}},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--release-1--c315ae04
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1--c315ae04,
+        :inputs
+        {:effect-id :audio-one-shot,
+         :operation :spawn,
+         :payload
+         {:position
+          {:nid :n/n--entry--release-1--9f0e21f0,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-1--cc93061b,
+             :ref [:local :trace]}}},
+          :sound-id "academy:tp.guts",
+          :volume 0.6,
+          :pitch 1.0},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--release-1--3910ea8
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1--3910ea8,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :destroy,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload {}}},
+       :n--entry--release-1--bdbaed47
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-1--bdbaed47,
+        :inputs {:outcome :insufficient-resource, :end-ability? true}},
+       :n--entry--release-1-else-0
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1-else-0,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :destroy,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload {}}},
+       :n--entry--release-1-else-1
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--release-1-else-1,
+        :inputs
+        {:effect-id :audio-one-shot,
+         :operation :spawn,
+         :payload
+         {:position
+          {:nid :n/n--entry--release-1--dbba0adb,
+           :component :value/field,
+           :inputs
+           {:field :position,
+            :value
+            {:nid :n/n--entry--release-1--c699cf0d,
+             :ref [:local :trace]}}},
+          :sound-id "academy:tp.guts",
+          :volume 0.6,
+          :pitch 1.0},
+         :audience {:type :nearby, :radius 64.0}}},
+       :n--entry--release-1-else-2
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--release-1-else-2,
+        :inputs {:outcome :miss, :end-ability? true}}},
+   :links
+   [{:id :e/link048,
+     :kind :data,
+     :from [:n/n028 :value],
+     :to [:n/n--entry--release-0 :value]}
+    {:id :e/link049,
+     :kind :data,
+     :from [:n/n030 :value],
+     :to [:n/n029 :value]}
+    {:id :e/link050,
+     :kind :data,
+     :from [:n/n029 :value],
+     :to [:n/n--entry--release-1 :condition]}
+    {:id :e/link051,
+     :kind :data,
+     :from [:n/n031 :value],
+     :to [:n/n--entry--release-1-then-0 :value]}
+    {:id :e/link052,
+     :kind :data,
+     :from [:n/n032 :value],
+     :to [:n/n--entry--release-1-then-1 :value]}
+    {:id :e/link053,
+     :kind :exec,
+     :from [:n/n--entry--release-1-then-0 :out],
+     :to [:n/n--entry--release-1-then-1 :in]}
+    {:id :e/link054,
+     :kind :data,
+     :from [:n/n034 :value],
+     :to [:n/n033 :arg0]}
+    {:id :e/link055,
+     :kind :data,
+     :from [:n/n033 :value],
+     :to [:n/n--entry--release-1-then-2 :value]}
+    {:id :e/link056,
+     :kind :exec,
+     :from [:n/n--entry--release-1-then-1 :out],
+     :to [:n/n--entry--release-1-then-2 :in]}
+    {:id :e/link057,
+     :kind :data,
+     :from [:n/n036 :value],
+     :to [:n/n035 :budget]}
+    {:id :e/link058,
+     :kind :data,
+     :from [:n/n037 :value],
+     :to [:n/n035 :scale]}
+    {:id :e/link059,
+     :kind :data,
+     :from [:n/n035 :value],
+     :to [:n/n--entry--release-1-then-3 :value]}
+    {:id :e/link060,
+     :kind :exec,
+     :from [:n/n--entry--release-1-then-2 :out],
+     :to [:n/n--entry--release-1-then-3 :in]}
+    {:id :e/link061,
+     :kind :data,
+     :from [:n/n038 :value],
+     :to [:n/n--entry--release-1-then-4 :condition]}
+    {:id :e/link062,
+     :kind :data,
+     :from [:n/n039 :value],
+     :to [:n/n--entry--release-1--f631a579 :value]}
+    {:id :e/link063,
+     :kind :data,
+     :from [:n/n040 :value],
+     :to [:n/n--entry--release-1--9830d05e :value]}
+    {:id :e/link064,
+     :kind :exec,
+     :from [:n/n--entry--release-1--f631a579 :out],
+     :to [:n/n--entry--release-1--9830d05e :in]}
+    {:id :e/link065,
+     :kind :data,
+     :from [:n/n041 :value],
+     :to [:n/n--entry--release-1--50df101b :value]}
+    {:id :e/link066,
+     :kind :exec,
+     :from [:n/n--entry--release-1--9830d05e :out],
+     :to [:n/n--entry--release-1--50df101b :in]}
+    {:id :e/link067,
+     :kind :data,
+     :from [:n/n043 :value],
+     :to [:n/n042 :value]}
+    {:id :e/link068,
+     :kind :data,
+     :from [:n/n042 :value],
+     :to [:n/n--entry--release-1--9649e2be :target]}
+    {:id :e/link069,
+     :kind :data,
+     :from [:n/n044 :value],
+     :to [:n/n--entry--release-1--9649e2be :amount]}
+    {:id :e/link070,
+     :kind :exec,
+     :from [:n/n--entry--release-1--50df101b :out],
+     :to [:n/n--entry--release-1--9649e2be :in]}
+    {:id :e/link071,
+     :kind :data,
+     :from [:n/n046 :value],
+     :to [:n/n045 :probability]}
+    {:id :e/link072,
+     :kind :data,
+     :from [:n/n045 :value],
+     :to [:n/n--entry--release-1--f6754142 :value]}
+    {:id :e/link073,
+     :kind :exec,
+     :from [:n/n--entry--release-1--9649e2be :out],
+     :to [:n/n--entry--release-1--f6754142 :in]}
+    {:id :e/link074,
+     :kind :data,
+     :from [:n/n047 :value],
+     :to [:n/n--entry--release-1--9d32e9b :condition]}
+    {:id :e/link075,
+     :kind :data,
+     :from [:n/n048 :value],
+     :to [:n/n--entry--release-1--904e70a7 :target]}
+    {:id :e/link076,
+     :kind :data,
+     :from [:n/n049 :value],
+     :to [:n/n--entry--release-1--904e70a7 :duration-ticks]}
+    {:id :e/link077,
+     :kind :data,
+     :from [:n/n050 :value],
+     :to [:n/n--entry--release-1--904e70a7 :amplifier]}
+    {:id :e/link078,
+     :kind :exec,
+     :from [:n/n--entry--release-1--9d32e9b :true],
+     :to [:n/n--entry--release-1--904e70a7 :in]}
+    {:id :e/link079,
+     :kind :exec,
+     :from [:n/n--entry--release-1--904e70a7 :out],
+     :to [:n/n051 :in]}
+    {:id :e/link080,
+     :kind :exec,
+     :from [:n/n--entry--release-1--9d32e9b :false],
+     :to [:n/n051 :in]}
+    {:id :e/link081,
+     :kind :exec,
+     :from [:n/n--entry--release-1--f6754142 :out],
+     :to [:n/n--entry--release-1--9d32e9b :in]}
+    {:id :e/link082,
+     :kind :data,
+     :from [:n/n052 :value],
+     :to [:n/n--entry--release-1--3ab13c4e :progression]}
+    {:id :e/link083,
+     :kind :exec,
+     :from [:n/n051 :out],
+     :to [:n/n--entry--release-1--3ab13c4e :in]}
+    {:id :e/link084,
+     :kind :data,
+     :from [:n/n053 :value],
+     :to [:n/n--entry--release-1--a27b6600 :ticks]}
+    {:id :e/link085,
+     :kind :exec,
+     :from [:n/n--entry--release-1--3ab13c4e :out],
+     :to [:n/n--entry--release-1--a27b6600 :in]}
+    {:id :e/link086,
+     :kind :exec,
+     :from [:n/n--entry--release-1--a27b6600 :out],
+     :to [:n/n--entry--release-1--6d16cb8c :in]}
+    {:id :e/link087,
+     :kind :exec,
+     :from [:n/n--entry--release-1--6d16cb8c :out],
+     :to [:n/n--entry--release-1--9d22e8f5 :in]}
+    {:id :e/link088,
+     :kind :exec,
+     :from [:n/n--entry--release-1--9d22e8f5 :out],
+     :to [:n/n--entry--release-1--6ce3caa3 :in]}
+    {:id :e/link089,
+     :kind :exec,
+     :from [:n/n--entry--release-1--6ce3caa3 :out],
+     :to [:n/n--entry--release-1--fce22908 :in]}
+    {:id :e/link090,
+     :kind :exec,
+     :from [:n/n--entry--release-1--eb48d02b :out],
+     :to [:n/n--entry--release-1--c315ae04 :in]}
+    {:id :e/link091,
+     :kind :exec,
+     :from [:n/n--entry--release-1--c315ae04 :out],
+     :to [:n/n--entry--release-1--3910ea8 :in]}
+    {:id :e/link092,
+     :kind :exec,
+     :from [:n/n--entry--release-1--3910ea8 :out],
+     :to [:n/n--entry--release-1--bdbaed47 :in]}
+    {:id :e/link093,
+     :kind :exec,
+     :from [:n/n--entry--release-1-then-4 :true],
+     :to [:n/n--entry--release-1--f631a579 :in]}
+    {:id :e/link094,
+     :kind :exec,
+     :from [:n/n--entry--release-1-then-4 :false],
+     :to [:n/n--entry--release-1--eb48d02b :in]}
+    {:id :e/link095,
+     :kind :exec,
+     :from [:n/n--entry--release-1-then-3 :out],
+     :to [:n/n--entry--release-1-then-4 :in]}
+    {:id :e/link096,
+     :kind :exec,
+     :from [:n/n--entry--release-1-else-0 :out],
+     :to [:n/n--entry--release-1-else-1 :in]}
+    {:id :e/link097,
+     :kind :exec,
+     :from [:n/n--entry--release-1-else-1 :out],
+     :to [:n/n--entry--release-1-else-2 :in]}
+    {:id :e/link098,
+     :kind :exec,
+     :from [:n/n--entry--release-1 :true],
+     :to [:n/n--entry--release-1-then-0 :in]}
+    {:id :e/link099,
+     :kind :exec,
+     :from [:n/n--entry--release-1 :false],
+     :to [:n/n--entry--release-1-else-0 :in]}
+    {:id :e/link100,
+     :kind :exec,
+     :from [:n/n--entry--release-0 :out],
+     :to [:n/n--entry--release-1 :in]}
+    {:id :e/link101,
+     :kind :exec,
+     :from [:n/start-release :out],
+     :to [:n/n--entry--release-0 :in]}]},
+  :abort
+  {:on :phase/abort,
+   :nodes
+   #:n{:start-abort {:type :start, :nid :n/start-abort},
+       :n--entry--abort-0
+       {:type :component,
+        :component :vfx/emit,
+        :nid :n/n--entry--abort-0,
+        :inputs
+        {:effect-id :target-box-session,
+         :operation :destroy,
+         :instance-key [:activation :flesh-ripping-marker],
+         :payload {}}},
+       :n--entry--abort-1
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--abort-1,
+        :inputs {:outcome :aborted, :end-ability? true}}},
+   :links
+   [{:id :e/link102,
+     :kind :exec,
+     :from [:n/n--entry--abort-0 :out],
+     :to [:n/n--entry--abort-1 :in]}
+    {:id :e/link103,
+     :kind :exec,
+     :from [:n/start-abort :out],
+     :to [:n/n--entry--abort-0 :in]}]}}}

@@ -1,129 +1,103 @@
-;; Spell composer — no main-branch XML; layout follows the compose flow:
-;; pick one form (left top) → add effects/augments (left bottom) →
-;; review the glyph chain + cost (right) → Clear / Cast.
 {:ui/schema 2 :view/id :academy.app/spell-composer
- :host {:kind :screen :design-width 400 :design-height 240 :scale-policy :fit}
- :state-schema {:title :string
-                :form-header :string :effect-header :string :spell-header :string
-                :form-palette :vector :effect-palette :vector
-                :composition :vector
-                :cost-label :string :status :string
-                :cast-label :string :clear-label :string
-                :can-cast? :boolean :cast-rgba :vector}
- :root
- {:type :absolute :key :composer/root :layout {:width 400 :height 240}
-  :children
-  [{:type :rect :key :composer/blackout
-    :layout {:width :fill :height :fill}
-    :style {:rgba [0.0 0.0 0.0 0.72]}
-    :semantics {:role :generic}}
-
-   {:type :text :key :composer/title
-    :layout {:x 10.0 :y 6.0 :width 220.0 :height 14.0}
-    :style {:font-size 12.0 :rgba [1.0 1.0 1.0 1.0]}
-    :bind {:text [:state :title]}
-    :semantics {:role :heading}}
-
-   ;; Left panel — palettes
-   {:type :rect :key :composer/left-bg
-    :layout {:x 8.0 :y 24.0 :width 124.0 :height 208.0}
-    :style {:rgba [0.12 0.12 0.14 0.94]}
-    :semantics {:role :generic}}
-
-   {:type :text :key :composer/form-header
-    :layout {:x 14.0 :y 28.0 :width 112.0 :height 12.0}
-    :style {:font-size 9.0 :rgba [0.65 0.85 1.0 1.0]}
-    :bind {:text [:state :form-header]}
-    :semantics {:role :generic}}
-
-   {:type :scroll :key :composer/form-palette
-    :layout {:x 14.0 :y 42.0 :width 112.0 :height 52.0}
-    :bind {:items [:state :form-palette]}
-    :semantics {:role :list}
-    :children
-    [{:type :text :layout {:width :fill :height 13.0}
-      :style {:font-size 9.0}
-      :bind {:text [:item :label] :rgba [:item :rgba]}
-      :on {:activate :composer/pick-form}
-      :semantics {:role :button}}]}
-
-   {:type :rect :key :composer/left-divider
-    :layout {:x 14.0 :y 98.0 :width 112.0 :height 1.0}
-    :style {:rgba [0.35 0.35 0.4 0.8]}
-    :semantics {:role :generic}}
-
-   {:type :text :key :composer/effect-header
-    :layout {:x 14.0 :y 104.0 :width 112.0 :height 12.0}
-    :style {:font-size 9.0 :rgba [0.85 0.8 0.55 1.0]}
-    :bind {:text [:state :effect-header]}
-    :semantics {:role :generic}}
-
-   {:type :scroll :key :composer/effect-palette
-    :layout {:x 14.0 :y 118.0 :width 112.0 :height 106.0}
-    :bind {:items [:state :effect-palette]}
-    :semantics {:role :list}
-    :children
-    [{:type :text :layout {:width :fill :height 13.0}
-      :style {:font-size 9.0}
-      :bind {:text [:item :label] :rgba [:item :rgba]}
-      :on {:activate :composer/add-effect}
-      :semantics {:role :button}}]}
-
-   ;; Right panel — composition + actions
-   {:type :rect :key :composer/right-bg
-    :layout {:x 140.0 :y 24.0 :width 252.0 :height 208.0}
-    :style {:rgba [0.12 0.12 0.14 0.94]}
-    :semantics {:role :generic}}
-
-   {:type :text :key :composer/spell-header
-    :layout {:x 148.0 :y 28.0 :width 180.0 :height 12.0}
-    :style {:font-size 9.0 :rgba [0.75 0.75 0.8 1.0]}
-    :bind {:text [:state :spell-header]}
-    :semantics {:role :generic}}
-
-   {:type :scroll :key :composer/composition
-    :layout {:x 148.0 :y 44.0 :width 236.0 :height 96.0}
-    :bind {:items [:state :composition]}
-    :semantics {:role :list}
-    :children
-    [{:type :text :layout {:width :fill :height 14.0}
-      :style {:font-size 9.0}
-      :bind {:text [:item :label] :rgba [:item :rgba]}
-      :semantics {:role :generic}}]}
-
-   {:type :text :key :composer/cost
-    :layout {:x 148.0 :y 146.0 :width 236.0 :height 12.0}
-    :style {:font-size 9.0 :rgba [0.7 0.9 0.7 1.0]}
-    :bind {:text [:state :cost-label]}
-    :semantics {:role :generic}}
-
-   {:type :text :key :composer/status
-    :layout {:x 148.0 :y 158.0 :width 236.0 :height 24.0}
-    :style {:font-size 8.0 :rgba [0.72 0.72 0.72 1.0]}
-    :bind {:text [:state :status]}
-    :semantics {:role :generic}}
-
-   ;; Actions — plain text+rect (not :button): button lowering paints the
-   ;; default opaque white rect as the control chrome, which blew out this
-   ;; strip and ignored :bind :rgba on the label.
-   {:type :rect :key :composer/clear-bg
-    :layout {:x 148.0 :y 188.0 :width 64.0 :height 16.0}
-    :style {:rgba [0.22 0.22 0.26 0.95]}
-    :semantics {:role :generic}}
-   {:type :text :key :composer/clear
-    :layout {:x 148.0 :y 191.0 :width 64.0 :height 12.0}
-    :style {:font-size 9.0 :rgba [0.9 0.9 0.9 1.0]}
-    :bind {:text [:state :clear-label]}
-    :on {:activate :composer/clear}
-    :semantics {:role :button}}
-
-   {:type :rect :key :composer/cast-bg
-    :layout {:x 312.0 :y 188.0 :width 64.0 :height 16.0}
-    :style {:rgba [0.22 0.22 0.26 0.95]}
-    :semantics {:role :generic}}
-   {:type :text :key :composer/cast
-    :layout {:x 312.0 :y 191.0 :width 64.0 :height 12.0}
-    :style {:font-size 9.0}
-    :bind {:text [:state :cast-label] :rgba [:state :cast-rgba]}
-    :on {:activate :composer/cast}
-    :semantics {:role :button}}]}}
+ :host {:kind :screen :design-width 480 :design-height 320 :scale-policy :fit}
+ :state-schema {:title :string :form-palette :vector :effect-palette :vector
+                :augment-palette :vector :form-label :string :selected-param-fields :vector :effect-slots :vector
+                :can-cast? :boolean :busy? :boolean :status :string
+                :cast-label :string :clear-label :string}
+ :root {:type :column :key :composer/root :layout {:x 8 :y 8 :width 464 :height 304}
+        :children
+        [{:type :text :key :composer/title :layout {:height 18}
+          :bind {:text [:state :title]} :semantics {:role :heading}}
+         {:type :row :key :composer/form-row :layout {:height 56}
+          :children
+          [{:type :column :layout {:width 190}
+            :children
+            [{:type :text :layout {:height 14} :bind {:text [:state :form-label]}}
+             {:type :scroll :key :composer/form-palette :layout {:height 36}
+              :bind {:items [:state :form-palette]} :semantics {:role :list}
+              :children [{:type :row :layout {:height 16}
+                          :children [{:type :button :layout {:width 180 :height 14}
+                                      :bind {:text [:item :label]}
+                                      :on {:activate :composer/pick-form}
+                                      :semantics {:role :button}}]}]}]}
+           {:type :column :layout {:width 260}
+            :children
+            [{:type :text :layout {:height 14} :bind {:text "Effects"}}
+             {:type :scroll :key :composer/effect-slots :layout {:height 36}
+              :bind {:items [:state :effect-slots]} :semantics {:role :list}
+              :children
+              [{:type :column :layout {:width 260}
+                :bind {:height [:item :row-height]}
+                :children
+                [{:type :row :layout {:height 16}
+                  :children
+                  [{:type :button :layout {:width 92 :height 14}
+                    :bind {:text [:item :label]}
+                    :on {:activate :composer/select-effect}
+                    :semantics {:role :button}}
+                   {:type :button :layout {:width 22 :height 14}
+                    :bind {:text [:item :up-label] :visible [:item :can-move-up?]}
+                    :on {:activate :composer/move-effect-up}
+                    :semantics {:role :button}}
+                   {:type :button :layout {:width 22 :height 14}
+                    :bind {:text [:item :down-label] :visible [:item :can-move-down?]}
+                    :on {:activate :composer/move-effect-down}
+                    :semantics {:role :button}}
+                   {:type :button :layout {:width 22 :height 14}
+                    :bind {:text [:item :remove-label]}
+                    :on {:activate :composer/remove-effect}
+                    :semantics {:role :button}}]}
+                 {:type :repeater :layout {:width 110 :direction :column}
+                  :bind {:items [:item :augments] :height [:item :augment-height]}
+                  :children
+                  [{:type :row :layout {:width 110 :height 14}
+                    :children
+                    [{:type :text :layout {:width 90 :height 14}
+                      :bind {:text [:item :label]}}
+                     {:type :button :layout {:width 16 :height 14}
+                      :bind {:text [:item :remove-label]}
+                      :on {:activate :composer/remove-augment}
+                      :semantics {:role :button}}]}]}]}]}]}]}{:type :row :key :composer/params-row :layout {:height 54}
+          :children
+          [{:type :text :layout {:width 92 :height 14} :bind {:text "Parameters"}}
+           {:type :scroll :key :composer/selected-params :layout {:width 360 :height 52}
+            :bind {:items [:state :selected-param-fields]} :semantics {:role :list}
+            :children [{:type :row :layout {:height 16}
+                        :children [{:type :text :layout {:width 132 :height 14}
+                                    :bind {:text [:item :label]}}
+                                   {:type :text-input :layout {:width 96 :height 14}
+                                    :bind {:text [:item :value]}
+                                    :on {:change :composer/param-change :submit :composer/param-submit}
+                                    :semantics {:role :textbox :field :composer-param}}]}]}]}{:type :row :key :composer/palette-row :layout {:height 112}
+          :children
+          [{:type :column :layout {:width 220}
+            :children
+            [{:type :text :layout {:height 14} :bind {:text "Effects"}}
+             {:type :scroll :key :composer/effect-palette :layout {:height 96}
+              :bind {:items [:state :effect-palette]} :semantics {:role :list}
+              :children [{:type :row :layout {:height 16}
+                          :children [{:type :button :layout {:width 210 :height 14}
+                                      :bind {:text [:item :label]}
+                                      :on {:activate :composer/add-effect}
+                                      :semantics {:role :button}}]}]}]}
+           {:type :column :layout {:width 220}
+            :children
+            [{:type :text :layout {:height 14} :bind {:text "Augments"}}
+             {:type :scroll :key :composer/augment-palette :layout {:height 96}
+              :bind {:items [:state :augment-palette]} :semantics {:role :list}
+              :children [{:type :row :layout {:height 16}
+                          :children [{:type :button :layout {:width 210 :height 14}
+                                      :bind {:text [:item :label]}
+                                      :on {:activate :composer/add-augment}
+                                      :semantics {:role :button}}]}]}]}]}
+         {:type :row :key :composer/actions :layout {:height 18}
+          :children [{:type :button :layout {:width 100 :height 16}
+                      :bind {:text [:state :clear-label]}
+                      :on {:activate :composer/clear}
+                      :semantics {:role :button}}
+                     {:type :button :layout {:width 100 :height 16}
+                      :bind {:text [:state :cast-label]}
+                      :on {:activate :composer/cast}
+                      :semantics {:role :button}}]}
+         {:type :text :key :composer/status :layout {:height 18}
+          :bind {:text [:state :status]}}]}}

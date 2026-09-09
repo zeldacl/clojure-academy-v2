@@ -27,6 +27,7 @@
             [cn.li.neoforge262.client.fov-renderer :as fov-renderer]
             [cn.li.neoforge262.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.neoforge262.client.presentation-world-renderer :as presentation-world-renderer]
+            [cn.li.neoforge262.client.imag-phase-stage :as imag-phase-stage]
             [cn.li.neoforge262.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.neoforge262.adapter.gui-registry :as gui-registry]
             [cn.li.neoforge262.gui.network.shared :as gui-network]
@@ -397,6 +398,7 @@
   (media-playback-bridge/install-media-playback-bridge!)
   (hand-effect-renderer/init!)
   (presentation-world-renderer/init!)
+  (imag-phase-stage/init!)
   (fov-renderer/init!)
   (request-bridge/init!)
 

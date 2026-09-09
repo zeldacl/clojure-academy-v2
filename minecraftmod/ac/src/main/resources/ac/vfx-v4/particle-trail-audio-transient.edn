@@ -1,0 +1,62 @@
+{:schema :ac/vfx-v4,
+ :id :particle-trail-audio-transient,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:sound-position {:type :vec3},
+  :count-limit {:type :int},
+  :sound-pitch {:type :float},
+  :life-ticks {:type :int},
+  :sound-volume {:type :float},
+  :fade-out {:type :int},
+  :start {:type :vec3},
+  :radius {:type :any},
+  :size {:type :any},
+  :sound-id {:type :string},
+  :alpha {:type :any},
+  :end {:type :vec3},
+  :velocity {:type :any},
+  :texture {:type :string},
+  :spacing {:type :any},
+  :fade-in {:type :int}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :component,
+        :component :audio-one-shot,
+        :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :sound-id, :nid :n/n001},
+       :n002 {:type :context-ref, :key :sound-position, :nid :n/n002},
+       :n003 {:type :context-ref, :key :sound-volume, :nid :n/n003},
+       :n004 {:type :context-ref, :key :sound-pitch, :nid :n/n004},
+       :n--entry--default-1
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-1,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :sound-id]}
+    {:id :e/link002,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--default-0 :position]}
+    {:id :e/link003,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--default-0 :volume]}
+    {:id :e/link004,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--default-0 :pitch]}
+    {:id :e/link005,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}
+    {:id :e/link006,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.service.combat-catalog
   "Read-only metadata projection for skill UI, trigger resolution and
-   passive effects. The V3 document is the single source of truth; no
+   passive effects. The V4 graph document is the single source of truth; no
    manifest/source indirection is reconstructed here."
   (:require [clojure.string :as str]
             [cn.li.ac.ability.skills-catalog :as skills-catalog]
@@ -30,7 +30,7 @@
                             metadata
                             {:id id
                              ;; Existing runtime reducers consume the old
-                             ;; scalar activation mode; V3 stores it as an
+                             ;; scalar activation mode; V4 stores it as an
                              ;; explicit map for editor extensibility.
                              :activation (or (get-in document [:activation :mode])
                                              (:activation metadata)
@@ -45,39 +45,49 @@
    {:sources (source-map assembled)
     :registrations (mapv #(dissoc % :ir) (:registrations assembled))}))
 
-(defn initialize! []
-  (let [assembled (skills-catalog/assemble)
-        abilities (ability-map assembled)
-        current (get-in @state* [:combat :abilities])]
-    (if (and (empty? abilities) (seq current))
-      (do (log/warn "Refusing to replace populated combat catalog with empty assemble"
-                    {:incoming 0 :current (count current)})
-          @state*)
-      (let [trigger-index (reduce (fn [index source]
-                                    (reduce (fn [result trigger]
-                                              (if (and (:source trigger) (:dispatch trigger))
-                                                (update result (:source trigger) (fnil conj []) trigger)
-                                                result))
-                                            index (:external-triggers source)))
-                                  {} (vals (source-map assembled)))
-            combat {:sources (source-map assembled)
-                    :registrations (:registrations assembled)
-                    :abilities abilities
-                    :by-id (registration-map assembled)
-                    :trigger-index trigger-index
-                    :errors {}}
-            value {:status :ready
-                   :schema-version schema-version
-                   :content-hash (content-hash assembled)
-                   :combat combat}]
-        (reset! state* value)
-        (let [payload {:abilities (count abilities)
-                       :arc-gen? (contains? abilities :arc-gen)
-                       :status :ready}]
-          (if (zero? (count abilities))
-            (log/warn "Combat catalog ready but empty" payload)
-            (log/info "Combat catalog ready" payload)))
-        value))))
+(defn initialize!
+  "Project the assembled V4 catalog into the read-only metadata state.
+
+   The zero-arg form assembles the catalog itself. Assembling parses, validates
+   and node-compiles every shipped skill document, so callers that already hold
+   an assembled catalog should pass it in rather than paying for a second,
+   identical assembly. Pass the raw catalog from skills-catalog/assemble, not a
+   runtime's :catalog -- engine-v2 replaces :registrations with compiled entries,
+   and content-hash only strips :ir, so a compiled catalog would change the hash
+   that verifyCombatContentHash pins."
+  ([] (initialize! (skills-catalog/assemble)))
+  ([assembled]
+   (let [abilities (ability-map assembled)
+         current (get-in @state* [:combat :abilities])]
+     (if (and (empty? abilities) (seq current))
+       (do (log/warn "Refusing to replace populated combat catalog with empty assemble"
+                     {:incoming 0 :current (count current)})
+           @state*)
+       (let [trigger-index (reduce (fn [index source]
+                                     (reduce (fn [result trigger]
+                                               (if (and (:source trigger) (:dispatch trigger))
+                                                 (update result (:source trigger) (fnil conj []) trigger)
+                                                 result))
+                                             index (:external-triggers source)))
+                                   {} (vals (source-map assembled)))
+             combat {:sources (source-map assembled)
+                     :registrations (:registrations assembled)
+                     :abilities abilities
+                     :by-id (registration-map assembled)
+                     :trigger-index trigger-index
+                     :errors {}}
+             value {:status :ready
+                    :schema-version schema-version
+                    :content-hash (content-hash assembled)
+                    :combat combat}]
+         (reset! state* value)
+         (let [payload {:abilities (count abilities)
+                        :arc-gen? (contains? abilities :arc-gen)
+                        :status :ready}]
+           (if (zero? (count abilities))
+             (log/warn "Combat catalog ready but empty" payload)
+             (log/info "Combat catalog ready" payload)))
+         value)))))
 
 (defn ensure-ready!
   "Initialize the catalog if it is still cold or has no abilities."
@@ -163,3 +173,5 @@
              :translations (normalize-translations (:translations ability))
              :cooldown {:mode :default} :execution :final}))
         (sort-by first (get-in @state* [:combat :abilities]))))
+
+

@@ -4,13 +4,18 @@
    same mechanism ac's existing skill_tree.clj already uses to paint a
    graph -- see the node-editor plan's §1.4 for that precedent).
 
-   SCOPE for this first visual iteration (graph->composite-items):
-   renders the EXEC statement chain only, one box per statement
-   (including nested when/each/if bodies, indented). Canvas labels use
-   graph/stmt-label (short plain words like bind hit / damage) — not
-   raw DSL. Full stmt-text remains for inspectors that need the exact
-   printable form. A full Blueprint-style per-expression node graph is
-   a deliberate follow-up."
+   SCOPE for this visual iteration (graph->composite-items):
+   renders the EXEC statement chain as the primary top-to-bottom flow and
+   renders every referenced pure expression in a secondary column. Expression
+   boxes expose an output pin and statement boxes expose semantic input pins,
+   so value wires are structurally editable without pretending an exec node is
+   an expression. The view is intentionally hybrid rather than a full Blueprint
+   canvas: it keeps the common control-flow path compact while making data
+   dependencies visible and testable.
+
+   Canvas labels use graph/stmt-label (short plain words like bind hit /
+   damage), not raw DSL. Full stmt-text remains for inspectors that need the
+   exact printable form."
   (:require [cn.li.ability.editor.graph :as graph]))
 
 (defn wire-quads
@@ -65,6 +70,7 @@
 
 (def ^:private node-box-width 220.0)
 (def ^:private node-box-height 16.0)
+(def ^:private expr-box-width 150.0)
 (def ^:private node-row-height 20.0)
 (def ^:private node-indent-x 18.0)
 (def ^:private wire-thickness 1.5)
@@ -88,34 +94,206 @@
 
 (defn- box-color [stmt] (get stmt-colors stmt 0xFF444444))
 
+(defn expr-default-layout
+  "data-node-ids -> deterministic secondary-column positions."
+  [nids]
+  (into {}
+        (map-indexed (fn [i nid]
+                       [nid {:x (+ 280.0 (* 160.0 (double (mod i 3))))
+                             :y (* node-row-height (double (quot i 3)))}]))
+        nids))
+
+(defn- expr-composite-items [nodes nid pos]
+  (let [x (:x pos) y (:y pos)
+        text (graph/expr-text nodes nid)
+        text (if (> (count text) 42) (str (subs text 0 39) "...") text)]
+    [{:kind :quad :role :expr-body :nid nid :x x :y y :w expr-box-width :h node-box-height
+      :rgba 0xFF34495E}
+     {:kind :text :role :expr-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
+      :text text :rgba 0xFFE8F1F8}
+     {:kind :quad :role :pin :target :pin :nid nid :pin :out :key :result
+      :x (+ x expr-box-width) :y (+ y 5.0) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))
+
+(defn- exec-inputs [node]
+  (let [stmt (:stmt node)]
+    (case stmt
+      :let (when (:rhs node) [[:rhs (:rhs node)]])
+      :when (when (:cond node) [[:cond (:cond node)]])
+      :each (when (:coll node) [[:coll (:coll node)]])
+      (:state! :set!) (when (:value node) [[:value (:value node)]])
+      :call (if (map? (:args node)) (seq (:args node))
+                (map-indexed vector (:args node)))
+      (:event! :vfx!) (seq (:fields node))
+      [])))
+
+(defn- exec-pin-items [node]
+  (mapv (fn [[key _]]
+          {:kind :quad :role :pin :target :pin :nid (:nid node) :pin :in :key key
+           :x -5.0 :y 5.0 :w 5.0 :h 5.0 :rgba 0xFF66CCFF})
+        (exec-inputs node)))
+
 (defn- node-composite-items [nodes nid pos]
   (let [{:keys [stmt]} (get nodes nid)
         x (:x pos) y (:y pos)
-        text (graph/stmt-label nodes nid)]
-    [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
-      :rgba (box-color stmt)}
-     {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0) :text text :rgba 0xFFFFFFFF}]))
+        ;; stmt-label already clips to graph/label-max, so no truncation here.
+        text (graph/stmt-label nodes nid)
+        pins (map (fn [pin] (assoc pin :x (+ x (:x pin)) :y (+ y (:y pin))))
+                  (exec-pin-items (assoc (get nodes nid) :nid nid)))]
+    (vec (concat
+          [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h node-box-height
+            :rgba (box-color stmt)}
+           {:kind :text :role :node-label :nid nid :x (+ x 4.0) :y (+ y 3.0)
+            :text text :rgba 0xFFFFFFFF}]
+          pins))))
 
-(defn graph->composite-items
-  "graph (cn.li.ability.editor.graph/form->graph's output), stored-layout
-   -> a flat composite-item vector for a :repeater-bound canvas (see
-   this namespace's own docstring for the exec-chain-only scope of this
-   first iteration). Each node contributes a :quad (:role :node-body,
-   the click target) + a :text label; consecutive statements (including
-   into/out-of a nested when/each/if body) get a connecting wire. Every
-   item carries :nid (and :role) so a click handler can resolve the
-   :index the presentation runtime hands back into a real hit
-   classification (cn.li.ability.editor.hit's {:target :node :nid ..})
-   without a second lookup table."
+(defn- graph->composite-items*
+  "Render a legacy surface graph using the existing composite geometry."
   [graph stored-layout]
   (let [flat (graph/exec-flatten graph)
-        layout (merge (exec-default-layout flat) stored-layout)
+        exec-ids (mapv :nid flat)
+        data-ids (->> (:nodes graph) (keep (fn [[nid node]] (when (= :data (:kind node)) nid))) vec)
+        layout (merge (exec-default-layout flat) (expr-default-layout data-ids) stored-layout)
         nodes (:nodes graph)
         node-items (mapcat (fn [{:keys [nid]}] (node-composite-items nodes nid (get layout nid))) flat)
-        wire-items (mapcat (fn [[{a :nid} {b :nid}]]
+        expr-items (mapcat (fn [nid] (expr-composite-items nodes nid (get layout nid))) data-ids)
+        flow-wires (mapcat (fn [[{a :nid} {b :nid}]]
                              (let [pa (get layout a) pb (get layout b)]
                                (wire-quads (+ (:x pa) (/ node-box-width 2.0)) (+ (:y pa) node-box-height)
-                                          (+ (:x pb) (/ node-box-width 2.0)) (:y pb)
-                                          wire-thickness 0xFFAAAAAA)))
-                           (partition 2 1 flat))]
-    (vec (concat node-items wire-items))))
+                                           (+ (:x pb) (/ node-box-width 2.0)) (:y pb)
+                                           wire-thickness 0xFFAAAAAA)))
+                           (partition 2 1 flat))
+        value-wires (mapcat (fn [{:keys [nid] :as node}]
+                              (mapcat (fn [[key src]]
+                                        (when (contains? nodes src)
+                                          (let [pa (get layout src) pb (get layout nid)]
+                                            (map #(assoc % :role :value-wire :to-key key)
+                                                 (wire-quads (+ (:x pa) expr-box-width) (+ (:y pa) 8.0)
+                                                             (- (:x pb) 5.0) (+ (:y pb) 8.0)
+                                                             wire-thickness 0xFF66CCFF)))))
+                                      (exec-inputs node)))
+                            (map #(get nodes %) exec-ids))]
+    (mapv #(assoc % :local-x 0.0 :local-y 0.0)
+          (concat expr-items node-items value-wires flow-wires))))
+
+(defn graph->composite-items
+  "Render both legacy surface graphs and persisted V4 node/link graphs."
+  [graph stored-layout]
+  (if (:order graph)
+    (graph->composite-items* graph stored-layout)
+    (let [nodes (:nodes graph)
+          nids (vec (keys nodes))
+          layout (resolve-layout stored-layout nids)
+          links (:links graph)
+          incoming (group-by #(second (:to %)) (filter #(= :data (:kind %)) links))
+          exec-node? #(contains? #{:start :component :branch :merge :foreach :repeat :loop-end :end :local-set} (:type %))
+          data-node? #(contains? #{:literal :context-ref :parameter-ref :state-ref :local-get} (:type %))
+          fixed-data-inputs (fn [type]
+                              (case type
+                                :branch [:condition]
+                                :foreach [:collection]
+                                :repeat [:count]
+                                :local-set [:value]
+                                []))
+          input-ports* (fn [nid n]
+                         (vec (distinct
+                               (concat (fixed-data-inputs (:type n))
+                                       (keys (or (:inputs n) {}))
+                                       (keep (fn [l]
+                                               (when (and (= :data (:kind l))
+                                                          (= nid (first (:to l))))
+                                                 (second (:to l))))
+                                             links)))))
+          node-height (fn [nid n]
+                        (+ 30.0 (* 14.0 (count (input-ports* nid n)))))
+          title (fn [n]
+                  (let [t (:type n)]
+                    (cond
+                      (= :component t) (str (:component n))
+                      (= :foreach t) (str "foreach (limit " (:limit n) ")")
+                      (= :repeat t) (str "repeat (count " (:count n) ")")
+                      (contains? #{:context-ref :parameter-ref :state-ref :local-get} t)
+                      (str (name t) " " (:key n))
+                      (= :local-set t) (str "local-set " (:key n))
+                      (= :literal t) (str "literal " (pr-str (:value n)))
+                      :else (name t))))
+          node-items (mapcat (fn [[nid n]]
+                               (let [{:keys [x y]} (get layout nid)
+                                     h (node-height nid n)
+                                     input-ports (input-ports* nid n)]
+                                 (concat
+                                  [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h h
+                                    :rgba (box-color (if (= :component (:type n)) :call (:type n)))}
+                                   {:kind :text :role :node-label :nid nid :x (+ x 6.0) :y (+ y 5.0)
+                                    :text (title n) :rgba 0xFFFFFFFF}
+                                   {:kind :text :role :node-type :nid nid :x (+ x 6.0) :y (+ y 18.0)
+                                    :text (str "[" (name (:type n)) "]") :rgba 0xFFB8C7D9}]
+                                   (mapcat (fn [[i p]]
+                                                  (let [wired? (some (fn [l]
+                                                                      (and (= :data (:kind l))
+                                                                           (= nid (first (:to l)))
+                                                                           (= p (second (:to l)))))
+                                                                    links)]
+                                                   [{:kind :text :role :param-label :nid nid :key p
+                                                   :x (+ x 14.0) :y (+ y 32.0 (* i 14.0))
+                                                   :text (str (name p) " = " (if wired? "wired" (pr-str (get-in n [:inputs p])))) :rgba 0xFFD5E6F2}
+                                                  {:kind :quad :role :pin :target :pin :nid nid :pin :in :key p
+                                                   :x (- x 5.0) :y (+ y 31.0 (* i 14.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]))
+                                                (map-indexed vector input-ports))
+                                  (when (exec-node? n)
+                                    (concat
+                                     [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key :in
+                                       :x (- x 5.0) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]
+                                     (map-indexed (fn [i port]
+                                                    {:kind :quad :role :pin :target :pin :nid nid :pin :out :key port
+                                                     :x (+ x node-box-width) :y (+ y 12.0 (* i 12.0))
+                                                     :w 5.0 :h 5.0 :rgba 0xFFFFCC66})
+                                                  (case (:type n)
+                                                    :branch [:true :false]
+                                     :foreach [:body :completed]
+                                     :repeat [:body :completed]
+                                                    :loop-end [:continue]
+                                                    [:exec]))))
+                                  (when (= :component (:type n))
+                                    [{:kind :quad :role :pin :target :pin :nid nid :pin :out :key :value
+                                      :x (+ x node-box-width) :y (+ y (- h 8.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]))))
+                             nodes)
+          data-items (mapcat (fn [[nid n]]
+                               (let [{:keys [x y]} (get layout nid)]
+                                 [{:kind :quad :role :data-body :nid nid :x x :y y :w expr-box-width :h 34.0 :rgba 0xFF34495E}
+                                  {:kind :text :role :data-label :nid nid :x (+ x 6.0) :y (+ y 6.0)
+                                   :text (str (name (:type n)) " " (or (:key n) (:value n) "")) :rgba 0xFFE8F1F8}
+                                  {:kind :quad :role :pin :target :pin :nid nid :pin :out :key :value
+                                   :x (+ x expr-box-width) :y (+ y 14.0) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))
+                            (filter (fn [[_ n]] (data-node? n)) nodes))
+          wire-items (mapcat (fn [l]
+                               (let [[from from-port] (:from l) [to to-port] (:to l)
+                                     pa (get layout from) pb (get layout to)
+                                     source (get nodes from)
+                                     target-node (get nodes to)
+                                     target-inputs (input-ports* to target-node)
+                                     target-index (max 0 (.indexOf ^java.util.List target-inputs to-port))
+                                     source-outputs (case (:type source)
+                                                      :branch [:true :false]
+                                                      :foreach [:body :completed]
+                                                      :repeat [:body :completed]
+                                                      :loop-end [:continue]
+                                                      [:exec])
+                                     source-index (max 0 (.indexOf ^java.util.List source-outputs from-port))
+                                     src-right (+ (:x pa) (if (data-node? (get nodes from)) expr-box-width node-box-width))
+                                     dst-left (- (:x pb) 5.0)
+                                     sy (if (= :data (:kind l))
+                                          (if (data-node? source) (+ (:y pa) 14.0) (+ (:y pa) (- (node-height from source) 8.0)))
+                                          (+ (:y pa) 12.0 (* source-index 12.0)))
+                                     dy (if (= :data (:kind l))
+                                          (+ (:y pb) 32.0 (* target-index 14.0))
+                                          (+ (:y pb) (/ (node-height to target-node) 2.0)))]
+                                 (map #(assoc % :role (if (= :data (:kind l)) :value-wire :exec-wire)
+                                                :from from :to to :from-port from-port :to-port to-port)
+                                      (wire-quads src-right sy dst-left dy wire-thickness
+                                                  (if (= :data (:kind l)) 0xFF66CCFF 0xFFAAAAAA)))))
+                             links)]
+      (mapv #(assoc % :local-x 0.0 :local-y 0.0)
+            ;; Paint wires first so crossings never obscure node bodies or
+            ;; parameter slots, matching the Blueprint/Niagara convention
+            ;; while retaining the same hit-test geometry.
+            (concat wire-items node-items data-items)))))

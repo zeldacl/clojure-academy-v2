@@ -8,7 +8,8 @@
    {:descriptors
     [{:id :test/a :revision 1 :layer :primitive :visibility :author
       :doc "does a thing" :category :test
-      :inputs {:amount {:type :float :min 0.0 :max 10.0 :default 1.0 :doc "how much"}}
+      :inputs {:amount {:type :float :min 0.0 :max 10.0 :default 1.0 :doc "how much"}
+               :mode {:type :keyword :choices [:fast :safe] :default :safe}}
       :outputs {:result {:type :float :doc "the result"}}
       :effects #{:pure} :impl (fn [_ _] {:result 1.0})}
      {:id :test/z :revision 1 :layer :primitive :visibility :author
@@ -24,4 +25,6 @@
     (is (= "does a thing" (:doc entry)))
     (is (= {:type :float :min 0.0 :max 10.0 :default 1.0 :doc "how much"}
            (get-in entry [:inputs :amount])))
+    (is (= {:type :keyword :choices [:fast :safe] :default :safe}
+           (get-in entry [:inputs :mode])))
     (is (not (contains? entry :impl)))))

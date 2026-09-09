@@ -69,6 +69,13 @@
     ;; N-1 consecutive pairs -> 3 quads (wire-quads) each.
     (is (= (* 3 (dec (count flat))) (count wires)))))
 
+(deftest graph->composite-items-provides-local-composite-offsets-test
+  (let [items (render/graph->composite-items (sample-graph) {})]
+    (is (seq items))
+    (is (every? #(and (= 0.0 (:local-x %))
+                      (= 0.0 (:local-y %)))
+                items)
+        "canvas items are painted local to their item-sized hit wrapper")))
 (deftest graph->composite-items-respects-stored-layout-override-test
   (let [g (sample-graph)
         first-nid (:nid (first (graph/exec-flatten g)))
@@ -76,3 +83,27 @@
         body (first (filter #(and (= :node-body (:role %)) (= first-nid (:nid %))) items))]
     (is (= 500.0 (:x body)))
     (is (= 500.0 (:y body)))))
+
+(deftest graph->composite-items-renders-expression-pins-and-value-wires-test
+  (let [g (sample-graph)
+        items (render/graph->composite-items g {})
+        expr-bodies (filter #(= :expr-body (:role %)) items)
+        pins (filter #(= :pin (:role %)) items)
+        value-wires (filter #(= :value-wire (:role %)) items)]
+    (is (seq expr-bodies))
+    (is (some #(and (= :out (:pin %)) (= :data (:kind (get (:nodes g) (:nid %))))) pins))
+    (is (some #(= :in (:pin %)) pins))
+    (is (seq value-wires))))
+
+(deftest v4-loop-nodes-render-body-and-completed-pins-test
+  (let [g {:nodes {:n/start {:nid :n/start :type :start}
+                   :n/each {:nid :n/each :type :foreach :limit 8}
+                   :n/repeat {:nid :n/repeat :type :repeat :count 2}
+                   :n/end {:nid :n/end :type :end}}
+          :links []}
+        items (render/graph->composite-items g {})
+        pins (filter #(and (= :pin (:role %)) (= :out (:pin %))) items)]
+    (is (some #(and (= :n/each (:nid %)) (= :body (:key %))) pins))
+    (is (some #(and (= :n/each (:nid %)) (= :completed (:key %))) pins))
+    (is (some #(and (= :n/repeat (:nid %)) (= :body (:key %))) pins))
+    (is (some #(and (= :n/repeat (:nid %)) (= :completed (:key %))) pins))))

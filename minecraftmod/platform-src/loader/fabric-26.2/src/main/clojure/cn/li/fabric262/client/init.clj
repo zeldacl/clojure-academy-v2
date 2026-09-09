@@ -16,6 +16,7 @@
             [cn.li.fabric262.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.fabric262.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric262.client.presentation-world-renderer :as presentation-world-renderer]
+            [cn.li.fabric262.client.imag-phase-stage :as imag-phase-stage]
             [cn.li.fabric262.client.keyboard-init :as kb-init]
             [cn.li.mc262.client.font.msdf-setup :as msdf-setup]
             [cn.li.mcbase.client.session :as mc-session]
@@ -258,6 +259,7 @@
   (presentation-hud-renderer/init!)
   (hand-effect-renderer/init!)
   (presentation-world-renderer/init!)
+  (imag-phase-stage/init!)
   (msdf-setup/init!)
   (media-playback-bridge/install-media-playback-bridge!)
   (log/info "Fabric client initialization complete"))

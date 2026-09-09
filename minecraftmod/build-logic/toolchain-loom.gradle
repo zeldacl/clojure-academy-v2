@@ -20,10 +20,11 @@ if (target.loader == "forge" || target.loader == "neoforge") {
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }
         .configureEach { task ->
             task.doFirst {
-                // runClient/runServer default to source-first; datagen stays AOT
-                // because :platform:jar depends on runData.
-                def useAotClasspath = project.ext.platformAotForRun ||
-                    task.name in ["runData", "runDatagen", "runGametestServer"]
+                // All dev launches (including datagen) are source-first; the AOT
+                // classpath is used only when the graph also packages. See the
+                // platformRuntimeDevMode block in platform-target.gradle -- it is
+                // resolved at taskGraph.whenReady, i.e. before this doFirst runs.
+                def useAotClasspath = !project.ext.platformRuntimeDevMode
                 def rootDirs = [
                     layout.buildDirectory.dir("classes/java/main"),
                     layout.buildDirectory.dir("resources/main")

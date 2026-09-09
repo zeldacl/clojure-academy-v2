@@ -1,280 +1,86 @@
 (ns cn.li.ac.ability.client.screens.node-editor-reactive-test
-  "Unit coverage for the node editor screen's PURE logic (document open,
-   render-state shaping, layout nudging, workspace save/reload/export) --
-   everything reachable without a live presentation-runtime mount.
-   open! (the actual mount-view! side) is exercised only by using the
-   screen in-game; see the namespace's own docstring for why."
-  (:require [clojure.test :refer [deftest is]]
-            [clojure.java.io :as io]
-            [cn.li.ac.ability.client.screens.node-editor-reactive :as node-editor]
-            [cn.li.ability.editor.document :as editor-document]
-            [cn.li.ability.editor.v3 :as editor-v3]))
+  "Pure controller coverage for the V4 free-graph editor.
 
-(def ^:private thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
-(def ^:private railgun-path "src/main/resources/ac/skills-v3/railgun.edn")
-(def ^:private arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
-(def ^:private legacy-thunder-bolt-path nil)
-(def ^:private multi-stage-vfx
-  {:schema :ac/vfx-v3
-   :id :editor/multi-stage
-   :lifecycle {:mode :transient}
-   :system {:spawn [{:nid :n/spawn-root :component :particle/spawn}]
-            :update [{:nid :n/update-root :component :particle/update}]
-            :render [{:nid :n/render-root :component :particle/render}]}})
-(def ^:private v3-thunder-bolt-path "src/main/resources/ac/skills-v3/thunder-bolt.edn")
-(def ^:private v3-arc-ring-fade-audio-path "src/main/resources/ac/vfx-v3/arc-ring-fade-audio.edn")
+   Presentation smoke tests cover compiled view routing; this namespace
+   covers the controller's V4 geometry and graph edits without a game window."
+  (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.client.screens.node-editor-reactive :as editor]))
 
-(defn- temp-copy-of
-  "Copies `source-path` into a fresh temp directory under the same
-   basename, returning the new absolute path as a string -- tests that
-   exercise real disk writes (save/reload) must never touch the actual
-   source tree file, only a throwaway copy."
-  [source-path]
-  (let [dir (java.nio.file.Files/createTempDirectory "node-editor-test" (make-array java.nio.file.attribute.FileAttribute 0))
-        dest (io/file (.toFile dir) (.getName (io/file source-path)))]
-    (io/copy (io/file source-path) dest)
-    (.getAbsolutePath dest)))
+(defn- graph [& nodes]
+  {:nodes (into {} (map (fn [[nid type & kvs]]
+                          [nid (into {:nid nid :type type} (apply hash-map kvs))]) nodes))
+   :links []})
 
-(deftest open-document-loads-a-real-single-phase-skill-file-test
-  (let [state (node-editor/open-document thunder-bolt-path :skill)]
-    (is (= [:default] (:phases state)))
-    (is (= :default (:phase state)))
-    (is (seq (:order (:graph state))))
-    (is (= [] (:diagnostics state)))
-    (is (some? (:cost-summary state)))))
+(deftest compact-and-viewport-screen-coordinates-are-inverted
+  (testing "the root inset and compact control column are included"
+    (is (= {:x 20.0 :y 12.0}
+           (#'editor/screen->canvas-point
+            {:canvas-viewport? false :zoom 1.0 :viewport {:x 0.0 :y 0.0}}
+            28.0 100.0))))
+  (testing "viewport origin and zoom are both inverted"
+    (is (= {:x 20.0 :y 12.0}
+           (#'editor/screen->canvas-point
+            {:canvas-viewport? true :zoom 2.0 :viewport {:x 10.0 :y -8.0}}
+            58.0 70.0)))))
 
-(deftest open-document-loads-a-real-multi-phase-skill-file-test
-  (let [state (node-editor/open-document railgun-path :skill)]
-    (is (> (count (:phases state)) 1))
-    (is (contains? (set (:phases state)) :start))))
+(deftest canvas-pointer-bounds-follow-active-mode
+  (let [compact {:canvas-viewport? false}
+        viewport {:canvas-viewport? true}]
+    (is (true? (#'editor/canvas-pointer? compact 8.0 88.0)))
+    (is (true? (#'editor/canvas-pointer? compact 472.0 216.0)))
+    (is (false? (#'editor/canvas-pointer? compact 472.1 216.0)))
+    (is (true? (#'editor/canvas-pointer? viewport 8.0 54.0)))
+    (is (true? (#'editor/canvas-pointer? viewport 472.0 332.0)))
+    (is (false? (#'editor/canvas-pointer? viewport 8.0 332.1)))))
 
-(deftest open-document-loads-a-real-scene-file-test
-  (let [state (node-editor/open-document arc-ring-fade-audio-path :scene)]
-    (is (= :scene (:mode state)))
-    (is (= :ac/vfx-v3 (get-in state [:document :v3-document :schema])))
-    (is (seq (:order (:graph state))))
-    (is (= [] (:diagnostics state))
-        (str "scene file should compile cleanly against its own per-file capabilities: "
-             (:diagnostics state)))))
+(deftest screen-delta-is-scaled-only-for-node-movement
+  (is (= {:dx 3.0 :dy -2.0}
+         (#'editor/screen->canvas-delta {:zoom 2.0} 6.0 -4.0)))
+  (is (= {:dx 6.0 :dy -4.0}
+         (#'editor/screen->canvas-delta {:zoom 1.0} 6.0 -4.0))))
 
-(deftest open-document-builds-a-non-empty-palette-test
-  (let [skill-state (node-editor/open-document thunder-bolt-path :skill)
-        scene-state (node-editor/open-document arc-ring-fade-audio-path :scene)]
-    (is (seq (:palette skill-state)))
-    (is (some #(= :fn (:source %)) (:palette skill-state))
-        "skill mode's palette must include the combat.lib :defn functions")
-    (is (seq (:palette scene-state)))
-    (is (every? #(not= :uncategorized (:category %)) (:palette skill-state)))))
+(deftest fixed-palette-insertion-creates-editable-v4-node
+  (let [{:keys [graph nid]} (#'editor/insert-v4-palette-node
+                             (graph [:n/start :start])
+                             {:id :node/repeat :fixed-type :repeat :params {}}
+                             "palette-test")]
+    (is (= :repeat (get-in graph [:nodes nid :type])))
+    (is (= 1 (get-in graph [:nodes nid :count])))
+    (is (= nid (get-in graph [:nodes nid :nid])))))
 
-(deftest render-state-shape-is-consistent-with-the-ui-edn-state-schema-test
-  (let [state (node-editor/open-document thunder-bolt-path :skill)
-        rendered (#'node-editor/render-state state)]
-    (is (string? (:title rendered)))
-    (is (.contains ^String (:title rendered) "skill"))
-    (is (string? (:path-label rendered)))
-    (is (string? (:phase-header rendered)))
-    (is (vector? (:phase-tabs rendered)))
-    (is (every? #(and (string? (:label %)) (string? (:phase %)) (vector? (:rgba %)))
-                (:phase-tabs rendered)))
-    (is (string? (:palette-header rendered)))
-    (is (vector? (:palette rendered)))
-    (is (seq (:palette rendered)))
-    (is (every? #(string? (:label %)) (:palette rendered)))
-    (is (vector? (:canvas rendered)))
-    (is (string? (:selected-header rendered)))
-    (is (string? (:diag-header rendered)))
-    (is (vector? (:diagnostics rendered)))
-    (is (number? (:diagnostic-count rendered)))
-    (is (string? (:cost-label rendered)))
-    (is (boolean? (:dirty? rendered)))
-    (is (= "Reload" (:reload-label rendered)))
-    (is (= "Save" (:save-label rendered)))
-    (is (= "Export" (:export-label rendered)))))
+(deftest component-palette-insertion-preserves-default-input-slots
+  (let [{:keys [graph nid]} (#'editor/insert-v4-palette-node
+                             (graph [:n/start :start])
+                             {:id :math/add
+                              :params {:arg0 {:type :double :default 1.5}
+                                       :arg1 {:type :long :default 2}}}
+                             "palette-test")]
+    (is (= :component (get-in graph [:nodes nid :type])))
+    (is (= :math/add (get-in graph [:nodes nid :component])))
+    (is (= {:arg0 1.5 :arg1 2} (get-in graph [:nodes nid :inputs])))))
 
-(deftest item->hit-classifies-nid-bearing-items-as-node-hits-test
-  (is (= {:target :node :nid "n3"} (#'node-editor/item->hit {:kind :quad :role :node-body :nid "n3"})))
-  (is (= {:target :node :nid "n3"} (#'node-editor/item->hit {:kind :text :role :node-label :nid "n3"})))
-  (is (= {:target :canvas} (#'node-editor/item->hit {:kind :quad :x 0 :y 0}))))
+(deftest v4-wire-kind-and-target-port-are-derived-from-pins
+  (let [g (assoc (graph [:n/lit :literal :value 1]
+                        [:n/action :component :component :math/add]
+                        [:n/end :end])
+                 :links [{:id :e/exec :kind :exec
+                          :from [:n/action :out] :to [:n/end :in]}])
+        wired (#'editor/connect-v4-wire
+               g {:from-nid :n/lit :from-pin :out :from-key :value
+                  :to-nid :n/action :to-pin :in :to-key :arg0})
+        link (last (:links wired))]
+    (is (= :data (:kind link)))
+    (is (= [[:n/lit :value] [:n/action :arg0]]
+           [(:from link) (:to link)]))))
 
-(deftest nudge-node-layout-accumulates-from-the-default-position-test
-  (let [state (node-editor/open-document thunder-bolt-path :skill)
-        state* (atom state)
-        nid (:nid (first (:order (:graph state))))]
-    (#'node-editor/nudge-node-layout! state* nid 10.0 5.0)
-    (#'node-editor/nudge-node-layout! state* nid 3.0 2.0)
-    (let [pos (get (:layout @state*) nid)]
-      (is (= 13.0 (:x pos)))
-      (is (= 7.0 (:y pos))))))
-
-(deftest default-sample-skill-resource-path-resolves-thunder-bolt-from-source-tree-test
-  "G key / editor_dev_tool share this resolver. Under ac's test cwd the
-   classpath may already be file:, but the source-tree walk must also
-   succeed on its own (Loom runClient often only has union:/ jar URLs)."
-  (let [via-public (node-editor/default-sample-skill-resource-path "ac/skills/thunder_bolt.edn")
-        via-walk (#'node-editor/source-tree-resource-path "ac/skills/thunder_bolt.edn")]
-    (is (some? via-public))
-    (is (.isFile (io/file via-public)))
-    (is (some? via-walk))
-    (is (.endsWith ^String via-walk "thunder_bolt.edn"))))
-
-(deftest layout-path-is-a-sibling-layout-directory-file-test
-  (let [f (#'node-editor/layout-path-for "/a/b/ac/skills-v3/thunder-bolt.edn")]
-    (is (= "thunder-bolt.edn.layout.edn" (.getName ^java.io.File f)))
-    (is (.endsWith (.getParent ^java.io.File f) "layout"))))
-
-(deftest workspace-path-is-a-sibling-editor-workspace-directory-file-test
-  (let [f (#'node-editor/workspace-path-for "/a/b/ac/skills-v3/thunder-bolt.edn")]
-    (is (= "thunder-bolt.edn" (.getName ^java.io.File f)))
-    (is (.endsWith (.getParent ^java.io.File f) "editor-workspace"))))
-
-(deftest save-layout-then-load-layout-round-trips-test
-  (let [path (temp-copy-of thunder-bolt-path)
-        layout {"n1" {:x 12.0 :y 34.0}}]
-    (#'node-editor/save-layout! path layout)
-    (is (= layout (#'node-editor/load-layout path)))))
-
-(deftest load-layout-defaults-to-empty-when-no-sidecar-exists-test
-  (let [path (temp-copy-of thunder-bolt-path)]
-    (is (= {} (#'node-editor/load-layout path)))))
-
-(deftest editor-save-action-actually-writes-a-workspace-file-and-a-layout-sidecar-test
-  (let [path (temp-copy-of thunder-bolt-path)
-        state* (atom (node-editor/open-document path :skill))
-        nid (:nid (first (:order (:graph @state*))))]
-    (#'node-editor/nudge-node-layout! state* nid 5.0 5.0)
-    (#'node-editor/handle-action state* :editor/save nil)
-    (is (.isFile ^java.io.File (#'node-editor/workspace-path-for path))
-        "Save must actually write a workspace file, not just mutate in-memory state")
-    (is (.isFile ^java.io.File (#'node-editor/layout-path-for path)))
-    (is (= {:x 5.0 :y 5.0} (get (#'node-editor/load-layout path) nid)))))
-
-(deftest editor-reload-action-re-reads-the-file-from-disk-test
-  (let [path (temp-copy-of thunder-bolt-path)
-        state* (atom (node-editor/open-document path :skill))]
-    ;; Simulate an in-memory edit (a node move) that was never saved.
-    (#'node-editor/nudge-node-layout! state* (:nid (first (:order (:graph @state*)))) 99.0 99.0)
-    (#'node-editor/handle-action state* :editor/reload nil)
-    (is (= {} (:layout @state*))
-        "reload discards the unsaved in-memory layout and starts fresh from disk")
-    (is (= "Reloaded from disk" (:status @state*)))))
-
-(deftest editor-export-action-overwrites-the-real-source-file-test
-  (let [path (temp-copy-of thunder-bolt-path)
-        state* (atom (node-editor/open-document path :skill))]
-    (#'node-editor/handle-action state* :editor/export nil)
-    (is (= (:file-text (:document @state*)) (slurp path))
-        "export must actually overwrite the file at `path`, not just claim to")
-    (is (.contains ^String (:status @state*) "Exported to"))))
-
-(deftest pan-canvas-items-shifts-every-item-by-the-viewport-offset-test
-  (is (= [{:x 15.0 :y 24.0 :kind :quad}]
-         (#'node-editor/pan-canvas-items [{:x 5.0 :y 20.0 :kind :quad}] {:x 10.0 :y 4.0}))))
-
-(deftest canvas-drag-on-empty-canvas-pans-the-viewport-test
-  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
-    ;; In-game: empty press hits the canvas hit-rect → activate with no :item.
-    (#'node-editor/handle-action state* :editor/canvas-press {:x 10.0 :y 20.0})
-    (is (= :panning (:mode (:drag @state*)))
-        "nil/empty item classifies as :canvas hit, arming panning")
-    ;; In-game: subsequent mouseDragged while still over the hit-rect are also
-    ;; routed as :editor/canvas-press (not :input/pointer) — motion must use
-    ;; absolute :x/:y deltas from the armed cur position.
-    (#'node-editor/handle-action state* :editor/canvas-press {:x 20.0 :y 24.0})
-    (#'node-editor/handle-action state* :editor/canvas-press {:x 23.0 :y 25.0})
-    (is (= {:x 13.0 :y 5.0} (:viewport @state*))
-        "viewport accumulates activate-drag absolute deltas")
-    (#'node-editor/handle-action state* :input/pointer {:event-type :up})
-    (is (= :idle (:mode (:drag @state*))))))
-
-(deftest canvas-drag-continues-via-input-pointer-when-hit-misses-test
-  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))]
-    (#'node-editor/handle-action state* :editor/canvas-press {:item {} :x 0.0 :y 0.0})
-    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 10.0 :drag-y 4.0})
-    (is (= {:x 10.0 :y 4.0} (:viewport @state*))
-        "once armed, miss-target :input/pointer drags still pan")))
-
-(deftest render-state-canvas-reflects-the-accumulated-viewport-test
-  (let [state* (atom (node-editor/open-document thunder-bolt-path :skill))
-        before (:layout-x (first (:canvas (#'node-editor/render-state @state*))))]
-    (#'node-editor/handle-action state* :editor/canvas-press {:item {}})
-    (#'node-editor/handle-action state* :input/pointer {:event-type :drag :drag-x 7.0 :drag-y 2.0})
-    (let [after (:layout-x (first (:canvas (#'node-editor/render-state @state*))))]
-      (is (= (+ before 7.0) after)
-          "panning must actually move what render-state hands the .ui.edn canvas, not just internal state"))))
-
-(deftest open-document-prefers-a-saved-workspace-copy-over-the-original-test
-  (let [path (temp-copy-of thunder-bolt-path)
-        ^java.io.File ws (#'node-editor/workspace-path-for path)]
-    (.mkdirs (.getParentFile ws))
-    ;; railgun is multi-phase, thunder_bolt (the file actually at `path`)
-    ;; is single-phase -- an unmistakable signal of which one got read.
-    (io/copy (io/file railgun-path) ws)
-    (let [state (node-editor/open-document path :skill)]
-      (is (> (count (:phases state)) 1)
-          "open-document must read the workspace sidecar, not `path` itself, when one exists")
-      (is (.contains ^String (:status state) "workspace")))))
-
-(deftest open-document-loads-a-structured-v3-skill-test
-  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)]
-    (is (true? (:v3? (:document state))))
-    (is (= :ac/skill-v3 (get-in state [:document :v3-document :schema])))
-    (is (contains? (set (:phases state)) :default))
-    (is (seq (:order (:graph state))))
-    (is (= [] (:diagnostics state)))
-    (is (some? (:cost-summary state)))))
-
-(deftest open-document-rejects-legacy-string-wrapper-test
-  (let [legacy (java.io.File/createTempFile "node-editor-legacy" ".edn")]
-    (spit legacy "{:id :legacy :program \"(finish {:outcome :performed})\"}")
-    (try
-      (node-editor/open-document (.getPath legacy) :skill)
-      (is false "the production editor must accept structured V3 documents only")
-      (catch clojure.lang.ExceptionInfo error
-        (is (.contains (.getMessage error) "structured V3 document")))
-      (finally (when (.isFile legacy) (.delete legacy))))))
-
-(deftest open-document-loads-a-structured-v3-vfx-test
-  (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)]
-    (is (true? (:v3? (:document state))))
-    (is (= :ac/vfx-v3 (get-in state [:document :v3-document :schema])))
-    (is (contains? (set (:phases state)) :render))
-    (is (seq (:order (:graph state))))
-    (is (= [] (:diagnostics state)))))
-
-(deftest structured-v3-save-keeps-the-map-document-contract-test
-  (let [path (temp-copy-of v3-thunder-bolt-path)
-        state* (atom (node-editor/open-document path :skill))]
-    (#'node-editor/handle-action state* :editor/save nil)
-    (let [saved (slurp (#'node-editor/workspace-path-for path))
-          parsed (clojure.edn/read-string saved)]
-      (is (= :ac/skill-v3 (:schema parsed)))
-      (is (map? (:entries parsed)))
-      (is (nil? (:program parsed)))
-      (is (= saved (:file-text (:document @state*)))))))
-
-(deftest structured-v3-content-round-trip-remains-valid-test
-  (let [state (node-editor/open-document v3-thunder-bolt-path :skill)
-        edited (editor-document/edit (:document state) (:form (:document state)))
-        saved (editor-document/save edited pr-str)
-        parsed (clojure.edn/read-string (:file-text saved))]
-    (is (= :ac/skill-v3 (:schema parsed)))
-    (is (map? (:entries parsed)))
-    (is (every? map? (mapcat (comp :do val) (:entries parsed))))))
-
-(deftest structured-v3-vfx-content-round-trip-remains-valid-test
-  (let [state (node-editor/open-document v3-arc-ring-fade-audio-path :scene)
-        edited (editor-document/edit (:document state) (:form (:document state)))
-        saved (editor-document/save edited pr-str)
-        parsed (clojure.edn/read-string (:file-text saved))]
-    (is (= :ac/vfx-v3 (:schema parsed)))
-    (is (vector? (get-in parsed [:system :render])))
-    (is (every? map? (get-in parsed [:system :render])))))
-
-(deftest structured-v3-vfx-save-preserves-all-system-stages-test
-  (let [form (editor-v3/document->form multi-stage-vfx)
-        edited (assoc-in form [:phases :spawn]
-                         [(list 'finish {:outcome :performed})])
-        saved (editor-v3/form->document multi-stage-vfx edited)]
-    (is (= :finish (get-in saved [:system :spawn 0 :flow])))
-    (is (= :particle/update (get-in saved [:system :update 0 :component])))
-    (is (= :particle/render (get-in saved [:system :render 0 :component])))))
+(deftest remove-v4-node-removes-incident-links-but-protects-sentinels
+  (let [g (assoc (graph [:n/start :start]
+                        [:n/action :component :component :math/add]
+                        [:n/end :end])
+                 :links [{:id :e/a :kind :exec :from [:n/start :out] :to [:n/action :in]}
+                         {:id :e/b :kind :exec :from [:n/action :out] :to [:n/end :in]}])
+        removed (#'editor/remove-v4-node g :n/action)]
+    (is (nil? (get-in removed [:nodes :n/action])))
+    (is (empty? (:links removed)))
+    (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/start)))
+    (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/end)))))

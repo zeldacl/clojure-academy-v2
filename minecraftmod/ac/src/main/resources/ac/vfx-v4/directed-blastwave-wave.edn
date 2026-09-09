@@ -1,0 +1,21 @@
+{:schema :ac/vfx-v4,
+ :id :directed-blastwave-wave,
+ :lifecycle {:mode :transient},
+ :inputs
+ {:position {:type :vec3},
+  :direction {:type :vec3},
+  :seed {:type :int}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-0,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/link001,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}]}}}

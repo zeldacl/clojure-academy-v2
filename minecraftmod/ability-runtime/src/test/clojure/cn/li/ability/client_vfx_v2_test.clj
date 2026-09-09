@@ -77,3 +77,14 @@
     :instance-key [:cast 5] :event-seq 1 :params {:duration-ticks 4}})
   (let [frame (controller/sample-java-frame! {:frame-id 1 :partial-tick 0.0})]
     (is (instance? cn.li.mcmod.runtime.vfx.VfxFrame frame))))
+
+(deftest editor-preview-isolated-from-production-runtime-test
+  (reset-runtime!)
+  (is (nil? (controller/sample-preview-frame!)))
+  (is (= [:editor-preview :probe-transient]
+         (controller/start-preview! :probe-transient {:duration-ticks 2})))
+  (is (empty? @(:instances (controller/runtime))))
+  (is (instance? cn.li.mcmod.runtime.vfx.VfxFrame
+                 (controller/sample-preview-frame!)))
+  (controller/stop-preview!)
+  (is (nil? (controller/sample-preview-frame!))))

@@ -1176,25 +1176,25 @@ tasks.register("verifyNodeCoreDependencyDirection") {
 
 tasks.register("verifyNodeLayerDiscipline") {
     group = "verification"
-    description = "Ensure every production authoring document uses an AC V3 schema and no non-V3 resource tree is loaded."
+    description = "Ensure every production authoring document uses an AC V4 schema and no non-V4 resource tree is loaded."
     dependsOn ":node-core:checkClojure"
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills-v3"), file("ac/src/main/resources/ac/vfx-v3")]
+        def roots = [file("ac/src/main/resources/ac/skills-v4"), file("ac/src/main/resources/ac/vfx-v4")]
         def violations = []
         roots.each { root ->
             if (!root.directory) {
-                violations << "missing V3 resource root: ${root}"
+                violations << "missing V4 resource root: ${root}"
             } else {
                 fileTree(root) { include "*.edn" }.files.each { File doc ->
                     def text = doc.text
-                    if (!(text =~ /:schema\s+:ac\/(?:skill|vfx)-v3/)) {
-                        violations << "${doc}: missing :ac/skill-v3 or :ac/vfx-v3 schema"
+                    if (!(text =~ /:schema\s+:ac\/(?:skill|vfx)-v4/)) {
+                        violations << "${doc}: missing :ac/skill-v4 or :ac/vfx-v4 schema"
                     }
                 }
             }
         }
         if (!violations.isEmpty()) throw new GradleException(violations.unique().join("\n"))
-        logger.lifecycle("[verifyNodeLayerDiscipline] ok (V3 resource roots only)")
+        logger.lifecycle("[verifyNodeLayerDiscipline] ok (V4 resource roots only)")
     }
 }
 tasks.register("verifyPresentationContainsNoVfxRuntime") {
@@ -1391,13 +1391,13 @@ tasks.register("verifyNoDuplicateUtilities") {
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
-    description = "Every effect emitted by an AC V3 ability must be present in the V3 VFX catalog. Coverage uses real EDN parsing."
+    description = "Every effect emitted by an AC V4 ability must be present in the V4 VFX catalog. Coverage uses real EDN parsing."
     dependsOn ":vfx-core:checkClojure", ":ac:checkClojure"
 }
 
 tasks.register("verifyVfxSingleTickPath") {
     group = "verification"
-    description = "Exactly one V3 VFX instance-tick implementation exists."
+    description = "Exactly one V4 VFX instance-tick implementation exists."
     dependsOn ":vfx-core:checkClojure"
     doLast {
         def runtimeSources = fileTree("vfx-core/src/main/clojure") {
@@ -1405,7 +1405,7 @@ tasks.register("verifyVfxSingleTickPath") {
         }.files
         def definitions = runtimeSources.findAll { it.text =~ /\(defn\s+client-tick!/ }
         if (definitions.size() != 1) {
-            throw new GradleException("expected exactly one V3 VFX client-tick! definition, found: ${definitions}")
+            throw new GradleException("expected exactly one V4 VFX client-tick! definition, found: ${definitions}")
         }
         logger.lifecycle("[verifyVfxSingleTickPath] ok (${definitions[0]})")
     }
@@ -1504,9 +1504,9 @@ tasks.register("verifyVocabularyPaletteMetadata") {
 
 tasks.register("verifyContentEdnNoRawComments") {
     group = "verification"
-    description = "All structured V3 content EDN must store authoring notes in :doc data and must not contain raw EDN comment lines."
+    description = "All structured V4 content EDN must store authoring notes in :doc data and must not contain raw EDN comment lines."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills-v3"), file("ac/src/main/resources/ac/vfx-v3")]
+        def roots = [file("ac/src/main/resources/ac/skills-v4"), file("ac/src/main/resources/ac/vfx-v4")]
         def offenders = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.each { f ->
@@ -1526,14 +1526,14 @@ tasks.register("verifyContentEdnNoRawComments") {
 
 tasks.register("verifyEditorLayoutSidecarNotLoaded") {
     group = "verification"
-    description = "The node editor's layout sidecars (ac/skills-v3/layout/<id>.layout.edn, ac/vfx-v3/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only the structured V3 map. This gate asserts no ac DISPATCH source file references a 'skills-v3/layout' or 'vfx-v3/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
+    description = "The node editor's layout sidecars (ac/skills-v4/layout/<id>.layout.edn, ac/vfx-v4/layout/<id>.layout.edn -- per-node canvas x/y/collapsed/group positions, keyed by :nid) are editor-only presentation state, never consumed at runtime: dispatch reads only the structured V4 map. This gate asserts no ac DISPATCH source file references a 'skills-v4/layout' or 'vfx-v4/layout' resource path -- the node editor's own screen controllers (ac/.../ability/client/screens/, which legitimately read/write these sidecars -- that is the entire point of the file) are the one allowed exception, scanned separately by nothing (there is no runtime dispatch code under client/screens/); everywhere else in ac/src/main/clojure staying clean is what proves a runtime read never crept in. Was vacuously true before Phase 3 built the editor; now enforced against the real exception list instead."
     doLast {
         def offenders = []
         def editorScreensDir = file("ac/src/main/clojure/cn/li/ac/ability/client/screens")
         fileTree("ac/src/main/clojure").matching { include "**/*.clj" }.each { f ->
             if (f.canonicalPath.startsWith(editorScreensDir.canonicalPath)) return
             def text = f.text.replaceAll(/;.*$/, "")
-            if (text =~ /skills-v3\/layout|vfx-v3\/layout/) {
+            if (text =~ /skills-v4\/layout|vfx-v4\/layout/) {
                 offenders << f.path
             }
         }
@@ -1546,7 +1546,7 @@ tasks.register("verifyEditorLayoutSidecarNotLoaded") {
 
 tasks.register("verifyContentModuleCoreIsolation") {
     group = "verification"
-    description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring, and -- added for the node editor's palette-translation datagen and its editor screens -- cn.li.node.ops/cn.li.vfx.api for the pure-op table and the VFX scene vocabulary); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here. Pruned in the node-editor plan's Phase 7 cleanup: cn.li.combat.vocabulary/cn.li.node.scope/validate had zero real callers left anywhere in ac/src/main/clojure (grep-verified, not assumed) -- editor schema infrastructure is now V3-only."
+    description = "Content modules (ac/bc/cc) should reach node-core/combat-core/vfx-core/presentation-core only through cn.li.ability.*. This is an allow-list gate, not a zero gate: the dispatch pipeline (session gating, cooldown, damage/mark handling) still lives in ac/.../combat_runtime.clj by deliberate Phase 6 scope decision -- moving it needs a real second content module to validate the port design against, not a guess. The allow-list below is today's real AC usage (catalog assembly, RNG facade, damage-math reuse, Presentation GUI wiring, and -- added for the node editor's palette-translation datagen and its editor screens -- cn.li.node.ops/cn.li.vfx.api for the pure-op table and the VFX scene vocabulary); it exists to catch NEW direct core reaches creeping in, not to relitigate the ones already here. Pruned in the node-editor plan's Phase 7 cleanup: cn.li.combat.vocabulary/cn.li.node.scope/validate had zero real callers left anywhere in ac/src/main/clojure (grep-verified, not assumed) -- editor schema infrastructure is now V4-only."
     doLast {
         def allowed = [
             "cn.li.combat.api", "cn.li.combat.damage-math",
@@ -1572,7 +1572,7 @@ tasks.register("verifyContentModuleCoreIsolation") {
 
 tasks.register("verifyAbilityCompositionBoundary") {
     group = "verification"
-    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary for V3 content."
+    description = "Ensure AC uses ability-runtime as the cross-core Combat/VFX/Presentation composition boundary for V4 content."
     dependsOn ":ac:checkClojure"
     doLast {
         def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj")
@@ -2963,10 +2963,10 @@ tasks.register("verifyCoreNoSkillKnowledge") {
 
 tasks.register("verifyEdnNoConfigBackReferences") {
     group = "verification"
-    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills-v3 and ac/vfx-v3, the S6/S8 live content directories -- no pre-V3 resource roots are included in the production build."
+    description = "Require migrated skill EDN to be config-independent declarations. Points at ac/skills-v4 and ac/vfx-v4, the S6/S8 live content directories -- no pre-V4 resource roots are included in the production build."
     doLast {
-        def roots = [file("ac/src/main/resources/ac/skills-v3"),
-                     file("ac/src/main/resources/ac/vfx-v3")]
+        def roots = [file("ac/src/main/resources/ac/skills-v4"),
+                     file("ac/src/main/resources/ac/vfx-v4")]
         def violations = []
         roots.each { root ->
             fileTree(root).matching { include "*.edn" }.files.each { source ->
@@ -3021,6 +3021,7 @@ gradle.projectsEvaluated {
         }
     }
 }
+
 
 
 

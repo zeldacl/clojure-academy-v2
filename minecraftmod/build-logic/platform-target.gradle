@@ -283,20 +283,19 @@ if (target.loader != "none") {
         "org.clojure:core.specs.alpha:${clojureVersions.coreSpecsAlpha}"
     ]
 
-    // Maven Central publishes org.clojure:clojure in two variants: the
-    // ordinary jar (with AOT-compiled classes for the runtime namespaces)
-    // and the `slim` classifier jar (identical .clj sources, no Clojure AOT
-    // classes, ~3x smaller). Dev/test/compile classpaths keep the full jar
-    // so every JVM avoids load-time compilation; only the packaged artifacts
-    // (Jar-in-Jar / Loom include) embed the slim jar, shrinking the
-    // distributed mod. Only the clojure entry differs — the other two
-    // runtime libraries are packaged as resolved.
+    // Maven Central publishes org.clojure:clojure in two variants: the ordinary
+    // jar (with AOT-compiled classes for the runtime namespaces) and the `slim`
+    // classifier jar (identical .clj sources, no Clojure AOT classes, ~3x
+    // smaller). Embedding slim in the Jar-in-Jar payload would cut roughly 2.8 MB
+    // (~10%) off the distributed mod, and commit 56d5819ec did exactly that.
+    //
+    // DO NOT re-enable it. The slim jar omits Java interfaces the runtime needs,
+    // so the packaged mod fails at load time. It was disabled again in ea8a8d12f
+    // ("update version"), which recorded no reason -- hence this note. The size
+    // win is real but unusable; look at the asset payload instead, which is ~52%
+    // of the archive versus ~16% for the embedded Clojure runtime.
     def packagedRuntimeLibraries = clojureRuntimeLibraries.collect { dependencyNotation ->
-//        if (dependencyNotation.startsWith("org.clojure:clojure:")) {
-//            "${dependencyNotation}:slim"
-//        } else {
-            dependencyNotation
-//        }
+        dependencyNotation
     }
 
     // Do not put SourceSetOutput on platform configurations: it is built by
@@ -693,13 +692,45 @@ if (target.loader != "none") {
             }
         }
     }
-    // Source-first runClient/runServer publish all .clj via prepareDevClojureRuntime.
-    // stageNeutral only carries filtered neutral sources (AOT namespaces omitted on
+    // ---- Runtime representation mode -----------------------------------------
+    // Every dev launch (runClient/runServer/runData/runGametestServer) loads Clojure
+    // from source, so they can all share one preparation path; alternating between
+    // them then rebuilds nothing. runData previously sat on the AOT path only
+    // because :platform:jar depends on it -- but jar declares its own AOT inputs
+    // (copyClojureClassesToJavaOutput / stageNeutral / stagePlatform /
+    // verifyPlatformAotCoverage) and merely borrows runData for its generated data
+    // files, so the two concerns can be separated.
+    //
+    // Decided at configuration time from the requested task names, because the
+    // branch has to change dependsOn edges. onlyIf is not enough: it skips a task's
+    // actions but still runs everything that task depends on, which is how
+    // compileClojure kept being dragged in via
+    // stageNeutral -> prepareNeutralClojureRuntimeSources.
+    //
+    // Fails safe: dev mode requires EVERY requested task to be a dev launch, so an
+    // aggregate or unrecognised entry point keeps the packaging behaviour (correct,
+    // merely slower) instead of publishing platform .clj into a jar, which
+    // verifyNeutralClojurePackaging forbids.
+    def platformAotForRun = findProperty("platformAotForRun")?.toString()?.equalsIgnoreCase("true")
+    def forcePlatformAotRequested = findProperty("forcePlatformAot")?.toString()?.equalsIgnoreCase("true")
+    def devRunTaskNames = ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"]
+    def requestedLeafTaskNames = gradle.startParameter.taskNames.collect { it.tokenize(":").last() }
+    def platformRuntimeDevMode =
+        !platformAotForRun && !forcePlatformAotRequested &&
+        !requestedLeafTaskNames.isEmpty() &&
+        requestedLeafTaskNames.every { it in devRunTaskNames }
+    ext.platformRuntimeDevMode = platformRuntimeDevMode
+    logger.info("[platform-runtime-mode] devMode={} requested={}",
+        platformRuntimeDevMode, requestedLeafTaskNames)
+
+    // stageNeutral carries only filtered neutral sources (AOT namespaces omitted on
     // remapped targets) and its stale-manifest cleanup can delete files that
-    // prepareDev just published — keep it on datagen/gametest/jar paths only.
-    tasks.matching { it.name in ["runData", "runDatagen", "runGametestServer"] }.configureEach {
-        dependsOn stageNeutralClojureRuntimeResources
-        dependsOn stagePlatformClojureSources
+    // prepareDev publishes, so it belongs to the packaging path only.
+    if (!platformRuntimeDevMode) {
+        tasks.matching { it.name in ["runData", "runDatagen", "runGametestServer"] }.configureEach {
+            dependsOn stageNeutralClojureRuntimeResources
+            dependsOn stagePlatformClojureSources
+        }
     }
     tasks.matching { it.name == "checkClojure" }.configureEach {
         dependsOn stageNeutralClojureRuntimeResources
@@ -949,10 +980,44 @@ if (target.loader != "none") {
         }
     }
 
+    // prepareDevClojureRuntime publishes every staged .clj into resources/main so the
+    // dev launch can load platform namespaces from source. Packaging requires the
+    // opposite (platform namespaces must be class-only), and :platform:processResources
+    // strips them -- but only in its doFirst, which never runs while that task is
+    // UP-TO-DATE. A dev launch followed by a packaging build therefore left all 306
+    // platform .clj in resources/main and failed verifyPlatformAotCoverage with
+    // sourceLeaks. Sweep them unconditionally on the packaging path instead of relying
+    // on another task happening to be out of date.
+    def sweepPlatformClojureFromResources = tasks.register("sweepPlatformClojureFromResources") {
+        group = "build"
+        description = "Drop platform .clj from resources/main so packaging keeps platform namespaces class-only."
+        onlyIf { rootProject.ext.platformRemapAotEnabled }
+        mustRunAfter tasks.named("processResources"), prepareDevClojureRuntime
+        // Cheap namespace-targeted sweep; must run even when its neighbours are cached.
+        outputs.upToDateWhen { false }
+        doLast {
+            def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
+            def removed = 0
+            platformRuntimeAotNamespaces().each { String namespaceName ->
+                def base = namespaceName.replace(".", "/").replace("-", "_")
+                ["clj", "cljc"].each { String suffix ->
+                    def leaked = new File(resourcesRoot, "${base}.${suffix}")
+                    if (leaked.isFile() && leaked.delete()) {
+                        removed++
+                    }
+                }
+            }
+            if (removed > 0) {
+                logger.lifecycle("[sweepPlatformClojureFromResources] removed {} platform source files from resources/main", removed)
+            }
+        }
+    }
+
     def verifyPlatformAotCoverage = tasks.register("verifyPlatformAotCoverage") {
         group = "verification"
         description = "Verify platform Clojure namespace representation for the selected remap policy."
         dependsOn copyClojureClassesToJavaOutput, stageNeutralClojureRuntimeResources
+        dependsOn sweepPlatformClojureFromResources
         doLast {
             def aotRoot = clojureAotDir.get().asFile
             def classesRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
@@ -1040,10 +1105,9 @@ if (target.loader != "none") {
         dependsOn copyClojureClassesToJavaOutput
     }
 
-    // Dev game launches load Clojure from source. Platform AOT exists for Loom
-    // remap of the release jar (and for runData/datagen, which jar depends on).
-    // -PplatformAotForRun=true forces AOT before runClient/runServer as well.
-    def platformAotForRun = findProperty("platformAotForRun")?.toString()?.equalsIgnoreCase("true")
+    // platformAotForRun / platformRuntimeDevMode are resolved earlier (see the
+    // "Runtime representation mode" block); all five run tasks now share one
+    // preparation path chosen by that flag.
     def sourceFirstRunTaskNames = ["runClient", "runServer"]
     def aotRunTaskNames = ["runData", "runDatagen", "runGametestServer"]
     // Stage into one generated root under the platform build tree. Forge's mod
@@ -1073,7 +1137,16 @@ if (target.loader != "none") {
         doLast {
             def classesRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
             def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
-            delete clojureAotDir
+            // Do NOT delete clojureAotDir here. Source-first run tasks never read
+            // clojure/main: it is absent from the run classpath (see setClasspath
+            // below) and from MOD_CLASSES (toolchain-loom.gradle). Deleting it buys
+            // this launch nothing and only forces :platform:compileClojure
+            // out-of-date, so the next runData/jar pays a full AOT rebuild plus the
+            // cascade it invalidates (copyClojureClassesToJavaOutput,
+            // compilePresentationViews, several processResources tasks).
+            // Measured 2026-09-08 on forge-1.20.1: that cascade cost +2m08s on the
+            // following runData (4m14s vs 2m06s). Full-rebuild atomicity for the AOT
+            // graph is already guaranteed by compileClojure's own doFirst.
             // Drop platform AOT classes that would mask .clj on the run classpath.
             deleteAotNamespaceClasses(classesRoot, platformRuntimeAotNamespaces())
             // Drop AOT leftovers only for source-first neutral modules. Keep
@@ -1142,21 +1215,24 @@ if (target.loader != "none") {
         }
     }
 
-    if (platformAotForRun) {
-        tasks.matching { it.name in sourceFirstRunTaskNames }.configureEach {
+    // One preparation path for all five run tasks, selected by platformRuntimeDevMode
+    // (resolved at configuration time -- see the "Runtime representation mode" block).
+    // The edges themselves have to be conditional: an onlyIf on the AOT tasks would
+    // still pull their dependencies, notably
+    // stageNeutral -> prepareNeutralClojureRuntimeSources -> compileClojure.
+    if (platformRuntimeDevMode) {
+        tasks.matching { it.name in devRunTaskNames }.configureEach {
+            dependsOn prepareDevClojureRuntime
+        }
+    } else {
+        tasks.matching { it.name in devRunTaskNames }.configureEach {
             dependsOn copyClojureClassesToJavaOutput
             dependsOn stageNeutralClojureRuntimeResources
         }
-    } else {
-        tasks.matching { it.name in sourceFirstRunTaskNames }.configureEach {
-            dependsOn prepareDevClojureRuntime
+        // When a jar graph also drags prepareDev in, the AOT copy must land last.
+        copyClojureClassesToJavaOutput.configure {
+            mustRunAfter prepareDevClojureRuntime
         }
-    }
-    // Datagen / gametest stay on the AOT path: :platform:jar depends on runData
-    // and must not observe prepareDev clearing AOT outputs mid-graph.
-    tasks.matching { it.name in aotRunTaskNames }.configureEach {
-        dependsOn copyClojureClassesToJavaOutput
-        dependsOn stageNeutralClojureRuntimeResources
     }
 
     // Optional flight-recorder capture belongs on the forked game JVM, not
