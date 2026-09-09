@@ -30,6 +30,11 @@
   (is (= :skill (doc/kind skill)))
   (is (= (dissoc skill :editor) (doc/semantic-document skill))))
 
+(deftest rejects-top-level-legacy-wrapper-fields
+  (doseq [field [:program :scene]]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (doc/validate-document! (assoc skill field {:legacy true}))))))
+
 (deftest rejects-ordinary-cycle
   (let [graph {:nodes {:n/start (n :n/start :start)
                        :n/a (n :n/a :local-set :key :x :operation :define)

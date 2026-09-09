@@ -67,7 +67,7 @@ per-file capabilities 推导需要）。`ability-runtime/editor/*` 本身不含�
 参数和 `:nid` 同时属于持久化模型。编辑器通过 `document/open-v4` 解析并调用
 `node.api/validate-v4-document!`，保存时由 `editor.document/save` 校验并重建 map，
 再以 EDN 序列化写入工作区或显式导出路径。工作区与源文件写入使用临时文件 + 原子替换；
-导出前比较打开时的源文件指纹，外部修改会阻止覆盖并要求 Reload。不存在旧的 `:program`/`:scene` 字符串
+导出前比较打开时的源文件指纹，外部修改会阻止覆盖并要求 Reload。不存在旧的 `:program`/`:scene` 字段
 读取器，也不存在字节 splice；嵌套在 damage policy 中的 `:program` 是 Combat Core
 当前策略载荷字段，不是旧技能文档包装器；因此不会出现“运行时读取一套、编辑器保存另一套”的
 双格式问题。

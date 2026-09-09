@@ -302,8 +302,9 @@
     (require! (contains? schemas schema) "unsupported V4 document schema"
               {:schema schema :asset (:id document)})
     (require! (keyword? (:id document)) "V4 document requires keyword :id" {:schema schema})
-    (require! (not (or (string? (:program document)) (string? (:scene document))))
-              "V4 document cannot contain a legacy string program or scene"
+    (require! (not (or (contains? document :program)
+                       (contains? document :scene)))
+              "V4 document cannot contain legacy :program or :scene fields"
               {:schema schema :asset (:id document)})
     (case schema
       :ac/skill-v4
