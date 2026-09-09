@@ -83,10 +83,10 @@ P0/P1 已完成并通过门禁；P2 基础版及 schema 驱动的 keyword/vec3 �
 | --- | --- | --- | --- |
 | 1 源码/视图收束 | 已完成 | viewport、坐标逆变换、repeater 命中包装器、phase item payload 均有源码和回归覆盖 | 无 |
 | 2 视图产物 | 已完成 | `:ac:compilePresentationViews`、`verifyPresentationGoldenArtifacts` 通过；golden 已同步 | 无 |
-| 3 定向回归 | 已完成 | AC 定向 69/279、Presentation core 45/168，均 0 failures/0 errors；含 schema 标量越界拒绝、未知/缺少 palette id 的 pointer 拖拽清理、空 drag-item 清理、错误 drop-zone 拒绝、画布外滚轮不缩放、固定宽度长标签显示省略、无 effect 时 Cast 的本地拒绝，compiled smoke 和 320×240 压力测试覆盖 canvas/node `:drop` 统一路由、普通节点拖拽、空画布平移释放、过期 palette 来源清理和非法 vec3 草稿 | 无 |
+| 3 定向回归 | 核心已完成，AC 当前受基线阻断 | 本轮重新执行的 node-core 130/318、ability-runtime 80/182 均 0 failures/0 errors；AC 定向测试无法进入测试运行器，因为 `:ac:compileClojure` 先在既有 `cn.li.ac.block.developer.presentation` 的缺失 `cn.li.ac.block.developer.console` 处失败；此前覆盖的 schema 标量越界、pointer 拖拽清理、drop-zone 拒绝、滚轮边界、长标签省略、vec3 草稿和 320×240 压力用例仍保留在源码 | 补回/修复该既有 namespace 后，从定向 AC 测试开始重跑 |
 | 4 全量门禁 | 核心通过，AC 受既有基线阻断 | 本轮 node-core 130/318、ability-runtime 80/182、`verifyNodeLayerDiscipline` 通过；AC `checkClojure` 在加载既有 `cn.li.ac.block.developer.presentation` 时因缺失 `cn.li.ac.block.developer.console` 失败，不能标记 AC 全量通过 | 补回/修复该既有缺失 namespace 后再运行 AC 全量门禁 |
 | 5 真实游戏验收 | 待外部 | 本轮遵守“不跑 `runClient`”，没有伪造画面/手感结论 | 由具备游戏窗口的验收者按第 5 步记录可复现结果 |
-| 6 提交边界 | 已提交（`d8cc46ecb`） | 相关源码、视图、测试、文档和 golden 已限定；无关未跟踪文件保留；后续参数草稿修正另行提交 | 保持只提交本计划涉及文件 |
+| 6 提交边界 | 已提交 | 相关源码、视图、测试、文档和 golden 已限定；无关未跟踪文件保留；后续参数草稿、端口和验证记录均已分别提交 | 保持只提交本计划涉及文件 |
 
 ## 6. 当前工作树的可执行收束步骤
 
