@@ -203,7 +203,7 @@
   (mapv (fn [type]
           {:id (keyword "node" (name type)) :fixed-type type :params {}
            :category :control :label (name type) :source :fixed})
-        [:start :component :branch :merge :foreach :repeat :loop-end :end
+        [:start :branch :merge :foreach :repeat :loop-end :end
          :literal :context-ref :parameter-ref :state-ref :local-get :local-set]))
 (defn open-document
   "path (absolute file path), mode (:skill or :scene) -> a fresh editor
