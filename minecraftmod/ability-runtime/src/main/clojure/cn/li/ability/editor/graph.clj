@@ -288,7 +288,10 @@
    that node, so a canvas label can never show something structurally
    different from what saving would actually write."
   [nodes nid]
-  (pr-str (node->stmt-form nodes nid)))
+  (let [node (get nodes nid)]
+    (if (:stmt node)
+      (pr-str (node->stmt-form nodes nid))
+      (pr-str (dissoc node :nid)))))
 
 (defn- short-sym
   "keyword/symbol/string -> a short display token (name segment only)."
@@ -504,4 +507,5 @@
             {:code :order-refers-to-missing-node :nid nid})
           (for [[nid node] nodes ref (refs node) :when (not (contains? ids ref))]
             {:code :dangling-reference :nid nid :ref ref})))))
+
 
