@@ -212,7 +212,7 @@
                                                input-ports)
                                   (when (exec-node? n)
                                     (concat
-                                     [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key :exec
+                                     [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key :in
                                        :x (- x 5.0) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]
                                      (map-indexed (fn [i port]
                                                     {:kind :quad :role :pin :target :pin :nid nid :pin :out :key port
