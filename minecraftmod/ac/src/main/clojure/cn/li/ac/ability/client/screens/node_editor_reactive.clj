@@ -288,7 +288,7 @@
 (defn- axis-draft-key [draft-key axis]
   (keyword (str (name draft-key) "-" (name axis))))
 
-(defn- selected-param-fields
+(defn- legacy-selected-param-fields
   "state -> display/edit fields for expression inputs of the selected node.
    Literal, vector-literal and map-literal expressions are locally editable;
    references/calls remain read-only so wiring stays the explicit operation.
@@ -350,6 +350,35 @@
                  :decrement-label "−"
                  :increment-label "+"}))
             refs))
+    []))
+(defn- selected-param-fields
+  "Return editable fields for either legacy surface nodes or V4 component inputs."
+  [{:keys [graph selected-nid palette param-drafts]}]
+  (if-let [node (get-in graph [:nodes selected-nid])]
+    (if (= :component (:type node))
+      (let [entry (some #(when (= (:component node) (:id %)) %) palette)
+            specs (:params entry)]
+        (mapv (fn [[key value]]
+                (let [descriptor (or (get specs key)
+                                     {:type (cond (number? value) :double
+                                                  (boolean? value) :boolean
+                                                  (string? value) :string
+                                                  :else :any)})
+                      type (:type descriptor)
+                      choices (vec (filter keyword? (:choices descriptor)))
+                      draft-key (keyword (str "node-editor-param-" (name selected-nid) "-" (name key)))]
+                  {:nid selected-nid :param-key key :data-nid nil :draft-key draft-key
+                   :type type :label (str (name key) (when type (str " [" (name type) "]")))
+                   :value (or (get param-drafts [selected-nid key]) (pr-str value))
+                   :editable? true :toggle? (and (contains? #{:bool :boolean} type) (empty? choices))
+                   :choice? (seq choices) :choices choices :choice-next-label "Next"
+                   :text-editor? (not (or (contains? #{:bool :boolean} type) (seq choices)))
+                   :vec3-editor? false :vec3-components []
+                   :stepper? (and (contains? #{:int :long :float :double} type) (number? value))
+                   :control-label (if (= true value) "On" "Off")
+                   :decrement-label "−" :increment-label "+"}))
+              (:inputs node)))
+      (legacy-selected-param-fields {:graph graph :selected-nid selected-nid :palette palette :param-drafts param-drafts}))
     []))
 (defn- parse-editor-value [descriptor raw]
   (let [type (:type descriptor)
@@ -631,7 +660,7 @@
     (catch Throwable error (swap! state* assoc :status (str "Cannot apply graph edit: " (.getMessage error))))))
 (declare install-graph!)
 
-(defn- param-submit [state* payload]
+(defn- legacy-param-submit [state* payload]
   (let [item (or (:item payload) payload)
         nid (or (:nid item) (:selected-nid @state*))
         key (:param-key item)
@@ -668,6 +697,30 @@
         (swap! state* (fn [s] (-> s
                                    (update :param-drafts dissoc [nid key])
                                    (assoc :status (str "Updated " (name key) ".")))))))))
+(defn- param-submit
+  "Commit a parameter edit to either a legacy literal node or a V4 inline input."
+  [state* payload]
+  (let [item (or (:item payload) payload)
+        nid (or (:nid item) (:selected-nid @state* ))
+        key (:param-key item)
+        raw (or (:value payload) (:value item) (:text payload))
+        node (get-in @state* [:graph :nodes nid])]
+    (if (= :component (:type node))
+      (let [entry (some #(when (= (:component node) (:id %)) %) (:palette @state*))
+            descriptor (or (get-in entry [:params key]) {:type :any})
+            parsed (parse-editor-value descriptor raw)]
+        (cond
+          (nil? key) (swap! state* assoc :status "Unknown node parameter.")
+          (nil? parsed) (swap! state* assoc :status (str "Invalid " (name key) " value."))
+          (and (seq (:choices descriptor)) (not (some #(= parsed %) (:choices descriptor))))
+          (swap! state* assoc :status (str "Choose one of the allowed values for " (name key) "."))
+          (not (editor-value-within-bounds? descriptor parsed))
+          (swap! state* assoc :status (str "Value for " (name key) " is outside the allowed range."))
+          :else (do
+                  (install-graph! state* (assoc-in (:graph @state*) [:nodes nid :inputs key] parsed))
+                  (swap! state* (fn [s] (-> s (update :param-drafts dissoc [nid key])
+                                                (assoc :status (str "Updated " (name key) "."))))))))
+      (legacy-param-submit state* payload))))
 (defn- param-step [state* payload direction]
   (let [item (or (:item payload) payload)
         nid (or (:nid item) (:selected-nid @state*))
@@ -803,6 +856,16 @@
      {:kind :text :role :ghost-label :x (+ x 4.0) :y (+ y 3.0)
       :text (str "[drop] " (or label id)) :rgba 0xFFFFFFFF}]))
 
+(defn- insert-v4-palette-node [graph entry prefix]
+  (let [nid (keyword "n" (str prefix "-call"))
+        defaults (into {} (map (fn [[k d]] [k (or (:default d)
+                                                   (case (:type d) (:float :double) 0.0
+                                                         (:int :long) 0
+                                                         (:bool :boolean) false
+                                                         :vec3 [0.0 0.0 0.0]
+                                                         nil))]) (:params entry)))
+        node {:nid nid :type :component :component (:id entry) :inputs defaults}]
+    {:graph (assoc-in graph [:nodes nid] node) :nid nid}))
 (defn- palette-drop! [state* payload]
   (let [item (:drag-item payload)
         id (:id item)
@@ -817,7 +880,7 @@
       (try
         (let [entry (palette/find-by-id (:palette @state*) id)
               prefix (str "palette-" (System/nanoTime))
-              {:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)
+              {:keys [graph nid]} (if (:v4? (:document @state*)) (insert-v4-palette-node (:graph @state*) entry prefix) (graph/insert-palette-node (:graph @state*) entry prefix))
               point (screen->canvas-point @state* (:x payload) (:y payload))
               x (:x point)
               y (:y point)]
@@ -1046,7 +1109,7 @@
       (if-not entry
         (swap! state* assoc :status "Palette entry is no longer available.")
         (try
-          (let [{:keys [graph nid]} (graph/insert-palette-node (:graph @state*) entry prefix)]
+          (let [{:keys [graph nid]} (if (:v4? (:document @state*)) (insert-v4-palette-node (:graph @state*) entry prefix) (graph/insert-palette-node (:graph @state*) entry prefix))]
             (install-graph! state* graph)
             (remember-palette! state* (:id entry))
             (swap! state* assoc :selected-nid nid :palette-drag nil :ghost nil :status (str "Added " (:id entry) ".")))
