@@ -122,13 +122,33 @@
       (fn [^ExecutionFrame fr] (wr fr (argf fr)) -1))
 
     :convert
-    (let [src (compile-reader (:src instr) consts) wr (compile-writer (:dst instr)) to (:to instr)]
+    (let [src (compile-reader (:src instr) consts) wr (compile-writer (:dst instr)) to (:to instr)
+          nid (:nid instr)
+          from (:from instr)]
       (fn [^ExecutionFrame fr]
-        (wr fr (case to
-                 :double (double (src fr))
-                 :long (long (src fr))
-                 :boolean (boolean (src fr))
-                 (src fr)))
+        (let [v (src fr)]
+          (wr fr
+              (case to
+                :double (cond
+                          (nil? v)
+                          (throw (ex-info "convert to :double received nil"
+                                          {:nid nid :to to :from from}))
+                          (number? v) (double v)
+                          :else
+                          (throw (ex-info "convert to :double expected number"
+                                          {:nid nid :to to :from from
+                                           :value v :value-class (class v)})))
+                :long (cond
+                        (nil? v)
+                        (throw (ex-info "convert to :long received nil"
+                                        {:nid nid :to to :from from}))
+                        (number? v) (long v)
+                        :else
+                        (throw (ex-info "convert to :long expected number"
+                                        {:nid nid :to to :from from
+                                         :value v :value-class (class v)})))
+                :boolean (boolean v)
+                v)))
         -1))
 
     :query

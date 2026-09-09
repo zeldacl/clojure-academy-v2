@@ -1025,7 +1025,7 @@
            :ref [:local :destination]},
           :fade-from-tick 4}}},
        :n--entry--release-9
-       {:type :foreach, :as :ball, :limit 256, :nid :n/n--entry--release-9},
+       {:type :foreach, :as :ball, :index-as :ball-index, :limit 256, :nid :n/n--entry--release-9},
        :n066 {:type :state-ref, :key :ball-ids, :nid :n/n066},
        :n094
        {:type :component,

@@ -607,7 +607,7 @@
       {}
       (try
         (let [materialized (:tunables (skill-config/overlay-edn-tunables source))]
-          (reduce-kv
+           (reduce-kv
            (fn [result key spec]
              (assoc result key
                     (cond
@@ -616,7 +616,12 @@
                       (let [[lo hi] (:range spec)]
                         (+ (double lo) (* (double skill-exp)
                                           (- (double hi) (double lo)))))
-                      :else nil)))
+                      :else
+                      (throw (ex-info "final tunable missing materialized :value or :range"
+                                      {:ability-id ability-id
+                                       :tunable key
+                                       :spec spec
+                                       :curve (:curve spec)})))))
            {} materialized))
         (catch Throwable e
           (throw (ex-info "final tunable materialization failed"
@@ -1200,6 +1205,23 @@
          (fn [marks]
            (into {} (filter (fn [[_ value]] (> (long (:expires-at value)) (long tick))) marks))))
   nil)
+
+(defn- impact-long
+  [field value default]
+  (cond
+    (nil? value) (long default)
+    (number? value) (long value)
+    :else (throw (ex-info "world/block-impact field must be a number"
+                          {:field field :value value}))))
+
+(defn- impact-double
+  [field value default]
+  (cond
+    (nil? value) (double default)
+    (number? value) (double value)
+    :else (throw (ex-info "world/block-impact field must be a number"
+                          {:field field :value value}))))
+
 (defn- handle-neutral-domain-event!
   "Apply the two generic domain events emitted by the Arc final graph.
 
@@ -1238,6 +1260,14 @@
     :world/block-impact
     (let [{:keys [world-id position block-position water? ignite-probability
                   fishing-probability fishing-exp-threshold skill-exp seed]} (:payload event)
+          seed (impact-long :seed seed 0)
+          skill-exp (impact-double :skill-exp skill-exp 0.0)
+          fishing-exp-threshold (impact-double :fishing-exp-threshold fishing-exp-threshold 1.0)
+          fishing-probability (impact-double :fishing-probability fishing-probability 0.0)
+          ignite-probability (impact-double :ignite-probability ignite-probability 0.0)
+          _ (when (and (some? water?) (not (boolean? water?)))
+              (throw (ex-info "world/block-impact :water? must be a boolean"
+                              {:value water?})))
           point (cond
                   (vector? position) position
                   (map? position) [(:x position) (:y position) (:z position)]
@@ -1261,14 +1291,10 @@
                                     (long (Math/floor (double (nth block-point 0))))
                                     (long (Math/floor (double (nth block-point 1))))
                                     (long (Math/floor (double (nth block-point 2))))))))
-          seed (long (or seed 0))
-          fish? (and detected-water? (> (double (or skill-exp 0.0))
-                               (double (or fishing-exp-threshold 1.0)))
-                     (< (rng/unit-double seed)
-                        (double (or fishing-probability 0.0))))
+          fish? (and detected-water? (> skill-exp fishing-exp-threshold)
+                     (< (rng/unit-double seed) fishing-probability))
           ignite? (and (not detected-water?)
-                       (< (rng/unit-double (rng/next-seed seed))
-                          (double (or ignite-probability 0.0))))]
+                       (< (rng/unit-double (rng/next-seed seed)) ignite-probability))]
       (cond
         (not (and (string? world-id) (finite-point? point)
                   (finite-point? block-point)))

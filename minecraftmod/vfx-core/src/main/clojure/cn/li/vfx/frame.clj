@@ -10,7 +10,8 @@
    :primitive/:geometry/:material shape final-client's op->java-batch/
    op->java-output already know how to consume. Every new :kind here maps
    to exactly one old :vfx/* case; field-name differences (:layers/:style
-   replace old's bare :material for :beam/:ray-beam; :from/:to replace
+   replace old's bare :material for :beam/:ray-beam — `:layers` may be a
+   material map or a V4 vector of layer maps; :from/:to replace
    :start/:end for :line) are confirmed against real ac/vfx-v4/*.edn
    content, not assumed -- cn.li.platform.neutral.vfx-render-plan's own
    line-ops already accepts :from/:to via its own fallback key chain.
@@ -32,14 +33,38 @@
    :first-person VfxRenderStage/FIRST_PERSON
    :screen VfxRenderStage/SCREEN})
 
+(def ^:private default-layer-color [255 255 255 255])
+
+(defn- beam-material
+  "V4 beam content (beam-arc-fade, beam-fade-audio) passes `:layers` as a
+   sequence of `{ :shape :color ... }` maps. Older/test shapes pass a single
+   material map. The live render plan only reads `:color`/`:alpha` today, so
+   promote the first layer's color while preserving the full layer list."
+  [{:keys [layers alpha]}]
+  (let [a (double (or alpha 1.0))]
+    (cond
+      (nil? layers) {:alpha a}
+      (map? layers) (assoc layers :alpha a)
+      (sequential? layers)
+      (let [layer-vec (vec layers)]
+        (when-not (every? map? layer-vec)
+          (throw (ex-info "beam :layers sequence entries must be maps"
+                          {:layers layers})))
+        (cond-> {:layers layer-vec :alpha a}
+          (seq layer-vec) (assoc :color (or (:color (first layer-vec))
+                                            default-layer-color))))
+      :else (throw (ex-info "beam :layers must be a map or a sequence of layer maps"
+                            {:value layers})))))
+
 (defn- legacy-op [{:keys [kind] :as op}]
   (case kind
     :ring {:operation :draw-batch :stage :world-after-translucent :primitive :line
            :geometry {:kind :ring :center (:center op) :radius (:radius op) :segments (:segments op)}
            :material {:color (:color op) :alpha (double (or (:alpha op) 1.0))}}
     :beam {:operation :draw-batch :stage :world-after-translucent :primitive :line
-           :geometry {:kind :beam :start (:start op) :end (:end op)}
-           :material (assoc (or (:layers op) {}) :alpha (double (or (:alpha op) 1.0)))}
+           :geometry {:kind :beam :start (:start op) :end (:end op)
+                      :grow-ticks (:grow-ticks op)}
+           :material (beam-material op)}
     :ray-beam {:operation :draw-batch :stage :world-after-translucent :primitive :line
                :geometry {:kind :beam :start (:start op) :end (:end op)}
                :material (:style op)}

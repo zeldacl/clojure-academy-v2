@@ -85,6 +85,17 @@
        :n028 {:type :context-ref, :key :ring-color, :nid :n/n028},
        :n029 {:type :local-get, :key :fade-alpha, :nid :n/n029},
        :n030 {:type :merge, :nid :n/n030},
+       :n031
+       {:type :component,
+        :component :value/field,
+        :nid :n/n031,
+        :inputs {:field :from}},
+       :n032
+       {:type :component,
+        :component :value/field,
+        :nid :n/n032,
+        :inputs {:field :to}},
+       :n033 {:type :component, :component :math/lerp, :nid :n/n033},
        :n--entry--default-2
        {:type :end,
         :result {},
@@ -205,8 +216,28 @@
      :to [:n/n--entry--default-1-do-2 :center]}
     {:id :e/link029,
      :kind :data,
-     :from [:n/n026 :value],
+     :from [:n/n033 :value],
      :to [:n/n--entry--default-1-do-2 :radius]}
+    {:id :e/link040,
+     :kind :data,
+     :from [:n/n026 :value],
+     :to [:n/n031 :value]}
+    {:id :e/link041,
+     :kind :data,
+     :from [:n/n026 :value],
+     :to [:n/n032 :value]}
+    {:id :e/link042,
+     :kind :data,
+     :from [:n/n031 :value],
+     :to [:n/n033 :arg0]}
+    {:id :e/link043,
+     :kind :data,
+     :from [:n/n032 :value],
+     :to [:n/n033 :arg1]}
+    {:id :e/link044,
+     :kind :data,
+     :from [:n/n024 :value],
+     :to [:n/n033 :arg2]}
     {:id :e/link030,
      :kind :data,
      :from [:n/n027 :value],
