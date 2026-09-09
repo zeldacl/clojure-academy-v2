@@ -254,10 +254,24 @@
           wire-items (mapcat (fn [l]
                                (let [[from from-port] (:from l) [to to-port] (:to l)
                                      pa (get layout from) pb (get layout to)
+                                     source (get nodes from)
+                                     target-node (get nodes to)
+                                     target-inputs (input-ports* to target-node)
+                                     target-index (max 0 (.indexOf ^java.util.List target-inputs to-port))
+                                     source-outputs (case (:type source)
+                                                      :branch [:true :false]
+                                                      #{:foreach :repeat} [:body :completed]
+                                                      :loop-end [:continue]
+                                                      [:exec])
+                                     source-index (max 0 (.indexOf ^java.util.List source-outputs from-port))
                                      src-right (+ (:x pa) (if (data-node? (get nodes from)) expr-box-width node-box-width))
                                      dst-left (- (:x pb) 5.0)
-                                     sy (+ (:y pa) (if (data-node? (get nodes from)) 14.0 (/ (node-height from (get nodes from)) 2.0)))
-                                     dy (+ (:y pb) 32.0)]
+                                     sy (if (= :data (:kind l))
+                                          (if (data-node? source) (+ (:y pa) 14.0) (+ (:y pa) (- (node-height from source) 8.0)))
+                                          (+ (:y pa) 12.0 (* source-index 12.0)))
+                                     dy (if (= :data (:kind l))
+                                          (+ (:y pb) 32.0 (* target-index 14.0))
+                                          (+ (:y pb) (/ (node-height to target-node) 2.0)))]
                                  (map #(assoc % :role (if (= :data (:kind l)) :value-wire :exec-wire)
                                                 :from from :to to :from-port from-port :to-port to-port)
                                       (wire-quads src-right sy dst-left dy wire-thickness
