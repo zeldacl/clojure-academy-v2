@@ -191,21 +191,14 @@
     :else (throw (ex-info "document has neither :do nor :phases" {:form form}))))
 
 (defn- recompute
-  "state -> state with :graph/:diagnostics/:cost-summary refreshed from
-   the current document + selected phase. Called after every edit so the
-   canvas/inspector never show a stale reading against the actual form."
+  "Refresh graph state from either a V4 persisted graph or legacy surface form."
   [{:keys [document opts] :as state}]
-  (let [entries (entries-of (:form document))
-        phase (or (:phase state) (ffirst entries))
-        stmts (get entries phase)
-        g (graph/form->graph stmts)]
-    (assoc state
-           :phase phase
-           :phases (vec (keys entries))
-           :graph g
-           :diagnostics (check/diagnostics (:form document) opts)
-           :cost-summary (check/cost-summary (:form document) opts))))
-
+  (if (:v4? document)
+    (let [graphs (:graphs (:form document)) phase (or (:phase state) (first (keys graphs)))]
+      (assoc state :phase phase :phases (vec (keys graphs)) :graph (get graphs phase) :diagnostics [] :cost-summary nil))
+    (let [entries (entries-of (:form document)) phase (or (:phase state) (ffirst entries)) stmts (get entries phase)]
+      (assoc state :phase phase :phases (vec (keys entries)) :graph (graph/form->graph stmts)
+             :diagnostics (check/diagnostics (:form document) opts) :cost-summary (check/cost-summary (:form document) opts)))))
 (defn open-document
   "path (absolute file path), mode (:skill or :scene) -> a fresh editor
    state. `path` is always the identity used for the layout/workspace
@@ -234,12 +227,10 @@
          :opts opts
          :palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
                                   :category-for (:category-for opts)})
-         :document (if (document/v3-document? wrapper-doc)
-                     (document/open-v3 raw)
-                     (throw (ex-info "node editor requires a structured V3 document"
-                                     {:path path
-                                      :schema (:schema wrapper-doc)
-                                      :legacy-fields (select-keys wrapper-doc [:program :scene])})))
+         :document (cond
+                     (document/v4-document? wrapper-doc) (document/open-v4 raw)
+                     (document/v3-document? wrapper-doc) (document/open-v3 raw)
+                     :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
          :selected-nid nil
          :param-drafts {}
          :palette-query ""
@@ -247,7 +238,7 @@
          :palette-recent []
          :palette-drag nil
          :ghost nil
-         :canvas-viewport? false
+         :canvas-viewport? true
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
@@ -1039,7 +1030,7 @@
     :input/key
     (if (= 256 (int (or (:key-code payload) -1)))
       (if (:canvas-viewport? @state*)
-        (swap! state* assoc :canvas-viewport? false :palette-drag nil :ghost nil
+        (swap! state* assoc :canvas-viewport? true :palette-drag nil :ghost nil
                :status "Canvas viewport collapsed.")
         (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled."))
       nil)
@@ -1187,3 +1178,6 @@
      (bridge/call-adapter :presentation-open-screen!
                           (:mount vm) "Node Editor" on-close)
      vm)))
+
+
+
