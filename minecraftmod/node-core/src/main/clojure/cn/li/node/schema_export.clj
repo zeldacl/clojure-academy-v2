@@ -5,8 +5,8 @@
    details are intentionally excluded from the visual editor schema.
 
    export-descriptor/export-environment below serve the descriptor
-   environment system used by the V3 editor palette.
-   V3 content consumes this export directly; no legacy catalog reader remains.
+   environment system used by the V4 editor palette.
+   V4 content consumes this export directly; no legacy catalog reader remains.
    The remaining descriptor consumers are schema/export callers, not
    runtime resource loaders.
 

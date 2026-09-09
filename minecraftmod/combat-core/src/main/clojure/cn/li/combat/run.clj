@@ -7,8 +7,9 @@
    (compile-skill-doc!/compile-skill-program/dispatch-skill!) and reached
    by every real player action via cn.li.ac.ability.service.combat-
    runtime/dispatch-intent-v2!. No legacy graph engine is loaded or retained;
-   this single V3 path is exercised by the catalog/runtime test suite -- see
-   NODE_LANGUAGE.md §0 for the language boundary. All AC V3 skills
+   this graph lowering path is exercised by the catalog/runtime test suite -- see
+   see
+   NODE_LANGUAGE.md §0 for the language boundary. All AC V4 skills
    (ac/skills-v4/*.edn) compile through this path.
 
    capability-type is a FUNCTION, not a static map: ?budget/fire,
@@ -27,7 +28,7 @@
 (def ^:private fixed-capabilities
   "Capabilities present on every activation regardless of which ability
    declared what -- the old system's caster-capability-values/entry-frame
-   ports (the V3 capability source nodes folded here
+   ports (the legacy capability source nodes folded here
    into the ?cap sigil uniformly, and combat_runtime.clj's :capabilities
    construction for the real name list)."
   {:caster/eye :vec3 :caster/aim :vec3 :caster/body :vec3
@@ -76,7 +77,7 @@
         "budget" :any
         "cooldown" :long
         "progression" :double
-        ;; ?invariant/name (the V3 :ability/invariant source,
+        ;; ?invariant/name (the legacy :ability/invariant source,
         ;; e.g. a toggle ability's per-tick resource floor, S6) is always
         ;; a single tunable-derived number in every real ability seen so
         ;; far -- unlike ?budget/*, which genuinely needs a whole

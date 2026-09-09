@@ -1,5 +1,5 @@
 (ns cn.li.node.validate
-  "Structural validation for V3 IR/document nodes: unknown component, unknown
+  "Structural validation for compiled IR/document nodes: unknown component, unknown
    field, missing required field, literal type mismatch. Validation runs on
    compiled primitives and is deliberately independent of cn.li.node.scope,
    which proves binding safety; together they cover shape and binding for the

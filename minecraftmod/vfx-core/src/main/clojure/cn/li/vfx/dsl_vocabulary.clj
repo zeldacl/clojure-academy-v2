@@ -68,7 +68,7 @@
    (node {:from (p* :vec3) :to (p* :vec3) :color (opt :any nil) :material (opt :any nil)})
    :quad
    (node {:geometry (p) :material (opt :any nil)})
-   ;; V3 :vfx/emitter is a single
+   ;; :vfx/emitter is a single
    ;; declarative "spawn an emitter here" draw-batch op per sample, not a
    ;; per-particle simulation -- the actual particle stepping happens
    ;; client-side off the :particle description, same as every other

@@ -191,7 +191,7 @@
 
 (defn- transient-duration
   "Returns the authoritative client lifetime for a transient instance.
-   `duration-ticks` is the explicit V3 lifecycle contract. Effects whose
+   `duration-ticks` is the explicit lifecycle contract. Effects whose
    visual payload already owns a particle/ray lifetime uses `life-ticks` or
    `ttl-ticks` as the natural fallback. A transient with neither field is a one-shot
    operation (audio, burst, etc.) and must still be retired after one tick;
