@@ -102,5 +102,16 @@
    :entry-triggers (into {} (map (fn [[k v]] [k (:on v)]) (:graphs document)))
    :entries (into {} (map (fn [[k v]] [k (graph-entry v)]) (:graphs document)))})
 
+(defn vfx->core [document]
+  ((requiring-resolve 'cn.li.node.graph-document/validate-document!) document)
+  (when-not (= :ac/vfx-v4 (:schema document)) (fail "expected :ac/vfx-v4" {:schema (:schema document)}))
+  {:kind :ability :id (:id document) :activation :instant
+   :tunables (into {} (map (fn [[k v]] [k {:type (:type v)}]) (:parameters document)))
+   :state {} :entry-triggers {:render :vfx/render}
+   :entries {:render (graph-entry (or (get-in document [:graphs :render]) (val (first (:graphs document)))) )}})
+
 (defn compile-skill! [document opts mode]
   ((requiring-resolve 'cn.li.node.compile/compile-program) (skill->core document) opts mode))
+
+(defn compile-vfx! [document opts mode]
+  ((requiring-resolve 'cn.li.node.compile/compile-program) (vfx->core document) opts mode))

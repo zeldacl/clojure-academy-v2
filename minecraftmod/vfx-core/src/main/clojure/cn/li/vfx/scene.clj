@@ -17,6 +17,7 @@
   (:require [cn.li.node.compile :as compile]
             [cn.li.node.ops :as ops]
             [cn.li.node.surface :as surface]
+            [cn.li.node.graph-compile :as graph-compile]
             [cn.li.vfx.dsl-vocabulary :as vocab]
             [cn.li.mcmod.runtime.effect-emit :as emit])
   (:import [cn.li.mcmod.runtime.effect ExecutionFrame]))
@@ -171,3 +172,5 @@
    returning the vector of ops this sample produced."
   [program input]
   (vec (.-actions (emit/dispatch! program :default (emit/new-frame program input)))))
+
+
