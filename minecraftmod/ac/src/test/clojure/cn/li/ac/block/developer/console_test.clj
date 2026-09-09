@@ -3,8 +3,8 @@
    rewrites (console.clj -> console_reactive.clj -> nothing) while the screen
    kept calling it, so the point of these tests is to pin the surface
    cn.li.ac.block.developer.presentation actually uses -- max-lines, editing?,
-   type-char, backspace-input, set-input, submit-input, tick, display-rows --
-   against behaviour, not just against existence."
+   type-char, backspace-input, set-input, submit-input, tick, body-rows,
+   prompt-line -- against behaviour, not just against existence."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.developer.console :as console]))
 
@@ -165,34 +165,28 @@
         (is (= :idle (:phase wrong)))
         (is (= 1 @started) "still only the allowed reset above")))))
 
-(deftest display-rows-match-the-screen-contract-test
+(deftest rendering-output-is-text-only-test
   (let [cs (boot! (console/init-state :learn "Tester" true))
-        rows (console/display-rows cs 257.0)]
-    (is (every? #(every? % [:x :y :w :h :label]) rows)
-        "developer.ui.edn's console repeater binds exactly these item keys")
-    (is (every? #(string? (:label %)) rows))
-    (is (<= (count rows) (inc console/max-lines))
-        "at most one prompt line on top of the body window")
-    (is (re-find #"^OS > " (:label (last rows)))
-        "the prompt is the last row")
-    (testing "rows sit on the 10px grid inset 5px from the area"
-      (is (every? #(= 5.0 (:x %)) rows))
-      (is (every? #(= 247.0 (:w %)) rows) "width is the area minus both insets")
-      (is (= (mapv :y (butlast rows))
-             (mapv #(+ 5.0 (* 10.0 %)) (range (dec (count rows)))))
-          "body rows are contiguous from the top")
-      (is (= (+ 5.0 (* 10.0 console/max-lines)) (:y (last rows)))
-          "the prompt is pinned to the last slot however few body lines there are"))))
+        rows (console/body-rows cs)]
+    (testing "body rows carry a label and nothing else"
+      (is (every? #(= #{:label} (set (keys %))) rows)
+          "no :x/:y/:w/:h -- developer.ui.edn's :scroll owns the layout, and a
+           geometry key here would mean this namespace is laying out again")
+      (is (every? #(string? (:label %)) rows)))
+    (testing "the prompt is a plain string, pinned by the .ui.edn"
+      (is (string? (console/prompt-line cs)))
+      (is (re-find #"^OS > " (console/prompt-line cs))))))
 
 (deftest body-window-never-exceeds-max-lines-test
   (let [cs (-> (console/init-state :learn "Tester" true)
                boot!
-               (assoc :lines (mapv #(str "line " %) (range 40))))]
-    (is (= console/max-lines (dec (count (console/display-rows cs 257.0))))
-        "only the last max-lines body lines are painted")
-    (is (= "line 39" (:label (nth (console/display-rows cs 257.0)
-                                  (dec console/max-lines))))
-        "the newest line is the last body row")))
+               (assoc :lines (mapv #(str "line " %) (range 40))))
+        rows (console/body-rows cs)]
+    (is (= console/max-lines (count rows))
+        "only the last max-lines body lines are handed to the list, so the
+         :scroll's fixed height always shows the newest output")
+    (is (= "line 39" (:label (last rows)))
+        "the newest line is the last row")))
 
 (deftest tick-reports-dirty-only-when-the-painted-output-changes-test
   (let [cs (boot! (console/init-state :learn "Tester" true))

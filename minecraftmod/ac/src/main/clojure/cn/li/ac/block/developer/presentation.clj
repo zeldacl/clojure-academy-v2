@@ -434,11 +434,14 @@
             :composite-list (if skill-tree?
                               (area-skill-composite nodes connections selected)
                               [])
-            :console-display (if console?
-                               (console/display-rows (or (:console @state)
-                                                         (console/init-state :learn "Player" true))
-                                                     area-w)
-                               [])
+            :console-lines (if console?
+                             (console/body-rows (or (:console @state)
+                                                    (console/init-state :learn "Player" true)))
+                             [])
+            :console-prompt (if console?
+                              (console/prompt-line (or (:console @state)
+                                                       (console/init-state :learn "Player" true)))
+                              "")
             :detail-visible? (boolean (and skill-tree? selected-node))
             :wireless-visible (not portable?)
             :wireless-page-visible? (boolean (and (not portable?)

@@ -15,13 +15,16 @@
    trailing blank line from the localized strings), with every UiRt / node /
    signal concern removed.
 
-   Nothing here touches rendering or the network. The screen
+   Nothing here touches rendering, layout or the network. The screen
    (cn.li.ac.block.developer.presentation) owns the atom, calls `tick` once per
    frame with the container's development signals, feeds keystrokes through
-   `type-char` / `backspace-input` / `set-input` / `submit-input`, and paints
-   whatever `display-rows` returns. `:on-start-development` and
-   `:reset-precheck` are installed by the screen at init-state time -- this
-   namespace never reaches back into the container."
+   `type-char` / `backspace-input` / `set-input` / `submit-input`, and hands
+   `body-rows` / `prompt-line` to developer.ui.edn -- text only. Every
+   coordinate lives in the .ui.edn and is resolved by presentation-core, like
+   every other list in the app; this namespace deliberately has no pixel
+   constants. `:on-start-development` and `:reset-precheck` are installed by
+   the screen at init-state time -- this namespace never reaches back into the
+   container."
   (:require [clojure.string :as str]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.i18n :as i18n]))
@@ -32,8 +35,6 @@
   10)
 
 (def ^:private max-history 50)
-(def ^:private line-height 10.0)
-(def ^:private text-inset 5.0)
 (def ^:private prompt-str "OS >")
 
 ;; i18n key prefix — matching upstream ac.skill_tree.console.*
@@ -360,20 +361,24 @@
   [state]
   [(visible-lines state) (input-line-text state)])
 
-(defn display-rows
-  "console state, area width -> painted rows [{:x :y :w :h :label} ...] for the
-   developer screen's console repeater. Body lines first, the prompt/progress
-   line last, laid out from (5, 5) on a 10px grid like upstream."
-  [state width]
-  (let [w (max 0.0 (- (double width) (* 2.0 text-inset)))
-        body (visible-lines state)]
-    (-> (into []
-              (map-indexed (fn [i line]
-                             {:x text-inset :y (+ text-inset (* i line-height))
-                              :w w :h line-height :label (str line)}))
-              body)
-        (conj {:x text-inset :y (+ text-inset (* max-lines line-height))
-               :w w :h line-height :label (input-line-text state)}))))
+(defn body-rows
+  "console state -> the scrollback rows [{:label \"...\"} ...] for
+   developer.ui.edn's :developer/console-body list.
+
+   Labels only, no geometry: the presentation runtime lays the rows out from
+   the :scroll's own declared layout, the same as every other text list in the
+   app (about, application, freq-transmitter). The console used to hand back
+   pixel x/y/w/h because its pre-Presentation ancestor drew into fixed text
+   widgets -- carrying that forward would have kept a layout engine in here."
+  [state]
+  (mapv (fn [line] {:label (str line)}) (visible-lines state)))
+
+(defn prompt-line
+  "console state -> the single bottom line: the prompt with the typed input and
+   blinking cursor while idle, the progress readout while developing, the
+   success/failure message just after. Pinned by developer.ui.edn, not here."
+  [state]
+  (input-line-text state))
 
 ;; ---------------------------------------------------------------------------
 ;; Input

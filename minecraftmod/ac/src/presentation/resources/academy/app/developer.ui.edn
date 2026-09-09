@@ -12,7 +12,7 @@
                 :wireless-page-visible? :boolean
                 :skill-tree-visible? :boolean :console-visible? :boolean
                 :composite-list :vector
-                :console-display :vector
+                :console-lines :vector :console-prompt :string
                 :detail-visible? :boolean :selected-detail :map
                 :status :string}
  :root
@@ -149,18 +149,23 @@
                  :width [:item :w] :height [:item :h]}
           :on {:activate :developer/select-skill}}]}
 
-       ;; Console: painted text rows (body + OS > / status). Invisible
-       ;; focusable catcher owns the whole 257×139 area for key input —
-       ;; no text-input widget (matches main terminal-style console).
-       {:type :repeater :key :developer/console-lines
-        :layout {:x 0.0 :y 0.0 :width 257.0 :height 139.0 :direction :none}
-        :bind {:items [:state :console-display] :visible [:state :console-visible?]}
+       ;; Console: scrollback above, prompt pinned to the bottom row. Both are
+       ;; laid out here — cn.li.ac.block.developer.console hands over text
+       ;; only, never coordinates, same as every other list in this app.
+       ;; The controller already clamps the body to its 10 lines, so the list
+       ;; fills the area exactly and the newest line is always the last one.
+       {:type :scroll :key :developer/console-body
+        :layout {:x 5.0 :y 5.0 :width 247.0 :height 100.0}
+        :bind {:items [:state :console-lines] :visible [:state :console-visible?]}
+        :semantics {:role :list}
         :children
-        [{:type :text
+        [{:type :text :layout {:width :fill :height 10.0}
           :style {:font-size 8.0 :rgba [1.0 1.0 1.0 1.0]}
-          :bind {:x [:item :x] :y [:item :y]
-                 :width [:item :w] :height [:item :h]
-                 :text [:item :label]}}]}
+          :bind {:text [:item :label]}}]}
+       {:type :text :key :developer/console-prompt
+        :layout {:x 5.0 :y 105.0 :width 247.0 :height 10.0}
+        :style {:font-size 8.0 :rgba [1.0 1.0 1.0 1.0]}
+        :bind {:text [:state :console-prompt] :visible [:state :console-visible?]}}
        {:type :absolute :key :developer/console-catcher
         :layout {:x 0.0 :y 0.0 :width 257.0 :height 139.0}
         :bind {:visible [:state :console-visible?]}
