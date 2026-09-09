@@ -220,11 +220,16 @@
                                    {:kind :text :role :node-type :nid nid :x (+ x 6.0) :y (+ y 18.0)
                                     :text (str "[" (name (:type n)) "]") :rgba 0xFFB8C7D9}]
                                   (map-indexed (fn [i p]
-                                                 [{:kind :text :role :param-label :nid nid :key p
+                                                 (let [wired? (some (fn [l]
+                                                                      (and (= :data (:kind l))
+                                                                           (= nid (first (:to l)))
+                                                                           (= p (second (:to l)))))
+                                                                    links)]
+                                                   [{:kind :text :role :param-label :nid nid :key p
                                                    :x (+ x 14.0) :y (+ y 32.0 (* i 14.0))
-                                                   :text (str (name p) " = " (pr-str (get-in n [:inputs p]))) :rgba 0xFFD5E6F2}
+                                                   :text (str (name p) " = " (if wired? "wired" (pr-str (get-in n [:inputs p])))) :rgba 0xFFD5E6F2}
                                                   {:kind :quad :role :pin :target :pin :nid nid :pin :in :key p
-                                                   :x (- x 5.0) :y (+ y 31.0 (* i 14.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}])
+                                                   :x (- x 5.0) :y (+ y 31.0 (* i 14.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]))
                                                input-ports)
                                   (when (exec-node? n)
                                     (concat
