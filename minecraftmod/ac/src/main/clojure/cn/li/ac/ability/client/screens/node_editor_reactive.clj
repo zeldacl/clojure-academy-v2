@@ -1110,7 +1110,7 @@
     :input/key
     (if (= 256 (int (or (:key-code payload) -1)))
       (if (:canvas-viewport? @state*)
-        (swap! state* assoc :canvas-viewport? true :palette-drag nil :ghost nil
+        (swap! state* assoc :canvas-viewport? false :palette-drag nil :ghost nil
                :status "Canvas viewport collapsed.")
         (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled."))
       nil)
