@@ -618,25 +618,17 @@
 
 
 (defn- install-graph!
-  "Replace the active phase with graph->form output, preserving the V4
-   document envelope and history. Invalid temporary wires stay in-memory
-   only and are surfaced as status instead of corrupting source."
   [state* edited-graph]
   (try
-    (let [snapshot @state*
-          doc-form (get-in snapshot [:document :form])
-          stmts (graph/graph->form edited-graph)
-          new-form (if (contains? doc-form :phases)
-                     (assoc-in doc-form [:phases (:phase snapshot)] stmts)
-                     (assoc doc-form :do stmts))]
-      (swap! state*
-             (fn [s]
-               (recompute (assoc s
-                                 :document (document/edit (:document s) new-form)
-                                 :status "Graph updated.")))))
-    (catch Throwable error
-      (swap! state* assoc :status (str "Cannot apply wire: " (.getMessage error))))))
-
+    (swap! state*
+           (fn [s]
+             (let [doc (:document s) form (:form doc)
+                   new-form (if (:v4? doc)
+                              (assoc-in form [:graphs (:phase s)] edited-graph)
+                              (let [stmts (graph/graph->form edited-graph)]
+                                (if (contains? form :phases) (assoc-in form [:phases (:phase s)] stmts) (assoc form :do stmts))))]
+               (recompute (assoc s :document (document/edit doc new-form) :status "Graph updated.")))))
+    (catch Throwable error (swap! state* assoc :status (str "Cannot apply graph edit: " (.getMessage error))))))
 (declare install-graph!)
 
 (defn- param-submit [state* payload]
@@ -1177,6 +1169,7 @@
      (bridge/call-adapter :presentation-open-screen!
                           (:mount vm) "Node Editor" on-close)
      vm)))
+
 
 
 
