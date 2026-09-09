@@ -16,4 +16,5 @@
   (if (empty? future) document (-> document (update :history conj (:form document)) (assoc :form (peek future)) (cond-> (:v4? document) (assoc :v4-document (peek future))) (update :future pop) (assoc :dirty? true))))
 (defn save [document _print-fn]
   (when-not (:v4? document) (throw (ex-info "editor save requires V4 graph document" {})))
+  (node-api/validate-v4-document! (:form document))
   (assoc document :v4-document (:form document) :file-text (pr-str (:form document)) :dirty? false))
