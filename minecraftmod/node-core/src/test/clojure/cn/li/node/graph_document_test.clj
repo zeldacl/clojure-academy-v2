@@ -67,6 +67,34 @@
           (catch clojure.lang.ExceptionInfo e
             (re-find #"true and false" (.getMessage e)))))))
 
+(deftest rejects-invalid-fixed-node-ports
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/branch (n :n/branch :branch)
+                       :n/lit (n :n/lit :literal :value true)
+                       :n/end (n :n/end :end)
+                       :n/end2 (n :n/end2 :end)}
+               :links [(e :e/one-link :exec [:n/start :out] [:n/branch :in])
+                       (e :e/true-link :exec [:n/branch :out] [:n/end :in])
+                       (e :e/false-link :exec [:n/branch :false] [:n/end2 :in])
+                       (e :e/cond-link :data [:n/lit :value] [:n/branch :condition])] }]
+    (is (try
+          (doc/validate-graph! graph [:graphs :default])
+          false
+          (catch clojure.lang.ExceptionInfo e
+            (re-find #"invalid source port" (.getMessage e)))))))
+
+(deftest rejects-data-edges-on-control-only-nodes
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/end (n :n/end :end)
+                       :n/lit (n :n/lit :literal :value true)}
+               :links [(e :e/start-link :exec [:n/start :out] [:n/end :in])
+                       (e :e/data-link :data [:n/lit :value] [:n/end :in])] }]
+    (is (try
+          (doc/validate-graph! graph [:graphs :default])
+          false
+          (catch clojure.lang.ExceptionInfo e
+            (re-find #"invalid target port" (.getMessage e)))))))
+
 (deftest rejects-implicit-multiway-convergence
   (let [graph {:nodes {:n/start (n :n/start :start)
                        :n/branch (n :n/branch :branch)
@@ -132,3 +160,18 @@
                                                   (e :e/completed :exec [:n/each :completed] [:n/end :in])]}})
         {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {}}}} :collect)]
     (is (empty? diagnostics))))
+
+(deftest rejects-branch-with-one-terminating-arm
+  (let [d (assoc skill :graphs {:default {:on :activation/start
+                                          :nodes {:n/start (n :n/start :start)
+                                                  :n/branch (n :n/branch :branch)
+                                                  :n/end (n :n/end :end)
+                                                  :n/action (n :n/action :component :component :test/do)
+                                                  :n/end2 (n :n/end2 :end)}
+                                          :links [(e :e/start-arm :exec [:n/start :out] [:n/branch :in])
+                                                  (e :e/true-arm :exec [:n/branch :true] [:n/end :in])
+                                                  (e :e/false-arm :exec [:n/branch :false] [:n/action :in])
+                                                  (e :e/action-end :exec [:n/action :out] [:n/end2 :in])]}})
+        opts {:vocab {:test/do {:params {}}}}]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (graph-compile/compile-skill! d opts :collect)))))

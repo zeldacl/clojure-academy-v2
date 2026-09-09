@@ -102,6 +102,55 @@
 (defn- incoming [links nid kind]
   (filter #(and (= kind (:kind %)) (= nid (first (:to %)))) links))
 
+(def ^:private exec-input-ports
+  "The control-flow input contract for every fixed execution node.  Keeping
+   this in the neutral document validator makes malformed persisted graphs
+   fail before either the editor or runtime compiler can silently ignore an
+   edge whose port name is merely a typo."
+  {:start #{}
+   :component #{:in}
+   :branch #{:in}
+   :merge #{:in}
+   :foreach #{:in}
+   :repeat #{:in}
+   :loop-end #{:in}
+   :end #{:in}
+   :local-set #{:in}})
+
+(def ^:private exec-output-ports
+  {:start #{:out}
+   :component #{:out}
+   :branch #{:true :false}
+   :merge #{:out}
+   :foreach #{:body :completed}
+   :repeat #{:body :completed}
+   :loop-end #{:continue}
+   :end #{}
+   :local-set #{:out}})
+
+(def ^:private data-node-types
+  #{:literal :context-ref :parameter-ref :state-ref :local-get})
+
+(defn- valid-exec-source-port? [node port]
+  (contains? (get exec-output-ports (:type node) #{}) port))
+
+(defn- valid-exec-target-port? [node port]
+  (contains? (get exec-input-ports (:type node) #{}) port))
+
+(defn- valid-data-source-port? [node port]
+  (and (or (contains? data-node-types (:type node))
+           (= :component (:type node)))
+       (= :value port)))
+
+(defn- valid-data-target-port? [node port]
+  (case (:type node)
+    :component true
+    :branch (= :condition port)
+    :foreach (= :collection port)
+    :repeat (= :count port)
+    :local-set (= :value port)
+    false))
+
 (defn- validate-cycle-free! [nodes links]
   ;; Loop back edges are the only legal cycles.  Removing them makes the
   ;; remaining execution graph a DAG, which is sufficient for deterministic
@@ -148,7 +197,34 @@
       (doseq [endpoint [(:from link) (:to link)]]
         (require! (contains? nodes (first endpoint))
                   "V4 link references an unknown node"
-                  {:path (conj path :links idx) :node (first endpoint)})))
+                  {:path (conj path :links idx) :node (first endpoint)}))
+      (let [[from-nid from-port] (:from link)
+            [to-nid to-port] (:to link)
+            from-node (get nodes from-nid)
+            to-node (get nodes to-nid)]
+        (if (= :exec (:kind link))
+          (do
+            (require! (valid-exec-source-port? from-node from-port)
+                      "V4 exec link uses an invalid source port"
+                      {:path (conj path :links idx) :node from-nid :port from-port})
+            (if (= :loop-back to-port)
+              (do
+                (require! (= :loop-end (:type from-node))
+                          "V4 loop-back must originate at loop-end"
+                          {:path (conj path :links idx) :node from-nid})
+                (require! (contains? #{:foreach :repeat} (:type to-node))
+                          "V4 loop-back must target foreach/repeat"
+                          {:path (conj path :links idx) :node to-nid}))
+              (require! (valid-exec-target-port? to-node to-port)
+                        "V4 exec link uses an invalid target port"
+                        {:path (conj path :links idx) :node to-nid :port to-port})))
+          (do
+            (require! (valid-data-source-port? from-node from-port)
+                      "V4 data link must originate at a value output"
+                      {:path (conj path :links idx) :node from-nid :port from-port})
+            (require! (valid-data-target-port? to-node to-port)
+                      "V4 data link uses an invalid target port"
+                      {:path (conj path :links idx) :node to-nid :port to-port})))))
     (let [starts (filter #(= :start (:type (val %))) nodes)
           starts (map key starts)]
       (require! (= 1 (count starts)) "V4 graph requires exactly one start node"

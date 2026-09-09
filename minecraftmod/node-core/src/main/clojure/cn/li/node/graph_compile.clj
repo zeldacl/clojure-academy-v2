@@ -97,9 +97,15 @@
           (let [c (port-expr ctx nid :condition)
                 tr (collect ctx (target (:links ctx) nid :true) stops)
                 fr (collect ctx (target (:links ctx) nid :false) stops)
-                m (or (:next tr) (:next fr))
+                tn (:next tr)
+                false-next (:next fr)
+                _ (when (not= tn false-next)
+                    (fail "V4 branch arms must both terminate or converge at the same merge node"
+                          {:nid nid :true-next tn :false-next false-next}))
                 f (list* 'if (:form c) (:forms tr) (:forms fr))]
-            (recur (when m (target (:links ctx) m :out)) (into out (concat (:pre c) [f])) (conj seen nid)))
+            (recur (when tn (target (:links ctx) tn :out))
+                   (into out (concat (:pre c) [f]))
+                   (conj seen nid)))
           (contains? #{:foreach :repeat} t)
            (let [c (port-expr ctx nid (if (= :foreach t) :collection :count))
                  body (collect ctx (target (:links ctx) nid :body) (conj stops nid))
