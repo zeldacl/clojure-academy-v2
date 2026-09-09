@@ -5,13 +5,12 @@
    graph -- see the node-editor plan's §1.4 for that precedent).
 
    SCOPE for this visual iteration (graph->composite-items):
-   renders the EXEC statement chain as the primary top-to-bottom flow and
-   renders every referenced pure expression in a secondary column. Expression
-   boxes expose an output pin and statement boxes expose semantic input pins,
-   so value wires are structurally editable without pretending an exec node is
-   an expression. The view is intentionally hybrid rather than a full Blueprint
-   canvas: it keeps the common control-flow path compact while making data
-   dependencies visible and testable.
+   persisted V4 documents render as a free two-dimensional graph. Execution
+   nodes, data nodes, parameter slots, and semantic exec/value wires all retain
+   their document coordinates, so branches and joins are visible instead of
+   being flattened into a statement chain. The older surface-form geometry is
+   kept only for isolated neutral DSL tests; the production V4 editor never
+   selects that path.
 
    Canvas labels use graph/stmt-label (short plain words like bind hit /
    damage), not raw DSL. Full stmt-text remains for inspectors that need the

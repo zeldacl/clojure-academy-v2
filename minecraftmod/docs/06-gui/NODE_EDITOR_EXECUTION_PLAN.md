@@ -35,7 +35,8 @@
 ### P1：提高编辑效率（不改变文档契约，已完成）
 
 1. 已为调色板条目增加明确的 pointer-drag 生命周期：`drag-start` 携带 palette id，画布 drop 使用当前坐标插入节点；点击仍保留为无拖拽的快捷插入。
-2. 已加入临时 ghost 节点、有效/无效 drop 颜色和 Esc 取消；drop 只调用 `graph/insert-palette-node`，不直接拼接 EDN。
+2. 已加入临时 ghost 节点、有效/无效 drop 颜色和 Esc 取消；V4 drop 只调用
+   `insert-v4-palette-node`，不直接拼接 EDN，并在插入阶段阻止重复 `start` 哨兵。
 3. 已在 `presentation-core` 增加通用 drag payload/capture 原语，并为旧按钮行为补回归测试。
 4. 已验证拖动、点击回退、取消、越界和重复拖动；无 pointer-drag 的宿主仍走点击路径。
 
