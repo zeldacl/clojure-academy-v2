@@ -211,8 +211,18 @@
                                                    :x (- x 5.0) :y (+ y 31.0 (* i 14.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}])
                                                input-ports)
                                   (when (exec-node? n)
-                                    [{:kind :quad :role :pin :target :pin :nid nid :pin :out :key :exec
-                                      :x (+ x node-box-width) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFFFFCC66}]))))
+                                    (concat
+                                     [{:kind :quad :role :pin :target :pin :nid nid :pin :in :key :exec
+                                       :x (- x 5.0) :y (+ y (/ h 2.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]
+                                     (map-indexed (fn [i port]
+                                                    {:kind :quad :role :pin :target :pin :nid nid :pin :out :key port
+                                                     :x (+ x node-box-width) :y (+ y 12.0 (* i 12.0))
+                                                     :w 5.0 :h 5.0 :rgba 0xFFFFCC66})
+                                                  (case (:type n)
+                                                    :branch [:true :false]
+                                                    #{:foreach :repeat} [:body :completed]
+                                                    :loop-end [:continue]
+                                                    [:exec])))))))
                              nodes)
           data-items (mapcat (fn [[nid n]]
                                (let [{:keys [x y]} (get layout nid)]

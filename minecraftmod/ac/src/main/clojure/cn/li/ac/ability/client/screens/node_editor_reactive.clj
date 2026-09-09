@@ -948,6 +948,24 @@
       (recompute (assoc state :phase phase :selected-nid nil))
       (assoc state :status "Select a valid phase."))))
 
+(defn- connect-v4-wire [graph {:keys [from-nid from-pin from-key to-nid to-pin to-key]}]
+  (let [nodes (:nodes graph)
+        from (get nodes from-nid)
+        to (get nodes to-nid)
+        data-types #{:literal :context-ref :parameter-ref :state-ref :local-get}
+        output? (= :out from-pin)
+        input? (= :in to-pin)
+        kind (if (contains? data-types (:type from)) :data :exec)
+        link-id (keyword "e" (str "editor-" (System/nanoTime)))]
+    (when-not (and from to output? input?)
+      (throw (ex-info "V4 wire endpoints must be output to input" {:from from-nid :to to-nid})))
+    (when (and (= :data kind) (contains? data-types (:type to)))
+      (throw (ex-info "V4 data output cannot target a data node" {:to to-nid})))
+    (let [from-port (or from-key :exec)
+          to-port (or to-key :in)
+          links (vec (remove #(and (= kind (:kind %)) (= [to-nid to-port] (:to %))) (:links graph)))]
+      (assoc graph :links (conj links {:id link-id :kind kind
+                                       :from [from-nid from-port] :to [to-nid to-port]})))))
 (defn- finish-pointer-drag! [state* payload]
   "Finish a node/pin/empty-canvas drag routed through a canvas :drop.
    Canvas wrappers also carry the palette drop action, so the controller
@@ -960,7 +978,7 @@
                                           (double (or (:y payload) 0.0)))]
     (when (= :connect-wire (:kind action))
       (try
-        (install-graph! state* (graph/connect-wire (:graph @state*) action))
+        (install-graph! state* (if (:v4? (:document @state*)) (connect-v4-wire (:graph @state*) action) (graph/connect-wire (:graph @state*) action)))
         (catch Throwable error
           (swap! state* assoc :status (str "Cannot connect: " (.getMessage error))))))
     (swap! state* assoc :drag state)))
