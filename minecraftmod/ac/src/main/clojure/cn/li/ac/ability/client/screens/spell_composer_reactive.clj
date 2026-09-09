@@ -47,7 +47,7 @@
 (defn- ui-label
   "Keep single-line composer labels inside their fixed layout box.
 
-   Presentation V3 currently clips but does not implement generic text
+   Presentation V4 currently clips but does not implement generic text
    ellipsizing.  Only derived display labels are shortened here; glyph data,
    status state and parameter drafts remain lossless."
   [value max-width]
@@ -456,3 +456,4 @@
     (bridge/call-adapter :presentation-open-screen!
                          (:mount vm) "Spell Composer" on-close)
     vm))
+

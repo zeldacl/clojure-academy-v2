@@ -74,7 +74,7 @@
   (combat-platform/install!
    {:schedule-beam! ability-combat/schedule-installed!})
   (combat-runtime/install-ac-host-capabilities!)
-  ;; Assembling the V3 catalog parses, validates and node-compiles every shipped
+  ;; Assembling the V4 catalog parses, validates and node-compiles every shipped
   ;; skill document. The runtime install and the metadata projection below both
   ;; need it, so assemble once and hand the same value to both instead of doing
   ;; that work twice. Pass the raw assembly, not the runtime's :catalog: engine-v2
@@ -109,6 +109,7 @@
   (ability-runtime/install-runtime-hooks!
     (ability-runtime-container/create-ability-runtime-container))
   nil)
+
 
 
 

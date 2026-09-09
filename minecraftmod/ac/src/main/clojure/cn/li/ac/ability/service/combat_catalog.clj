@@ -30,7 +30,7 @@
                             metadata
                             {:id id
                              ;; Existing runtime reducers consume the old
-                             ;; scalar activation mode; V3 stores it as an
+                             ;; scalar activation mode; V4 stores it as an
                              ;; explicit map for editor extensibility.
                              :activation (or (get-in document [:activation :mode])
                                              (:activation metadata)
@@ -46,7 +46,7 @@
     :registrations (mapv #(dissoc % :ir) (:registrations assembled))}))
 
 (defn initialize!
-  "Project the assembled V3 catalog into the read-only metadata state.
+  "Project the assembled V4 catalog into the read-only metadata state.
 
    The zero-arg form assembles the catalog itself. Assembling parses, validates
    and node-compiles every shipped skill document, so callers that already hold
@@ -173,4 +173,5 @@
              :translations (normalize-translations (:translations ability))
              :cooldown {:mode :default} :execution :final}))
         (sort-by first (get-in @state* [:combat :abilities]))))
+
 
