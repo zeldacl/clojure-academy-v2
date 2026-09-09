@@ -236,7 +236,8 @@
                                                      :w 5.0 :h 5.0 :rgba 0xFFFFCC66})
                                                   (case (:type n)
                                                     :branch [:true :false]
-                                                    #{:foreach :repeat} [:body :completed]
+                                     :foreach [:body :completed]
+                                     :repeat [:body :completed]
                                                     :loop-end [:continue]
                                                     [:exec]))))
                                   (when (= :component (:type n))
@@ -260,7 +261,8 @@
                                      target-index (max 0 (.indexOf ^java.util.List target-inputs to-port))
                                      source-outputs (case (:type source)
                                                       :branch [:true :false]
-                                                      #{:foreach :repeat} [:body :completed]
+                                                      :foreach [:body :completed]
+                                                      :repeat [:body :completed]
                                                       :loop-end [:continue]
                                                       [:exec])
                                      source-index (max 0 (.indexOf ^java.util.List source-outputs from-port))

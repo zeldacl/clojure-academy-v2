@@ -983,6 +983,22 @@
       (recompute (assoc state :phase phase :selected-nid nil))
       (assoc state :status "Select a valid phase."))))
 
+(defn- remove-v4-node [graph nid]
+  (let [node (get-in graph [:nodes nid])]
+    (when-not node
+      (throw (ex-info "V4 node no longer exists" {:nid nid})))
+    (when (= :start (:type node))
+      (throw (ex-info "The start node cannot be deleted" {:nid nid})))
+    (when (= :end (:type node))
+      (throw (ex-info "The end node cannot be deleted" {:nid nid})))
+    (-> graph
+        (update :nodes dissoc nid)
+        (update :links (fn [links]
+                         (vec (remove (fn [l]
+                                        (or (= nid (first (:from l)))
+                                            (= nid (first (:to l)))))
+                                      links)))))))
+
 (defn- connect-v4-wire [graph {:keys [from-nid from-pin from-key to-nid to-pin to-key]}]
   (let [nodes (:nodes graph)
         from (get nodes from-nid)
@@ -1150,12 +1166,24 @@
       (zoom-canvas! state* payload))
 
     :input/key
-    (if (= 256 (int (or (:key-code payload) -1)))
-      (if (:canvas-viewport? @state*)
-        (swap! state* assoc :canvas-viewport? false :palette-drag nil :ghost nil
-               :status "Canvas viewport collapsed.")
-        (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled."))
-      nil)
+    (let [key-code (int (or (:key-code payload) -1))]
+      (cond
+        (= 256 key-code)
+        (if (:canvas-viewport? @state*)
+          (swap! state* assoc :canvas-viewport? false :palette-drag nil :ghost nil
+                 :status "Canvas viewport collapsed.")
+          (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled."))
+
+        (contains? #{259 261} key-code)
+        (if (and (:v4? (:document @state*)) (:selected-nid @state*))
+          (try
+            (install-graph! state* (remove-v4-node (:graph @state*) (:selected-nid @state*)))
+            (swap! state* assoc :selected-nid nil :status "Node deleted.")
+            (catch Throwable error
+              (swap! state* assoc :status (str "Cannot delete node: " (.getMessage error)))))
+          (swap! state* assoc :status "Select a V4 node to delete."))
+
+        :else nil))
     :editor/toggle-preview
     (if (not= :scene (:mode @state*))
       (swap! state* assoc :status "Preview is available for VFX scene mode only.")
