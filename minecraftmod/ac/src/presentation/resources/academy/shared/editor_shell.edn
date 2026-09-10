@@ -5,6 +5,20 @@
 ;; include site supplies these via cn.li.ability.editor.chrome/panel-geometry
 ;; (a pure function; see that namespace for why width, not :visible, is what
 ;; reclaims a collapsed panel's space). See docs/06-gui/NODE_EDITOR.md.
+;;
+;; Every slot wrapper is :clip, NOT :absolute, and that is load-bearing --
+;; binding a container's width/height to 0 does NOT shrink its children.
+;; LayoutKernel.measureFree/measureLinear derive the child constraint from
+;; the INCOMING avail (LayoutKernel.java:351 / :238-240), never from the
+;; node's own bound size; the bound value is applied only to the node's own
+;; measured rect (resolveOwnAxis at :364). So a collapsed :absolute panel
+;; records itself as 0 wide -- which does correctly shift its row siblings --
+;; while its children keep their natural measured size and keep painting,
+;; straight over the panel that just took the space. :clip derives its
+;; scissor rect from the node's ARRANGED width (:378-385), which IS the
+;; resolved 0, so the collapsed panel's content is actually scissored away.
+;; Verified against real draw commands, not assumed: see
+;; cn.li.presentation.core.editor-shell-paint-test.
 {:fragment/id :academy.shared/editor-shell
  :slots/required [:header :palette :stage :inspector :diagnostics :footer]
  :state-schema {:shell-header-h :number :shell-footer-h :number
@@ -13,24 +27,24 @@
  :root
  {:type :column :key :shell/root
   :children
-  [{:type :absolute :key :shell/header
+  [{:type :clip :key :shell/header
     :bind {:height [:state :shell-header-h]}
     :children [{:type :slot :name :header}]}
    {:type :row :key :shell/body
     :bind {:height [:state :shell-body-h]}
     :children
-    [{:type :absolute :key :shell/palette
+    [{:type :clip :key :shell/palette
       :bind {:width [:state :shell-palette-w] :height [:state :shell-body-h]}
       :children [{:type :slot :name :palette}]}
-     {:type :absolute :key :shell/stage
+     {:type :clip :key :shell/stage
       :bind {:width [:state :shell-stage-w] :height [:state :shell-body-h]}
       :children [{:type :slot :name :stage}]}
-     {:type :absolute :key :shell/inspector
+     {:type :clip :key :shell/inspector
       :bind {:width [:state :shell-inspector-w] :height [:state :shell-body-h]}
       :children [{:type :slot :name :inspector}]}]}
-   {:type :absolute :key :shell/diagnostics
+   {:type :clip :key :shell/diagnostics
     :bind {:height [:state :shell-diagnostics-h]}
     :children [{:type :slot :name :diagnostics}]}
-   {:type :absolute :key :shell/footer
+   {:type :clip :key :shell/footer
     :bind {:height [:state :shell-footer-h]}
     :children [{:type :slot :name :footer}]}]}}
