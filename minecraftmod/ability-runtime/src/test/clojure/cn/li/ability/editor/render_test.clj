@@ -49,6 +49,39 @@
     (doseq [[nid pos] layout]
       (is (= (* 18.0 (double (get depths nid))) (:x pos))))))
 
+(deftest format-param-value-formats-common-shapes-test
+  (is (= "nil" (#'render/format-param-value nil)))
+  (is (= "foo" (#'render/format-param-value :foo)))
+  (is (= "3" (#'render/format-param-value 3)))
+  (is (= "(1, 2, 3)" (#'render/format-param-value [1 2 3])))
+  (is (= "{...}" (#'render/format-param-value {:a 1})))
+  (is (= "[...]" (#'render/format-param-value [1 2 3 4]))))
+
+;; P4: every :component node used to render the literal string "[component]"
+;; as its second line regardless of which component -- box-color also
+;; collapses every :component to the same :call color, so that line
+;; distinguished nothing. It's now either the first bound parameter or
+;; omitted entirely (see render.clj's component-summary).
+(defn- v4-graph-with-component [inputs]
+  {:nodes {:n/start {:nid :n/start :type :start}
+           :n/call {:nid :n/call :type :component :component "combat/damage" :inputs inputs}
+           :n/end {:nid :n/end :type :end}}
+   :links []})
+
+(deftest component-nodes-never-render-the-literal-component-tag-test
+  (let [items (render/graph->composite-items (v4-graph-with-component {:target :n/hit :amount 5}) {})]
+    (is (not-any? #(= "[component]" (:text %)) items))))
+
+(deftest component-node-type-line-shows-first-param-when-present-test
+  (let [items (render/graph->composite-items (v4-graph-with-component {:amount 5}) {})
+        type-lines (filter #(and (= :node-type (:role %)) (= :n/call (:nid %))) items)]
+    (is (seq type-lines))
+    (is (every? #(re-find #" = " (:text %)) type-lines))))
+
+(deftest component-node-type-line-is-omitted-with-no-inputs-test
+  (let [items (render/graph->composite-items (v4-graph-with-component {}) {})]
+    (is (not-any? #(and (= :node-type (:role %)) (= :n/call (:nid %))) items))))
+
 (deftest graph->composite-items-produces-one-body-and-label-per-exec-node-test
   (let [g (sample-graph)
         items (render/graph->composite-items g {})

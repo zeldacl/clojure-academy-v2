@@ -93,6 +93,27 @@
 
 (defn- box-color [stmt] (get stmt-colors stmt 0xFF444444))
 
+(defn- format-param-value
+  "A raw :inputs value -> a short, canvas-width-aware display string.
+   pr-str alone (the previous behavior) dumps a compound literal verbatim
+   into a fixed-width box -- a vec3 overruns it, a map/coll is unreadable
+   at this box's width either way. Scalars still show their real value
+   (that's the whole point of a param label); compound values show their
+   shape, not their content -- the full value is one click away in the
+   selected-node inspector, which has real width to work with."
+  [v]
+  (cond
+    (nil? v) "nil"
+    (keyword? v) (name v)
+    (string? v) v
+    (number? v) (str v)
+    (boolean? v) (str v)
+    (and (vector? v) (= 3 (count v)) (every? number? v))
+    (str "(" (nth v 0) ", " (nth v 1) ", " (nth v 2) ")")
+    (map? v) "{...}"
+    (coll? v) "[...]"
+    :else (pr-str v)))
+
 (defn expr-default-layout
   "data-node-ids -> deterministic secondary-column positions."
   [nids]
@@ -230,26 +251,42 @@
                       (= :local-set t) (str "local-set " (:key n))
                       (= :literal t) (str "literal " (pr-str (:value n)))
                       :else (name t))))
+          port-wired? (fn [nid p]
+                        (some (fn [l] (and (= :data (:kind l)) (= nid (first (:to l))) (= p (second (:to l)))))
+                              links))
+          ;; :component nodes all render the SAME "[component]" second line
+          ;; regardless of which component -- box-color also collapses them
+          ;; to one shared :call color, so that line was the only thing on
+          ;; the card distinguishing nothing. Its most useful replacement is
+          ;; the first bound parameter (there is no single "most important"
+          ;; one in general, but the first declared input is the closest
+          ;; stable choice); when a component call has no inputs at all,
+          ;; the line is omitted rather than left blank.
+          component-summary (fn [nid n input-ports]
+                               (when-let [p (first input-ports)]
+                                 (str (name p) " = "
+                                      (if (port-wired? nid p) "wired" (format-param-value (get-in n [:inputs p]))))))
           node-items (mapcat (fn [[nid n]]
                                (let [{:keys [x y]} (get layout nid)
                                      h (node-height nid n)
-                                     input-ports (input-ports* nid n)]
+                                     input-ports (input-ports* nid n)
+                                     component? (= :component (:type n))]
                                  (concat
                                   [{:kind :quad :role :node-body :nid nid :x x :y y :w node-box-width :h h
-                                    :rgba (box-color (if (= :component (:type n)) :call (:type n)))}
+                                    :rgba (box-color (if component? :call (:type n)))}
                                    {:kind :text :role :node-label :nid nid :x (+ x 6.0) :y (+ y 5.0)
-                                    :text (title n) :rgba 0xFFFFFFFF}
-                                   {:kind :text :role :node-type :nid nid :x (+ x 6.0) :y (+ y 18.0)
-                                    :text (str "[" (name (:type n)) "]") :rgba 0xFFB8C7D9}]
+                                    :text (title n) :rgba 0xFFFFFFFF}]
+                                  (if component?
+                                    (when-let [summary (component-summary nid n input-ports)]
+                                      [{:kind :text :role :node-type :nid nid :x (+ x 6.0) :y (+ y 18.0)
+                                        :text summary :rgba 0xFFB8C7D9}])
+                                    [{:kind :text :role :node-type :nid nid :x (+ x 6.0) :y (+ y 18.0)
+                                      :text (str "[" (name (:type n)) "]") :rgba 0xFFB8C7D9}])
                                    (mapcat (fn [[i p]]
-                                                  (let [wired? (some (fn [l]
-                                                                      (and (= :data (:kind l))
-                                                                           (= nid (first (:to l)))
-                                                                           (= p (second (:to l)))))
-                                                                    links)]
+                                                  (let [wired? (port-wired? nid p)]
                                                    [{:kind :text :role :param-label :nid nid :key p
                                                    :x (+ x 14.0) :y (+ y 32.0 (* i 14.0))
-                                                   :text (str (name p) " = " (if wired? "wired" (pr-str (get-in n [:inputs p])))) :rgba 0xFFD5E6F2}
+                                                   :text (str (name p) " = " (if wired? "wired" (format-param-value (get-in n [:inputs p])))) :rgba 0xFFD5E6F2}
                                                   {:kind :quad :role :pin :target :pin :nid nid :pin :in :key p
                                                    :x (- x 5.0) :y (+ y 31.0 (* i 14.0)) :w 5.0 :h 5.0 :rgba 0xFF66CCFF}]))
                                                 (map-indexed vector input-ports))
