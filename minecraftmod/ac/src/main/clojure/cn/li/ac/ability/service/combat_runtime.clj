@@ -1186,10 +1186,20 @@
 (defn- apply-mark-event!
   [{:keys [world-id source-player-id target-id mark-type duration tick rate]}]
   (let [tick (long (or tick @last-known-tick*))
-        duration (max 1 (long (or duration 60)))
+        requested (max 1 (long (or duration 60)))
+        source-id (str source-player-id)
+        ;; Main's radiation helper carries the attacker's remaining mark hold
+        ;; into the next hit and enforces a 60-tick floor. Preserve that rule
+        ;; in the neutral index while still replacing one target mark atomically.
+        inherited (reduce max 0
+                           (keep (fn [[_ value]]
+                                      (when (= source-id (:source-player-id value))
+                                        (max 0 (- (long (:expires-at value)) tick))))
+                                 @combat-marks*))
+        duration (max 60 requested inherited)
         key (mark-key world-id target-id mark-type)]
     (swap! combat-marks* assoc key {:world-id (str (or world-id "minecraft:overworld"))
-                                    :source-player-id (str source-player-id)
+                                    :source-player-id source-id
                                     :target-id (str target-id)
                                     :mark-type mark-type
                                     :rate (double (or rate 1.0))
@@ -1197,7 +1207,6 @@
                                     :expires-at (+ tick duration)})
     {:status :applied :type :entity-mark :target-id (str target-id)
      :mark-type mark-type :expires-at (+ tick duration)}))
-
 (defn- clear-mark-target!
   [target-id]
   (swap! combat-marks*
@@ -1745,6 +1754,7 @@
 
 (defn reset-for-test! []
   (reset! last-known-tick* 0)
+  (reset! combat-marks* {})
   (reset! vfx-event-seq* 0)
   ;; reflection-claims*/finalized-damage-claims* are per-JVM-lifetime dedup
   ;; atoms (see their own defonce docstrings) that, like a stale
