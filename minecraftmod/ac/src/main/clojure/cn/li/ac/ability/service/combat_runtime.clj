@@ -71,6 +71,8 @@
 ;; would make `random/*` behave identically for repeated activations. Mixing
 ;; in this counter and wall-clock nanos gives every activation its own seed.
 (defonce ^:private activation-seed-counter* (atom 0))
+;; Server-authoritative monotonic VFX sequence; tick alone collides when one dispatch emits multiple signals.
+(defonce ^:private vfx-event-seq* (atom 0))
 ;; Mark state is authoritative server data, partitioned by world and target.
 ;; Entries contain only neutral ids/ticks; no entity object or cross-player atom
 ;; is retained, so one player's mark cannot affect another world or target.
@@ -240,9 +242,8 @@
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :max-cp (double (or (:max-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
-     :active-abilities (if-let [session (combat-sessions/session content-id (str owner))]
-                         #{(:ability-id session)}
-                         #{})
+     :active-abilities (set (keys (combat-sessions/sessions-for-owner content-id
+                                                                      (str owner))))
      ;; {ability-id {sub-id ticks}} -- keyed by BOTH ctrl-id and sub-id, unlike
      ;; the flattened {ctrl-id ticks} this used to project, which silently
      ;; collapsed an ability with more than one named cooldown onto a single
@@ -353,14 +354,7 @@
     (fn []
       (install-runtime-adapters!)
       (let [runtime (final-runtime-v2/install-production!
-                     {:catalog-compile catalog-compile
-                      :commit-ability-state! (fn [owner patches]
-                                               (when (seq patches)
-                                                 (combat-sessions/apply-actions!
-                                                  content-id (str owner)
-                                                  [{:type :session-patch :entries patches}])))
-                      :remove-ability-state! (fn [owner]
-                                               (combat-sessions/remove! content-id (str owner)))})]
+                     {:catalog-compile catalog-compile})]
         (reset! final-runtime-v2* runtime))))
    @final-runtime-v2*))
 
@@ -533,7 +527,9 @@
            ;; example a saved location name). Server-owned registration
            ;; bindings are merged last so the client cannot replace variant
            ;; metadata or presentation/runtime values.
-           (:context intent)
+           (apply dissoc (or (:context intent) {})
+                  [:owner :ability-id :world-id :eye-pos :look :activation-seed
+                   :skill-exp :ability-level :resources :creative? :hold-ticks])
            ;; Hold duration is a server-owned neutral capability.  Pulse and
            ;; release intents carry it outside the skill-specific context so a
            ;; client cannot spoof it; make it visible to :charge/ticks for all
@@ -755,7 +751,7 @@
    is exactly what a fresh read here is supposed to see; this function
    is never called mid-dispatch)."
   [owner ability-id intent seed]
-  (let [session-state (:state (or (combat-sessions/session content-id (str owner)) {}))
+  (let [session-state (:state (or (combat-sessions/session content-id (str owner) ability-id) {}))
         context (activation-context owner ability-id intent seed)
         tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
         capabilities (final-capabilities-v2 owner ability-id intent seed session-state)]
@@ -989,7 +985,7 @@
            :schema-version 1 :ability-id nil
            :feedback [{:type :combat-input-rejected :reason :unknown-ability}]})
       (let [source (combat-source ability-id)
-            active-session (combat-sessions/session content-id (str owner))
+            active-session (combat-sessions/session content-id (str owner) ability-id)
             intent (if (toggle-close-edge? (:op intent) (:activation source)
                                            (:ability-id active-session) ability-id)
                      (assoc intent :op :abort)
@@ -1069,12 +1065,29 @@
                          (assoc result :feedback [{:type :combat-input-rejected
                                                    :reason (or (:reason result) :rejected)}])
                          result)]
-            (when (should-open-session? (:status result) (:op intent) (:activation source)
-                                        (:finish-ability? result)
-                                        (boolean active-session))
-              (combat-sessions/start! content-id (str owner) ability-id prepared))
+            (let [open? (should-open-session? (:status result) (:op intent) (:activation source)
+                                               (:finish-ability? result)
+                                               (boolean active-session))
+                  session-intent (assoc prepared
+                                        :server-tick (long (or (:server-tick intent)
+                                                               @last-known-tick*))
+                                        :activation-seed seed)]
+              (when open?
+                (combat-sessions/start! content-id (str owner) ability-id session-intent))
+              (when (and (= :accepted (:status result))
+                         (seq (:ability-state-patches result))
+                         (combat-sessions/active? content-id (str owner) ability-id))
+                (combat-sessions/apply-actions!
+                 content-id (str owner) ability-id
+                 [{:type :session-patch :entries (:ability-state-patches result)}]))
+              (when (and (= :accepted (:status result))
+                         (:finish-ability? result)
+                         (combat-sessions/active? content-id (str owner) ability-id))
+                (combat-sessions/remove! content-id (str owner) ability-id))
+              (cond-> result
+                (or open? (seq (:ability-state-patches result)) (:finish-ability? result))
+                (assoc :session-patches-committed? true)))
             result))))))
-
 (def player-spell-complexity-cap combat-api/player-spell-complexity-cap)
 
 (defn dispatch-player-spell!
@@ -1353,9 +1366,9 @@
   (when (map? signal)
     (let [owner (str (or (:owner signal) owner))
           signal (vfx-contract/signal
-                  (merge {:op :spawn
+                  (merge {:op (or (:op signal) :spawn)
                           :owner owner
-                          :event-seq (long (or tick 0))
+                          :event-seq (swap! vfx-event-seq* unchecked-inc)
                           :seed (long (or (:seed signal) 0))}
                          (select-keys signal [:effect-id :instance-key :instance-id
                                               :world-id :audience :anchor :params])))
@@ -1423,6 +1436,7 @@
                        exp-data (if source-learned? source-data target-data)
                        skill-exp (double (or (get-in exp-data [:skill-exps ability-id]) 0.0))
                        mark-type (some :mark-type (:mark-policies source))
+                       target-session (combat-sessions/session content-id (str target-id) ability-id)
                        mark (when mark-type
                                (active-mark world-id target-id mark-type @last-known-tick*))
                        enabled? (= ability-id (:ability-id target-session))
@@ -1616,7 +1630,8 @@
         cost-result (if (and accepted? (:resource-costs result))
                       (commit-damage-costs! owner result)
                       {:status :none :commands 0})
-        _session-result (when accepted? (commit-damage-session! owner result))
+        _session-result (when (and accepted? (not (:session-patches-committed? result)))
+                          (commit-damage-session! owner result))
         domain-results (if accepted?
                          (dispatch-result-domain-events! owner result)
                          [])
@@ -1668,43 +1683,33 @@
     result))
 
 (defn- pulse-active-sessions!
-  "Run exactly one authoritative Final :pulse for every active hold session.
-
-  Client key ticks are transport/UI notifications only; the server tick owns
-  cadence and supplies an elapsed hold count. Iterating the owner-scoped
-  session snapshot keeps one player's pulse, resources and VFX independent of
-  every other player, while a finished pulse removes its own session through
-  the normal Final runtime boundary.
-
-  S8 cutover: routes through dispatch-intent-v2!, see dispatch-trigger!'s
-  own docstring."
+  "Run one authoritative pulse for every active owner/ability session."
   [tick]
-  (doseq [[owner session] (combat-sessions/snapshot content-id)]
-    (when (= session (combat-sessions/session content-id owner))
+  (doseq [[[owner ability-id] session] (combat-sessions/snapshot-all content-id)]
+    (when (= session (combat-sessions/session content-id owner ability-id))
       (let [hold-ticks (inc (max 0 (- (long tick)
-                                      (long (or (:start-tick session) tick)))))
-            result (dispatch-intent-v2!
-                    owner
-                    {:op :pulse
-                     :ability-id (:ability-id session)
-                     :server-tick (long tick)
-                     :hold-ticks hold-ticks
-                     :context (:context session)
-                     :activation-seed (:activation-seed session)})]
-        (when (= :accepted (:status result))
-          (finalize-result! owner result)
-          (when (= :release (:next-phase result))
-            (let [release-result
-                  (dispatch-intent-v2!
-                   owner
-                   {:op :release
-                    :ability-id (:ability-id session)
-                    :server-tick (long tick)
-                    :context (:context session)
-                    :activation-seed (:activation-seed session)})]
-              (when (= :accepted (:status release-result))
-                (finalize-result! owner release-result)))))))))
-(defn tick!
+                                      (long (or (:start-tick session) tick)))))]
+        (let [result (dispatch-intent-v2!
+                      owner
+                      {:op :pulse
+                       :ability-id ability-id
+                       :server-tick (long tick)
+                       :hold-ticks hold-ticks
+                       :context (:context session)
+                       :activation-seed (:activation-seed session)})]
+          (when (= :accepted (:status result))
+            (finalize-result! owner result)
+            (when (= :release (:next-phase result))
+              (let [release-result
+                    (dispatch-intent-v2!
+                     owner
+                     {:op :release
+                      :ability-id ability-id
+                      :server-tick (long tick)
+                      :context (:context session)
+                      :activation-seed (:activation-seed session)})]
+                (when (= :accepted (:status release-result))
+                  (finalize-result! owner release-result))))))))))(defn tick!
   "Advance session/mark bookkeeping and return its neutral result.
 
    Post-deletion cleanup: previously nested pulse-active-sessions! (the
@@ -1723,13 +1728,24 @@
   (pulse-active-sessions! (long tick))
   {:status :accepted :tick tick})
 (defn abort-owner! [owner]
-  (combat-sessions/remove! content-id (str owner))
+  (doseq [[[session-owner ability-id] session] (combat-sessions/snapshot-all content-id)
+          :when (= (str session-owner) (str owner))]
+    (let [result (dispatch-intent-v2! owner {:op :abort
+                                              :ability-id ability-id
+                                              :server-tick @last-known-tick*
+                                              :activation-seed (:activation-seed session)})]
+      (when (= :accepted (:status result))
+        (finalize-result! owner result)))
+    (combat-sessions/remove! content-id (str owner) ability-id))
   {:status :aborted :owner owner})
+
 (defn snapshot-owner [owner]
-  {:combat-session (combat-sessions/session content-id owner)})
+  {:combat-session (combat-sessions/session content-id owner)
+   :combat-sessions (combat-sessions/sessions-for-owner content-id (str owner))})
 
 (defn reset-for-test! []
   (reset! last-known-tick* 0)
+  (reset! vfx-event-seq* 0)
   ;; reflection-claims*/finalized-damage-claims* are per-JVM-lifetime dedup
   ;; atoms (see their own defonce docstrings) that, like a stale
   ;; final-runtime-v2* capability snapshot, silently make a test's damage

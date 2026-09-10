@@ -273,6 +273,18 @@
 (defn- tombstone-seq [rt instance-key]
   (get @(:tombstones rt) instance-key {:event-seq -1 :state-seq -1}))
 
+(defn- canonical-instance-key
+  "Scope caller-local keys by signal identity when the signal is complete."
+  [{:keys [world-id owner effect-id instance-key]}]
+  (if (and world-id owner effect-id)
+    (if (and (vector? instance-key)
+             (= 5 (count instance-key))
+             (= world-id (nth instance-key 0))
+             (= owner (nth instance-key 1))
+             (= effect-id (nth instance-key 2)))
+      instance-key
+      [world-id owner effect-id instance-key])
+    instance-key))
 (defn- transient-duration
   "Returns the authoritative client lifetime for a transient instance.
    `duration-ticks` is the explicit lifecycle contract. Effects whose
@@ -301,8 +313,8 @@
    an authoritatively destroyed effect."
   [rt {:keys [op owner instance-key seed params] :as signal}]
   (let [event-seq (long (or (:event-seq signal) 0))
-        state-seq (long (or (:state-seq signal) event-seq))]
-    (if (= :clear-owner op)
+        instance-key (canonical-instance-key signal)
+        state-seq (long (or (:state-seq signal) event-seq))]    (if (= :clear-owner op)
       (clear-owner! rt owner)
       (let [tomb (tombstone-seq rt instance-key)
             existing (lookup rt instance-key)]

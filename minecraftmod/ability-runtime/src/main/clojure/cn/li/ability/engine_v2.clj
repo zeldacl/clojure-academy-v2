@@ -19,8 +19,9 @@
    engine still needs committed after the fact is SESSION state (a
    toggle/session ability's own :state! writes, e.g. active-ticks) --
    :ability-state-provider/:commit-ability-state!/:remove-ability-
-   state! are kept, with the exact same meaning cn.li.ability.engine
-   already gives them."
+   state! are optional compatibility hooks. Production composition owns
+   session commits so it can address the exact [owner ability-id] entry;
+   when supplied by a legacy caller they are still invoked."
   (:require [cn.li.combat.api :as combat-api]
             [cn.li.mcmod.runtime.capabilities :as capabilities])
   (:import [cn.li.mcmod.runtime.effect ExecutionFrame]))
@@ -90,13 +91,16 @@
    caller threads through so concurrent signals from one dispatch get a
    real, distinct, monotonic sequence -- matching the old engine's own
    :vfx-order* per-context counter, not a per-namespace global."
-  [owner world-id event-seq-counter {:keys [effect-id operation instance-key audience
-                                            payload nid] :as signal}]
+  [owner world-id activation-seed event-seq-counter {:keys [effect-id operation instance-key audience
+                                                           payload nid] :as signal}]
   {:op (or operation :spawn)
    :effect-id effect-id
    :owner (or (:owner signal) owner)
    :world-id (or (:world-id signal) world-id)
-   :instance-key (or instance-key [owner nid])
+   ;; A graph-local key is only unique within one activation. Scope it with
+   ;; the server-issued activation seed so two owners/effects cannot collide
+   ;; in the client VFX instance registry.
+   :instance-key [world-id owner effect-id activation-seed (or instance-key nid)]
    :event-seq (swap! event-seq-counter inc)
    :audience audience
    :params (or payload {})})
@@ -116,12 +120,13 @@
   [^ExecutionFrame frame owner ability-id]
   (let [result (or (.result frame) {:outcome :ended :next-phase nil :end-ability? false})
         world-id (world-id-of (.input frame))
-        event-seq-counter (atom 0)]
+        event-seq-counter (atom 0)
+        activation-seed (long (or (get-in (.input frame) [:capabilities :rng/seed]) 0))]
     {:status :accepted
      :outcome (:outcome result)
      :next-phase (:next-phase result)
      :finish-ability? (boolean (:end-ability? result))
-     :vfx-signals (mapv #(normalize-vfx-signal owner world-id event-seq-counter %) (.vfx frame))
+     :vfx-signals (mapv #(normalize-vfx-signal owner world-id activation-seed event-seq-counter %) (.vfx frame))
      :feedback []
      :events (mapv #(normalize-event owner ability-id %) (.events frame))
      :ability-state-patches (mapv state-write->patch (.stateWrites frame))}))
@@ -148,8 +153,6 @@
   [{:keys [commit-ability-state! remove-ability-state! catalog-compile] :as options}]
   (when-not (ifn? catalog-compile)
     (throw (ex-info "engine-v2 requires catalog-compile" {})))
-  (when-not (ifn? commit-ability-state!)
-    (throw (ex-info "engine-v2 requires commit-ability-state!" {})))
   (let [host (registry-host)
         assembled (catalog-compile)
         registrations (mapv (fn [reg]
@@ -186,7 +189,8 @@
       (let [full-input (assoc input :ability-id ability-id)
             ^ExecutionFrame frame (combat-api/dispatch-skill! (:compiled reg) entry full-input)
             result (translate-frame frame owner ability-id)]
-        ((:commit-ability-state! runtime) owner (:ability-state-patches result))
+        (when (ifn? (:commit-ability-state! runtime))
+          ((:commit-ability-state! runtime) owner (:ability-state-patches result)))
         (when (and (:finish-ability? result) (ifn? (:remove-ability-state! runtime)))
           ((:remove-ability-state! runtime) owner))
         result))))
