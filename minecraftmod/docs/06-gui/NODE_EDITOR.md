@@ -43,17 +43,43 @@ ability-runtime/src/main/clojure/cn/li/ability/editor/   纯函数、无内容�
     document.clj   打开/undo/redo/结构化 V4 保存契约
     graph.clj      表层 form ⇄ 节点/连线图,双向无损
     check.clj      诊断(cn.li.node.compile :collect 模式) + 静态代价读数
-    render.clj     图 → 扁平 composite-item 向量(exec 链视图) + 正交连线
+    render.clj     图 → 扁平 composite-item 向量(exec 链视图) + 正交连线;
+                   也是 category-color/argb->rgba-floats(调色板配色)、
+                   format-param-value(参数值格式化)的落点
     hit.clj        指针事件 → 拖拽状态机(节点选中/移动、平移)
+    chrome.clj     共用编辑器骨架的纯面板几何函数(panel-geometry) ——
+                   两个编辑器的 palette/stage/inspector/diagnostics/footer
+                   宽高都由它算,折叠面板靠宽度归零而非 :visible(见下)
+    label.clj      两个编辑器 + graph.clj 共用的唯一像素宽度截断实现
+                   (ellipsize) ——此前三处各有一份重复/不一致的实现
 
 ac/src/main/clojure/cn/li/ac/ability/client/screens/
     node_editor_reactive.clj      技能模式 + 场景效果模式,同一个屏幕
     spell_composer_reactive.clj   玩家法术合成器
 
+ac/src/main/clojure/cn/li/ac/ability/datagen/
+    spell_glyph_translations.clj  法术合成器 5 个 glyph 的本地化标签
+                                   (glyph-specs 的 :i18n 键此前从未被真正
+                                   翻译过);在 registry.clj 里与
+                                   editor_vocab_translations.clj 同构接线
+
+ac/src/presentation/resources/academy/shared/
+    editor_shell.edn   两个编辑器共用的骨架 fragment(header/palette/
+                       stage/inspector/diagnostics/footer),面板宽高全部
+                       绑定 state,从不写字面量,靠 chrome.clj 算出的值
+                       同时服务两种设计尺寸
+
 ac/src/presentation/resources/academy/app/
-    node_editor.ui.edn       480×360
-    spell_composer.ui.edn    480×320（另有 320×240 宿主窗口压力测试）
+    node_editor.ui.edn       560×380(经 P0 实测校正,见下)
+    spell_composer.ui.edn    480×320(刻意未放大)
 ```
+
+两个 `.ui.edn` 现在都通过 `{:type :include :src "academy/shared/editor_shell"}`
+消费上面的共用骨架,不再各自维护一套布局;节点编辑器原有的模态 `:canvas-viewport`
+浮层(整屏放大画布、同时遮住调色板/参数/诊断)已删除,画布现在是 shell 里
+`stage` 槽位的常驻面板,palette/inspector 各自可独立折叠(宽度归零,不是
+`:visible`——见 `chrome.clj` 与 `LayoutKernel.java` 的 measure/arrange 从不读
+`:visible` 这一点)来让画布临时占满更多宽度。
 
 `verifyContentModuleCoreIsolation` 允许 `ac` 直接 require 的核心命名空间里，
 `cn.li.node.ops`/`cn.li.vfx.api` 是专为这套编辑器加的（词汇表调色板与场景模式的
@@ -130,8 +156,21 @@ V4 图的固定节点集合为 `start`、`component`、`branch`、`merge`、`for
   owner；它不会污染生产 runtime。当前仍未绑定玩家准星，因为仓库没有可复用的
   客户端相机锚点契约；待该契约建立后再增加位置发布。
 - **画布缩放与 viewport**：画布平移和基于既有 `:scroll` 事件的 50%–200% 光标锚定缩放已实现，
-  保存的 layout 仍保持图坐标。点击 cost 行的“Expand canvas”会打开独立 viewport 操作层（464×278px），
-  画布不再被参数/诊断区挤压；按钮或 Esc 关闭后恢复紧凑布局。运行时已支持 Tab/Shift-Tab 在可见控件间环回，当前剩余是等待独立中立 pinch 手势契约。
+  保存的 layout 仍保持图坐标。旧的模态 `:canvas-viewport` 浮层（整屏放大但会遮住调色板/
+  参数/诊断，二选一）已删除；画布现在是共用 shell 的 `stage` 槽位常驻面板，footer 上
+  `Hide/Show palette`、`Hide/Show inspector` 两个按钮各自把对应面板宽度归零来临时让出
+  更多画布宽度，不再需要在“看得见图”与“编辑得了图”之间二选一。运行时已支持 Tab/Shift-Tab
+  在可见控件间环回，当前剩余是等待独立中立 pinch 手势契约。
+- **展示与内容**（node-editor/spell-composer UI 重构，2026-09）：调色板行显示本地化名
+  （`:i18n`，此前生成了却从未显示）而非裸 `id`；cost 是独立列，不再拼进标签被截断；
+  选中节点的检查器会显示一行签名（参数数 / 返回类型，来自 schema-export 永远填充的
+  `:params`/`:returns`，`:doc` 字段是空管道不予采用）；诊断行携带 `:nid` 并接上了
+  `:on {:activate :editor/focus-diagnostic}` 跳转（此前数据备好但 UI 从未接线）；画布节点
+  不再显示对所有 `:component` 节点都相同的 `[component]` 占位行，改显示首个已绑定参数或
+  省略；参数值改用 `format-param-value` 格式化（vec3 显示 `(x, y, z)`，复合值显示
+  `{...}`/`[...]`），不再是裸 `pr-str` 转储。法术合成器同一轮改为横向 Form→Effect→Aug
+  链（对标 Ars Nouveau），不可用 glyph 灰显而非隐藏，header 常驻复杂度/上限读数（实时算，
+  不再只在 Cast 时算一次），调色板/参数标签全部走 `spell_glyph_translations.clj` 本地化。
 
 ## 验证状态
 
@@ -140,7 +179,12 @@ V4 图的固定节点集合为 `start`、`component`、`branch`、`merge`、`for
 不是合法角色、一个没有默认分支的 `case` 会在点击节点标签时抛异常、
 `(name :form/self)` 会悄悄丢掉命名空间）。developer console namespace 已恢复；本轮 AC 全量测试与相关架构门禁已重新执行并通过。
 
-**没有验证、也无法在这个环境里验证的**：画面实际渲染效果、点击/拖拽的手感、
-480×360（节点编辑器设计尺寸）与 320×240（缩放后的宿主窗口）下四个面板是否真的挤得下。这部分需要在真实
-游戏里试。
+**没有验证、也无法在这个环境里验证的**：画面实际渲染效果、点击/拖拽的手感。
+560×380（节点编辑器当前设计尺寸）的选择依据是 `runtime.clj` 的 `content-rect`
+（`:scale-policy :fit` 的实现）——它只把设计框居中放进宿主视口，从不缩放；因此
+设计框超出玩家实际 GUI-Scale 后的逻辑视口时会在两侧对称裁切，而不是像名字暗示的
+那样自动缩小。640×400（该轮规划最初的推荐值）因此被放弃，退回本仓已实际上线的
+最宽设计（`preset_editor` 的 540×280）附近的 560×380，而不是凭感觉选一个更大的
+数字。这个结论本身可以从 `runtime.clj` 的 `content-rect` 代码直接核实，但“真实
+GUI-Scale 设置下具体挤不挤得下”仍然需要在真实游戏里试。
 

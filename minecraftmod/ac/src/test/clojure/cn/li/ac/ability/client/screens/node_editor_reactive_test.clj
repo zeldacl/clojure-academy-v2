@@ -32,6 +32,18 @@
     (is (nil? (#'editor/selected-signature {:graph g :selected-nid "n1" :palette []})))
     (is (nil? (#'editor/selected-signature {:graph g :selected-nid nil :palette []})))))
 
+;; C5: editor_vocab_translations.clj generated ~140 real labels that the
+;; palette never displayed -- :label used the raw :id instead, even
+;; though the translated text was already in the search index
+;; (palette-search-text). This confirms the DISPLAYED label actually
+;; changes with the entry's :i18n resolution, not just that some string
+;; is present.
+(deftest palette-item-label-comes-from-i18n-not-the-raw-id-test
+  (let [item (#'editor/palette-item {:id :target/raycast :i18n "editor.node.combat.target.raycast"
+                                     :cost 1 :source :node :category :targeting})]
+    (is (not= "target/raycast" (:label item)))
+    (is (not (str/includes? (:label item) "target/raycast")))))
+
 ;; P1/P2: cost used to be concatenated into the label text and truncated
 ;; together with it (a long name could push cost off the end entirely) --
 ;; it is now :cost-label, a field of its own.
