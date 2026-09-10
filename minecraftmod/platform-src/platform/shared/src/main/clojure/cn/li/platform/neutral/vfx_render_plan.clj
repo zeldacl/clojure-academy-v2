@@ -175,6 +175,7 @@
                            (line-ops geometry color))
                    :quad (case (:kind geometry)
                            :arc (arc-geometry/arc-quad-ops geometry material color)
+                           :emitter (marker-quad (:anchor geometry) color)
                            (quad-ops geometry color material))
                    :particle (if-let [particles (:particle-buffer op)]
                                (if (instance? ParticleBuffer particles)
