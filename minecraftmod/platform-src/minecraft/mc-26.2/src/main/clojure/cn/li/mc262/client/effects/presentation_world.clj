@@ -5,6 +5,7 @@
    SubmitNodeCollector, with all GPU state owned by RenderType."
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.runtime.raycast-normalize :as rn]
+            [cn.li.platform.neutral.vfx :as vfx]
             [cn.li.mc262.runtime.registry :as registry])
   (:import [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexConsumer]
            [cn.li.mc262.client.effects LevelEffectGeometry]
@@ -582,9 +583,14 @@
   [{:keys [plan camera-pos ^LocalPlayer player
            ^PoseStack pose-stack
            ^SubmitNodeCollector submit-node-collector]}]
-  (when (and player (number? (:local-walk-speed plan)))
+  (when player
     (when-let [owner (client-session/current-local-player-owner)]
-      (apply-local-walk-speed-from-plan! owner player plan)))
+      (let [vfx-speed (vfx/local-walk-speed owner)
+            effective-plan (if (number? vfx-speed)
+                             (assoc (or plan {}) :local-walk-speed vfx-speed)
+                             plan)]
+        (when (number? (:local-walk-speed effective-plan))
+          (apply-local-walk-speed-from-plan! owner player effective-plan)))))
   (when (seq (:ops plan))
     (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
       (.pushPose pose-stack)

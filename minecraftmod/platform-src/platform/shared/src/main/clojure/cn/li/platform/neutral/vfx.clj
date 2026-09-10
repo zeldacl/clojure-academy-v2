@@ -47,6 +47,12 @@
 (defn fov-offset [player-uuid]
   (when-let [api (host)] ((:fov-offset api) player-uuid)))
 
+(defn local-walk-speed [player-uuid]
+  "Return an owner-local movement override supplied by the VFX host, or nil
+   when no side-channel effect currently owns the player."
+  (when-let [api (host)]
+    (when-let [f (get api :local-walk-speed)]
+      (f player-uuid))))
 (defn tick!
   "Advance VFX exactly once for the supplied game tick."
   [context]

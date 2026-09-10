@@ -32,6 +32,7 @@
 (defonce ^:private screen-flashes* (atom {}))
 (defonce ^:private camera-fov-targets* (atom {}))
 (defonce ^:private camera-fov-eased* (atom {}))
+(defonce ^:private local-walk-speed-targets* (atom {}))
 (defonce ^:private preview-runtime* (atom nil))
 (defonce ^:private production-options* (atom nil))
 
@@ -107,6 +108,17 @@
           (swap! camera-fov-targets* assoc owner
                 (double (or (:offset params) 0.0)))
           (:destroy :release :clear-owner) (swap! camera-fov-targets* dissoc owner)
+          nil))
+      ;; Blood Retrograde's charge is a presentation side-channel rather than
+      ;; geometry: the old client effect slowed only the owning player's walk
+      ;; speed while charging. Keep the owner/instance lifecycle in the V4
+      ;; dispatcher and expose the resolved value through the neutral host ABI.
+      (when (= :blood-retrograde-charge (:effect-id signal))
+        (case (:op signal)
+          (:spawn :update :trigger :snapshot)
+          (swap! local-walk-speed-targets* assoc owner
+                (double (or (:speed params) 0.1)))
+          (:destroy :release :clear-owner) (swap! local-walk-speed-targets* dissoc owner)
           nil)))))
 
 (defn dispatch-signal! [signal]
@@ -120,6 +132,7 @@
     (swap! screen-flashes* dissoc owner)
     (swap! camera-fov-targets* dissoc owner)
     (swap! camera-fov-eased* dissoc owner)
+    (swap! local-walk-speed-targets* dissoc owner)
     (core/clear-owner! (runtime) owner))
   nil)
 
@@ -171,6 +184,11 @@
             0.0))
       0.0)))
 
+(defn local-walk-speed [player-uuid]
+  "Return the owner-local walk-speed override, or nil when no V4 effect owns it."
+  (when-let [owner (some-> player-uuid str)]
+    (get @local-walk-speed-targets* owner)))
+
 (defn add-camera-pitch-delta!
   [owner delta]
   (when-not owner
@@ -213,6 +231,7 @@
     :reload-resources! reload-resources!
     :active? active?
     :fov-offset current-fov-offset
+    :local-walk-speed local-walk-speed
     :drain-camera-pitch-deltas! drain-camera-pitch-deltas!}))
 
 (defn reset-for-test! []
@@ -222,6 +241,7 @@
   (reset! screen-flashes* {})
   (reset! camera-fov-targets* {})
   (reset! camera-fov-eased* {})
+  (reset! local-walk-speed-targets* {})
   (.clear ^ArrayDeque camera-pitch*)
   nil)
 

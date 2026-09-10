@@ -35,7 +35,8 @@
   {:ring :geometry :beam :geometry :ray-beam :geometry :line :geometry
    :quad :geometry :arc :geometry :emitter :geometry
    :audio-one-shot :audio :audio-loop :audio
-   :camera-fov :camera :camera-shake :camera :post-process :camera})
+   :camera-fov :camera :camera-shake :camera :post-process :camera
+   :first-person-motion :geometry})
 
 (defn- i18n-for [id] (str "editor.node.vfx." (str/replace (name id) "-" "_")))
 
@@ -101,7 +102,14 @@
    :camera-shake
    (node {:amplitude (p* :double) :duration (p* :double)})
    :post-process
-   (node {:effect (p* :keyword)})})
+   (node {:effect (p* :keyword)})
+
+   ;; First-person hand pose emitted by the V4 motion composite.
+   :first-person-motion
+   (node {:stage (p* :resource-id)
+          :phase-ticks (p* :long)
+          :duration-ticks (p* :long)
+          :curves (p)})})
 
 (def nodes (attach-presentation raw-nodes))
 

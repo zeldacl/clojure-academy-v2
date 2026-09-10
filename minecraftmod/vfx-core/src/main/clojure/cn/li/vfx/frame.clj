@@ -56,6 +56,47 @@
       :else (throw (ex-info "beam :layers must be a map or a sequence of layer maps"
                             {:value layers})))))
 
+(defn- sample-motion-curve
+  "Linearly sample a V4 first-person motion curve at normalized `t`."
+  [points t]
+  (let [points (->> (if (sequential? points) points [])
+                    (keep (fn [point]
+                            (when (and (sequential? point)
+                                       (>= (count point) 2)
+                                       (number? (first point))
+                                       (number? (second point)))
+                              [(double (first point)) (double (second point))])))
+                    (sort-by first)
+                    vec)]
+    (cond
+      (empty? points) 0.0
+      (<= t (ffirst points)) (double (second (first points)))
+      (>= t (first (last points))) (double (second (last points)))
+      :else
+      (loop [[[left right] & more] (partition 2 1 points)]
+        (if (<= t (first right))
+          (let [[t0 v0] left
+                [t1 v1] right
+                ratio (/ (- t t0) (max 1.0e-9 (- t1 t0)))]
+            (+ v0 (* ratio (- v1 v0))))
+          (recur more))))))
+
+(defn- first-person-transform
+  "Convert the V4 motion payload into the transform map consumed by the
+   platform hand renderer.  Keeping interpolation here makes the scene node
+   declarative while retaining the old curve semantics and deterministic
+   owner/lifecycle handling in the new frame ABI."
+  [{:keys [stage phase-ticks duration-ticks curves]}]
+  (let [stage (or stage :prepare)
+        stage-curves (or (get curves stage)
+                         (get curves (keyword (name stage)))
+                         {})
+        duration (max 1.0 (double (or duration-ticks 1)))
+        t (max 0.0 (min 1.0 (/ (double (or phase-ticks 0)) duration)))]
+    (into {}
+          (map (fn [axis]
+                 [axis (sample-motion-curve (get stage-curves axis) t)])
+               [:tx :ty :tz :rot-x :rot-y :rot-z]))))
 (defn- legacy-op [{:keys [kind] :as op}]
   (case kind
     :ring {:operation :draw-batch :stage :world-after-translucent :primitive :line
@@ -96,6 +137,8 @@
     :camera-shake {:operation :camera-shake :stage :camera
                    :amplitude (:amplitude op) :duration (:duration op)}
     :post-process {:operation :post-process :stage :post :effect (:effect op)}
+    :first-person-motion {:operation :draw-batch :stage :first-person :primitive :first-person
+                         :payload [(first-person-transform op)]}
     nil))
 
 (defn- op->java-batch ^VfxBatch [op]

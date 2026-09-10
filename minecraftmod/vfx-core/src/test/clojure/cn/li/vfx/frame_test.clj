@@ -94,6 +94,25 @@
     (is (identical? cn.li.mcmod.runtime.vfx.VfxOutputKind/CAMERA (.kind output)))
     (is (= (float 0.4) (.amount output)))))
 
+(deftest first-person-motion-op-emits-interpolated-transform-test
+  "V4 hand-motion curves cross the neutral frame ABI as a first-person batch.
+   The platform renderer consumes the transform map without knowing the curve
+   representation, so interpolation remains deterministic and renderer-neutral."
+  (let [f (frame/->java-frame 1 0
+                              (one-instance
+                               [{:kind :first-person-motion
+                                 :stage :punch
+                                 :phase-ticks 3
+                                 :duration-ticks 6
+                                 :curves {:punch {:tx [[0.0 0.0] [1.0 0.8]]
+                                                 :rot-x [[0.0 -40.0] [1.0 0.0]]}}}]))
+        batch (first (.batches f))
+        transform (first (.payload batch))]
+    (is (identical? VfxRenderStage/FIRST_PERSON (.stage batch)))
+    (is (= "first-person" (.primitive batch)))
+    (is (= 0.4 (:tx transform)))
+    (is (= -20.0 (:rot-x transform)))
+    (is (= 0.0 (:rot-y transform)))))
 (deftest emitter-op-produces-a-quad-batch-with-no-corners-matching-old-live-no-op-test
   (testing "reproduces the old engine's own confirmed no-op :vfx/emitter rendering
             (quad-ops requires :p0..:p3, which emitter geometry never has) -- behavioral

@@ -9,7 +9,9 @@
   {:probe-transient
    {:scene nil :user-types {:duration-ticks :int} :emitters [] :lifecycle :transient}
    :screen-flash-session
-   {:scene nil :user-types {:alpha :float :duration-ticks :int} :emitters [] :lifecycle :transient}})
+   {:scene nil :user-types {:alpha :float :duration-ticks :int} :emitters [] :lifecycle :transient}
+   :blood-retrograde-charge
+   {:scene nil :user-types {:speed :float} :emitters [] :lifecycle :session}})
 
 (defn- reset-runtime! []
   (controller/reset-for-test!)
@@ -65,6 +67,21 @@
    {:op :destroy :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
     :instance-key [:flash] :event-seq 2})
   (is (= 0.0 (controller/screen-flash-alpha "owner-1"))))
+
+(deftest blood-retrograde-charge-side-channel-preserves-owner-speed-lifecycle-test
+  (reset-runtime!)
+  (controller/dispatch-signal!
+   {:op :spawn :effect-id :blood-retrograde-charge :owner "owner-1" :world-id "world"
+    :instance-key [:charge] :event-seq 1 :params {:speed 0.1}})
+  (is (= 0.1 (controller/local-walk-speed "owner-1")))
+  (controller/dispatch-signal!
+   {:op :update :effect-id :blood-retrograde-charge :owner "owner-1" :world-id "world"
+    :instance-key [:charge] :event-seq 2 :params {:speed 0.007}})
+  (is (= 0.007 (controller/local-walk-speed "owner-1")))
+  (controller/dispatch-signal!
+   {:op :destroy :effect-id :blood-retrograde-charge :owner "owner-1" :world-id "world"
+    :instance-key [:charge] :event-seq 3})
+  (is (nil? (controller/local-walk-speed "owner-1"))))
 
 (deftest vfx-host-api-is-contract-valid-test
   (reset-runtime!)

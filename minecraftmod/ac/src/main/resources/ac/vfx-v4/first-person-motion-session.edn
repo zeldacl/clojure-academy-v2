@@ -5,18 +5,25 @@
  {:stage {:type :resource-id},
   :phase-ticks {:type :int},
   :duration-ticks {:type :int},
-  :curves {:type :any}},
- :graphs
+  :curves {:type :any}}, :graphs
  {:render
   {:nodes
    #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
+       :n--entry--default-0 {:type :component,
+        :component :first-person-motion,
+        :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :stage, :nid :n/n001},
+       :n002 {:type :context-ref, :key :phase-ticks, :nid :n/n002},
+       :n003 {:type :context-ref, :key :duration-ticks, :nid :n/n003},
+       :n004 {:type :context-ref, :key :curves, :nid :n/n004},
+       :n--entry--default-1 {:type :end,
         :result {},
-        :nid :n/n--entry--default-0,
+        :nid :n/n--entry--default-1,
         :inputs {:outcome :performed}}},
    :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+   [{:id :e/fpm-1, :kind :data, :from [:n/n001 :value], :to [:n/n--entry--default-0 :stage]}
+    {:id :e/fpm-2, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--default-0 :phase-ticks]}
+    {:id :e/fpm-3, :kind :data, :from [:n/n003 :value], :to [:n/n--entry--default-0 :duration-ticks]}
+    {:id :e/fpm-4, :kind :data, :from [:n/n004 :value], :to [:n/n--entry--default-0 :curves]}
+    {:id :e/fpm-5, :kind :exec, :from [:n/start :out], :to [:n/n--entry--default-0 :in]}
+    {:id :e/fpm-6, :kind :exec, :from [:n/n--entry--default-0 :out], :to [:n/n--entry--default-1 :in]}]}}}

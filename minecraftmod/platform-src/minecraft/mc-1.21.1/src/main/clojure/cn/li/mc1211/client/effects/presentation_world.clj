@@ -1,7 +1,8 @@
 (ns cn.li.mc1211.client.effects.presentation-world
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcbase.runtime.raycast-normalize :as rn])
+            [cn.li.mcbase.runtime.raycast-normalize :as rn]
+            [cn.li.platform.neutral.vfx :as vfx])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [cn.li.mcver RenderInterop]
            [cn.li.mc1211.client.render ModRenderTypes]
@@ -558,10 +559,14 @@
            tick
            plan]}]
   (let [owner (client-session/current-local-player-owner)
-        ;; Skip hand-center-pos/query-fn allocation and the plan build itself
-        ;; when no level effect is active (idle skill) — checked first so the
-        ;; common (idle) frame does none of the below.
-        plan plan]
+        ;; V4 side-channel effects (currently Blood Retrograde charge) own
+        ;; movement independently of the legacy level-effect plan. Prefer that
+        ;; resolved owner-local override when present, while retaining the old
+        ;; plan path for effects that have not migrated yet.
+        vfx-speed (when owner (vfx/local-walk-speed owner))
+        plan (if (number? vfx-speed)
+               (assoc (or plan {}) :local-walk-speed vfx-speed)
+               plan)]
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))

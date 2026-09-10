@@ -96,7 +96,7 @@
   "Camera-specific capability, not part of the core lifecycle. A host API
    without a first-person/camera consumer legitimately has no use for
    these; only validate their type when the key is actually present."
-  #{:active? :fov-offset :drain-camera-pitch-deltas!})
+  #{:active? :fov-offset :local-walk-speed :drain-camera-pitch-deltas!})
 
 (defn validate-host-api [api]
   (when-not (map? api)
