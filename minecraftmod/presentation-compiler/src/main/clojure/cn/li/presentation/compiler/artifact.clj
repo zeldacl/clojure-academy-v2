@@ -167,7 +167,37 @@
          :direction direction
          :children (lower-children physical)))
 
-(defn- lower-button [physical]
+(defn- backdrop-size
+  "The size a generated backdrop RECT should take inside its control wrapper.
+
+   A wrapper with a FIXED width/height hands that exact size to its
+   backdrop instead of [:fill 1.0]. :fill resolves against the INCOMING
+   avail -- and measureLinear/measureFree pass children the avail they were
+   themselves handed, never the node's own declared or bound size -- so a
+   :fill backdrop inside a 40px-wide control routinely measured hundreds of
+   pixels wide and painted far outside its control. :fill is kept only for
+   an AUTO/percent wrapper, which genuinely has no size of its own to copy.
+   preset_editor.ui.edn's authors hit the same trap from the .ui.edn side
+   and left the matching warning there (\"never :fill\")."
+  [physical]
+  (let [own (fn [axis] (let [[mode value] (get physical axis)]
+                         (if (= :fixed mode) [:fixed value] [:fill 1.0])))]
+    {:width (own :width) :height (own :height)}))
+
+(defn- lower-button
+  "Expand to a hit wrapper with a backdrop RECT and a TEXT child.
+
+   `backdrop-rgba` is the caller's decision, NOT (:rgba physical), and that
+   distinction is load-bearing: parse-static-rgba turns a MISSING :style
+   :rgba into opaque white (its documented fallback, and the right one for
+   :text), while this backdrop is sized [:fill 1.0] -- and :fill resolves
+   against the INCOMING avail, which no ancestor's own declared or bound
+   width constrains (measureLinear/measureFree hand children the avail they
+   were themselves given). An unstyled button therefore used to paint a
+   near-fullscreen OPAQUE WHITE rectangle; the spell composer, with nine of
+   them, rendered as a solid white screen. Backdrops are now opt-in: declare
+   :style {:rgba ...} to get one."
+  [physical backdrop-rgba]
   (let [bind (:bind physical)
         text-path (get bind :text)]
     (assoc physical
@@ -175,9 +205,9 @@
            :bind (select-keys bind [:visible])
            :children
            [(merge default-physical
+                   (backdrop-size physical)
                    {:phys-op UiOp/RECT :flags #{} :direction :none
-                    :width [:fill 1.0] :height [:fill 1.0]
-                    :rgba (:rgba physical)})
+                    :rgba backdrop-rgba})
             (merge default-physical
                    {:phys-op UiOp/TEXT :flags #{} :direction :none
                     :x 4.0 :y 4.0
@@ -212,8 +242,8 @@
                    text-path (assoc :text text-path))
            :children
            [(merge default-physical
+                   (backdrop-size physical)
                    {:phys-op UiOp/RECT :flags #{} :direction :none
-                    :width [:fill 1.0] :height [:fill 1.0]
                     :rgba bg})
             (merge default-physical
                    {:phys-op UiOp/TEXT :flags #{} :direction :none
@@ -296,7 +326,12 @@
                            :rgba 0x22000000)
        :transform (lower-container physical :none #{:has-transform})
 
-       :button (lower-button physical)
+       ;; Opt-in backdrop: only a button that actually declared :style
+       ;; {:rgba ...} gets one. See lower-button's docstring.
+       :button (lower-button physical
+                             (if (some? (:rgba (or (:style source) {})))
+                               (:rgba physical)
+                               0x00000000))
        :text-input (lower-text-input physical)
        :glow-line (lower-glow-line physical)
 

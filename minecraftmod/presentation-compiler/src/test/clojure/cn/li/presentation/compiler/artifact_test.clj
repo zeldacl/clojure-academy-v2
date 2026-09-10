@@ -88,6 +88,50 @@
     (is (= {:text [:state :label]} (nth (:node/bind-map compiled) 2)))
     (is (= {:activate 0} (nth (:node/action-ids compiled) 0)))))
 
+;; Regression: an unstyled button used to give its generated backdrop
+;; parse-static-rgba's missing-value fallback, opaque white -- and that
+;; backdrop is [:fill 1.0], which resolves against the INCOMING avail (no
+;; ancestor's own declared/bound width constrains it). Every unstyled
+;; button therefore painted a near-fullscreen opaque white rectangle; the
+;; spell composer, with nine of them, opened as a solid white screen.
+;; Backdrops are opt-in now: no :style {:rgba ...}, no backdrop.
+(deftest unstyled-button-backdrop-is-transparent
+  (let [compiled (compile* {:type :button :bind {:text [:state :label]}})]
+    (is (= UiOp/RECT (nth (:node/op compiled) 1)))
+    (is (zero? (nth (:node/rgba compiled) 1))
+        "an unstyled button must not paint a backdrop at all")))
+
+(deftest styled-button-keeps-its-declared-backdrop-colour
+  (let [compiled (compile* {:type :button :style {:rgba 0xFF204060}
+                            :bind {:text [:state :label]}})]
+    (is (= 0xFF204060 (nth (:node/rgba compiled) 1))
+        "declaring :style {:rgba ...} is how a button opts into a backdrop")))
+
+;; Second half of the same bug: even an opted-in backdrop was sized
+;; [:fill 1.0] and so escaped its own control. A fixed-size control now
+;; hands the backdrop its own size; only an AUTO wrapper still fills.
+;; size-mode ints: {:auto 0 :fixed 1 :pct 2 :weight 3 :fill 4}.
+(def ^:private fixed-mode 1)
+(def ^:private fill-mode 4)
+
+(deftest fixed-size-control-sizes-its-backdrop-to-itself
+  (let [compiled (compile* {:type :button :layout {:width 40 :height 14}
+                            :style {:rgba 0xFF204060}})]
+    (is (= fixed-mode (nth (:node/width-mode compiled) 1)))
+    (is (= 40.0 (nth (:node/width-value compiled) 1)))
+    (is (= fixed-mode (nth (:node/height-mode compiled) 1)))
+    (is (= 14.0 (nth (:node/height-value compiled) 1))))
+  (let [compiled (compile* {:type :text-input :layout {:width 40 :height 20}})]
+    (is (= fixed-mode (nth (:node/width-mode compiled) 1)))
+    (is (= 40.0 (nth (:node/width-value compiled) 1)))
+    (is (= fixed-mode (nth (:node/height-mode compiled) 1)))
+    (is (= 20.0 (nth (:node/height-value compiled) 1)))))
+
+(deftest auto-sized-control-backdrop-still-fills
+  (let [compiled (compile* {:type :button :style {:rgba 0xFF204060}})]
+    (is (= fill-mode (nth (:node/width-mode compiled) 1)))
+    (is (= fill-mode (nth (:node/height-mode compiled) 1)))))
+
 (deftest text-input-wrapper-is-hit-testable-and-focusable
   (let [compiled (compile* {:type :text-input :bind {:text [:state :query]}})
         wrapper-flags (nth (:node/flags compiled) 0)]

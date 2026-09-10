@@ -172,6 +172,38 @@
 (deftest golden-artifact-is-on-disk-test
   (is (some? (node-editor-golden-file)) "node-editor golden artifact must be on disk"))
 
+(defn- largest-opaque-rect-area
+  "Area of the biggest fully/partly opaque RECT the view paints. The
+   screen-covering-fill guard below reads this."
+  [state]
+  (let [dl (draw-list state)
+        geom (.geom dl)
+        rgba (.rgba dl)
+        ops (.op dl)]
+    (reduce max 0.0
+            (keep (fn [i]
+                    (let [g (* 4 i)
+                          alpha (bit-and (bit-shift-right (aget rgba i) 24) 0xFF)]
+                      (when (and (= 0 (aget ops i)) (pos? alpha))
+                        (* (double (aget geom (+ g 2))) (double (aget geom (+ g 3)))))))
+                  (range (.count dl))))))
+
+;; Regression for a bug that shipped unnoticed for a long time and made the
+;; spell composer open as a solid white screen: :button lowers to a wrapper
+;; plus a generated backdrop RECT, that backdrop used to take
+;; parse-static-rgba's missing-:style fallback (OPAQUE WHITE) and be sized
+;; [:fill 1.0] -- and :fill resolves against the incoming avail, which no
+;; ancestor's own declared/bound width constrains. So every unstyled button
+;; painted a near-fullscreen white rectangle. Nothing caught it because the
+;; unit tests never render, and the golden diff only ever showed an rgba
+;; int nobody reads as "covers the whole screen".
+(deftest no-single-rect-covers-the-screen-test
+  (let [design-area (* (double design-w) (double design-h))
+        worst (largest-opaque-rect-area (editor-state {:palette-entries 6 :diagnostics 2}))]
+    (is (< worst (* 0.25 design-area))
+        (str "an opaque rect covering " (int (* 100 (/ worst design-area)))
+             "% of the screen is a fill escaping its control, not a design"))))
+
 (deftest each-palette-entry-costs-a-fixed-number-of-draw-commands-test
   (let [n0 (paint-count (editor-state {:palette-entries 0}))
         n2 (paint-count (editor-state {:palette-entries 2}))
