@@ -11,27 +11,44 @@
                           [nid (into {:nid nid :type type} (apply hash-map kvs))]) nodes))
    :links []})
 
-(deftest compact-and-viewport-screen-coordinates-are-inverted
-  (testing "the root inset and compact control column are included"
-    (is (= {:x 20.0 :y 12.0}
+;; Single-canvas-rectangle contract (the :canvas-viewport modal was removed
+;; in favor of the shared editor shell -- cn.li.ability.editor.chrome/
+;; panel-geometry now supplies stage origin/size from :palette-open?/
+;; :inspector-open?/:diagnostics, not a two-branch compact/viewport mode).
+;; See node_editor_reactive.clj's own shell-geometry/design-width/
+;; palette-open-w/inspector-open-w for the numbers this derives from:
+;; design 560x380, header-h 48, footer-h 32, palette-open-w 130,
+;; inspector-open-w 180.
+
+(deftest screen-canvas-point-follows-stage-origin-test
+  (testing "default origin: both panels open, stage starts at (130, 48)"
+    (is (= {:x 20.0 :y 20.0}
            (#'editor/screen->canvas-point
-            {:canvas-viewport? false :zoom 1.0 :viewport {:x 0.0 :y 0.0}}
-            28.0 100.0))))
-  (testing "viewport origin and zoom are both inverted"
-    (is (= {:x 20.0 :y 12.0}
+            {:zoom 1.0 :viewport {:x 0.0 :y 0.0}}
+            150.0 68.0))))
+  (testing "collapsed palette shifts the origin to x=0; zoom and viewport still invert"
+    (is (= {:x 24.0 :y 15.0}
            (#'editor/screen->canvas-point
-            {:canvas-viewport? true :zoom 2.0 :viewport {:x 10.0 :y -8.0}}
+            {:palette-open? false :zoom 2.0 :viewport {:x 10.0 :y -8.0}}
             58.0 70.0)))))
 
-(deftest canvas-pointer-bounds-follow-active-mode
-  (let [compact {:canvas-viewport? false}
-        viewport {:canvas-viewport? true}]
-    (is (true? (#'editor/canvas-pointer? compact 8.0 88.0)))
-    (is (true? (#'editor/canvas-pointer? compact 472.0 216.0)))
-    (is (false? (#'editor/canvas-pointer? compact 472.1 216.0)))
-    (is (true? (#'editor/canvas-pointer? viewport 8.0 54.0)))
-    (is (true? (#'editor/canvas-pointer? viewport 472.0 332.0)))
-    (is (false? (#'editor/canvas-pointer? viewport 8.0 332.1)))))
+(deftest canvas-pointer-bounds-follow-panel-state-test
+  (testing "both panels open (default): stage is [130,48]..[380,348]"
+    (is (true? (#'editor/canvas-pointer? {} 130.0 48.0)))
+    (is (true? (#'editor/canvas-pointer? {} 380.0 348.0)))
+    (is (false? (#'editor/canvas-pointer? {} 129.9 48.0)))
+    (is (false? (#'editor/canvas-pointer? {} 380.1 348.0))))
+  (testing "collapsed palette grows the stage leftward to x=0"
+    (is (true? (#'editor/canvas-pointer? {:palette-open? false} 0.0 48.0)))
+    (is (true? (#'editor/canvas-pointer? {:palette-open? false} 380.0 348.0))))
+  (testing "both panels collapsed: stage spans the full design width"
+    (let [state {:palette-open? false :inspector-open? false}]
+      (is (true? (#'editor/canvas-pointer? state 0.0 48.0)))
+      (is (true? (#'editor/canvas-pointer? state 560.0 348.0)))))
+  (testing "a non-empty diagnostics list shrinks the stage height"
+    (let [state {:diagnostics [{:code :x :message "m"}]}]
+      (is (true? (#'editor/canvas-pointer? state 130.0 320.0)))
+      (is (false? (#'editor/canvas-pointer? state 130.0 320.1))))))
 
 (deftest screen-delta-is-scaled-only-for-node-movement
   (is (= {:dx 3.0 :dy -2.0}

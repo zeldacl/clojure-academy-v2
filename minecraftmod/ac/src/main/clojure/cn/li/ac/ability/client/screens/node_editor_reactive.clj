@@ -47,7 +47,9 @@
             [clojure.string :as str]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.vfx.fx-catalog :as fx-catalog]
+            [cn.li.ability.editor.chrome :as chrome]
             [cn.li.ability.editor.document :as document]
             [cn.li.ability.editor.graph :as graph]
             [cn.li.ability.editor.check :as check]
@@ -279,7 +281,8 @@
          :palette-recent []
          :palette-drag nil
          :ghost nil
-         :canvas-viewport? true
+         :palette-open? true
+         :inspector-open? true
          :drag hit/idle
          :layout (load-layout path)
          :viewport {:x 0.0 :y 0.0}
@@ -504,10 +507,18 @@
 
 (declare ui-label)
 
-(defn- diagnostic-item [d]
-  {:code (ui-label (:code d) 82.0)
-   :message (ui-label (:message d) 292.0)
-   :nid (str (:nid d)) :line (str (or (:line d) "-"))})
+(defn- diagnostic-item
+  "compile.clj's :collect diagnostics carry no :severity (every entry is an
+   error -- see check.clj's own docstring), so :code-tag is a plain wide-
+   enough label, not an invented severity color. :nid is stripped to its
+   bare name (no leading ':') so :editor/focus-diagnostic can (keyword ...)
+   it straight back without string surgery; check.clj's docstring is explicit
+   that :nid is nil for an unstamped form."
+  [d]
+  {:code-tag (ui-label (name (or (:code d) :error)) 112.0)
+   :message (ui-label (:message d) 420.0)
+   :nid (some-> (:nid d) name)
+   :line (str (or (:line d) "-"))})
 
 (defn- ui-label
   "Keep single-line editor labels inside their fixed layout box.
@@ -535,12 +546,16 @@
 (defn- palette-item
   "One cn.li.ability.editor.palette/build entry -> a display row. The same
    row is both a browseable reference and a drag source for canvas insertion.
-   Category is folded into the label text (\"[targeting] target/raycast (cost 2)\").
-   The palette row model adds collapsible category headers while preserving
-   palette/build's stable (:category :id) ordering."
-  [{:keys [id category cost source]}]
+   :label is the localized name (:i18n, via editor_vocab_translations'
+   ~140 auto-derived Title Case keys -- see that namespace) rather than the
+   raw namespaced id; :cost-label is its own column, not concatenated into
+   :label, so a long name can never push cost off the truncated end.
+   Category is shown once, via the row's own collapsible header -- not
+   folded into every entry's label too (see palette-rows)."
+  [{:keys [id i18n cost source]}]
   {:id id :source source
-   :label (ui-label (str "[" (name category) "] " id " (" (name source) ", cost " cost ")") 432.0)})
+   :label (ui-label (i18n/translate i18n) 92.0)
+   :cost-label (ui-label (str cost) 34.0)})
 
 (defn- palette-search-text [entry]
   (str/lower-case
@@ -563,7 +578,7 @@
    :entry? false
    :toggleable? true
    :collapsed? collapsed
-             :header-label (ui-label (str (if collapsed "▶ " "▼ ") (name category) " (" count ")") 432.0)})
+             :header-label (ui-label (str (if collapsed "▶ " "▼ ") (name category) " (" count ")") 126.0)})
 
 (defn- palette-rows
   "Build the compact palette presentation model: optional recent group,
@@ -630,10 +645,14 @@
           items)))
 
 (declare ghost-items)
+(declare shell-geometry)
 
 (defn- render-state [state]
   (let [{:keys [graph document diagnostics cost-summary phase phases status mode palette viewport zoom ghost
-                palette-query palette-collapsed palette-recent canvas-viewport?]} state
+                palette-query palette-collapsed palette-recent]} state
+        shell (shell-geometry state)
+        palette-open? (not (false? (:palette-open? state)))
+        inspector-open? (not (false? (:inspector-open? state)))
         selected (selected-node-info state)
         selected-params (selected-param-fields state)
         ;; Repeater text inputs need a stable state-backed draft. The
@@ -648,8 +667,7 @@
                                     [draft-key (str value)])))
                           draft-items)
         raw-canvas (into (render/graph->composite-items graph (:layout state))
-                         (when ghost (ghost-items ghost)))
-        canvas-viewport? (boolean canvas-viewport?)]
+                         (when ghost (ghost-items ghost)))]
     (merge draft-state
            {:title (str "Node Editor [" (name (or mode :skill)) "]" (when (:dirty? document) " *"))
      :path (:path state)
@@ -661,12 +679,19 @@
      :palette-search-label "Filter palette"
      :palette-clear-label "Clear"
      :canvas (transform-canvas-items raw-canvas viewport zoom)
-     :canvas-viewport? canvas-viewport?
-     :canvas-compact-visible? (not canvas-viewport?)
-     :canvas-viewport-visible? canvas-viewport?
-     :canvas-viewport-label (if canvas-viewport? "Close viewport (Esc)" "Expand canvas")
-     :canvas-viewport-title "Canvas viewport"
-     :selected-label (ui-label (if selected (:text selected) "(nothing selected)") 456.0)
+     ;; Shell panel geometry (see chrome.clj/shell-geometry): both panels
+     ;; open by default; the two toggle buttons in the footer drive their
+     ;; width to 0 rather than hiding them (:visible is never layout-
+     ;; reclaiming -- see editor_shell.edn's own docstring).
+     :shell-header-h (:header-h shell) :shell-footer-h (:footer-h shell)
+     :shell-body-h (:body-h shell) :shell-diagnostics-h (:diagnostics-h shell)
+     :shell-palette-w (:palette-w shell) :shell-stage-w (:stage-w shell) :shell-inspector-w (:inspector-w shell)
+     :palette-open? palette-open? :inspector-open? inspector-open?
+     :palette-toggle-label (if palette-open? "Hide palette" "Show palette")
+     :inspector-toggle-label (if inspector-open? "Hide inspector" "Show inspector")
+     :palette-list-h (max 0.0 (- (:body-h shell) 16.0))
+     :inspector-list-h (max 0.0 (- (:body-h shell) 18.0))
+     :selected-label (ui-label (if selected (:text selected) "(nothing selected)") 176.0)
      :selected-params selected-params
      :diagnostics (mapv diagnostic-item diagnostics)
      :diagnostic-count (double (count diagnostics))
@@ -676,7 +701,7 @@
                    "(compile errors -- see diagnostics)")
      :zoom-label (format "Zoom %.0f%%" (* 100.0 (double (or zoom 1.0))))
      :zoom-reset-label "Reset zoom"
-     :status (ui-label (or status "") 456.0)
+     :status (ui-label (or status "") 420.0)
      :preview-active? (boolean (:preview-active? state))
      :preview-label (or (:preview-label state) "Preview off")
      :preview-toggle-label (if (:preview-active? state) "Stop preview" "Preview")
@@ -904,17 +929,38 @@
       (do
         (param-submit state* (assoc item :value (pr-str (assoc current index parsed))))
         (swap! state* update :param-drafts dissoc [nid key axis])))))
-(defn- canvas-origin
-  "Design-space origin of the active canvas inside node-editor.ui.edn.
-   The root stack has an 8px inset on both axes. Compact mode then follows
-   the fixed controls (16+16+16+32 = 80px); the viewport overlay starts at
-   24px and its inner canvas at 22px. Keeping the full global origin here
-   makes screen->canvas-point the inverse of the UI layout, including the
-   root inset used by runtime pointer events."
+;; node_editor.ui.edn's :host design box and this screen's own open-widths
+;; for the shared shell's palette/inspector panels -- the SAME numbers the
+;; .ui.edn's slot content hardcodes for its own :layout {:width ...}, so a
+;; change to either must change both (see chrome.clj's header-h/footer-h
+;; docstring for the same coupling on the header/footer bands).
+(def ^:private design-width 560.0)
+(def ^:private design-height 380.0)
+(def ^:private palette-open-w 130.0)
+(def ^:private inspector-open-w 180.0)
+
+(defn- shell-geometry
+  "Internal editor state -> cn.li.ability.editor.chrome/panel-geometry's
+   result for THIS screen's design box and open-widths. The single place
+   that turns :palette-open?/:inspector-open?/diagnostic count into the
+   shell's panel scalars, so render-state (what the UI paints) and
+   canvas-origin/canvas-pointer? (what pointer math uses) can never disagree
+   about where the stage panel actually is -- the old compact/viewport
+   duplication (two independently hand-maintained 464.0/128.0/278.0
+   literals) was exactly this kind of drift."
   [state]
-  (if (:canvas-viewport? state)
-    {:x 8.0 :y 54.0}
-    {:x 8.0 :y 88.0}))
+  (chrome/panel-geometry
+   {:design-width design-width :design-height design-height
+    :palette-open? (not (false? (:palette-open? state))) :palette-open-w palette-open-w
+    :inspector-open? (not (false? (:inspector-open? state))) :inspector-open-w inspector-open-w
+    :diagnostic-count (count (:diagnostics state))}))
+
+(defn- canvas-origin
+  "Design-space origin of the stage panel inside node-editor.ui.edn: the
+   shell has no outer inset, so the stage sits at (palette-w, header-h)."
+  [state]
+  (let [g (shell-geometry state)]
+    {:x (:palette-w g) :y (:header-h g)}))
 (defn- screen->camera-point [state x y]
   (let [{ox :x oy :y} (canvas-origin state)]
     {:x (- (double (or x ox)) (double ox))
@@ -925,9 +971,11 @@
    Scroll events outside scroll containers arrive as :input/unknown; they
    must not zoom the graph merely because the host has no other scroll target."
   [state x y]
-  (let [{ox :x oy :y} (canvas-origin state)
-        width 464.0
-        height (if (:canvas-viewport? state) 278.0 128.0)]
+  (let [g (shell-geometry state)
+        ox (:palette-w g)
+        oy (:header-h g)
+        width (:stage-w g)
+        height (:body-h g)]
     (and (number? x) (number? y)
          (<= ox (double x) (+ ox width))
          (<= oy (double y) (+ oy height)))))
@@ -1214,12 +1262,24 @@
     :editor/reset-zoom
     (swap! state* assoc :zoom 1.0 :status "Zoom reset to 100%.")
 
-    :editor/toggle-canvas-viewport
-    (let [expanded? (not (:canvas-viewport? @state*))]
-      (swap! state* assoc :canvas-viewport? expanded?
-             :status (if expanded?
-                       "Canvas viewport expanded. Press Esc to close."
-                       "Canvas viewport collapsed.")))
+    :editor/toggle-palette-panel
+    (let [open? (false? (:palette-open? @state*))]
+      (swap! state* assoc :palette-open? open?
+             :status (if open? "Palette panel shown." "Palette panel hidden.")))
+
+    :editor/toggle-inspector-panel
+    (let [open? (false? (:inspector-open? @state*))]
+      (swap! state* assoc :inspector-open? open?
+             :status (if open? "Inspector panel shown." "Inspector panel hidden.")))
+
+    ;; check.clj's diagnostics docstring: :nid is nil for an unstamped form,
+    ;; so the button only jumps when the compiler actually attributed the
+    ;; error to a node.
+    :editor/focus-diagnostic
+    (let [nid (some-> (get-in payload [:item :nid]) keyword)]
+      (if nid
+        (swap! state* assoc :selected-nid nid :status (str "Jumped to " (name nid) "."))
+        (swap! state* assoc :status "This diagnostic is not attributed to a single node.")))
 
     :editor/undo
     (history-action! state* :undo)
@@ -1240,10 +1300,7 @@
     (let [key-code (int (or (:key-code payload) -1))]
       (cond
         (= 256 key-code)
-        (if (:canvas-viewport? @state*)
-          (swap! state* assoc :canvas-viewport? false :palette-drag nil :ghost nil
-                 :status "Canvas viewport collapsed.")
-          (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled."))
+        (swap! state* assoc :palette-drag nil :ghost nil :status "Palette drag cancelled.")
 
         (contains? #{259 261} key-code)
         (if (and (:v4? (:document @state*)) (:selected-nid @state*))

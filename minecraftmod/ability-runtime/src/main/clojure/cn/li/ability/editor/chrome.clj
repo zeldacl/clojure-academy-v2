@@ -16,8 +16,8 @@
    No content knowledge lives here (see verifyCoreNoSkillKnowledge)."
   )
 
-(def header-h 16.0)
-(def footer-h 16.0)
+(def header-h 48.0)
+(def footer-h 32.0)
 (def diagnostics-open-h 28.0)
 
 (defn panel-geometry
