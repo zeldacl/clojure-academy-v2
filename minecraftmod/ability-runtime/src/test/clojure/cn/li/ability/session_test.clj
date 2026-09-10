@@ -16,6 +16,28 @@
   (is (= :fireball (:ability-id (session/session :bc "alice"))))
   (is (nil? (session/session :cc "alice"))))
 
+(deftest abilities-do-not-collide-on-the-same-owner-test
+  (session/reset-for-test! :ac)
+  (session/start! :ac "alice" :railgun {:server-tick 5})
+  (session/start! :ac "alice" :thunder-clap {:server-tick 6})
+  (is (= #{:railgun :thunder-clap}
+         (set (keys (session/sessions-for-owner :ac "alice")))))
+  (is (= 5 (:server-tick (session/session :ac "alice" :railgun))))
+  (is (= 6 (:server-tick (session/session :ac "alice" :thunder-clap))))
+  (session/remove! :ac "alice" :railgun)
+  (is (not (session/active? :ac "alice" :railgun)))
+  (is (session/active? :ac "alice" :thunder-clap)))
+
+(deftest exact-ability-patches-do-not-leak-between-sessions-test
+  (session/reset-for-test! :ac)
+  (session/start! :ac "alice" :railgun {})
+  (session/start! :ac "alice" :thunder-clap {})
+  (session/apply-actions! :ac "alice" :railgun
+                           [{:type :session-patch
+                             :entries [{:path [:charge] :mode :assign :value 3}]}])
+  (is (= 3.0 (get-in (session/session :ac "alice" :railgun) [:state :charge])))
+  (is (nil? (get-in (session/session :ac "alice" :thunder-clap) [:state :charge]))))
+
 (deftest remove-only-affects-its-own-tenant-test
   (session/reset-for-test!)
   (session/start! :ac "alice" :railgun {})
