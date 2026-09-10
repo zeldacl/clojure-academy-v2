@@ -77,9 +77,29 @@ ac/src/presentation/resources/academy/app/
 两个 `.ui.edn` 现在都通过 `{:type :include :src "academy/shared/editor_shell"}`
 消费上面的共用骨架,不再各自维护一套布局;节点编辑器原有的模态 `:canvas-viewport`
 浮层(整屏放大画布、同时遮住调色板/参数/诊断)已删除,画布现在是 shell 里
-`stage` 槽位的常驻面板,palette/inspector 各自可独立折叠(宽度归零,不是
-`:visible`——见 `chrome.clj` 与 `LayoutKernel.java` 的 measure/arrange 从不读
-`:visible` 这一点)来让画布临时占满更多宽度。
+`stage` 槽位的常驻面板,palette/inspector 各自可独立折叠来让画布临时占满更多宽度。
+
+### 折叠面板的两条硬约束(改 shell 前必读)
+
+`LayoutKernel` 里"节点自身的尺寸"和"子节点的尺寸"几乎是相互独立的,踩过两次:
+
+1. **`:visible` 不参与布局**。measure/arrange 全程不读它(只有 `PaintKernel` /
+   `HitKernel` 读),所以 `:row`/`:column` 里两个用 `:visible` 互斥切换的兄弟节点,
+   隐藏的那个照样占满自己声明的宽度并把后面的兄弟顶开。互斥切换必须放进
+   `:absolute` 里叠放(`preset_editor.ui.edn` 的 slot-icon 就是这个写法)。
+2. **绑定宽高为 0 不会收缩子节点**。`measureFree`(`LayoutKernel.java:351`)与
+   `measureLinear`(`:238-240`)给子节点的约束来自**父节点传下来的 avail**,不是本
+   节点自己绑定的值;绑定值只在最后经 `resolveOwnAxis`(`:364`)作用于本节点自己的
+   矩形。所以宽度绑 0 的面板确实会让 `:row` 里的兄弟正确左移,但它自己的子节点
+   仍按自然尺寸测量并继续绘制——直接盖在刚让出去的空间上。**要真正折叠必须用
+   `:clip`**:`:clip` 的裁剪矩形取自 arrange 后的实际宽度(`:378-385`),也就是那个
+   0,子树才会被真正裁掉。骨架里六个槽位包装节点因此全是 `:clip`。
+
+> 这两点都**不能用绘制命令条数验证**:`PaintKernel` 对每个节点都发命令并附一个
+> clip 下标,裁剪是下游 scissor,不是剔除——折叠前后 `.count` 完全相同(实测
+> 38 vs 38)。`cn.li.presentation.core.editor-shell-paint-test` 断言的是**裁剪后的
+> 可见面积**,并且确认过:换回 `:absolute` 时它会红(折叠的调色板会有 336 px² 的
+> 条目文字和 240 px² 的 Clear 按钮压在画布上)。
 
 `verifyContentModuleCoreIsolation` 允许 `ac` 直接 require 的核心命名空间里，
 `cn.li.node.ops`/`cn.li.vfx.api` 是专为这套编辑器加的（词汇表调色板与场景模式的
@@ -171,6 +191,14 @@ V4 图的固定节点集合为 `start`、`component`、`branch`、`merge`、`for
   `{...}`/`[...]`），不再是裸 `pr-str` 转储。法术合成器同一轮改为横向 Form→Effect→Aug
   链（对标 Ars Nouveau），不可用 glyph 灰显而非隐藏，header 常驻复杂度/上限读数（实时算，
   不再只在 Cast 时算一次），调色板/参数标签全部走 `spell_glyph_translations.clj` 本地化。
+- **图标层（只有结构，没有美术）**：两个编辑器的调色板行与法术链卡片都已带一层
+  `:composite` 图标节点，绑 `:visible [:item :has-icon?]` / `:item [:item :icon]`。
+  控制器目前一律送 `:has-icon? false`，这一层**不产生任何绘制命令**（`PaintKernel`
+  的 `emitComposite` 在绑定值不是 `CompositeSpec` 时直接 return），所以既不需要占位
+  贴图也不会出现紫黑格。等真有美术时**只改控制器里那个 map**，不用动 `.ui.edn`——
+  这条承诺由 `editor-shell-paint-test` 真正驱动两种状态验证过，不是一句注释。
+  注意图标是**叠在按钮之上**而非替换按钮：按钮同时是点击/拖拽命中目标，换掉它会
+  让整行不可点（这一点与原计划字面写法不同，是刻意的）。
 
 ## 验证状态
 
