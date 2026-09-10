@@ -111,7 +111,7 @@
   (let [g {:nodes {:n/start {:nid :n/start :type :start}
                    :n/end {:nid :n/end :type :end}}
            :links []}
-        pins (filter #(and (= :pin (:role %)) (= :exec (:kind %)))
+        pins (filter #(= :pin (:role %))
                      (render/graph->composite-items g {}))]
     ;; Start is a source-only sentinel; end is a sink-only sentinel.  The
     ;; renderer must not expose phantom ports that the graph validator
