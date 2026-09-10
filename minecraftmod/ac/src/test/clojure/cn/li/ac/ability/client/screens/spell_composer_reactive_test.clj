@@ -3,7 +3,15 @@
   (:require [clojure.test :refer [deftest is]]
             [clojure.string :as str]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.ability.editor.label :as label]
             [cn.li.ac.ability.client.screens.spell-composer-reactive :as composer]))
+
+;; P6: this screen no longer carries its own copy of the truncation
+;; algorithm -- ui-label is a thin wrapper over the one shared function
+;; node_editor_reactive.clj and graph.clj also call.
+(deftest ui-label-delegates-to-the-shared-label-namespace-test
+  (is (= (label/ellipsize "a somewhat long composer label" 40.0)
+         (#'composer/ui-label "a somewhat long composer label" 40.0))))
 
 ;; i18n/*translate-fn* defaults to (fn [k _] (str k)) with no platform
 ;; module installed (never true in this headless test process) -- real key

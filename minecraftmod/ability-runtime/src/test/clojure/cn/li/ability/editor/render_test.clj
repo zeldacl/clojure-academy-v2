@@ -49,6 +49,16 @@
     (doseq [[nid pos] layout]
       (is (= (* 18.0 (double (get depths nid))) (:x pos))))))
 
+(deftest category-color-is-deterministic-and-covers-unknown-keywords-test
+  (is (= (render/category-color :targeting) (render/category-color :targeting)))
+  (is (integer? (render/category-color :some/brand-new-category-nobody-registered)))
+  (is (integer? (render/category-color nil))))
+
+(deftest argb->rgba-floats-roundtrips-into-the-0-1-range-test
+  (let [[r g b a] (render/argb->rgba-floats 0xFF3A5A78)]
+    (is (every? #(<= 0.0 % 1.0) [r g b a]))
+    (is (= 1.0 a))))
+
 (deftest format-param-value-formats-common-shapes-test
   (is (= "nil" (#'render/format-param-value nil)))
   (is (= "foo" (#'render/format-param-value :foo)))

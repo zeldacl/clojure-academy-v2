@@ -31,6 +31,8 @@
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ability.editor.chrome :as chrome]
+            [cn.li.ability.editor.label :as label]
+            [cn.li.ability.editor.render :as render]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.combat.api :as combat-api]))
@@ -51,21 +53,11 @@
 
    Presentation V4 currently clips but does not implement generic text
    ellipsizing.  Only derived display labels are shortened here; glyph data,
-   status state and parameter drafts remain lossless."
+   status state and parameter drafts remain lossless. Delegates to
+   cn.li.ability.editor.label/ellipsize, the one shared implementation
+   both editors and graph.clj's canvas labels now use (P6)."
   [value max-width]
-  (let [s (str (or value ""))
-        measure (fn [text]
-                  (double (or (bridge/font-width-optional text)
-                              (* 4.8 (count text)))))]
-    (if (or (str/blank? s) (<= (measure s) (double max-width)))
-      s
-      (let [suffix "..."]
-        (loop [n (count s)]
-          (let [candidate (str (subs s 0 n) suffix)]
-            (cond
-              (<= (measure candidate) (double max-width)) candidate
-              (zero? n) suffix
-              :else (recur (dec n)))))))))
+  (label/ellipsize value max-width))
 
 ;; spell_composer.ui.edn's :host design box and this screen's shared-shell
 ;; panel widths. Unlike the node editor, the composer's palette/inspector
@@ -376,10 +368,11 @@
 
 ;; --- render-state ------------------------------------------------------
 
-(defn- glyph-palette-item [state {:keys [glyph cost admissible?]}]
+(defn- glyph-palette-item [state {:keys [glyph kind cost admissible?]}]
   {:glyph glyph :header? false :entry? true
    :label (ui-label (glyph-label state glyph) 62.0)
    :cost-label (ui-label (str cost) 22.0)
+   :category-color (render/argb->rgba-floats (render/category-color kind))
    ;; Both rendered, never filtered out (C3): an unlocked-but-inadmissible
    ;; glyph is a real "the game will not accept this yet" signal a player
    ;; needs to SEE to know what to work toward -- combat.player/glyph-
@@ -426,6 +419,7 @@
 (defn- chain-card [state idx {:keys [glyph augments]} selected-effect group-count]
   {:form? false :effect? true :index idx
    :label (ui-label (glyph-label state glyph) 48.0)
+   :category-color (render/argb->rgba-floats (render/category-color (get-in state [:glyph-specs glyph :kind])))
    :selected? (= idx selected-effect)
    :can-move-up? (pos? idx)
    :can-move-down? (< idx (dec group-count))
@@ -454,7 +448,8 @@
         {:keys [complexity cap over-cap?]} (spell-complexity state)
         chain (into (if form
                       [{:form? true :effect? false :index -1
-                        :label (ui-label (glyph-label state (:glyph form)) 48.0)}]
+                        :label (ui-label (glyph-label state (:glyph form)) 48.0)
+                        :category-color (render/argb->rgba-floats (render/category-color :form))}]
                       [])
                     (map-indexed (fn [idx group] (chain-card state idx group selected-effect (count effect-groups))))
                     effect-groups)]

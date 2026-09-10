@@ -80,7 +80,7 @@
                               :on {:activate :editor/toggle-palette-category}
                               :semantics {:role :button :field :palette-category}}
                              {:type :button :layout {:height 14 :width 94}
-                              :bind {:text [:item :label] :visible [:item :entry?]}
+                              :bind {:text [:item :label] :visible [:item :entry?] :rgba [:item :category-color]}
                               :on {:activate :editor/add-palette-node :drag-start :editor/palette-drag-start}
                               :semantics {:role :button}}
                              {:type :text :layout {:height 14 :width 36}

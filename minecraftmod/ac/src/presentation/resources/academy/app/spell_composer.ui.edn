@@ -56,7 +56,7 @@
         :bind {:visible [:item :entry?]}
         :children
         [{:type :button :layout {:width 64 :height 14}
-          :bind {:text [:item :label] :visible [:item :admissible?]}
+          :bind {:text [:item :label] :visible [:item :admissible?] :rgba [:item :category-color]}
           :on {:activate :composer/glyph-activate}
           :semantics {:role :button}}
          {:type :text :layout {:width 64 :height 14}
@@ -76,7 +76,7 @@
       :on {:activate :composer/select-effect}
       :semantics {:role :button}
       :children
-      [{:type :text :layout {:height 28} :bind {:text [:item :label]}}
+      [{:type :text :layout {:height 28} :bind {:text [:item :label] :rgba [:item :category-color]}}
        {:type :row :layout {:height 14}
         :bind {:visible [:item :effect?]}
         :children [{:type :button :layout {:width 14 :height 14}

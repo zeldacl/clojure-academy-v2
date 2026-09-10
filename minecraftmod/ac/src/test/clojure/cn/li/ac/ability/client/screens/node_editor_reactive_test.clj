@@ -4,7 +4,15 @@
    Presentation smoke tests cover compiled view routing; this namespace
    covers the controller's V4 geometry and graph edits without a game window."
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ability.editor.label :as label]
             [cn.li.ac.ability.client.screens.node-editor-reactive :as editor]))
+
+;; P6: this screen no longer carries its own copy of the truncation
+;; algorithm -- ui-label is a thin wrapper over the one shared function
+;; spell_composer_reactive.clj and graph.clj also call.
+(deftest ui-label-delegates-to-the-shared-label-namespace-test
+  (is (= (label/ellipsize "a somewhat long editor label" 40.0)
+         (#'editor/ui-label "a somewhat long editor label" 40.0))))
 
 (defn- graph [& nodes]
   {:nodes (into {} (map (fn [[nid type & kvs]]

@@ -93,6 +93,44 @@
 
 (defn- box-color [stmt] (get stmt-colors stmt 0xFF444444))
 
+;; A fixed palette + deterministic hash, not a hand-authored {category
+;; color} table: both editors' palette categories (node editor's
+;; :category-for output, the composer's glyph :kind) are open-ended
+;; content the caller supplies, and stmt-colors above already shows what
+;; happens when a lookup table doesn't cover a new key (the "unmapped ->
+;; 0xFF444444" fallback color) -- category-color instead ALWAYS has a real
+;; (if arbitrary) answer for any keyword, including ones this namespace
+;; (which carries no content knowledge -- verifyCoreNoSkillKnowledge) has
+;; never seen.
+(def ^:private category-palette
+  [0xFF3A5A78 0xFF3A6E4A 0xFF7A5A2A 0xFF6A3A7A 0xFF2A6A6A 0xFF7A2A2A 0xFF4A4A7A 0xFF6A6A2A])
+
+(defn category-color
+  "Any category/kind keyword -> a stable RGBA int from a small fixed
+   palette (the same 8 colors every category hashes into, always the
+   SAME color for the SAME keyword within one process). Cheap, real
+   \"scan the palette by color\" value (Blueprint/Niagara both color-code
+   by type) without hand-authoring a table that would need editing every
+   time a category is added on the content side."
+  [kw]
+  (let [n (count category-palette)
+        idx (mod (Math/abs (long (hash (or kw :uncategorized)))) n)]
+    (nth category-palette idx)))
+
+(defn argb->rgba-floats
+  "0xAARRGGBB packed int (this namespace's own composite-item :rgba
+   convention, its Java-side consumer's expectation) -> [r g b a] each
+   0.0-1.0, the vector form presentation-core's :bind {:rgba ...} expects
+   instead (see preset_editor.ui.edn/tutorial.ui.edn's own usage). A
+   caller binding category-color straight into a .ui.edn needs this."
+  [argb]
+  (let [argb (long argb)
+        a (bit-and (bit-shift-right argb 24) 0xFF)
+        r (bit-and (bit-shift-right argb 16) 0xFF)
+        g (bit-and (bit-shift-right argb 8) 0xFF)
+        b (bit-and argb 0xFF)]
+    [(/ r 255.0) (/ g 255.0) (/ b 255.0) (/ a 255.0)]))
+
 (defn- format-param-value
   "A raw :inputs value -> a short, canvas-width-aware display string.
    pr-str alone (the previous behavior) dumps a compound literal verbatim

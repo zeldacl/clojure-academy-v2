@@ -50,6 +50,7 @@
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.vfx.fx-catalog :as fx-catalog]
             [cn.li.ability.editor.chrome :as chrome]
+            [cn.li.ability.editor.label :as label]
             [cn.li.ability.editor.document :as document]
             [cn.li.ability.editor.graph :as graph]
             [cn.li.ability.editor.check :as check]
@@ -526,22 +527,10 @@
    Presentation V4 currently clips but does not implement generic text
    ellipsizing.  The two editors therefore bound only display labels here;
    source text, diagnostics data and input drafts remain lossless in state.
-   Use the installed font bridge when available and a deterministic fallback
-   for headless tests."
+   Delegates to cn.li.ability.editor.label/ellipsize, the one shared
+   implementation both editors and graph.clj's canvas labels now use (P6)."
   [value max-width]
-  (let [s (str (or value ""))
-        measure (fn [text]
-                  (double (or (bridge/font-width-optional text)
-                              (* 4.8 (count text)))))]
-    (if (or (str/blank? s) (<= (measure s) (double max-width)))
-      s
-      (let [suffix "..."]
-        (loop [n (count s)]
-          (let [candidate (str (subs s 0 n) suffix)]
-            (cond
-              (<= (measure candidate) (double max-width)) candidate
-              (zero? n) suffix
-              :else (recur (dec n)))))))))
+  (label/ellipsize value max-width))
 
 (defn- palette-item
   "One cn.li.ability.editor.palette/build entry -> a display row. The same
@@ -552,10 +541,11 @@
    :label, so a long name can never push cost off the truncated end.
    Category is shown once, via the row's own collapsible header -- not
    folded into every entry's label too (see palette-rows)."
-  [{:keys [id i18n cost source]}]
+  [{:keys [id i18n cost source category]}]
   {:id id :source source
    :label (ui-label (i18n/translate i18n) 92.0)
-   :cost-label (ui-label (str cost) 34.0)})
+   :cost-label (ui-label (str cost) 34.0)
+   :category-color (render/argb->rgba-floats (render/category-color category))})
 
 (defn- palette-search-text [entry]
   (str/lower-case

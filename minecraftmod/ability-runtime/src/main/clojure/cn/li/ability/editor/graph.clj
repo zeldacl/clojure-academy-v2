@@ -29,7 +29,8 @@
    round-trip assertion over the full real corpus, which is what actually
    proves this namespace's coverage claims rather than a hand-picked
    fixture set."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.ability.editor.label :as label]))
 
 ;; --- nid allocation ------------------------------------------------------
 
@@ -316,13 +317,17 @@
         (.replace \- \space)
         (.replace \_ \space))))
 
-(def ^:private label-max 28)
+;; Pixel-width budget, not a character count (P6): a fixed character count
+;; has no fixed pixel width under a proportional font -- a run of "i"/"l"
+;; and a run of "M"/"W" at the same count are nowhere near the same width.
+;; 134.0 keeps this at roughly its old 28-char footprint (~4.8px/char, the
+;; same deterministic fallback label/ellipsize itself falls back to when
+;; no font metric is installed) while actually measuring real labels.
+(def ^:private label-max-width 134.0)
 
 (defn- clip-label
   [^String s]
-  (if (<= (count s) label-max)
-    s
-    (str (subs s 0 (- label-max 3)) "...")))
+  (label/ellipsize s label-max-width))
 
 (defn stmt-label
   "nodes, nid -> a SHORT plain-language canvas label (not raw DSL).
