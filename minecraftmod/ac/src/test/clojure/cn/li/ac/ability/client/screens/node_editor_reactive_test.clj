@@ -84,3 +84,39 @@
     (is (empty? (:links removed)))
     (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/start)))
     (is (thrown? clojure.lang.ExceptionInfo (#'editor/remove-v4-node g :n/end)))))
+
+(deftest selected-node-info-reads-the-cached-catalog-not-a-fresh-assemble
+  ;; A3: open-document used to build state without a VFX catalog at all --
+  ;; selected-node-info called fx-catalog/assemble itself on EVERY :vfx!
+  ;; node selection, re-parsing and re-validating all 36 ac/vfx-v4/*.edn
+  ;; documents per click. open-document now assembles once and stores the
+  ;; result under :vfx-catalog-by-id; selected-node-info must read that
+  ;; field instead of calling assemble again -- these tests construct
+  ;; state by hand (no file I/O, no real catalog) precisely to prove
+  ;; selected-node-info's own correctness is independent of fx-catalog.
+  (let [lit {:n/lit {:nid :n/lit :expr :literal :value 1.0}}
+        vfx-node {:nid :n/fx :stmt :vfx! :effect-id :known-effect
+                  :fields {:start :n/lit :bogus-field :n/lit}}
+        g {:nodes (assoc lit :n/fx vfx-node) :links []}
+        catalog {:known-effect {:user-types {:start :vec3}}}]
+    (testing "an unknown field on a known effect is reported"
+      (let [info (#'editor/selected-node-info
+                  {:graph g :selected-nid :n/fx :mode :skill :vfx-catalog-by-id catalog})]
+        (is (some? info))
+        (is (re-find #"unknown fields: bogus-field" (:text info)))))
+    (testing "no note when every field is declared"
+      (let [clean-g {:nodes (assoc lit :n/fx (assoc vfx-node :fields {:start :n/lit})) :links []}
+            info (#'editor/selected-node-info
+                  {:graph clean-g :selected-nid :n/fx :mode :skill :vfx-catalog-by-id catalog})]
+        (is (not (re-find #"unknown fields" (:text info))))))
+    (testing "scene mode never surfaces the vfx note, regardless of the catalog"
+      (let [info (#'editor/selected-node-info
+                  {:graph g :selected-nid :n/fx :mode :scene :vfx-catalog-by-id catalog})]
+        (is (not (re-find #"unknown fields" (:text info))))))
+    (testing "an effect-id absent from the catalog produces no note (a
+              different, more serious problem check/unknown-vfx-fields
+              deliberately reports as nil, not an empty set)"
+      (let [unknown-effect-g {:nodes (assoc lit :n/fx (assoc vfx-node :effect-id :does-not-exist)) :links []}
+            info (#'editor/selected-node-info
+                  {:graph unknown-effect-g :selected-nid :n/fx :mode :skill :vfx-catalog-by-id catalog})]
+        (is (not (re-find #"unknown fields" (:text info))))))))

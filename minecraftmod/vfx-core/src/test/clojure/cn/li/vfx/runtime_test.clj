@@ -120,7 +120,62 @@
    {:scene "{:ability :probe :do [(finish {:outcome :performed})]}"
     :user-types {:duration-ticks :int}
     :emitters []
+    :lifecycle :transient}
+   :with-scene-2
+   {:scene "{:ability :probe2 :do [(finish {:outcome :performed})]}"
+    :emitters []
+    :lifecycle :transient}
+   :emitter-only
+   {:emitters []
     :lifecycle :transient}})
+
+(deftest scene-program-is-compiled-once-per-effect-id-and-cached-test
+  (testing "A2: compile-instance used to recompile the scene program on
+            EVERY spawn (0.2-1.8ms and up to ~1MB on the worst shipped
+            effects), even though the program never depends on the
+            spawning instance -- see compiled-scene-program's docstring"
+    (let [s (runtime/create-store scene-registry)
+          a (runtime/ensure! s [:a] {:effect-id :with-scene :seed 1 :user {:duration-ticks 4}})
+          b (runtime/ensure! s [:b] {:effect-id :with-scene :seed 2 :user {:duration-ticks 4}})]
+      (is (identical? (:scene-program a) (:scene-program b))
+          "two instances of the SAME effect-id must share one compiled program object"))))
+
+(deftest scene-program-cache-is-keyed-by-effect-id-test
+  (let [s (runtime/create-store scene-registry)
+        a (runtime/ensure! s [:a] {:effect-id :with-scene :seed 1 :user {:duration-ticks 4}})
+        c (runtime/ensure! s [:c] {:effect-id :with-scene-2 :seed 1})]
+    (is (not (identical? (:scene-program a) (:scene-program c)))
+        "different effect-ids must not share a cached program")))
+
+(deftest scene-program-cache-handles-emitter-only-decls-without-recompiling-test
+  (testing "an effect decl with no :scene/:document compiles to a nil
+            program -- contains? (not a nil-as-miss check) must still
+            treat that nil as cached, not recompute it on every spawn"
+    (let [s (runtime/create-store scene-registry)]
+      (runtime/ensure! s [:a] {:effect-id :emitter-only :seed 1})
+      (is (contains? @(:scene-programs s) :emitter-only))
+      (is (nil? (get @(:scene-programs s) :emitter-only))))))
+
+(deftest reload-resources-invalidates-the-scene-program-cache-test
+  (let [rt (runtime/create-client-runtime scene-registry)
+        before (runtime/ensure! rt [:a] {:effect-id :with-scene :seed 1 :user {:duration-ticks 4}})
+        _ (runtime/destroy! rt [:a])
+        _ (runtime/reload-resources! rt 2)
+        after (runtime/ensure! rt [:a] {:effect-id :with-scene :seed 1 :user {:duration-ticks 4}})]
+    (is (not (identical? (:scene-program before) (:scene-program after)))
+        "reload-resources! must force a fresh compile, not keep serving the old cached program")))
+
+(deftest independent-stores-do-not-share-a-scene-program-cache-test
+  (testing "cn.li.ability.client-vfx-v2's preview runtime is built from a
+            fresh create-runtime call on the SAME registry as production
+            (see that ns's preview-runtime docstring) -- its cache must not
+            be visible to, or corrupted by, production's cache"
+    (let [rt-a (runtime/create-client-runtime scene-registry)
+          rt-b (runtime/create-client-runtime scene-registry)
+          a (runtime/ensure! rt-a [:a] {:effect-id :with-scene :seed 1 :user {:duration-ticks 4}})
+          b (runtime/ensure! rt-b [:a] {:effect-id :with-scene :seed 1 :user {:duration-ticks 4}})]
+      (is (not (identical? (:scene-programs rt-a) (:scene-programs rt-b))))
+      (is (not (identical? (:scene-program a) (:scene-program b)))))))
 
 (def ^:private transient-lifecycle-registry
   {:one-shot

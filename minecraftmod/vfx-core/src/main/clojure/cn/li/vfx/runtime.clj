@@ -35,21 +35,51 @@
      {:scene dsl-text-or-nil :user-types {cap-key type}
       :emitters [emitter-decl ...]}"
   [registry]
-  {:registry registry :instances (atom {})})
+  {:registry registry :instances (atom {}) :scene-programs (atom {})})
+
+(defn- compiled-scene-program
+  "The compiled scene program for effect-id, built once per store and
+   cached in :scene-programs -- unlike the Niagara emitter stack compiled
+   below (which closes over THIS spawn's own :user values as compile-time
+   literals, see cn.li.vfx.compile's own scope-cut docstring), a scene
+   program never depends on instance data: cn.li.vfx.scene/compile-v4-
+   document!'s arglist is ([document]) and cn.li.vfx.scene/host is a
+   shared def, so nothing instance-specific is ever closed over. An
+   instance's :user capability values are read back at DISPATCH time,
+   through :cap register reads (cn.li.vfx.scene/sample!'s :capabilities
+   map), not baked in at compile time -- confirmed against every real
+   ac/vfx-v4 document: 19 of 36 read :user fields via :cap instructions,
+   and none of them ever produce a different program from a different
+   :user value, only different SAMPLE output from the same program.
+   Recompiling this per spawn cost 0.2-1.8ms and up to ~1MB on the most
+   expensive shipped effects -- exactly the effects that get spawned on
+   every activation of the abilities that reference them. contains?
+   (not a plain cache miss on nil)
+   because :else nil is a legitimate compiled value for an emitter-only
+   effect decl; without it, such an effect would recompile (to nil) on
+   every single spawn, defeating the cache for that decl shape."
+  [store effect-id decl]
+  (let [cache (:scene-programs store)]
+    (if (contains? @cache effect-id)
+      (get @cache effect-id)
+      (let [program (cond
+                      (:document decl) (scene/compile-v4-document! (:document decl))
+                      (:scene decl) (scene/compile-program
+                                     (scene/compile-doc! (:scene decl) (:user-types decl {})))
+                      :else nil)]
+        (swap! cache assoc effect-id program)
+        program))))
 
 (defn- compile-instance
-  "Compiles the scene program (if any) and every emitter, then runs each
-   emitter's OWN :spawn stage exactly ONCE here -- :spawn/burst means
-   burst, a one-time reservation, not a per-tick action; tick! below only
-   ever runs :update afterward. A continuously-emitting effect (a
-   :spawn/rate-style module re-triggering reservation on its own schedule)
-   is a natural follow-up this pass does not implement or claim to."
-  [decl {:keys [user] :as _spawn}]
-  (let [scene-program (cond
-                        (:document decl) (scene/compile-v4-document! (:document decl))
-                        (:scene decl) (scene/compile-program
-                                       (scene/compile-doc! (:scene decl) (:user-types decl {})))
-                        :else nil)
+  "Reuses store's cached scene program (see compiled-scene-program above)
+   and compiles every emitter fresh, then runs each emitter's OWN :spawn
+   stage exactly ONCE here -- :spawn/burst means burst, a one-time
+   reservation, not a per-tick action; tick! below only ever runs :update
+   afterward. A continuously-emitting effect (a :spawn/rate-style module
+   re-triggering reservation on its own schedule) is a natural follow-up
+   this pass does not implement or claim to."
+  [store effect-id decl {:keys [user] :as _spawn}]
+  (let [scene-program (compiled-scene-program store effect-id decl)
         emitters (mapv (fn [emitter-decl]
                          (let [compiled (pcompile/compile-emitter emitter-decl user)
                                buffer ((:new-buffer compiled))]
@@ -70,7 +100,7 @@
             (or existing
                 (merge {:effect-id effect-id :seed (long (or seed 0)) :user (:user spawn)
                        :age 0 :owner (:owner spawn) :world-id (:world-id spawn)}
-                      (compile-instance decl spawn)))))
+                      (compile-instance store effect-id decl spawn)))))
     (get @(:instances store) instance-key)))
 
 (defn lookup [store instance-key] (get @(:instances store) instance-key))
@@ -329,7 +359,16 @@
 (defn latest-frame-stage [rt stage] (get-in @(:latest-frame rt) [:stages stage]))
 (defn release-frame! [rt frame-id] (swap! (:frames rt) dissoc frame-id) nil)
 (defn resource-generation [rt] @(:generation rt))
-(defn reload-resources! [rt generation] (reset! (:generation rt) generation) generation)
+(defn reload-resources!
+  "Bumps the resource generation AND drops the cached scene programs
+   (compiled-scene-program above) -- resources changing is exactly the
+   signal that a cached compile might now be stale; the caches are keyed
+   by effect-id only, with no generation dimension, precisely because
+   reload is the one path expected to invalidate them wholesale."
+  [rt generation]
+  (reset! (:scene-programs rt) {})
+  (reset! (:generation rt) generation)
+  generation)
 (defn registered-effects [rt] (set (keys (:registry rt))))
 
 

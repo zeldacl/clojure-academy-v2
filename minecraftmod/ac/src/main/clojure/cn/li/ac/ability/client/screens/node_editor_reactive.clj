@@ -259,6 +259,16 @@
          :opts opts
          :palette (vec (concat v4-fixed-palette (palette/build {:vocab (:vocab opts) :ops ops/table :fns (:fns opts)
                                   :category-for (:category-for opts)})))
+         ;; Built once here, not by selected-node-info on every selection
+         ;; change: fx-catalog/assemble parses, validates and node-compiles
+         ;; every ac/vfx-v4/*.edn document (36 files) from scratch on each
+         ;; call, and selected-node-info re-derives on every :vfx! node
+         ;; selection -- clicking through a graph's vfx! calls used to
+         ;; reparse the whole catalog per click. The catalog cannot change
+         ;; within one editor session (no in-editor VFX-catalog reload
+         ;; action exists), so mount time is the correct cache point --
+         ;; same reasoning as :palette just above.
+         :vfx-catalog-by-id (:by-id (fx-catalog/assemble))
          :document (cond
                      (document/v4-document? wrapper-doc) (document/open-v4 raw)
                      :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))
@@ -281,12 +291,12 @@
          :status (if (.isFile ws) "Loaded (from workspace)" "Loaded")}
         recompute)))
 
-(defn- selected-node-info [{:keys [graph selected-nid mode]}]
+(defn- selected-node-info [{:keys [graph selected-nid mode vfx-catalog-by-id]}]
   (when (and selected-nid (get (:nodes graph) selected-nid))
     (let [node (get (:nodes graph) selected-nid)
           text (graph/stmt-text (:nodes graph) selected-nid)
           vfx-note (when (and (= :skill mode) (= :vfx! (:stmt node)))
-                     (when-let [unknown (check/unknown-vfx-fields node (:by-id (fx-catalog/assemble)))]
+                     (when-let [unknown (check/unknown-vfx-fields node vfx-catalog-by-id)]
                        (when (seq unknown)
                          (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
       {:nid selected-nid :text (str text vfx-note)})))
