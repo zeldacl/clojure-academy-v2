@@ -33,6 +33,22 @@
               running the program"
       (is (= 24 (:max-iterations result))))))
 
+(deftest literal-nil-for-concrete-typed-param-is-a-compile-error-test
+  (testing "literal nil into a :double param must fail at compile, not as
+            convert-to-:double received nil at dispatch"
+    (let [fns (assoc fx/fns
+                     :test/strike
+                     {:params [{:name 'length :type :double}]
+                      :body '[(finish {:outcome :performed})]})
+          doc (surface/parse
+               "{:ability :nil-arg :tunables {}
+                 :do [(test/strike nil) (finish {:outcome :performed})]}")]
+      (try
+        (compile/compile! doc (assoc fx/opts :fns fns))
+        (is false "expected compile! to throw")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :nil-typed-param (:code (ex-data e)))))))))
+
 (deftest type-mismatch-is-reported-at-the-source-node-test
   (let [doc (surface/parse
              "{:ability :bad-type :tunables {:range {:type :double}}
@@ -96,8 +112,10 @@
   (testing "a :defn with NO :returns stays void -- binding its call via
             `let` is still a real error, not silently allowed now"
     (let [doc (surface/parse
-               "{:ability :void-bind :tunables {:damage {:type :double}}
-                 :do [(let x (ac/strike nil $damage)) (finish {:outcome :performed})]}")]
+               "{:ability :void-bind :tunables {:damage {:type :double} :range {:type :double}}
+                 :do [(let hit (target/raycast {:from ?caster/eye :dir ?caster/aim :distance $range}))
+                      (let x (ac/strike (:entity-id hit) $damage))
+                      (finish {:outcome :performed})]}")]
       (try
         (compile/compile! doc fx/opts)
         (is false "expected compile! to throw")

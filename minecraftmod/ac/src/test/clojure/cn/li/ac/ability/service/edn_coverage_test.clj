@@ -2,15 +2,18 @@
   "Direct structural coverage checks for the current V4 skill/VFX resources.
 
    This intentionally reads the shipped EDN instead of relying on a status
-   document or a regex. The checks cover the two migration invariants that
-   can otherwise regress silently: every skill resource is assembled by the
-   V4 compiler, and every authored :effect-id is present in the V4 VFX catalog."
+   document or a regex. The checks cover the migration invariants that can
+   otherwise regress silently: every skill resource assembles, every
+   authored :effect-id is present in the V4 VFX catalog, every graph
+   :component resolves, and every compiled IR capability is host-
+   dispatchable (unknown-query / nil-convert dispatch failures)."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog]
-            [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]))
+            [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]
+            [cn.li.combat.api :as combat-api]))
 
 (def ^:private main-registration-ids
   #{:arc-gen :blood-retrograde :body-intensify :current-charging
@@ -65,6 +68,26 @@
     (is (every? #(map? (:ir %)) (:skills assembled))
         "every shipped skill must have compiled V4 IR")))
 
+(deftest assembled-skill-ir-capabilities-are-host-dispatchable-test
+  (let [assembled (skills-catalog/assemble)
+        gaps (mapcat (fn [{:keys [id ir]}]
+                       (map #(assoc % :skill id)
+                            (combat-api/skill-ir-capability-gaps ir)))
+                     (:skills assembled))]
+    (is (empty? gaps)
+        (str "compiled skill IR references capabilities the host cannot dispatch: "
+             (vec gaps)))))
+
+(deftest v4-skill-graph-components-resolve-test
+  (let [failures (mapcat
+                  (fn [file]
+                    (map #(assoc % :skill (.getName ^java.io.File file))
+                         (combat-api/skill-unresolvable-components (read-edn-file file))))
+                  (resource-files "ac/skills-v4"))]
+    (is (empty? failures)
+        (str "V4 skill graph :component keywords that cannot resolve: "
+             (vec failures)))))
+
 (deftest every-skill-effect-id-is-registered-v4-test
   (let [skill-files (resource-files "ac/skills-v4")
         effect-ids (into #{}
@@ -101,6 +124,36 @@
                   (resource-files "ac/skills-v4"))]
     (is (empty? failures)
         (str "spawned VFX payload(s) omit required effect inputs: " failures))))
+
+(deftest spawned-vfx-payloads-honor-map-keys-test
+  "Effect `:inputs` may declare `:map-keys` (e.g. beam-arc-fade :ring-radius).
+   Literal skill payloads must be maps with those keys — skill catalog compile
+   also enforces this; this is a structural EDN safety net."
+  (let [effects (:by-id (fx-catalog/assemble))
+        failures (mapcat
+                  (fn [file]
+                    (keep (fn [node]
+                            (when (and (= :effect/vfx (:component node))
+                                       (= :spawn (get-in node [:inputs :operation])))
+                              (let [effect-id (get-in node [:inputs :effect-id])
+                                    payload (or (get-in node [:inputs :payload]) {})
+                                    input-specs (or (get-in effects [effect-id :document :inputs]) {})
+                                    bad (keep (fn [[k spec]]
+                                                (when-let [mk (:map-keys spec)]
+                                                  (let [v (get payload k)]
+                                                    (when (and (contains? payload k)
+                                                               (or (not (map? v))
+                                                                   (not (every? #(contains? v %) (keys mk)))))
+                                                      {:key k :expected mk :actual v}))))
+                                              input-specs)]
+                                (when (seq bad)
+                                  {:skill (.getName ^java.io.File file)
+                                   :effect-id effect-id
+                                   :bad (vec bad)}))))
+                          (collect-vfx-nodes (read-edn-file file))))
+                  (resource-files "ac/skills-v4"))]
+    (is (empty? failures)
+        (str "spawned VFX payload(s) disagree with effect :map-keys: " failures))))
 
 (deftest v4-vfx-resources-have-unique-ids-and-render-graphs-test
   (let [files (resource-files "ac/vfx-v4")

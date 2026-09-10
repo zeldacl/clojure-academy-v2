@@ -166,7 +166,9 @@
         {:keys [diagnostics]} (graph-compile/compile-skill! d {:vocab {:test/do {:params {}}}} :collect)]
     (is (empty? diagnostics))))
 
-(deftest rejects-branch-with-one-terminating-arm
+(deftest accepts-branch-with-one-terminating-arm
+  "One arm may finish at :end while the other continues; that is not a hidden
+   fan-in and must not be rejected (see graph-compile/collect join rules)."
   (let [d (assoc skill :graphs {:default {:on :activation/start
                                           :nodes {:n/start (n :n/start :start)
                                                   :n/branch (n :n/branch :branch)
@@ -177,9 +179,9 @@
                                                   (e :e/true-arm :exec [:n/branch :true] [:n/end :in])
                                                   (e :e/false-arm :exec [:n/branch :false] [:n/action :in])
                                                   (e :e/action-end :exec [:n/action :out] [:n/end2 :in])]}})
-        opts {:vocab {:test/do {:params {}}}}]
-    (is (thrown? clojure.lang.ExceptionInfo
-                 (graph-compile/compile-skill! d opts :collect)))))
+        opts {:vocab {:test/do {:params {}}}}
+        {:keys [diagnostics]} (graph-compile/compile-skill! d opts :collect)]
+    (is (empty? diagnostics))))
 
 (deftest known-op-links-use-arg-ports-not-type-keys
   (let [graph {:nodes {:n/start (n :n/start :start)
@@ -202,6 +204,63 @@
                     (= '$y (nth % 2)))
               (tree-seq coll? identity stmts))
         "pure op inputs wired at :arg0/:arg1 must not compile as nil")))
+
+(deftest defn-composite-accepts-argn-ports
+  (testing "lib :defn composites accept V4 :argN wiring (railgun beam-strike)"
+    (let [graph {:nodes {:n/start (n :n/start :start)
+                         :n/n-o (n :n/n-o :parameter-ref :key :origin)
+                         :n/n-len (n :n/n-len :parameter-ref :key :length)
+                         :n/n-strike (n :n/n-strike :component :component :test/strike
+                                       :inputs {:arg2 1.0})
+                         :n/end (n :n/end :end)}
+                 :links [(e :e/start :exec [:n/start :out] [:n/n-strike :in])
+                         (e :e/origin :data [:n/n-o :value] [:n/n-strike :arg0])
+                         (e :e/length :data [:n/n-len :value] [:n/n-strike :arg1])
+                         (e :e/out :exec [:n/n-strike :out] [:n/end :in])]}
+          d (assoc skill
+                   :parameters {:origin {:type :vec3 :default nil}
+                               :length {:type :double :default 0.0}}
+                   :graphs {:default (assoc graph :on :activation/start)})
+          opts {:fns {:test/strike {:params [{:name 'origin :type :vec3}
+                                             {:name 'length :type :double}
+                                             {:name 'step :type :double}]}}}
+          stmts (get-in (graph-compile/skill->core d opts) [:entries :default])]
+      (is (some #(and (list? %)
+                      (= 'test/strike (first %))
+                      (= '$origin (nth % 1))
+                      (= '$length (nth % 2))
+                      (= 1.0 (nth % 3)))
+                (tree-seq coll? identity stmts))
+          "composite :argN wiring must not lower to nil named params"))))
+
+(deftest inline-args-vector-expands-to-arg-ports
+  (testing "migrated nested :args vectors lower as positional op args"
+    (let [graph {:nodes {:n/start (n :n/start :start)
+                         :n/n-set (n :n/n-set :local-set :key :budget :operation :define
+                                     :inputs {:value {:nid :n/n-sel
+                                                      :component :math/select
+                                                      :args [{:nid :n/n-cond
+                                                              :ref [:local :coin?]}
+                                                             {:nid :n/n-a
+                                                              :ref [:parameter :a]}
+                                                             {:nid :n/n-b
+                                                              :ref [:parameter :b]}]}})
+                         :n/end (n :n/end :end)}
+                 :links [(e :e/start :exec [:n/start :out] [:n/n-set :in])
+                         (e :e/out :exec [:n/n-set :out] [:n/end :in])]}
+          d (assoc skill
+                   :parameters {:a {:type :double :default 1.0}
+                               :b {:type :double :default 2.0}}
+                   :graphs {:default (assoc graph :on :activation/start)})
+          stmts (get-in (graph-compile/skill->core d) [:entries :default])
+          forms (tree-seq coll? identity stmts)]
+      (is (some #(and (list? %)
+                      (= 'math/select (first %))
+                      (= 'coin? (nth % 1))
+                      (= '$a (nth % 2))
+                      (= '$b (nth % 3)))
+                forms)
+          "inline :args vector must expand to :arg0/:arg1/:arg2"))))
 
 (deftest foreach-index-as-lowers-to-each-binding-vector
   (let [graph {:nodes {:n/start (n :n/start :start)
@@ -264,3 +323,51 @@
     (is (= '$threshold (:fishing-exp-threshold payload)))
     (is (= (list :position 'wid) (:position payload))
         "nested :value/field fragments must lower to field access, not stay as maps")))
+
+(deftest effect-vfx-payload-map-keys-checked-at-skill-compile
+  (testing "scalar where :map-keys expects a map fails at skill->core"
+    (let [graph {:nodes {:n/start (n :n/start :start)
+                         :n/vfx (n :n/vfx :component :component :effect/vfx
+                                   :inputs {:effect-id :beam-arc-fade
+                                            :operation :spawn
+                                            :payload {:ring-radius 0.34}})
+                         :n/end (n :n/end :end)}
+                 :links [(e :e/start :exec [:n/start :out] [:n/vfx :in])
+                         (e :e/out :exec [:n/vfx :out] [:n/end :in])]}
+          d (assoc skill :graphs {:default (assoc graph :on :activation/start)})
+          opts {:effect-inputs {:beam-arc-fade
+                                {:ring-radius {:type :any
+                                               :map-keys {:from :double :to :double}}}}}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"map-keys"
+                            (graph-compile/skill->core d opts)))))
+  (testing "matching {:from :to} map compiles"
+    (let [graph {:nodes {:n/start (n :n/start :start)
+                         :n/vfx (n :n/vfx :component :component :effect/vfx
+                                   :inputs {:effect-id :beam-arc-fade
+                                            :operation :spawn
+                                            :payload {:ring-radius {:from 0.34 :to 0.34}}})
+                         :n/end (n :n/end :end)}
+                 :links [(e :e/start :exec [:n/start :out] [:n/vfx :in])
+                         (e :e/out :exec [:n/vfx :out] [:n/end :in])]}
+          d (assoc skill :graphs {:default (assoc graph :on :activation/start)})
+          opts {:effect-inputs {:beam-arc-fade
+                                {:ring-radius {:type :any
+                                               :map-keys {:from :double :to :double}}}}}]
+      (is (some? (graph-compile/skill->core d opts)))))
+  (testing "VFX value/field on context-ref requires :map-keys on that input"
+    (let [doc {:schema :ac/vfx-v4
+               :id :toy
+               :lifecycle {:mode :transient}
+               :inputs {:ring-radius {:type :any}}
+               :graphs {:render
+                        {:nodes {:n/start (n :n/start :start)
+                                 :n/ctx (n :n/ctx :context-ref :key :ring-radius)
+                                 :n/field (n :n/field :component :component :value/field
+                                             :inputs {:field :from})
+                                 :n/end (n :n/end :end)}
+                         :links [(e :e/start :exec [:n/start :out] [:n/end :in])
+                                 (e :e/field-value :data [:n/ctx :value] [:n/field :value])]}}}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"map-keys"
+                            (graph-compile/vfx->core doc))))))

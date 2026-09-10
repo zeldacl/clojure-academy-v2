@@ -65,13 +65,18 @@
 
 (defn- default-skill-icon-path
   "Convention used by shipped textures when a skill EDN omits :icon:
-   textures/abilities/<category>/skills/<stem>.png"
+   textures/abilities/<category>/skills/<stem>.png
+
+   Generic course passives (brain/mind) keep one shared icon bank under
+   textures/abilities/generic/skills/, matching main course-chain."
   [skill-id]
-  (when-let [cat (or (some-> (skill/raw-skill skill-id) :category-id)
-                     (get-in skill-config/skill-definitions-by-id [skill-id :category-id]))]
-    (let [stem (or (get icon-stem-overrides skill-id)
-                   (str/replace (name skill-id) "-" "_"))]
-      (str "textures/abilities/" (name cat) "/skills/" stem ".png"))))
+  (let [stem (or (get icon-stem-overrides skill-id)
+                 (when skill-id (str/replace (name skill-id) "-" "_")))]
+    (if (#{"brain_course" "brain_course_advanced" "mind_course"} stem)
+      (str "textures/abilities/generic/skills/" stem ".png")
+      (when-let [cat (or (some-> (skill/raw-skill skill-id) :category-id)
+                         (get-in skill-config/skill-definitions-by-id [skill-id :category-id]))]
+        (str "textures/abilities/" (name cat) "/skills/" stem ".png")))))
 
 (defn get-skill-icon-path
 	[skill-id]

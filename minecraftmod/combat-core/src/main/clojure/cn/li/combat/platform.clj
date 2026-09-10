@@ -170,8 +170,10 @@
              (<= pd (* 0.5 pitch-span)))))))
 
 (defn entity-select!
-  [{:keys [world-id owner shape filter projection limit sort]} _frame]
-  (let [line? (= :line (:type shape))
+  [{:keys [world-id owner shape projection limit sort]
+    entity-filter :filter} _frame]
+  (let [entity-filter (or entity-filter {})
+        line? (= :line (:type shape))
         line-start (point (:start shape))
         line-end (point (:end shape))
         center (point (or (:center shape) (:origin shape) line-start))
@@ -183,11 +185,11 @@
         distance (double (or (:distance shape) (:range shape) radius))
         limit (max 0 (min 256 (long (or limit 256))))
         owner (some-> owner str)
-        types (set (or (:entity-types filter) []))
-        ids (set (map str (or (:entity-ids filter) [])))
-        excluded (set (map str (or (:excluded-entity-ids filter) [])))
-        excluded-tags (set (or (:excluded-tags filter) []))
-        required-tags (set (or (:required-tags filter) []))
+        types (set (or (:entity-types entity-filter) []))
+        ids (set (map str (or (:entity-ids entity-filter) [])))
+        excluded (set (map str (or (:excluded-entity-ids entity-filter) [])))
+        excluded-tags (set (or (:excluded-tags entity-filter) []))
+        required-tags (set (or (:required-tags entity-filter) []))
         difficulty-map (reduce (fn [result entry]
                                  (if (string? entry)
                                    (let [index (.lastIndexOf ^String entry ":")]
@@ -196,9 +198,9 @@
                                                     (Double/parseDouble (subs entry (inc index))))
                                             (catch Throwable _ result))
                                        result))
-                                   result)) {} (or (:difficulty-entries filter) []))
-        owner-filter (some-> (or (:owner filter) (:owner-id filter)) str)
-        living-filter (when (contains? filter :living?) (boolean (:living? filter)))]
+                                   result)) {} (or (:difficulty-entries entity-filter) []))
+        owner-filter (some-> (or (:owner entity-filter) (:owner-id entity-filter)) str)
+        living-filter (when (contains? entity-filter :living?) (boolean (:living? entity-filter)))]
     (if (and world-id center (pos? limit)
              (if cone?
                (and direction eye-origin (<= 0.0 distance 128.0))
@@ -1608,6 +1610,62 @@
      :blocks blocks
      :reflection-policy reflection-policy}))
 
+(defn- rng-cursor!
+  "Advance and return the per-dispatch RNG cursor carried on the host
+   input map (:rng/cursor volatile). engine-v2 installs the cursor before
+   dispatch; when missing (unit tests with a bare host), fall back to a
+   fresh stream from :capabilities :rng/seed so handlers stay pure-ish."
+  [frame-ctx]
+  (let [input (or (:frame frame-ctx) {})
+        cursor (or (:rng/cursor input)
+                   (volatile! (long (or (get-in input [:capabilities :rng/seed]) 0))))]
+    (vswap! cursor rng/next-seed)
+    (long @cursor)))
+
+(defn random-chance!
+  [{:keys [probability]} frame-ctx]
+  (< (rng/unit-double (rng-cursor! frame-ctx))
+     (double (or probability 0.0))))
+
+(defn random-int!
+  [{:keys [min max]} frame-ctx]
+  (rng/bounded-int (rng-cursor! frame-ctx)
+                   (long (or min 0))
+                   (long (or max 0))))
+
+(defn random-uniform!
+  [{:keys [min max]} frame-ctx]
+  (rng/uniform (rng-cursor! frame-ctx)
+               (double (or min 0.0))
+               (double (or max 0.0))))
+
+(defn random-item!
+  "Pick one element from :items with the per-dispatch RNG cursor
+   (vocab :data/random-item)."
+  [{:keys [items]} frame-ctx]
+  (let [xs (vec items)
+        n (count xs)]
+    (when (pos? n)
+      (nth xs (rng/bounded-int (rng-cursor! frame-ctx) 0 (dec n))))))
+
+(defn scatter-end!
+  "Random point on a cone around :direction from :origin at :range
+   (vocab :kernel/scatter-end). Uses the same per-dispatch RNG cursor as
+   :random/* so seeded rolls stay consistent within one activation."
+  [{:keys [origin direction range angle-degrees]} frame-ctx]
+  (let [o (or (point origin) [0.0 0.0 0.0])
+        d (normalize-vector (or (point direction) [0.0 0.0 1.0]))
+        range (double (or range 0.0))
+        half (double (or angle-degrees 0.0))
+        yaw (* half (- (* 2.0 (rng/unit-double (rng-cursor! frame-ctx))) 1.0))
+        pitch (* half (- (* 2.0 (rng/unit-double (rng-cursor! frame-ctx))) 1.0))
+        dir (fan-direction d yaw pitch)
+        [ox oy oz] o
+        [dx dy dz] dir]
+    {:vec3 [(+ ox (* dx range))
+            (+ oy (* dy range))
+            (+ oz (* dz range))]}))
+
 (defn query-handlers []
   {:raycast raycast!
    :item/held item-held!
@@ -1617,7 +1675,21 @@
    :saved-location saved-location!
    :owner/snapshot owner-snapshot!
    :entity/snapshot entity-snapshot!
-   :kernel/terrain-wave-plan terrain-propagate!})
+   :kernel/terrain-wave-plan terrain-propagate!
+   ;; Vocab declares these as queries (:returns non-nil). Registering them
+   ;; only under actions made release-phase beam composites throw
+   ;; "unknown query capability" the moment they ran.
+   :kernel/trace-beam beam-trace!
+   :kernel/scatter-end scatter-end!
+   :random/chance random-chance!
+   :random/int random-int!
+   :random/uniform random-uniform!
+   :data/random-item random-item!
+   ;; entity/spawn returns a value (spawned id / handle) — compiler emits
+   ;; :query when :returns is set; must not live only under actions.
+   :entity/spawn spawn-entity!
+   ;; Same shape as entity/spawn: vocab :returns :any → :query at compile.
+   :block/break break!})
 
 (defn action-handlers []
   {:entity/damage damage!
@@ -1625,7 +1697,6 @@
    :entity/status entity-status!
 
    :entity/impulse entity-impulse!
-   :block/break break!
    :block/set set-block!
    :world/sound sound!
    :world/explosion explosion!
@@ -1636,7 +1707,6 @@
    :inventory/consume consume-item!
    :inventory/settle settle-item!
    :inventory/place-or-drop place-or-drop-item!
-   :entity/spawn spawn-entity!
    :entity/discard discard-entity!
    :entity/configure configure-entity!
    :entity/teleport teleport-entity!
@@ -1648,12 +1718,13 @@
    :projectile/redirect projectile-redirect!
 
    ;; Internal kernel capabilities are not exported by schema-export.
+   ;; Value-returning kernels (:kernel/trace-beam, :kernel/terrain-wave-plan,
+   ;; :kernel/scatter-end) live in query-handlers — vocab :returns makes the
+   ;; compiler emit :query, not :action.
    :kernel/terrain-break-area area-break!
    :kernel/terrain-random-break random-break!
    :kernel/terrain-apply-break-budget break-budget!
-   :kernel/motion-radial-impulse radial-impulse!
-   :kernel/trace-beam beam-trace!
-   :kernel/terrain-wave-plan terrain-propagate!})
+   :kernel/motion-radial-impulse radial-impulse!})
 
 (defn install!
   "Register Combat Core capabilities with an injected delayed-work scheduler.

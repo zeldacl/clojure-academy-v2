@@ -73,7 +73,12 @@
          (skill-query/get-skill-icon-path :railgun)))
   (sk/register-skill! (dissoc (minimal-skill :shift-teleport :teleporter :shift-teleport) :icon))
   (is (= "academy:textures/abilities/teleporter/skills/shift_tp.png"
-         (skill-query/get-skill-icon-path :shift-teleport))))
+         (skill-query/get-skill-icon-path :shift-teleport)))
+  (sk/register-skill! (dissoc (minimal-skill :electromaster/brain-course :electromaster :brain-course
+                                             :level 3)
+                              :icon))
+  (is (= "academy:textures/abilities/generic/skills/brain_course.png"
+         (skill-query/get-skill-icon-path :electromaster/brain-course))))
 
 (deftest learning-cost-and-developer-type-test
   (is (= 5.0 (progression/learning-cost 2))) ;; 3 + 2²×0.5

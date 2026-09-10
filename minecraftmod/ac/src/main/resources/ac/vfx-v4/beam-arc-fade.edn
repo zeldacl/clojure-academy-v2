@@ -9,7 +9,7 @@
   :beam-at {:type :int},
   :arc-radius {:type :any},
   :start {:type :vec3},
-  :ring-radius {:type :any},
+  :ring-radius {:type :any, :map-keys {:from :double, :to :double}},
   :arc-life-ticks {:type :int},
   :fade-to-tick {:type :int},
   :arc-spacing {:type :any},
