@@ -1,0 +1,36 @@
+;; Shared skeleton for the two visual editors (node editor, spell composer):
+;; header / palette+stage+inspector row / diagnostics / footer. Panel
+;; widths/heights are bound to state, never literal, so the SAME fragment
+;; serves both screens' different design sizes and open-widths -- the
+;; include site supplies these via cn.li.ability.editor.chrome/panel-geometry
+;; (a pure function; see that namespace for why width, not :visible, is what
+;; reclaims a collapsed panel's space). See docs/06-gui/NODE_EDITOR.md.
+{:fragment/id :academy.shared/editor-shell
+ :slots/required [:header :palette :stage :inspector :diagnostics :footer]
+ :state-schema {:shell-header-h :number :shell-footer-h :number
+                :shell-body-h :number :shell-diagnostics-h :number
+                :shell-palette-w :number :shell-stage-w :number :shell-inspector-w :number}
+ :root
+ {:type :column :key :shell/root
+  :children
+  [{:type :absolute :key :shell/header
+    :bind {:height [:state :shell-header-h]}
+    :children [{:type :slot :name :header}]}
+   {:type :row :key :shell/body
+    :bind {:height [:state :shell-body-h]}
+    :children
+    [{:type :absolute :key :shell/palette
+      :bind {:width [:state :shell-palette-w] :height [:state :shell-body-h]}
+      :children [{:type :slot :name :palette}]}
+     {:type :absolute :key :shell/stage
+      :bind {:width [:state :shell-stage-w] :height [:state :shell-body-h]}
+      :children [{:type :slot :name :stage}]}
+     {:type :absolute :key :shell/inspector
+      :bind {:width [:state :shell-inspector-w] :height [:state :shell-body-h]}
+      :children [{:type :slot :name :inspector}]}]}
+   {:type :absolute :key :shell/diagnostics
+    :bind {:height [:state :shell-diagnostics-h]}
+    :children [{:type :slot :name :diagnostics}]}
+   {:type :absolute :key :shell/footer
+    :bind {:height [:state :shell-footer-h]}
+    :children [{:type :slot :name :footer}]}]}}
