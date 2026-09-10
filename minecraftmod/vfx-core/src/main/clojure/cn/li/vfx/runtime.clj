@@ -214,24 +214,24 @@
           f))))
 
 (defn sample-frame!
-  "{instance-key {:scene [op ...] :emitters [{:layout ... :buffer ...} ...]}}
-   for every live instance -- the caller (a future presentation/render
-   bridge) turns :scene ops and each emitter's :buffer contents into
-   actual draw calls; this namespace only owns instance lifecycle and
-   simulation, not rendering."
+  "Sample live scene/emitter state; one-shot audio is emitted only at age 0."
   [store]
   (into {}
         (map (fn [[k instance]]
-               [k {:scene (when-let [program (:scene-program instance)]
-                           (scene/sample-into!
-                            program (scene-frame-for store (:effect-id instance) program)
-                            {:capabilities
-                             (assoc (:user instance)
-                                    :age (double (age-of instance))
-                                    :progress (progress-of instance)
-                                    :seed (long (or (:seed instance) 0))
-                                    :source-player-id (:owner instance))}))
-                  :emitters (:render-views instance)}]))
+               (let [age (age-of instance)
+                     scene (when-let [program (:scene-program instance)]
+                             (scene/sample-into!
+                              program (scene-frame-for store (:effect-id instance) program)
+                              {:capabilities
+                               (assoc (:user instance)
+                                      :age (double age)
+                                      :progress (progress-of instance)
+                                      :seed (long (or (:seed instance) 0))
+                                      :source-player-id (:owner instance))}))]
+                 [k {:scene (if (zero? age)
+                              scene
+                              (vec (remove #(= :audio-one-shot (:kind %)) (or scene []))))
+                    :emitters (:render-views instance)}])))
         @(:instances store)))
 
 ;; ============================================================
