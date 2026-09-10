@@ -106,6 +106,58 @@
     (testing "state writes accumulate as patches for the caller to commit, never mutate persistent state directly"
       (is (= [{:key :mode :value :electric}] (into [] (.-stateWrites frame)))))))
 
+(deftest map-args-with-many-keys-falls-back-past-array-map-threshold-test
+  (testing "B4: compile-args' map branch now builds the result via a
+            compile-time key template + clojure.lang.RT/mapUniqueKeys
+            instead of (into {} ...) -- prove it still produces a
+            correct, complete map well past PersistentArrayMap's usual
+            small-arity threshold, not just for the 1-4 key cases every
+            other test here happens to use."
+    (let [ks [:a :b :c :d :e :f :g :h :i :j :k :l]
+          consts (into [] (map double (range (count ks))))
+          host {:query! (fn [_cap args _fr] args) :command! (fn [_ _ _])}
+          ir {:ir/version 1 :id :many-args-test :registers {:doubles 0 :longs 0 :booleans 0 :objects 1}
+              :constants {:doubles consts :longs [] :booleans [] :objects []}
+              :entries {:default 0}
+              :blocks [{:id 0 :instrs
+                        [{:op :query :nid "n1" :dst (reg :objects 0) :node :test/many :capability :test/many
+                          :args (into {} (map-indexed (fn [i k] [k (const :doubles i)])) ks)}
+                         {:op :finish :nid "n2" :outcome :performed :next-phase nil :end-ability? true}]}]}
+          program (emit/compile-program ir {:invoke-op invoke-op :host host})
+          frame (emit/new-frame program nil)]
+      (emit/dispatch! program :default frame)
+      (let [result (aget ^objects (.-objects frame) 0)]
+        (is (= (set ks) (set (keys result))))
+        (is (= (zipmap ks (map double (range (count ks)))) result))))))
+
+(deftest cloned-template-does-not-leak-between-dispatches-test
+  (testing "B4: the map-args template Object[] is built ONCE at compile
+            time and cloned per dispatch -- prove two dispatches against
+            two DIFFERENT frames (different :tunables) each get their own
+            correct map, and the first dispatch's already-returned map is
+            not mutated by the second dispatch running afterward (would
+            only happen if aclone were missing and both dispatches wrote
+            into the SAME shared array)."
+    (let [ir {:ir/version 1 :id :no-leak-test :tunable-types {:v :double}
+              :registers {:doubles 1 :longs 0 :booleans 0 :objects 1}
+              :constants {:doubles [] :longs [] :booleans [] :objects []}
+              :entries {:default 0}
+              :blocks [{:id 0 :instrs
+                        [{:op :tun :nid "n1" :dst (reg :doubles 0) :key :v}
+                         {:op :query :nid "n2" :dst (reg :objects 0) :node :test/echo :capability :test/echo
+                          :args {:value (reg :doubles 0)}}
+                         {:op :finish :nid "n3" :outcome :performed :next-phase nil :end-ability? true}]}]}
+          host {:query! (fn [_cap args _fr] args) :command! (fn [_ _ _])}
+          program (emit/compile-program ir {:invoke-op invoke-op :host host})
+          frame-a (emit/new-frame program {:tunables {:v 1.0}})
+          _ (emit/dispatch! program :default frame-a)
+          result-a (aget ^objects (.-objects frame-a) 0)
+          frame-b (emit/new-frame program {:tunables {:v 2.0}})
+          _ (emit/dispatch! program :default frame-b)
+          result-b (aget ^objects (.-objects frame-b) 0)]
+      (is (= {:value 1.0} result-a) "the first dispatch's result must be unaffected by the second running afterward")
+      (is (= {:value 2.0} result-b)))))
+
 (deftest convert-non-number-fails-loudly-test
   "Regression: feeding a map (e.g. {:from :to} ring-radius) into a :double
    convert used to ClassCastException inside RT.doubleCast with no context.

@@ -166,3 +166,106 @@
       (do (when-not (known-op? op-name)
             (throw (ex-info "unknown pure op" {:op op-name})))
           (expr/evaluate op-name (vec args))))))
+
+;; --- primitive fast path for mcmod's emitter (perf plan Phase B) -----------
+;;
+;; The general :pure path above goes through invoke, an arg VECTOR, and
+;; cn.li.node.expr/evaluate's own arg-position dispatch -- every read off an
+;; ExecutionFrame's :doubles/:longs bank is already a primitive `aget`, but
+;; it gets BOXED the moment it crosses that (fn [frame] ...) IFn.invoke
+;; boundary, then boxed again going into the arg vector, then unboxed again
+;; inside expr/evaluate's own (double (nth args n)) calls. Measured cost:
+;; 4594 ns / 7944 B for an 11-op :math/add chain.
+;;
+;; node-core cannot import mcmod's ExecutionFrame or any other mcmod type
+;; (verifyNodeCoreDependencyDirection) -- but it does not need to: a plain
+;; Clojure fn hinted ^double/^long on its args and return is compiled by
+;; Clojure itself into an implementation of a clojure.lang.IFn$xyz
+;; interface (IFn$DDD for two double args returning double, IFn$OD for one
+;; Object arg returning double, etc.) -- clojure.lang is a dependency both
+;; node-core and mcmod already have, so this is a real zero-new-edge seam,
+;; not a workaround (verified: every shape below actually implements the
+;; interface effect-emit casts it to, confirmed with instance? before this
+;; landed).
+;;
+;; Every entry here duplicates one arithmetic expression already defined in
+;; cn.li.node.expr (never anything with real logic in it like SplitMix64 or
+;; vec3-components, which stay single-sourced there per
+;; verifyNodeKernelSingleSource/verifyNoDuplicateUtilities) -- correctness
+;; is guaranteed by cn.li.mcmod.runtime.effect-emit's own differential test,
+;; which dispatches the SAME real IR through the generic path and this
+;; specialized path and asserts byte-for-byte agreement, not by this
+;; namespace's own tests alone.
+;;
+;; :arg-banks/:dst-bank are cn.li.node.types/bank values -- effect-emit
+;; matches them against an IR instruction's actual [kind bank slot]
+;; register references before ever using :fn, and falls back to the
+;; generic invoke path on any mismatch (an op present here compiled
+;; against unexpected banks, or simply absent from this table).
+(def prim-table
+  "op-name -> {:arg-banks [bank...] :dst-bank bank :fn primitive-fn}.
+   Only :math/* (minus :select, whose :any args have no fixed bank) and
+   :long/* are covered -- vec3/collection/value/pair/map ops read and
+   write the :objects bank, which cn.li.mcmod.runtime.effect-emit's
+   EXISTING generic reader already returns unboxed (an Object array read
+   is not a primitive-boxing operation), so specializing them would not
+   remove any boxing, only an arg-vector allocation -- not worth the
+   combinatorial surface this table would otherwise need. :bool/* is the
+   same story for a different reason: Clojure has no primitive `boolean`
+   letter in its IFn family (confirmed: this repo's own clojure.jar has
+   every D/L/O combination up to 5 args, never a B), so a bool/and|or|not
+   specialization could only save the arg-vector allocation, not any
+   unboxing -- Boolean/TRUE and Boolean/FALSE are cached singletons, so
+   there is nothing to unbox in the first place."
+  {:math/add {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (+ a b))}
+   :math/sub {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (- a b))}
+   :math/mul {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (* a b))}
+   :math/div {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (if (zero? b) 0.0 (/ a b)))}
+   :math/min {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (min a b))}
+   :math/max {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (max a b))}
+   :math/pow {:arg-banks [:doubles :doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a ^double b] (Math/pow a b))}
+   :math/abs {:arg-banks [:doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a] (Math/abs a))}
+   :math/floor {:arg-banks [:doubles] :dst-bank :doubles
+                :fn (fn ^double [^double a] (Math/floor a))}
+   :math/sqrt {:arg-banks [:doubles] :dst-bank :doubles
+               :fn (fn ^double [^double a] (Math/sqrt a))}
+   :math/sin {:arg-banks [:doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a] (Math/sin a))}
+   :math/cos {:arg-banks [:doubles] :dst-bank :doubles
+              :fn (fn ^double [^double a] (Math/cos a))}
+   ;; See cn.li.node.expr's matching comment: the one legitimate
+   ;; double->long narrowing case.
+   :math/floor-long {:arg-banks [:doubles] :dst-bank :longs
+                      :fn (fn ^long [^double a] (long (Math/floor a)))}
+   :math/clamp {:arg-banks [:doubles :doubles :doubles] :dst-bank :doubles
+                :fn (fn ^double [^double v ^double lo ^double hi] (max lo (min hi v)))}
+   :math/lerp {:arg-banks [:doubles :doubles :doubles] :dst-bank :doubles
+               :fn (fn ^double [^double lo ^double hi ^double t] (+ lo (* t (- hi lo))))}
+   :math/lt {:arg-banks [:doubles :doubles] :dst-bank :booleans
+             :fn (fn [^double a ^double b] (< a b))}
+   :math/lte {:arg-banks [:doubles :doubles] :dst-bank :booleans
+              :fn (fn [^double a ^double b] (<= a b))}
+   :math/eq {:arg-banks [:doubles :doubles] :dst-bank :booleans
+             :fn (fn [^double a ^double b] (= a b))}
+   :math/gte {:arg-banks [:doubles :doubles] :dst-bank :booleans
+              :fn (fn [^double a ^double b] (>= a b))}
+   :math/gt {:arg-banks [:doubles :doubles] :dst-bank :booleans
+             :fn (fn [^double a ^double b] (> a b))}
+   :long/add {:arg-banks [:longs :longs] :dst-bank :longs
+              :fn (fn ^long [^long a ^long b] (+ a b))}
+   :long/sub {:arg-banks [:longs :longs] :dst-bank :longs
+              :fn (fn ^long [^long a ^long b] (- a b))}
+   :long/mul {:arg-banks [:longs :longs] :dst-bank :longs
+              :fn (fn ^long [^long a ^long b] (* a b))}
+   :long/min {:arg-banks [:longs :longs] :dst-bank :longs
+              :fn (fn ^long [^long a ^long b] (min a b))}
+   :long/max {:arg-banks [:longs :longs] :dst-bank :longs
+              :fn (fn ^long [^long a ^long b] (max a b))}})

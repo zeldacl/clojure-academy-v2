@@ -22,11 +22,17 @@ public final class ExecutionFrame {
      *  commits these to the owning session store after a dispatch finishes
      *  -- this carrier never mutates persistent state itself. */
     public final ArrayList<Object> stateWrites;
-    /** Read-only per-dispatch input a :tun/:cap/:state-read instruction
-     *  reads from (a plain Clojure map, e.g. {:tunables {} :capabilities {}
-     *  :state {}}); shape is owned entirely by whatever compiled the
-     *  program, not by this carrier. */
-    public final Object input;
+    /** Per-dispatch input a :tun/:cap/:state-read instruction reads from (a
+     *  plain Clojure map, e.g. {:tunables {} :capabilities {} :state {}});
+     *  shape is owned entirely by whatever compiled the program, not by
+     *  this carrier. Read-only WITHIN one dispatch, but not final: a
+     *  caller that owns a frame's whole lifecycle (see cn.li.mcmod.runtime.
+     *  effect-emit/reset-frame!) may reuse it across dispatches against
+     *  DIFFERENT input, avoiding a fresh frame allocation per dispatch --
+     *  correctness there is the caller's responsibility (no concurrent
+     *  in-flight dispatch against the same frame), same as reusing any of
+     *  the mutable arrays/lists below already required. */
+    public Object input;
     public final int[] touchedObjects;
     public int touchedCount;
     /** Set once by a :finish instruction (e.g. {:outcome :performed

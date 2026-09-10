@@ -165,6 +165,40 @@
     (is (not (identical? (:scene-program before) (:scene-program after)))
         "reload-resources! must force a fresh compile, not keep serving the old cached program")))
 
+(def ^:private beam-scene-registry
+  {:beam-effect
+   {:scene "{:ability :probe :do [(beam {:start ?start :end ?end :grow-ticks 4})
+                                  (finish {:outcome :performed})]}"
+    :user-types {:start :vec3 :end :vec3}
+    :emitters []
+    :lifecycle :transient}})
+
+(deftest two-instances-of-the-same-effect-share-a-frame-without-leaking-test
+  (testing "B5: scene-frame-for caches one ExecutionFrame per effect-id,
+            shared across every live instance of that effect -- prove
+            sample-frame! (one pass over ALL instances, reusing the frame
+            for each) still gives each instance its OWN correct :scene
+            ops, keyed to its OWN :user values, not a previous instance's
+            leftover state from sharing the same underlying frame."
+    (let [s (runtime/create-store beam-scene-registry)]
+      (runtime/ensure! s [:a] {:effect-id :beam-effect :seed 1
+                               :user {:start {:x 0.0 :y 0.0 :z 0.0} :end {:x 1.0 :y 0.0 :z 0.0}}})
+      (runtime/ensure! s [:b] {:effect-id :beam-effect :seed 2
+                               :user {:start {:x 9.0 :y 9.0 :z 9.0} :end {:x 8.0 :y 8.0 :z 8.0}}})
+      (let [sampled (runtime/sample-frame! s)
+            beam-a (first (get-in sampled [[:a] :scene]))
+            beam-b (first (get-in sampled [[:b] :scene]))]
+        (is (= {:x 0.0 :y 0.0 :z 0.0} (:start beam-a)))
+        (is (= {:x 1.0 :y 0.0 :z 0.0} (:end beam-a)))
+        (is (= {:x 9.0 :y 9.0 :z 9.0} (:start beam-b)))
+        (is (= {:x 8.0 :y 8.0 :z 8.0} (:end beam-b)))
+        ;; re-sample in the OPPOSITE order -- the same shared frame gets
+        ;; reused in a different sequence; the leak this guards against
+        ;; would be order-dependent, so both orderings must stay correct
+        (let [resampled (into {} (reverse (seq (runtime/sample-frame! s))))]
+          (is (= beam-a (first (get-in resampled [[:a] :scene]))))
+          (is (= beam-b (first (get-in resampled [[:b] :scene])))))))))
+
 (deftest independent-stores-do-not-share-a-scene-program-cache-test
   (testing "cn.li.ability.client-vfx-v2's preview runtime is built from a
             fresh create-runtime call on the SAME registry as production

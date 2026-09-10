@@ -113,9 +113,13 @@
 (defn compile-program
   "IR -> CompiledProgram, wired to `host` (see
    cn.li.mcmod.runtime.effect-emit's namespace docstring for the exact
-   {:query! :command! :flush!} shape a real host must satisfy)."
+   {:query! :command! :flush!} shape a real host must satisfy). :prim-ops
+   ops/prim-table gives effect-emit a primitive fast path for :math/* and
+   :long/* :pure instructions -- see that table's own docstring; combat
+   content is not required to use it, the generic invoke-op path still
+   covers every op regardless."
   [ir host]
-  (emit/compile-program ir {:invoke-op invoke-op :host host}))
+  (emit/compile-program ir {:invoke-op invoke-op :prim-ops ops/prim-table :host host}))
 
 (defn dispatch!
   "Run `program` from `entry` against a fresh frame built for `input`.

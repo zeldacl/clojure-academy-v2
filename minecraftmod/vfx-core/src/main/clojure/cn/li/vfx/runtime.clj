@@ -28,14 +28,15 @@
    prove the model."
   (:require [cn.li.vfx.scene :as scene]
             [cn.li.vfx.compile :as pcompile]
-            [cn.li.vfx.frame :as frame]))
+            [cn.li.vfx.frame :as frame]
+            [cn.li.mcmod.runtime.effect-emit :as emit]))
 
 (defn create-store
   "registry: {effect-id effect-decl}, effect-decl:
      {:scene dsl-text-or-nil :user-types {cap-key type}
       :emitters [emitter-decl ...]}"
   [registry]
-  {:registry registry :instances (atom {}) :scene-programs (atom {})})
+  {:registry registry :instances (atom {}) :scene-programs (atom {}) :scene-frames (atom {})})
 
 (defn- compiled-scene-program
   "The compiled scene program for effect-id, built once per store and
@@ -164,6 +165,24 @@
   (let [duration (double (or (:duration-ticks user) 1))]
     (max 0.0 (min 1.0 (/ (double (or age 0)) (max 1.0 duration))))))
 
+(defn- scene-frame-for
+  "The cached, reusable ExecutionFrame for effect-id's compiled scene
+   program -- one per store, same granularity and rationale as
+   compiled-scene-program's own cache (every instance of the same
+   effect-id shares one program, so they can safely share one
+   correctly-sized frame too: cn.li.vfx.scene/sample-into! fully
+   snapshots a frame's .-actions into a persistent vector before this
+   store's single-threaded sample-frame! loop ever reuses it for the
+   next instance -- see cn.li.mcmod.runtime.effect-emit/reset-frame!'s
+   own docstring for why that ordering is the actual safety
+   requirement, not merely single-threadedness)."
+  [store effect-id program]
+  (let [cache (:scene-frames store)]
+    (or (get @cache effect-id)
+        (let [f (emit/new-frame program nil)]
+          (swap! cache assoc effect-id f)
+          f))))
+
 (defn sample-frame!
   "{instance-key {:scene [op ...] :emitters [{:layout ... :buffer ...} ...]}}
    for every live instance -- the caller (a future presentation/render
@@ -174,13 +193,14 @@
   (into {}
         (map (fn [[k instance]]
                [k {:scene (when-let [program (:scene-program instance)]
-                           (scene/sample! program
-                                          {:capabilities
-                                           (assoc (:user instance)
-                                                  :age (double (:age instance))
-                                                  :progress (progress-of instance)
-                                                  :seed (long (or (:seed instance) 0))
-                                                  :source-player-id (:owner instance))}))
+                           (scene/sample-into!
+                            program (scene-frame-for store (:effect-id instance) program)
+                            {:capabilities
+                             (assoc (:user instance)
+                                    :age (double (:age instance))
+                                    :progress (progress-of instance)
+                                    :seed (long (or (:seed instance) 0))
+                                    :source-player-id (:owner instance))}))
                   :emitters (mapv #(select-keys % [:layout :buffer]) (:emitters instance))}]))
         @(:instances store)))
 
@@ -361,12 +381,17 @@
 (defn resource-generation [rt] @(:generation rt))
 (defn reload-resources!
   "Bumps the resource generation AND drops the cached scene programs
-   (compiled-scene-program above) -- resources changing is exactly the
+   (compiled-scene-program above) plus their cached ExecutionFrames
+   (scene-frame-for above) -- a stale frame after reload would be sized
+   for the OLD program's register counts, not the freshly-recompiled
+   one's, so it must be invalidated in lockstep with its program, not
+   left to be lazily replaced later. Resources changing is exactly the
    signal that a cached compile might now be stale; the caches are keyed
    by effect-id only, with no generation dimension, precisely because
    reload is the one path expected to invalidate them wholesale."
   [rt generation]
   (reset! (:scene-programs rt) {})
+  (reset! (:scene-frames rt) {})
   (reset! (:generation rt) generation)
   generation)
 (defn registered-effects [rt] (set (keys (:registry rt))))

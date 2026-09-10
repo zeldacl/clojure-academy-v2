@@ -1,6 +1,7 @@
 (ns cn.li.vfx.scene-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.vfx.scene :as scene]))
+            [cn.li.vfx.scene :as scene]
+            [cn.li.mcmod.runtime.effect-emit :as emit]))
 
 (def ^:private arc-strike-scene
   "{:ability :arc-strike-scene
@@ -28,6 +29,25 @@
       (is (= 4 (:grow-ticks (first ops)))))
     (testing "sampling has no side effects -- resampling the same input is idempotent"
       (is (= ops (scene/sample! program input))))))
+
+(deftest sample-into-reuses-a-frame-without-leaking-between-calls-test
+  (testing "B5: sample-into! (unlike sample!) takes a caller-owned frame
+            it resets and reuses across calls -- prove two calls against
+            DIFFERENT inputs, sharing the SAME frame object, each produce
+            the correct ops for their own input, matching what sample!
+            (fresh frame every call) would have produced."
+    (let [ir (scene/compile-doc! arc-strike-scene {:start :vec3 :end :vec3})
+          program (scene/compile-program ir)
+          input-a {:capabilities {:start {:x 0.0 :y 1.0 :z 0.0} :end {:x 0.0 :y 1.0 :z 5.0}
+                                  :age 0.0 :progress 0.0}}
+          input-b {:capabilities {:start {:x 9.0 :y 9.0 :z 9.0} :end {:x 1.0 :y 2.0 :z 3.0}
+                                  :age 0.0 :progress 0.0}}
+          frame (emit/new-frame program nil)
+          ops-a (scene/sample-into! program frame input-a)
+          ops-b (scene/sample-into! program frame input-b)]
+      (is (= (scene/sample! program input-a) ops-a))
+      (is (= (scene/sample! program input-b) ops-b))
+      (is (not= ops-a ops-b) "sanity: the two inputs really do produce different ops"))))
 
 (deftest v4-render-entry-samples-without-default
   "Regression: compile-v4-document! emits entry :render, not :default.

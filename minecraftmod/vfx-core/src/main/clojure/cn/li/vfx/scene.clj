@@ -55,9 +55,11 @@
 
 (defn compile-program
   "IR -> CompiledProgram. No :query!/:flush! needed -- scene sampling
-   never reads a host, only constructs values."
+   never reads a host, only constructs values. :prim-ops ops/prim-table
+   gives effect-emit a primitive fast path for :math/* and :long/*
+   :pure instructions -- see that table's own docstring."
   [ir]
-  (emit/compile-program ir {:invoke-op ops/invoke :host host}))
+  (emit/compile-program ir {:invoke-op ops/invoke :prim-ops ops/prim-table :host host}))
 
 ;; ---------------------------------------------------------------------------
 (defn compile-v4-document!
@@ -85,6 +87,17 @@
   [program input]
   (vec (.-actions (emit/dispatch! program (sample-entry program)
                                   (emit/new-frame program input)))))
+
+(defn sample-into!
+  "As sample!, but reuses `frame` (see cn.li.mcmod.runtime.effect-emit/
+   reset-frame!) instead of allocating a fresh one every call -- the
+   caller (cn.li.vfx.runtime, one frame cached per effect-id) owns frame's
+   whole lifecycle and must not call this concurrently for the same
+   frame. `frame` must already be sized for `program` (built via new-frame
+   against the SAME program, or one with identical register counts)."
+  [program frame input]
+  (vec (.-actions (emit/dispatch! program (sample-entry program)
+                                  (emit/reset-frame! frame input)))))
 
 
 
