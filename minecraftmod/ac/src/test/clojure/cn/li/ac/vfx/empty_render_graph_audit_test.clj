@@ -1,13 +1,13 @@
 (ns cn.li.ac.vfx.empty-render-graph-audit-test
   "Phase D of the node-engine/VFX performance plan: an audit, not a fix.
-   17 of the 36 ac/vfx-v4/*.edn documents compile to a :render graph that
+   5 of the 36 ac/vfx-v4/*.edn documents compile to a :render graph that
    is literally start->end with no component node in between -- real
    content, discovered while measuring per-frame VFX cost (an empty
    :render costs nothing to sample, so the per-instance-cost numbers the
    perf plan measured are ~2x lower than they will be once this content
    is filled in).
 
-   Exactly ONE of the 17 is legitimately empty on purpose:
+   Exactly ONE of the 5 is legitimately empty on purpose:
    :screen-flash-session's :alpha/:duration-ticks/:color are consumed by
    cn.li.ability.client-vfx-v2's own update-presentation-sidechannels! at
    SIGNAL-DISPATCH time (see that fn's own :screen-flash-session case),
@@ -17,7 +17,7 @@
    :camera-fov scene op reading ?offset -- confirmed by direct
    compilation below, not assumed from the naming pattern.)
 
-   The other 16 are V4 migration leftovers with no known reason to stay
+   The other 5 are V4 migration leftovers with no known reason to stay
    empty. This test does not fix them -- filling in real scene content is
    the V4 migration owner's call, the same boundary already drawn for
    task #16 (skills-v4's :vfx/emit vs the vocabulary's :effect/vfx). It
@@ -48,13 +48,8 @@
    is a snapshot, not a floor: an entry moving to non-empty (content
    getting filled in) does not fail this test, only a NEW, unclassified
    empty document does."
-  #{:arc-channel-session :arc-strike-transient :billboard-session
-    :block-progress-session :block-scan-transient
-    :blood-retrograde-charge :blood-retrograde-impact
-    :directed-blastwave-charge :directed-blastwave-wave
-    :first-person-motion-session :particle-burst-trail-transient
-    :ray-fan-transient :target-box-session :target-mark-session
-    :trajectory-ribbon-session :vortex-column-session})
+  #{:blood-retrograde-charge :first-person-motion-session
+    :ray-fan-transient :trajectory-ribbon-session :vortex-column-session})
 
 (defn- vfx-v4-resource-names []
   (let [root (io/resource vfx-v4-resource-root)]
