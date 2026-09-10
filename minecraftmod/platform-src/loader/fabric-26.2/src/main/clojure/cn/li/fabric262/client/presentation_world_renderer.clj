@@ -46,7 +46,7 @@
              :backend-context
              {:draw-batch!
               (fn [_g _stage prim _mat _var _cnt payload]
-                (when (or (= "mesh" prim) (#{"line" "quad" "particle"} prim))
+                (when (or (= "mesh" prim) (#{"line" "quad" "particle" "first-person"} prim))
                   (doseq [plan (if (= "mesh" prim)
                                  (or payload [])
                                  [(vfx-plan/neutral-op->plan
