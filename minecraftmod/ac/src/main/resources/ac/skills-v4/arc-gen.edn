@@ -380,7 +380,23 @@
              :ref [:local :aim-hit]}}},
           :fade-from-tick 3,
           :ring-color [188 252 238 180],
-          :ring-segments 10}}}},
+          :ring-segments 10,
+          :arc-pattern :weak}}},
+       :n--entry--default-7-then-1b
+       {:type :component,
+        :component :effect/vfx,
+        :nid :n/n--entry--default-7-then-1b,
+        :inputs
+        {:effect-id :audio-one-shot,
+         :operation :spawn,
+         :instance-key [:activation :arc-fired-audio],
+         :audience {:type :nearby, :radius 32.0},
+         :payload
+         {:position
+          {:nid :n/n--entry--default-7--audio-pos, :ref [:local :eye]},
+          :sound-id "academy:em.arc_weak",
+          :volume 0.5,
+          :pitch 1.0}}}},
    :links
    [{:id :e/link001,
      :kind :data,
@@ -473,6 +489,10 @@
     {:id :e/link023,
      :kind :exec,
      :from [:n/n--entry--default-7-then-1 :out],
+     :to [:n/n--entry--default-7-then-1b :in]}
+    {:id :e/link023b,
+     :kind :exec,
+     :from [:n/n--entry--default-7-then-1b :out],
      :to [:n/n--entry--default-7-then-2 :in]}
     {:id :e/link024,
      :kind :data,

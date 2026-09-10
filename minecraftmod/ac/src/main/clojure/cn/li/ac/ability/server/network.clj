@@ -63,7 +63,12 @@
           {:schema-version 1 :intent-id seq
            :op (case edge :press :start :release :release :abort :abort)
            :slot control-id :client-tick client-tick}))
-      (catch Throwable _ nil))))
+      (catch Throwable e
+        (log/warn "Combat intent wire decode failed"
+                  {:error (.getMessage e)
+                   :wire-bytes (when (bytes? (:wire payload))
+                                 (alength ^bytes (:wire payload)))})
+        nil))))
 
 (def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
 
@@ -269,21 +274,43 @@
                      (combat-runtime/dispatch-intent-v2! owner intent)))))
         result (if (= :accepted (:status result))
                  (combat-runtime/finalize-result! owner result)
-                 result)]
-    (when (= :rejected (:status result))
-      (log/warn "Combat intent rejected" {:owner owner
-                                          :reason (:reason result)
-                                          :ability-id (:ability-id result)
-                                          :feedback (:feedback result)})
-      (when (seq (:feedback result))
+                 result)
+        failed-outcome? (and (= :accepted (:status result))
+                             (contains? #{:insufficient-resource :failed :error}
+                                        (:outcome result)))
+        notify? (or (= :rejected (:status result)) failed-outcome?)
+        feedback (cond
+                   (seq (:feedback result)) (vec (:feedback result))
+                   failed-outcome? [{:type :combat-outcome
+                                     :reason (:outcome result)
+                                     :text (str "Combat outcome: "
+                                                (name (:outcome result)))}]
+                   (= :rejected (:status result))
+                   [{:type :combat-input-rejected
+                     :reason (or (:reason result) :rejected)
+                     :text (str "Combat rejected: "
+                                (name (or (:reason result) :rejected)))}]
+                   :else [])]
+    (when notify?
+      (log/warn "Combat intent failed"
+                {:owner owner
+                 :status (:status result)
+                 :reason (or (:reason result) (:outcome result))
+                 :ability-id (:ability-id result)
+                 :op (:op intent)
+                 :slot (:slot intent)
+                 :entry (:entry result)
+                 :feedback feedback})
+      (when (seq feedback)
         (try
           (server-bridge/send-to-client!
            owner catalog/MSG-COMBAT-RESULT
            {:wire (fixed-channel/encode-combat-feedback
-                   {:status :rejected
-                    :feedback (vec (:feedback result))})})
+                   {:status (if (= :rejected (:status result)) :rejected :accepted)
+                    :feedback feedback})})
           (catch Throwable e
-            (log/debug "Failed to push combat reject feedback" {:error (.getMessage e)})))))
+            (log/warn "Failed to push combat failure feedback"
+                      {:owner owner :error (.getMessage e)})))))
     result))
 
 (defn- handle-spell-submit-request
@@ -309,7 +336,8 @@
                  (combat-runtime/finalize-result! owner result)
                  result)]
     (when (= :rejected (:status result))
-      (log/debug "Player spell submit rejected" {:owner owner :reason (:reason result)}))
+      (log/warn "Player spell submit rejected"
+                {:owner owner :reason (:reason result) :feedback (:feedback result)}))
     result))
 
 (defn register-handlers! []

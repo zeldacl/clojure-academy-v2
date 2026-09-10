@@ -30,6 +30,44 @@
     (is (= "line" (.primitive batch)))
     (is (= [0 255 0 255] (get-in (.payload batch) [:material :color])))))
 
+(deftest beam-op-accepts-v4-layer-vector-test
+  "Regression: arc-gen / beam-arc-fade pass :layers as a vector of layer
+   maps. assoc onto that vector threw 'Key must be integer'."
+  (let [layers [{:shape :tube :radius 0.08 :color [236 170 93 60]}
+                {:shape :line :width 0.015 :color [165 230 255 160]}]
+        f (frame/->java-frame 1 0 (one-instance
+                                    [{:kind :beam :start {:vec3 [0.0 0.0 0.0]} :end {:vec3 [1.0 0.0 0.0]}
+                                      :layers layers :alpha 1.0}]))
+        material (get-in (.payload (first (.batches f))) [:material])]
+    (is (= [236 170 93 60] (:color material)))
+    (is (= layers (:layers material)))
+    (is (= 1.0 (:alpha material)))))
+
+(deftest beam-op-rejects-invalid-layers-loudly-test
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"must be a map or a sequence"
+                        (frame/->java-frame 1 0 (one-instance
+                                                  [{:kind :beam :start {:vec3 [0.0 0.0 0.0]}
+                                                    :end {:vec3 [1.0 0.0 0.0]}
+                                                    :layers "bad"}])))))
+
+(deftest arc-op-becomes-a-quad-primitive-batch-test
+  "Regression: main arc-gen zigzag bolts must cross the frame ABI as :quad
+   batches with geometry :kind :arc for the neutral render plan to expand."
+  (let [f (frame/->java-frame 1 0 (one-instance
+                                    [{:kind :arc
+                                      :start {:x 0.0 :y 1.0 :z 0.0}
+                                      :end {:x 0.0 :y 1.0 :z 5.0}
+                                      :pattern :weak :seed 3
+                                      :life-ratio 0.1 :alpha 1.0}]))
+        batch (first (.batches f))]
+    (is (= 1 (count (.batches f))))
+    (is (= "quad" (.primitive batch)))
+    (is (= :arc (get-in (.payload batch) [:geometry :kind])))
+    (is (= :weak (get-in (.payload batch) [:geometry :pattern])))
+    (is (= "academy:textures/effects/arc/line_segment.png"
+           (get-in (.payload batch) [:material :texture])))))
+
 (deftest quad-op-passes-geometry-and-material-through-test
   (let [f (frame/->java-frame 1 0 (one-instance
                                     [{:kind :quad :geometry {:p0 :a :p1 :b :p2 :c :p3 :d}

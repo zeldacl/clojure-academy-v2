@@ -37,6 +37,47 @@
     (is (= 1 (count (:ops line-plan))))
     (is (= :quad (:kind (first (:ops marker-plan)))))
     (is (= 1 (count (:ops marker-plan))))))
+
+(deftest arc-geometry-expands-to-textured-quad-strip
+  "Regression: main arc-gen drew zigzag EntityArc quads. V4 :arc leaf must
+   expand through the neutral render plan into a non-empty quad strip."
+  (let [plan (vfx-plan/neutral-op->plan
+              {:operation :draw-batch
+               :primitive :quad
+               :geometry {:kind :arc
+                          :start {:x 0.0 :y 1.0 :z 0.0}
+                          :end {:x 0.0 :y 1.0 :z 8.0}
+                          :pattern :weak
+                          :seed 7
+                          :life-ratio 0.2}
+               :material {:texture "academy:textures/effects/arc/line_segment.png"
+                          :alpha 1.0
+                          :color [255 255 255 255]}})
+        ops (:ops plan)]
+    (is (<= 8 (count ops)))
+    (is (every? #(= :quad (:kind %)) ops))
+    (is (every? #(= "academy:textures/effects/arc/line_segment.png" (:texture %)) ops))))
+
+(deftest arc-hand-origin-shifts-start-in-first-person
+  "Main arc-gen used ViewOptimize.fix so the bolt leaves the hand, not the eye."
+  (let [view-ctx {:player-uuid "p1" :first-person? true}
+        base {:operation :draw-batch
+              :primitive :quad
+              :geometry {:kind :arc
+                         :start {:x 0.0 :y 2.0 :z 0.0}
+                         :end {:x 0.0 :y 2.0 :z 10.0}
+                         :pattern :weak
+                         :seed 1
+                         :hand-origin? true
+                         :source-player-id "p1"
+                         :life-ratio 0.0}
+              :material {:alpha 1.0 :color [255 255 255 255]}}
+        unshifted (vfx-plan/neutral-op->plan base)
+        shifted (vfx-plan/neutral-op->plan base view-ctx)
+        p0-un (:p0 (first (:ops unshifted)))
+        p0-sh (:p0 (first (:ops shifted)))]
+    (is (not= (.-y p0-un) (.-y p0-sh))
+        "first-person hand-origin must change the bolt's world Y")))
 (deftest direct-host-bypasses-lifecycle-map-on-render-path
   (let [lifecycle-lookups (atom 0)
         api {:frame! (fn [_frame-id _delta _width _height] :frame)}]

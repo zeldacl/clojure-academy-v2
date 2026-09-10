@@ -48,14 +48,74 @@
     (= :event/emit component) (list 'event! ins)
     (= :state/set component) (list 'state! (get ins :key) (get ins :value))
     (ops/known-op? component)
-    (let [params (:params (ops/signature component))]
-      (apply list (head component) (map #(get ins %) params)))
+    ;; Ops signatures name argument TYPES (:double, :vec3, …), but V4 graphs
+    ;; wire inputs to editor ports :arg0, :arg1, … — never use the type tag as
+    ;; a lookup key (that silently compiled (math/add nil nil) for arc-gen).
+    (let [param-types (:params (ops/signature component))
+          args (mapv (fn [i] (get ins (keyword (str "arg" i))))
+                     (range (count param-types)))]
+      (apply list (head component) args))
     ;; Composite functions are supplied by the caller's compile options and
     ;; use positional arguments declared by their :params vector.
     (contains? fns component)
     (apply list (head component)
            (map #(get ins (:name %)) (:params (get fns component))))
     :else (list (head component) ins)))
+
+(defn- sigil-symbol
+  [prefix k]
+  (symbol (str prefix (when (namespace k) (str (namespace k) "/")) (name k))))
+
+(defn- inline-ref-form
+  "Lower a persisted `{ :ref [root key & path] }` fragment to a surface
+   sigil.  Migrated V4 graphs embed these inside map/vector literals
+   (event payloads, VFX params) instead of wiring a graph node."
+  [ref]
+  (when-not (and (vector? ref) (seq ref) (keyword? (first ref)))
+    (fail "V4 inline :ref must be a vector starting with a keyword root" {:ref ref}))
+  (let [root (first ref)
+        segs (rest ref)]
+    (when (empty? segs)
+      (fail "V4 inline :ref is missing a key" {:ref ref}))
+    (let [k (first segs)
+          path (next segs)
+          base (case root
+                 :local (symbol (if (namespace k)
+                                  (str (namespace k) "/" (name k))
+                                  (name k)))
+                 :parameter (sigil-symbol "$" k)
+                 :context (sigil-symbol "?" k)
+                 :state (sigil-symbol "%" k)
+                 (fail "unsupported V4 inline :ref root" {:ref ref :root root}))]
+      (reduce (fn [x f] (list (keyword (name f)) x)) base path))))
+
+(defn- inline-expr
+  "Recursively lower inline `:ref` / `:component` fragments that migrated
+   graphs store inside `:inputs` maps.  Ordinary literals pass through."
+  [ctx value]
+  (cond
+    (and (map? value) (vector? (:ref value)))
+    {:pre [] :form (inline-ref-form (:ref value))}
+
+    (and (map? value) (keyword? (:component value)))
+    (let [parts (map (fn [[k v]] [k (inline-expr ctx v)]) (or (:inputs value) {}))
+          ins (into {} (map (fn [[k x]] [k (:form x)]) parts))
+          pre (vec (mapcat (comp :pre second) parts))
+          call (component-call (:component value) ins (:fns ctx))]
+      {:pre pre :form (stamp call (:nid value))})
+
+    (map? value)
+    (let [parts (map (fn [[k v]] [k (inline-expr ctx v)]) value)
+          form (into {} (map (fn [[k x]] [k (:form x)]) parts))
+          pre (vec (mapcat (comp :pre second) parts))]
+      {:pre pre :form form})
+
+    (vector? value)
+    (let [xs (mapv #(inline-expr ctx %) value)]
+      {:pre (vec (mapcat :pre xs))
+       :form (mapv :form xs)})
+
+    :else {:pre [] :form value}))
 
 (declare expr)
 (defn expr [ctx nid]
@@ -70,7 +130,7 @@
                 (let [parts (for [p (component-input-ports ctx nid)
                                   :let [l (data-link links nid p)
                                         v (get-in n [:inputs p])
-                                        x (if l (expr ctx (first (:from l))) {:pre [] :form v})]]
+                                        x (if l (expr ctx (first (:from l))) (inline-expr ctx v))]]
                               [p x])
                       ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
                       pre (vec (mapcat (comp :pre second) parts))
@@ -83,10 +143,9 @@
 (defn port-expr [ctx nid port]
   (if-let [l (data-link (:links ctx) nid port)]
     (expr ctx (first (:from l)))
-    ;; V4 permits an input slot to carry an inline literal.  Preserve that
-    ;; value when no data wire is present; otherwise every migrated component
-    ;; with a constant option would silently receive nil at runtime.
-    {:pre [] :form (get-in ctx [:nodes nid :inputs port])}))
+    ;; V4 permits an input slot to carry an inline literal, including nested
+    ;; `{ :ref ... }` / `{ :component ... }` fragments from migrated graphs.
+    (inline-expr ctx (get-in ctx [:nodes nid :inputs port]))))
 
 (defn statement [ctx nid]
   (let [n (get (:nodes ctx) nid)]
@@ -156,9 +215,12 @@
           (contains? #{:foreach :repeat} t)
            (let [c (port-expr ctx nid (if (= :foreach t) :collection :count))
                  body (collect ctx (target (:links ctx) nid :body) (conj stops nid))
-                 b (symbol (name (or (:as n) :item)))
+                 item-sym (symbol (name (or (:as n) :item)))
+                 binding (if-let [idx (:index-as n)]
+                             [item-sym (symbol (name idx))]
+                             item-sym)
                  coll (if (= :foreach t) (:form c) (list 'range (:form c)))
-                 f (list* 'each b coll (:forms body))]
+                 f (list* 'each binding coll (:forms body))]
             (recur (target (:links ctx) nid :completed) (into out (concat (:pre c) [f])) (conj seen nid)))
           (= :loop-end t)
           ;; A loop-end is a structural terminator for the current each body;

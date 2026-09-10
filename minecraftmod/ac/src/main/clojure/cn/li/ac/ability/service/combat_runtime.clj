@@ -37,7 +37,9 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.framework.platform :as platform]))
+            [cn.li.mcmod.framework.platform :as platform]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.ability.rules.resource-rules :as resource-rules]))
 
 ;; This module's identity in every multi-tenant ability-runtime store
 ;; (cn.li.ability.session) that's keyed by [content-id owner] so a future
@@ -436,19 +438,22 @@
       (resolve-slot owner intent)))
 
 (defn- entry-triggers-for
-  "Map of compiled entry-name -> :on trigger from the skill-v4 IR/document."
+  "Map of entry-name -> :on trigger from the installed skill-v4 IR.
+
+  Assemble refuses skills without `:entry-triggers`. Do not reconstruct or
+  guess entries here — missing triggers means a broken install."
   [ability-id]
   (when ability-id
-    (or (get-in (final-runtime-v2) [:catalog :by-id ability-id :ir :entry-triggers])
-        (let [source (combat-source ability-id)
-              entries (:entries source)]
-          (when (map? entries)
-            (into {}
-                  (keep (fn [[entry spec]]
-                          (when-let [on (or (when (map? spec) (:on spec))
-                                            (when (keyword? spec) spec))]
-                            [entry on])))
-                  entries))))))
+    (not-empty (get-in (final-runtime-v2)
+                       [:catalog :by-id ability-id :ir :entry-triggers]))))
+
+(defn- known-program-entries
+  "Entry keywords actually present on the compiled program (or IR)."
+  [ability-id]
+  (when ability-id
+    (or (not-empty (set (keys (get-in (final-runtime-v2)
+                                      [:catalog :by-id ability-id :ir :entries]))))
+        (not-empty (set (keys (entry-triggers-for ability-id)))))))
 
 (defn- op-trigger-candidates
   "Intent :op values map onto one or more skill-v4 :on triggers. Instant
@@ -463,22 +468,33 @@
     nil))
 
 (defn- resolve-program-entry
-  "Translate an intent's :op/:event into the compiled program entry key.
+  "Translate an intent's :op/:event into the skill-v4 program entry key.
 
-  skill-v4 documents name entries freely and declare the trigger in :on;
-  dispatch must not assume the entry is literally named :start/:pulse/... ."
+  V4 only: entries are named freely; the document/IR `:entry-triggers`
+  map (entry → `:on`) is the sole authority. Intent ops map through
+  `op-trigger-candidates` onto those `:on` values — never invent an entry
+  name, never pass the raw `:op` through to the emitter.
+
+  Returns nil when the intent does not map to any declared trigger
+  (e.g. instant `:default`/`:activation/start` has no `:release`)."
   [ability-id intent]
-  (let [requested (or (:event intent) (:op intent))
-        triggers (entry-triggers-for ability-id)
-        by-trigger (into {} (map (fn [[entry on]] [on entry]) triggers))]
-    (or (when (and requested (contains? triggers requested))
-          requested)
-        (when-let [on (:event intent)]
-          (get by-trigger on))
-        (when-let [cands (and (not (:event intent))
-                              (op-trigger-candidates (:op intent)))]
-          (some by-trigger cands))
-        requested)))
+  (let [op (:op intent)
+        event (:event intent)
+        triggers (or (entry-triggers-for ability-id) {})
+        by-trigger (into {} (map (fn [[entry on]] [on entry]) triggers))
+        known (known-program-entries ability-id)
+        from-event (when event
+                     (or (when (contains? triggers event) event)
+                         (get by-trigger event)
+                         (when-let [cands (op-trigger-candidates event)]
+                           (some by-trigger cands))))
+        from-op (when op
+                  (or (when (contains? triggers op) op)
+                      (when-let [cands (op-trigger-candidates op)]
+                        (some by-trigger cands))))
+        resolved (or from-event from-op)]
+    (when (and resolved (or (nil? known) (contains? known resolved)))
+      resolved)))
 
 
 (defn- activation-context
@@ -591,7 +607,7 @@
       {}
       (try
         (let [materialized (:tunables (skill-config/overlay-edn-tunables source))]
-          (reduce-kv
+           (reduce-kv
            (fn [result key spec]
              (assoc result key
                     (cond
@@ -600,7 +616,12 @@
                       (let [[lo hi] (:range spec)]
                         (+ (double lo) (* (double skill-exp)
                                           (- (double hi) (double lo)))))
-                      :else nil)))
+                      :else
+                      (throw (ex-info "final tunable missing materialized :value or :range"
+                                      {:ability-id ability-id
+                                       :tunable key
+                                       :spec spec
+                                       :curve (:curve spec)})))))
            {} materialized))
         (catch Throwable e
           (throw (ex-info "final tunable materialization failed"
@@ -851,54 +872,39 @@
                                :overload amount :cp 0.0 :creative? false})]
                  {:status (if (:success? result) :applied :failed)})
                {:status :rejected :reason :invalid-resource-add})))))
-      ;; S8 cutover: the new node-core engine's cost/spend and cooldown/start
-      ;; are ordinary host actions/queries (dsl_vocabulary.clj's
-      ;; :cost/spend :capability :cost/spend, :cooldown/start :capability
-      ;; :cooldown/start), unlike the old engine where both are special-
-      ;; cased nodes mutating an in-graph :txn that a LATER whole-state diff
-      ;; (combat_runtime.clj's commit-final-state!, still used by the old
-      ;; engine only) turns into :consume-resource/:set-cooldown commands.
-      ;; These two registrations are that same net effect, applied
-      ;; immediately instead of diffed-and-committed after the fact -- see
-      ;; the old engine's own spend-budget helper for the ground truth this
-      ;; is a faithful port of (:required/:available/:sufficient?/:partial?
-      ;; logic identical; only the deferred-txn-then-diff mechanics are
-      ;; replaced with an immediate command).
-      ;;
-      ;; :overload's sign convention is the one genuinely non-obvious thing
-      ;; ported here verbatim rather than "fixed": spend-budget treats
-      ;; :budget {:overload N} as spending FROM a pool (available = current
-      ;; overload, gate = current >= N, and its own :txn update SUBTRACTS
-      ;; N) -- but the :txn only ever reaches the real player-state store
-      ;; through commit-final-state!'s diff, which (since :consume-resource
-      ;; :overload always ADDS to real overload, per resource_rules.clj's
-      ;; perform-resource) turns that subtraction into a real ADDITION of N
-      ;; overload. That is the actual live behavior every real ability's
-      ;; :overload cost has always produced, confirmed by reading
-      ;; perform-resource directly, not inferred -- so the real, net
-      ;; command issued below is :consume-resource {:overload N} (an add),
-      ;; even though the SUFFICIENCY CHECK below still gates on "is current
-      ;; overload >= N" (spend-budget's own gate, also ported verbatim).
+      ;; :cost/spend matches resource_rules/can-perform? + perform-resource:
+      ;; CP is a depletable pool; overload is heat ADDED on cast (not spent
+      ;; from cur-overload). Gating overload as `cur-overload >= cost` made
+      ;; every fresh player (overload 0) fail any skill with an overload
+      ;; budget — tests had to pre-fill cur-overload to paper over that.
       (when-not (contains? (:queries (capabilities/snapshot)) :cost/spend)
         (capabilities/register-query!
          :cost/spend
-         (fn [{:keys [owner budget scale partial?]} _frame]
+         (fn [{:keys [owner budget scale partial?]} frame-ctx]
            (let [resources (or (:resources budget) budget {})
                  scale (max 0.0 (let [s (double (or scale 1.0))] (if (Double/isFinite s) s 0.0)))
                  required (into {} (map (fn [[k v]] [k (* scale (double (or v 0.0)))]) resources))
-                 state (owner-state owner)
-                 available (into {} (map (fn [[k _]] [k (max 0.0 (double (or (get-in state [:resources k]) 0.0)))])
-                                        required))
-                 sufficient? (every? (fn [[k amount]] (>= (get available k 0.0) amount)) required)
-                 spend (cond sufficient? required
-                             (true? partial?)
-                             (into {} (map (fn [[k amount]] [k (min amount (get available k 0.0))]) required))
-                             :else {})
-                 cp (double (get spend :cp 0.0)) overload (double (get spend :overload 0.0))]
-             (when (and owner (or (pos? cp) (pos? overload)))
+                 cp (double (get required :cp 0.0))
+                 overload (double (get required :overload 0.0))
+                 player (runtime-store/get-player-state (server-session-id) (str owner))
+                 rd (or (:resource-data player) {})
+                 creative? (boolean (get-in frame-ctx [:frame :capabilities :caster/creative?]))
+                 sufficient? (resource-rules/can-perform? rd overload cp creative?)]
+             (when-not sufficient?
+               (log/warn "cost/spend insufficient"
+                         {:owner (str owner)
+                          :required required
+                          :cur-cp (:cur-cp rd)
+                          :max-cp (:max-cp rd)
+                          :cur-overload (:cur-overload rd)
+                          :max-overload (:max-overload rd)
+                          :overload-fine (:overload-fine rd)
+                          :activated (:activated rd)
+                          :creative? creative?}))
+             (when (and owner sufficient? (or (pos? cp) (pos? overload)))
                (command-runtime/run-command-in-session!
                 (server-session-id) (str owner)
-                {:command :consume-resource :cp cp :overload overload :creative? false}))
+                {:command :consume-resource :cp cp :overload overload :creative? creative?}))
              sufficient?))))
       (when-not (contains? (:actions (capabilities/snapshot)) :cooldown/start)
         (capabilities/register-action!
@@ -974,9 +980,14 @@
     (initialize-final-runtime-v2!))
   (let [ability-id (edn-ability-id owner intent)]
     (if (nil? ability-id)
-      {:status :rejected :reason :unknown-ability
-       :schema-version 1 :ability-id nil
-       :feedback [{:type :combat-input-rejected :reason :unknown-ability}]}
+      (do (log/warn "Combat intent has no resolvable ability"
+                    {:owner (str owner)
+                     :op (:op intent)
+                     :slot (:slot intent)
+                     :ability-id (:ability-id intent)})
+          {:status :rejected :reason :unknown-ability
+           :schema-version 1 :ability-id nil
+           :feedback [{:type :combat-input-rejected :reason :unknown-ability}]})
       (let [source (combat-source ability-id)
             active-session (combat-sessions/session content-id (str owner))
             intent (if (toggle-close-edge? (:op intent) (:activation source)
@@ -997,30 +1008,72 @@
                                                      (long (or (:server-tick intent)
                                                                @last-known-tick*)))))
             prepared (final-input-v2 owner ability-id (assoc intent :activation-seed seed) seed)]
-        (if (and (= :slot-wheel (:event intent))
-                 (not (and active-session
-                           (= ability-id (:ability-id active-session)))))
+        (cond
+          (nil? entry)
+          ;; Instant skills only declare :default/:activation/start. Client still
+          ;; sends :release/:abort on key-up; those must not reach the emitter
+          ;; as literal entry names (→ "no such program entry").
+          (cond
+            (nil? (get-in (final-runtime-v2) [:catalog :by-id ability-id]))
+            {:status :rejected :reason :unknown-ability
+             :schema-version 1 :ability-id ability-id
+             :feedback [{:type :combat-input-rejected :reason :unknown-ability}]}
+
+            (#{:release :abort :pulse} (:op intent))
+            {:status :accepted :outcome :noop :schema-version 1 :ability-id ability-id}
+
+            :else
+            (do (log/warn "Combat intent has no program entry"
+                          {:ability-id ability-id
+                           :op (:op intent)
+                           :event (:event intent)
+                           :triggers (entry-triggers-for ability-id)
+                           :known (seq (known-program-entries ability-id))
+                           :has-ir? (some? (get-in (final-runtime-v2)
+                                                   [:catalog :by-id ability-id :ir]))
+                           :source-entries
+                           (some-> (combat-source ability-id) :entries keys vec)})
+                {:status :rejected :reason :no-program-entry
+                 :schema-version 1 :ability-id ability-id
+                 :feedback [{:type :combat-input-rejected :reason :no-program-entry}]}))
+
+          (and (= :slot-wheel (:event intent))
+               (not (and active-session
+                         (= ability-id (:ability-id active-session)))))
           {:status :rejected :reason :no-active-session
            :schema-version 1 :ability-id ability-id
            :feedback [{:type :combat-input-rejected :reason :no-active-session}]}
-          (if (and (= :start (:op intent))
-                   (cooldown-active? owner ability-id))
-            {:status :rejected :reason :cooldown
-             :schema-version 1 :ability-id ability-id
-             :feedback [{:type :cooldown-active :ability-id ability-id}]}
-            (let [result (assoc (final-runtime-v2/dispatch-production! owner ability-id
-                                                                        {:entry entry :input prepared})
+
+          (and (= :start (:op intent))
+               (cooldown-active? owner ability-id))
+          {:status :rejected :reason :cooldown
+           :schema-version 1 :ability-id ability-id
+           :feedback [{:type :cooldown-active :ability-id ability-id}]}
+
+          :else
+          (let [result (try
+                         (assoc (final-runtime-v2/dispatch-production! owner ability-id
+                                                                       {:entry entry :input prepared})
                                 :schema-version 1 :ability-id ability-id)
-                  result (if (and (= :rejected (:status result))
-                                  (empty? (:feedback result)))
-                           (assoc result :feedback [{:type :combat-input-rejected
-                                                     :reason (or (:reason result) :rejected)}])
-                           result)]
-              (when (should-open-session? (:status result) (:op intent) (:activation source)
-                                          (:finish-ability? result)
-                                          (boolean active-session))
-                (combat-sessions/start! content-id (str owner) ability-id prepared))
-              result)))))))
+                         (catch clojure.lang.ExceptionInfo e
+                           (if (= "no such program entry" (ex-message e))
+                             {:status :rejected :reason :no-program-entry
+                              :schema-version 1 :ability-id ability-id
+                              :entry entry
+                              :feedback [{:type :combat-input-rejected
+                                          :reason :no-program-entry}]
+                              :detail (ex-data e)}
+                             (throw e))))
+                result (if (and (= :rejected (:status result))
+                                (empty? (:feedback result)))
+                         (assoc result :feedback [{:type :combat-input-rejected
+                                                   :reason (or (:reason result) :rejected)}])
+                         result)]
+            (when (should-open-session? (:status result) (:op intent) (:activation source)
+                                        (:finish-ability? result)
+                                        (boolean active-session))
+              (combat-sessions/start! content-id (str owner) ability-id prepared))
+            result))))))
 
 (def player-spell-complexity-cap combat-api/player-spell-complexity-cap)
 
@@ -1152,6 +1205,23 @@
          (fn [marks]
            (into {} (filter (fn [[_ value]] (> (long (:expires-at value)) (long tick))) marks))))
   nil)
+
+(defn- impact-long
+  [field value default]
+  (cond
+    (nil? value) (long default)
+    (number? value) (long value)
+    :else (throw (ex-info "world/block-impact field must be a number"
+                          {:field field :value value}))))
+
+(defn- impact-double
+  [field value default]
+  (cond
+    (nil? value) (double default)
+    (number? value) (double value)
+    :else (throw (ex-info "world/block-impact field must be a number"
+                          {:field field :value value}))))
+
 (defn- handle-neutral-domain-event!
   "Apply the two generic domain events emitted by the Arc final graph.
 
@@ -1190,6 +1260,14 @@
     :world/block-impact
     (let [{:keys [world-id position block-position water? ignite-probability
                   fishing-probability fishing-exp-threshold skill-exp seed]} (:payload event)
+          seed (impact-long :seed seed 0)
+          skill-exp (impact-double :skill-exp skill-exp 0.0)
+          fishing-exp-threshold (impact-double :fishing-exp-threshold fishing-exp-threshold 1.0)
+          fishing-probability (impact-double :fishing-probability fishing-probability 0.0)
+          ignite-probability (impact-double :ignite-probability ignite-probability 0.0)
+          _ (when (and (some? water?) (not (boolean? water?)))
+              (throw (ex-info "world/block-impact :water? must be a boolean"
+                              {:value water?})))
           point (cond
                   (vector? position) position
                   (map? position) [(:x position) (:y position) (:z position)]
@@ -1213,14 +1291,10 @@
                                     (long (Math/floor (double (nth block-point 0))))
                                     (long (Math/floor (double (nth block-point 1))))
                                     (long (Math/floor (double (nth block-point 2))))))))
-          seed (long (or seed 0))
-          fish? (and detected-water? (> (double (or skill-exp 0.0))
-                               (double (or fishing-exp-threshold 1.0)))
-                     (< (rng/unit-double seed)
-                        (double (or fishing-probability 0.0))))
+          fish? (and detected-water? (> skill-exp fishing-exp-threshold)
+                     (< (rng/unit-double seed) fishing-probability))
           ignite? (and (not detected-water?)
-                       (< (rng/unit-double (rng/next-seed seed))
-                          (double (or ignite-probability 0.0))))]
+                       (< (rng/unit-double (rng/next-seed seed)) ignite-probability))]
       (cond
         (not (and (string? world-id) (finite-point? point)
                   (finite-point? block-point)))

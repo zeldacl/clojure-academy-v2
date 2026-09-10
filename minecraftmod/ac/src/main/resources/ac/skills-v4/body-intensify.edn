@@ -774,7 +774,7 @@
         :nid :n/n--entry--release-2-then-14},
        :n063 {:type :local-get, :key :cooldown-exp-next, :nid :n/n063},
        :n--entry--release-2-then-18
-       {:type :foreach, :as :effect-entry,
+       {:type :foreach, :as :effect-entry, :index-as :effect-index,
         :limit 256,
         :nid :n/n--entry--release-2-then-18},
        :n076

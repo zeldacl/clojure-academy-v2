@@ -106,11 +106,23 @@
     (testing "state writes accumulate as patches for the caller to commit, never mutate persistent state directly"
       (is (= [{:key :mode :value :electric}] (into [] (.-stateWrites frame)))))))
 
-(deftest dispatch-on-unknown-entry-throws-test
-  (let [ir {:ir/version 1 :id :x :tunable-types {} :registers {:doubles 0 :longs 0 :booleans 0 :objects 0}
+(deftest convert-non-number-fails-loudly-test
+  "Regression: feeding a map (e.g. {:from :to} ring-radius) into a :double
+   convert used to ClassCastException inside RT.doubleCast with no context.
+   Fail with ex-info that names the value class."
+  (let [ir {:ir/version 1 :id :convert-map :tunable-types {}
+            :registers {:doubles 1 :longs 0 :booleans 0 :objects 1}
             :constants {:doubles [] :longs [] :booleans [] :objects []}
             :entries {:default 0}
-            :blocks [{:id 0 :instrs [{:op :finish :nid "n1" :outcome :performed :next-phase nil :end-ability? true}]}]}
+            :blocks [{:id 0 :instrs
+                      [{:op :cap :nid "n1" :dst (reg :objects 0) :key :ring-radius}
+                       {:op :convert :nid "n2" :dst (reg :doubles 0)
+                        :src (reg :objects 0) :to :double :from :any}
+                       {:op :finish :nid "n3" :outcome :performed :next-phase nil :end-ability? false}]}]}
         program (emit/compile-program ir {:invoke-op invoke-op})
-        frame (emit/new-frame program nil)]
-    (is (thrown? clojure.lang.ExceptionInfo (emit/dispatch! program :not-a-real-entry frame)))))
+        frame (emit/new-frame program {:capabilities {:ring-radius {:from 0.12 :to 0.28}}})
+        ex (try (emit/dispatch! program :default frame) nil
+                (catch clojure.lang.ExceptionInfo e e))]
+    (is (some? ex))
+    (is (re-find #"expected number" (ex-message ex)))
+    (is (= clojure.lang.PersistentArrayMap (:value-class (ex-data ex))))))

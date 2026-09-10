@@ -5,6 +5,7 @@
    mc-* geometry modules remain responsible for Minecraft buffer state, so
    this adapter only expands line/beam/ring/quad/particle geometry into their
    long-lived {:ops [...]} plan shape.  It imports no Minecraft class."
+  (:require [cn.li.platform.neutral.arc-geometry :as arc-geometry])
   (:import [cn.li.mcmod.math V3]
            [cn.li.mcmod.runtime.vfx ParticleBuffer]))
 
@@ -154,25 +155,32 @@
   "Return the mc-* geometry plan for one neutral draw-batch operation.
 
    Particle and typed-vfx payloads are lowered through explicit neutral rules;
-   no legacy payload is read and no recognized operation is silently discarded."
-  [op]
-  (when (and (map? op) (= :draw-batch (:operation op)))
-    (let [geometry (or (:geometry op) {})
-          material (or (:material op) {})
-          color (material-color material)
-          primitive (:primitive op)
-          ops (case primitive
-                :line (case (:kind geometry)
-                        :ring (ring-ops geometry color)
-                        :beam (line-ops {:start (:start geometry)
-                                         :end (:end geometry)} color)
-                        (line-ops geometry color))
-                :quad (quad-ops geometry color material)
-                :particle (if-let [particles (:particle-buffer op)]
-                            (if (instance? ParticleBuffer particles)
-                              (particle-ops particles material)
-                              [])
-                            [])
-                :typed-vfx (typed-vfx-ops geometry color)
-                [])]
-      {:ops ops})))
+   no legacy payload is read and no recognized operation is silently discarded.
+
+   Optional `view-ctx` (presentation-world hand-center-pos) applies main's
+   ViewOptimize hand-origin translation to `:arc` geometry before expansion."
+  ([op] (neutral-op->plan op nil))
+  ([op view-ctx]
+   (let [op (arc-geometry/with-hand-origin-view op view-ctx)]
+     (when (and (map? op) (= :draw-batch (:operation op)))
+       (let [geometry (or (:geometry op) {})
+             material (or (:material op) {})
+             color (material-color material)
+             primitive (:primitive op)
+             ops (case primitive
+                   :line (case (:kind geometry)
+                           :ring (ring-ops geometry color)
+                           :beam (line-ops {:start (:start geometry)
+                                            :end (:end geometry)} color)
+                           (line-ops geometry color))
+                   :quad (case (:kind geometry)
+                           :arc (arc-geometry/arc-quad-ops geometry material color)
+                           (quad-ops geometry color material))
+                   :particle (if-let [particles (:particle-buffer op)]
+                               (if (instance? ParticleBuffer particles)
+                                 (particle-ops particles material)
+                                 [])
+                               [])
+                   :typed-vfx (typed-vfx-ops geometry color)
+                   [])]
+         {:ops ops})))))

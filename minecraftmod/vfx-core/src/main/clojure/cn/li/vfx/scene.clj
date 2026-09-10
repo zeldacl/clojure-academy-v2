@@ -20,13 +20,13 @@
             [cn.li.node.graph-compile :as graph-compile]
             [cn.li.vfx.dsl-vocabulary :as vocab]
             [cn.li.mcmod.runtime.effect-emit :as emit])
-  (:import [cn.li.mcmod.runtime.effect ExecutionFrame]))
+  (:import [cn.li.mcmod.runtime.effect CompiledProgram ExecutionFrame]))
 
 (def ^:private universal-capabilities
   "Present on every scene sample regardless of which effect declared what.
    :user's own per-effect param types (?start, ?end, ...) are supplied by
    the caller at compile time and merged with these -- see compile-doc!."
-  {:age :double :progress :double})
+  {:age :double :progress :double :seed :long :source-player-id :any})
 
 (defn capabilities-for
   "user-types ({capability-key type}, an effect's own :inputs :spawn
@@ -67,11 +67,24 @@
         {:keys [ir diagnostics]} (graph-compile/compile-vfx! document {:vocab vocab/nodes :capabilities (capabilities-for input-types) :fns {}} :throw)]
     (when (seq diagnostics) (throw (ex-info "V4 VFX graph compilation failed" {:diagnostics diagnostics})))
     (compile-program ir)))
+(defn- sample-entry
+  "V4 graph VFX compiles its sole graph as entry `:render` (`:vfx/render`
+   trigger). Surface-DSL scenes (`:do`) still compile as `:default`. Prefer
+   `:render`, then `:default`; never guess an unrelated entry name."
+  [^CompiledProgram program]
+  (let [entries ^java.util.Map (.-entries program)]
+    (cond
+      (.containsKey entries :render) :render
+      (.containsKey entries :default) :default
+      :else (throw (ex-info "VFX program has no :render or :default sample entry"
+                            {:known (vec (.keySet entries))})))))
+
 (defn sample!
   "Run `program` once against `input` ({:capabilities {...} ...}),
    returning the vector of ops this sample produced."
   [program input]
-  (vec (.-actions (emit/dispatch! program :default (emit/new-frame program input)))))
+  (vec (.-actions (emit/dispatch! program (sample-entry program)
+                                  (emit/new-frame program input)))))
 
 
 

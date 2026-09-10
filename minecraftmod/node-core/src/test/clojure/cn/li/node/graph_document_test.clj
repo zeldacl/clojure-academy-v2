@@ -180,3 +180,87 @@
         opts {:vocab {:test/do {:params {}}}}]
     (is (thrown? clojure.lang.ExceptionInfo
                  (graph-compile/compile-skill! d opts :collect)))))
+
+(deftest known-op-links-use-arg-ports-not-type-keys
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/n-x (n :n/n-x :parameter-ref :key :x)
+                       :n/n-y (n :n/n-y :parameter-ref :key :y)
+                       :n/n-add (n :n/n-add :component :component :math/add)
+                       :n/end (n :n/end :end)}
+               :links [(e :e/start :exec [:n/start :out] [:n/n-add :in])
+                       (e :e/n-x :data [:n/n-x :value] [:n/n-add :arg0])
+                       (e :e/n-y :data [:n/n-y :value] [:n/n-add :arg1])
+                       (e :e/out :exec [:n/n-add :out] [:n/end :in])]}
+        d (assoc skill
+                 :parameters {:x {:type :double :default 0.0}
+                              :y {:type :double :default 0.0}}
+                 :graphs {:default (assoc graph :on :activation/start)})
+        stmts (get-in (graph-compile/skill->core d) [:entries :default])]
+    (is (some #(and (list? %)
+                    (= 'math/add (first %))
+                    (= '$x (nth % 1))
+                    (= '$y (nth % 2)))
+              (tree-seq coll? identity stmts))
+        "pure op inputs wired at :arg0/:arg1 must not compile as nil")))
+
+(deftest foreach-index-as-lowers-to-each-binding-vector
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/n-coll (n :n/n-coll :parameter-ref :key :items)
+                       :n/n-loop (n :n/n-loop :foreach :as :item :index-as :idx :limit 4)
+                       :n/n-use (n :n/n-use :component :component :math/add)
+                       :n/n-end (n :n/n-end :end)
+                       :n/n-loop-end (n :n/n-loop-end :loop-end)
+                       :n/n-x (n :n/n-x :local-get :key :item)
+                       :n/n-i (n :n/n-i :local-get :key :idx)}
+               :links [(e :e/start :exec [:n/start :out] [:n/n-loop :in])
+                       (e :e/coll :data [:n/n-coll :value] [:n/n-loop :collection])
+                       (e :e/body :exec [:n/n-loop :body] [:n/n-use :in])
+                       (e :e/n-x :data [:n/n-x :value] [:n/n-use :arg0])
+                       (e :e/n-i :data [:n/n-i :value] [:n/n-use :arg1])
+                       (e :e/use :exec [:n/n-use :out] [:n/n-loop-end :in])
+                       (e :e/back :exec [:n/n-loop-end :continue] [:n/n-loop :loop-back])
+                       (e :e/done :exec [:n/n-loop :completed] [:n/n-end :in])]}
+        d (assoc skill
+                 :parameters {:items {:type :any :default nil}}
+                 :graphs {:default (assoc graph :on :activation/start)})
+        stmts (get-in (graph-compile/skill->core d) [:entries :default])]
+    (is (some? (some #(and (seq? %) (= 'each (first %))
+                           (vector? (second %))
+                           (= '[item idx] (vec (second %))))
+                   (tree-seq coll? identity stmts)))
+        "foreach :index-as must lower to (each [item idx] ...)")))
+
+(deftest inline-ref-fragments-in-event-payload-lower-to-sigils
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/n-set (n :n/n-set :local-set :key :wid :operation :define
+                                   :inputs {:value "overworld"})
+                       :n/n-evt (n :n/n-evt :component :component :event/emit
+                                   :inputs {:type :world/block-impact
+                                            :payload {:world-id {:nid :n/n-wid :ref [:local :wid]}
+                                                      :seed {:nid :n/n-seed :ref [:local :wid]}
+                                                      :fishing-exp-threshold
+                                                      {:nid :n/n-th :ref [:parameter :threshold]}
+                                                      :position
+                                                      {:nid :n/n-pos
+                                                       :component :value/field
+                                                       :inputs {:field :position
+                                                                :value {:nid :n/n-hit
+                                                                        :ref [:local :wid]}}}}})
+                       :n/end (n :n/end :end)}
+               :links [(e :e/start :exec [:n/start :out] [:n/n-set :in])
+                       (e :e/n-set :exec [:n/n-set :out] [:n/n-evt :in])
+                       (e :e/n-evt :exec [:n/n-evt :out] [:n/end :in])]}
+        d (assoc skill
+                 :parameters {:threshold {:type :double :default 0.5}}
+                 :graphs {:default (assoc graph :on :activation/start)})
+        stmts (get-in (graph-compile/skill->core d) [:entries :default])
+        forms (tree-seq coll? identity stmts)
+        payload (some (fn [x]
+                        (when (and (map? x) (contains? x :seed) (contains? x :world-id))
+                          x))
+                      forms)]
+    (is (= 'wid (:world-id payload)))
+    (is (= 'wid (:seed payload)))
+    (is (= '$threshold (:fishing-exp-threshold payload)))
+    (is (= (list :position 'wid) (:position payload))
+        "nested :value/field fragments must lower to field access, not stay as maps")))

@@ -47,7 +47,10 @@
              {:draw-batch!
               (fn [_g _stage prim _mat _var _cnt payload]
                 (when (or (= "mesh" prim) (#{"line" "quad" "particle"} prim))
-                  (doseq [plan (if (= "mesh" prim) (or payload []) [(vfx-plan/neutral-op->plan payload)])]
+                  (doseq [plan (if (= "mesh" prim)
+                                 (or payload [])
+                                 [(vfx-plan/neutral-op->plan
+                                   payload (:hand-center-pos presentation-context))])]
                     (geometry/render-presentation-geometry!
                       {:player player :camera-pos camera-pos :tick tick :plan plan
                        :pose-stack (.poseStack context)
