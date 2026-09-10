@@ -25,6 +25,9 @@
 `particle-burst-trail-transient`、`target-box-session`、`target-mark-session`、
 `ray-fan-transient`、`trajectory-ribbon-session`、`vortex-column-session`。
 
+另外两个非几何语义项为 `first-person-motion-session`（手部变换）和
+`blood-retrograde-charge`（owner-local 移动速度）。
+
 其中前 11 项已提交在 `ea5556f84`，后三项在 `e2815ad27`；均通过空渲染图专项审计后提交。
 
 `first-person-motion-session` 使用新的 `:first-person-motion` 声明式节点，帧层对曲线做确定性插值，复用现有平台 hand renderer；`blood-retrograde-charge` 保持空 render graph，因为它的真实语义是 owner-local walk-speed side channel，而不是可见几何。
