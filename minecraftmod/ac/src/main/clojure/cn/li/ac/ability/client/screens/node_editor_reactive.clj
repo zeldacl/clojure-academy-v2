@@ -577,7 +577,12 @@
   {:id id :source source
    :label (ui-label (i18n/translate i18n) 92.0)
    :cost-label (ui-label (str cost) 34.0)
-   :category-color (render/argb->rgba-floats (render/category-color category))})
+   :category-color (render/argb->rgba-floats (render/category-color category))
+   ;; Icon placeholder (P4): the .ui.edn already carries an icon layer, but
+   ;; no node art exists yet, so it is switched off here and paints nothing.
+   ;; Turning icons on is a change to THIS map only -- :has-icon? true plus
+   ;; an :icon composite spec -- never to the .ui.edn.
+   :has-icon? false :icon nil})
 
 (defn- palette-search-text [entry]
   (str/lower-case

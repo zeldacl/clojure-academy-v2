@@ -334,11 +334,24 @@
 ;; equipped slots vs. the add-effect palette). The unified palette has no
 ;; static "Effects" literal anywhere -- it labels each group from the
 ;; glyph's own :kind at render time.
-(deftest no-static-effects-title-literal-in-source-test
-  (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))
-        all-maps (filter map? (tree-seq coll? seq ui))
-        literal-texts (keep :text all-maps)]
-    (is (not-any? #(and (string? %) (= "Effects" %)) literal-texts))))
+;;
+;; Asserted against the COMPILED GOLDEN, not the .ui.edn source: the
+;; artifact is what actually ships and renders, and it is the only form
+;; that has had every :include fragment expanded into it -- a duplicate
+;; title reintroduced via a shared fragment would be invisible to a
+;; source-level scan of this one file.
+(def ^:private spell-composer-golden-path
+  (first (filter #(.isFile ^java.io.File (clojure.java.io/file %))
+                 ["../docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn"
+                  "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn"])))
+
+(deftest no-static-effects-title-literal-in-compiled-artifact-test
+  (is (some? spell-composer-golden-path) "spell-composer golden artifact must be on disk")
+  (let [artifact-text (slurp spell-composer-golden-path)
+        occurrences (count (re-seq #"\"Effects\"" artifact-text))]
+    (is (zero? occurrences)
+        (str "the composer must not ship a static \"Effects\" literal (found "
+             occurrences "); group headings come from each glyph's own :kind"))))
 
 (deftest effect-reorder-controls-bind-boundary-visibility-test
   (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))

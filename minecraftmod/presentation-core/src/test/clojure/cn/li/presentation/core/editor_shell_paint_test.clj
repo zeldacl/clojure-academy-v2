@@ -59,8 +59,9 @@
 (def ^:private canvas-item-h 21.0)
 
 (defn- editor-state
-  [{:keys [palette-entries palette-open? inspector-open? diagnostics]
-    :or {palette-entries 0 palette-open? true inspector-open? true diagnostics 0}}]
+  [{:keys [palette-entries palette-open? inspector-open? diagnostics entry-icon]
+    :or {palette-entries 0 palette-open? true inspector-open? true diagnostics 0
+         entry-icon nil}}]
   (let [palette-w (if palette-open? palette-open-w 0.0)
         inspector-w (if inspector-open? inspector-open-w 0.0)
         diagnostics-h (if (pos? diagnostics) diagnostics-open-h 0.0)
@@ -78,7 +79,8 @@
      :palette-rows (mapv (fn [i] {:header? false :entry? true
                                   :id (str "entry-" i) :label (str "Entry " i)
                                   :cost-label "1"
-                                  :category-color [1.0 1.0 1.0 1.0]})
+                                  :category-color [1.0 1.0 1.0 1.0]
+                                  :has-icon? (some? entry-icon) :icon entry-icon})
                          (range palette-entries))
      :palette-list-h (max 0.0 (- body-h 16.0))
      :palette-open? palette-open? :inspector-open? inspector-open?
@@ -210,6 +212,40 @@
               so the scroll's own clip never covered it"
       (is (pos? (visible-area-of-text open "Clear")))
       (is (zero? (visible-area-of-text closed "Clear"))))))
+
+;; P4 reserved the icon structure in the .ui.edn so that shipping real art
+;; is a CONTROLLER-only change. That claim is only worth anything if it is
+;; actually exercised, so this drives the layer from state both ways -- no
+;; art asset and no .ui.edn edit involved.
+(def ^:private icon-spec
+  {:kind :quad :x 0.0 :y 0.0 :w 12.0 :h 12.0 :rgba (unchecked-int 0xFF00FF00)})
+
+(defn- icon-quad-count
+  [state]
+  (let [dl (draw-list state)
+        geom (.geom dl)]
+    (count (filter (fn [i]
+                     (let [g (* 4 i)]
+                       (and (== 12.0 (double (aget geom (+ g 2))))
+                            (== 12.0 (double (aget geom (+ g 3)))))))
+                   (range (.count dl))))))
+
+(deftest palette-icon-layer-is-off-today-and-turns-on-from-state-alone-test
+  (testing ":has-icon? false paints nothing -- a :composite whose bound item
+            is not a CompositeSpec emits zero commands"
+    (is (zero? (icon-quad-count (editor-state {:palette-entries 3})))))
+  (testing "and the same artifact paints one icon per row once state supplies it"
+    (is (= 3 (icon-quad-count (editor-state {:palette-entries 3 :entry-icon icon-spec}))))))
+
+(deftest palette-icon-layer-does-not-displace-the-row-label-test
+  ;; The icon is overlaid ON the button, not swapped for it, so the row
+  ;; stays clickable and the label keeps its place -- turning icons on must
+  ;; not silently reflow the palette.
+  (let [without (editor-state {:palette-entries 2})
+        with (editor-state {:palette-entries 2 :entry-icon icon-spec})]
+    (is (pos? (visible-area-of-text without "Entry 0")))
+    (is (= (visible-area-of-text without "Entry 0")
+           (visible-area-of-text with "Entry 0")))))
 
 (deftest collapsing-the-inspector-does-not-move-the-stage-origin-test
   ;; The inspector is the LAST panel in the row, so collapsing it grows the

@@ -378,7 +378,11 @@
    ;; needs to SEE to know what to work toward -- combat.player/glyph-
    ;; catalog's own docstring calls this the grey-out list by name.
    :admissible? (boolean admissible?)
-   :not-admissible? (not (boolean admissible?))})
+   :not-admissible? (not (boolean admissible?))
+   ;; Glyph icon placeholder (P4) -- see node_editor_reactive.clj's
+   ;; palette-item for the contract: art arrives as a controller change
+   ;; only, the .ui.edn already has the layer.
+   :has-icon? false :icon nil})
 
 (defn- palette-rows
   "catalog (cn.li.combat.api/player-glyph-catalog's shape) -> the palette's
@@ -420,6 +424,7 @@
   {:form? false :effect? true :index idx
    :label (ui-label (glyph-label state glyph) 48.0)
    :category-color (render/argb->rgba-floats (render/category-color (get-in state [:glyph-specs glyph :kind])))
+   :has-icon? false :icon nil
    :selected? (= idx selected-effect)
    :can-move-up? (pos? idx)
    :can-move-down? (< idx (dec group-count))
@@ -449,7 +454,8 @@
         chain (into (if form
                       [{:form? true :effect? false :index -1
                         :label (ui-label (glyph-label state (:glyph form)) 48.0)
-                        :category-color (render/argb->rgba-floats (render/category-color :form))}]
+                        :category-color (render/argb->rgba-floats (render/category-color :form))
+                        :has-icon? false :icon nil}]
                       [])
                     (map-indexed (fn [idx group] (chain-card state idx group selected-effect (count effect-groups))))
                     effect-groups)]

@@ -92,6 +92,20 @@
                               :bind {:text [:item :label] :visible [:item :entry?] :rgba [:item :category-color]}
                               :on {:activate :editor/add-palette-node :drag-start :editor/palette-drag-start}
                               :semantics {:role :button}}
+                             ;; Icon placeholder (P4): no node art exists, so the
+                             ;; controller always sends :has-icon? false and this
+                             ;; paints nothing (a :composite whose bound item is
+                             ;; not a CompositeSpec emits zero commands --
+                             ;; PaintKernel.emitComposite's own early return).
+                             ;; Overlaid ON the button rather than replacing it:
+                             ;; the button is also the click/drag target, so
+                             ;; hiding it behind an icon would make the row
+                             ;; unusable. When art lands only the controller
+                             ;; changes -- :has-icon? true, :icon <spec>, and a
+                             ;; shortened/emptied :label.
+                             {:type :composite :layout {:x 0 :width 14 :height 14}
+                              :bind {:item [:item :icon] :visible [:item :has-icon?]}
+                              :semantics {:role :image}}
                              {:type :text :layout {:x 94 :width 36 :height 14}
                               :bind {:text [:item :cost-label] :visible [:item :entry?]}
                               :semantics {:role :generic}}]}]}]}
