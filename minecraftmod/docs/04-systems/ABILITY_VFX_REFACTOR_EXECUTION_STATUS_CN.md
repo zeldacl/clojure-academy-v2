@@ -13,6 +13,7 @@
 - `ea5556f84`、`e2815ad27`：补回 11 个 V4 空渲染图的声明式 scene graph。
 - `4e1671cca`：审计门禁收敛到当前仍需 ABI 设计的 5 个 VFX。
 - `e3e68a185`：补回 `first-person-motion-session` 的手部变换 ABI，并恢复 `blood-retrograde-charge` 的 owner-local 移动速度侧通道。
+- `f0e011001`：将 `first-person` primitive 纳入 6 个 loader 的接受集合，避免平台提交层静默丢弃。
 
 ## 当前清单
 
@@ -40,4 +41,4 @@
 - `:ac:runAcClojureTests`
 - `verifyCurrentPlatforms`
 
-已通过：AC 全量 `647 tests / 6698 assertions`（持久化改动阶段），VFX Core `49 / 148`，以及 VFX 空图专项此前的 `3 / 5`。`e3e68a185` 之后新增了 first-person 帧测试、charge 侧通道测试和三套平台接线；由于 Windows 当前无法为 Gradle JVM 提交约 512 MiB 虚拟内存（DOS errno 1455），必须在资源恢复后重新执行上述全量门禁，特别是 `:vfx-core:runVfxClojureTests`、`:ac:runAcClojureTestsFast -Dac.test.only=cn.li.ac.vfx.empty-render-graph-audit-test` 与 `verifyCurrentPlatforms`，才能把 50/36 标为“门禁全绿”。
+最终验证已通过：VFX Core `50 tests / 153 assertions`，ability-runtime `86 / 200`，AC 全量 `647 / 6698`，空图审计 `3 / 5`（无失败、无未分类图），以及 `verifyCurrentPlatforms` 全部通过。50 个技能和 36 个 VFX 当前均已纳入门禁覆盖；其中两个合法空图明确走 side-channel，其余历史迁移缺口已补齐。
