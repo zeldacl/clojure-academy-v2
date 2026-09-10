@@ -5,18 +5,18 @@
  {:position {:type :vec3},
   :width {:type :float},
   :height {:type :float},
-  :color {:type :any}},
- :graphs
+  :color {:type :any}}, :graphs
  {:render
   {:nodes
    #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
-        :result {},
-        :nid :n/n--entry--default-0,
-        :inputs {:outcome :performed}}},
+       :n--entry--default-0 {:type :component, :component :ring, :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :position, :nid :n/n001},
+       :n002 {:type :context-ref, :key :width, :nid :n/n002},
+       :n003 {:type :context-ref, :key :color, :nid :n/n003},
+       :n--entry--default-1 {:type :end, :result {}, :nid :n/n--entry--default-1, :inputs {:outcome :performed}}},
    :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+   [{:id :e/target-box-1, :kind :data, :from [:n/n001 :value], :to [:n/n--entry--default-0 :center]}
+    {:id :e/target-box-2, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--default-0 :radius]}
+    {:id :e/target-box-3, :kind :data, :from [:n/n003 :value], :to [:n/n--entry--default-0 :color]}
+    {:id :e/target-box-4, :kind :exec, :from [:n/start :out], :to [:n/n--entry--default-0 :in]}
+    {:id :e/target-box-5, :kind :exec, :from [:n/n--entry--default-0 :out], :to [:n/n--entry--default-1 :in]}]}}}

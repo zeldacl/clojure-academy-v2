@@ -16,18 +16,4 @@
   :surface-hits {:type :any},
   :splash-count {:type :int},
   :splash-size {:type :float},
-  :target-width {:type :float}},
- :graphs
- {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
-        :result {},
-        :nid :n/n--entry--default-0,
-        :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+  :target-width {:type :float}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :emitter,:nid :n/n--entry--default-0,:inputs {:rate-per-tick 1.0,:limit 64,:particle {:texture {:nid :n/n/texture,:ref [:context :spray-textures]},:life-ticks {:nid :n/n/life,:ref [:context :spray-life-ticks]},:size {:nid :n/n/size,:ref [:context :splash-size]}}}},:n001 {:type :context-ref,:key :origin,:nid :n/n001},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/impact-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :anchor]} {:id :e/impact-2,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/impact-3,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}

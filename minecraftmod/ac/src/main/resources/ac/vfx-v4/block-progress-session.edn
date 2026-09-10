@@ -5,18 +5,18 @@
  {:target {:type :vec3},
   :progress {:type :float},
   :color {:type :any},
-  :pulse-period {:type :float}},
- :graphs
+  :pulse-period {:type :float}}, :graphs
  {:render
   {:nodes
    #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
-        :result {},
-        :nid :n/n--entry--default-0,
-        :inputs {:outcome :performed}}},
+       :n--entry--default-0 {:type :component, :component :ring, :nid :n/n--entry--default-0},
+       :n001 {:type :context-ref, :key :target, :nid :n/n001},
+       :n002 {:type :context-ref, :key :progress, :nid :n/n002},
+       :n003 {:type :context-ref, :key :color, :nid :n/n003},
+       :n--entry--default-1 {:type :end, :result {}, :nid :n/n--entry--default-1, :inputs {:outcome :performed}}},
    :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+   [{:id :e/block-progress-1, :kind :data, :from [:n/n001 :value], :to [:n/n--entry--default-0 :center]}
+    {:id :e/block-progress-2, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--default-0 :radius]}
+    {:id :e/block-progress-3, :kind :data, :from [:n/n003 :value], :to [:n/n--entry--default-0 :color]}
+    {:id :e/block-progress-4, :kind :exec, :from [:n/start :out], :to [:n/n--entry--default-0 :in]}
+    {:id :e/block-progress-5, :kind :exec, :from [:n/n--entry--default-0 :out], :to [:n/n--entry--default-1 :in]}]}}}

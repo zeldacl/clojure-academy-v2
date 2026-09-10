@@ -7,18 +7,4 @@
   :texture-pattern {:type :string},
   :frame-count {:type :int},
   :frame-duration-ms {:type :int},
-  :half-size {:type :float}},
- :graphs
- {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
-        :result {},
-        :nid :n/n--entry--default-0,
-        :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+  :half-size {:type :float}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :emitter,:nid :n/n--entry--default-0,:inputs {:rate-per-tick 1.0,:limit 1,:particle {:texture {:nid :n/n/texture,:ref [:context :texture-pattern]},:life-ticks {:nid :n/n/life,:ref [:context :duration-ticks]},:size {:nid :n/n/size,:ref [:context :half-size]}}}},:n001 {:type :context-ref,:key :anchor,:nid :n/n001},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/bb-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :anchor]} {:id :e/bb-2,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/bb-3,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}

@@ -13,18 +13,4 @@
   :velocity {:type :any},
   :texture {:type :string},
   :spacing {:type :any},
-  :fade-in {:type :int}},
- :graphs
- {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
-        :result {},
-        :nid :n/n--entry--default-0,
-        :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+  :fade-in {:type :int}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :emitter,:nid :n/n--entry--default-0,:inputs {:rate-per-tick 1.0,:limit {:nid :n/n/limit,:ref [:context :count-limit]},:particle {:texture {:nid :n/n/texture,:ref [:context :texture]},:life-ticks {:nid :n/n/life,:ref [:context :life-ticks]},:size {:nid :n/n/size,:ref [:context :size]},:alpha {:nid :n/n/alpha,:ref [:context :alpha]}}}},:n001 {:type :context-ref,:key :start,:nid :n/n001},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/pbt-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :anchor]} {:id :e/pbt-2,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/pbt-3,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}
