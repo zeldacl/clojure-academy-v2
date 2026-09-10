@@ -81,7 +81,7 @@
   "A glyph keyword -> its localized display name (\"Touch\", not
    \"form/touch\") via cn.li.ac.ability.datagen.spell-glyph-translations'
    :en_us entry for the spec's own :i18n key -- the spec has always had
-   this key (cn.li.combat.player/glyph-specs), nothing ever wrote a real
+   this key (combat-core's glyph-specs table), nothing ever wrote a real
    translation for it before this refactor (datagen's own registry.clj
    docstring point 3)."
   [state glyph]
@@ -403,7 +403,7 @@
    (C4) -- previously this same analyze-player-spell call only ever ran
    once, at Cast, so a player learned they were over budget only after
    being rejected. :over-complexity is the one reject reason that still
-   reports :complexity/:cap (cn.li.combat.player/admit), so that case
+   reports :complexity/:cap (combat-core's admit fn), so that case
    keeps the real number instead of collapsing to a blank/zero reading."
   [state]
   (let [cap (long combat-api/player-spell-complexity-cap)

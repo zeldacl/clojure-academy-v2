@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.datagen.spell-glyph-translations
   "Auto-derived English labels for the player spell composer's glyph
    palette (node-editor/spell-composer UI refactor plan, P3/C1-C2).
-   combat-core's glyph-specs table (cn.li.combat.player) already declares
+   combat-core's glyph-specs table already declares
    an :i18n key per glyph (\"glyph.academy.form.touch\" etc.) -- it has
    from the start, this namespace is the missing OTHER half: nothing ever
    wrote an actual translation for those keys, so resolving one through
