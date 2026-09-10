@@ -1395,6 +1395,12 @@ tasks.register("verifyAbilityVfxRegistryCoverage") {
     dependsOn ":vfx-core:checkClojure", ":ac:checkClojure"
 }
 
+tasks.register("verifyNoUnclassifiedEmptyVfxRenderGraphs") {
+    group = "verification"
+    description = "Every ac/vfx-v4/*.edn document with an empty (start->end only) :render graph must be explicitly classified as either a known client-side-only effect (side-channel-stubs) or a known V4 migration leftover (known-migration-leftover-stubs) -- an audit gate, not a content fix; see cn.li.ac.vfx.empty-render-graph-audit-test's own docstring for the full rationale and the perf-plan context that found this. Real EDN parsing and real node-core compilation, not a text regex -- runs only that one test namespace, not the full ac suite (see :ac:runEmptyVfxRenderGraphAuditTest), matching cn.li.ac.ability.service.edn-coverage-test's own pattern for the same class of check."
+    dependsOn ":ac:runEmptyVfxRenderGraphAuditTest"
+}
+
 tasks.register("verifyVfxSingleTickPath") {
     group = "verification"
     description = "Exactly one V4 VFX instance-tick implementation exists."
@@ -1410,6 +1416,85 @@ tasks.register("verifyVfxSingleTickPath") {
         logger.lifecycle("[verifyVfxSingleTickPath] ok (${definitions[0]})")
     }
 }
+tasks.register("verifyNoJitHostileMethods") {
+    group = "verification"
+    description = "cn.li.node.expr's compiled methods stay under HotSpot's HugeMethodLimit (8000 bytecode bytes) -- a method past that limit is NEVER JIT-compiled for the process lifetime and runs in the bytecode interpreter forever. expr/evaluate was a single ~20KB case over every opcode until the perf plan's Phase A split it into one private function per opcode namespace; this gate is that split's permanent regression guard, since no unit test can detect 'runs correctly but never gets JIT-compiled'. Scoped to this one namespace, not a repo-wide sweep: an earlier attempt auditing node-core+mcmod+combat-core+vfx-core together drove hundreds of per-class javap process forks, which failed outright after several minutes ('a problem occurred starting process javap') well before finishing -- exactly the fragility the perf plan's own D1 section anticipated and pre-approved narrowing for. cn.li.node.expr is also the one namespace with a PROVEN historical violation, so this scope still protects the actual incident, not a hypothetical one. Compiles to an ISOLATED output directory, never build/clojure/main (node-core's own clearNeutralAotOutput deletes that on every classes/jar build) and never anything on a packaging path -- see verifyNeutralClojurePackaging/verifyVfxAotBoundary, which this gate must not interact with."
+    dependsOn ":node-core:classes"
+    def auditClasspath = project(":node-core").sourceSets.main.runtimeClasspath.files
+    def outputDir = layout.buildDirectory.dir("reports/jit-audit/classes")
+    doLast {
+        def classesDir = outputDir.get().asFile
+        delete(classesDir)
+        classesDir.mkdirs()
+        exec {
+            executable = "${System.getProperty('java.home')}/bin/java"
+            args = ["-cp", auditClasspath.join(File.pathSeparator),
+                    "-Dclojure.compile.path=${classesDir.absolutePath}",
+                    "clojure.main", "-e", "(compile 'cn.li.node.expr)"]
+        }
+        // __init classes are namespace-load bootstrapping (top-level defs,
+        // the `load` static initializer), run exactly once per process --
+        // never a per-dispatch hot path, so excluded from the size check.
+        def classNames = fileTree(classesDir) { include "**/*.class" }.files
+            .collect { classesDir.toPath().relativize(it.toPath()).toString().replace(File.separator, ".") - ".class" }
+            .findAll { !it.endsWith("__init") }
+            .sort()
+        if (classNames.isEmpty()) {
+            throw new GradleException("verifyNoJitHostileMethods: no compiled classes found for cn.li.node.expr")
+        }
+        // ONE javap invocation listing every class, not one process fork per
+        // class -- the repo-wide attempt above forked javap per class file
+        // (hundreds of them) and that is what actually failed; expr.clj's
+        // own ~20 classes in a single call is small and reliable.
+        def out = new ByteArrayOutputStream()
+        exec {
+            executable = "${System.getProperty('java.home')}/bin/javap"
+            args = ["-c", "-p", "-classpath", classesDir.absolutePath] + classNames
+            standardOutput = out
+            errorOutput = out
+        }
+        def hugeMethods = []
+        def currentClass = null
+        def currentMethod = null
+        def maxOffset = 0
+        def flush = {
+            if (currentClass != null && currentMethod != null && maxOffset > 8000) {
+                hugeMethods << "${currentClass} ${currentMethod} (${maxOffset} bytes)"
+            }
+        }
+        out.toString().eachLine { String line ->
+            def classMatch = line =~ /^Compiled from /
+            def headerMatch = line =~ /^(?:public |final |abstract )*(?:class|interface) (\S+)/
+            if (headerMatch) { currentClass = headerMatch[0][1] }
+            def sigMatch = line =~ /^\s{2}\S.*\(.*\);\s*$/
+            if (sigMatch) {
+                flush()
+                currentMethod = line.trim()
+                maxOffset = 0
+            } else {
+                def offsetMatch = line =~ /^\s+(\d+):\s/
+                if (offsetMatch) {
+                    // A tableswitch/lookupswitch case-value column matches
+                    // this same "N: " shape but is a jump-table KEY, not a
+                    // bytecode offset -- observed in practice to look like an
+                    // arbitrary 10-digit hash. A real offset is provably <=
+                    // 65535, the JVM spec's hard cap on one method's
+                    // code_length; anything past that cannot be a real
+                    // offset and is filtered out.
+                    def n = offsetMatch[0][1] as long
+                    if (n <= 65535 && n > maxOffset) maxOffset = n
+                }
+            }
+        }
+        flush()
+        if (!hugeMethods.isEmpty()) {
+            throw new GradleException("Method(s) past HotSpot's HugeMethodLimit (8000 bytes), never JIT-compiled:\n" +
+                hugeMethods.join("\n"))
+        }
+        logger.lifecycle("[verifyNoJitHostileMethods] ok (${classNames.size()} cn.li.node.expr classes audited)")
+    }
+}
+
 tasks.register("verifyCombatIntentOnlyNetwork") {
     group = "verification"
     description = "Ensure AC server combat registration exposes CombatIntent only, not Context/slot packets, and that the ability:combat/result payload never carries raw VFX signals (those are audience-routed onto ability:combat/vfx instead)."
@@ -2613,7 +2698,9 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNeutralProviderRuntimeLoad",
               "verifyMinecraftComponentNeutrality",
               "verifyVersionSeamParity",
-              "verifyParticleDefinitions"
+              "verifyParticleDefinitions",
+              "verifyNoJitHostileMethods",
+              "verifyNoUnclassifiedEmptyVfxRenderGraphs"
 }
 
 tasks.register("verifyBuildProfiles") {

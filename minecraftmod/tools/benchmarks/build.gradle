@@ -44,7 +44,7 @@ dependencies {
 
 tasks.register("jmh", JavaExec) {
     group = "verification"
-    description = "Run isolated neutral-runtime JMH benchmarks; output is never part of the mod Jar."
+    description = "Run the node-engine/VFX runtime performance-plan acceptance benchmarks (cn.li.node.ops/prim-table + cn.li.mcmod.runtime.effect-emit specialization, cn.li.vfx.runtime per-frame path); output is never part of the mod Jar. Replaces the old FinalRuntimeTickBenchmark, which measured cn.li.ac.ability.final-runtime's empty-scheduled-tick path -- that namespace, and the V4-predecessor engine's whole :scheduled-bucket tick model it measured, no longer exist (confirmed: neither cn.li.ability.engine nor cn.li.ac.ability.final-runtime are present in the current tree); the V4 engine dispatches per-ability, not via a global scheduled sweep, so there is no equivalent to repoint at."
     dependsOn tasks.named("jmhClasses")
     classpath = sourceSets.jmh.runtimeClasspath
     mainClass = "org.openjdk.jmh.Main"
@@ -52,7 +52,8 @@ tasks.register("jmh", JavaExec) {
     outputs.file(report)
     outputs.upToDateWhen { false }
     doFirst { report.get().asFile.parentFile.mkdirs() }
-    args = ["cn.li.tools.benchmark.FinalRuntimeTickBenchmark", "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
+    args = ["cn.li.tools.benchmark.NodeEngineDispatchBenchmark|cn.li.tools.benchmark.VfxFrameBenchmark",
+            "-wi", "3", "-i", "5", "-f", "1", "-prof", "gc", "-rf", "json", "-rff", report.get().asFile.absolutePath]
 }
 
 tasks.register("jmhPresentation", JavaExec) {
