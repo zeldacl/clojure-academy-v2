@@ -17,7 +17,7 @@
    :camera-fov scene op reading ?offset -- confirmed by direct
    compilation below, not assumed from the naming pattern.)
 
-   The other 5 are V4 migration leftovers with no known reason to stay
+   The other 2 are V4 migration leftovers with no known reason to stay
    empty. This test does not fix them -- filling in real scene content is
    the V4 migration owner's call, the same boundary already drawn for
    task #16 (skills-v4's :vfx/emit vs the vocabulary's :effect/vfx). It
@@ -48,8 +48,7 @@
    is a snapshot, not a floor: an entry moving to non-empty (content
    getting filled in) does not fail this test, only a NEW, unclassified
    empty document does."
-  #{:blood-retrograde-charge :first-person-motion-session
-    :ray-fan-transient :trajectory-ribbon-session :vortex-column-session})
+  #{:blood-retrograde-charge :first-person-motion-session})
 
 (defn- vfx-v4-resource-names []
   (let [root (io/resource vfx-v4-resource-root)]
