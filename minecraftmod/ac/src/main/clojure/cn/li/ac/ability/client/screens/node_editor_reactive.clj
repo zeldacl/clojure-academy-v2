@@ -324,6 +324,19 @@
           (str n " param" (when (not= 1 n) "s")
                (when ret (str " -> " (name ret)))))))))
 
+(defn- focus-diagnostic
+  "state, action payload -> state with :selected-nid jumped to the
+   diagnostic's attributed node (check.clj's diagnostics docstring: :nid
+   is nil for an unstamped form, so this is a real no-jump case, not an
+   error). Pulled out as its own pure fn (not inline in handle-action's
+   case) specifically so it is testable without going through handle-
+   action's own unconditional trailing render-state call."
+  [state payload]
+  (let [nid (some-> (get-in payload [:item :nid]) keyword)]
+    (if nid
+      (assoc state :selected-nid nid :status (str "Jumped to " (name nid) "."))
+      (assoc state :status "This diagnostic is not attributed to a single node."))))
+
 (defn- node-op-id [node]
   (let [op (:op node)]
     (if (symbol? op) (keyword (namespace op) (name op)) op)))
@@ -1288,10 +1301,7 @@
     ;; so the button only jumps when the compiler actually attributed the
     ;; error to a node.
     :editor/focus-diagnostic
-    (let [nid (some-> (get-in payload [:item :nid]) keyword)]
-      (if nid
-        (swap! state* assoc :selected-nid nid :status (str "Jumped to " (name nid) "."))
-        (swap! state* assoc :status "This diagnostic is not attributed to a single node.")))
+    (swap! state* focus-diagnostic payload)
 
     :editor/undo
     (history-action! state* :undo)

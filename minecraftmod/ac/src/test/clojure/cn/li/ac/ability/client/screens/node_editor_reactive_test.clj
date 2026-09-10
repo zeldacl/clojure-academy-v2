@@ -4,6 +4,7 @@
    Presentation smoke tests cover compiled view routing; this namespace
    covers the controller's V4 geometry and graph edits without a game window."
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.string :as str]
             [cn.li.ability.editor.label :as label]
             [cn.li.ac.ability.client.screens.node-editor-reactive :as editor]))
 
@@ -30,6 +31,28 @@
   (let [g {:nodes {"n1" {:nid "n1" :type :literal :value 1}} :links []}]
     (is (nil? (#'editor/selected-signature {:graph g :selected-nid "n1" :palette []})))
     (is (nil? (#'editor/selected-signature {:graph g :selected-nid nil :palette []})))))
+
+;; P1/P2: cost used to be concatenated into the label text and truncated
+;; together with it (a long name could push cost off the end entirely) --
+;; it is now :cost-label, a field of its own.
+(deftest palette-item-keeps-cost-as-a-separate-field-from-label-test
+  (let [item (#'editor/palette-item {:id :target/raycast :i18n "editor.node.combat.target.raycast"
+                                     :cost 7 :source :node :category :targeting})]
+    (is (contains? item :cost-label))
+    (is (= "7" (:cost-label item)))
+    (is (not (str/includes? (:label item) "7")))))
+
+;; C6: check.clj's diagnostics docstring says :nid is meant to let the
+;; editor "jump straight to and highlight the failing node" -- this
+;; confirms the dispatch actually does that, not just that the data
+;; carries a :nid the UI happens to bind.
+(deftest focus-diagnostic-jumps-to-the-attributed-node-test
+  (is (= :n7 (:selected-nid (#'editor/focus-diagnostic {} {:item {:nid "n7"}})))))
+
+(deftest focus-diagnostic-is-a-safe-noop-without-an-attributed-nid-test
+  (let [result (#'editor/focus-diagnostic {:selected-nid :untouched} {:item {:nid nil}})]
+    (is (= :untouched (:selected-nid result)))
+    (is (= "This diagnostic is not attributed to a single node." (:status result)))))
 
 (defn- graph [& nodes]
   {:nodes (into {} (map (fn [[nid type & kvs]]

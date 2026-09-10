@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ability.editor.label :as label]
+            [cn.li.combat.api :as combat-api]
             [cn.li.ac.ability.client.screens.spell-composer-reactive :as composer]))
 
 ;; P6: this screen no longer carries its own copy of the truncation
@@ -247,6 +248,22 @@
     (is (not-any? #(str/includes? % "/") palette-labels))
     (is (not-any? #(str/includes? % "/") chain-labels))))
 
+;; C3: an inadmissible glyph must still be a real row (grey-out), never
+;; dropped from the vector -- combat.player/glyph-catalog's own docstring
+;; names this the palette's "grey-out list" by name. Every real glyph is
+;; admissible under this test environment's default combat config (see
+;; palette-groups-forms-effects-and-augments-under-one-list-test's own
+;; sanity check), so this feeds a synthetic catalog entry directly rather
+;; than depend on some future config having a locked-out effect.
+(deftest inadmissible-glyphs-render-greyed-out-not-hidden-test
+  (let [state (assoc (#'composer/initial-state)
+                     :catalog [{:glyph :effect/damage :kind :effect :cost 3.0 :admissible? false}])
+        rows (:palette-rows (#'composer/render-state state))
+        entry (first (filter :entry? rows))]
+    (is (some? entry) "the inadmissible entry must still be a row, not filtered out")
+    (is (false? (:admissible? entry)))
+    (is (true? (:not-admissible? entry)))))
+
 ;; C4: the complexity readout is live in render-state, not only computed
 ;; once at Cast time.
 (deftest complexity-readout-updates-as-effects-are-added-test
@@ -254,12 +271,31 @@
         with-effect (-> (#'composer/initial-state)
                         (#'composer/pick-form :form/self)
                         (#'composer/add-effect :effect/damage))
-        rendered (#'composer/render-state with-effect)]
+        rendered (#'composer/render-state with-effect)
+        expected (:complexity
+                  (combat-api/analyze-player-spell
+                   (#'composer/composed-glyphs with-effect)
+                   combat-api/player-spell-complexity-cap))]
     (is (= 0.0 (:complexity-ratio empty-rendered)))
     (is (false? (:over-cap? empty-rendered)))
     (is (pos? (:complexity-ratio rendered)))
     (is (<= 0.0 (:complexity-ratio rendered) 1.0))
+    ;; the readout's number must be THE SAME complexity admit itself would
+    ;; compute, not a separate/approximate reading that could drift.
+    (is (= (double (/ expected combat-api/player-spell-complexity-cap)) (:complexity-ratio rendered)))
     (is (str/includes? (:complexity-label rendered) "Complexity"))))
+
+(deftest complexity-readout-flags-over-cap-spells-test
+  (let [maxed (reduce (fn [s _] (#'composer/add-effect s :effect/damage))
+                       (-> (#'composer/initial-state) (#'composer/pick-form :form/touch))
+                       (range 8))
+        rendered (#'composer/render-state maxed)
+        analysis (combat-api/analyze-player-spell (#'composer/composed-glyphs maxed)
+                                                   combat-api/player-spell-complexity-cap)]
+    (is (= :over-complexity (:reject analysis))
+        "sanity: 8 damage effects on a real form must actually exceed the cap")
+    (is (true? (:over-cap? rendered)))
+    (is (= 1.0 (:complexity-ratio rendered)))))
 
 (deftest rendered-chain-card-lists-every-augment-in-order-test
   (let [state (-> (#'composer/initial-state)
