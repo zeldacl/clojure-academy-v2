@@ -46,13 +46,20 @@
     :bind {:items [:state :palette-rows] :width [:state :shell-palette-w] :height [:state :shell-body-h]}
     :semantics {:role :list}
     :children
-    [{:type :row :layout {:height 14}
+    ;; :absolute item template, NOT :row -- LayoutKernel never reads
+    ;; :visible during measure/arrange (only Paint/Hit do), so a :row's
+    ;; header/entry children would both reserve their full flow width
+    ;; even while invisible, pushing the entry button to start AFTER the
+    ;; header's width regardless of which one is actually showing.
+    ;; Overlapping both at x=0 (same fix as preset_editor's icon/text
+    ;; slot layering) keeps the entry button inside the palette column.
+    [{:type :absolute :layout {:height 14}
       :children
-      [{:type :text :layout {:height 14 :width 106}
+      [{:type :text :layout {:x 0 :width 106 :height 14}
         :bind {:text [:item :header-label] :visible [:item :header?]}
         :on {:activate :composer/toggle-palette-category}
         :semantics {:role :button :field :composer-palette-category}}
-       {:type :absolute :layout {:width 66 :height 14}
+       {:type :absolute :layout {:x 0 :width 66 :height 14}
         :bind {:visible [:item :entry?]}
         :children
         [{:type :button :layout {:width 64 :height 14}
@@ -63,7 +70,7 @@
           :bind {:text [:item :label] :visible [:item :not-admissible?]}
           :style {:rgba [0.5 0.5 0.5 1.0]}
           :semantics {:role :generic}}]}
-       {:type :text :layout {:width 24 :height 14}
+       {:type :text :layout {:x 66 :width 24 :height 14}
         :bind {:text [:item :cost-label] :visible [:item :entry?]}
         :semantics {:role :generic}}]}]}
 

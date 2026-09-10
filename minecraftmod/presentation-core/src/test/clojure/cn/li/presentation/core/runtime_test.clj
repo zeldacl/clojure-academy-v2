@@ -414,28 +414,37 @@
                   (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/node-editor.uic.edn")])))
 
 (defn- node-editor-smoke-state
-  [expanded?]
+  "Design 560x380, header-h 48 / footer-h 32 (chrome.clj), both panels
+   open (palette-w 130, inspector-w 180, stage-w 250) with no diagnostics
+   -> body-h 300. See node_editor_reactive.clj's own design-width/
+   palette-open-w/inspector-open-w for where these numbers come from."
+  []
   {:title "Node Editor"
+   :shell-header-h 48.0 :shell-footer-h 32.0 :shell-body-h 300.0 :shell-diagnostics-h 0.0
+   :shell-palette-w 130.0 :shell-stage-w 250.0 :shell-inspector-w 180.0
    :phase-label "Phase: default"
    :phase-tabs []
    :palette-query ""
    :palette-clear-label "Clear"
-   :palette-rows []
+   ;; One entry row (no header) -- palette-list-h is body-h minus the
+   ;; 16px search row.
+   :palette-rows [{:header? false :entry? true :id "entry-1" :label "Raycast"
+                   :cost-label "2" :category-color [1.0 1.0 1.0 1.0]}]
+   :palette-list-h 284.0
+   :palette-open? true :inspector-open? true
+   :palette-toggle-label "Hide palette" :inspector-toggle-label "Hide inspector"
    :canvas [{:kind :quad :nid "first" :x 10.0 :y 10.0 :w 20.0 :h 20.0
              :local-x 0.0 :local-y 0.0 :rgba 0xFFFFFFFF}
             {:kind :quad :nid "second" :x 60.0 :y 10.0 :w 20.0 :h 20.0
              :local-x 0.0 :local-y 0.0 :rgba 0xFFFFFFFF}]
    :selected-label "(nothing selected)"
+   :selected-signature "" :selected-signature-visible? false
    :selected-params []
+   :inspector-list-h 282.0
    :diagnostics []
    :cost-label "complexity=0 host-cmds=0"
    :zoom-label "Zoom 100%"
    :zoom-reset-label "Reset zoom"
-   :canvas-viewport? expanded?
-   :canvas-compact-visible? (not expanded?)
-   :canvas-viewport-visible? expanded?
-   :canvas-viewport-label (if expanded? "Close viewport (Esc)" "Expand canvas")
-   :canvas-viewport-title "Canvas viewport"
    :preview-label "Preview off"
    :preview-toggle-label "Preview"
    :reload-label "Reload from disk"
@@ -445,7 +454,7 @@
    :redo-label "Redo"
    :status ""})
 
-(deftest compiled-node-editor-routes-compact-and-viewport-item-hits
+(deftest compiled-node-editor-paints-and-routes-item-hits
   (let [art-file (node-editor-golden-file)]
     (is (some? art-file) "node-editor golden artifact must be on disk")
     (let [artifact (edn/read-string (slurp art-file))
@@ -455,56 +464,54 @@
                   rt {:host {:stage :screen}
                       :view-id :academy.app/node-editor
                       :artifact artifact
-                      :state (node-editor-smoke-state false)
+                      :state (node-editor-smoke-state)
                       :reduce (fn [state action payload]
                                 (swap! seen conj [action payload])
                                 {:state state :event-result :consume})})]
-      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 480 360 1.0))
-      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
+      (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 560 380 1.0))
+      (let [dl (-> (runtime/extract-stage! rt :screen {:width 560 :height 380})
                    :mounts first :commands)]
-        (is (pos? (.count dl)) "compact node editor must paint")
-        (is (= 10.0 (double (aget (.geom dl) 24)))
-            "compact node body is painted at its item wrapper x"))
+        (is (pos? (.count dl)) "node editor must paint"))
+      ;; The single stage panel (the old compact/viewport modal split is
+      ;; gone) starts at (palette-w, header-h) = (130, 48); canvas item
+      ;; "first" sits at design-local (10,10), so its 20x20 box spans
+      ;; absolute (140,58)-(160,78).
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :down :x 18 :y 108 :button 0})
+                          {:type :pointer :event-type :down :x 150 :y 68 :button 0})
       (is (= :editor/canvas-press (ffirst @seen)))
       (is (= "first" (get-in (last @seen) [1 :item :nid])))
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :up :x 18 :y 108 :button 0})
+                          {:type :pointer :event-type :up :x 150 :y 68 :button 0})
       ;; Canvas and node wrappers expose a palette-drop action for releases;
       ;; runtime must preserve the origin item so the controller can split
       ;; palette insertion from ordinary node movement/panning.
       (reset! seen [])
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :down :x 18 :y 108 :button 0})
+                          {:type :pointer :event-type :down :x 150 :y 68 :button 0})
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :drag :x 22 :y 112
+                          {:type :pointer :event-type :drag :x 154 :y 72
                            :drag-x 4.0 :drag-y 4.0 :button 0})
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :up :x 22 :y 112 :button 0})
+                          {:type :pointer :event-type :up :x 154 :y 72 :button 0})
       (is (= :editor/palette-drop (first (last @seen))))
       (is (= "first" (get-in (last @seen) [1 :drag-item :nid])))
+      ;; Regression for the header/entry palette row fix: a :row item
+      ;; template left the (invisible) header text's full flow width
+      ;; reserved, pushing the entry button past the palette's own 130px
+      ;; column -- both are now :absolute-overlaid at x=0, so a click
+      ;; safely inside the column must reach the entry button.
+      ;; The button also has a :drag-start handler (for canvas insertion by
+      ;; drag), so a lone :down alone resolves to that -- a real click is
+      ;; :down immediately followed by :up with no intervening movement.
       (reset! seen [])
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :down :x 200 :y 190 :button 0})
+                          {:type :pointer :event-type :down :x 40 :y 71 :button 0})
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :drag :x 204 :y 194
-                           :drag-x 4.0 :drag-y 4.0 :button 0})
-      (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :up :x 204 :y 194 :button 0})
-      (is (= :editor/palette-drop (first (last @seen))))
-      (is (nil? (get-in (last @seen) [1 :drag-item])))
-      (runtime/present! rt mount (node-editor-smoke-state true))
-      (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 360})
-                   :mounts first :commands)]
-        (is (pos? (.count dl)) "viewport node editor must paint")
-        (is (= 10.0 (double (aget (.geom dl) 12)))
-            "viewport node body is painted at its own wrapper x"))
-      (reset! seen [])
-      (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :down :x 18 :y 74 :button 0})
-      (is (= :editor/canvas-press (ffirst @seen)))
-      (is (= "first" (get-in (last @seen) [1 :item :nid]))))))
+                          {:type :pointer :event-type :up :x 40 :y 71 :button 0})
+      (is (some #(= :editor/add-palette-node (first %)) @seen))
+      (is (= "entry-1" (get-in (last (filter #(= :editor/add-palette-node (first %)) @seen))
+                               [1 :item :id]))))))
+
 (deftest compiled-node-editor-paints-in-320x240-host
   (let [art-file (node-editor-golden-file)]
     (is (some? art-file) "node-editor golden artifact must be on disk")
@@ -514,11 +521,13 @@
                   rt {:host {:stage :screen}
                       :view-id :academy.app/node-editor
                       :artifact artifact
-                      :state (node-editor-smoke-state false)
+                      :state (node-editor-smoke-state)
                       :reduce (fn [state _action _payload]
                                 {:state state :event-result :consume})})]
-      ;; The node editor is designed at 480x360; this host exercises the
-      ;; fit transform at 320x240 without launching a game client.
+      ;; The node editor is designed at 560x380 (P0 finding: content-rect
+      ;; only centers the design box, never scales it -- see NODE_EDITOR.
+      ;; md's own verification-status section); this host exercises the
+      ;; fit transform at a smaller 320x240 host without a game client.
       (runtime/update-host! rt mount (HostGeometry. 0.0 0.0 320 240 1.0))
       (let [dl (-> (runtime/extract-stage! rt :screen {:width 320 :height 240})
                    :mounts first :commands)]
@@ -533,28 +542,30 @@
                   (io/file ".." "minecraftmod" "docs/06-gui/presentation/golden/assets/academy/presentation-compiled/academy.app/spell-composer.uic.edn")])))
 
 (defn- spell-composer-smoke-state
+  "Design 480x320, header-h 48 / footer-h 32 (chrome.clj shared with the
+   node editor), palette-w 110 / stage-w 250 / inspector-w 120, always
+   both open (the composer never collapses its panels) -> body-h 240."
   []
   {:title "Spell Composer"
-   :form-palette [{:id :form/projectile :label "Projectile"}]
-   :effect-palette [{:id :effect/damage :label "Damage"}]
-   :augment-palette [{:id :augment/amplify :label "Amplify"}]
-   :form-label "Form"
+   :shell-header-h 48.0 :shell-footer-h 32.0 :shell-body-h 240.0 :shell-diagnostics-h 0.0
+   :shell-palette-w 110.0 :shell-stage-w 250.0 :shell-inspector-w 120.0
+   :palette-rows [{:header? false :entry? true :glyph :effect/damage
+                   :label "Damage" :cost-label "3" :admissible? true :not-admissible? false
+                   :category-color [1.0 1.0 1.0 1.0]}]
+   :complexity-label "Complexity 0 / 20" :complexity-ratio 0.0 :over-cap? false
+   :chain-items [{:form? false :effect? true :index 0 :label "Damage"
+                  :category-color [1.0 1.0 1.0 1.0]
+                  :selected? false :can-move-up? false :can-move-down? false
+                  :up-label "^" :down-label "v" :remove-label "x"
+                  :augments [{:effect-index 0 :augment-index 0 :label "Amplify" :remove-label "x"}]}]
    :selected-param-fields []
-   :effect-slots [{:index 0 :label "1. effect/damage"
-                   :row-height 128 :augment-height 112
-                   :augments (mapv (fn [augment-index]
-                               {:effect-index 0 :augment-index augment-index
-                                :label "+ augment/amplify" :remove-label "X"})
-                             (range 8))
-                   :can-move-up? false :can-move-down? false
-                   :up-label "UP" :down-label "DN" :remove-label "X"}]
-   :can-cast? true
+   :can-cast? false
    :busy? false
    :status ""
    :cast-label "Cast"
    :clear-label "Clear"})
 
-(deftest compiled-spell-composer-paints-and-routes-effect-palette-hit
+(deftest compiled-spell-composer-paints-and-routes-item-hits
   (let [art-file (spell-composer-golden-file)]
     (is (some? art-file) "spell-composer golden artifact must be on disk")
     (let [artifact (edn/read-string (slurp art-file))
@@ -572,34 +583,23 @@
       (let [dl (-> (runtime/extract-stage! rt :screen {:width 480 :height 320})
                    :mounts first :commands)]
         (is (pos? (.count dl)) "compiled spell composer must paint"))
-      ;; The effect palette begins below title/form/parameter rows at y=128;
-      ;; its first button is the 142..158 row in the 480x320 design space.
+      ;; Regression for the header/entry palette row fix (same issue as
+      ;; the node editor's): the entry button is now :absolute-overlaid
+      ;; at x=0 under the (invisible-when-entry) header text instead of
+      ;; being pushed past it in row flow. Palette starts at (0, header-h);
+      ;; the one entry row is the first row below the header band.
       (runtime/dispatch! rt mount
-                          {:type :pointer :event-type :down :x 20 :y 150 :button 0})
-      (is (= :composer/add-effect (ffirst @seen)))
-       (is (= :effect/damage (get-in (last @seen) [1 :item :id])))
-       (reset! seen [])
-       ;; The first augment row has its own remove button at x280..296, y48..62.
-       (runtime/dispatch! rt mount
-                           {:type :pointer :event-type :down :x 288 :y 55 :button 0})
-       (is (= :composer/remove-augment (ffirst @seen)))
-       (is (= 0 (get-in (last @seen) [1 :item :augment-index])))
-       ;; Eight augment rows exceed the 36px effect-slot viewport. Scroll the
-       ;; compiled repeater to its maximum, then hit the now-visible final
-       ;; row; this proves the runtime applies scroll offsets before nested
-       ;; item hit-testing rather than merely painting an oversized list.
-       (reset! seen [])
-       (runtime/dispatch! rt mount
-                          {:type :scroll :x 220 :y 50 :delta -8.0})
-       (is (pos? (double (or (get-in (runtime/instance! rt mount)
-                                    [:scroll-offsets :composer/effect-slots])
-                             0.0)))
-           "effect-slot repeater must scroll when eight augments exceed its viewport")
-       (reset! seen [])
-       (runtime/dispatch! rt mount
-                           {:type :pointer :event-type :down :x 288 :y 55 :button 0})
-       (is (= :composer/remove-augment (ffirst @seen)))
-       (is (= 7 (get-in (last @seen) [1 :item :augment-index]))))))
+                          {:type :pointer :event-type :down :x 30 :y 55 :button 0})
+      (is (= :composer/glyph-activate (ffirst @seen)))
+      (is (= :effect/damage (get-in (last @seen) [1 :item :glyph])))
+      ;; The chain's one card sits at the stage origin (palette-w, header-h)
+      ;; = (110, 48); :on {:activate :composer/select-effect} is on the
+      ;; whole card column, not just its label text.
+      (reset! seen [])
+      (runtime/dispatch! rt mount
+                          {:type :pointer :event-type :down :x 130 :y 68 :button 0})
+      (is (= :composer/select-effect (ffirst @seen))))))
+
 (deftest compiled-spell-composer-paints-in-320x240-host
   (let [art-file (spell-composer-golden-file)]
     (is (some? art-file) "spell-composer golden artifact must be on disk")
