@@ -357,12 +357,12 @@ tasks.register('runEmptyVfxRenderGraphAuditTest', JavaExec) {
 
 tasks.register('verifyPaletteMetadataAc', JavaExec) {
     group = 'verification'
-    description = 'Node-editor plan Phase 0 gate, ac half: runs only cn.li.ac.ability.datagen.editor-vocab-translations-test (every exported node/op/fn i18n key actually resolves to a label, against the real combat/vfx vocab + node-core ops table, not a synthetic fixture). See root verifyVocabularyPaletteMetadata.'
+    description = 'Node-editor plan Phase 0 gate, ac half: runs cn.li.ac.ability.datagen.editor-vocab-translations-test (every exported node/op/fn i18n key actually resolves to a label, against the real combat/vfx vocab + node-core ops table, not a synthetic fixture) and spell-glyph-translations-test (same check for the spell composer\'s 5 glyph :i18n keys -- see that namespace\'s own docstring: combat-core\'s glyph-specs table has always declared an :i18n key, nothing wrote a real translation for it until the node-editor/spell-composer UI refactor). See root verifyVocabularyPaletteMetadata.'
     dependsOn compileClojure, classes
     workingDir = project.projectDir
     classpath = sourceSets.main.runtimeClasspath + configurations.testRuntimeClasspath + files(sourceSets.test.resources.srcDirs) + files(sourceSets.test.allSource.srcDirs)
     mainClass = 'clojure.main'
-    systemProperty 'ac.test.only', 'cn.li.ac.ability.datagen.editor-vocab-translations-test'
+    systemProperty 'ac.test.only', 'cn.li.ac.ability.datagen.editor-vocab-translations-test,cn.li.ac.ability.datagen.spell-glyph-translations-test'
     args '-m', 'cn.li.ac.test-runner'
 }
 
