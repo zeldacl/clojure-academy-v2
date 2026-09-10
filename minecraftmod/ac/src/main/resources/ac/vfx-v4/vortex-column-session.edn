@@ -11,18 +11,4 @@
   :base {:type :vec3},
   :axis {:type :vec3},
   :height {:type :float},
-  :spacing {:type :any}},
- :graphs
- {:render
-  {:nodes
-   #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0
-       {:type :end,
-        :result {},
-        :nid :n/n--entry--default-0,
-        :inputs {:outcome :performed}}},
-   :links
-   [{:id :e/link001,
-     :kind :exec,
-     :from [:n/start :out],
-     :to [:n/n--entry--default-0 :in]}]}}}
+  :spacing {:type :any}}, :graphs {:render {:nodes #:n{:start {:type :start,:nid :n/start},:n--entry--default-0 {:type :component,:component :emitter,:nid :n/n--entry--default-0,:inputs {:rate-per-tick 1.0,:limit {:nid :n/n/limit,:ref [:context :count-limit]},:particle {:life-ticks {:nid :n/n/life,:ref [:context :life-ticks]},:size {:nid :n/n/size,:ref [:context :radius]},:alpha {:nid :n/n/alpha,:ref [:context :alpha]}}}},:n001 {:type :context-ref,:key :base,:nid :n/n001},:n--entry--default-1 {:type :end,:result {},:nid :n/n--entry--default-1,:inputs {:outcome :performed}}},:links [{:id :e/vortex-1,:kind :data,:from [:n/n001 :value],:to [:n/n--entry--default-0 :anchor]} {:id :e/vortex-2,:kind :exec,:from [:n/start :out],:to [:n/n--entry--default-0 :in]} {:id :e/vortex-3,:kind :exec,:from [:n/n--entry--default-0 :out],:to [:n/n--entry--default-1 :in]}]}}}
