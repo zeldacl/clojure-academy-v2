@@ -6,6 +6,7 @@
             [cn.li.ac.ability.datagen.skill-translations :as skill-translations]
             [cn.li.ac.ability.datagen.teleporter-translations :as teleporter-translations]
             [cn.li.ac.ability.datagen.editor-vocab-translations :as editor-vocab-translations]
+            [cn.li.ac.ability.datagen.spell-glyph-translations :as spell-glyph-translations]
             [cn.li.ac.achievement.registry :as achievement-registry]
             [cn.li.ac.achievement.data :as achievement-data]
             [cn.li.ac.ability.registry.category :as category-registry]
@@ -37,6 +38,7 @@
       skill-translation-map (skill-translations/translation-map)
       ac-content-map (ac-content/translation-map)
       editor-vocab-map (editor-vocab-translations/translation-map)
+      spell-glyph-map (spell-glyph-translations/translation-map)
         category-name-entries
         (into {}
               (keep (fn [{:keys [id name-key]}]
@@ -69,7 +71,8 @@
                   (:en_us skill-translation-map)
                   explicit-en
                   (:en_us teleporter-translation-map)
-                  (:en_us editor-vocab-map))
+                  (:en_us editor-vocab-map)
+                  (:en_us spell-glyph-map))
         ;; other locales: fall back to en, layer AC content, central skill translations, explicit per-skill, and teleporter
         zh (merge en (:zh_cn ac-content-map) (:zh_cn skill-translation-map) explicit-zh (:zh_cn teleporter-translation-map))
         tw (merge en (:zh_tw ac-content-map) (:zh_tw skill-translation-map) explicit-tw (:zh_tw teleporter-translation-map))

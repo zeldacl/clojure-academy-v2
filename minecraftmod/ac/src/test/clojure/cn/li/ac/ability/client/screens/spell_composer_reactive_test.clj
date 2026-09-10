@@ -1,7 +1,19 @@
 (ns cn.li.ac.ability.client.screens.spell-composer-reactive-test
   "Pure state coverage for the grouped player spell composer."
   (:require [clojure.test :refer [deftest is]]
+            [clojure.string :as str]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.ability.client.screens.spell-composer-reactive :as composer]))
+
+;; i18n/*translate-fn* defaults to (fn [k _] (str k)) with no platform
+;; module installed (never true in this headless test process) -- real key
+;; resolution is spell-glyph-translations-test's job. This binding only
+;; proves glyph-label actually threads a glyph's :i18n key through
+;; i18n/translate, by making the "translation" a recognizable transform of
+;; the key instead of the identity default.
+(defmacro ^:private with-fake-translations [& body]
+  `(binding [i18n/*translate-fn* (fn [k# _args#] (str "T:" k#))]
+     ~@body))
 
 (def ^:private spell-composer-ui-path "src/presentation/resources/academy/app/spell_composer.ui.edn")
 
@@ -58,11 +70,12 @@
                   (#'composer/pick-form :form/self)
                   (#'composer/add-effect :effect/damage))
         rendered (#'composer/render-state state)]
-    (is (vector? (:form-palette rendered)))
-    (is (vector? (:effect-palette rendered)))
-    (is (vector? (:augment-palette rendered)))
-    (is (vector? (:effect-slots rendered)))
-    (is (= 1 (count (:effect-slots rendered))))
+    (is (vector? (:palette-rows rendered)))
+    (is (vector? (:chain-items rendered)))
+    ;; form card + one effect card
+    (is (= 2 (count (:chain-items rendered))))
+    (is (true? (:form? (first (:chain-items rendered)))))
+    (is (true? (:effect? (second (:chain-items rendered)))))
     (is (true? (:can-cast? rendered)))
     (is (false? (:busy? rendered)))))
 
@@ -123,11 +136,24 @@
     (#'composer/handle-action state* nil :composer/add-effect {:item {:glyph 99}})
     (is (= groups (:effect-groups @state*)))))
 
-(deftest palette-splits-forms-effects-and-augments-test
-  (let [rendered (#'composer/render-state (#'composer/initial-state))]
-    (is (= #{"form/self" "form/touch"} (set (map :glyph (:form-palette rendered)))))
-    (is (= #{"effect/damage" "effect/push"} (set (map :glyph (:effect-palette rendered)))))
-    (is (= #{"augment/amplify"} (set (map :glyph (:augment-palette rendered)))))))
+(deftest palette-groups-forms-effects-and-augments-under-one-list-test
+  (let [rows (:palette-rows (#'composer/render-state (#'composer/initial-state)))
+        headers (filter :header? rows)
+        entries (filter :entry? rows)
+        glyphs-under (fn [kind]
+                       (->> rows
+                            (drop-while #(not= kind (:kind %)))
+                            (rest)
+                            (take-while #(not (:header? %)))
+                            (map :glyph)
+                            set))]
+    ;; C3: every catalog entry renders (grey-out, never filtered/hidden).
+    (is (= #{:form :effect :augment} (set (map :kind headers))))
+    (is (= 5 (count entries)))
+    (is (= #{:form/self :form/touch} (glyphs-under :form)))
+    (is (= #{:effect/damage :effect/push} (glyphs-under :effect)))
+    (is (= #{:augment/amplify} (glyphs-under :augment)))
+    (is (every? :admissible? entries) "sanity: every glyph is admissible with no form picked yet")))
 
 (deftest selected-effect-parameters-can-be-edited-with-bounds-test
   (let [state (-> (#'composer/initial-state)
@@ -143,8 +169,21 @@
     (is (= 7.5 (get-in submitted [:effect-groups 0 :params :amount])))
     (is (= 7.5 (get-in rejected [:effect-groups 0 :params :amount])))
     (is (.contains ^String (:status rejected) "exceeds"))
-    (is (= [{:effect-index 0 :param-key :amount :draft-key :composer-param-0-amount :label "amount [0.0..20.0]" :value "7.5"}]
+    (is (= [{:effect-index 0 :param-key :amount :draft-key :composer-param-0-amount :label "amount" :value "7.5"
+             :decrement-label "-" :increment-label "+"}]
            (#'composer/selected-param-fields submitted)))))
+
+(deftest param-stepper-nudges-value-within-descriptor-bounds-test
+  (let [state (-> (#'composer/initial-state)
+                  (#'composer/pick-form :form/self)
+                  (#'composer/add-effect :effect/damage))
+        up (#'composer/param-step state 0 :amount 1)
+        clamped-low (#'composer/param-step state 0 :amount -1000)
+        clamped-high (#'composer/param-step state 0 :amount 1000)]
+    (is (> (get-in up [:effect-groups 0 :params :amount])
+           (get-in state [:effect-groups 0 :params :amount])))
+    (is (= 0.0 (get-in clamped-low [:effect-groups 0 :params :amount])))
+    (is (= 20.0 (get-in clamped-high [:effect-groups 0 :params :amount])))))
 
 (deftest effect-reorder-and-remove-remap-parameter-drafts-test
   (let [base (-> (#'composer/initial-state)
@@ -173,58 +212,89 @@
     (is (false? (#'composer/valid-param-drafts? state)))
     (is (false? (:can-cast? (#'composer/render-state state))))) )
 
-(deftest rendered-effect-slot-exposes-augment-remove-payload-test
+(deftest rendered-chain-card-exposes-augment-remove-payload-test
+  (with-fake-translations
+    (let [state (-> (#'composer/initial-state)
+                    (#'composer/pick-form :form/self)
+                    (#'composer/add-effect :effect/damage)
+                    (#'composer/add-augment :augment/amplify))
+          card (second (:chain-items (#'composer/render-state state)))
+          augment (first (:augments card))]
+      (is (str/starts-with? (:label augment) "T:") "augment label goes through i18n/translate, not a raw keyword")
+      (is (= 0 (:effect-index augment)))
+      (is (= 0 (:augment-index augment)))
+      (is (= "x" (:remove-label augment)))
+      (is (= [] (get-in (#'composer/remove-augment state 0 0) [:effect-groups 0 :augments]))))))
+
+;; C1/C2: palette + chain labels are localized display names, never the raw
+;; "kind/name" keyword text a player would have no reason to understand.
+(deftest palette-and-chain-labels-are-never-raw-glyph-keywords-test
   (let [state (-> (#'composer/initial-state)
-                  (#'composer/pick-form :form/self)
-                  (#'composer/add-effect :effect/damage)
-                  (#'composer/add-augment :augment/amplify))
-        slot (first (:effect-slots (#'composer/render-state state)))
-        augment (first (:augments slot))]
-    (is (= "+ augment/amplify" (:label augment)))
-    (is (= 0 (:effect-index augment)))
-    (is (= 0 (:augment-index augment)))
-    (is (= "X" (:remove-label augment)))
-    (is (= [] (get-in (#'composer/remove-augment state 0 0) [:effect-groups 0 :augments])))))
-(deftest rendered-augment-rows-use-dynamic-vertical-budget-test
+                  (#'composer/pick-form :form/touch)
+                  (#'composer/add-effect :effect/damage))
+        rendered (#'composer/render-state state)
+        palette-labels (map :label (filter :entry? (:palette-rows rendered)))
+        chain-labels (map :label (:chain-items rendered))]
+    (is (seq palette-labels))
+    (is (not-any? #(str/includes? % "/") palette-labels))
+    (is (not-any? #(str/includes? % "/") chain-labels))))
+
+;; C4: the complexity readout is live in render-state, not only computed
+;; once at Cast time.
+(deftest complexity-readout-updates-as-effects-are-added-test
+  (let [empty-rendered (#'composer/render-state (#'composer/initial-state))
+        with-effect (-> (#'composer/initial-state)
+                        (#'composer/pick-form :form/self)
+                        (#'composer/add-effect :effect/damage))
+        rendered (#'composer/render-state with-effect)]
+    (is (= 0.0 (:complexity-ratio empty-rendered)))
+    (is (false? (:over-cap? empty-rendered)))
+    (is (pos? (:complexity-ratio rendered)))
+    (is (<= 0.0 (:complexity-ratio rendered) 1.0))
+    (is (str/includes? (:complexity-label rendered) "Complexity"))))
+
+(deftest rendered-chain-card-lists-every-augment-in-order-test
   (let [state (-> (#'composer/initial-state)
                   (#'composer/pick-form :form/self)
                   (#'composer/add-effect :effect/damage)
                   (#'composer/add-augment :augment/amplify)
                   (#'composer/add-augment :augment/amplify))
-        slot (first (:effect-slots (#'composer/render-state state)))]
-    (is (= 28 (:augment-height slot)))
-    (is (= 44 (:row-height slot)))
-    (is (= 2 (count (:augments slot))))))
-(deftest spell-composer-layout-fits-design-and-320x240-bounds-test
+        card (second (:chain-items (#'composer/render-state state)))]
+    (is (= 2 (count (:augments card))))
+    (is (= [0 1] (mapv :augment-index (:augments card))))))
+(deftest spell-composer-uses-the-shared-editor-shell-test
   (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))
         host (:host ui)
-        root-layout (get-in ui [:root :layout])
+        root (:root ui)
         all-maps (filter map? (tree-seq coll? seq ui))
-        augment-repeaters (filter #(and (= :repeater (:type %))
-                                        (= [:item :augments] (get-in % [:bind :items]))) all-maps)
-        effect-slot-columns (filter #(and (= :column (:type %))
-                                          (= [:item :row-height] (get-in % [:bind :height]))) all-maps)
-        scale (min (/ 320.0 (double (:design-width host)))
-                   (/ 240.0 (double (:design-height host))))
-        right (* scale (+ (double (:x root-layout)) (double (:width root-layout))))
-        bottom (* scale (+ (double (:y root-layout)) (double (:height root-layout))))]
+        chain-repeater (first (filter #(= [:state :chain-items] (get-in % [:bind :items])) all-maps))
+        augment-repeaters (filter #(= [:item :augments] (get-in % [:bind :items])) all-maps)]
     (is (= :screen (:kind host)))
-    (is (= 1 (count augment-repeaters))
-        "augment repeater must be a single explicit collection")
+    ;; P3: "do not enlarge" -- unlike the node editor, this design size did
+    ;; not move; P0's centering-not-scaling finding is the reason any
+    ;; growth here would need the same real-viewport justification.
+    (is (= 480 (:design-width host)))
+    (is (= 320 (:design-height host)))
+    (is (= :fit (:scale-policy host)))
+    (is (= :include (keyword (name (:type root)))))
+    (is (= "academy/shared/editor_shell" (:src root)))
+    (is (= :row (get-in chain-repeater [:layout :direction]))
+        "the spell chain reads left-to-right, Form -> Effect -> Effect+Aug")
+    (is (= 1 (count augment-repeaters)))
     (is (= :column (get-in (first augment-repeaters) [:layout :direction]))
-        "augment entries must stack vertically instead of overflowing horizontally")
-    (is (= [:item :augment-height] (get-in (first augment-repeaters) [:bind :height])))
-    (is (= 1 (count effect-slot-columns))
-        "effect slot height must be driven by its augment rows")
-    (is (<= (+ (double (:x root-layout)) (double (:width root-layout)))
-            (double (:design-width host)))
-        "composer root must fit its declared design width")
-    (is (<= (+ (double (:y root-layout)) (double (:height root-layout)))
-            (double (:design-height host)))
-        "composer root must fit its declared design height")
-    (is (<= right 320.0) (str "composer right edge exceeds 320px: " right))
-    (is (<= bottom 240.0) (str "composer bottom edge exceeds 240px: " bottom))))
+        "augments stack vertically inside their own card, not sideways")))
 
+
+;; Layout regression (P1 finding): the old three-panel layout had two
+;; separately-titled "Effects" panels with opposite meanings (already-
+;; equipped slots vs. the add-effect palette). The unified palette has no
+;; static "Effects" literal anywhere -- it labels each group from the
+;; glyph's own :kind at render time.
+(deftest no-static-effects-title-literal-in-source-test
+  (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))
+        all-maps (filter map? (tree-seq coll? seq ui))
+        literal-texts (keep :text all-maps)]
+    (is (not-any? #(and (string? %) (= "Effects" %)) literal-texts))))
 
 (deftest effect-reorder-controls-bind-boundary-visibility-test
   (let [ui (binding [*read-eval* false] (read-string (slurp spell-composer-ui-path)))

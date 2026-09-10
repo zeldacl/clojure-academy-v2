@@ -29,6 +29,8 @@
   (:require [clojure.string :as str]
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.ability.editor.chrome :as chrome]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.combat.api :as combat-api]))
@@ -65,6 +67,36 @@
               (zero? n) suffix
               :else (recur (dec n)))))))))
 
+;; spell_composer.ui.edn's :host design box and this screen's shared-shell
+;; panel widths. Unlike the node editor, the composer's palette/inspector
+;; are never collapsed -- there are only 5 real glyphs and 1 selected
+;; effect's params, so the always-open width is already the minimum
+;; useful one (see cn.li.ability.editor.chrome for why width, not
+;; :visible, is what the shell actually needs to reclaim panel space).
+(def ^:private design-width 480.0)
+(def ^:private design-height 320.0)
+(def ^:private palette-open-w 110.0)
+(def ^:private inspector-open-w 120.0)
+
+(defn- shell-geometry []
+  (chrome/panel-geometry
+   {:design-width design-width :design-height design-height
+    :palette-open? true :palette-open-w palette-open-w
+    :inspector-open? true :inspector-open-w inspector-open-w
+    :diagnostic-count 0}))
+
+(defn- glyph-label
+  "A glyph keyword -> its localized display name (\"Touch\", not
+   \"form/touch\") via cn.li.ac.ability.datagen.spell-glyph-translations'
+   :en_us entry for the spec's own :i18n key -- the spec has always had
+   this key (cn.li.combat.player/glyph-specs), nothing ever wrote a real
+   translation for it before this refactor (datagen's own registry.clj
+   docstring point 3)."
+  [state glyph]
+  (if-let [i18n-key (get-in state [:glyph-specs glyph :i18n])]
+    (i18n/translate i18n-key)
+    (glyph-str glyph)))
+
 ;; NOT routed through the mod's i18n/datagen translation system (checked
 ;; before writing this: every existing reactive controller's dynamic
 ;; :status text -- skill_tree.clj, settings_reactive.clj, about_reactive.
@@ -95,6 +127,7 @@
      :form nil
      :effect-groups []
      :selected-effect nil
+     :palette-collapsed #{}
      :busy? false
      :status "Pick a form, then add effects and cast."}))
 
@@ -230,9 +263,10 @@
               {:effect-index selected-effect
                :param-key key
                :draft-key (keyword (str "composer-param-" selected-effect "-" (name key)))
-               :label (ui-label (str (name key) " [" (:min descriptor) ".." (:max descriptor) "]") 126.0)
+               :label (ui-label (name key) 96.0)
                :value (str (get param-drafts [selected-effect key]
-                                (get-in group [:params key])))})
+                                (get-in group [:params key])))
+               :decrement-label "-" :increment-label "+"})
             params))
     []))
 
@@ -305,58 +339,140 @@
           (assoc-in [:effect-groups idx :params key] (coerce-param-value descriptor value))
           (update :param-drafts dissoc [idx key])
           (assoc :status (str "Updated " (name key) "."))))))
+(defn- toggle-palette-category [state kind]
+  (update state :palette-collapsed
+          (fn [collapsed]
+            (if (contains? collapsed kind)
+              (disj collapsed kind)
+              (conj (or collapsed #{}) kind)))))
+
+(defn- param-step
+  "Nudge the selected effect's param `key` by one step in `direction`
+   (+1/-1), clamped to the glyph spec's own [:min :max] -- the same bound
+   param-submit already enforces on a typed Enter, just reachable with a
+   click. Step size is the descriptor's own range / 20, so a wide range
+   (:range 1..128) and a narrow one (:amount 0..20) both take a sane
+   number of clicks to cross."
+  [state idx key direction]
+  (let [groups (:effect-groups state)
+        valid-index? (and (integer? idx) (<= 0 idx) (< idx (count groups)))
+        glyph (when valid-index? (get-in groups [idx :glyph]))
+        descriptor (when (and valid-index? (keyword? key))
+                     (get-in (:glyph-specs state) [glyph :params key]))]
+    (if-not descriptor
+      state
+      (let [min-v (double (:min descriptor))
+            max-v (double (:max descriptor))
+            current (or (parse-finite-number (get (:param-drafts state) [idx key]))
+                        (double (get-in groups [idx :params key] min-v)))
+            step (max 0.01 (/ (- max-v min-v) 20.0))
+            next-v (-> (+ current (* step (double direction)))
+                       (max min-v) (min max-v)
+                       (->> (coerce-param-value descriptor)))]
+        (-> state
+            (assoc-in [:effect-groups idx :params key] next-v)
+            (update :param-drafts dissoc [idx key])
+            (assoc :status (str "Updated " (name key) ".")))))))
+
 ;; --- render-state ------------------------------------------------------
 
-(defn- palette-item [{:keys [glyph kind cost admissible? params]}]
-  {:glyph (glyph-str glyph) :kind (name kind)
-   :cost (double cost)
-   :label (ui-label (str (glyph-str glyph) " (cost " cost ")") 202.0)
-   :params params
-   :admissible? admissible?})
+(defn- glyph-palette-item [state {:keys [glyph cost admissible?]}]
+  {:glyph glyph :header? false :entry? true
+   :label (ui-label (glyph-label state glyph) 62.0)
+   :cost-label (ui-label (str cost) 22.0)
+   ;; Both rendered, never filtered out (C3): an unlocked-but-inadmissible
+   ;; glyph is a real "the game will not accept this yet" signal a player
+   ;; needs to SEE to know what to work toward -- combat.player/glyph-
+   ;; catalog's own docstring calls this the grey-out list by name.
+   :admissible? (boolean admissible?)
+   :not-admissible? (not (boolean admissible?))})
 
-(defn- render-state [state]
-  (let [{:keys [catalog form effect-groups selected-effect status busy?]} state
+(defn- palette-rows
+  "catalog (cn.li.combat.api/player-glyph-catalog's shape) -> the palette's
+   display rows: one collapsible category header per glyph :kind (form/
+   effect/augment), replacing the old three separately-titled panels (the
+   duplicate \"Effects\" heading P1/C1 flagged) with the single list
+   Ars Nouveau/Blueprint both use."
+  [state catalog collapsed]
+  (let [by-kind (group-by :kind catalog)]
+    (vec (mapcat (fn [kind]
+                   (let [entries (get by-kind kind [])
+                         folded? (contains? collapsed kind)]
+                     (when (seq entries)
+                       (cons {:row-type :category :header? true :entry? false :kind kind
+                              :header-label (ui-label (str (if folded? "> " "v ") (name kind)) 100.0)}
+                             (when-not folded?
+                               (map #(glyph-palette-item state %) entries))))))
+                 [:form :effect :augment]))))
+
+(defn- spell-complexity
+  "Live complexity/cap reading for the header's persistent :progress bar
+   (C4) -- previously this same analyze-player-spell call only ever ran
+   once, at Cast, so a player learned they were over budget only after
+   being rejected. :over-complexity is the one reject reason that still
+   reports :complexity/:cap (cn.li.combat.player/admit), so that case
+   keeps the real number instead of collapsing to a blank/zero reading."
+  [state]
+  (let [cap (long combat-api/player-spell-complexity-cap)
+        glyphs (composed-glyphs state)]
+    (if-not glyphs
+      {:complexity 0 :cap cap :over-cap? false}
+      (let [analysis (combat-api/analyze-player-spell glyphs cap)]
+        (cond
+          (:ok analysis) {:complexity (long (:complexity analysis)) :cap cap :over-cap? false}
+          (= :over-complexity (:reject analysis)) {:complexity (long (:complexity analysis)) :cap cap :over-cap? true}
+          :else {:complexity 0 :cap cap :over-cap? false})))))
+
+(defn- chain-card [state idx {:keys [glyph augments]} selected-effect group-count]
+  {:form? false :effect? true :index idx
+   :label (ui-label (glyph-label state glyph) 48.0)
+   :selected? (= idx selected-effect)
+   :can-move-up? (pos? idx)
+   :can-move-down? (< idx (dec group-count))
+   :up-label "^" :down-label "v" :remove-label "x"
+   :augments (mapv (fn [augment-index a]
+                      {:effect-index idx
+                       :augment-index augment-index
+                       :label (ui-label (glyph-label state (:glyph a)) 44.0)
+                       :remove-label "x"})
+                    (range) augments)})
+
+(defn- render-state
+  "form + effect-groups render as one left-to-right :chain-items sequence
+   the stage's :repeater :direction :row draws (P3: 'a spell is a chain
+   that reads like a sentence, Form -> Effect -> Effect+Aug', matching
+   Ars Nouveau -- player.clj:149's own comment already calls that
+   reference out by name)."
+  [state]
+  (let [{:keys [catalog form effect-groups selected-effect palette-collapsed status busy?]} state
         selected-params (selected-param-fields state)
         draft-state (into {}
                           (keep (fn [{:keys [draft-key value]}]
                                   (when draft-key [draft-key (str value)])))
                           selected-params)
-        forms (filter #(= :form (:kind %)) catalog)
-        effects (filter #(= :effect (:kind %)) catalog)
-        augments (filter #(= :augment (:kind %)) catalog)]
+        shell (shell-geometry)
+        {:keys [complexity cap over-cap?]} (spell-complexity state)
+        chain (into (if form
+                      [{:form? true :effect? false :index -1
+                        :label (ui-label (glyph-label state (:glyph form)) 48.0)}]
+                      [])
+                    (map-indexed (fn [idx group] (chain-card state idx group selected-effect (count effect-groups))))
+                    effect-groups)]
     (merge draft-state
            {:title "Spell Composer"
-     :form-palette (mapv palette-item (filter :admissible? forms))
-     :effect-palette (mapv palette-item (filter :admissible? effects))
-     :augment-palette (mapv palette-item (filter :admissible? augments))
-     :form-label (ui-label (if form (glyph-str (:glyph form)) "(none)") 182.0)
+     :shell-header-h (:header-h shell) :shell-footer-h (:footer-h shell)
+     :shell-body-h (:body-h shell) :shell-diagnostics-h (:diagnostics-h shell)
+     :shell-palette-w (:palette-w shell) :shell-stage-w (:stage-w shell) :shell-inspector-w (:inspector-w shell)
+     :palette-rows (palette-rows state catalog palette-collapsed)
+     :complexity-label (str "Complexity " complexity " / " cap)
+     :complexity-ratio (double (min 1.0 (/ (double complexity) (double (max 1 cap)))))
+     :over-cap? (boolean over-cap?)
+     :chain-items chain
      :selected-param-fields selected-params
-     :effect-slots
-     (mapv (fn [idx {:keys [glyph augments]}]
-             (let [augment-height (* 14 (count augments))]
-               {:index idx :label (ui-label (str (inc idx) ". " (glyph-str glyph)) 86.0)
-                :selected? (= idx selected-effect)
-                ;; The slot row grows with its augment list. Augments are
-                ;; rendered as a vertical set of removable rows so eight
-                ;; augments cannot overflow the fixed effect controls.
-                :row-height (+ 16 augment-height)
-                :augment-height augment-height
-                :augment-label (when (seq augments)
-                                 (str/join " " (map #(str "+" (glyph-str (:glyph %))) augments)))
-                :augments (mapv (fn [augment-index a]
-                                  {:effect-index idx
-                                   :augment-index augment-index
-                                   :label (ui-label (str "+ " (glyph-str (:glyph a))) 84.0)
-                                   :remove-label "X"})
-                                (range) augments)
-                :can-move-up? (pos? idx)
-                :can-move-down? (< idx (dec (count effect-groups)))
-                :up-label "UP" :down-label "DN" :remove-label "X"}))
-           (range) effect-groups)
      :can-cast? (boolean (and (not busy?) form (seq effect-groups)
                               (valid-param-drafts? state)))
      :busy? (boolean busy?)
-     :status (ui-label (or status "") 456.0)
+     :status (ui-label (or status "") 420.0)
      :cast-label (if busy? "Casting..." "Cast")
      :clear-label "Clear"})))
 
@@ -374,14 +490,28 @@
 
 (defn- handle-action [state* owner action payload]
   (case action
-    :composer/pick-form
-    (swap! state* pick-form (payload-keyword (:glyph (:item payload))))
+    ;; The palette is now one list grouped by kind (C1/P1), not three
+    ;; separately-titled panels each bound to their own add-X action --
+    ;; this one handler routes by the clicked glyph's OWN :kind instead,
+    ;; the same :kind palette-rows already grouped it under.
+    :composer/glyph-activate
+    (let [glyph (payload-keyword (:glyph (:item payload)))
+          kind (:kind (descriptor-for @state* glyph))]
+      (case kind
+        :form (swap! state* pick-form glyph)
+        :effect (swap! state* add-effect glyph)
+        :augment (swap! state* add-augment glyph)
+        nil))
 
-    :composer/add-effect
-    (swap! state* add-effect (payload-keyword (:glyph (:item payload))))
+    :composer/toggle-palette-category
+    (let [kind (or (:kind payload) (get-in payload [:item :kind]))]
+      (when kind (swap! state* toggle-palette-category (keyword kind))))
 
-    :composer/add-augment
-    (swap! state* add-augment (payload-keyword (:glyph (:item payload))))
+    :composer/param-increment
+    (swap! state* param-step (payload-index payload :effect-index) (:param-key (:item payload)) 1)
+
+    :composer/param-decrement
+    (swap! state* param-step (payload-index payload :effect-index) (:param-key (:item payload)) -1)
 
     :composer/select-effect
     (swap! state* select-effect (payload-index payload :index))
