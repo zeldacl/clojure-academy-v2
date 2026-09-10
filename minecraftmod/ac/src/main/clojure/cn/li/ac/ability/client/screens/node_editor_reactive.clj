@@ -66,6 +66,36 @@
 
 (defonce ^:private active-mounts (atom {}))
 
+(defn- source-tree-original
+  "An on-disk resource path that lives under some BUILD OUTPUT -> the same
+   resource in a module's SOURCE TREE, or nil.
+
+   Deliberately derives-then-CHECKS rather than assuming: strip the
+   classpath-relative `resource` tail off `abs-path` to get the classpath
+   root, take everything before that root's `build/` segment as the project
+   root, then probe `<project-root>/<module>/src/main/resources/<resource>`
+   for a file that actually exists. Written against the path shape rather
+   than a hardcoded module list so it covers both output layouts a dev run
+   puts on the classpath -- `build/neutral/<module>/resources/main` and
+   `build/targets/<target>/platform/resources/main` -- neither of which
+   names the owning module in a position that could just be read out.
+
+   This matters because :editor/export is documented to overwrite the real
+   source file: handing the editor a build-output copy would let an export
+   silently succeed into a directory the next build wipes."
+  [^String abs-path ^String resource]
+  (let [norm (str/replace abs-path "\\" "/")
+        rel (str/replace resource "\\" "/")]
+    (when (str/ends-with? norm rel)
+      (let [classpath-root (subs norm 0 (- (count norm) (count rel)))]
+        (when-let [build-idx (str/last-index-of classpath-root "/build/")]
+          (let [project-root (io/file (subs classpath-root 0 build-idx))]
+            (some (fn [^java.io.File module-dir]
+                    (let [candidate (io/file module-dir "src" "main" "resources" rel)]
+                      (when (.isFile candidate) (.getAbsolutePath candidate))))
+                  (filter #(.isDirectory ^java.io.File %)
+                          (or (seq (.listFiles project-root)) [])))))))))
+
 (defn default-sample-skill-resource-path
   "A classpath-relative V4 content resource (e.g. \"ac/skills-v4/thunder-bolt.edn\") -> its absolute on-disk path, or nil. Public because there is
    no in-game file-picker UI yet (a real follow-up, not part of this
@@ -79,14 +109,31 @@
    resources or a packaged jar's zip entries -- but this screen needs to
    WRITE sibling files (editor-workspace/, layout/) next to the opened
    file, which only makes sense against a real file:// resource, not a
-   jar entry. Returns nil rather than guessing at a working directory
-   (see this namespace's own docstring on why open! never does that
-   itself) when the resource is not on disk, so the caller can report a
-   clear reason instead of failing deep inside io/file."
+   jar entry.
+
+   Uses getResources (PLURAL) rather than io/resource: in a dev run this
+   exact resource is present three times over -- ac's jar, ac's own
+   resources/main output, and the platform target's resources/main -- and
+   io/resource returns whichever the classloader happens to reach first.
+   When that was the jar, both editor entry points reported 'not on-disk'
+   and refused to open a file that was in fact sitting right there on
+   disk. So: scan every classpath match, keep the file: ones, and prefer
+   the source-tree original over a build-output copy (see
+   source-tree-original on why that preference is not cosmetic).
+
+   Still returns nil rather than guessing at a working directory (see this
+   namespace's own docstring on why open! never does that itself) when NO
+   classpath entry provides the resource as a real file, so the caller can
+   report a clear reason instead of failing deep inside io/file."
   [resource]
-  (when-let [^java.net.URL url (io/resource resource)]
-    (when (= "file" (.getProtocol url))
-      (.getAbsolutePath (io/as-file url)))))
+  (let [^ClassLoader loader (or (.getContextClassLoader (Thread/currentThread))
+                                (clojure.lang.RT/baseLoader))
+        on-disk (keep (fn [^java.net.URL url]
+                        (when (= "file" (.getProtocol url))
+                          (.getAbsolutePath (io/as-file url))))
+                      (enumeration-seq (.getResources loader resource)))]
+    (or (some #(source-tree-original % resource) on-disk)
+        (first on-disk))))
 
 (defn- mode-opts
   "mode (:skill or :scene), document (the just-opened V4 map, needed for

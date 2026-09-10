@@ -66,6 +66,52 @@
     (is (= :untouched (:selected-nid result)))
     (is (= "This diagnostic is not attributed to a single node." (:status result)))))
 
+;; Regression: both editor entry points (the G keybind and editor_dev_tool)
+;; refused to open with "not on-disk (packaged jar?)" even though the file
+;; was on disk. io/resource returns only the FIRST classpath match, and in
+;; a dev run this resource exists three times over -- ac's jar plus two
+;; resources/main outputs -- so the jar could win and the file: copies were
+;; never looked at.
+(deftest default-sample-skill-resource-path-finds-the-real-shipped-file-test
+  (let [path (editor/default-sample-skill-resource-path "ac/skills-v4/thunder-bolt.edn")]
+    (is (some? path) "the shipped sample must resolve to an on-disk path")
+    (is (.isFile (clojure.java.io/file path)))
+    (is (str/ends-with? (str/replace path "\\" "/") "ac/skills-v4/thunder-bolt.edn"))))
+
+(deftest default-sample-skill-resource-path-is-nil-for-a-missing-resource-test
+  (is (nil? (editor/default-sample-skill-resource-path "ac/skills-v4/no-such-file.edn"))))
+
+;; :editor/export overwrites the real source file, so handing it a
+;; build-output copy would let an export silently land somewhere the next
+;; build wipes. The mapping is derived then CHECKED -- an unrelated path,
+;; or one whose source-tree counterpart does not exist, maps to nil.
+(deftest build-output-paths-map-back-to-the-source-tree-test
+  (let [src (editor/default-sample-skill-resource-path "ac/skills-v4/thunder-bolt.edn")
+        normalized (str/replace src "\\" "/")]
+    (is (str/includes? normalized "/src/main/resources/")
+        (str "must prefer the source tree over a build output, got " src))
+    (is (not (str/includes? normalized "/build/")))))
+
+(deftest source-tree-original-maps-both-dev-run-output-layouts-test
+  ;; Uses the real repo so the "does this file exist" half is genuinely
+  ;; exercised; project-root is derived from the path, not hardcoded.
+  (let [res "ac/skills-v4/thunder-bolt.edn"
+        real (str/replace (editor/default-sample-skill-resource-path res) "\\" "/")
+        root (subs real 0 (- (count real) (count (str "ac/src/main/resources/" res))))]
+    (doseq [layout ["build/neutral/ac/resources/main/"
+                    "build/targets/forge-1.20.1/platform/resources/main/"]]
+      (is (= real (str/replace (#'editor/source-tree-original (str root layout res) res) "\\" "/"))
+          (str "must map " layout " back to the source tree")))))
+
+(deftest source-tree-original-rejects-unmappable-paths-test
+  (let [res "ac/skills-v4/thunder-bolt.edn"]
+    ;; not under any build output -> nothing to map back from
+    (is (nil? (#'editor/source-tree-original (str "/somewhere/else/" res) res)))
+    ;; mapped path derived fine but the source-tree file does not exist
+    (is (nil? (#'editor/source-tree-original
+               "/root/build/neutral/ac/resources/main/ac/skills-v4/no-such.edn"
+               "ac/skills-v4/no-such.edn")))))
+
 (defn- graph [& nodes]
   {:nodes (into {} (map (fn [[nid type & kvs]]
                           [nid (into {:nid nid :type type} (apply hash-map kvs))]) nodes))
