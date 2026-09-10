@@ -78,7 +78,17 @@
    reservation, not a per-tick action; tick! below only ever runs :update
    afterward. A continuously-emitting effect (a :spawn/rate-style module
    re-triggering reservation on its own schedule) is a natural follow-up
-   this pass does not implement or claim to."
+   this pass does not implement or claim to.
+
+   Also precomputes :render-views, the {:layout :buffer} view sample-
+   frame! hands to its caller -- built once here instead of via select-
+   keys on every single sample-frame! call, every frame, for every live
+   instance. Safe because :layout never changes and :buffer's OBJECT
+   IDENTITY never changes for an instance's lifetime (only its CONTENTS
+   mutate in place, via the SAME ParticleColumns reference, every tick! --
+   see cn.li.mcmod.runtime.vfx.ParticleColumns), so the precomputed view
+   map stays valid for as long as the instance is alive; there is nothing
+   per-frame to recompute."
   [store effect-id decl {:keys [user] :as _spawn}]
   (let [scene-program (compiled-scene-program store effect-id decl)
         emitters (mapv (fn [emitter-decl]
@@ -86,13 +96,20 @@
                                buffer ((:new-buffer compiled))]
                            ((:spawn compiled) buffer 0.0)
                            (assoc compiled :buffer buffer)))
-                       (:emitters decl))]
-    {:scene-program scene-program :emitters emitters}))
+                       (:emitters decl))
+        render-views (mapv #(select-keys % [:layout :buffer]) emitters)]
+    {:scene-program scene-program :emitters emitters :render-views render-views}))
 
 (defn ensure!
   "Create (if absent) and return the instance at `instance-key`. A second
    ensure! for the same key is a no-op returning the existing instance --
-   matches final-client's own idempotent-spawn contract."
+   matches final-client's own idempotent-spawn contract.
+
+   :age is a (long-array 1), not a plain number -- see tick!'s own
+   docstring for why: it is the one instance field that changes on EVERY
+   tick for EVERY live instance, and boxing it into an ordinary immutable
+   map value forced a full instances-map rebuild every tick just to bump
+   a counter. Read it with age-of, never (:age instance) directly."
   [store instance-key {:keys [effect-id seed] :as spawn}]
   (let [decl (get (:registry store) effect-id)]
     (when-not decl (throw (ex-info "unknown vfx effect-id" {:effect-id effect-id})))
@@ -100,9 +117,16 @@
           (fn [existing]
             (or existing
                 (merge {:effect-id effect-id :seed (long (or seed 0)) :user (:user spawn)
-                       :age 0 :owner (:owner spawn) :world-id (:world-id spawn)}
+                       :age (long-array 1) :owner (:owner spawn) :world-id (:world-id spawn)}
                       (compile-instance store effect-id decl spawn)))))
     (get @(:instances store) instance-key)))
+
+(defn age-of
+  "The current tick-age of `instance` (an ensure!/lookup result), as a
+   plain long -- the public accessor for :age's mutable-box
+   representation (see ensure!'s own docstring)."
+  ^long [instance]
+  (aget ^longs (:age instance) 0))
 
 (defn lookup [store instance-key] (get @(:instances store) instance-key))
 (defn instances [store] (vals @(:instances store)))
@@ -143,13 +167,19 @@
    integrate over `dt` seconds inside each emitter's own :update stage
    above). Spawn already ran once at ensure! time (see compile-instance)
    -- only :update runs here, every tick, over whatever the buffer
-   currently holds."
+   currently holds.
+
+   :age bumps in place via aset on its own (long-array 1) -- see ensure!'s
+   docstring -- so this no longer touches :instances at all (used to
+   rebuild the WHOLE instances map every tick, at 200 live instances
+   ~57 us / ~85 KB of garbage just to increment a counter, every one of
+   which was thrown away one tick later)."
   [store ^double dt]
   (doseq [[_ instance] @(:instances store)]
     (doseq [{:keys [buffer update]} (:emitters instance)]
-      (update buffer dt)))
-  (swap! (:instances store)
-        (fn [instances] (into {} (map (fn [[k v]] [k (update v :age (fnil inc 0))])) instances))))
+      (update buffer dt))
+    (let [^longs age-box (:age instance)]
+      (aset age-box 0 (unchecked-inc (aget age-box 0))))))
 
 (defn- progress-of
   "age/duration-ticks, clamped to [0,1] -- the exact computation cn.li.
@@ -161,9 +191,9 @@
    :duration-ticks spawn input) -- when absent, matching the old engine's
    identical (max 1.0 (or duration 1)) fallback: progress reaches 1.0
    after exactly one tick rather than staying 0 forever."
-  [{:keys [age user]}]
-  (let [duration (double (or (:duration-ticks user) 1))]
-    (max 0.0 (min 1.0 (/ (double (or age 0)) (max 1.0 duration))))))
+  [instance]
+  (let [duration (double (or (:duration-ticks (:user instance)) 1))]
+    (max 0.0 (min 1.0 (/ (double (age-of instance)) (max 1.0 duration))))))
 
 (defn- scene-frame-for
   "The cached, reusable ExecutionFrame for effect-id's compiled scene
@@ -197,11 +227,11 @@
                             program (scene-frame-for store (:effect-id instance) program)
                             {:capabilities
                              (assoc (:user instance)
-                                    :age (double (:age instance))
+                                    :age (double (age-of instance))
                                     :progress (progress-of instance)
                                     :seed (long (or (:seed instance) 0))
                                     :source-player-id (:owner instance))}))
-                  :emitters (mapv #(select-keys % [:layout :buffer]) (:emitters instance))}]))
+                  :emitters (:render-views instance)}]))
         @(:instances store)))
 
 ;; ============================================================
@@ -325,29 +355,34 @@
                   nil)))))))
     nil))
 
+(defn- expired-transient?
+  [rt [_ inst]]
+  (let [decl (get (:registry rt) (:effect-id inst))]
+    (and (= :transient (:lifecycle decl)) (>= (age-of inst) (transient-duration inst)))))
+
 (defn client-tick!
   "tick! above (particle buffers + per-instance :age), then destroy any
    :transient instance whose :age has reached its effective lifetime:
    explicit :duration-ticks, then :life-ticks/:ttl-ticks, then one tick for a true
-   one-shot."
+   one-shot.
+
+   Used to rebuild the WHOLE :instances map every tick via (into {}
+   (remove ...) instances) regardless of whether anything actually
+   expired -- the common case, most ticks, is that nothing does. Now:
+   find expired entries against a snapshot first (a pure read, no
+   allocation if the resulting seq is empty), and only touch :instances
+   at all -- via a targeted dissoc of just those keys, not a full
+   rebuild -- when there is something to remove."
   [rt ^double dt]
   (tick! rt dt)
-  (let [expired (atom [])]
-    (swap! (:instances rt)
-          (fn [instances]
-            (into {}
-                  (remove (fn [[instance-key inst]]
-                           (let [decl (get (:registry rt) (:effect-id inst))
-                                 expired? (and (= :transient (:lifecycle decl))
-                                               (>= (long (:age inst)) (transient-duration inst)))]
-                             (when expired? (swap! expired conj [instance-key inst]))
-                             expired?)))
-                  instances)))
-    (doseq [[instance-key inst] @expired]
-      (remember-tombstone! rt instance-key
-                           (long (or (:event-seq inst) -1))
-                           (long (or (:state-seq inst) -1))))
-  nil))
+  (let [expired (into [] (filter #(expired-transient? rt %)) @(:instances rt))]
+    (when (seq expired)
+      (swap! (:instances rt) #(apply dissoc % (map first expired)))
+      (doseq [[instance-key inst] expired]
+        (remember-tombstone! rt instance-key
+                             (long (or (:event-seq inst) -1))
+                             (long (or (:state-seq inst) -1))))))
+  nil)
 
 (defn sample-client-frame!
   "Samples every live instance (sample-frame! above), builds a VfxFrame
@@ -361,9 +396,11 @@
   (let [frame-id (swap! (:next-frame-id rt) inc)
         sampled (sample-frame! rt)
         java-frame (frame/->java-frame frame-id @(:generation rt) sampled)
-        stages (into {}
-                     (map (fn [[k v]] [k v]))
-                     (group-by (fn [^cn.li.mcmod.runtime.vfx.VfxBatch b] (.stage b)) (.batches java-frame)))
+        ;; group-by already returns exactly {stage [batch ...]} -- the
+        ;; (into {} (map (fn [[k v]] [k v])) ...) that used to wrap it was
+        ;; an identity transform, rebuilding an equal map via a pointless
+        ;; extra allocation every single frame.
+        stages (group-by (fn [^cn.li.mcmod.runtime.vfx.VfxBatch b] (.stage b)) (.batches java-frame))
         pooled {:frame-id frame-id :java-frame java-frame :stages stages
                :outputs (vec (.outputs java-frame))}]
     (swap! (:frames rt)

@@ -109,11 +109,11 @@
     (let [s (store)
           _ (runtime/ensure! s [:k] {:effect-id :arc-strike :seed 1
                                      :user {:start [0.0 0.0 0.0] :end [4.0 0.0 0.0]}})]
-      (is (= 0 (:age (runtime/lookup s [:k]))))
+      (is (= 0 (runtime/age-of (runtime/lookup s [:k]))))
       (runtime/tick! s 0.1)
-      (is (= 1 (:age (runtime/lookup s [:k]))))
+      (is (= 1 (runtime/age-of (runtime/lookup s [:k]))))
       (runtime/tick! s 0.1)
-      (is (= 2 (:age (runtime/lookup s [:k])))))))
+      (is (= 2 (runtime/age-of (runtime/lookup s [:k])))))))
 
 (def ^:private scene-registry
   {:with-scene
