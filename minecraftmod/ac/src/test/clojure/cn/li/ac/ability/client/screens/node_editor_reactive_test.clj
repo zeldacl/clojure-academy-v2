@@ -14,6 +14,23 @@
   (is (= (label/ellipsize "a somewhat long editor label" 40.0)
          (#'editor/ui-label "a somewhat long editor label" 40.0))))
 
+;; C7: the palette row has no room for a description line (:doc is never
+;; populated by any source anyway -- see selected-signature's own
+;; docstring), so the real, always-populated :params/:returns signature
+;; surfaces in the inspector instead, once a component node is selected.
+(deftest selected-signature-reports-param-count-and-return-type-test
+  (let [g {:nodes {"n1" {:nid "n1" :type :component :component :target/raycast
+                         :inputs {:from [0.0 0.0 0.0]}}}
+           :links []}
+        palette [{:id :target/raycast :params {:from {:type :vec3} :dir {:type :vec3}} :returns :entity}]]
+    (is (= "2 params -> entity"
+           (#'editor/selected-signature {:graph g :selected-nid "n1" :palette palette})))))
+
+(deftest selected-signature-is-nil-without-a-component-selection-test
+  (let [g {:nodes {"n1" {:nid "n1" :type :literal :value 1}} :links []}]
+    (is (nil? (#'editor/selected-signature {:graph g :selected-nid "n1" :palette []})))
+    (is (nil? (#'editor/selected-signature {:graph g :selected-nid nil :palette []})))))
+
 (defn- graph [& nodes]
   {:nodes (into {} (map (fn [[nid type & kvs]]
                           [nid (into {:nid nid :type type} (apply hash-map kvs))]) nodes))

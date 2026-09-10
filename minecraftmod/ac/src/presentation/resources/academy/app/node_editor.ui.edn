@@ -16,7 +16,9 @@
                 :palette-open? :boolean :inspector-open? :boolean
                 :palette-toggle-label :string :inspector-toggle-label :string
                 :palette-list-h :number :inspector-list-h :number
-                :canvas :vector :selected-label :string :selected-params :vector :diagnostics :vector
+                :canvas :vector :selected-label :string
+                :selected-signature :string :selected-signature-visible? :boolean
+                :selected-params :vector :diagnostics :vector
                 :diagnostic-count :number :cost-label :string :zoom-label :string :zoom-reset-label :string
                 :status :string :preview-active? :boolean :preview-label :string :preview-toggle-label :string :dirty? :boolean
                 :reload-label :string :save-label :string :export-label :string :undo-label :string :redo-label :string}
@@ -113,6 +115,10 @@
     :children
     [{:type :text :key :node-editor/selected :layout {:height 18}
       :bind {:text [:state :selected-label]} :semantics {:role :generic}}
+     {:type :text :key :node-editor/selected-signature :layout {:height 14}
+      :bind {:text [:state :selected-signature] :visible [:state :selected-signature-visible?]}
+      :style {:rgba [0.72 0.78 0.85 1.0]}
+      :semantics {:role :generic}}
      {:type :scroll :key :node-editor/params
       :bind {:items [:state :selected-params] :height [:state :inspector-list-h]}
       :semantics {:role :list}

@@ -305,6 +305,25 @@
                          (str " [unknown fields: " (str/join ", " (map name unknown)) "]"))))]
       {:nid selected-nid :text (str text vfx-note)})))
 
+(defn- selected-signature
+  "Selected V4 :component node -> a short 'N params -> type' signature
+   string from its palette entry's real, always-populated :params/:returns
+   (schema_export.clj's node helper always sets them). This is C7's
+   replacement for a description line: :doc is never populated by any
+   source (export-ops/export-fns hardcode :doc nil), so a description row
+   would just be blank -- the signature is real content, the same
+   typed-pin information Blueprint's node cards already show. nil for a
+   non-component node or no selection, so the UI can skip the row
+   entirely rather than paint an empty one."
+  [{:keys [graph selected-nid palette]}]
+  (when-let [node (get-in graph [:nodes selected-nid])]
+    (when (= :component (:type node))
+      (when-let [entry (some #(when (= (:component node) (:id %)) %) palette)]
+        (let [n (count (:params entry))
+              ret (:returns entry)]
+          (str n " param" (when (not= 1 n) "s")
+               (when ret (str " -> " (name ret)))))))))
+
 (defn- node-op-id [node]
   (let [op (:op node)]
     (if (symbol? op) (keyword (namespace op) (name op)) op)))
@@ -645,6 +664,7 @@
         inspector-open? (not (false? (:inspector-open? state)))
         selected (selected-node-info state)
         selected-params (selected-param-fields state)
+        signature (selected-signature state)
         ;; Repeater text inputs need a stable state-backed draft. The
         ;; Presentation runtime rewrites focus to this per-field key so
         ;; character/backspace/Enter events carry the current value.
@@ -680,8 +700,10 @@
      :palette-toggle-label (if palette-open? "Hide palette" "Show palette")
      :inspector-toggle-label (if inspector-open? "Hide inspector" "Show inspector")
      :palette-list-h (max 0.0 (- (:body-h shell) 16.0))
-     :inspector-list-h (max 0.0 (- (:body-h shell) 18.0))
+     :inspector-list-h (max 0.0 (- (:body-h shell) 18.0 (if signature 14.0 0.0)))
      :selected-label (ui-label (if selected (:text selected) "(nothing selected)") 176.0)
+     :selected-signature (or signature "")
+     :selected-signature-visible? (boolean signature)
      :selected-params selected-params
      :diagnostics (mapv diagnostic-item diagnostics)
      :diagnostic-count (double (count diagnostics))
