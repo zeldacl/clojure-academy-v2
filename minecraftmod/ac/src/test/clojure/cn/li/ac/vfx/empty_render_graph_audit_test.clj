@@ -1,13 +1,13 @@
 (ns cn.li.ac.vfx.empty-render-graph-audit-test
   "Phase D of the node-engine/VFX performance plan: an audit, not a fix.
-   5 of the 36 ac/vfx-v4/*.edn documents compile to a :render graph that
+   2 of the 36 ac/vfx-v4/*.edn documents compile to a :render graph that
    is literally start->end with no component node in between -- real
    content, discovered while measuring per-frame VFX cost (an empty
    :render costs nothing to sample, so the per-instance-cost numbers the
    perf plan measured are ~2x lower than they will be once this content
    is filled in).
 
-   Exactly ONE of the 5 is legitimately empty on purpose:
+   Both empty documents are legitimately empty side-channel effects:
    :screen-flash-session's :alpha/:duration-ticks/:color are consumed by
    cn.li.ability.client-vfx-v2's own update-presentation-sidechannels! at
    SIGNAL-DISPATCH time (see that fn's own :screen-flash-session case),
@@ -17,12 +17,13 @@
    :camera-fov scene op reading ?offset -- confirmed by direct
    compilation below, not assumed from the naming pattern.)
 
-   The other 2 are V4 migration leftovers with no known reason to stay
-   empty. This test does not fix them -- filling in real scene content is
-   the V4 migration owner's call, the same boundary already drawn for
-   task #16 (skills-v4's :vfx/emit vs the vocabulary's :effect/vfx). It
-   only prevents SILENT accumulation: any NEWLY empty document must be
-   explicitly classified into one of the two sets below, not slip through
+   :blood-retrograde-charge owns the same owner-local walk-speed side channel
+   used by the legacy charge effect; :camera-fov-session, which looks like the
+   same family, is NOT in the empty set because it genuinely emits a
+   :camera-fov scene op.
+
+   This test prevents SILENT accumulation: any newly empty document must be
+   explicitly classified into the side-channel set rather than slipping through
    unnoticed."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -39,16 +40,12 @@
    is consumed at signal-dispatch time by a client-side side channel,
    never through scene sampling. Adding to this set is a real design
    claim -- point at the specific side-channel consumer, as above."
-  #{:screen-flash-session})
+  #{:screen-flash-session :blood-retrograde-charge})
 
 (def ^:private known-migration-leftover-stubs
-  "V4 migration leftovers with an empty :render graph and no known reason
-   to stay that way -- filling these in is the V4 migration owner's
-   scope (see this namespace's own docstring), not this gate's. This set
-   is a snapshot, not a floor: an entry moving to non-empty (content
-   getting filled in) does not fail this test, only a NEW, unclassified
-   empty document does."
-  #{:blood-retrograde-charge :first-person-motion-session})
+  "Reserved for newly discovered V4 migration leftovers. All currently known
+   empty graphs are classified as side-channel consumers."
+  #{})
 
 (defn- vfx-v4-resource-names []
   (let [root (io/resource vfx-v4-resource-root)]
