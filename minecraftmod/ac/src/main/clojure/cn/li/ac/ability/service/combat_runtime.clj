@@ -1018,6 +1018,12 @@
             (#{:release :abort :pulse} (:op intent))
             {:status :accepted :outcome :noop :schema-version 1 :ability-id ability-id}
 
+            ;; Safety net: undeclared :slot-wheel must never cast/release.
+            ;; Client should only emit wheel for held skills that declare the
+            ;; trigger; if a stray packet arrives, accept as noop (no warn).
+            (= :slot-wheel (:event intent))
+            {:status :accepted :outcome :noop :schema-version 1 :ability-id ability-id}
+
             :else
             (do (log/warn "Combat intent has no program entry"
                           {:ability-id ability-id

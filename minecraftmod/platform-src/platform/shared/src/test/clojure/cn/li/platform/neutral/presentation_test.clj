@@ -1,5 +1,6 @@
 (ns cn.li.platform.neutral.presentation-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.platform.neutral.arc-geometry :as arc-geometry]
             [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.platform.neutral.vfx-render-plan :as vfx-plan]))
 
@@ -78,6 +79,61 @@
         p0-sh (:p0 (first (:ops shifted)))]
     (is (not= (.-y p0-un) (.-y p0-sh))
         "first-person hand-origin must change the bolt's world Y")))
+
+(deftest bolt-reshapes-every-ttl-tick
+  "Main EntityArc texWiggle: zigzag reseeds from (seed, remaining-ttl) each tick."
+  (let [base {:operation :draw-batch
+              :primitive :quad
+              :geometry {:kind :arc
+                         :start {:x 0.0 :y 1.0 :z 0.0}
+                         :end {:x 0.0 :y 1.0 :z 8.0}
+                         :pattern :weak
+                         :seed 42
+                         :age 0
+                         :arc-life-ticks 8
+                         :life-ratio 0.0}
+              :material {:alpha 1.0 :color [255 255 255 255]}}
+        ;; Pin visibility so reshape asserts aren't seed/Markov dependent.
+        ops0 (with-redefs [arc-geometry/arc-visible? (constantly true)]
+               (:ops (vfx-plan/neutral-op->plan base)))
+        ops1 (with-redefs [arc-geometry/arc-visible? (constantly true)]
+               (:ops (vfx-plan/neutral-op->plan
+                      (assoc-in base [:geometry :age] 1))))]
+    (is (seq ops0))
+    (is (seq ops1))
+    (is (not= (:p0 (first ops0)) (:p0 (first ops1)))
+        "zigzag path must differ when remaining ttl changes")))
+
+(deftest arc-show-hide-chain-follows-upstream-markov
+  "Main showWiggle/hideWiggle 0.2/0.2 Markov — seed 0's Random sequence.
+   Argument is remaining ttl (counting down), not age-up."
+  (let [pattern {:show-wiggle 0.2 :hide-wiggle 0.2}]
+    (is (true? (arc-geometry/arc-visible? pattern 0 5)))
+    (is (true? (arc-geometry/arc-visible? pattern 0 11)))
+    (is (false? (arc-geometry/arc-visible? pattern 0 12)))
+    (is (true? (arc-geometry/arc-visible? pattern 0 13)))
+    (is (false? (arc-geometry/arc-visible? pattern 0 14)))
+    (is (true? (arc-geometry/arc-visible? pattern 0 20)))))
+
+(deftest triple-bolts-cover-single-bolt-markov-gaps
+  "Main ArcGen spawns 3 EntityArcs. Seed 5 alone is visible for only 1 of 8
+   remaining-ttl ticks; with bolt-count 3 the cast stays lit across the life."
+  (let [base {:kind :arc
+              :start {:x 0.0 :y 1.0 :z 0.0}
+              :end {:x 0.0 :y 1.0 :z 8.0}
+              :pattern :weak
+              :seed 5
+              :arc-life-ticks 8
+              :life-ratio 0.0}
+        mat {:alpha 1.0 :color [255 255 255 255]}
+        lit? (fn [bolt-count age]
+               (seq (arc-geometry/arc-quad-ops
+                     (assoc base :bolt-count bolt-count :age age)
+                     mat nil)))
+        single-lit (count (filter #(lit? 1 %) (range 8)))
+        triple-lit (count (filter #(lit? 3 %) (range 8)))]
+    (is (= 1 single-lit) "seed 5 single bolt: one visible tick (Markov gap)")
+    (is (>= triple-lit 6) "three bolts fill most of the arc-life window")))
 (deftest direct-host-bypasses-lifecycle-map-on-render-path
   (let [lifecycle-lookups (atom 0)
         api {:frame! (fn [_frame-id _delta _width _height] :frame)}]

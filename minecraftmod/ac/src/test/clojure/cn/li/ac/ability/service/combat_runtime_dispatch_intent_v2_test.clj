@@ -181,3 +181,16 @@
     (let [result (combat-runtime/dispatch-intent-v2! owner {:op :release :ability-id :arc-gen})]
       (is (= :accepted (:status result)))
       (is (= :noop (:outcome result))))))
+
+(deftest real-arc-gen-slot-wheel-is-noop-without-entry-test
+  "Wheel is not a cast/release. If a stray :slot-wheel reaches arc-gen
+   (no such trigger), accept as noop — never :no-program-entry spam."
+  (let [_ (combat-runtime/initialize-final-runtime-v2!)
+        owner "v2-arc-gen-wheel-owner"]
+    (is (nil? (@#'combat-runtime/resolve-program-entry
+               :arc-gen {:op :event :event :slot-wheel})))
+    (flush-with-resources! owner)
+    (let [result (combat-runtime/dispatch-intent-v2!
+                  owner {:op :event :event :slot-wheel :ability-id :arc-gen :slot 0})]
+      (is (= :accepted (:status result)))
+      (is (= :noop (:outcome result))))))

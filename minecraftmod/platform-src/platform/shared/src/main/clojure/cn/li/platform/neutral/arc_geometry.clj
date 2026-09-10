@@ -15,9 +15,12 @@
 (def third-person-view-offset [0.15 -0.8 0.23])
 
 (def ^:private patterns
-  {:weak {:segments 24 :amplitude 0.12 :width 0.1}
-   :strong {:segments 20 :amplitude 0.07 :width 0.3}
-   :aoe {:segments 20 :amplitude 0.06 :width 0.13}})
+  ;; EntityArc defaults: showWiggle/hideWiggle 0.2 → ~50% duty flicker.
+  ;; Zigzag is reseeded per age tick (main hash[seed,ttl]) so the bolt
+  ;; crackles instead of holding one frozen path for its whole life.
+  {:weak {:segments 24 :amplitude 0.12 :width 0.1 :show-wiggle 0.2 :hide-wiggle 0.2}
+   :strong {:segments 20 :amplitude 0.07 :width 0.3 :show-wiggle 0.2 :hide-wiggle 0.2}
+   :aoe {:segments 20 :amplitude 0.06 :width 0.13 :show-wiggle 0.2 :hide-wiggle 0.2}})
 
 (defn- pattern-of [key]
   (get patterns (keyword key) (:weak patterns)))
@@ -132,60 +135,131 @@
       255.0
       (* 255.0 (/ (- 1.0 lr) 0.3)))))
 
-(defn arc-quad-ops
-  "Expand one `:arc` geometry into textured segment quads."
-  [geometry material color]
+(defn arc-visible?
+  "EntityArc.onUpdate show/hide Markov chain (main arc-beam/arc-visible?).
+
+   A visible arc hides with show-wiggle probability per tick; a hidden one
+   reshows with hide-wiggle (defaults 0.2/0.2). `ttl` is remaining life
+   (main item :ttl counting down) — rolled from Random(seed) so the same
+   chain prefix is replayed for every ttl (stable within a tick, stable
+   across viewers for one cast)."
+  [pattern seed ttl]
+  (let [show-w (double (or (:show-wiggle pattern) 0.2))
+        hide-w (double (or (:hide-wiggle pattern) 0.2))
+        rng (java.util.Random. (long seed))]
+    (loop [t 0 visible true]
+      (if (>= t (long ttl))
+        visible
+        (recur (inc t)
+               (if visible
+                 (not (< (.nextDouble rng) show-w))
+                 (< (.nextDouble rng) hide-w)))))))
+
+(defn- tick-seed
+  "Main texWiggle reseed: shape from (seed, remaining-ttl), stable within a tick."
+  ^long [seed ttl]
+  (long (hash [seed (long ttl)])))
+
+(defn- arc-clock
+  "Derive main-style remaining :ttl / :max-ttl from age + arc life.
+
+   Main's arc item stored ttl counting down from arc-life. V4 instances age
+   upward; remaining = max-ttl - age. Prefer :arc-life-ticks (EntityArc life),
+   then :duration-ticks."
+  [geometry]
+  (let [age (long (or (:age geometry) 0))
+        max-ttl (long (or (:arc-life-ticks geometry)
+                          (:duration-ticks geometry)
+                          (:max-ttl geometry)
+                          0))
+        ttl (if (pos? max-ttl)
+              (max 0 (- max-ttl age))
+              (long (or (:ttl geometry) age)))
+        max* (long (max 1 (if (pos? max-ttl) max-ttl (max ttl 1))))
+        life-ratio (double (or (:life-ratio geometry)
+                               (- 1.0 (/ (double ttl) (double max*)))))]
+    {:age age :ttl ttl :max-ttl max* :life-ratio life-ratio}))
+
+(defn- bolt-seeds
+  "Main ArcGen enqueues 3 EntityArcs each with its own rand seed so one bolt's
+   Markov hide does not blank the whole cast. Keep bolt 0 on the activation
+   seed (tests pin Random(0)); siblings derive deterministically for sync."
+  [seed bolt-count]
+  (let [n (max 1 (long bolt-count))
+        base (long seed)]
+    (mapv (fn [i]
+            (if (zero? i) base (long (hash [base i]))))
+          (range n))))
+
+(defn- single-bolt-quad-ops
+  "One EntityArc-equivalent zigzag: Markov visibility + per-ttl reshape."
+  [geometry material color seed]
   (let [start (as-v3 (:start geometry))
         end (as-v3 (:end geometry))
         pat (pattern-of (or (:pattern geometry) :weak))
-        seed (long (or (:seed geometry) 0))
-        life-ratio (double (or (:life-ratio geometry) 0.0))
-        alpha-scale (double (or (:alpha material) 1.0))
-        base-alpha (* alpha-scale (life-fade-alpha life-ratio))
-        a (int (max 0 (min 255 (long base-alpha))))
-        tint (or color [255 255 255 a])
-        tint (if (sequential? tint)
-               (let [[r g b _a] (concat tint [255 255 255 255])]
-                 [r g b a])
-               tint)
-        width (double (or (:width geometry) (:width pat) 0.1))
-        texture (or (:texture material) (:texture geometry) default-texture)
-        vertices (generate-zigzag-segments start end
-                                           {:segments (:segments pat)
-                                            :amplitude (:amplitude pat)
-                                            :seed seed})
-        segment-count (dec (count vertices))]
-    (if (< segment-count 1)
+        {:keys [ttl life-ratio]} (arc-clock geometry)]
+    (if-not (arc-visible? pat seed ttl)
       []
-      (let [forward (vnorm (v- end start))
-            normal-raw (vcross forward (V3. 0.0 1.0 0.0))
-            normal (if (> (vlen normal-raw) 1.0e-5)
-                     (vnorm normal-raw)
-                     (V3. 1.0 0.0 0.0))
-            laterals (loop [i 0 acc [] prev (V3. 1.0 0.0 0.0)]
-                       (if (>= i segment-count)
-                         acc
-                         (let [v0 (nth vertices i)
-                               v1 (nth vertices (inc i))
-                               dir-vec (v- v1 v0)
-                               raw (vcross dir-vec normal)
-                               lateral (if (> (vlen raw) 1.0e-5)
-                                         (vnorm raw)
-                                         prev)]
-                           (recur (inc i) (conj acc lateral) lateral))))]
-        (mapv (fn [i]
-                (let [seg-start (nth vertices i)
-                      seg-end (nth vertices (inc i))
-                      right-start (nth laterals (if (zero? i) 0 (dec i)))
-                      right-end (nth laterals i)
-                      outer-s (v* right-start width)
-                      outer-e (v* right-end width)]
-                  {:kind :quad
-                   :p0 (v+ seg-start outer-s)
-                   :p1 (v- seg-start outer-s)
-                   :p2 (v- seg-end outer-e)
-                   :p3 (v+ seg-end outer-e)
-                   :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
-                   :texture texture
-                   :color tint}))
-              (range segment-count))))))
+      (let [alpha-scale (double (or (:alpha material) 1.0))
+            base-alpha (* alpha-scale (life-fade-alpha life-ratio))
+            a (int (max 0 (min 255 (long base-alpha))))
+            tint (or color [255 255 255 a])
+            tint (if (sequential? tint)
+                   (let [[r g b _a] (concat tint [255 255 255 255])]
+                     [r g b a])
+                   tint)
+            width (double (or (:width geometry) (:width pat) 0.1))
+            texture (or (:texture material) (:texture geometry) default-texture)
+            vertices (generate-zigzag-segments start end
+                                               {:segments (:segments pat)
+                                                :amplitude (:amplitude pat)
+                                                :seed (tick-seed seed ttl)})
+            segment-count (dec (count vertices))]
+        (if (< segment-count 1)
+          []
+          (let [forward (vnorm (v- end start))
+                normal-raw (vcross forward (V3. 0.0 1.0 0.0))
+                normal (if (> (vlen normal-raw) 1.0e-5)
+                         (vnorm normal-raw)
+                         (V3. 1.0 0.0 0.0))
+                laterals (loop [i 0 acc [] prev (V3. 1.0 0.0 0.0)]
+                           (if (>= i segment-count)
+                             acc
+                             (let [v0 (nth vertices i)
+                                   v1 (nth vertices (inc i))
+                                   dir-vec (v- v1 v0)
+                                   raw (vcross dir-vec normal)
+                                   lateral (if (> (vlen raw) 1.0e-5)
+                                             (vnorm raw)
+                                             prev)]
+                               (recur (inc i) (conj acc lateral) lateral))))]
+            (mapv (fn [i]
+                    (let [seg-start (nth vertices i)
+                          seg-end (nth vertices (inc i))
+                          right-start (nth laterals (if (zero? i) 0 (dec i)))
+                          right-end (nth laterals i)
+                          outer-s (v* right-start width)
+                          outer-e (v* right-end width)]
+                      {:kind :quad
+                       :p0 (v+ seg-start outer-s)
+                       :p1 (v- seg-start outer-s)
+                       :p2 (v- seg-end outer-e)
+                       :p3 (v+ seg-end outer-e)
+                       :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+                       :texture texture
+                       :color tint}))
+                  (range segment-count))))))))
+
+(defn arc-quad-ops
+  "Expand one `:arc` geometry into textured segment quads.
+
+   `:bolt-count` (default 1) mirrors main ArcGen's three independent EntityArcs:
+   each bolt has its own Markov chain, so flicker gaps on one bolt do not make
+   the cast look like a truncated lifetime."
+  [geometry material color]
+  (let [seed (long (or (:seed geometry) 0))
+        bolt-count (long (or (:bolt-count geometry) 1))]
+    (into []
+          (mapcat (fn [bolt-seed]
+                    (single-bolt-quad-ops geometry material color bolt-seed)))
+          (bolt-seeds seed bolt-count))))

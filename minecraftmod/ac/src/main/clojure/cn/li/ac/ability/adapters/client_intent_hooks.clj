@@ -121,6 +121,20 @@
 (defn- combat-slot? [player-uuid slot]
   (some? (keybinds/get-skill-id-for-slot-public player-uuid slot)))
 
+(defn- skill-accepts-slot-wheel?
+  "True only when the skill IR declares a :slot-wheel entry (e.g. penetrate-
+   teleport distance adjust). Instant casts like arc-gen must never consume
+   the wheel — scrolling is not a cast/release."
+  [ability-id]
+  (when ability-id
+    (let [triggers (or (get-in (combat-catalog/catalog)
+                               [:combat :abilities ability-id :program :entry-triggers])
+                       {})
+          ons (set (vals triggers))]
+      (boolean (or (contains? triggers :slot-wheel)
+                   (contains? ons :slot-wheel)
+                   (contains? ons :phase/slot-wheel))))))
+
 (defn- runtime-sync-resets-input?
   [old-ability-data new-ability-data]
   (or (not= (:category-id old-ability-data) (:category-id new-ability-data))
@@ -322,15 +336,22 @@
    (fn [player-uuid movement-key]
      (send-movement-intent! player-uuid movement-key :release))
    :client-on-slot-wheel!
-   (fn [player-uuid slot delta]
-     (when (and (not= :location-teleport
-                    (keybinds/get-skill-id-for-slot-public player-uuid slot))
-                (combat-slot? player-uuid slot)
-                (number? delta)
-                (Double/isFinite (double delta))
-                (not (zero? (double delta))))
-       (send-choice-intent! player-uuid slot
-                            (str "wheel:" (double delta)))))   :client-slot-visual-state slot-visual-state
+   (fn [player-uuid _slot delta]
+     ;; Wheel never casts or releases. It only adjusts an already-held
+     ;; session skill that declares :slot-wheel (PenetrateTeleport). Idle
+     ;; bound slots (arc-gen in slot 0) must leave the event alone so the
+     ;; vanilla hotbar can scroll.
+     (when-let [slot (active-slot-for-owner player-uuid)]
+       (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
+         (when (and (not= :location-teleport ability-id)
+                    (skill-accepts-slot-wheel? ability-id)
+                    (number? delta)
+                    (Double/isFinite (double delta))
+                    (not (zero? (double delta))))
+           (send-choice-intent! player-uuid slot
+                                (str "wheel:" (double delta)))
+           true))))
+   :client-slot-visual-state slot-visual-state
    :client-visual-state reactive-hud/visual-state
    :client-register-push-handlers! register-push-handlers!
    :client-clear-owner-state! clear-owner-state!

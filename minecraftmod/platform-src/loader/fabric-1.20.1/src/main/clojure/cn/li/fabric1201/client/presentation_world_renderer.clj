@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.client.presentation-world-renderer
   "CLIENT-ONLY world Presentation Runtime submission adapter."
   (:require [cn.li.mc1201.client.effects.presentation-world :as geometry]
+            [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.platform.neutral.vfx :as vfx]
             [cn.li.platform.neutral.vfx-render-plan :as vfx-plan]
             [cn.li.platform.neutral.presentation :as presentation]
@@ -38,7 +39,10 @@
                 :world-after-translucent 0.0 w h
                 {:presentation-context frame-context
                  :backend-context
-                 {:draw-batch!
+                 {:play-audio!
+                  (fn [_stage sound-id volume pitch]
+                    (sound/play-local! sound-id volume pitch))
+                  :draw-batch!
                   (fn [_g _stage prim _mat _var _cnt payload]
                     (when (or (= "mesh" prim) (#{"line" "quad" "particle" "first-person"} prim))
                       (doseq [plan (if (= "mesh" prim)

@@ -20,7 +20,7 @@
             RenderCommand$CameraContribution
             RenderCommand$Layer RenderCommand$Mesh RenderCommand$OrderBarrier
             RenderCommand$ParticleBatch RenderCommand$PostProcess
-            RenderCommand$Ribbon RenderPass
+            RenderCommand$Ribbon RenderPass RenderStage
             UiResourceRef]
            [cn.li.mcmod.runtime.ui UiDrawList UiOp]
            [cn.li.mc1201.client GuiGraphicsHelper]
@@ -271,11 +271,16 @@
   (let [context (if (map? graphics) graphics {})
         ^GuiGraphics gg (if (map? graphics) (:graphics graphics) graphics)
         wanted (neutral/stage->render-stage stage)
+        ;; Loaders never submit :audio alone; fold AUDIO into the world
+        ;; translucent pass so VFX one-shots (arc_weak, etc.) actually play.
+        pass-stages (cond-> #{wanted}
+                      (= wanted RenderStage/WORLD_AFTER_TRANSLUCENT)
+                      (conj RenderStage/AUDIO))
         ^UiDrawList dl (.uiFor frame wanted)]
     (when (and dl (pos? (.count dl)) (instance? GuiGraphics gg))
       (draw-ui-draw-list! gg context stage dl))
     (doseq [^RenderPass pass (.passes frame)
-            :when (= wanted (.stage pass))
+            :when (contains? pass-stages (.stage pass))
             ^RenderCommand command (.commands pass)]
       (when (or (instance? GuiGraphics gg)
                 (and (map? context) (some fn? (vals context))))

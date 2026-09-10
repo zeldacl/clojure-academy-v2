@@ -30,6 +30,8 @@
               :ring-color [188 252 238 180]
               :arc-pattern :weak
               :seed 42
+              :arc-life-ticks 10
+              :duration-ticks 10
               :age 5.0
               :progress 0.5}]
     (testing "fade phase draws ring without ClassCast on ring-radius map"
@@ -40,4 +42,6 @@
         (is (number? (:radius ring)))
         (is (< 0.12 (double (:radius ring)) 0.28))
         (is (some? arc) "main-parity zigzag arc leaf must sample")
-        (is (= :weak (:pattern arc)))))))
+        (is (= :weak (:pattern arc)))
+        (is (= 3 (:bolt-count arc)) "ArcGen-parity: three independent bolts")
+        (is (number? (:age arc)) "age must flow through for per-tick crackle")))))

@@ -2,6 +2,7 @@
   "Fabric 26.2 extraction/render hooks for world-space presentation effects."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc262.client.effects.presentation-world :as geometry]
+            [cn.li.mc262.client.effects.sound :as sound]
             [cn.li.platform.neutral.vfx :as vfx]
             [cn.li.platform.neutral.vfx-render-plan :as vfx-plan]
             [cn.li.platform.neutral.presentation :as presentation])
@@ -44,7 +45,10 @@
             :world-after-translucent 0.0 w h
             {:presentation-context presentation-context
              :backend-context
-             {:draw-batch!
+             {:play-audio!
+              (fn [_stage sound-id volume pitch]
+                (sound/play-local! sound-id volume pitch))
+              :draw-batch!
               (fn [_g _stage prim _mat _var _cnt payload]
                 (when (or (= "mesh" prim) (#{"line" "quad" "particle" "first-person"} prim))
                   (doseq [plan (if (= "mesh" prim)

@@ -360,7 +360,7 @@
           :start
           {:nid :n/n--entry--default-7--5011e6c, :ref [:local :eye]},
           :ring-radius {:from 0.12, :to 0.28},
-          :arc-life-ticks 8,
+          :arc-life-ticks 10,
           :fade-to-tick 10,
           :arc-spacing {:min 1.0, :max 2.0},
           :fade-from-alpha 1.0,
@@ -381,7 +381,9 @@
           :fade-from-tick 3,
           :ring-color [188 252 238 180],
           :ring-segments 10,
-          :arc-pattern :weak}}},
+          :arc-pattern :weak,
+          :seed
+          {:nid :n/n--entry--default-7--arc-seed, :ref [:local :seed]}}}},
        :n--entry--default-7-then-1b
        {:type :component,
         :component :effect/vfx,

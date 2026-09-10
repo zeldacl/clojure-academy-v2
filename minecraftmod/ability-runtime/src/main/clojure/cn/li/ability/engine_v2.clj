@@ -101,6 +101,10 @@
    ;; the server-issued activation seed so two owners/effects cannot collide
    ;; in the client VFX instance registry.
    :instance-key [world-id owner effect-id activation-seed (or instance-key nid)]
+   ;; Must carry the activation seed: client dispatch-signal! seeds geometry
+   ;; RNG from (:seed signal). Falling through to event-seq made every bolt
+   ;; look identical (first signal is always event-seq 1).
+   :seed (long activation-seed)
    :event-seq (swap! event-seq-counter inc)
    :audience audience
    :params (or payload {})})
