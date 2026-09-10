@@ -1193,7 +1193,7 @@
         ;; in the neutral index while still replacing one target mark atomically.
         inherited (reduce max 0
                            (keep (fn [[_ value]]
-                                      (when (= source-id (:source-player-id value))
+                                      (when (= source-id (:target-id value))
                                         (max 0 (- (long (:expires-at value)) tick))))
                                  @combat-marks*))
         duration (max 60 requested inherited)
