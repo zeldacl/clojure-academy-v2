@@ -771,6 +771,7 @@
                        (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
                        (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
                        (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
+                       (contains? cmd :combat-data) (assoc :combat-data (:combat-data cmd))
                        (contains? cmd :sync-revision) (assoc :sync-revision (:sync-revision cmd))
                        (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
                        (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))

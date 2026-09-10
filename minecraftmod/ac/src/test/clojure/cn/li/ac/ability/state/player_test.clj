@@ -131,7 +131,7 @@
     (is (= persisted decoded))
     (is (false? (contains? decoded :dirty-domains)))
     (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data
-             :cheats-data :context-registry}
+             :cheats-data :context-registry :combat-data}
            (set (keys decoded))))
     (is (false? (get-in decoded [:cheats-data :enabled?]))
         "the /aim cheat switch round-trips like any other persisted domain")

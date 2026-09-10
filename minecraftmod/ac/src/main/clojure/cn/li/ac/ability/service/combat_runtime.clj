@@ -1162,11 +1162,41 @@
 (defn- mark-key [world-id target-id mark-type]
   [(str (or world-id "minecraft:overworld")) (str target-id) mark-type])
 
+(defn- persisted-mark-entries []
+  (mapcat (fn [source-id]
+            (let [marks (get-in (runtime-store/get-player-state (server-session-id)
+                                                                  (str source-id))
+                                [:combat-data :radiation-marks])]
+              (for [[target-id mark] marks]
+                [source-id target-id mark])))
+          (runtime-store/list-players (server-session-id))))
+
+(defn- hydrate-mark-index!
+  []
+  (doseq [[source-id target-id mark] (persisted-mark-entries)
+          :when (map? mark)]
+    (let [world-id (or (:world-id mark) "minecraft:overworld")
+          mark-type (or (:mark-type mark) :radiation)
+          entry (assoc mark :source-player-id (str (or (:source-player-id mark) source-id))
+                            :target-id (str target-id)
+                            :world-id (str world-id))]
+      (swap! combat-marks* assoc (mark-key world-id target-id mark-type) entry)))
+  nil)
+
+(defn- persist-mark! [source-id target-id mark]
+  (when (and source-id target-id)
+    (runtime-store/update-player-state!
+     (server-session-id) (str source-id)
+     (fn [state]
+       (assoc-in state [:combat-data :radiation-marks (str target-id)] mark))))
+  nil)
+
 (defn- active-mark
   [world-id target-id mark-type tick]
-  (let [entry (get @combat-marks* (mark-key world-id target-id mark-type))]
+  (let [key (mark-key world-id target-id mark-type)
+        entry (or (get @combat-marks* key)
+                  (do (hydrate-mark-index!) (get @combat-marks* key)))]
     (when (and entry (> (long (:expires-at entry)) (long tick))) entry)))
-
 (defn- mark-rate-for
   "Snapshot a mark amplification at application time using the source skill's
    neutral tunables. This preserves main's radiation-mark behavior without
@@ -1205,13 +1235,24 @@
                                     :rate (double (or rate 1.0))
                                     :applied-at tick
                                     :expires-at (+ tick duration)})
+    (persist-mark! source-id target-id (get @combat-marks* key))
     {:status :applied :type :entity-mark :target-id (str target-id)
      :mark-type mark-type :expires-at (+ tick duration)}))
+(defn- update-persisted-marks! [pred]
+  (doseq [source-id (runtime-store/list-players (server-session-id))]
+    (runtime-store/update-player-state!
+     (server-session-id) (str source-id)
+     (fn [state]
+       (update-in state [:combat-data :radiation-marks]
+                  (fn [marks]
+                    (into {} (remove (fn [[_ mark]] (pred mark)) (or marks {}))))))))
+  nil)
 (defn- clear-mark-target!
   [target-id]
   (swap! combat-marks*
          (fn [marks]
            (into {} (remove (fn [[_ value]] (= (str target-id) (:target-id value))) marks))))
+  (update-persisted-marks! (fn [mark] (= (str target-id) (:target-id mark))))
   {:status :applied :type :entity-mark-clear :target-id (str target-id)})
 
 (defn- clear-mark-owner!
@@ -1219,6 +1260,7 @@
   (swap! combat-marks*
          (fn [marks]
            (into {} (remove (fn [[_ value]] (= (str owner) (:source-player-id value))) marks))))
+  (update-persisted-marks! (fn [mark] (= (str owner) (:source-player-id mark))))
   {:status :applied :type :entity-owner-clear :owner (str owner)})
 
 (defn- expire-marks!
@@ -1226,6 +1268,7 @@
   (swap! combat-marks*
          (fn [marks]
            (into {} (filter (fn [[_ value]] (> (long (:expires-at value)) (long tick))) marks))))
+  (update-persisted-marks! (fn [mark] (<= (long (or (:expires-at mark) 0)) (long tick))))
   nil)
 
 (defn- impact-long

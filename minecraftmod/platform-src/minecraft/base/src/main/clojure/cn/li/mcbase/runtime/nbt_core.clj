@@ -15,7 +15,7 @@
 (def ^:private root-key "ac_runtime_v2")
 (def ^:private schema-version 2)
 (def ^:private persisted-domains
-  [:ability-data :resource-data :preset-data :develop-data :cheats-data])
+  [:ability-data :resource-data :preset-data :develop-data :cheats-data :combat-data])
 
 (defn- player-tag
   ^CompoundTag [^ServerPlayer player]

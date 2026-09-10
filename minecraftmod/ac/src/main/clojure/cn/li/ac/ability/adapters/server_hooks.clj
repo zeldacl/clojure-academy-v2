@@ -50,6 +50,7 @@
                       (contains? state* :cooldown-data) (assoc :cooldown-data (:cooldown-data state*))
                       (contains? state* :preset-data) (assoc :preset-data preset)
                       (contains? state* :develop-data) (assoc :develop-data (:develop-data state*))
+                      (contains? state* :combat-data) (assoc :combat-data (:combat-data state*))
                       (contains? state* :runtime) (assoc :runtime-data (:runtime state*))
                       (contains? state* :dirty?) (assoc :dirty? (:dirty? state*)))]
     (if (> (count hydrate-cmd) 1)

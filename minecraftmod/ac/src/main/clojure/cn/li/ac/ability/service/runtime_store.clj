@@ -65,6 +65,7 @@
    :cooldown-data (cdata/new-cooldown-data)
    :preset-data (pdata/new-preset-data)
    :develop-data (ddata/new-develop-data)
+   :combat-data {:radiation-marks {}}
    ;; Upstream keeps the /aim cheat switch in PlayerDataTag, outside
    ;; AbilityData/CPData, and it survives relog. Its own persisted domain here
    ;; for the same reason: it gates commands, it is not ability progression.
