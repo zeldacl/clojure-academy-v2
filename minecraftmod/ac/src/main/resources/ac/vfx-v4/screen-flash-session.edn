@@ -4,7 +4,8 @@
  :inputs
  {:alpha {:type :float},
   :duration-ticks {:type :int},
-  :color {:type :any}},
+  :color {:type :any},
+  :local-walk-speed {:type :float, :default nil}},
  :graphs
  {:render
   {:nodes

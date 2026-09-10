@@ -3,6 +3,7 @@
  :lifecycle {:mode :session},
  :inputs
  {:sound-position {:type :vec3},
+  :local-walk-speed {:type :float, :default nil},
   :fade-at {:type :int},
   :sound-pitch {:type :float},
   :duration-ticks {:type :int},

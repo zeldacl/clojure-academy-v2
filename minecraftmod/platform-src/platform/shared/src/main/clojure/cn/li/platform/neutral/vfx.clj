@@ -15,8 +15,10 @@
 (def ^:private host-api nil)
 (def ^:private required-host-operations
   [:required-anchors :tick! :sample-frame! :frame-stage :latest-frame-stage
-   :release-frame! :clear-world! :resource-snapshot :reload-resources!
-   :active? :fov-offset :drain-camera-pitch-deltas!])
+   :release-frame! :clear-world! :resource-snapshot :reload-resources!])
+
+(def ^:private optional-host-operations
+  [:active? :fov-offset :local-walk-speed :drain-camera-pitch-deltas!])
 
 (defn install-host!
   "Install the concrete VFX host API during client bootstrap.
@@ -26,7 +28,9 @@
    tick/render path. A second install is allowed for development reloads."
   [api]
   (when (or (not (map? api))
-            (some #(not (ifn? (get api %))) required-host-operations))
+            (some #(not (ifn? (get api %))) required-host-operations)
+            (some #(and (contains? api %)
+                        (not (ifn? (get api %)))) optional-host-operations))
     (throw (ex-info "VFX host API contract mismatch" {:value api})))
   (alter-var-root #'host-api (constantly api))
   nil)
@@ -45,7 +49,9 @@
   (when-let [api (host)] ((:required-anchors api))))
 
 (defn fov-offset [player-uuid]
-  (when-let [api (host)] ((:fov-offset api) player-uuid)))
+  (when-let [api (host)]
+    (when-let [f (get api :fov-offset)]
+      (f player-uuid))))
 
 (defn local-walk-speed [player-uuid]
   "Return an owner-local movement override supplied by the VFX host, or nil
@@ -91,7 +97,9 @@
   (when-let [api (host)] ((:clear-world! api) world-id)))
 
 (defn drain-camera-pitch-deltas! [owner]
-  (when-let [api (host)] ((:drain-camera-pitch-deltas! api) owner)))
+  (when-let [api (host)]
+    (when-let [f (get api :drain-camera-pitch-deltas!)]
+      (f owner))))
 
 (defn reload-resources! [generation]
   (when-let [api (host)] ((:reload-resources! api) generation)))

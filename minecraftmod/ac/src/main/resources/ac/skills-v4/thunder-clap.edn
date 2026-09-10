@@ -131,7 +131,8 @@
             {:nid :n/n--entry--start-5-th-e9806248,
              :ref [:local :aim-hit]}}},
           :ring-color [188 252 238 210],
-          :ring-segments 24}}},
+          :ring-segments 24,
+          :local-walk-speed 0.1}}},
        :n--entry--start-5-then-1
        {:type :end,
         :result {},
@@ -268,7 +269,22 @@
            {:field :position,
             :value
             {:nid :n/n--entry--pulse-5-th-6aa83ac6,
-             :ref [:local :aim-hit]}}}}}},
+             :ref [:local :aim-hit]}}},
+          :local-walk-speed
+          {:nid :n/n-thunder-walk-speed,
+           :component :math/clamp,
+           :args
+           [{:nid :n/n-thunder-walk-speed-sub,
+             :component :math/sub,
+             :args
+             [0.1
+              {:nid :n/n-thunder-walk-speed-mul,
+               :component :math/mul,
+               :args
+               [0.00165
+                {:ref [:local :charge-ticks]}]}]}
+            0.001
+            0.1]}}}},
        :n--entry--pulse-5-then-3
        {:type :local-set,
         :operation :define,
@@ -330,7 +346,7 @@
         {:effect-id :arc-ring-session,
          :operation :destroy,
          :instance-key [:activation :thunder-clap],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n--entry--pulse-5-then-1
        {:type :local-set,
         :operation :define,
@@ -414,7 +430,22 @@
            {:field :position,
             :value
             {:nid :n/n--entry--pulse-5-el-6cb876e4,
-             :ref [:local :aim-hit]}}}}}},
+             :ref [:local :aim-hit]}}},
+          :local-walk-speed
+          {:nid :n/n-thunder-walk-speed,
+           :component :math/clamp,
+           :args
+           [{:nid :n/n-thunder-walk-speed-sub,
+             :component :math/sub,
+             :args
+             [0.1
+              {:nid :n/n-thunder-walk-speed-mul,
+               :component :math/mul,
+               :args
+               [0.00165
+                {:ref [:local :charge-ticks]}]}]}
+            0.001
+            0.1]}}}},
        :n013 {:type :context-ref, :key :caster/aim, :nid :n/n013},
        :n044 {:type :loop-end, :nid :n/n044},
        :n--entry--pulse-5-then-13
@@ -483,7 +514,7 @@
         {:effect-id :arc-ring-session,
          :operation :destroy,
          :instance-key [:activation :thunder-clap],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n023 {:type :component, :component :math/div, :nid :n/n023},
        :n--entry--pulse-5-then-4-do-0
        {:type :component,
@@ -916,7 +947,22 @@
            {:field :position,
             :value
             {:nid :n/n--entry--release-5--75f2d97b,
-             :ref [:local :aim-hit]}}}}}},
+             :ref [:local :aim-hit]}}},
+          :local-walk-speed
+          {:nid :n/n-thunder-walk-speed,
+           :component :math/clamp,
+           :args
+           [{:nid :n/n-thunder-walk-speed-sub,
+             :component :math/sub,
+             :args
+             [0.1
+              {:nid :n/n-thunder-walk-speed-mul,
+               :component :math/mul,
+               :args
+               [0.00165
+                {:ref [:local :charge-ticks]}]}]}
+            0.001
+            0.1]}}}},
        :n071 {:type :component, :component :math/gte, :nid :n/n071},
        :n--entry--release-5-then-1
        {:type :local-set,
@@ -972,7 +1018,7 @@
         {:effect-id :arc-ring-session,
          :operation :destroy,
          :instance-key [:activation :thunder-clap],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n081 {:type :parameter-ref, :key :charge-max, :nid :n/n081},
        :n092
        {:type :component,
@@ -1059,7 +1105,7 @@
         {:effect-id :arc-ring-session,
          :operation :destroy,
          :instance-key [:activation :thunder-clap],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n--entry--release-1
        {:type :local-set,
         :operation :define,
@@ -1362,7 +1408,7 @@
         {:effect-id :arc-ring-session,
          :operation :destroy,
          :instance-key [:activation :thunder-clap],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n--entry--abort-1
        {:type :end,
         :result {},

@@ -28,7 +28,7 @@
 
 ;; --- editor palette presentation (:category/:i18n) --------------------
 ;;
-;; Only 11 node ids and none of them namespaced (unlike combat's :ns/name
+;; Only 12 node ids and none of them namespaced (unlike combat's :ns/name
 ;; shape), so a per-id table here is both simpler and more precise than
 ;; deriving from a namespace that does not exist.
 (def ^:private category-by-id

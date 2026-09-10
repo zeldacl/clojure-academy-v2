@@ -92,8 +92,39 @@
 
 (defn- update-presentation-sidechannels! [signal]
   (let [owner (some-> (:owner signal) str)
-        params (or (:params signal) {})]
+        params (or (:params signal) {})
+        instance (or (:instance-key signal)
+                     (:instance-id signal)
+                     [:effect (:effect-id signal)])]
     (when owner
+      ;; Several legacy level effects (Jet Engine, Meltdowner and Thunder
+      ;; Clap) expose the same owner-local movement slowdown while their
+      ;; primary VFX uses a different effect id.  Keep this transport-neutral:
+      ;; any V4 signal may carry an explicit :local-walk-speed field and the
+      ;; side channel follows that signal's lifecycle.  A missing field means
+      ;; "leave the current value alone"; an explicit nil clears it.
+      (when (#{:destroy :release :clear-owner} (:op signal))
+        (swap! local-walk-speed-targets*
+               (fn [targets]
+                 (if (= :clear-owner (:op signal))
+                   (dissoc targets owner)
+                   (let [entries (dissoc (get targets owner {}) instance)]
+                     (if (seq entries)
+                       (assoc targets owner entries)
+                       (dissoc targets owner)))))))
+      (when (contains? params :local-walk-speed)
+        (let [speed (:local-walk-speed params)]
+          (if (number? speed)
+            (swap! local-walk-speed-targets*
+                   update owner (fnil assoc {}) instance (double speed))
+            (swap! local-walk-speed-targets*
+                   (fn [targets]
+                     (if (= :clear-owner (:op signal))
+                       (dissoc targets owner)
+                       (let [entries (dissoc (get targets owner {}) instance)]
+                         (if (seq entries)
+                           (assoc targets owner entries)
+                           (dissoc targets owner)))))))))
       (when (= :screen-flash-session (:effect-id signal))
         (case (:op signal)
           (:spawn :update :trigger :snapshot)
@@ -116,9 +147,18 @@
       (when (= :blood-retrograde-charge (:effect-id signal))
         (case (:op signal)
           (:spawn :update :trigger :snapshot)
-          (swap! local-walk-speed-targets* assoc owner
-                (double (or (:speed params) 0.1)))
-          (:destroy :release :clear-owner) (swap! local-walk-speed-targets* dissoc owner)
+          (swap! local-walk-speed-targets*
+                 update owner (fnil assoc {}) instance
+                 (double (or (:speed params) 0.1)))
+          (:destroy :release :clear-owner)
+          (swap! local-walk-speed-targets*
+                 (fn [targets]
+                   (if (= :clear-owner (:op signal))
+                     (dissoc targets owner)
+                     (let [entries (dissoc (get targets owner {}) instance)]
+                       (if (seq entries)
+                         (assoc targets owner entries)
+                         (dissoc targets owner))))))
           nil)))))
 
 (defn dispatch-signal! [signal]
@@ -185,9 +225,10 @@
       0.0)))
 
 (defn local-walk-speed [player-uuid]
-  "Return the owner-local walk-speed override, or nil when no V4 effect owns it."
+  "Return the slowest owner-local walk-speed override, or nil when no V4 effect owns it."
   (when-let [owner (some-> player-uuid str)]
-    (get @local-walk-speed-targets* owner)))
+    (when-let [speeds (seq (get @local-walk-speed-targets* owner))]
+      (reduce min (map val speeds)))))
 
 (defn add-camera-pitch-delta!
   [owner delta]

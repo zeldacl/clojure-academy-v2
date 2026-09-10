@@ -9,7 +9,9 @@
   {:probe-transient
    {:scene nil :user-types {:duration-ticks :int} :emitters [] :lifecycle :transient}
    :screen-flash-session
-   {:scene nil :user-types {:alpha :float :duration-ticks :int} :emitters [] :lifecycle :transient}
+   {:scene nil :user-types {:alpha :float :duration-ticks :int
+                            :local-walk-speed :float}
+    :emitters [] :lifecycle :transient}
    :blood-retrograde-charge
    {:scene nil :user-types {:speed :float} :emitters [] :lifecycle :session}})
 
@@ -67,6 +69,40 @@
    {:op :destroy :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
     :instance-key [:flash] :event-seq 2})
   (is (= 0.0 (controller/screen-flash-alpha "owner-1"))))
+
+(deftest shared-local-walk-speed-side-channel-follows-vfx-signal-test
+  (reset-runtime!)
+  ;; Jet Engine, Meltdowner and Thunder Clap all use different visual
+  ;; resources, but their legacy movement slowdown is the same owner-local
+  ;; transport concern.  It must survive through a normal V4 signal payload.
+  (controller/dispatch-signal!
+   {:op :spawn :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
+    :instance-key [:flash] :event-seq 1
+    :params {:alpha 0.5 :duration-ticks 2 :local-walk-speed 0.07}})
+  (is (= 0.07 (controller/local-walk-speed "owner-1")))
+  (controller/dispatch-signal!
+   {:op :update :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
+    :instance-key [:flash] :event-seq 2 :params {:local-walk-speed nil}})
+  (is (nil? (controller/local-walk-speed "owner-1"))))
+
+(deftest local-walk-speed-side-channel-composes-concurrently-test
+  (reset-runtime!)
+  (doseq [[instance speed event-seq]
+          [[[:flash-a] 0.08 1]
+           [[:flash-b] 0.03 1]]]
+    (controller/dispatch-signal!
+     {:op :spawn :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
+      :instance-key instance :event-seq event-seq
+      :params {:alpha 0.5 :duration-ticks 2 :local-walk-speed speed}}))
+  (is (= 0.03 (controller/local-walk-speed "owner-1")))
+  (controller/dispatch-signal!
+   {:op :destroy :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
+    :instance-key [:flash-b] :event-seq 2})
+  (is (= 0.08 (controller/local-walk-speed "owner-1")))
+  (controller/dispatch-signal!
+   {:op :clear-owner :effect-id :screen-flash-session :owner "owner-1" :world-id "world"
+    :event-seq 3})
+  (is (nil? (controller/local-walk-speed "owner-1"))))
 
 (deftest blood-retrograde-charge-side-channel-preserves-owner-speed-lifecycle-test
   (reset-runtime!)

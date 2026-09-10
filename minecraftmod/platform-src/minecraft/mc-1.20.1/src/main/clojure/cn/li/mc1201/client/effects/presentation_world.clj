@@ -558,7 +558,7 @@
            tick
            plan]}]
   (let [owner (client-session/current-local-player-owner)
-        ;; V4 side-channel effects (currently Blood Retrograde charge) own
+        ;; V4 side-channel effects own
         ;; movement independently of the legacy level-effect plan. Prefer that
         ;; resolved owner-local override when present, while retaining the old
         ;; plan path for effects that have not migrated yet.

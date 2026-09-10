@@ -1,7 +1,8 @@
 {:schema :ac/vfx-v4,
  :id :camera-fov-session,
  :lifecycle {:mode :session},
- :inputs {:offset {:type :float}},
+ :inputs {:offset {:type :float},
+          :local-walk-speed {:type :float, :default nil}},
  :graphs
  {:render
   {:nodes

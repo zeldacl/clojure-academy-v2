@@ -303,7 +303,7 @@
         {:effect-id :camera-fov-session,
          :operation :destroy,
          :instance-key [:activation :meltdowner-camera],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n036 {:type :local-get, :key :rate-lo, :nid :n/n036},
        :n035 {:type :component, :component :math/lerp, :nid :n/n035},
        :n046
@@ -349,7 +349,22 @@
            :args
            [24.0
             {:nid :n/n--entry--pulse-4-th-9424c625,
-             :ref [:local :camera-progress]}]}}}},
+             :ref [:local :camera-progress]}]},
+          :local-walk-speed
+          {:nid :n/n--entry--pulse-4-th-walk-speed,
+           :component :math/clamp,
+           :args
+           [{:nid :n/n--entry--pulse-4-th-walk-speed-sub,
+             :component :math/sub,
+             :args
+             [0.1
+              {:nid :n/n--entry--pulse-4-th-walk-speed-mul,
+               :component :math/mul,
+               :args
+               [0.099
+                {:ref [:local :camera-progress]}]}]}
+            0.001
+            0.1]}}}},
        :n045 {:type :local-get, :key :next-hold-ticks, :nid :n/n045},
        :n021
        {:type :parameter-ref, :key :charge-min-ticks, :nid :n/n021},
@@ -497,7 +512,7 @@
         {:effect-id :camera-fov-session,
          :operation :destroy,
          :instance-key [:activation :meltdowner-camera],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n031 {:type :local-get, :key :charge-min-ticks, :nid :n/n031},
        :n038 {:type :local-get, :key :progress, :nid :n/n038},
        :n025 {:type :component, :component :pair/second, :nid :n/n025},
@@ -1045,7 +1060,7 @@
         {:effect-id :camera-fov-session,
          :operation :destroy,
          :instance-key [:activation :meltdowner-camera],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n--entry--release-1-else-4
        {:type :local-set,
         :operation :define,
@@ -1060,7 +1075,7 @@
         {:effect-id :camera-fov-session,
          :operation :destroy,
          :instance-key [:activation :meltdowner-camera],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n--entry--release-1-else-13
        {:type :component,
         :component :cooldown/start,
@@ -1400,7 +1415,7 @@
         {:effect-id :camera-fov-session,
          :operation :destroy,
          :instance-key [:activation :meltdowner-camera],
-         :payload {}}},
+         :payload {:local-walk-speed nil}}},
        :n--entry--abort-3
        {:type :end,
         :result {},
