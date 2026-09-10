@@ -12,6 +12,21 @@
             [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog]
             [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]))
 
+(def ^:private main-registration-ids
+  #{:arc-gen :blood-retrograde :body-intensify :current-charging
+    :dim-folding-theorem :directed-blastwave :directed-shock :electron-bomb
+    :electron-missile :flashing :flesh-ripping :groundshock :jet-engine
+    :light-shield :location-teleport :mag-manip :mag-movement :mark-teleport :meltdowner
+    :mine-detect :mine-ray-basic :mine-ray-expert :mine-ray-luck
+    :penetrate-teleport :plasma-cannon :rad-intensify :railgun :ray-barrage
+    :scatter-bomb :shift-teleport :space-fluct :storm-wing :threatening-teleport
+    :thunder-bolt :thunder-clap :vec-accel :vec-deviation :vec-reflection
+    :electromaster/brain-course :meltdowner/brain-course
+    :teleporter/brain-course :vecmanip/brain-course
+    :electromaster/brain-course-advanced :meltdowner/brain-course-advanced
+    :teleporter/brain-course-advanced :vecmanip/brain-course-advanced
+    :electromaster/mind-course :meltdowner/mind-course
+    :teleporter/mind-course :vecmanip/mind-course})
 (defn- resource-files [root]
   (let [url (or (io/resource root)
                 (throw (ex-info "V4 resource root not found" {:root root})))]
@@ -45,6 +60,8 @@
     (is (= 50 (count (:skills assembled))))
     (is (= 50 (count (set (map :id (:skills assembled)))))
         "skill ids must be unique after V4 assembly")
+    (is (= main-registration-ids (set (map :id (:skills assembled))))
+        "V4 registration ids must match the main-branch public skill set")
     (is (every? #(map? (:ir %)) (:skills assembled))
         "every shipped skill must have compiled V4 IR")))
 
