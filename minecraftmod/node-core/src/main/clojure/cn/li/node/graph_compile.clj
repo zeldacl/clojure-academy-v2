@@ -48,6 +48,25 @@
                      (:links ctx))]
     (vec (distinct (concat inline linked)))))
 
+(def special-components
+  "Components component-call lowers itself, with no vocab/:defn/:ops entry.
+
+   These are the graph-only spellings: the editor persists them as
+   :component nodes so their parameter slots stay visible, and lowering
+   turns each into the corresponding surface statement (:effect/vfx ->
+   vfx!, :event/emit -> event!, :state/set -> state!) or a plain value
+   form (:value/map, :value/field). Looking any of them up in the
+   vocabulary is expected to MISS -- see cn.li.combat.dsl-vocabulary's
+   note on why :effect/vfx is deliberately absent there.
+
+   Public because callers outside node-core must be able to tell
+   \"unresolvable component\" from \"resolved by component-call below\";
+   cn.li.combat.host-parity/resolvable-component? is the gate that does.
+   It read from a hand-copied duplicate of this set until that mirror
+   drifted out of anyone's sight -- keep the single definition here, next
+   to the cond that is its only source of truth."
+  #{:value/map :value/field :effect/vfx :event/emit :state/set})
+
 (defn- component-call
   "Build the surface call for a component node.  Vocabulary nodes consume a
    single keyword map, while node-core pure operators use positional args

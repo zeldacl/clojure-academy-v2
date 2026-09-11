@@ -15,6 +15,7 @@
             [cn.li.combat.dsl-vocabulary :as vocab]
             [cn.li.combat.lib :as lib]
             [cn.li.combat.platform :as platform]
+            [cn.li.node.graph-compile :as graph-compile]
             [cn.li.node.ops :as ops]))
 
 ;; Owned by cn.li.ac.ability.service.combat-runtime/install-ac-host-capabilities!,
@@ -33,8 +34,13 @@
 
 (def graph-special-components
   "Lowered by cn.li.node.graph-compile/component-call without a vocab/
-   :defn/:ops entry."
-  #{:value/map :value/field :effect/vfx :event/emit :state/set})
+   :defn/:ops entry.
+
+   Aliased, not re-listed: this used to be a hand-copied duplicate of the
+   set in graph-compile, so adding a special form there silently made this
+   gate report it unresolvable, and removing one silently made the gate
+   over-accept."
+  graph-compile/special-components)
 
 (defn- capability-of
   [node-id spec]
