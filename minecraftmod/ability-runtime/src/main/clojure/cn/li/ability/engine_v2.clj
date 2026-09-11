@@ -59,14 +59,16 @@
                (let [input (.input fr)
                      handler (get (:queries snap) cap)]
                  (when-not handler
-                   (throw (ex-info "unknown query capability" {:capability cap})))
+                   (throw (ex-info (str "unknown query capability: " cap)
+                                   {:capability cap})))
                  (handler (assoc args :owner (owner-of input) :world-id (world-id-of input))
                           {:frame input})))
      :command! (fn [cap args ^ExecutionFrame fr]
                  (let [input (.input fr)
                        handler (get (:actions snap) cap)]
                    (when-not handler
-                     (throw (ex-info "unknown action capability" {:capability cap})))
+                     (throw (ex-info (str "unknown action capability: " cap)
+                                     {:capability cap})))
                    (handler (assoc args :owner (owner-of input) :world-id (world-id-of input)
                                    :ability-id (:ability-id input)))))}))
 
@@ -101,6 +103,10 @@
    ;; the server-issued activation seed so two owners/effects cannot collide
    ;; in the client VFX instance registry.
    :instance-key [world-id owner effect-id activation-seed (or instance-key nid)]
+   ;; Must carry the activation seed: client dispatch-signal! seeds geometry
+   ;; RNG from (:seed signal). Falling through to event-seq made every bolt
+   ;; look identical (first signal is always event-seq 1).
+   :seed (long activation-seed)
    :event-seq (swap! event-seq-counter inc)
    :audience audience
    :params (or payload {})})
@@ -174,6 +180,16 @@
    :source-count (get-in runtime [:catalog :source-count])
    :registration-count (get-in runtime [:catalog :registration-count])})
 
+(defn- with-rng-cursor
+  "Install a mutable per-dispatch RNG cursor on the input map so host
+   queries (:random/chance, :kernel/scatter-end, …) share one seeded
+   stream. Seed comes from :capabilities :rng/seed (activation seed)."
+  [input]
+  (if (contains? input :rng/cursor)
+    input
+    (let [seed (long (or (get-in input [:capabilities :rng/seed]) 0))]
+      (assoc input :rng/cursor (volatile! seed)))))
+
 (defn dispatch!
   "runtime, ability-id, frame ({:owner :entry :input {:tunables
    :capabilities :state}}) -> the translated result map (see
@@ -186,7 +202,7 @@
   (let [reg (registration runtime ability-id)]
     (if (nil? reg)
       {:status :rejected :reason :unknown-ability :ability-id ability-id}
-      (let [full-input (assoc input :ability-id ability-id)
+      (let [full-input (with-rng-cursor (assoc input :ability-id ability-id))
             ^ExecutionFrame frame (combat-api/dispatch-skill! (:compiled reg) entry full-input)
             result (translate-frame frame owner ability-id)]
         (when (ifn? (:commit-ability-state! runtime))
@@ -214,7 +230,7 @@
    it on the caller's behalf."
   [runtime owner ability-id ir entry input]
   (let [program (combat-api/compile-skill-program ir (:host runtime))
-        full-input (assoc input :ability-id ability-id)
+        full-input (with-rng-cursor (assoc input :ability-id ability-id))
         ^ExecutionFrame frame (combat-api/dispatch-skill! program entry full-input)]
     (translate-frame frame owner ability-id)))
 

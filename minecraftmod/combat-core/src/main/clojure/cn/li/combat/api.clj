@@ -21,6 +21,7 @@
             [cn.li.combat.dsl-vocabulary :as dsl-vocabulary]
             [cn.li.combat.run :as run]
             [cn.li.combat.lib :as lib]
+            [cn.li.combat.host-parity :as host-parity]
             [cn.li.combat.player :as player]))
 
 ;; ---- damage ----
@@ -73,6 +74,12 @@
 ;; only this namespace" convention the functions above already establish
 ;; for the old engine. ----
 (def skill-lib-fns lib/fns)
+(defn skill-known-query-capabilities [] (host-parity/known-query-capabilities))
+(defn skill-known-action-capabilities [] (host-parity/known-action-capabilities))
+(defn skill-vocab-host-gaps [] (host-parity/vocab-host-gaps))
+(defn skill-ir-capability-gaps [ir] (host-parity/ir-capability-gaps ir))
+(defn skill-unresolvable-components [form] (host-parity/unresolvable-components form))
+(defn skill-query-action-overlap [] (host-parity/query-action-overlap))
 (defn compile-skill-doc!
   ([text] (run/compile-doc! text skill-lib-fns))
   ([text fns] (run/compile-doc! text fns)))

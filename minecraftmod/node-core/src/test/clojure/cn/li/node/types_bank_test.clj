@@ -33,3 +33,14 @@
   (is (types/assignable? :double :double))
   (is (not (types/assignable? :vec3 :double)))
   (is (not (types/assignable? :keyword :entity-ref))))
+
+(deftest assert-payload-literals-map-keys-test
+  (let [specs {:ring-radius {:type :any :map-keys {:from :double :to :double}}}]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"map-keys"
+                          (types/assert-payload-literals! :beam-arc-fade specs
+                                                          {:ring-radius 0.34})))
+    (is (nil? (types/assert-payload-literals! :beam-arc-fade specs
+                                              {:ring-radius {:from 0.34 :to 0.34}})))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing"
+                          (types/assert-payload-literals! :beam-arc-fade specs
+                                                          {:ring-radius {:from 0.34}})))))

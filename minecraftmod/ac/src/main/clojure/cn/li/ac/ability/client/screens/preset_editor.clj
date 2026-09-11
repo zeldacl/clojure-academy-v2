@@ -89,7 +89,10 @@
   Uses structural canControl (skill-definitions / raw registry), NOT the live
   Forge config overlay on get-skill. A blanket config `controllable=false` /
   `enabled=false` would otherwise yield L>0 A=0 after learn_all while combat
-  still works from already-bound slots."
+  still works from already-bound slots.
+
+  Passiveives (:activation :passive, e.g. brain-course) are never selectable —
+  matching upstream Skill.canControl=false on the course chain."
   [skill-spec]
   (let [sid (spec-skill-id skill-spec)
         unqualified (when sid
@@ -98,7 +101,10 @@
                  (get skill-config/skill-definitions-by-id unqualified))
         raw (or (skill-registry/raw-skill sid)
                 (when unqualified (skill-registry/raw-skill unqualified)))
+        passive? (or (= :passive (:activation skill-spec))
+                     (= :passive (:activation raw)))
         controllable? (cond
+                        passive? false
                         defn (not (false? (:controllable? defn)))
                         (false? (:controllable? raw)) false
                         ;; skill-specs may write nil over normalize defaults;

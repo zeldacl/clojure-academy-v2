@@ -3,9 +3,21 @@
   (:require [clojure.java.io :as io]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.util.classpath-edn :as classpath-edn]
+            [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]
             [cn.li.combat.api :as combat-api]
             [cn.li.mcmod.util.log :as log]
             [cn.li.node.api :as node-api]))
+
+(defn- effect-input-specs
+  "effect-id → VFX `:inputs` map, for compile-time spawn payload shape checks
+   (`:map-keys`, literal `:type`)."
+  []
+  (into {}
+        (map (fn [[id e]]
+               [id (or (get-in e [:document :inputs])
+                       (get-in e [:document :parameters])
+                       {})])
+             (:by-id (fx-catalog/assemble)))))
 
 (defn- default-compile-opts []
   {:vocab combat-api/skill-vocab
@@ -47,10 +59,13 @@
 
 (defn assemble
   ([] (assemble {}))
-  ([{:keys [resource-root compile-opts mode]
+   ([{:keys [resource-root compile-opts mode]
      :or {resource-root "ac/skills-v4"
           mode :throw}}]
-   (let [opts (or compile-opts (default-compile-opts))
+   (let [base (or compile-opts (default-compile-opts))
+         opts (if (contains? base :effect-inputs)
+                base
+                (assoc base :effect-inputs (effect-input-specs)))
          resources (resource-names resource-root)
          _ (when (empty? resources)
              (log/warn "Skill catalog enumerated no V4 documents"

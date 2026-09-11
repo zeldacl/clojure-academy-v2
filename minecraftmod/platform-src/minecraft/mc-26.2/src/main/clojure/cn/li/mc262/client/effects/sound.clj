@@ -49,6 +49,16 @@
     (catch Exception e
       (log/stacktrace "Error playing sound effect" e))))
 
+(defn play-local!
+  "Play a one-shot sound at the local player (presentation :play-audio! seam)."
+  ([sound-id volume pitch]
+   (play-local! sound-id volume pitch nil))
+  ([sound-id volume pitch source]
+   (play-sound-effect {:sound-id sound-id
+                       :volume (or volume 1.0)
+                       :pitch (or pitch 1.0)
+                       :source (or source :players)})))
+
 (defn tick-sounds!
   []
   (try

@@ -59,6 +59,30 @@
   [value]
   (and (map? value) (or (vector? (:ref value)) (keyword? (:expr value)))))
 
+(defn graph-fragment?
+  "True when `value` is a nested V4 graph fragment (inline :ref / :component /
+   typed node), not a fully concrete EDN literal."
+  [value]
+  (or (deferred? value)
+      (and (map? value) (keyword? (:component value)))
+      (and (map? value) (keyword? (:type value)) (contains? value :nid))))
+
+(defn literal-edn?
+  "True when `value` is fully concrete EDN (numbers, keywords, nested maps of
+   the same) with no graph fragments. Used to decide whether compile-time
+   payload shape checks apply."
+  [value]
+  (cond
+    (nil? value) true
+    (number? value) true
+    (boolean? value) true
+    (string? value) true
+    (keyword? value) true
+    (graph-fragment? value) false
+    (map? value) (every? literal-edn? (vals value))
+    (vector? value) (every? literal-edn? value)
+    :else false))
+
 (def ^:private type-aliases
   "cn.li.node.schema (deleted; it had zero real callers anywhere in the repo
    -- only its own now-deleted test) authored a second, incompatible scalar
@@ -78,6 +102,48 @@
    already-canonical type is a no-op."
   [t]
   (get type-aliases t t))
+
+(defn assert-payload-literals!
+  "Fail loudly when a literal spawn/update payload disagrees with effect
+   `:inputs` `:map-keys`. Catches scalars where the VFX graph does
+   `(:from x)` / `(:to x)` (nil → convert-to-:double). Plain `:type`
+   mismatches are left to runtime/host — V4 payloads often use bare vec3
+   vectors that do not match the {:vec3 [...]} literal shape."
+  [effect-id input-specs payload]
+  (when (and (map? input-specs) (map? payload))
+    (doseq [[k spec] input-specs
+            :when (map? spec)
+            :let [v (get payload k)
+                  mk (:map-keys spec)]
+            :when (and mk (contains? payload k) (literal-edn? v))]
+      (when-not (map? v)
+        (throw (ex-info "VFX payload value must be a map matching :map-keys"
+                        {:code :vfx-payload-shape
+                         :effect-id effect-id
+                         :key k
+                         :expected {:map-keys mk}
+                         :actual v})))
+      (doseq [[fk ft] mk]
+        (when-not (contains? v fk)
+          (throw (ex-info "VFX payload map is missing a required :map-keys entry"
+                          {:code :vfx-payload-shape
+                           :effect-id effect-id
+                           :key k
+                           :missing fk
+                           :expected {:map-keys mk}
+                           :actual v})))
+        (let [fv (get v fk)
+              want (canonical-type ft)]
+          (when (and (literal-edn? fv)
+                     (some? fv)
+                     (not (conforms? want fv)))
+            (throw (ex-info "VFX payload :map-keys value has the wrong type"
+                            {:code :vfx-payload-shape
+                             :effect-id effect-id
+                             :key k
+                             :field fk
+                             :expected want
+                             :actual fv}))))))))
 
 ;; --- register-bank plumbing for the surface-DSL compiler (cn.li.node.compile)
 ;; and the mcmod ExecutionFrame emitter it targets. Added alongside the

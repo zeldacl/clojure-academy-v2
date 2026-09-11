@@ -78,7 +78,19 @@ tasks.register("runCombatClojureTests", JavaExec) {
     dependsOn "compileTestClojure", "classes"
     classpath = sourceSets.test.runtimeClasspath
     mainClass = "clojure.main"
+    if (System.getProperty("combat-core.test.only") != null) {
+        systemProperty "combat-core.test.only", System.getProperty("combat-core.test.only")
+    }
     args "-m", "cn.li.combat.test-runner"
+}
+
+// Clojurephant's default :test is JUnit-empty for this source-first module.
+// Route `gradle :combat-core:test` through the real clojure.test runner so
+// host-parity and friends cannot be silently skipped.
+tasks.named("test").configure {
+    dependsOn "runCombatClojureTests"
+    actions.clear()
+    doLast { /* runCombatClojureTests already executed the suite */ }
 }
 
 tasks.register("verifyPaletteMetadataCombatCore", JavaExec) {

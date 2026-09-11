@@ -44,7 +44,16 @@ tasks.register("runNodeCoreClojureTests", JavaExec) {
     dependsOn "compileTestClojure", "classes"
     classpath = sourceSets.test.runtimeClasspath
     mainClass = "clojure.main"
+    if (System.getProperty("node-core.test.only") != null) {
+        systemProperty "node-core.test.only", System.getProperty("node-core.test.only")
+    }
     args "-m", "cn.li.node.test-runner"
+}
+
+tasks.named("test").configure {
+    dependsOn "runNodeCoreClojureTests"
+    actions.clear()
+    doLast { /* runNodeCoreClojureTests already executed the suite */ }
 }
 
 tasks.register("verifyPaletteMetadataNodeCore", JavaExec) {

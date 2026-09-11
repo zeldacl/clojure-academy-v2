@@ -9,7 +9,7 @@
   :beam-at {:type :int},
   :arc-radius {:type :any},
   :start {:type :vec3},
-  :ring-radius {:type :any},
+  :ring-radius {:type :any, :map-keys {:from :double, :to :double}},
   :arc-life-ticks {:type :int},
   :fade-to-tick {:type :int},
   :arc-spacing {:type :any},
@@ -49,13 +49,16 @@
        {:type :component,
         :component :arc,
         :nid :n/n--entry--arc-0-do-0,
-        :inputs {:pattern :weak, :hand-origin? true}},
+        ;; Main ArcGen enqueues 3 EntityArcs; one Markov hide must not blank the cast.
+        :inputs {:pattern :weak, :hand-origin? true, :bolt-count 3}},
        :n053 {:type :context-ref, :key :start, :nid :n/n053},
        :n054 {:type :context-ref, :key :end, :nid :n/n054},
        :n055 {:type :context-ref, :key :seed, :nid :n/n055},
        :n056 {:type :context-ref, :key :progress, :nid :n/n056},
        :n057 {:type :context-ref, :key :arc-pattern, :nid :n/n057},
        :n059 {:type :context-ref, :key :source-player-id, :nid :n/n059},
+       :n060 {:type :context-ref, :key :arc-life-ticks, :nid :n/n060},
+       :n061 {:type :context-ref, :key :duration-ticks, :nid :n/n061},
        :n058 {:type :merge, :nid :n/n058},
        :n--entry--default-1
        {:type :branch, :nid :n/n--entry--default-1},
@@ -196,6 +199,18 @@
      :kind :data,
      :from [:n/n059 :value],
      :to [:n/n--entry--arc-0-do-0 :source-player-id]}
+    {:id :e/link063,
+     :kind :data,
+     :from [:n/n051 :value],
+     :to [:n/n--entry--arc-0-do-0 :age]}
+    {:id :e/link064,
+     :kind :data,
+     :from [:n/n060 :value],
+     :to [:n/n--entry--arc-0-do-0 :arc-life-ticks]}
+    {:id :e/link065,
+     :kind :data,
+     :from [:n/n061 :value],
+     :to [:n/n--entry--arc-0-do-0 :duration-ticks]}
     {:id :e/link058,
      :kind :exec,
      :from [:n/n--entry--arc-0 :true],

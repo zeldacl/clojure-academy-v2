@@ -155,20 +155,43 @@
                                      entries))]))
         (or translations {})))
 
+(defn- skill-definition-for
+  [ability-id]
+  (or (get skill-config/skill-definitions-by-id ability-id)
+      (when (and (keyword? ability-id) (namespace ability-id))
+        (get skill-config/skill-definitions-by-id (keyword (name ability-id))))))
+
+(defn- course-generic-icon
+  "Main course-chain icons live under textures/abilities/generic/skills/."
+  [ability-id]
+  (let [stem (some-> ability-id name)]
+    (when (#{"brain-course" "brain-course-advanced" "mind-course"} stem)
+      (str "textures/abilities/generic/skills/"
+           (str/replace stem "-" "_")
+           ".png"))))
+
 (defn skill-specs []
   (mapv (fn [[ability-id ability]]
-          (let [config-def (get skill-config/skill-definitions-by-id ability-id)]
+          (let [config-def (skill-definition-for ability-id)
+                activation (:activation ability)]
             {:id ability-id
              :category-id (or (:category-id config-def)
                               (:category-id ability)
                               (get-in ability [:skill :category])
                               :generic)
              :level (or (:level config-def) (:level ability) (get-in ability [:skill :level]) 1)
-             :controllable? (if (contains? config-def :controllable?)
-                              (:controllable? config-def)
-                              (:controllable? ability))
+             ;; Passiveives (brain/mind course, rad-intensify, …) are never hotkey-
+             ;; bindable. Prefer skill-definitions; fall back to activation mode
+             ;; so a missing definition cannot re-open the picker.
+             :controllable? (cond
+                              (contains? config-def :controllable?) (:controllable? config-def)
+                              (= :passive activation) false
+                              (contains? ability :controllable?) (:controllable? ability)
+                              :else true)
+             :activation activation
              :name-key (:name-key ability) :description-key (:description-key ability)
-             :icon (:icon ability) :ctrl-id (or (:ctrl-id ability) ability-id)
+             :icon (or (:icon ability) (course-generic-icon ability-id))
+             :ctrl-id (or (:ctrl-id ability) ability-id)
              :actions (or (:actions ability) {})
              :translations (normalize-translations (:translations ability))
              :cooldown {:mode :default} :execution :final}))

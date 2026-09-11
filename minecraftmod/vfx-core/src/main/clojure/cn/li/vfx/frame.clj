@@ -119,6 +119,10 @@
                      :start (:start op) :end (:end op)
                      :pattern (or (:pattern op) :weak)
                      :seed (or (:seed op) 0)
+                     :age (long (or (:age op) 0))
+                     :arc-life-ticks (long (or (:arc-life-ticks op) 0))
+                     :duration-ticks (long (or (:duration-ticks op) 0))
+                     :bolt-count (long (or (:bolt-count op) 1))
                      :life-ratio (double (or (:life-ratio op) 0.0))
                      :hand-origin? (boolean (:hand-origin? op))
                      :source-player-id (:source-player-id op)}

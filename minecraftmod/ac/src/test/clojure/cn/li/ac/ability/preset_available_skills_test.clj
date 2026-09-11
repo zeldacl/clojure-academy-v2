@@ -140,6 +140,16 @@
         (is (seq (get-in data [:slots 0 :skill-name])))
         (is (= :arc-gen (get-in data [:all-preset-slots 0 0 :skill-id]))))))
 
+  (testing "passive brain-course is learned but never preset-selectable"
+    (seed! [:arc-gen :electromaster/brain-course] [])
+    (pe/open-screen! (owner))
+    (let [ids (set (map :skill-id
+                        (:available-skills
+                         (pe/build-preset-editor-render-data (owner)))))]
+      (is (contains? ids :arc-gen))
+      (is (not (contains? ids :electromaster/brain-course)))
+      (is (not (contains? ids :brain-course)))))
+
   (testing "list pair (not vector) still paints the bound slot"
     (seed! [:railgun] [])
     (let [ps (rs/get-player-state session uuid)

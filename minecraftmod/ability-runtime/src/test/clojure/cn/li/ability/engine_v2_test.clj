@@ -126,7 +126,9 @@
           (is (= ["overworld" "player-1" :test-fx 0 [:activation :marker]]
                  (:instance-key signal)))
           (is (= {:position {:x 0.0 :y 1.5 :z 0.0}} (:params signal)))
-          (is (number? (:event-seq signal)))))
+          (is (number? (:event-seq signal)))
+          (is (contains? signal :seed)
+              "activation seed must ride the wire so client zigzag RNG varies")))
       (testing "events carry owner/ability-id, matching handle-progression-event!'s own contract"
         (is (= 1 (count (:events result))))
         (let [event (first (:events result))]

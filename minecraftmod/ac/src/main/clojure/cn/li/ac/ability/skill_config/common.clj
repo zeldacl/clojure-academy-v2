@@ -15,66 +15,82 @@
 (def category-ids
   [:electromaster :meltdowner :teleporter :vecmanip])
 
+(def ^:private course-skill-definitions
+  ;; V4 ids are category-namespaced (electromaster/brain-course). Main's
+  ;; course-chain registered canControl=false so they never enter the N-key
+  ;; / preset picker — only the skill tree.
+  (vec
+   (for [cat category-ids
+         [suffix level] [["brain-course" 3]
+                         ["brain-course-advanced" 4]
+                         ["mind-course" 5]]]
+     {:id (keyword (name cat) suffix)
+      :category-id cat
+      :level level
+      :controllable? false})))
+
 (def skill-definitions
   ;; electromaster :level values verified against AcademyCraft original source
   ;; (Skill(id, level) constructor calls) — see cn.academy.ability.vanilla.electromaster.skill.*.
-  [{:id :arc-gen :category-id :electromaster :level 1 :controllable? true}
-   {:id :body-intensify :category-id :electromaster :level 3 :controllable? true}
-   {:id :current-charging :category-id :electromaster :level 1 :controllable? true}
-   ;; mag-manip/mag-movement/railgun all declare real :cost blocks, and
-   ;; apply-cost! multiplies those by the consume speeds — a 0.0 override here
-   ;; made them free. Same zero-cost bug as the meltdowner block below;
-   ;; original's default.conf has no per-skill override for any of them.
-   {:id :mag-manip :category-id :electromaster :level 2 :controllable? true}
-   {:id :mag-movement :category-id :electromaster :level 2 :controllable? true}
-  {:id :mine-detect :category-id :electromaster :level 3 :controllable? true}
-   {:id :railgun :category-id :electromaster :level 4 :controllable? true}
-  {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? true}
-   {:id :thunder-clap :category-id :electromaster :level 5 :controllable? true}
+  (into
+   [{:id :arc-gen :category-id :electromaster :level 1 :controllable? true}
+    {:id :body-intensify :category-id :electromaster :level 3 :controllable? true}
+    {:id :current-charging :category-id :electromaster :level 1 :controllable? true}
+    ;; mag-manip/mag-movement/railgun all declare real :cost blocks, and
+    ;; apply-cost! multiplies those by the consume speeds — a 0.0 override here
+    ;; made them free. Same zero-cost bug as the meltdowner block below;
+    ;; original's default.conf has no per-skill override for any of them.
+    {:id :mag-manip :category-id :electromaster :level 2 :controllable? true}
+    {:id :mag-movement :category-id :electromaster :level 2 :controllable? true}
+    {:id :mine-detect :category-id :electromaster :level 3 :controllable? true}
+    {:id :railgun :category-id :electromaster :level 4 :controllable? true}
+    {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? true}
+    {:id :thunder-clap :category-id :electromaster :level 5 :controllable? true}
 
-   {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? true}
-   ;; electron-missile's own defskill already declares 1.0/1.0 — the override
-   ;; here was silently overruling it and zeroing its :cost block.
-   {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true}
-   ;; jet-engine/light-shield/meltdowner: no override -> field-level default
-   ;; 1.0/1.0 applies. jet-engine has no :cost block (fully manual
-   ;; perform-resource!, unaffected either way); light-shield and meltdowner
-   ;; DO route real costs through :cost + apply-cost!, and a 0.0 override here
-   ;; was silently zeroing those declared costs to nothing — original's
-   ;; default.conf has no per-skill override for any of the three, so this
-   ;; must inherit the 1.0/1.0 default like arc-gen/body-intensify/etc. do.
-   {:id :jet-engine :category-id :meltdowner :level 4 :controllable? true}
-   {:id :light-shield :category-id :meltdowner :level 2 :controllable? true}
-   {:id :meltdowner :category-id :meltdowner :level 3 :controllable? true}
-   ;; mine-ray-basic/expert/luck also route real costs through :cost +
-   ;; apply-cost! (no manual perform-resource! anywhere in mine_rays_base.clj)
-   ;; — same zero-cost bug as jet-engine/light-shield/meltdowner above.
-   {:id :mine-ray-basic :category-id :meltdowner :level 3 :controllable? true}
-   {:id :mine-ray-expert :category-id :meltdowner :level 4 :controllable? true}
-   {:id :mine-ray-luck :category-id :meltdowner :level 5 :controllable? true}
-   {:id :rad-intensify :category-id :meltdowner :level 1 :controllable? false}
-   {:id :ray-barrage :category-id :meltdowner :level 4 :controllable? true}
-   {:id :scatter-bomb :category-id :meltdowner :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? true}
+    ;; electron-missile's own defskill already declares 1.0/1.0 — the override
+    ;; here was silently overruling it and zeroing its :cost block.
+    {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true}
+    ;; jet-engine/light-shield/meltdowner: no override -> field-level default
+    ;; 1.0/1.0 applies. jet-engine has no :cost block (fully manual
+    ;; perform-resource!, unaffected either way); light-shield and meltdowner
+    ;; DO route real costs through :cost + apply-cost!, and a 0.0 override here
+    ;; was silently zeroing those declared costs to nothing — original's
+    ;; default.conf has no per-skill override for any of the three, so this
+    ;; must inherit the 1.0/1.0 default like arc-gen/body-intensify/etc. do.
+    {:id :jet-engine :category-id :meltdowner :level 4 :controllable? true}
+    {:id :light-shield :category-id :meltdowner :level 2 :controllable? true}
+    {:id :meltdowner :category-id :meltdowner :level 3 :controllable? true}
+    ;; mine-ray-basic/expert/luck also route real costs through :cost +
+    ;; apply-cost! (no manual perform-resource! anywhere in mine_rays_base.clj)
+    ;; — same zero-cost bug as jet-engine/light-shield/meltdowner above.
+    {:id :mine-ray-basic :category-id :meltdowner :level 3 :controllable? true}
+    {:id :mine-ray-expert :category-id :meltdowner :level 4 :controllable? true}
+    {:id :mine-ray-luck :category-id :meltdowner :level 5 :controllable? true}
+    {:id :rad-intensify :category-id :meltdowner :level 1 :controllable? false}
+    {:id :ray-barrage :category-id :meltdowner :level 4 :controllable? true}
+    {:id :scatter-bomb :category-id :meltdowner :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
 
-   {:id :dim-folding-theorem :category-id :teleporter :level 1 :controllable? false}
-   {:id :flashing :category-id :teleporter :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :flesh-ripping :category-id :teleporter :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :location-teleport :category-id :teleporter :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :mark-teleport :category-id :teleporter :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :penetrate-teleport :category-id :teleporter :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :shift-teleport :category-id :teleporter :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :space-fluct :category-id :teleporter :level 4 :controllable? false}
-   {:id :threatening-teleport :category-id :teleporter :level 1 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :dim-folding-theorem :category-id :teleporter :level 1 :controllable? false}
+    {:id :flashing :category-id :teleporter :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :flesh-ripping :category-id :teleporter :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :location-teleport :category-id :teleporter :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :mark-teleport :category-id :teleporter :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :penetrate-teleport :category-id :teleporter :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :shift-teleport :category-id :teleporter :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :space-fluct :category-id :teleporter :level 4 :controllable? false}
+    {:id :threatening-teleport :category-id :teleporter :level 1 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
 
-   {:id :blood-retrograde :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :directed-blastwave :category-id :vecmanip :level 3 :controllable? true}
-   {:id :directed-shock :category-id :vecmanip :level 1 :controllable? true}
-   {:id :groundshock :category-id :vecmanip :level 1 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :plasma-cannon :category-id :vecmanip :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :storm-wing :category-id :vecmanip :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :vec-accel :category-id :vecmanip :level 2 :controllable? true}
-   {:id :vec-deviation :category-id :vecmanip :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :vec-reflection :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}])
+    {:id :blood-retrograde :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :directed-blastwave :category-id :vecmanip :level 3 :controllable? true}
+    {:id :directed-shock :category-id :vecmanip :level 1 :controllable? true}
+    {:id :groundshock :category-id :vecmanip :level 1 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :plasma-cannon :category-id :vecmanip :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :storm-wing :category-id :vecmanip :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :vec-accel :category-id :vecmanip :level 2 :controllable? true}
+    {:id :vec-deviation :category-id :vecmanip :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+    {:id :vec-reflection :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}]
+   course-skill-definitions))
 
 (def all-skill-ids
   (mapv #(get % :id) skill-definitions))

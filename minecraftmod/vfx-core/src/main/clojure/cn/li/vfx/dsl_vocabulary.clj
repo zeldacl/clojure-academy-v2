@@ -74,6 +74,13 @@
    :arc
    (node {:start (p* :vec3) :end (p* :vec3)
           :pattern (opt :any :weak) :seed (opt :long 0)
+          ;; Universal scene :age is :double (cn.li.vfx.scene); coerce in
+          ;; frame/arc-geometry. :arc-life-ticks matches main EntityArc ttl.
+          ;; :bolt-count — main ArcGen spawns 3 EntityArcs; default 1 elsewhere.
+          :age (opt :double 0.0)
+          :arc-life-ticks (opt :any 0)
+          :duration-ticks (opt :any 0)
+          :bolt-count (opt :any 1)
           :life-ratio (opt :double 0.0) :alpha (opt :double 1.0)
           :hand-origin? (opt :boolean false)
           :source-player-id (opt :any nil)})

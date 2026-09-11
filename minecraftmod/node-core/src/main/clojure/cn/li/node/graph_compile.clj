@@ -2,7 +2,8 @@
   "V4 graph lowering.  The persisted graph is authoritative; this small
    adapter emits neutral surface forms with stable node metadata and delegates
    register allocation/type checking to cn.li.node.compile."
-  (:require [cn.li.node.ops :as ops]))
+  (:require [cn.li.node.ops :as ops]
+            [cn.li.node.types :as types]))
 
 (defn- fail [m d] (throw (ex-info m d)))
 (defn- stamp [f nid] (if (seq? f) (with-meta f {:nid (str (namespace nid) "/" (name nid))}) f))
@@ -16,14 +17,30 @@
 (defn- exec-link [links nid port]
   (some #(when (and (= :exec (:kind %)) (= nid (first (:from %))) (= port (second (:from %)))) %) links))
 (defn- target [links nid port] (some-> (exec-link links nid port) :to first))
+
+(defn- args-vector->arg-ports
+  "Migrated V4 graphs often store positional operator/composite args as a
+   top-level `:args` vector (sibling of `:component`) rather than editor
+   ports `:arg0`/`:arg1`/…. Expand that vector so component-call and
+   inline-expr share one wiring shape."
+  [args]
+  (when (vector? args)
+    (into {} (map-indexed (fn [i v] [(keyword (str "arg" i)) v]) args))))
+
+(defn- component-inputs
+  "Merge `:inputs` with optional migrated `:args` vector into one port map."
+  [value]
+  (merge (or (args-vector->arg-ports (:args value)) {})
+         (or (:inputs value) {})))
+
 (defn- component-input-ports
   "Return every component input slot declared inline or addressed by a data wire.
    Migrated V4 graphs may omit an :inputs map for pure calls and rely on the
    destination port carried by the link, so compilation must not discard those
-   values."
+   values. Also include `:args` vector slots expanded to `:argN`."
   [ctx nid]
   (let [n (get-in ctx [:nodes nid])
-        inline (keys (or (:inputs n) {}))
+        inline (keys (component-inputs n))
         linked (keep (fn [l]
                        (when (and (= :data (:kind l))
                                   (= nid (first (:to l))))
@@ -36,7 +53,12 @@
    single keyword map, while node-core pure operators use positional args
    (their signatures are ordered).  Keeping that distinction here prevents
    migrated graph nodes such as :value/eq from being compiled as a one-arg map
-   call and preserves the editor's named input slots at the graph boundary."
+   call and preserves the editor's named input slots at the graph boundary.
+
+   Combat lib :defn composites (beam-strike, apply-break-budget, …) declare
+   named `:params`, but V4 skill graphs wire them as `:arg0`/`:arg1`/… —
+   accept both so release graphs do not pass nil into :double params
+   (convert-to-double NPE at pulse→release)."
   [component ins fns]
   (cond
     ;; A value/map node is a data constructor, not a callable vocabulary
@@ -58,8 +80,19 @@
     ;; Composite functions are supplied by the caller's compile options and
     ;; use positional arguments declared by their :params vector.
     (contains? fns component)
-    (apply list (head component)
-           (map #(get ins (:name %)) (:params (get fns component))))
+    (let [params (:params (get fns component))
+          args (mapv (fn [i param]
+                       (let [pname (:name param)
+                             ;; :defn :params use SYMBOL names; V4 graphs may
+                             ;; also expose the same slot as a keyword port.
+                             named? (or (contains? ins pname)
+                                        (contains? ins (keyword pname)))
+                             by-name (or (get ins pname) (get ins (keyword pname)))
+                             by-arg (get ins (keyword (str "arg" i)))]
+                         (if named? by-name by-arg)))
+                     (range (count params))
+                     params)]
+      (apply list (head component) args))
     :else (list (head component) ins)))
 
 (defn- sigil-symbol
@@ -91,14 +124,17 @@
 
 (defn- inline-expr
   "Recursively lower inline `:ref` / `:component` fragments that migrated
-   graphs store inside `:inputs` maps.  Ordinary literals pass through."
+   graphs store inside `:inputs` maps.  Ordinary literals pass through.
+
+   Migrated skills also nest `{ :component :math/select, :args [...] }`
+   (no `:inputs` map) — expand `:args` to `:argN` ports before lowering."
   [ctx value]
   (cond
     (and (map? value) (vector? (:ref value)))
     {:pre [] :form (inline-ref-form (:ref value))}
 
     (and (map? value) (keyword? (:component value)))
-    (let [parts (map (fn [[k v]] [k (inline-expr ctx v)]) (or (:inputs value) {}))
+    (let [parts (map (fn [[k v]] [k (inline-expr ctx v)]) (component-inputs value))
           ins (into {} (map (fn [[k x]] [k (:form x)]) parts))
           pre (vec (mapcat (comp :pre second) parts))
           call (component-call (:component value) ins (:fns ctx))]
@@ -129,7 +165,7 @@
                 (= :component (:type n))
                 (let [parts (for [p (component-input-ports ctx nid)
                                   :let [l (data-link links nid p)
-                                        v (get-in n [:inputs p])
+                                        v (get (component-inputs n) p)
                                         x (if l (expr ctx (first (:from l))) (inline-expr ctx v))]]
                               [p x])
                       ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
@@ -145,13 +181,61 @@
     (expr ctx (first (:from l)))
     ;; V4 permits an input slot to carry an inline literal, including nested
     ;; `{ :ref ... }` / `{ :component ... }` fragments from migrated graphs.
-    (inline-expr ctx (get-in ctx [:nodes nid :inputs port]))))
+    ;; Also honor migrated top-level `:args` vectors (expanded to `:argN`).
+    (inline-expr ctx (get (component-inputs (get-in ctx [:nodes nid])) port))))
+
+(defn- maybe-validate-effect-vfx-payload!
+  "When compile opts carry `:effect-inputs` (effect-id → `:inputs` specs),
+   reject literal spawn/update payloads that disagree with `:type` /
+   `:map-keys` before they become runtime nil→convert crashes."
+  [ctx n]
+  (when (= :effect/vfx (:component n))
+    (let [ins (component-inputs n)
+          effect-id (:effect-id ins)
+          op (:operation ins)
+          payload (:payload ins)
+          specs (get (:effect-inputs ctx) effect-id)]
+      (when (and specs (keyword? effect-id) (map? payload)
+                 (or (nil? op) (= :spawn op) (= :update op)))
+        (types/assert-payload-literals! effect-id specs payload)))))
+
+(defn- assert-vfx-field-map-keys!
+  "If a VFX graph does `(:from ctx-key)` via `:value/field` on a context-ref,
+   that input must declare `:map-keys` including the field. Forces the contract
+   skills validate against at spawn compile time."
+  [document]
+  (let [input-specs (or (:inputs document) {})]
+    (doseq [[gname g] (or (:graphs document) {})]
+      (let [nodes (:nodes g)
+            links (:links g)]
+        (doseq [[nid n] nodes
+                :when (and (= :component (:type n))
+                           (= :value/field (:component n)))]
+          (let [field (get (component-inputs n) :field)
+                value-link (data-link links nid :value)
+                src-id (when value-link (first (:from value-link)))
+                src (when src-id (get nodes src-id))]
+            (when (and (keyword? field)
+                       src
+                       (= :context-ref (:type src)))
+              (let [k (:key src)
+                    spec (get input-specs k)
+                    mk (:map-keys spec)]
+                (when-not (and (map? mk) (contains? mk field))
+                  (fail "V4 value/field on a context input requires :map-keys on that input"
+                        {:code :vfx-field-map-keys
+                         :graph gname
+                         :nid nid
+                         :input k
+                         :field field
+                         :inputs-spec spec}))))))))))
 
 (defn statement [ctx nid]
   (let [n (get (:nodes ctx) nid)]
     (case (:type n)
       :component
-      (let [parts (for [p (component-input-ports ctx nid)
+      (let [_ (maybe-validate-effect-vfx-payload! ctx n)
+            parts (for [p (component-input-ports ctx nid)
                         :let [x (port-expr ctx nid p)]]
                     [p x])
             ins (into {} (map (fn [[p x]] [p (:form x)]) parts))
@@ -238,7 +322,9 @@
   ([g] (graph-entry g {}))
   ([g opts]
    (let [ctx {:nodes (:nodes g) :links (:links g)
-              :fns (or (:fns opts) {}) :cache (atom {})}
+              :fns (or (:fns opts) {})
+              :effect-inputs (or (:effect-inputs opts) {})
+              :cache (atom {})}
          start (some (fn [[id n]] (when (= :start (:type n)) id)) (:nodes g))]
      (:forms (collect ctx start #{})))))
 
@@ -258,6 +344,7 @@
   ([document opts]
    ((requiring-resolve 'cn.li.node.graph-document/validate-document!) document)
    (when-not (= :ac/vfx-v4 (:schema document)) (fail "expected :ac/vfx-v4" {:schema (:schema document)}))
+   (assert-vfx-field-map-keys! document)
    {:kind :ability :id (:id document) :activation :instant
     :tunables (into {} (map (fn [[k v]] [k {:type (:type v)}]) (or (:inputs document) (:parameters document))))
     :state {} :entry-triggers {:render :vfx/render}

@@ -944,7 +944,7 @@
             :value
             {:nid :n/n--entry--release-1--c53b0db5,
              :ref [:local :beam-result]}}},
-          :ring-radius 0.34,
+          :ring-radius {:from 0.34, :to 0.34},
           :arc-life-ticks 30,
           :fade-to-tick 50,
           :arc-spacing {:min 1.0, :max 2.0},

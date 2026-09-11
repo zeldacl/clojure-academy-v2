@@ -168,6 +168,19 @@
 
 ;; --- type coercion ---------------------------------------------------------
 
+(defn- reject-nil-literal!
+  "Literal nil is typed :any (see compile-literal!), and :any is
+   assignable to every concrete type -- that gradual escape hatch is
+   intentional for field reads, but a CALL SITE that passes a literal
+   nil into a :double/:long/:vec3 param is almost always a wiring bug
+   (missing V4 :argN, omitted composite arg) that only blew up later as
+   'convert to :double received nil'. Reject it at compile time."
+  [env form want]
+  (when (and (nil? form)
+             (not= (types/canonical-type want) :any))
+    (report! env {:code :nil-typed-param :form form :want want
+                  :message (str "literal nil cannot satisfy typed param " want)})))
+
 (defn- coerce!
   "Insert a :convert instruction when `reg` (of static type `from`) is used
    where `to` is declared, IFF the two types live in different
@@ -234,6 +247,7 @@
           (keep (fn [[k v-form]]
                   (when (contains? params k)
                     (let [want (:type (get params k))
+                          _ (reject-nil-literal! env v-form want)
                           {:keys [reg]} (compile-form env locals block-id 0 v-form false)
                           got (type-of env reg)]
                       (when-not (types/assignable? got want)
@@ -284,6 +298,7 @@
       (let [callee-locals
             (into {}
                   (map (fn [{:keys [name type]} arg-form]
+                         (reject-nil-literal! env arg-form type)
                          (let [{:keys [reg]} (compile-form env locals block-id depth arg-form false)
                                got (type-of env reg)]
                            (when-not (types/assignable? got type)
@@ -395,6 +410,7 @@
       (report! env {:code :arity-mismatch :form form
                    :message (str (first form) " expects " (count (:params sig)) " args, got " (count args))}))
     (let [arg-regs (mapv (fn [want a]
+                           (reject-nil-literal! env a want)
                            (let [{:keys [reg]} (compile-form env locals block-id depth a false)
                                  got (type-of env reg)]
                              (when-not (types/assignable? got want)
