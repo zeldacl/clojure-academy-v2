@@ -48,6 +48,7 @@
             [cn.li.ac.gui.presentation :as presentation]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.ac.vfx.fx-catalog :as fx-catalog]
             [cn.li.ability.editor.chrome :as chrome]
             [cn.li.ability.editor.label :as label]
@@ -314,7 +315,8 @@
                ;; same check (cn.li.ac.ability.skills-catalog-v4/
                ;; effect-input-specs), universal capabilities included.
                (= :skill mode)
-               (assoc :effect-inputs
+               (assoc :vfx-operations vfx-contract/signal-ops
+                      :effect-inputs
                       (let [universal (into {} (map (fn [[k t]] [k {:type t}]))
                                             (vfx-api/scene-capabilities-for {}))]
                         (into {}

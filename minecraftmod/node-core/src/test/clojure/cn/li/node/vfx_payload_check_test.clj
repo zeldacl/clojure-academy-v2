@@ -156,6 +156,41 @@
                                   (assoc fx/opts :effect-inputs effect-inputs)
                                   :throw)))))
 
+;; --- :operation, against the VFX signal ABI -------------------------------
+;; A typo'd operation used to compile clean and then throw "unknown VFX
+;; signal operation" out of vfx-contract/signal at spawn time.
+
+(def ^:private signal-ops
+  ;; Mirrors cn.li.mcmod.runtime.vfx-contract/signal-ops, which node-core
+  ;; must not depend on -- the real set is passed in by the caller.
+  #{:spawn :update :trigger :destroy :release :clear-owner :snapshot})
+
+(defn- operation-diagnostics [op & {:keys [ops] :or {ops signal-ops}}]
+  (let [doc (surface/read-doc
+             (str "{:ability :t :activation :instant :do "
+                  "[(vfx! {:effect-id :beam-arc-fade :operation " op
+                  " :instance-key [:a :b]})]}"))]
+    (:diagnostics (compile/compile-program
+                   (surface/normalize doc)
+                   (cond-> (assoc fx/opts :effect-inputs effect-inputs)
+                     ops (assoc :vfx-operations ops))
+                   :collect))))
+
+(deftest unknown-vfx-operation-test
+  (let [ds (operation-diagnostics ":bogus")]
+    (is (= [:invalid-vfx-operation] (mapv :code ds)))
+    (is (re-find #":bogus is not one of" (:message (first ds))))))
+
+(deftest every-abi-operation-is-accepted-test
+  (doseq [op signal-ops]
+    (is (empty? (operation-diagnostics (str op)))
+        (str op " is a real VFX signal op and must not be reported"))))
+
+(deftest operation-checking-is-skipped-without-the-abi-set-test
+  ;; Same discipline as :effect-inputs: nil means "no ABI supplied", not
+  ;; "no operation is valid".
+  (is (empty? (operation-diagnostics ":bogus" :ops nil))))
+
 (deftest stop-operation-carries-no-payload-test
   (let [doc (surface/read-doc
              "{:ability :t :activation :instant :do

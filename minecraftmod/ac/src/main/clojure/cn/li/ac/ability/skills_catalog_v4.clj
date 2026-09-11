@@ -5,6 +5,7 @@
             [cn.li.ac.util.classpath-edn :as classpath-edn]
             [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]
             [cn.li.combat.api :as combat-api]
+            [cn.li.mcmod.runtime.vfx-contract :as vfx-contract]
             [cn.li.mcmod.util.log :as log]
             [cn.li.node.api :as node-api]
             [cn.li.vfx.api :as vfx-api]))
@@ -33,7 +34,12 @@
 (defn- default-compile-opts []
   {:vocab combat-api/skill-vocab
    :capabilities combat-api/skill-capability-type
-   :fns combat-api/skill-lib-fns})
+   :fns combat-api/skill-lib-fns
+   ;; The VFX signal ABI's own operation set, so a typo'd vfx! :operation
+   ;; is a compile error instead of vfx-contract/signal throwing "unknown
+   ;; VFX signal operation" at spawn time. Passed in rather than duplicated:
+   ;; node-core must not depend on mcmod.
+   :vfx-operations vfx-contract/signal-ops})
 
 (defn- skill-name [id]
   (if-let [n (namespace id)]

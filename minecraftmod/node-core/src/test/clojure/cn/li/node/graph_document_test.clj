@@ -375,3 +375,31 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"map-keys"
                             (graph-compile/vfx->core doc))))))
+
+;; A lowering failure (a `fail` in graph-compile, raised before there is any
+;; compile env) used to escape as an exception. In :collect mode that aborted
+;; the editor's whole diagnostics pass -- the author saw a stack trace instead
+;; of a list, and lost every other diagnostic in the graph with it.
+(deftest lowering-failures-become-diagnostics-in-collect-mode
+  (let [graph {:nodes {:n/start (n :n/start :start)
+                       :n/src (n :n/src :literal :value 1.0)
+                       ;; :value/field with no :field input at all, feeding a
+                       ;; component that IS on the exec chain (an unreachable
+                       ;; node is never lowered, so it could not fail).
+                       :n/fld (n :n/fld :component :component :value/field)
+                       :n/act (n :n/act :component :component :test/do)
+                       :n/end (n :n/end :end)}
+               :links [(e :e/one :exec [:n/start :out] [:n/act :in])
+                       (e :e/two :exec [:n/act :out] [:n/end :in])
+                       (e :e/three :data [:n/src :value] [:n/fld :value])
+                       (e :e/four :data [:n/fld :value] [:n/act :amount])]}
+        d (assoc skill :graphs {:default (assoc graph :on :activation/start)})
+        opts {:vocab {:test/do {:params {:amount {:type :double}}}}}]
+    (testing ":collect lists it instead of throwing"
+      (let [{:keys [ir diagnostics]} (graph-compile/compile-skill! d opts :collect)]
+        (is (nil? ir))
+        (is (= [:invalid-value-field] (mapv :code diagnostics)))
+        (is (= [:error] (mapv :severity diagnostics)))))
+    (testing ":throw still dies loudly, so startup cannot accept the graph"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #":value/field"
+                            (graph-compile/compile-skill! d opts :throw))))))

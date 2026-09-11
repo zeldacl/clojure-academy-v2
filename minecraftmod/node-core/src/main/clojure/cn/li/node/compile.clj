@@ -66,7 +66,8 @@
 ;; are NOT part of env -- they are lexically scoped, threaded as plain
 ;; function arguments/return values instead (see compile-stmt).
 
-(defn- new-env [{:keys [vocab capabilities tunable-types state-types fns mode effect-inputs]}]
+(defn- new-env [{:keys [vocab capabilities tunable-types state-types fns mode
+                        effect-inputs vfx-operations]}]
   {:vocab (or vocab {})
    :capabilities (or capabilities {})
    :tunable-types (or tunable-types {})
@@ -79,6 +80,10 @@
    ;; catalog available", which check-vfx-payload! treats as skip -- NOT as
    ;; an empty catalog in which every effect is unknown.
    :effect-inputs effect-inputs
+   ;; The VFX signal ABI's accepted :operation values, supplied by the
+   ;; caller because they live in mcmod (see check-vfx-payload!). nil = no
+   ;; ABI available, so skip -- not "no operation is valid".
+   :vfx-operations vfx-operations
    :reg-counters (atom {:doubles 0 :longs 0 :booleans 0 :objects 0})
    :reg-types (atom {})
    :const-pools (atom {:doubles [] :longs [] :booleans [] :objects []})
@@ -771,6 +776,17 @@
    own compiles, most unit tests): there is nothing to check against, and
    inventing a failure there would be worse than the gap."
   [env stmt fields]
+  ;; The operation set is the VFX signal ABI's (cn.li.mcmod.runtime.vfx-
+  ;; contract/signal-ops), which node-core must not depend on -- so the
+  ;; caller passes it, same as :effect-inputs, and it is skipped when
+  ;; absent. Unchecked, a typo'd :operation reached vfx-contract/signal and
+  ;; threw "unknown VFX signal operation" at spawn time.
+  (when-let [ops (:vfx-operations env)]
+    (let [op (:operation fields)]
+      (when (and (some? op) (keyword? op) (not (contains? (set ops) op)))
+        (report! env {:code :invalid-vfx-operation :form stmt
+                      :message (str "vfx! :operation " op " is not one of "
+                                    (vec (sort (set ops))))}))))
   (when-let [specs-by-id (:effect-inputs env)]
     (let [effect-id (:effect-id fields)
           op (:operation fields)

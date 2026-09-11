@@ -65,7 +65,17 @@
     ;; operation.  Returning the assembled map lets compile-form emit the
     ;; normal :map-lit instruction while still resolving linked input slots.
     (= :value/map component) ins
-    (= :value/field component) (list (get ins :field) (get ins :value))
+    (= :value/field component)
+    ;; A field access lowers to (:the-field value), so :field must be a
+    ;; literal keyword. Left unchecked it produced (nil value), and the
+    ;; compiler rejected that with "malformed DSL call: head must be a
+    ;; symbol or keyword" -- true, but it names neither the node nor the
+    ;; input the author has to go fix.
+    (let [f (get ins :field)]
+      (when-not (keyword? f)
+        (fail "V4 :value/field requires a literal keyword :field input"
+              {:code :invalid-value-field :field f}))
+      (list f (get ins :value)))
     (= :effect/vfx component) (list 'vfx! ins)
     (= :event/emit component) (list 'event! ins)
     (= :state/set component) (list 'state! (get ins :key) (get ins :value))
@@ -341,8 +351,33 @@
     :state {} :entry-triggers {:render :vfx/render}
     :entries {:render (graph-entry (or (get-in document [:graphs :render]) (val (first (:graphs document)))) opts)}}))
 
+(defn- compile-lowered
+  "Lower `document` with `lower`, then compile.
+
+   Lowering runs before there is a compile env to report into, so every
+   `fail` in this namespace is a plain throw. In :throw mode that is what
+   we want (startup should die loudly). In :collect mode it was NOT: one
+   malformed node aborted the whole diagnostics pass, so the editor showed
+   an exception instead of a list of problems -- and the author lost every
+   OTHER diagnostic in the graph along with it. Lowering failures now become
+   ordinary diagnostics in :collect mode, carrying whatever :code/:nid the
+   thrower attached so the editor can still jump to the offending node."
+  [lower document opts mode]
+  (let [compile-program (requiring-resolve 'cn.li.node.compile/compile-program)]
+    (if (= :collect mode)
+      (try
+        (compile-program (lower document opts) opts mode)
+        (catch clojure.lang.ExceptionInfo e
+          (let [d (ex-data e)]
+            {:ir nil
+             :diagnostics [{:severity :error
+                            :code (or (:code d) :graph-lowering)
+                            :message (ex-message e)
+                            :nid (some-> (:nid d) name)}]})))
+      (compile-program (lower document opts) opts mode))))
+
 (defn compile-skill! [document opts mode]
-  ((requiring-resolve 'cn.li.node.compile/compile-program) (skill->core document opts) opts mode))
+  (compile-lowered skill->core document opts mode))
 
 (defn compile-vfx! [document opts mode]
-  ((requiring-resolve 'cn.li.node.compile/compile-program) (vfx->core document opts) opts mode))
+  (compile-lowered vfx->core document opts mode))
