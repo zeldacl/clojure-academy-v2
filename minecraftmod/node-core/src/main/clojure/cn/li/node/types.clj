@@ -103,47 +103,86 @@
   [t]
   (get type-aliases t t))
 
-(defn assert-payload-literals!
-  "Fail loudly when a literal spawn/update payload disagrees with effect
-   `:inputs` `:map-keys`. Catches scalars where the VFX graph does
-   `(:from x)` / `(:to x)` (nil → convert-to-:double). Plain `:type`
-   mismatches are left to runtime/host — V4 payloads often use bare vec3
-   vectors that do not match the {:vec3 [...]} literal shape."
+(defn payload-conforms?
+  "conforms? with the one leniency a VFX payload needs: a :vec3 input may be
+   written as a bare [x y z] vector, not only the canonical {:vec3 [...]}
+   literal. That difference is exactly why plain :type checking used to be
+   skipped for payloads entirely -- shipped content writes both spellings,
+   so the strict form alone would reject working effects."
+  [want value]
+  (if (= :vec3 want)
+    (or (vec3-literal? value)
+        (and (vector? value) (= 3 (count value)) (every? number? value)))
+    (conforms? want value)))
+
+(defn payload-problems
+  "effect-id, its declared `:inputs` specs, and a literal spawn/update
+   payload -> a vector of {:code :key :message ...} problems, empty when the
+   payload agrees with the declaration. Pure: callers decide whether to throw
+   or collect (cn.li.node.compile/compile-vfx reports these as ordinary
+   diagnostics so the editor can list them and the catalog can refuse to
+   start on them).
+
+   Only LITERAL values are judged -- a payload slot wired to a graph node or
+   `{:ref ...}` fragment has no statically known value, so it is skipped
+   rather than guessed at."
   [effect-id input-specs payload]
   (when (and (map? input-specs) (map? payload))
-    (doseq [[k spec] input-specs
-            :when (map? spec)
-            :let [v (get payload k)
-                  mk (:map-keys spec)]
-            :when (and mk (contains? payload k) (literal-edn? v))]
-      (when-not (map? v)
-        (throw (ex-info "VFX payload value must be a map matching :map-keys"
-                        {:code :vfx-payload-shape
-                         :effect-id effect-id
-                         :key k
-                         :expected {:map-keys mk}
-                         :actual v})))
-      (doseq [[fk ft] mk]
-        (when-not (contains? v fk)
-          (throw (ex-info "VFX payload map is missing a required :map-keys entry"
-                          {:code :vfx-payload-shape
-                           :effect-id effect-id
-                           :key k
-                           :missing fk
-                           :expected {:map-keys mk}
-                           :actual v})))
-        (let [fv (get v fk)
-              want (canonical-type ft)]
-          (when (and (literal-edn? fv)
-                     (some? fv)
-                     (not (conforms? want fv)))
-            (throw (ex-info "VFX payload :map-keys value has the wrong type"
-                            {:code :vfx-payload-shape
-                             :effect-id effect-id
-                             :key k
-                             :field fk
-                             :expected want
-                             :actual fv}))))))))
+    (let [unknown (for [k (keys payload)
+                        :when (not (contains? input-specs k))]
+                    ;; :warn, not :error -- an undeclared field is dead weight
+                    ;; the effect ignores, not something that crashes it, and
+                    ;; shipped content has a few. Surfacing it must not make
+                    ;; the catalog refuse to boot.
+                    {:code :unknown-vfx-field :severity :warn :effect-id effect-id :key k
+                     :message (str "effect " effect-id " declares no input " k
+                                   " -- it would be silently ignored at runtime")})
+          declared
+          (for [[k spec] input-specs
+                :when (and (map? spec) (contains? payload k))
+                :let [v (get payload k)
+                      mk (:map-keys spec)
+                      want (canonical-type (:type spec))]
+                :when (literal-edn? v)
+                problem
+                (cond
+                  ;; :map-keys is the stricter contract; when declared it
+                  ;; supersedes the (usually :any) :type tag.
+                  mk (cond
+                       (not (map? v))
+                       [{:code :vfx-payload-shape :effect-id effect-id :key k
+                         :message (str "input " k " of " effect-id " wants a map matching :map-keys "
+                                       (vec (keys mk)) ", got " (pr-str v))}]
+                       :else
+                       (concat
+                        (for [[fk _] mk :when (not (contains? v fk))]
+                          {:code :vfx-payload-shape :effect-id effect-id :key k
+                           :message (str "input " k " of " effect-id " is missing required key " fk)})
+                        (for [[fk ft] mk
+                              :let [fv (get v fk)
+                                    fwant (canonical-type ft)]
+                              :when (and (contains? v fk) (literal-edn? fv) (some? fv)
+                                         (not (payload-conforms? fwant fv)))]
+                          {:code :vfx-payload-shape :effect-id effect-id :key k
+                           :message (str "input " k "." fk " of " effect-id " wants " fwant
+                                         ", got " (pr-str fv))})))
+
+                  (and (some? v) (not (payload-conforms? want v)))
+                  [{:code :vfx-payload-type :effect-id effect-id :key k
+                    :message (str "input " k " of " effect-id " wants " want
+                                  ", got " (pr-str v))}]
+
+                  :else nil)]
+            problem)]
+      (vec (concat unknown declared)))))
+
+(defn assert-payload-literals!
+  "Throwing wrapper over payload-problems, kept for callers that validate
+   outside a compile env and have no diagnostic channel to report into."
+  [effect-id input-specs payload]
+  (when-let [[{:keys [message] :as problem}] (seq (payload-problems effect-id input-specs payload))]
+    (throw (ex-info message (assoc problem :code :vfx-payload-shape))))
+  nil)
 
 ;; --- register-bank plumbing for the surface-DSL compiler (cn.li.node.compile)
 ;; and the mcmod ExecutionFrame emitter it targets. Added alongside the

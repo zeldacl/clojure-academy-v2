@@ -66,13 +66,19 @@
 ;; are NOT part of env -- they are lexically scoped, threaded as plain
 ;; function arguments/return values instead (see compile-stmt).
 
-(defn- new-env [{:keys [vocab capabilities tunable-types state-types fns mode]}]
+(defn- new-env [{:keys [vocab capabilities tunable-types state-types fns mode effect-inputs]}]
   {:vocab (or vocab {})
    :capabilities (or capabilities {})
    :tunable-types (or tunable-types {})
    :state-types (or state-types {})
    :fns (or fns {})
    :mode mode
+   ;; effect-id -> that effect's declared :inputs, when the caller has a VFX
+   ;; catalog to check spawn payloads against (the skill catalog supplies it;
+   ;; vfx-core's own compiles and most unit tests do not). nil means "no
+   ;; catalog available", which check-vfx-payload! treats as skip -- NOT as
+   ;; an empty catalog in which every effect is unknown.
+   :effect-inputs effect-inputs
    :reg-counters (atom {:doubles 0 :longs 0 :booleans 0 :objects 0})
    :reg-types (atom {})
    :const-pools (atom {:doubles [] :longs [] :booleans [] :objects []})
@@ -112,13 +118,22 @@
    :collect mode, records the diagnostic and returns nil -- callers are
    responsible for producing their own recovery value (see
    dummy-register!) so compilation can keep going and surface every error
-   in one pass, not just the first."
-  [env {:keys [code message form nid want] :as diag}]
-  (let [entry (merge {:severity :error :code code :message message :nid nid :want want}
+   in one pass, not just the first.
+
+   `:severity` defaults to :error, which is every existing caller. A
+   :warn diagnostic is ALWAYS collected and never throws, in either mode,
+   and does not suppress the IR (see compile-program's tail) -- it is for
+   something provably wrong that still runs, like a payload field the
+   target effect does not declare and will therefore ignore. Those exist in
+   shipped content today; failing the whole catalog on them would trade a
+   silent bug for an unbootable game."
+  [env {:keys [code message form nid want severity] :as diag}]
+  (let [severity (or severity :error)
+        entry (merge {:severity severity :code code :message message :nid nid :want want}
                      (pos-of form))]
-    (case (:mode env)
-      :throw (throw (ex-info message entry))
-      :collect (swap! (:diagnostics env) conj entry))))
+    (if (and (= :throw (:mode env)) (= :error severity))
+      (throw (ex-info message entry))
+      (swap! (:diagnostics env) conj entry))))
 
 ;; --- register/constant/block allocation ----------------------------------
 
@@ -738,6 +753,41 @@
       (append! env block-id {:op :event :nid (nid-for! env stmt) :event-type (:type fields) :args resolved})
       {:locals locals :block-id block-id})))
 
+(defn- check-vfx-payload!
+  "Type/shape-check a vfx! spawn payload against the referenced effect's own
+   declared `:inputs`, as ordinary diagnostics.
+
+   Nothing used to check this. compile-vfx requires a literal :effect-id and
+   passes every other field through untouched, so a payload that disagreed
+   with the effect -- a double where a :vec3 input is declared, a scalar
+   where the effect declares :map-keys {:from :double :to :double}, a
+   misspelled input name -- compiled clean and only failed once the effect
+   actually spawned, as a conversion crash or a silently ignored field.
+   The declarations and the plumbing were already in place (effect :inputs
+   carry :type and :map-keys; the skill catalog already passes them in as
+   :effect-inputs) -- only the check itself was missing.
+
+   Skipped entirely when the caller supplies no :effect-inputs (vfx-core's
+   own compiles, most unit tests): there is nothing to check against, and
+   inventing a failure there would be worse than the gap."
+  [env stmt fields]
+  (when-let [specs-by-id (:effect-inputs env)]
+    (let [effect-id (:effect-id fields)
+          op (:operation fields)
+          specs (get specs-by-id effect-id)
+          payload (:payload fields)]
+      (cond
+        (nil? specs)
+        (report! env {:code :unknown-vfx-effect :form stmt
+                      :message (str "vfx! references unknown effect " effect-id)})
+
+        ;; Only spawn/update carry a payload; stop//other ops legitimately omit it.
+        (and (map? payload) (or (nil? op) (= :spawn op) (= :update op)))
+        (doseq [{:keys [code message severity]} (types/payload-problems effect-id specs payload)]
+          (report! env {:code code :form stmt :message message :severity severity}))
+
+        :else nil))))
+
 (defn- compile-vfx
   "vfx! is event!'s sibling: an outbound signal, not a host query/action --
    mcmod.runtime.effect-emit's :vfx op is distinct from :action precisely
@@ -752,7 +802,8 @@
     (do (report! env {:code :invalid-vfx-signal :form fields
                       :message "vfx! requires a literal :effect-id keyword"})
         {:locals locals :block-id block-id})
-    (let [[resolved block-id]
+    (let [_ (check-vfx-payload! env stmt fields)
+          [resolved block-id]
           (reduce (fn [[acc block-id] [k v-form]]
                     (let [{:keys [reg block-id]} (compile-form env locals block-id depth v-form false)]
                       [(assoc acc k reg) block-id]))
@@ -851,10 +902,14 @@
             :entries entries
             :blocks (let [registry @(:block-registry env)]
                      (mapv (fn [id] {:id id :instrs (vec @(get registry id))}) (sort (keys registry))))}]
-    (if (seq @(:diagnostics env))
-      {:ir nil :diagnostics @(:diagnostics env)}
-      (do (ir/validate! ir)
-          {:ir ir :diagnostics []}))))
+    ;; Only ERRORS suppress the IR. Warnings ride along with a valid IR so a
+    ;; caller can surface them (startup log, editor diagnostics panel) without
+    ;; losing a program that does run.
+    (let [ds @(:diagnostics env)]
+      (if (some #(= :error (:severity %)) ds)
+        {:ir nil :diagnostics ds}
+        (do (ir/validate! ir)
+            {:ir ir :diagnostics ds})))))
 
 (defn compile!
   "Compile `doc` (already normalized) and return the IR, throwing ex-info

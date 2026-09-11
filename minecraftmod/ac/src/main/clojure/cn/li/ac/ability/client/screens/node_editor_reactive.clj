@@ -303,7 +303,27 @@
         source (if (.isFile ws) (.getAbsolutePath ws) path)
         raw (slurp source)
         wrapper-doc (binding [*read-eval* false] (read-string raw))
-        opts (mode-opts mode wrapper-doc)]
+        ;; Assembled once and shared by :vfx-catalog-by-id below AND by the
+        ;; compiler's vfx payload check -- see the caching note there.
+        vfx-catalog (:by-id (fx-catalog/assemble))
+        opts (cond-> (mode-opts mode wrapper-doc)
+               ;; Lets check/diagnostics type-check every vfx! spawn payload
+               ;; against the effect it targets, so a wrong-typed or
+               ;; misspelled field shows up in the diagnostics panel instead
+               ;; of at spawn time. Same map the skill catalog builds for the
+               ;; same check (cn.li.ac.ability.skills-catalog-v4/
+               ;; effect-input-specs), universal capabilities included.
+               (= :skill mode)
+               (assoc :effect-inputs
+                      (let [universal (into {} (map (fn [[k t]] [k {:type t}]))
+                                            (vfx-api/scene-capabilities-for {}))]
+                        (into {}
+                              (map (fn [[id e]]
+                                     [id (merge universal
+                                                (or (get-in e [:document :inputs])
+                                                    (get-in e [:document :parameters])
+                                                    {}))]))
+                              vfx-catalog))))]
     (-> {:path path
          :mode mode
          :opts opts
@@ -318,7 +338,7 @@
          ;; within one editor session (no in-editor VFX-catalog reload
          ;; action exists), so mount time is the correct cache point --
          ;; same reasoning as :palette just above.
-         :vfx-catalog-by-id (:by-id (fx-catalog/assemble))
+         :vfx-catalog-by-id vfx-catalog
          :document (cond
                      (document/v4-document? wrapper-doc) (document/open-v4 raw)
                      :else (throw (ex-info "node editor requires a V4 graph document" {:path path :schema (:schema wrapper-doc)})))

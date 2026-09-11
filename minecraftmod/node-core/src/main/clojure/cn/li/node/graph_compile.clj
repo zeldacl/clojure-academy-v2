@@ -184,20 +184,12 @@
     ;; Also honor migrated top-level `:args` vectors (expanded to `:argN`).
     (inline-expr ctx (get (component-inputs (get-in ctx [:nodes nid])) port))))
 
-(defn- maybe-validate-effect-vfx-payload!
-  "When compile opts carry `:effect-inputs` (effect-id → `:inputs` specs),
-   reject literal spawn/update payloads that disagree with `:type` /
-   `:map-keys` before they become runtime nil→convert crashes."
-  [ctx n]
-  (when (= :effect/vfx (:component n))
-    (let [ins (component-inputs n)
-          effect-id (:effect-id ins)
-          op (:operation ins)
-          payload (:payload ins)
-          specs (get (:effect-inputs ctx) effect-id)]
-      (when (and specs (keyword? effect-id) (map? payload)
-                 (or (nil? op) (= :spawn op) (= :update op)))
-        (types/assert-payload-literals! effect-id specs payload)))))
+;; VFX spawn-payload validation used to live here and THREW during lowering,
+;; which meant the editor's :collect pass blew up on the first bad payload
+;; instead of listing every problem, and the check could never report
+;; anything lowering does not see. It now runs in cn.li.node.compile/
+;; check-vfx-payload! as ordinary diagnostics -- same :effect-inputs opt,
+;; same declarations, but it honours :throw/:collect like every other check.
 
 (defn- assert-vfx-field-map-keys!
   "If a VFX graph does `(:from ctx-key)` via `:value/field` on a context-ref,
@@ -234,8 +226,7 @@
   (let [n (get (:nodes ctx) nid)]
     (case (:type n)
       :component
-      (let [_ (maybe-validate-effect-vfx-payload! ctx n)
-            parts (for [p (component-input-ports ctx nid)
+      (let [            parts (for [p (component-input-ports ctx nid)
                         :let [x (port-expr ctx nid p)]]
                     [p x])
             ins (into {} (map (fn [[p x]] [p (:form x)]) parts))

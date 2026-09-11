@@ -325,7 +325,13 @@
         "nested :value/field fragments must lower to field access, not stay as maps")))
 
 (deftest effect-vfx-payload-map-keys-checked-at-skill-compile
-  (testing "scalar where :map-keys expects a map fails at skill->core"
+  ;; The payload check MOVED: it used to throw during lowering (skill->core),
+  ;; which meant the editor's :collect pass died on the first bad payload
+  ;; instead of listing every problem. It is now an ordinary diagnostic
+  ;; raised by cn.li.node.compile/check-vfx-payload!, so lowering itself no
+  ;; longer rejects anything -- see cn.li.node.vfx-payload-check-test for the
+  ;; full matrix. This case is kept here to pin the move down.
+  (testing "lowering no longer throws; the payload survives to the compiler"
     (let [graph {:nodes {:n/start (n :n/start :start)
                          :n/vfx (n :n/vfx :component :component :effect/vfx
                                    :inputs {:effect-id :beam-arc-fade
@@ -338,9 +344,7 @@
           opts {:effect-inputs {:beam-arc-fade
                                 {:ring-radius {:type :any
                                                :map-keys {:from :double :to :double}}}}}]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"map-keys"
-                            (graph-compile/skill->core d opts)))))
+      (is (some? (graph-compile/skill->core d opts)))))
   (testing "matching {:from :to} map compiles"
     (let [graph {:nodes {:n/start (n :n/start :start)
                          :n/vfx (n :n/vfx :component :component :effect/vfx

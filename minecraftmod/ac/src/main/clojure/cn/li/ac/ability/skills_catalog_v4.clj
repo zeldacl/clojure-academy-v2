@@ -6,18 +6,29 @@
             [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]
             [cn.li.combat.api :as combat-api]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.node.api :as node-api]))
+            [cn.li.node.api :as node-api]
+            [cn.li.vfx.api :as vfx-api]))
 
 (defn- effect-input-specs
   "effect-id → VFX `:inputs` map, for compile-time spawn payload shape checks
-   (`:map-keys`, literal `:type`)."
+   (`:map-keys`, literal `:type`, unknown field names).
+
+   The universal capabilities every scene gets regardless of what it declared
+   (:age/:progress/:seed/:source-player-id) are merged in via vfx-api's own
+   scene-capabilities-for, NOT re-listed here: a payload may legitimately
+   carry :seed even though no effect declares it, and duplicating that set
+   would mean a new universal silently became an 'unknown field'. Merged as
+   `{:type t}` specs so they read like any other declared input."
   []
-  (into {}
-        (map (fn [[id e]]
-               [id (or (get-in e [:document :inputs])
-                       (get-in e [:document :parameters])
-                       {})])
-             (:by-id (fx-catalog/assemble)))))
+  (let [universal (into {} (map (fn [[k t]] [k {:type t}]))
+                        (vfx-api/scene-capabilities-for {}))]
+    (into {}
+          (map (fn [[id e]]
+                 [id (merge universal
+                            (or (get-in e [:document :inputs])
+                                (get-in e [:document :parameters])
+                                {}))]))
+          (:by-id (fx-catalog/assemble)))))
 
 (defn- default-compile-opts []
   {:vocab combat-api/skill-vocab
@@ -80,6 +91,14 @@
                                  :diagnostics diagnostics)))
                       resources)
          ids (map :id skills)]
+     ;; :throw mode already refused to produce an IR for any ERROR, so
+     ;; anything still here is a warning -- provably wrong but non-fatal
+     ;; (today: payload fields the target effect does not declare and will
+     ;; silently ignore). Log them; they are invisible otherwise, which is
+     ;; how they survived this long.
+     (doseq [{:keys [id diagnostics]} skills
+             {:keys [code message]} diagnostics]
+       (log/warn "V4 skill compiled with a warning" {:id id :code code :message message}))
      (when-not (= (count ids) (count (set ids)))
        (throw (ex-info "V4 skill ids must be unique" {:ids ids})))
      (doseq [{:keys [id ir document]} skills]
