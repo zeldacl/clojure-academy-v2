@@ -68,6 +68,20 @@
     (is (every? #(map? (:ir %)) (:skills assembled))
         "every shipped skill must have compiled V4 IR")))
 
+(deftest no-v4-skill-compiles-with-a-warning-test
+  ;; :throw mode already refuses an IR for any ERROR, so whatever survives
+  ;; assembly is a warning: provably wrong but non-fatal. assemble only
+  ;; log/warn's them, which is how three of them (railgun :charge-ticks,
+  ;; scatter-bomb :balls x2 -- payload fields the target effect declares no
+  ;; input for, so the runtime silently drops them) sat in shipped content
+  ;; unnoticed. Nothing asserted on them before; now a reintroduction fails
+  ;; here instead of scrolling past in a startup log.
+  (let [warnings (for [{:keys [id diagnostics]} (:skills (skills-catalog/assemble))
+                       d diagnostics]
+                   (assoc (select-keys d [:code :message]) :skill id))]
+    (is (empty? warnings)
+        (str "V4 skills compiled with warnings: " (pr-str (vec warnings))))))
+
 (deftest assembled-skill-ir-capabilities-are-host-dispatchable-test
   (let [assembled (skills-catalog/assemble)
         gaps (mapcat (fn [{:keys [id ir]}]

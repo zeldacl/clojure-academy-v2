@@ -291,10 +291,7 @@
          :instance-key [:activation :scatter-bomb],
          :payload
          {:position
-          {:nid :n/n--entry--pulse-2-el-e70491c8, :ref [:local :eye]},
-          :balls
-          {:nid :n/n--entry--pulse-2-el-557131b5,
-           :ref [:local :balls]}}}},
+          {:nid :n/n--entry--pulse-2-el-e70491c8, :ref [:local :eye]}}}},
        :n046 {:type :local-get, :key :wid, :nid :n/n046},
        :n--entry--pulse-2-then-0
        {:type :local-set,
@@ -311,10 +308,7 @@
          :instance-key [:activation :scatter-bomb],
          :payload
          {:position
-          {:nid :n/n--entry--pulse-2-el-b07b4379, :ref [:local :eye]},
-          :balls
-          {:nid :n/n--entry--pulse-2-el-ba80598e,
-           :ref [:local :balls-next]}}}},
+          {:nid :n/n--entry--pulse-2-el-b07b4379, :ref [:local :eye]}}}},
        :n033 {:type :local-get, :key :next-spawn-tick, :nid :n/n033},
        :n--entry--pulse-2-el-850be0cf
        {:type :local-set,

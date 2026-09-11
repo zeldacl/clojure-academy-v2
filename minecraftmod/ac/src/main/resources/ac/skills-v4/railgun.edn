@@ -372,19 +372,6 @@
         :inputs {:key :hold-ticks},
         :nid :n/n--entry--pulse-1-then-3},
        :n025 {:type :local-get, :key :next-hold-ticks, :nid :n/n025},
-       :n--entry--pulse-1-then-4
-       {:type :component,
-        :component :effect/vfx,
-        :nid :n/n--entry--pulse-1-then-4,
-        :inputs
-        {:effect-id :billboard-session,
-         :operation :update,
-         :instance-key [:activation :railgun-charge],
-         :audience {:type :nearby, :radius 32.0},
-         :payload
-         {:charge-ticks
-          {:nid :n/n--entry--pulse-1-th-d2cc7e25,
-           :ref [:local :next-hold-ticks]}}}},
        :n--entry--pulse-1-then-5
        {:type :branch, :nid :n/n--entry--pulse-1-then-5},
        :n026 {:type :component, :component :math/gte, :nid :n/n026},
@@ -458,7 +445,7 @@
     {:id :e/link043,
      :kind :exec,
      :from [:n/n--entry--pulse-1-then-3 :out],
-     :to [:n/n--entry--pulse-1-then-4 :in]}
+     :to [:n/n--entry--pulse-1-then-5 :in]}
     {:id :e/link044,
      :kind :data,
      :from [:n/n027 :value],
@@ -483,10 +470,6 @@
      :kind :exec,
      :from [:n/n--entry--pulse-1-then-5 :false],
      :to [:n/n--entry--pulse-1-then-5-else-0 :in]}
-    {:id :e/link050,
-     :kind :exec,
-     :from [:n/n--entry--pulse-1-then-4 :out],
-     :to [:n/n--entry--pulse-1-then-5 :in]}
     {:id :e/link051,
      :kind :exec,
      :from [:n/n--entry--pulse-1 :true],
