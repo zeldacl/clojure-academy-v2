@@ -92,8 +92,26 @@
     {:id :vec-reflection :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}]
    course-skill-definitions))
 
+(def player-configurable-skill-definitions
+  "skill-definitions minus the generic brain/mind course skills.
+
+   skill-definitions serves two different jobs and they need different
+   subsets. As REGISTRATION metadata it must be complete -- registry/
+   skill.clj's register-skill! throws when a registered skill has no entry
+   here, and the course entries are the only place their :level and
+   :controllable? false come from. As the PLAYER CONFIG surface it must not
+   include them: they registered canControl=false precisely so they never
+   reach the N-key/preset picker, so emitting a per-skill TOML/JSON block
+   for them advertises balance knobs for something a player cannot select,
+   and makes validate-config! demand values for it.
+
+   Course skills are exactly the category-namespaced ids
+   (:electromaster/brain-course); every player-facing skill id is plain."
+  (filterv #(nil? (namespace (:id %))) skill-definitions))
+
 (def all-skill-ids
-  (mapv #(get % :id) skill-definitions))
+  ;; Config surface, so player-configurable only -- see that def's docstring.
+  (mapv #(get % :id) player-configurable-skill-definitions))
 
 (def field-definitions
   [{:id :enabled

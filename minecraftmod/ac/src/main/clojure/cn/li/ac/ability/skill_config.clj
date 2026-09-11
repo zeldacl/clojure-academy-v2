@@ -24,12 +24,21 @@
   common/all-skill-ids)
 
 (def skill-definitions-by-id
+  ;; Registration metadata, so this keeps EVERY entry including the course
+  ;; skills -- register-skill! rejects a skill that is missing here.
   (into {} (map #(vector (get % :id) %) skill-definitions)))
 
+(def ^:private player-configurable-ids
+  (set all-skill-ids))
+
 (def skills-by-category
+  ;; Drives descriptors-for-category, i.e. the player-facing config blocks --
+  ;; so it groups the player-configurable subset, NOT every registered skill.
+  ;; See common/player-configurable-skill-definitions for why the two differ.
   (into {}
         (map (fn [category-id]
-               [category-id (vec (filter #(= category-id (:category-id %)) skill-definitions))])
+               [category-id (vec (filter #(= category-id (:category-id %))
+                                         common/player-configurable-skill-definitions))])
              category-ids)))
 
 (def field-definitions
@@ -658,8 +667,15 @@
                 category-ids)))
 
 (defn skill-configured?
+  "Whether this skill has a player-facing config surface, i.e. whether
+   apply-skill-overrides has anything to overlay.
+
+   Not the same as \"has a skill-definitions entry\": the generic brain/mind
+   course skills have one (registration needs their :level and
+   :controllable? false) but emit no config block, so overlaying config on
+   them only re-reads the very defaults register-skill! already applied."
   [skill-id]
-  (contains? skill-definitions-by-id skill-id))
+  (contains? player-configurable-ids skill-id))
 
 (defn category-domain
   [category-id]
