@@ -85,7 +85,12 @@
   (let [doc {:schema :ac/vfx-v4
              :id :ring-range
              :lifecycle {:mode :transient}
-             :inputs {:ring-radius {:type :any}
+             ;; :map-keys mirrors real beam-arc-fade.edn and is REQUIRED, not
+             ;; decoration: graph-compile/assert-vfx-field-map-keys! rejects a
+             ;; :value/field read off a context input that does not declare the
+             ;; field. Checked by node-core's
+             ;; effect-vfx-payload-map-keys-checked-at-skill-compile.
+             :inputs {:ring-radius {:type :any :map-keys {:from :double :to :double}}
                       :fade-p {:type :double}
                       :center {:type :vec3}}
              :state {}
