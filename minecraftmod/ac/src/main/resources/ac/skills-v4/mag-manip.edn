@@ -1873,6 +1873,7 @@
             {:nid :n/n--entry--release-10-8cb2117f,
              :ref [:local :held-body]}}},
           :ring-radius {:from 0.12, :to 0.34},
+          :arc-pattern :weak,
           :arc-life-ticks 8,
           :fade-to-tick 12,
           :arc-spacing {:min 1.0, :max 2.0},

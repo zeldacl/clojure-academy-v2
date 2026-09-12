@@ -835,7 +835,9 @@
 
         ;; Only spawn/update carry a payload; stop//other ops legitimately omit it.
         (and (map? payload) (or (nil? op) (= :spawn op) (= :update op)))
-        (doseq [{:keys [code message severity]} (types/payload-problems effect-id specs payload)]
+        (doseq [{:keys [code message severity]}
+                (types/payload-problems effect-id specs payload
+                                        {:require-inputs? (= :spawn op)})]
           (report! env {:code code :form stmt :message message :severity severity}))
 
         :else nil))))

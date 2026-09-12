@@ -25,7 +25,7 @@
 (defn- diagnostics-for [payload]
   (let [doc (surface/read-doc
              (str "{:ability :t :activation :instant :do "
-                  "[(vfx! {:effect-id :beam-arc-fade :operation :spawn :payload " (pr-str payload) "})]}"))
+                  "[(vfx! {:effect-id :beam-arc-fade :operation :update :payload " (pr-str payload) "})]}"))
         {:keys [diagnostics]} (compile/compile-program
                                (surface/normalize doc)
                                (assoc fx/opts :effect-inputs effect-inputs)
@@ -35,7 +35,7 @@
 (defn- diagnostics-full [payload]
   (let [doc (surface/read-doc
              (str "{:ability :t :activation :instant :do "
-                  "[(vfx! {:effect-id :beam-arc-fade :operation :spawn :payload " (pr-str payload) "})]}"))]
+                  "[(vfx! {:effect-id :beam-arc-fade :operation :update :payload " (pr-str payload) "})]}"))]
     (:diagnostics (compile/compile-program
                    (surface/normalize doc)
                    (assoc fx/opts :effect-inputs effect-inputs)
@@ -80,7 +80,7 @@
 (deftest a-warning-still-yields-a-usable-ir-test
   (let [doc (surface/read-doc
              (str "{:ability :t :activation :instant :do "
-                  "[(vfx! {:effect-id :beam-arc-fade :operation :spawn "
+                  "[(vfx! {:effect-id :beam-arc-fade :operation :update "
                   ":payload {:strat 1}})]}"))
         {:keys [ir diagnostics]} (compile/compile-program
                                   (surface/normalize doc)
@@ -91,7 +91,7 @@
   (testing ":throw mode does not throw on a warning either"
     (let [doc (surface/read-doc
                (str "{:ability :t :activation :instant :do "
-                    "[(vfx! {:effect-id :beam-arc-fade :operation :spawn "
+                    "[(vfx! {:effect-id :beam-arc-fade :operation :update "
                     ":payload {:strat 1}})]}"))
           {:keys [ir diagnostics]} (compile/compile-program
                                     (surface/normalize doc)
@@ -128,6 +128,31 @@
   ;; supplies are judged.
   (is (clean? {})))
 
+(deftest required-spawn-inputs-are-reported-test
+  (let [doc (surface/read-doc
+             "{:ability :t :activation :instant :do
+               [(vfx! {:effect-id :beam-arc-fade :operation :spawn
+                       :payload {:start {:vec3 [0.0 0.0 0.0]}}})]}")
+        {:keys [diagnostics]} (compile/compile-program
+                               (surface/normalize doc)
+                               (assoc fx/opts :effect-inputs
+                                      {:beam-arc-fade
+                                       {:start {:type :vec3}
+                                        :duration-ticks {:type :long}}})
+                               :collect)]
+    (is (= [:missing-vfx-input] (mapv :code diagnostics)))
+    (is (re-find #"missing required input :duration-ticks"
+                 (:message (first diagnostics))))))
+
+(deftest required-spawn-nil-is-reported-test
+  (is (= [:nil-vfx-input]
+         (mapv :code
+               (types/payload-problems
+                :beam-arc-fade
+                {:duration-ticks {:type :long}}
+                {:duration-ticks nil}
+                {:require-inputs? true})))))
+
 (deftest non-literal-values-are-skipped-test
   ;; A slot wired to a graph node / sigil has no statically known value.
   (is (empty? (types/payload-problems
@@ -139,7 +164,7 @@
   ;; nothing to check against and inventing a failure would be worse.
   (let [doc (surface/read-doc
              "{:ability :t :activation :instant :do
-               [(vfx! {:effect-id :beam-arc-fade :operation :spawn :payload {:start 5.0}})]}")
+               [(vfx! {:effect-id :beam-arc-fade :operation :update :payload {:start 5.0}})]}")
         {:keys [diagnostics]} (compile/compile-program (surface/normalize doc) fx/opts :collect)]
     (is (empty? diagnostics))))
 
@@ -149,7 +174,7 @@
   ;; This is what makes the skill catalog fail at startup instead of at spawn.
   (let [doc (surface/read-doc
              "{:ability :t :activation :instant :do
-               [(vfx! {:effect-id :beam-arc-fade :operation :spawn :payload {:start 5.0}})]}")]
+               [(vfx! {:effect-id :beam-arc-fade :operation :update :payload {:start 5.0}})]}")]
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"wants :vec3"
          (compile/compile-program (surface/normalize doc)

@@ -118,17 +118,50 @@
 (defn payload-problems
   "effect-id, its declared `:inputs` specs, and a literal spawn/update
    payload -> a vector of {:code :key :message ...} problems, empty when the
-   payload agrees with the declaration. Pure: callers decide whether to throw
-   or collect (cn.li.node.compile/compile-vfx reports these as ordinary
-   diagnostics so the editor can list them and the catalog can refuse to
-   start on them).
+   payload agrees with the declaration. When `:require-inputs?` is true,
+   inputs without a declared default must also be present and non-nil. This
+   is used for literal `:spawn` payloads: omitting a primitive input otherwise
+   leaves a nil in the VFX execution frame and fails only when the scene is
+   sampled. Pure: callers decide whether to throw or collect (cn.li.node.compile
+   reports these as ordinary diagnostics so the editor can list them and the
+   catalog can refuse to start on them).
 
    Only LITERAL values are judged -- a payload slot wired to a graph node or
    `{:ref ...}` fragment has no statically known value, so it is skipped
    rather than guessed at."
-  [effect-id input-specs payload]
-  (when (and (map? input-specs) (map? payload))
-    (let [unknown (for [k (keys payload)
+  ([effect-id input-specs payload]
+   (payload-problems effect-id input-specs payload {}))
+  ([effect-id input-specs payload {:keys [require-inputs?]
+                                   :or {require-inputs? false}}]
+   (when (and (map? input-specs) (map? payload))
+    (let [missing
+          (when require-inputs?
+            (for [[k spec] input-specs
+                  :when (and (map? spec)
+                             (not (:auto-provided? spec))
+                             (or (:required? spec)
+                                 (and (not (contains? spec :default))
+                                      (not= :any (canonical-type (:type spec)))))
+                             (not (contains? payload k)))]
+              {:code :missing-vfx-input :severity :error :effect-id effect-id :key k
+               :message (str "spawn payload for " effect-id
+                             " is missing required input " k)}))
+          nil-inputs
+          (when require-inputs?
+            (for [[k spec] input-specs
+                  :when (and (map? spec)
+                             (not (:auto-provided? spec))
+                             (or (:required? spec)
+                                 (and (not (contains? spec :default))
+                                      (not= :any (canonical-type (:type spec)))))
+                             (contains? #{:double :long :boolean}
+                                        (canonical-type (:type spec)))
+                             (contains? payload k)
+                             (nil? (get payload k)))]
+              {:code :nil-vfx-input :severity :error :effect-id effect-id :key k
+               :message (str "spawn payload for " effect-id
+                             " supplies nil for required input " k)}))
+          unknown (for [k (keys payload)
                         :when (not (contains? input-specs k))]
                     ;; :warn, not :error -- an undeclared field is dead weight
                     ;; the effect ignores, not something that crashes it, and
@@ -174,7 +207,7 @@
 
                   :else nil)]
             problem)]
-      (vec (concat unknown declared)))))
+      (vec (concat missing nil-inputs unknown declared))))))
 
 (defn assert-payload-literals!
   "Throwing wrapper over payload-problems, kept for callers that validate

@@ -21,14 +21,25 @@
    would mean a new universal silently became an 'unknown field'. Merged as
    `{:type t}` specs so they read like any other declared input."
   []
-  (let [universal (into {} (map (fn [[k t]] [k {:type t}]))
+  (let [universal (into {} (map (fn [[k t]] [k {:type t :auto-provided? true}]))
                         (vfx-api/scene-capabilities-for {}))]
     (into {}
           (map (fn [[id e]]
-                 [id (merge universal
-                            (or (get-in e [:document :inputs])
-                                (get-in e [:document :parameters])
-                                {}))]))
+                 (let [document (:document e)
+                       used (into #{}
+                                  (keep (fn [form]
+                                          (when (and (map? form)
+                                                     (= :context-ref (:type form)))
+                                            (:key form))))
+                                  (tree-seq coll? seq (:graphs document)))
+                       declared (or (:inputs document) (:parameters document) {})]
+                   [id (merge universal
+                              (into {}
+                                    (map (fn [[k spec]]
+                                          [k (cond-> spec
+                                               (contains? used k)
+                                               (assoc :required? true))]))
+                                    declared))])))
           (:by-id (fx-catalog/assemble)))))
 
 (defn- default-compile-opts []

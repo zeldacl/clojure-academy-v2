@@ -3,8 +3,8 @@
  :lifecycle {:mode :session},
  :inputs
  {:count-limit {:type :int},
+  :orientation {:type :any, :default nil},
   :life-ticks {:type :int},
-  :orientation {:type :any},
   :radius {:type :any},
   :seed {:type :int},
   :alpha {:type :float},

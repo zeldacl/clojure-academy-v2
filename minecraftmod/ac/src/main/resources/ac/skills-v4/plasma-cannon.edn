@@ -294,6 +294,7 @@
           :radius {:min 0.15, :max 0.7},
           :count-limit 128,
           :life-ticks 30,
+          :alpha 0.0,
           :seed
           {:nid :n/n--entry--start-12-t-121b49aa,
            :ref [:local :seed]}}}},

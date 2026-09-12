@@ -678,6 +678,7 @@
             {:nid :n/n--entry--release-19-7e5b7600,
              :ref [:local :beam-result]}}},
           :ring-radius {:from 0.34, :to 0.34},
+          :arc-pattern :weak,
           :arc-life-ticks 30,
           :fade-to-tick 50,
           :arc-spacing {:min 1.0, :max 2.0},

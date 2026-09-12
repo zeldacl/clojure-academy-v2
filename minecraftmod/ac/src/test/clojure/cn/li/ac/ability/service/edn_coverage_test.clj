@@ -173,7 +173,7 @@
                                                      (when (and (map? spec)
                                                                 (not (contains? spec :default)))
                                                        k))
-                                                   (:inputs effect))
+                                                   (get-in effect [:document :inputs]))
                                     missing (remove #(contains? payload %) required)]
                                 (when (seq missing)
                                   {:skill (.getName ^java.io.File file)

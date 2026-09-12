@@ -195,6 +195,7 @@
           {:nid :n/n--entry--default-2--c45916c0, :ref [:local :eye]},
           :sound-id "academy:em.arc_strong",
           :arc-life-ticks 20,
+          :duration-ticks 20,
           :aoe-points
           {:nid :n/n--entry--default-2--a3c92eb7,
            :ref [:local :aoe-targets]},
