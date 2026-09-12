@@ -1095,8 +1095,13 @@
 
 (defn configure-entity!
   "Apply only neutral entity state mutations requested by a compiled ability.
-   The platform relay owns entity lookup; Combat Core owns the bounded shape."
-  [{:keys [world-id entity velocity add-tags projectile-damage]}]
+   The platform relay owns entity lookup; Combat Core owns the bounded shape.
+
+   Block-body entities carry their rendered block in a synchronized field,
+   separate from the generic motion configuration. Keep that mutation in
+   the same neutral operation so a skill cannot consume a block and then
+   spawn an entity that still renders its registry default."
+  [{:keys [world-id entity velocity block-id add-tags projectile-damage]}]
   (let [entity-id (or (:id entity) (:uuid entity) (:entity-id entity))
         velocity (or velocity [0.0 0.0 0.0])
         velocity (if (and (map? velocity) (vector? (:vec3 velocity)))
@@ -1104,20 +1109,28 @@
                    (if (map? velocity)
                      [(:x velocity) (:y velocity) (:z velocity)]
                      velocity))
+        block-id-valid? (or (nil? block-id)
+                            (and (string? block-id)
+                                 (entity-motion/available?)))
         valid? (and world-id entity-id (= 3 (count velocity))
                     (every? #(and (number? %) (Double/isFinite (double %))) velocity)
+                    block-id-valid?
                     (or (nil? projectile-damage)
                         (and (number? projectile-damage)
                              (Double/isFinite (double projectile-damage))))
                     (every? string? (or add-tags []))
                     (world-effects/available?))]
     (if valid?
-      {:status (if (world-effects/configure-entity!
-                   (str world-id) (str entity-id)
-                   (mapv double velocity) (vec add-tags)
-                   (when (some? projectile-damage)
-                     (double projectile-damage)))
-                 :applied :failed)}
+      (let [block-configured? (or (nil? block-id)
+                                  (entity-motion/set-block-body-block-id!
+                                   (str world-id) (str entity-id) block-id))
+            configured? (and block-configured?
+                             (world-effects/configure-entity!
+                              (str world-id) (str entity-id)
+                              (mapv double velocity) (vec add-tags)
+                              (when (some? projectile-damage)
+                                (double projectile-damage))))]
+        {:status (if configured? :applied :failed)})
       {:status :rejected :reason :invalid-entity-configuration})))
 
 (defn entity-velocity!

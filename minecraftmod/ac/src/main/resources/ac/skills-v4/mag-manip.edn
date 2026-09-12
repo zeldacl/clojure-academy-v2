@@ -433,6 +433,9 @@
         :nid :n/n--entry--start-9-else-1-else-0,
         :inputs {:outcome :no-target, :end-ability? true}},
        :n014 {:type :local-get, :key :held-item, :nid :n/n014},
+       :n055 {:type :context-ref, :key :world/id, :nid :n/n055},
+       :n056 {:type :component, :component :entity/configure, :nid :n/n056},
+       :n057 {:type :component, :component :entity/configure, :nid :n/n057},
        :n049 {:type :local-get, :key :grab-hit, :nid :n/n049},
        :n053
        {:type :component,
@@ -580,6 +583,10 @@
      :kind :data,
      :from [:n/n024 :value],
      :to [:n/n023 :owner]}
+    {:id :e/link035-world,
+     :kind :data,
+     :from [:n/n055 :value],
+     :to [:n/n023 :world-id]}
     {:id :e/link036,
      :kind :data,
      :from [:n/n025 :value],
@@ -600,9 +607,25 @@
      :kind :data,
      :from [:n/n026 :value],
      :to [:n/n--entry--start-9-then-6 :value]}
+    {:id :e/link040-config-world,
+     :kind :data,
+     :from [:n/n055 :value],
+     :to [:n/n056 :world-id]}
+    {:id :e/link040-config-entity,
+     :kind :data,
+     :from [:n/n027 :value],
+     :to [:n/n056 :entity]}
+    {:id :e/link040-config-block,
+     :kind :data,
+     :from [:n/n020 :value],
+     :to [:n/n056 :block-id]}
     {:id :e/link041,
      :kind :exec,
      :from [:n/n--entry--start-9-then-5 :out],
+     :to [:n/n056 :in]}
+    {:id :e/link041-configured,
+     :kind :exec,
+     :from [:n/n056 :out],
      :to [:n/n--entry--start-9-then-6 :in]}
     {:id :e/link042,
      :kind :exec,
@@ -724,6 +747,10 @@
      :kind :data,
      :from [:n/n051 :value],
      :to [:n/n050 :owner]}
+    {:id :e/link071-world,
+     :kind :data,
+     :from [:n/n055 :value],
+     :to [:n/n050 :world-id]}
     {:id :e/link072,
      :kind :data,
      :from [:n/n052 :value],
@@ -747,6 +774,22 @@
     {:id :e/link077,
      :kind :exec,
      :from [:n/n--entry--start-9-else-1-then-5 :out],
+     :to [:n/n057 :in]}
+    {:id :e/link077-config-world,
+     :kind :data,
+     :from [:n/n055 :value],
+     :to [:n/n057 :world-id]}
+    {:id :e/link077-config-entity,
+     :kind :data,
+     :from [:n/n054 :value],
+     :to [:n/n057 :entity]}
+    {:id :e/link077-config-block,
+     :kind :data,
+     :from [:n/n045 :value],
+     :to [:n/n057 :block-id]}
+    {:id :e/link077-configured,
+     :kind :exec,
+     :from [:n/n057 :out],
      :to [:n/n--entry--start-9-else-1-then-6 :in]}
     {:id :e/link078,
      :kind :exec,
