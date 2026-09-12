@@ -8,9 +8,9 @@
   :break-speed {:type :double, :default nil}},
  :state
  {:target {:type :any, :default nil},
-  :hardness-left {:type :double, :default nil},
-  :starting-hardness {:type :double, :default nil},
-  :overload-floor {:type :double, :default nil}},
+  :hardness-left {:type :double, :default 3.4028235E38},
+  :starting-hardness {:type :double, :default 3.4028235E38},
+  :overload-floor {:type :double, :default 0.0}},
  :tunables
  {:targeting-range {:curve :const},
   :break-speed {:curve :mastery-lerp},

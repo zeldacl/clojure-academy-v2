@@ -64,10 +64,16 @@
 (defn- compile-writer [[kind bank slot]]
   (when (= kind :const)
     (throw (ex-info "cannot write to a :const register" {:bank bank :slot slot})))
-  (let [s (int slot)]
+  (let [s (int slot)
+        write-value (fn [v]
+                      (if (and (nil? v) (contains? #{:doubles :longs} bank))
+                        (throw (ex-info "primitive register write received nil"
+                                        {:code :nil-primitive-write
+                                         :bank bank :slot slot}))
+                        v))]
     (case bank
-      :doubles (fn [^ExecutionFrame fr v] (aset ^doubles (.-doubles fr) s (double v)))
-      :longs (fn [^ExecutionFrame fr v] (aset ^longs (.-longs fr) s (long v)))
+      :doubles (fn [^ExecutionFrame fr v] (aset ^doubles (.-doubles fr) s (double (write-value v))))
+      :longs (fn [^ExecutionFrame fr v] (aset ^longs (.-longs fr) s (long (write-value v))))
       :booleans (fn [^ExecutionFrame fr v] (aset ^booleans (.-booleans fr) s (boolean v)))
       :objects (fn [^ExecutionFrame fr v] (aset ^objects (.-objects fr) s v)))))
 

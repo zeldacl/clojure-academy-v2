@@ -102,7 +102,7 @@
     :ring {:operation :draw-batch :stage :world-after-translucent :primitive :line
            :geometry {:kind :ring :center (:center op) :radius (:radius op) :segments (:segments op)}
            :material {:color (:color op) :alpha (double (or (:alpha op) 1.0))}}
-    :beam {:operation :draw-batch :stage :world-after-translucent :primitive :line
+    :beam {:operation :draw-batch :stage :world-after-translucent :primitive :quad
            :geometry {:kind :beam :start (:start op) :end (:end op)
                       :grow-ticks (:grow-ticks op)}
            :material (beam-material op)}

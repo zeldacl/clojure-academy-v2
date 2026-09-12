@@ -18,8 +18,8 @@
   :explosion-radius {:type :double, :default nil}},
  :state
  {:mode {:type :long, :default 0},
-  :position {:type :vec3, :default nil},
-  :vortex-base {:type :vec3, :default nil},
+  :position {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
+  :vortex-base {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
   :destination {:type :any, :default nil},
   :flight-ticks {:type :long, :default 0},
   :sync-ticks {:type :long, :default 0},

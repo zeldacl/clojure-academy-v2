@@ -156,3 +156,28 @@
      (mapcat (fn [i v] (unresolvable-components v (conj path i)))
              (range) form)
      :else nil)))
+
+(defn- invoke-arity?
+  "Return whether a handler exposes an exact IFn invoke arity.
+
+   Query handlers are called by ability-runtime with `(request frame-ctx)`;
+   checking the generated IFn method keeps this gate side-effect free instead
+   of probing handlers by invoking them with a fake request."
+  [handler arity]
+  (boolean
+   (some (fn [^java.lang.reflect.Method method]
+           (and (= "invoke" (.getName method))
+                (= arity (count (.getParameterTypes method)))))
+         (.getMethods (class handler)))))
+
+(defn query-handler-arity-gaps
+  "Return registered query handlers that cannot receive the engine's
+   `(request frame-context)` call shape."
+  ([] (query-handler-arity-gaps (platform/query-handlers) 2))
+  ([handlers expected-arity]
+   (vec
+    (for [[capability handler] handlers
+          :when (not (invoke-arity? handler expected-arity))]
+      {:capability capability
+       :expected-arity expected-arity
+       :handler-class (class handler)}))))

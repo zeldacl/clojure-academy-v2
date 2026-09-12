@@ -18,7 +18,7 @@
              "{:ability :t :do [(let x (vec3/add ?caster/eye 1.0)) (finish {:outcome :performed})]}")
         diags (check/diagnostics raw fx/opts)]
     (is (seq diags))
-    (is (= :type-mismatch (:code (first diags))))
+    (is (= :invalid-literal-shape (:code (first diags))))
     (is (false? (check/ok? raw fx/opts)))
     (is (nil? (check/cost-summary raw fx/opts)))))
 

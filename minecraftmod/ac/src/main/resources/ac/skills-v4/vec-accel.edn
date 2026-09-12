@@ -15,8 +15,8 @@
  :state
  {:charge-ticks {:type :long, :default 0},
   :can-perform? {:type :boolean, :default true},
-  :look-dir {:type :vec3, :default nil},
-  :init-vel {:type :vec3, :default nil}},
+  :look-dir {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}},
+  :init-vel {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}}},
  :description-key "ability.skill.vecmanip.vec_accel.desc",
  :name-key "ability.skill.vecmanip.vec_accel",
  :cooldown nil,

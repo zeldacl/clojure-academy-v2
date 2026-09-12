@@ -64,6 +64,62 @@
         p2 (or (:p2 geometry) (:end geometry) (:to geometry))]
     (if (and p1 p2) [(line-op p1 p2 color)] [])))
 
+(def ^:private beam-glow-texture "academy:textures/effects/glow_line.png")
+
+(defn- scale-color-alpha [color alpha]
+  (cond
+    (and (sequential? color) (<= 4 (count color)))
+    (let [[r g b a] color]
+      [r g b (* (double a) (double alpha))])
+    (map? color)
+    (assoc color :a (* (double (or (:a color) 1.0)) (double alpha)))
+    :else color))
+
+(defn- beam-quad [^V3 start ^V3 end ^V3 axis radius texture color]
+  (let [offset (V3/scale axis radius)
+        start-left (V3/sub start offset)
+        start-right (V3/add start offset)
+        end-right (V3/add end offset)
+        end-left (V3/sub end offset)]
+    {:kind :quad
+     :p0 start-left :p1 start-right :p2 end-right :p3 end-left
+     :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
+     :texture texture :color color}))
+
+(defn- beam-layer-ops [^V3 start ^V3 end ^V3 right ^V3 up layer material]
+  (let [shape (or (:shape layer) (get layer "shape") :tube)
+        width (max 0.001 (number-or (or (:width layer) (get layer "width")
+                                        (:radius layer) (get layer "radius")
+                                        0.08)
+                                     0.08))
+        color (scale-color-alpha (or (:color layer) (get layer "color")
+                                    (material-color material))
+                                 (number-or (or (:alpha material)
+                                                (get material "alpha") 1.0)
+                                             1.0))
+        texture (or (:texture layer) (get layer "texture")
+                    (:texture material) beam-glow-texture)]
+    (if (= :line shape)
+      [(line-op start end color)]
+      [(assoc (beam-quad start end right width texture color)
+              :additive? true :no-depth-write? true)
+       (assoc (beam-quad start end up width texture color)
+              :additive? true :no-depth-write? true)])))
+
+(defn- beam-ops [geometry material]
+  (let [start (v3-from (or (:start geometry) (:from geometry)))
+        end (v3-from (or (:end geometry) (:to geometry)))
+        direction (V3/normalize (V3/sub end start))
+        reference (if (> (Math/abs (.-y direction)) 0.9)
+                    (V3. 1.0 0.0 0.0)
+                    (V3. 0.0 1.0 0.0))
+        right (V3/normalize (V3/cross direction reference))
+        up (V3/normalize (V3/cross right direction))
+        layers (or (:layers material) (get material "layers")
+                   [material])]
+    (into [] (mapcat #(beam-layer-ops start end right up % material) layers))))
+
+
 (defn- quad-ops [geometry color material]
   (let [corners (map #(get geometry %) [:p0 :p1 :p2 :p3])]
     (if (every? some? corners)
@@ -174,6 +230,7 @@
                                             :end (:end geometry)} color)
                            (line-ops geometry color))
                    :quad (case (:kind geometry)
+                           :beam (beam-ops geometry material)
                            :arc (arc-geometry/arc-quad-ops geometry material color)
                            :emitter (marker-quad (:anchor geometry) color)
                            (quad-ops geometry color material))

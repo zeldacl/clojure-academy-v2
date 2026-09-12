@@ -14,6 +14,9 @@
 (def link-kinds #{:exec :data})
 (def graph-stages #{:render})
 (def max-loop-bound 256)
+(def ^:private primitive-state-types
+  #{:double :long :int :float :tick :duration :seed
+    :angle :ratio :vec3})
 
 (defn- fail [message data]
   (throw (ex-info message data)))
@@ -53,6 +56,37 @@
                 "V4 field declaration requires keyword and :type"
                 {:path (conj path key) :spec spec})))
   fields)
+
+(defn- valid-vec3-default? [value]
+  (or (and (map? value) (vector? (:vec3 value))
+           (= 3 (count (:vec3 value)))
+           (every? number? (:vec3 value)))
+      (and (vector? value) (= 3 (count value)) (every? number? value))))
+
+(defn- valid-state-default? [type value]
+  (case type
+    (:double :float :angle :ratio) (number? value)
+    (:long :int :tick :duration :seed) (integer? value)
+    :vec3 (valid-vec3-default? value)
+    true))
+
+(defn- validate-state! [state path]
+  "State values are read into fixed primitive registers by the effect VM.
+   A missing numeric state default is therefore not nullable data: on the
+   first dispatch it becomes `long(nil)`/`double(nil)` in the emitter. Reject
+   that schema at document validation time, before a program can enter the
+   runtime. Object-typed state remains nullable by design."
+  (validate-fields! state path)
+  (doseq [[key spec] (or state {})]
+    (let [type (:type spec)]
+      (when (contains? primitive-state-types type)
+        (require! (some? (:default spec))
+                  "V4 primitive/vec3 state requires a non-nil :default"
+                  {:path (conj path key) :field key :spec spec})
+        (require! (valid-state-default? type (:default spec))
+                  "V4 state :default has the wrong literal shape/type"
+                  {:path (conj path key :default) :field key :spec spec}))))
+  state)
 
 (defn- validate-node! [nid node path]
   (require! (map? node) "V4 node must be a map" {:path path :node node})
@@ -312,7 +346,7 @@
         (require! (map? (:skill document)) "skill-v4 requires :skill" {})
         (require! (map? (:activation document)) "skill-v4 requires :activation" {})
         (validate-parameters! (:parameters document) [:parameters])
-        (validate-fields! (:state document) [:state]))
+        (validate-state! (:state document) [:state]))
 
       :ac/vfx-v4
       (do

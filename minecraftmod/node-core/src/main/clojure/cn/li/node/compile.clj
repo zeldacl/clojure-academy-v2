@@ -66,12 +66,13 @@
 ;; are NOT part of env -- they are lexically scoped, threaded as plain
 ;; function arguments/return values instead (see compile-stmt).
 
-(defn- new-env [{:keys [vocab capabilities tunable-types state-types fns mode
+(defn- new-env [{:keys [vocab capabilities tunable-types state-types state-specs fns mode
                         effect-inputs vfx-operations]}]
   {:vocab (or vocab {})
    :capabilities (or capabilities {})
    :tunable-types (or tunable-types {})
    :state-types (or state-types {})
+   :state-specs (or state-specs {})
    :fns (or fns {})
    :mode mode
    ;; effect-id -> that effect's declared :inputs, when the caller has a VFX
@@ -201,6 +202,24 @@
     (report! env {:code :nil-typed-param :form form :want want
                   :message (str "literal nil cannot satisfy typed param " want)})))
 
+(defn- reject-invalid-literal!
+  "Reject a fully concrete value whose shape cannot satisfy a vec3 slot.
+   `:any` is intentionally assignable to concrete types for deferred field
+   reads, but that gradual escape hatch must not let an author-written
+   malformed vector reach expr/vec3-components at runtime. Explicit `nil`
+   remains allowed here because state/object lifecycles use it to clear a
+   nullable value; numeric nil is handled separately by reject-nil-literal!.
+   Dynamic forms remain unchecked because their value is not statically known."
+  [env form want]
+  (let [want (types/canonical-type want)]
+    (when (and (= :vec3 want)
+               (some? form)
+               (types/literal-edn? form)
+               (not (types/payload-conforms? want form)))
+      (report! env {:code :invalid-literal-shape :form form :want want
+                    :message (str "literal " (pr-str form)
+                                  " does not satisfy " want)}))))
+
 (defn- coerce!
   "Insert a :convert instruction when `reg` (of static type `from`) is used
    where `to` is declared, IFF the two types live in different
@@ -268,6 +287,7 @@
                   (when (contains? params k)
                     (let [want (:type (get params k))
                           _ (reject-nil-literal! env v-form want)
+                          _ (reject-invalid-literal! env v-form want)
                           {:keys [reg]} (compile-form env locals block-id 0 v-form false)
                           got (type-of env reg)]
                       (when-not (types/assignable? got want)
@@ -319,6 +339,7 @@
             (into {}
                   (map (fn [{:keys [name type]} arg-form]
                          (reject-nil-literal! env arg-form type)
+                         (reject-invalid-literal! env arg-form type)
                          (let [{:keys [reg]} (compile-form env locals block-id depth arg-form false)
                                got (type-of env reg)]
                            (when-not (types/assignable? got type)
@@ -398,15 +419,23 @@
       ;; :state, typed, read via one IR op" shape. Writing state is a
       ;; statement, not an expression -- see compile-stmt's `state!` case.
       (str/starts-with? s "%")
-      (let [k (surface/str->keyword (subs s 1)) t (get (:state-types env) k)]
+      (let [k (surface/str->keyword (subs s 1))
+            t (get (:state-types env) k)
+            spec (get (:state-specs env) k)]
         (if (nil? t)
           {:reg (do (report! env {:code :unknown-state-key :form form
                                  :message (str "undeclared state key %" (name k))})
                    (dummy-register! env :any))
            :block-id block-id}
-          (let [dst (alloc-reg! env (types/bank t) t)]
-            (append! env block-id {:op :state-read :nid (nid-for! env form) :dst dst :key k})
-            {:reg dst :block-id block-id})))
+          (do
+            (when (and (types/numeric? t) (nil? (:default spec)))
+              (report! env {:code :nullable-primitive-state :form form :want t
+                            :message (str "state key %" (name k)
+                                          " of type " t
+                                          " requires a non-nil :default")}))
+            (let [dst (alloc-reg! env (types/bank t) t)]
+              (append! env block-id {:op :state-read :nid (nid-for! env form) :dst dst :key k})
+              {:reg dst :block-id block-id}))))
 
       :else
       (if-let [{:keys [reg]} (get locals form)]
@@ -431,6 +460,7 @@
                    :message (str (first form) " expects " (count (:params sig)) " args, got " (count args))}))
     (let [arg-regs (mapv (fn [want a]
                            (reject-nil-literal! env a want)
+                           (reject-invalid-literal! env a want)
                            (let [{:keys [reg]} (compile-form env locals block-id depth a false)
                                  got (type-of env reg)]
                              (when-not (types/assignable? got want)
@@ -696,14 +726,18 @@
         (do (report! env {:code :unknown-state-key :form key-form
                           :message (str "undeclared state key " key-form)})
             {:locals locals :block-id block-id})
-        (let [{:keys [reg block-id]} (compile-form env locals block-id depth value-form false)
+        (do
+          (when (types/numeric? want)
+            (reject-nil-literal! env value-form want))
+          (reject-invalid-literal! env value-form want)
+          (let [{:keys [reg block-id]} (compile-form env locals block-id depth value-form false)
               got (type-of env reg)]
           (when-not (types/assignable? got want)
             (report! env {:code :type-mismatch :form value-form :want want
                          :message (str "state! " key-form " wants " want " got " got)}))
           (append! env block-id {:op :state-write :nid (nid-for! env stmt) :key key-form
                                  :src (coerce! env block-id reg got want)})
-          {:locals locals :block-id block-id})))))
+          {:locals locals :block-id block-id}))))))
 
 (defn- compile-set!
   "set! reassigns an EXISTING local (bound by an outer let/each/param) to
@@ -892,7 +926,8 @@
     (throw (ex-info "compile-program expects a normalized :ability doc" {:doc doc})))
   (let [env (new-env (assoc opts :mode mode
                            :tunable-types (into {} (map (fn [[k v]] [k (:type v)])) (:tunables doc))
-                           :state-types (into {} (map (fn [[k v]] [k (:type v)])) (:state doc))))
+                           :state-types (into {} (map (fn [[k v]] [k (:type v)])) (:state doc))
+                           :state-specs (:state doc)))
         entries (into {} (map (fn [[phase stmts]] [phase (compile-entry! env stmts)])) (:entries doc))
         ir {:ir/version 1
             :id (:id doc)

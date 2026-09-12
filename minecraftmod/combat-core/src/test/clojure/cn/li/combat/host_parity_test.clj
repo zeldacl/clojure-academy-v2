@@ -41,3 +41,7 @@
     ;; how :effect/vfx's absence from the vocabulary looked like a bug.
     (is (identical? graph-compile/special-components
                     parity/graph-special-components))))
+
+(deftest platform-query-handlers-have-engine-arity-test
+  (is (= [] (parity/query-handler-arity-gaps))
+      "every query handler must accept (request frame-context), the shape used by ability-runtime"))

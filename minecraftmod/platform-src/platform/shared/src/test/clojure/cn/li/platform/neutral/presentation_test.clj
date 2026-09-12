@@ -149,3 +149,23 @@
         (is (zero? @lifecycle-lookups)))
       (finally
         (presentation/reset-host-for-test!)))))
+(deftest beam-geometry-expands-to-crossed-textured-quads
+  (let [plan (vfx-plan/neutral-op->plan
+               {:operation :draw-batch
+                :primitive :quad
+                :geometry {:kind :beam
+                           :start {:x 0.0 :y 1.0 :z 0.0}
+                           :end {:x 0.0 :y 1.0 :z 8.0}}
+                :material {:alpha 1.0
+                           :layers [{:shape :tube :radius 0.13
+                                     :texture "academy:textures/effects/glow_line.png"
+                                     :color [236 170 93 60]}
+                                    {:shape :tube :radius 0.09
+                                     :texture "academy:textures/effects/solid.png"
+                                     :color [241 240 222 200]}]}})
+        ops (:ops plan)]
+    (is (= 4 (count ops)))
+    (is (every? #(= :quad (:kind %)) ops))
+    (is (= #{"academy:textures/effects/glow_line.png"
+             "academy:textures/effects/solid.png"}
+           (set (map :texture ops))))))

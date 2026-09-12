@@ -27,7 +27,7 @@
                                     [{:kind :beam :start {:vec3 [0.0 0.0 0.0]} :end {:vec3 [1.0 0.0 0.0]}
                                       :layers {:color [0 255 0 255]} :alpha 1.0}]))
         batch (first (.batches f))]
-    (is (= "line" (.primitive batch)))
+    (is (= "quad" (.primitive batch)))
     (is (= [0 255 0 255] (get-in (.payload batch) [:material :color])))))
 
 (deftest beam-op-accepts-v4-layer-vector-test

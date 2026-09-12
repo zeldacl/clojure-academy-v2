@@ -11,7 +11,7 @@
  {:is-item {:type :boolean, :default nil},
   :charge-ticks {:type :long, :default 0},
   :style {:type :any, :default nil},
-  :overload-floor {:type :double, :default nil}},
+  :overload-floor {:type :double, :default 0.0}},
  :tunables
  {:visual-max-ticks {:curve :const, :type :int},
   :targeting-range {:curve :const},

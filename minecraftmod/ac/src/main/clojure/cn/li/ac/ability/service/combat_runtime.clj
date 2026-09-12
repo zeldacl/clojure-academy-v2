@@ -751,11 +751,18 @@
    is exactly what a fresh read here is supposed to see; this function
    is never called mid-dispatch)."
   [owner ability-id intent seed]
-  (let [session-state (:state (or (combat-sessions/session content-id (str owner) ability-id) {}))
+  (let [source (combat-source ability-id)
+        declared-state (into {}
+                             (keep (fn [[k spec]]
+                                     (when (and (map? spec) (contains? spec :default))
+                                       [k (:default spec)])))
+                             (or (:state source) {}))
+        session-state (:state (or (combat-sessions/session content-id (str owner) ability-id) {}))
+        state (merge declared-state (or session-state {}))
         context (activation-context owner ability-id intent seed)
         tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
-        capabilities (final-capabilities-v2 owner ability-id intent seed session-state)]
-    {:tunables tunables :capabilities capabilities :state session-state :context context}))
+        capabilities (final-capabilities-v2 owner ability-id intent seed state)]
+    {:tunables tunables :capabilities capabilities :state state :context context}))
 
 (defn install-ac-host-capabilities!
   "Link AC's own domain capabilities (resource/progression/energy/mark) to
@@ -1039,6 +1046,15 @@
                  :schema-version 1 :ability-id ability-id
                  :feedback [{:type :combat-input-rejected :reason :no-program-entry}]}))
 
+          ;; A session ability can finish on its own (for example railgun
+          ;; auto-releases when its item charge reaches the threshold).  The
+          ;; client still sends the physical key-up afterwards, but that edge
+          ;; belongs to the already-finished session and must not be treated
+          ;; as a fresh release cast.
+          (and (#{:release :abort} (:op intent))
+               (nil? active-session))
+          {:status :accepted :outcome :noop :schema-version 1
+           :ability-id ability-id}
           (and (= :slot-wheel (:event intent))
                (not (and active-session
                          (= ability-id (:ability-id active-session)))))

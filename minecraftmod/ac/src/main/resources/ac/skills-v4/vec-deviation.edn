@@ -12,7 +12,7 @@
   :small-fireball-ids {:type :any, :default nil},
   :fireball-explosion-radius {:type :double, :default nil}},
  :state
- {:overload-floor {:type :double, :default nil},
+ {:overload-floor {:type :double, :default 0.0},
   :visited-projectiles {:type :any, :default nil}},
  :description-key "ability.skill.vecmanip.vec_deviation.desc",
  :name-key "ability.skill.vecmanip.vec_deviation",

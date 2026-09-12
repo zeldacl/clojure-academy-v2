@@ -22,7 +22,7 @@
  {:phase {:type :long, :default 0},
   :charge-ticks {:type :long, :default 0},
   :previous-can-fly? {:type :boolean, :default false},
-  :move-direction {:type :vec3, :default nil}},
+  :move-direction {:type :vec3, :default {:vec3 [0.0 0.0 0.0]}}},
  :description-key "ability.skill.vecmanip.storm_wing.desc",
  :name-key "ability.skill.vecmanip.storm_wing",
  :cooldown {:main {:ticks {:ref [:input :tunables :cooldown-ticks]}}},

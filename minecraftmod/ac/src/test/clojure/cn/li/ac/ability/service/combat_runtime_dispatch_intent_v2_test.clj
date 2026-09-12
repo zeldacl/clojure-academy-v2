@@ -194,3 +194,15 @@
                   owner {:op :event :event :slot-wheel :ability-id :arc-gen :slot 0})]
       (is (= :accepted (:status result)))
       (is (= :noop (:outcome result))))))
+
+(deftest railgun-sessionless-release-after-auto-release-is-noop-test
+  "Railgun may finish from the server pulse's automatic release before the
+   physical mouse-up arrives. That stale key-up must not fire a second beam."
+  (let [owner "v2-railgun-stale-release-owner"]
+    (flush-with-resources! owner)
+    (is (nil? (combat-sessions/session :ac owner :railgun)))
+    (let [result (combat-runtime/dispatch-intent-v2!
+                  owner {:op :release :ability-id :railgun})]
+      (is (= :accepted (:status result)))
+      (is (= :noop (:outcome result)))
+      (is (nil? (combat-sessions/session :ac owner :railgun))))))

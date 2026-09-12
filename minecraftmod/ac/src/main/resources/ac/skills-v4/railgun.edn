@@ -641,8 +641,8 @@
           :arc-spacing {:min 1.0, :max 2.0},
           :fade-from-alpha 1.0,
           :layers
-          [{:shape :tube, :radius 0.13, :color [236 170 93 60]}
-           {:shape :tube, :radius 0.09, :color [241 240 222 200]}
+          [{:shape :tube, :radius 0.13, :texture "academy:textures/effects/railgun/tile.png", :color [236 170 93 60]}
+           {:shape :tube, :radius 0.09, :texture "academy:textures/effects/solid.png", :color [241 240 222 200]}
            {:shape :line, :width 0.02, :color [165 230 255 160]}],
           :grow-ticks 3,
           :fade-to-alpha 0.0,

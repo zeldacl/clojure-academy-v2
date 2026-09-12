@@ -72,8 +72,9 @@
    instead of re-implementing it."
   [value]
   (cond
-    (and (map? value) (vector? (:vec3 value))) (:vec3 value)
-    (vector? value) value
+    (and (map? value) (vector? (:vec3 value)) (= 3 (count (:vec3 value)))
+         (every? number? (:vec3 value))) (:vec3 value)
+    (and (vector? value) (= 3 (count value)) (every? number? value)) value
     (and (map? value) (every? #(number? (get value %)) [:x :y :z]))
     [(:x value) (:y value) (:z value)]
     :else (throw (ex-info "expected vec3 expression value" {:value value}))))

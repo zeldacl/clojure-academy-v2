@@ -45,3 +45,28 @@
                   {})]
       (is (= [] (:entities result)))
       (is (= [] (:blocks result))))))
+
+(deftest break-query-handler-accepts-engine-frame-context-test
+  (with-redefs [blocks/available? (constantly false)]
+    (let [handler (:block/break (platform/query-handlers))
+          result (handler {:owner "player-1"
+                           :world-id "minecraft:overworld"
+                           :position {:x 0.0 :y 0.0 :z 0.0}}
+                          {:frame {}})]
+      (is (map? result))
+      (is (= :failed (:status result))))))
+
+(deftest spawn-query-handler-accepts-engine-frame-context-test
+  (with-redefs [world-effects/available? (constantly true)
+                world-effects/spawn-entity!
+                (fn [& _] "entity-1")]
+    (let [handler (:entity/spawn (platform/query-handlers))
+          result (handler {:owner "player-1"
+                           :world-id "minecraft:overworld"
+                           :entity-type "academy:entity_magmanip_block_body"
+                           :velocity [0.0 0.0 0.0]
+                           :life-ticks 4096
+                           :add-tags []}
+                          {:frame {}})]
+      (is (= :applied (:status result)))
+      (is (= "entity-1" (:entity-id result))))))

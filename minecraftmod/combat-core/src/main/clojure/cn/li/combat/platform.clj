@@ -849,7 +849,7 @@
      :ratio ratio :ratio-slot ratio-slot :hits results}))
 (defn break!
   [{:keys [owner world-id position expected-block-id drop? fortune-level
-           tool-tier-capped?]}]
+           tool-tier-capped?]} _frame-ctx]
   (let [p (point position)
         [x y z] (mapv #(long (Math/floor (double %)))
                       (or p [0.0 0.0 0.0]))
@@ -1038,7 +1038,8 @@
 
 (defn spawn-entity!
   "Spawn a neutral tracked entity through the mcmod relay."
-  [{:keys [world-id owner entity-type position velocity life-ticks add-tags]}]
+  [{:keys [world-id owner entity-type position velocity life-ticks add-tags]}
+   _frame-ctx]
   (if (and world-id owner (string? entity-type)
            (every? string? (or add-tags []))
            (world-effects/available?))
