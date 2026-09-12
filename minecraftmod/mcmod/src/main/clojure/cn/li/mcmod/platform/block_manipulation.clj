@@ -50,18 +50,22 @@
   nil)
 
 (defn destroy-allowed?
-  []
+  "Return whether block destruction is allowed in `world-id`.
+
+   The installed gate is world-aware because the AC policy permits configured
+   dimensions even when the global destroy toggle is disabled."
+  [world-id]
   (if-let [pred (get-in @(fw/fw-atom) [:platform :block-destroy-gate])]
-    (boolean (pred))
+    (boolean (pred world-id))
     true))
 
 (defn break-block!
   ([player-id world-id x y z drop?]
-   (when (destroy-allowed?)
+   (when (destroy-allowed? world-id)
      (with-internal-break!
        (fn [] (call :break-block! player-id world-id x y z drop?)))))
   ([player-id world-id x y z drop? fortune-level]
-   (when (destroy-allowed?)
+   (when (destroy-allowed? world-id)
      (with-internal-break!
        (fn [] (call :break-block! player-id world-id x y z drop? fortune-level))))))
 

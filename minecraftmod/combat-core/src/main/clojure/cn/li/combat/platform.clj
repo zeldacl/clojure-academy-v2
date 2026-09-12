@@ -700,7 +700,7 @@
      :hit? (not miss?)
      :can-place? (boolean
                   (and placement? (not miss?) (blocks/available?)
-                       (blocks/destroy-allowed?)
+                       (blocks/destroy-allowed? (:world-id request))
                        (not (blocks/block-collidable? (str (:world-id request))
                                                       place-x place-y place-z))
                        (blocks/can-break-block? (str owner) (str (:world-id request))
