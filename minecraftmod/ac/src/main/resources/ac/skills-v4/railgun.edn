@@ -179,6 +179,15 @@
         :inputs {:key :mode, :value :item-charge},
         :nid :n/n--entry--start-9-do-0},
        :n017 {:type :merge, :nid :n/n017},
+       :n018 {:type :component, :component :vec3/normalize, :nid :n/n018},
+       :n019 {:type :component, :component :vec3/scale, :nid :n/n019,
+             :inputs {:arg1 0.24}},
+       :n020 {:type :component, :component :vec3/add, :nid :n/n020},
+       :n--entry--start-10-anchor
+       {:type :local-set,
+        :operation :define,
+        :key :charge-anchor,
+        :nid :n/n--entry--start-10-anchor},
        :n--entry--start-10
        {:type :component,
         :component :effect/vfx,
@@ -189,8 +198,7 @@
          :instance-key [:activation :railgun-charge],
          :audience {:type :nearby, :radius 32.0},
          :payload
-         {:anchor {:nid :n/n--entry--start-10-anchor,
-                   :ref [:local :eye]},
+          {:anchor {:ref [:local :charge-anchor]},
           :duration-ticks 64,
           :texture-pattern "academy:textures/effects/arc_burst/%d.png",
           :frame-count 40,
@@ -317,6 +325,30 @@
     {:id :e/link029,
      :kind :exec,
      :from [:n/n017 :out],
+     :to [:n/n--entry--start-10-anchor :in]}
+    {:id :e/link029a,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n020 :arg0]}
+    {:id :e/link029b,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n018 :arg0]}
+    {:id :e/link029c,
+     :kind :data,
+     :from [:n/n018 :value],
+     :to [:n/n019 :arg0]}
+    {:id :e/link029d,
+     :kind :data,
+     :from [:n/n019 :value],
+     :to [:n/n020 :arg1]}
+    {:id :e/link029e,
+     :kind :data,
+     :from [:n/n020 :value],
+     :to [:n/n--entry--start-10-anchor :value]}
+    {:id :e/link029f,
+     :kind :exec,
+     :from [:n/n--entry--start-10-anchor :out],
      :to [:n/n--entry--start-10 :in]}
     {:id :e/link030,
      :kind :exec,
@@ -550,7 +582,7 @@
         :result {},
         :nid :n/n--entry--release-19-then-10,
         :inputs {:outcome :committed, :end-ability? true}},
-       :n057 {:type :local-get, :key :aim, :nid :n/n057},
+       :n057 {:type :context-ref, :key :caster/aim, :nid :n/n057},
        :n071
        {:type :component,
         :component :value/field,
@@ -561,7 +593,7 @@
         :component :combat/beam-strike,
         :nid :n/n054,
         :inputs {:arg7 256, :arg9 :skill, :arg10 4096}},
-       :n056 {:type :local-get, :key :eye, :nid :n/n056},
+        :n056 {:type :local-get, :key :muzzle, :nid :n/n056},
        :n045
        {:type :component,
         :component :target/item-held,
@@ -569,11 +601,20 @@
         :inputs {:source :main-hand}},
        :n040
        {:type :parameter-ref, :key :beam-block-energy, :nid :n/n040},
-       :n--entry--release-2
-       {:type :local-set,
-        :operation :define,
-        :key :eye,
-        :nid :n/n--entry--release-2},
+        :n--entry--release-2
+        {:type :local-set,
+         :operation :define,
+         :key :eye,
+         :nid :n/n--entry--release-2},
+        :n087 {:type :component, :component :vec3/normalize, :nid :n/n087},
+        :n088 {:type :component, :component :vec3/scale, :nid :n/n088,
+              :inputs {:arg1 0.35}},
+        :n089 {:type :component, :component :vec3/add, :nid :n/n089},
+        :n--entry--release-20
+        {:type :local-set,
+         :operation :define,
+         :key :muzzle,
+         :nid :n/n--entry--release-20},
        :n--entry--release-19-else-0
        {:type :end,
         :result {},
@@ -589,7 +630,7 @@
         :operation :define,
         :key :max-distance,
         :nid :n/n--entry--release-7},
-       :n055 {:type :local-get, :key :eye, :nid :n/n055},
+        :n055 {:type :local-get, :key :muzzle, :nid :n/n055},
        :n047
        {:type :component,
         :component :value/field,
@@ -885,18 +926,42 @@
      :kind :data,
      :from [:n/n031 :value],
      :to [:n/n--entry--release-2 :value]}
-    {:id :e/link059,
-     :kind :exec,
-     :from [:n/n--entry--release-1 :out],
-     :to [:n/n--entry--release-2 :in]}
+     {:id :e/link059,
+      :kind :exec,
+      :from [:n/n--entry--release-1 :out],
+      :to [:n/n--entry--release-2 :in]}
+     {:id :e/link059a,
+      :kind :data,
+      :from [:n/n057 :value],
+      :to [:n/n087 :arg0]}
+     {:id :e/link059b,
+      :kind :data,
+      :from [:n/n087 :value],
+      :to [:n/n088 :arg0]}
+     {:id :e/link059c,
+      :kind :data,
+      :from [:n/n088 :value],
+      :to [:n/n089 :arg1]}
+    {:id :e/link059d,
+      :kind :data,
+      :from [:n/n031 :value],
+      :to [:n/n089 :arg0]}
+     {:id :e/link059e,
+      :kind :data,
+      :from [:n/n089 :value],
+      :to [:n/n--entry--release-20 :value]}
+     {:id :e/link059f,
+      :kind :exec,
+      :from [:n/n--entry--release-2 :out],
+      :to [:n/n--entry--release-20 :in]}
+     {:id :e/link059g,
+      :kind :exec,
+      :from [:n/n--entry--release-20 :out],
+      :to [:n/n--entry--release-3 :in]}
     {:id :e/link060,
      :kind :data,
      :from [:n/n032 :value],
      :to [:n/n--entry--release-3 :value]}
-    {:id :e/link061,
-     :kind :exec,
-     :from [:n/n--entry--release-2 :out],
-     :to [:n/n--entry--release-3 :in]}
     {:id :e/link062,
      :kind :data,
      :from [:n/n033 :value],
