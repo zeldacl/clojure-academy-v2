@@ -82,6 +82,24 @@
     (is (empty? warnings)
         (str "V4 skills compiled with warnings: " (pr-str (vec warnings))))))
 
+(deftest railgun-empty-coin-event-is-ignored-without-numeric-nil-test
+  (let [railgun (some #(when (= :railgun (:id %)) %)
+                      (:skills (skills-catalog/assemble)))
+        program (combat-api/compile-skill-program
+                 (:ir railgun)
+                 {:query! (fn [_cap _args _frame] [])
+                  :command! (fn [_cap _args _frame] nil)})
+        frame (combat-api/dispatch-skill!
+               program
+               :coin-thrown
+               {:tunables {:qte-active-threshold 0.6
+                           :qte-perform-threshold 0.7}
+                :capabilities {:caster/id "owner"
+                               :caster/eye {:x 0.0 :y 64.0 :z 0.0}
+                               :world/id "minecraft:overworld"}
+                :state {:mode :armed}})]
+    (is (= :ignored (:outcome (.result frame))))))
+
 (deftest assembled-skill-ir-capabilities-are-host-dispatchable-test
   (let [assembled (skills-catalog/assemble)
         gaps (mapcat (fn [{:keys [id ir]}]

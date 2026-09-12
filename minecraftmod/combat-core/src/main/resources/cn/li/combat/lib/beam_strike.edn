@@ -9,25 +9,16 @@
 ;; if/else, not two separate whens, since the two branches are mutually
 ;; exclusive by construction (matching the old :flow/branch :then/:else).
 ;;
-;; A real limitation, not yet hit by a real call site but worth flagging:
-;; the old :inputs' {:default nil} on :trace-origin/:visual-length/
-;; :query-radius/:step meant "field genuinely absent -> host applies its
-;; own fallback". :defn params are always positional and mandatory --
-;; there is no way to omit one -- so a caller with no real value MUST pass
-;; a real value here (reusing :origin/:length/:radius is one reasonable
-;; choice), never a literal nil: kernel/trace-beam declares these :vec3/
-;; :double, and the compiler's :any->:double runtime :convert (compile-
-;; args-map!'s coerce!) has no null-double representation to fall back to
-;; -- it throws NullPointerException at dispatch time, not compile time,
-;; since a nil literal's static type is :any (bidirectionally assignable
-;; to everything -- cn.li.node.types/assignable?'s documented escape
-;; hatch). Caught by combat-core/lib_test.clj's beam-strike-test.
+;; These parameters are required positional inputs, not optional fields. Keep
+;; their declarations aligned with kernel/trace-beam so a literal nil (or any
+;; other incompatible caller value) is rejected during compilation instead of
+;; becoming an any->double conversion that can fail on the server thread.
 {:defn :combat/beam-strike
- :params [{:name origin :type :vec3} {:name trace-origin :type :any} {:name direction :type :vec3}
-          {:name length :type :double} {:name visual-length :type :any} {:name radius :type :double}
-          {:name query-radius :type :any} {:name entity-limit :type :long} {:name damage :type :double}
+ :params [{:name origin :type :vec3} {:name trace-origin :type :vec3} {:name direction :type :vec3}
+          {:name length :type :double} {:name visual-length :type :double} {:name radius :type :double}
+          {:name query-radius :type :double} {:name entity-limit :type :long} {:name damage :type :double}
           {:name damage-type :type :keyword} {:name block-limit :type :long}
-          {:name reflection-policy :type :any} {:name step :type :any}]
+          {:name reflection-policy :type :any} {:name step :type :double}]
  :do [(let beam (kernel/trace-beam {:origin origin :trace-origin trace-origin :direction direction
                                     :length length :visual-length visual-length :radius radius
                                     :query-radius query-radius :entity-limit entity-limit

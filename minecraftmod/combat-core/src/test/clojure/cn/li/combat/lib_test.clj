@@ -173,6 +173,18 @@
            [:entity/damage {:target "d1" :amount 3.0 :damage-type :fire}]]
            @calls))))
 
+(deftest beam-strike-rejects-nil-required-argument-at-compile-time-test
+  (let [text "{:ability :t-beam-nil :activation :instant
+               :tunables {:length {:type :double} :radius {:type :double} :damage {:type :double}}
+               :do [(combat/beam-strike ?caster/eye ?caster/eye ?caster/aim $length nil $radius
+                      $radius 256 $damage :fire 4096 nil 1.0)
+                    (finish {:outcome :performed})]}" ]
+    (try
+      (run/compile-doc! text lib/fns)
+      (is false "expected a nil beam-strike argument to fail during compilation")
+      (catch clojure.lang.ExceptionInfo e
+        (is (= :nil-typed-param (:code (ex-data e))))))))
+
 ;; --- terrain/break-area ----------------------------------------------------------
 
 (deftest break-area-test

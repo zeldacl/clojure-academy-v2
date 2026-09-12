@@ -1344,6 +1344,18 @@
         :operation :define,
         :key :coins,
         :nid :n/n--entry--coin-thrown-1-then-3},
+       :n--entry--coin-thrown-1-then-3-check
+       {:type :branch,
+        :nid :n/n--entry--coin-thrown-1-then-3-check},
+       :n--entry--coin-thrown-1-then-3-nonempty
+       {:type :component,
+        :component :collection/nonempty,
+        :nid :n/n--entry--coin-thrown-1-then-3-nonempty},
+       :n--entry--coin-thrown-1-then-3-empty
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--coin-thrown-1-then-3-empty,
+        :inputs {:outcome :ignored}},
        :n093
        {:type :component,
         :component :target/entities,
@@ -1505,7 +1517,23 @@
     {:id :e/link171,
      :kind :exec,
      :from [:n/n--entry--coin-thrown-1-then-3 :out],
+     :to [:n/n--entry--coin-thrown-1-then-3-check :in]}
+    {:id :e/link171a,
+     :kind :data,
+     :from [:n/n095 :value],
+     :to [:n/n--entry--coin-thrown-1-then-3-nonempty :arg0]}
+    {:id :e/link171b,
+     :kind :data,
+     :from [:n/n--entry--coin-thrown-1-then-3-nonempty :value],
+     :to [:n/n--entry--coin-thrown-1-then-3-check :condition]}
+    {:id :e/link171c,
+     :kind :exec,
+     :from [:n/n--entry--coin-thrown-1-then-3-check :true],
      :to [:n/n--entry--coin-thrown-1-then-4 :in]}
+    {:id :e/link171d,
+     :kind :exec,
+     :from [:n/n--entry--coin-thrown-1-then-3-check :false],
+     :to [:n/n--entry--coin-thrown-1-then-3-empty :in]}
     {:id :e/link172,
      :kind :data,
      :from [:n/n097 :value],
