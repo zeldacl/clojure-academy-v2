@@ -1222,10 +1222,20 @@ if (target.loader != "none") {
     // stageNeutral -> prepareNeutralClojureRuntimeSources -> compileClojure.
     if (platformRuntimeDevMode) {
         tasks.matching { it.name in devRunTaskNames }.configureEach {
+            // Loom's run tasks do not all retain the normal `classes` ->
+            // `compileJava` edge after the custom target classpath is
+            // installed below.  In particular, a clean runData could reach
+            // Forge with an empty MOD_CLASSES/classes/java/main directory and
+            // fail as `missingclasses` before any datagen provider runs.
+            // Java platform classes are required in both source-first and AOT
+            // launch modes; this edge does not pull compileClojure into the
+            // source-first path.
+            dependsOn tasks.named("compileJava")
             dependsOn prepareDevClojureRuntime
         }
     } else {
         tasks.matching { it.name in devRunTaskNames }.configureEach {
+            dependsOn tasks.named("compileJava")
             dependsOn copyClojureClassesToJavaOutput
             dependsOn stageNeutralClojureRuntimeResources
         }
