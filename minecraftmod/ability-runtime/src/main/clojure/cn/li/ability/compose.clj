@@ -111,7 +111,10 @@
    List.copyOf."
   [^VfxOutput output]
   (condp = (.kind output)
-    VfxOutputKind/AUDIO (RenderCommand$AudioContribution. (or (.resourceId output) "") (.amount output) 1.0)
+    VfxOutputKind/AUDIO (RenderCommand$AudioContribution.
+                         (or (.resourceId output) "") (.amount output) 1.0
+                         (.instanceKey output) (.looping output)
+                         (.x output) (.y output) (.z output))
     VfxOutputKind/CAMERA (RenderCommand$CameraContribution. (.amount output) 0.0 0.0 0.0)
     VfxOutputKind/SCREEN (RenderCommand$PostProcess. (.value output) (.amount output))
     (throw (ex-info "unsupported VfxOutputKind"

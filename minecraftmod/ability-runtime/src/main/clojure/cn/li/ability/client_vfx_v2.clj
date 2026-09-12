@@ -24,7 +24,8 @@
    internals, and duplicating it here is a much smaller, safer footprint
    than building a shared dependency between a namespace several tests
    exercise directly and one that does not exist yet."
-  (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
+  (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.runtime.vfx-contract :as contract]
             [cn.li.vfx.api :as core])
   (:import [java.util ArrayDeque]))
 
@@ -35,6 +36,7 @@
 (defonce ^:private local-walk-speed-targets* (atom {}))
 (defonce ^:private preview-runtime* (atom nil))
 (defonce ^:private production-options* (atom nil))
+(defonce ^:private loop-audio-keys* (atom {}))
 
 (defonce ^:private camera-pitch* (ArrayDeque. 1024))
 
@@ -161,14 +163,48 @@
                          (dissoc targets owner))))))
           nil)))))
 
+(defn- loop-audio-key [signal]
+  (or (:instance-key signal) (:instance-id signal)))
+
+(defn- stop-loop-audio! [key]
+  (when (and key (client-bridge/operation-installed? :run-client-effect))
+    (client-bridge/run-client-effect!
+     :mcmod/stop-loop-sound {:key (pr-str key)}))
+  nil)
+
+(defn- update-loop-audio-lifecycle! [signal]
+  (when (= :audio-loop-session (:effect-id signal))
+    (let [owner (some-> (:owner signal) str)
+          key (loop-audio-key signal)]
+      (case (:op signal)
+        (:spawn :update :trigger :snapshot)
+        (when (and owner key)
+          (swap! loop-audio-keys* update owner (fnil conj #{}) key))
+
+        (:destroy :release)
+        (do
+          (stop-loop-audio! key)
+          (when (and owner key)
+            (swap! loop-audio-keys*
+                   (fn [owners]
+                     (let [keys (disj (get owners owner #{}) key)]
+                       (if (seq keys)
+                         (assoc owners owner keys)
+                         (dissoc owners owner)))))))
+        nil))))
+
 (defn dispatch-signal! [signal]
   (let [signal (contract/signal signal)]
     (update-presentation-sidechannels! signal)
+    (update-loop-audio-lifecycle! signal)
     (core/dispatch-signal! (runtime) signal))
   nil)
 
 (defn clear-owner! [owner]
   (let [owner (str owner)]
+    (doseq [key (get @loop-audio-keys* owner)]
+      (stop-loop-audio! key))
+    (swap! loop-audio-keys* dissoc owner)
     (swap! screen-flashes* dissoc owner)
     (swap! camera-fov-targets* dissoc owner)
     (swap! camera-fov-eased* dissoc owner)
@@ -283,6 +319,7 @@
   (reset! camera-fov-targets* {})
   (reset! camera-fov-eased* {})
   (reset! local-walk-speed-targets* {})
+  (reset! loop-audio-keys* {})
   (.clear ^ArrayDeque camera-pitch*)
   nil)
 

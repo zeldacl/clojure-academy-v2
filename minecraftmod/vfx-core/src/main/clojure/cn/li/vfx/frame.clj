@@ -134,9 +134,11 @@
                         :limit (:limit op) :particle (:particle op)}
               :material {:particle (:particle op)}}
     :audio-one-shot {:operation :audio :stage :audio :sound-id (:sound-id op)
-                      :volume (:volume op) :pitch (:pitch op) :position (:position op)}
+                      :volume (:volume op) :pitch (:pitch op) :position (:position op)
+                      :looping? false}
     :audio-loop {:operation :audio :stage :audio :sound-id (:sound-id op)
-                 :volume (:volume op) :pitch (:pitch op) :position (:position op)}
+                 :volume (:volume op) :pitch (:pitch op) :position (:position op)
+                 :looping? true}
     :camera-fov {:operation :camera-fov :stage :camera :value (:value op)}
     :camera-shake {:operation :camera-shake :stage :camera
                    :amplitude (:amplitude op) :duration (:duration op)}
@@ -153,16 +155,40 @@
              nil
              (or (:payload op) op)))
 
+(defn- audio-position->xyz [position]
+  (let [components (cond
+                     (and (map? position)
+                          (every? #(number? (get position %)) [:x :y :z]))
+                     (mapv #(double (get position %)) [:x :y :z])
+
+                     (and (map? position)
+                          (sequential? (:vec3 position)))
+                     (:vec3 position)
+
+                     (and (sequential? position) (= 3 (count position)))
+                     position
+
+                     :else nil)]
+    (if (and (= 3 (count components)) (every? number? components))
+      (mapv double components)
+      (throw (ex-info "audio output requires a concrete vec3 position"
+                      {:position position})))))
+
 (defn- op->java-output ^VfxOutput [op]
   (let [kind (case (:operation op)
                :audio VfxOutputKind/AUDIO
                (:camera-fov :camera-shake) VfxOutputKind/CAMERA
                :post-process VfxOutputKind/SCREEN
-               nil)]
+               nil)
+        [x y z] (if (= kind VfxOutputKind/AUDIO)
+                  (audio-position->xyz (:position op))
+                  [0.0 0.0 0.0])]
     (when kind
       (VfxOutput. kind (int (hash (or (:sound-id op) (:effect op) :none)))
                   (float (or (:volume op) (:value op) (:amplitude op) 0.0))
-                  (some-> (or (:sound-id op) (:effect op)) str)))))
+                  (some-> (or (:sound-id op) (:effect op)) str)
+                  (some-> (:instance-key op) pr-str)
+                  (boolean (:looping? op)) x y z))))
 
 (defn ->java-frame
   "frame-id, resource-generation, sample-frame!'s output
@@ -173,9 +199,10 @@
    unchanged while the renderer receives the complete SoA data it needs."
   ^VfxFrame [frame-id resource-generation sampled]
   (let [batches (ArrayList.) outputs (ArrayList.)]
-    (doseq [[_ {:keys [scene]}] sampled
+    (doseq [[instance-key {:keys [scene]}] sampled
             raw-op scene]
-      (when-let [legacy (legacy-op raw-op)]
+      (when-let [legacy (some-> (legacy-op raw-op)
+                                (assoc :instance-key instance-key))]
         (if (= :draw-batch (:operation legacy))
           (.add batches (op->java-batch legacy))
           (when-let [output (op->java-output legacy)] (.add outputs output)))))

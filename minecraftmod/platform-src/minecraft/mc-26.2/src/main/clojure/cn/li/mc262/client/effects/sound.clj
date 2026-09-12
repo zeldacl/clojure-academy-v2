@@ -120,6 +120,14 @@
   (LoopingSoundRegistry/updatePosition (str key) (double x) (double y) (double z))
   nil)
 
+(defn sync-loop-sound!
+  "Start a loop once, then only move the existing native sound instance."
+  [key sound-id volume pitch x y z]
+  (if (LoopingSoundRegistry/active (str key))
+    (update-loop-sound-position! key x y z)
+    (start-loop-sound! key sound-id volume pitch x y z))
+  nil)
+
 (defn stop-loop-sound!
   [key]
   (LoopingSoundRegistry/stop (str key))

@@ -209,6 +209,11 @@
                               (:volume payload) (:pitch payload)
                               (:x payload) (:y payload) (:z payload))
 
+                            :mcmod/sync-loop-sound
+                            (sound/sync-loop-sound! (:key payload) (:sound-id payload)
+                              (:volume payload) (:pitch payload)
+                              (:x payload) (:y payload) (:z payload))
+
                             :mcmod/start-loop-sound-at-player
                             (sound/start-loop-sound-at-player!
                               (:key payload) (:sound-id payload)

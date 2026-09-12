@@ -87,6 +87,21 @@
       (is (= (float 0.8) (.amount output)))
       (is (= "academy:boom" (.resourceId output))))))
 
+(deftest audio-loop-op-preserves-native-loop-lifecycle-data-test
+  (let [f (frame/->java-frame 1 0 {[:skill :charge]
+                                     {:scene [{:kind :audio-loop
+                                               :sound-id "academy:charge_loop"
+                                               :volume 0.3 :pitch 1.0
+                                               :position {:x 4.0 :y 5.0 :z 6.0}}]
+                                      :emitters []}})
+          output (first (.outputs f))]
+      (is (= 1 (count (.outputs f))))
+      (is (.looping output))
+      (is (= "[:skill :charge]" (.instanceKey output)))
+      (is (= 4.0 (.x output)))
+      (is (= 5.0 (.y output)))
+      (is (= 6.0 (.z output)))))
+
 (deftest camera-shake-op-becomes-a-camera-output-test
   (let [f (frame/->java-frame 1 0 (one-instance
                                     [{:kind :camera-shake :amplitude 0.4 :duration 10.0}]))

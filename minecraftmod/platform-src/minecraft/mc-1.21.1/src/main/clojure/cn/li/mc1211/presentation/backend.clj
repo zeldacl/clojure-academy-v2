@@ -205,7 +205,11 @@
   (condp instance? command
     RenderCommand$AudioContribution
     (let [^RenderCommand$AudioContribution c command]
-      (callback! context :play-audio! [stage (.soundId c) (.volume c) (.pitch c)]))
+      (if (.looping c)
+        (callback! context :sync-loop-audio!
+                  [stage (.instanceKey c) (.soundId c) (.volume c) (.pitch c)
+                   (.x c) (.y c) (.z c)])
+        (callback! context :play-audio! [stage (.soundId c) (.volume c) (.pitch c)])))
 
     RenderCommand$Layer
     (let [^RenderCommand$Layer c command]

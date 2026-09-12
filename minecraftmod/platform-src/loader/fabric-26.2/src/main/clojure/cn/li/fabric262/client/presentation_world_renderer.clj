@@ -48,6 +48,9 @@
              {:play-audio!
               (fn [_stage sound-id volume pitch]
                 (sound/play-local! sound-id volume pitch))
+              :sync-loop-audio!
+              (fn [_stage key sound-id volume pitch x y z]
+                (sound/sync-loop-sound! key sound-id volume pitch x y z))
               :draw-batch!
               (fn [_g _stage prim _mat _var _cnt payload]
                 (when (or (= "mesh" prim) (#{"line" "quad" "particle" "first-person"} prim))

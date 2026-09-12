@@ -51,9 +51,15 @@ public sealed interface RenderCommand
     record CameraContribution(float fovDelta, float shakeX, float shakeY, float roll) implements RenderCommand {}
     record PostProcess(int materialId, float intensity) implements RenderCommand {}
     /** Neutral audio intent paired with a frame; backend resolves the sound id. */
-    record AudioContribution(String soundId, float volume, float pitch) implements RenderCommand {
-        public AudioContribution { soundId = soundId == null ? "" : soundId; }
-    }
+      record AudioContribution(String soundId, float volume, float pitch,
+                               String instanceKey, boolean looping,
+                               double x, double y, double z) implements RenderCommand {
+          public AudioContribution(String soundId, float volume, float pitch) {
+              this(soundId, volume, pitch, null, false, 0.0, 0.0, 0.0);
+          }
+
+          public AudioContribution { soundId = soundId == null ? "" : soundId; }
+      }
     record OrderBarrier() implements RenderCommand {}
     /**
      * Neutral VFX effect batch. payload is immutable data or a ByteBuffer;

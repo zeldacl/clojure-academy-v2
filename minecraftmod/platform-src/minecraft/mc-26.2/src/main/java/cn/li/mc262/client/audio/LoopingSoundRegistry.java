@@ -108,6 +108,10 @@ public final class LoopingSoundRegistry {
         }
     }
 
+    public static boolean active(String key) {
+        return ACTIVE.containsKey(key);
+    }
+
     public static void stop(String key) {
         PositionalLoopSoundInstance instance = ACTIVE.remove(key);
         if (instance == null) {
