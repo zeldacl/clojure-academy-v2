@@ -27,3 +27,15 @@
   (let [doc (assoc base-skill :state
                    {:value {:type :vec3 :default {:vec3 [0.0 0.0 0.0]}}})]
     (is (map? (document/validate-document! doc)))))
+
+(deftest undeclared-formula-tunable-is-rejected-test
+  (let [doc (assoc base-skill
+                   :costs {:pulse {:resources {:cp {:ref [:input :tunables :missing]}}}})]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (document/validate-document! doc)))))
+
+(deftest declared-formula-tunable-is-accepted-test
+  (let [doc (-> base-skill
+                (assoc :parameters {:cost-tick-cp {:type :double :default nil}})
+                (assoc :costs {:pulse {:resources {:cp {:ref [:input :tunables :cost-tick-cp]}}}}))]
+    (is (map? (document/validate-document! doc)))))

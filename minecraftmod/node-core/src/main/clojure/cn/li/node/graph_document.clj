@@ -88,6 +88,43 @@
                   {:path (conj path key :default) :field key :spec spec}))))
   state)
 
+(defn- validate-formula-refs!
+  "Reject references to undeclared V4 tunables before lowering a graph.
+
+   Capability formulas are evaluated outside the graph itself, so a missing
+   tunable used by :costs/:cooldown/:progression/:invariants would otherwise
+   survive document validation and become a nil primitive conversion during
+   dispatch.  References in graph nodes use different roots (for example
+   :parameter or :context) and are intentionally left to the graph compiler.
+  "
+  [value path declared-tunables]
+  (cond
+    (map? value)
+    (do
+      (when-let [reference (:ref value)]
+        (when (and (vector? reference)
+                   (= :input (first reference))
+                   (= :tunables (second reference)))
+          (let [key (nth reference 2 nil)]
+            (require! (and (keyword? key) (contains? declared-tunables key))
+                      "V4 formula references an undeclared tunable"
+                      {:path (conj path :ref)
+                       :ref reference
+                       :tunable key}))))
+      (doseq [[key child] value]
+        (validate-formula-refs! child (conj path key) declared-tunables)))
+
+    (vector? value)
+    (doseq [[idx child] (map-indexed vector value)]
+      (validate-formula-refs! child (conj path idx) declared-tunables))))
+
+(defn- validate-skill-formula-refs! [document]
+  (let [declared-tunables (set (concat (keys (or (:parameters document) {}))
+                                      (keys (or (:tunables document) {}))))]
+    (doseq [section [:cooldown :costs :invariants :progression :mark-policies]]
+      (validate-formula-refs! (get document section) [section] declared-tunables)))
+  document)
+
 (defn- validate-node! [nid node path]
   (require! (map? node) "V4 node must be a map" {:path path :node node})
   (require! (= nid (:nid node)) "V4 node :nid must equal its map key"
@@ -346,7 +383,8 @@
         (require! (map? (:skill document)) "skill-v4 requires :skill" {})
         (require! (map? (:activation document)) "skill-v4 requires :activation" {})
         (validate-parameters! (:parameters document) [:parameters])
-        (validate-state! (:state document) [:state]))
+        (validate-state! (:state document) [:state])
+        (validate-skill-formula-refs! document))
 
       :ac/vfx-v4
       (do
