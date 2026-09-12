@@ -1,0 +1,60 @@
+{:schema :ac/vfx-v4,
+ :id :mag-movement-arc-session,
+ :lifecycle {:mode :session},
+ :inputs
+ {:caster {:type :vec3},
+  :target {:type :vec3}},
+ :graphs
+ {:render
+  {:nodes
+   #:n{:start {:type :start, :nid :n/start},
+       :n--entry--default-0
+       {:type :component,
+        :component :arc,
+        :nid :n/n--entry--default-0,
+        :inputs
+        {:pattern :thin-continuous,
+         :arc-life-ticks 100000,
+         :duration-ticks 100000,
+         :life-ratio 0.5,
+         :hand-origin? true,
+         :bolt-count 1}},
+       :n001 {:type :context-ref, :key :caster, :nid :n/n001},
+       :n002 {:type :context-ref, :key :target, :nid :n/n002},
+       :n003 {:type :context-ref, :key :age, :nid :n/n003},
+       :n004 {:type :context-ref, :key :seed, :nid :n/n004},
+       :n005 {:type :context-ref, :key :source-player-id, :nid :n/n005},
+       :n--entry--default-1
+       {:type :end,
+        :result {},
+        :nid :n/n--entry--default-1,
+        :inputs {:outcome :performed}}},
+   :links
+   [{:id :e/mag-movement-arc-1,
+     :kind :data,
+     :from [:n/n001 :value],
+     :to [:n/n--entry--default-0 :start]}
+    {:id :e/mag-movement-arc-2,
+     :kind :data,
+     :from [:n/n002 :value],
+     :to [:n/n--entry--default-0 :end]}
+    {:id :e/mag-movement-arc-3,
+     :kind :data,
+     :from [:n/n003 :value],
+     :to [:n/n--entry--default-0 :age]}
+    {:id :e/mag-movement-arc-4,
+     :kind :data,
+     :from [:n/n004 :value],
+     :to [:n/n--entry--default-0 :seed]}
+    {:id :e/mag-movement-arc-5,
+     :kind :data,
+     :from [:n/n005 :value],
+     :to [:n/n--entry--default-0 :source-player-id]}
+    {:id :e/mag-movement-arc-6,
+     :kind :exec,
+     :from [:n/start :out],
+     :to [:n/n--entry--default-0 :in]}
+    {:id :e/mag-movement-arc-7,
+     :kind :exec,
+     :from [:n/n--entry--default-0 :out],
+     :to [:n/n--entry--default-1 :in]}]}}}

@@ -373,29 +373,16 @@
         :component :effect/vfx,
         :nid :n/n--entry--start-4-th-fdac4f26,
         :inputs
-        {:effect-id :arc-channel-session,
+        {:effect-id :mag-movement-arc-session,
          :operation :spawn,
          :instance-key [:activation :mag-movement-arc],
          :audience {:type :nearby, :radius 64.0},
-         :payload
-         {:block-bounds nil,
-          :charge-ticks 0,
-          :mode :movement,
-          :style
-          {:beam
-           {:pattern :thin-continuous,
-            :wiggle 0.5,
-            :life-ratio 0.5,
-            :width 0.04,
-            :color [165 230 255 190]}},
-          :good? true,
-          :target
-          {:nid :n/n--entry--start-4-th-75e7b15c,
-           :ref [:local :target-position]},
-          :caster
-          {:nid :n/n--entry--start-4-th-2861cad7, :ref [:local :eye0]},
-          :block-pos nil,
-          :visual-max-ticks 4096}}},
+          :payload
+          {:target
+           {:nid :n/n--entry--start-4-th-75e7b15c,
+            :ref [:local :target-position]},
+           :caster
+           {:nid :n/n--entry--start-4-th-2861cad7, :ref [:local :eye0]}}}},
        :n--entry--start-4-th-787c5697
        {:type :local-set,
         :operation :assign,
@@ -1452,7 +1439,7 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-4-then-8,
         :inputs
-        {:effect-id :arc-channel-session,
+         {:effect-id :mag-movement-arc-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-arc],
          :audience {:type :nearby, :radius 64.0},
@@ -1486,31 +1473,16 @@
         :component :effect/vfx,
         :nid :n/n--entry--pulse-4-el-2f0c2599,
         :inputs
-        {:effect-id :arc-channel-session,
+         {:effect-id :mag-movement-arc-session,
          :operation :update,
          :instance-key [:activation :mag-movement-arc],
          :audience {:type :nearby, :radius 64.0},
-         :payload
-         {:block-bounds nil,
-          :charge-ticks
-          {:nid :n/n--entry--pulse-4-el-492854c1,
-           :ref [:local :movement-ticks-next]},
-          :mode :movement,
-          :style
-          {:beam
-           {:pattern :thin-continuous,
-            :wiggle 0.5,
-            :life-ratio 0.5,
-            :width 0.04,
-            :color [165 230 255 190]}},
-          :good? true,
-          :target
-          {:nid :n/n--entry--pulse-4-el-f67e825f,
-           :ref [:local :target-position-cur]},
-          :caster
-          {:nid :n/n--entry--pulse-4-el-ce03b13e, :ref [:local :eye]},
-          :block-pos nil,
-          :visual-max-ticks 4096}}},
+          :payload
+          {:target
+           {:nid :n/n--entry--pulse-4-el-f67e825f,
+            :ref [:local :target-position-cur]},
+           :caster
+           {:nid :n/n--entry--pulse-4-el-ce03b13e, :ref [:local :eye]}}}},
        :n141
        {:type :component,
         :component :value/field,
@@ -2110,7 +2082,7 @@
         :component :effect/vfx,
         :nid :n/n--entry--release-8,
         :inputs
-        {:effect-id :arc-channel-session,
+         {:effect-id :mag-movement-arc-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-arc],
          :audience {:type :nearby, :radius 64.0},
@@ -2309,7 +2281,7 @@
         :component :effect/vfx,
         :nid :n/n--entry--abort-8,
         :inputs
-        {:effect-id :arc-channel-session,
+         {:effect-id :mag-movement-arc-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-arc],
          :audience {:type :nearby, :radius 64.0},
