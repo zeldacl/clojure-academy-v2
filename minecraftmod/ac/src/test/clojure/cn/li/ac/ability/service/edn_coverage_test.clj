@@ -13,7 +13,34 @@
             [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skills-catalog-v4 :as skills-catalog]
             [cn.li.ac.vfx.fx-catalog-v4 :as fx-catalog]
-            [cn.li.combat.api :as combat-api]))
+            [cn.li.combat.api :as combat-api]
+            [cn.li.node.api :as node-api]))
+
+(deftest every-skill-input-is-provided-by-production-test
+  ;; Enumerate every entry's IR, including branches a smoke cast never takes.
+  ;; Build real inputs without dispatching world effects or spending resources.
+  (let [clean (requiring-resolve 'cn.li.ac.test.support.player-state/clean-player-states-fixture)
+        create-session! (requiring-resolve 'cn.li.ac.ability.service.runtime-store/create-session!)
+        create-player! (requiring-resolve 'cn.li.ac.ability.service.runtime-store/get-or-create-player-state!)
+        initialize! (requiring-resolve 'cn.li.ac.ability.service.combat-runtime/initialize-final-runtime-v2!)
+        reset! (requiring-resolve 'cn.li.ac.ability.service.combat-runtime/reset-final-runtime-v2-for-test!)
+        input! (requiring-resolve 'cn.li.ac.ability.service.combat-runtime/final-input-v2)]
+    (clean
+     (fn []
+       (let [session-id @(requiring-resolve 'cn.li.ac.test.support.player-state/test-session-id)
+             owner "input-contract-audit"]
+         (create-session! session-id)
+         (create-player! session-id owner)
+         (try
+           (initialize!)
+           (doseq [{:keys [id ir]} (:skills (skills-catalog/assemble))
+                   :let [input (input! owner id {:op :start
+                                                :context {:delta 1.0 :location-name :home
+                                                          :target-id "test-target"}} 1)
+                         problems (node-api/input-problems ir input)]]
+             (is (empty? problems)
+                 (str id " has invalid production inputs: " (pr-str problems))))
+           (finally (reset!))))))))
 
 (def ^:private main-registration-ids
   #{:arc-gen :blood-retrograde :body-intensify :current-charging

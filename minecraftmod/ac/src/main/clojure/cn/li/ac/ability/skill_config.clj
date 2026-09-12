@@ -174,7 +174,7 @@
     :min-distance-multiplier :cost.perform.min-distance-multiplier
     :distance-cap :cost.perform.distance-cap
     :cooldown-ticks :cooldown.ticks
-    :long-distance-threshold :progression.long-distance-threshold
+    :int-distance-threshold :progression.long-distance-threshold
     :exp-short :progression.exp-short
     :exp-long :progression.exp-long}
    :dim-folding-theorem

@@ -54,6 +54,7 @@
             [cn.li.node.ops :as ops]
             [cn.li.node.types :as types]
             [cn.li.node.ir :as ir]
+            [cn.li.node.static-check :as static-check]
             [cn.li.node.surface :as surface]))
 
 (def ^:const max-inline-depth 32)
@@ -306,6 +307,7 @@
             dst (when returns (alloc-reg! env (types/bank returns) returns))]
         (append! env block-id
                  (cond-> {:op (if returns :query :action) :nid (nid-for! env form) :node node-id :args args
+                         :arg-types (into {} (map (fn [[k pspec]] [k (:type pspec)])) (:params spec))
                          ;; Baked in at compile time so the emitter
                          ;; (cn.li.mcmod.runtime.effect-emit) never needs
                          ;; its own node-id -> capability lookup -- it must
@@ -392,7 +394,7 @@
                    (dummy-register! env :double))
            :block-id block-id}
           (let [dst (alloc-reg! env (types/bank t) t)]
-            (append! env block-id {:op :tun :nid (nid-for! env form) :dst dst :key k})
+            (append! env block-id {:op :tun :nid (nid-for! env form) :dst dst :key k :type t})
             {:reg dst :block-id block-id})))
 
       (str/starts-with? s "?")
@@ -410,7 +412,7 @@
                    (dummy-register! env :any))
            :block-id block-id}
           (let [dst (alloc-reg! env (types/bank t) t)]
-            (append! env block-id {:op :cap :nid (nid-for! env form) :dst dst :key k})
+            (append! env block-id {:op :cap :nid (nid-for! env form) :dst dst :key k :type t})
             {:reg dst :block-id block-id})))
 
       ;; %mode reads session state key :mode (cn.li.node.surface's :state
@@ -956,6 +958,9 @@
     ;; Only ERRORS suppress the IR. Warnings ride along with a valid IR so a
     ;; caller can surface them (startup log, editor diagnostics panel) without
     ;; losing a program that does run.
+    (when-not (some #(= :error (:severity %)) @(:diagnostics env))
+      (doseq [problem (static-check/problems ir)]
+        (report! env problem)))
     (let [ds @(:diagnostics env)]
       (if (some #(= :error (:severity %)) ds)
         {:ir nil :diagnostics ds}

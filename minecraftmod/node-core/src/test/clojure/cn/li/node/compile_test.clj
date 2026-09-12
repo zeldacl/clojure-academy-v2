@@ -4,6 +4,7 @@
             [cn.li.node.compile :as compile]
             [cn.li.node.cost :as cost]
             [cn.li.node.ir :as ir]
+            [cn.li.node.static-check :as static-check]
             [cn.li.node.test-fixtures :as fx]))
 
 (deftest golden-thunder-bolt-compiles-test
@@ -48,6 +49,68 @@
         (is false "expected compile! to throw")
         (catch clojure.lang.ExceptionInfo e
           (is (= :nil-typed-param (:code (ex-data e)))))))))
+
+(deftest statically-known-nil-through-field-is-a-compile-error-test
+  (testing "a nil hidden behind an :any map field is rejected before its
+            generated object-to-double conversion can reach the emitter"
+    (let [doc (surface/parse
+               "{:ability :nil-field :tunables {}
+                 :do [(let payload {:amount nil})
+                      (let result (math/add (:amount payload) 1.0))
+                      (finish {:outcome :performed})]}")]
+      (try
+        (compile/compile! doc fx/opts)
+        (is false "expected compile! to throw")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :invalid-static-value (:code (ex-data e)))))))))
+
+(deftest statically-known-invalid-vec3-through-field-is-a-compile-error-test
+  (let [doc (surface/parse
+             "{:ability :invalid-vec3-field :tunables {}
+               :do [(let payload {:position nil})
+                    (let result (vec3/add (:position payload) ?caster/eye))
+                    (finish {:outcome :performed})]}")]
+    (try
+      (compile/compile! doc fx/opts)
+      (is false "expected compile! to throw")
+      (catch clojure.lang.ExceptionInfo e
+        (is (= :invalid-static-value (:code (ex-data e))))
+        (is (= :vec3 (:want (ex-data e))))))))
+
+(deftest concrete-input-is-checked-against-compiled-register-types-test
+  (let [doc (surface/parse
+             "{:ability :input-contract :tunables {}
+               :do [(let result (math/add (:cp ?context/resources) 1.0))
+                    (finish {:outcome :performed})]}")
+        ir (compile/compile! doc (update fx/opts :capabilities assoc :context/resources :any))]
+    (testing "a present capability can still be invalid for a downstream primitive register"
+      (is (some #(= :invalid-static-value (:code %))
+                (static-check/problems ir {:capabilities {:context/resources {}}
+                                           :tunables {}}))))
+    (testing "an omitted production input is reported separately"
+      (is (some #(= :missing-input (:code %))
+                (static-check/problems ir {:capabilities {} :tunables {}}))))
+    (testing "a valid production value satisfies the whole compiled dataflow"
+      (is (empty? (static-check/problems ir {:capabilities {:context/resources {:cp 100.0}}
+                                             :tunables {}}))))))
+
+(deftest concrete-input-is-checked-at-node-call-boundaries-test
+  (let [doc (surface/parse
+             "{:ability :node-input-contract :tunables {}
+               :do [(let hit (target/raycast
+                               {:from (:eye ?context/runtime)
+                                :dir ?caster/aim
+                                :distance 1.0}))
+                    (finish {:outcome :performed})]}")
+        ir (compile/compile! doc (update fx/opts :capabilities assoc :context/runtime :any))
+        problems (static-check/problems
+                  ir {:capabilities (assoc fx/capabilities
+                                           :caster/aim {:x 0.0 :y 0.0 :z 1.0}
+                                           :context/runtime {:eye nil})
+                      :tunables {}})]
+    (is (some #(and (= :invalid-static-value (:code %))
+                    (= :vec3 (:want %)))
+              problems))))
 
 (deftest type-mismatch-is-reported-at-the-source-node-test
   (let [doc (surface/parse

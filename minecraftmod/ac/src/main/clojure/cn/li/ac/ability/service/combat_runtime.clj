@@ -498,8 +498,8 @@
                          (catch Throwable _ nil))
         bindings (or (:bindings registration) {})
         registration-context (merge (or (:metadata bindings) {})
-                                    (when (map? (:presentation bindings))
-                                      {:runtime (:presentation bindings)}))
+                                    (when (map? (:presentation registration))
+                                      {:runtime (:presentation registration)}))
         resource-data (:resource-data state)
         position (when (raycast/available?)
                    (raycast/player-position (str owner)))
@@ -637,7 +637,8 @@
 ;; resolve-final-formula-v2 below is NOT a general port of the old
 ;; resolver -- it covers exactly the
 ;; {:ref [:input :tunables k]} / {:ref [:input :context k]} / {:ref
-;; [:state k]} / {:expr :math/mul|:math/sub|:math/select :args [...]}
+;; [:input :capabilities k]} / {:ref [:state k]} /
+;; {:expr :math/mul|:math/sub|:math/select :args [...]}
 ;; shapes every real ac/skills-v4/*.edn :costs/:cooldown/:progression/
 ;; :invariants declaration actually uses (grep-confirmed across all 39
 ;; files before writing this, not assumed complete).
@@ -650,6 +651,7 @@
         :input (case a
                  :tunables (get-in scope [:tunables b])
                  :context (get-in scope [:context b])
+                 :capabilities (get-in scope [:capabilities b])
                  (throw (ex-info "unsupported S8 final formula :input ref"
                                  {:ref (:ref value)})))
         :state (get-in scope [:state a])
@@ -704,13 +706,23 @@
   [owner ability-id intent seed session-state]
   (let [context (activation-context owner ability-id intent seed)
         tunables (materialize-final-tunables ability-id (double (or (:skill-exp context) 0.0)))
-        scope {:tunables tunables :context context :state (or session-state {})}
+        base-capabilities (caster-facade owner context)
+        scope {:tunables tunables
+               :context context
+               :capabilities base-capabilities
+               :state (or session-state {})}
         source (combat-source ability-id)
         budgets (materialize-final-map-v2 (:costs source) scope)
         cooldowns (materialize-final-map-v2 (:cooldown source) scope)
         progressions (materialize-final-map-v2 (:progression source) scope)
         invariants (materialize-final-map-v2 (:invariants source) scope)]
-    (merge (caster-facade owner context)
+    (merge base-capabilities
+           {:context/resources (:resources context)
+            :context/skill-exp (:skill-exp context)
+            :context/ability-runtime (:runtime context)
+            :context/delta (:delta context)
+            :context/location-name (:location-name context)
+            :context/target-id (:target-id context)}
            (into {} (map (fn [[k v]] [(keyword "budget" (name k)) v])) budgets)
            (into {} (map (fn [[k v]] [(keyword "cooldown" (name k)) (long (or (:ticks v) 0))])) cooldowns)
            (into {} (map (fn [[k v]] [(keyword "progression" (name k)) (double (or (:per-mark v) 0.0))]))
@@ -724,9 +736,9 @@
            ;; the SAME three fields :targeting/*. Aliased here rather
            ;; than renaming either established, already-shipped
            ;; convention.
-           {:caster/normal-metal-blocks (:targeting/normal-metal-blocks (caster-facade owner context))
-            :caster/weak-metal-blocks (:targeting/weak-metal-blocks (caster-facade owner context))
-            :caster/metal-entities (:targeting/metal-entities (caster-facade owner context))})))
+           {:caster/normal-metal-blocks (:targeting/normal-metal-blocks base-capabilities)
+            :caster/weak-metal-blocks (:targeting/weak-metal-blocks base-capabilities)
+            :caster/metal-entities (:targeting/metal-entities base-capabilities)})))
 
 (defn- final-input-v2
   "owner, ability-id, intent, seed -> {:tunables :capabilities :state

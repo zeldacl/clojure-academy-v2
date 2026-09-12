@@ -7,7 +7,10 @@
             [cn.li.node.scope :as scope]
             [cn.li.node.cost :as cost]
             [cn.li.node.validate :as validate]
-            [cn.li.node.environment :as environment]))
+            [cn.li.node.environment :as environment]
+            [cn.li.node.static-check :as static-check]))
+
+(defn input-problems [ir input] (static-check/problems ir input))
 (defn content-hash [value] (digest/content-hash value))
 (defn validate-document! [value] (graph-document/validate-document! value))
 (defn document-kind [value] (graph-document/kind value))
