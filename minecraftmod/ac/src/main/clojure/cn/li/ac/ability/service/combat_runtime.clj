@@ -1018,7 +1018,14 @@
                                                      @last-known-tick*))))))
                      intent)
             entry (resolve-program-entry ability-id intent)
+            ;; A session owns one activation seed for its entire lifetime.
+            ;; The client release packet intentionally contains only the
+            ;; neutral input edge, so it does not carry that seed back. If a
+            ;; release/abort generated a fresh seed here, its VFX destroy
+            ;; signal would address a different instance key than the start
+            ;; and pulse signals, leaving the caster's session VFX alive.
             seed (long (or (:activation-seed intent)
+                           (:activation-seed active-session)
                            (generate-activation-seed owner ability-id
                                                      (long (or (:server-tick intent)
                                                                @last-known-tick*)))))

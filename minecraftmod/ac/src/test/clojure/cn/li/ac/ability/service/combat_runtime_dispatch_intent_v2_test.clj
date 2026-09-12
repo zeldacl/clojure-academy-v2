@@ -74,8 +74,28 @@
         (is (= :accepted (:status result)))
         (is (= :aborted (:outcome result)))
         (is (true? (:finish-ability? result)))
+        (is (= :destroy (:op (first (:vfx-signals result))))
+            "toggle abort must emit a destroy signal")
         (is (nil? (combat-sessions/session :ac owner))
             "session closed after the toggle's abort")))))
+
+(deftest manual-release-reuses-active-session-activation-seed-test
+  "A client key-up carries only the neutral release edge. The server must
+   reuse the active session seed so its destroy signal addresses the same VFX
+   instance that :start created."
+  (let [owner "v2-manual-release-seed-owner"]
+    (flush-with-resources! owner)
+    (let [start (combat-runtime/dispatch-intent-v2!
+                 owner {:op :start :ability-id :vec-reflection})
+          release (combat-runtime/dispatch-intent-v2!
+                   owner {:op :release :ability-id :vec-reflection})]
+      (is (= :accepted (:status start)))
+      (is (= :accepted (:status release)))
+      (is (= :destroy (:op (first (:vfx-signals release)))))
+      (is (= (:instance-key (first (:vfx-signals start)))
+             (:instance-key (first (:vfx-signals release))))
+          "manual release must destroy the start activation's VFX instance")
+      (is (nil? (combat-sessions/session :ac owner))))))
 
 (deftest insufficient-resources-rejects-without-opening-a-session-test
   (let [owner "v2-insufficient-owner"]
