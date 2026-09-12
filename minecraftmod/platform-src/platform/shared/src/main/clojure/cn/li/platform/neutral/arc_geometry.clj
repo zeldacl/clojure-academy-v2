@@ -48,6 +48,16 @@
 (defn- v3->map [^V3 v]
   {:x (.-x v) :y (.-y v) :z (.-z v)})
 
+(defn- endpoint-position
+  "Resolve a projected entity endpoint to its eye position."
+  [endpoint]
+  (if-let [position (:position endpoint)]
+    (if (number? (:eye-height endpoint))
+      (update position :y #(+ (double (or % 0.0))
+                              (double (:eye-height endpoint))))
+      position)
+    endpoint))
+
 (defn local-frame-offset
   "Resolve [forward up right] against the bolt's own axes (main ViewOptimize)."
   ^V3 [start end [forward-o up-o right-o]]
@@ -255,11 +265,24 @@
 
    `:bolt-count` (default 1) mirrors main ArcGen's three independent EntityArcs:
    each bolt has its own Markov chain, so flicker gaps on one bolt do not make
-   the cast look like a truncated lifetime."
+   the cast look like a truncated lifetime.
+
+   When `:end-points` is present, the same arc node is a deterministic fan-out
+   from `:start` to each endpoint. This keeps chained strike geometry in the
+   V4 render graph instead of dropping the target list at the scene boundary."
   [geometry material color]
   (let [seed (long (or (:seed geometry) 0))
         bolt-count (long (or (:bolt-count geometry) 1))]
-    (into []
-          (mapcat (fn [bolt-seed]
-                    (single-bolt-quad-ops geometry material color bolt-seed)))
-          (bolt-seeds seed bolt-count))))
+    (if (seq (:end-points geometry))
+      (into []
+            (mapcat (fn [[endpoint endpoint-index]]
+                      (let [geometry* (assoc geometry :end (endpoint-position endpoint))
+                            bolt-seed (long (hash [seed endpoint-index]))]
+                        (mapcat (fn [seed*]
+                                  (single-bolt-quad-ops geometry* material color seed*))
+                                (bolt-seeds bolt-seed bolt-count))))
+                    (map-indexed vector (:end-points geometry))))
+      (into []
+            (mapcat (fn [bolt-seed]
+                      (single-bolt-quad-ops geometry material color bolt-seed)))
+            (bolt-seeds seed bolt-count)))))

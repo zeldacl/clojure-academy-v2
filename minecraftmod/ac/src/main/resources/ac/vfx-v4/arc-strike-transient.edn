@@ -9,6 +9,7 @@
   :start {:type :vec3},
   :sound-id {:type :string},
   :arc-life-ticks {:type :int},
+  :duration-ticks {:type :int},
   :aoe-points {:type :any},
   :aoe-origin {:type :vec3},
   :end {:type :vec3},
@@ -17,11 +18,24 @@
  {:render
   {:nodes
    #:n{:start {:type :start, :nid :n/start},
-       :n--entry--default-0 {:type :component, :component :arc, :nid :n/n--entry--default-0},
+       :n--entry--default-0
+       {:type :component,
+        :component :arc,
+        :nid :n/n--entry--default-0,
+        :inputs {:bolt-count 3}},
        :n001 {:type :context-ref, :key :start, :nid :n/n001},
        :n002 {:type :context-ref, :key :end, :nid :n/n002},
        :n003 {:type :context-ref, :key :pattern, :nid :n/n003},
        :n004 {:type :context-ref, :key :arc-life-ticks, :nid :n/n004},
+       :n009 {:type :context-ref, :key :seed, :nid :n/n009},
+       :n010 {:type :context-ref, :key :hand-origin?, :nid :n/n010},
+       :n011 {:type :context-ref, :key :aoe-origin, :nid :n/n011},
+       :n012 {:type :context-ref, :key :aoe-points, :nid :n/n012},
+       :n013 {:type :context-ref, :key :duration-ticks, :nid :n/n013},
+       :n014 {:type :component,
+             :component :arc,
+             :nid :n/n014,
+             :inputs {:pattern :aoe}},
        :n--entry--default-1 {:type :component, :component :audio-one-shot, :nid :n/n--entry--default-1},
        :n005 {:type :context-ref, :key :sound-id, :nid :n/n005},
        :n006 {:type :context-ref, :key :sound-volume, :nid :n/n006},
@@ -32,11 +46,21 @@
    [{:id :e/arc-strike-1, :kind :data, :from [:n/n001 :value], :to [:n/n--entry--default-0 :start]}
     {:id :e/arc-strike-2, :kind :data, :from [:n/n002 :value], :to [:n/n--entry--default-0 :end]}
     {:id :e/arc-strike-3, :kind :data, :from [:n/n003 :value], :to [:n/n--entry--default-0 :pattern]}
-    {:id :e/arc-strike-4, :kind :data, :from [:n/n004 :value], :to [:n/n--entry--default-0 :life-ratio]}
-    {:id :e/arc-strike-5, :kind :exec, :from [:n/start :out], :to [:n/n--entry--default-0 :in]}
-    {:id :e/arc-strike-6, :kind :data, :from [:n/n005 :value], :to [:n/n--entry--default-1 :sound-id]}
-    {:id :e/arc-strike-7, :kind :data, :from [:n/n006 :value], :to [:n/n--entry--default-1 :volume]}
-    {:id :e/arc-strike-8, :kind :data, :from [:n/n007 :value], :to [:n/n--entry--default-1 :pitch]}
-    {:id :e/arc-strike-9, :kind :data, :from [:n/n008 :value], :to [:n/n--entry--default-1 :position]}
-    {:id :e/arc-strike-10, :kind :exec, :from [:n/n--entry--default-0 :out], :to [:n/n--entry--default-1 :in]}
-    {:id :e/arc-strike-11, :kind :exec, :from [:n/n--entry--default-1 :out], :to [:n/n--entry--default-2 :in]}]}}}
+    {:id :e/arc-strike-4, :kind :data, :from [:n/n004 :value], :to [:n/n--entry--default-0 :arc-life-ticks]}
+    {:id :e/arc-strike-5, :kind :data, :from [:n/n009 :value], :to [:n/n--entry--default-0 :seed]}
+    {:id :e/arc-strike-6, :kind :data, :from [:n/n010 :value], :to [:n/n--entry--default-0 :hand-origin?]}
+    {:id :e/arc-strike-7, :kind :exec, :from [:n/start :out], :to [:n/n--entry--default-0 :in]}
+    {:id :e/arc-strike-8, :kind :data, :from [:n/n011 :value], :to [:n/n014 :start]}
+    {:id :e/arc-strike-9, :kind :data, :from [:n/n011 :value], :to [:n/n014 :end]}
+    {:id :e/arc-strike-10, :kind :data, :from [:n/n012 :value], :to [:n/n014 :end-points]}
+    {:id :e/arc-strike-11, :kind :data, :from [:n/n004 :value], :to [:n/n014 :arc-life-ticks]}
+    {:id :e/arc-strike-12, :kind :data, :from [:n/n009 :value], :to [:n/n014 :seed]}
+    {:id :e/arc-strike-13, :kind :exec, :from [:n/n--entry--default-0 :out], :to [:n/n014 :in]}
+    {:id :e/arc-strike-14, :kind :data, :from [:n/n013 :value], :to [:n/n--entry--default-0 :duration-ticks]}
+    {:id :e/arc-strike-15, :kind :data, :from [:n/n013 :value], :to [:n/n014 :duration-ticks]}
+    {:id :e/arc-strike-16, :kind :data, :from [:n/n005 :value], :to [:n/n--entry--default-1 :sound-id]}
+    {:id :e/arc-strike-17, :kind :data, :from [:n/n006 :value], :to [:n/n--entry--default-1 :volume]}
+    {:id :e/arc-strike-18, :kind :data, :from [:n/n007 :value], :to [:n/n--entry--default-1 :pitch]}
+    {:id :e/arc-strike-19, :kind :data, :from [:n/n008 :value], :to [:n/n--entry--default-1 :position]}
+    {:id :e/arc-strike-20, :kind :exec, :from [:n/n014 :out], :to [:n/n--entry--default-1 :in]}
+    {:id :e/arc-strike-21, :kind :exec, :from [:n/n--entry--default-1 :out], :to [:n/n--entry--default-2 :in]}]}}}

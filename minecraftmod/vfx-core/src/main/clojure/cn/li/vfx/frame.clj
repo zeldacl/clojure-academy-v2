@@ -117,6 +117,7 @@
     :arc {:operation :draw-batch :stage :world-after-translucent :primitive :quad
           :geometry {:kind :arc
                      :start (:start op) :end (:end op)
+                     :end-points (:end-points op)
                      :pattern (or (:pattern op) :weak)
                      :seed (or (:seed op) 0)
                      :age (long (or (:age op) 0))

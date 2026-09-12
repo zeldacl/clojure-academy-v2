@@ -73,6 +73,9 @@
    ;; segment quads by cn.li.platform.neutral.arc-geometry — not a no-op emitter.
    :arc
    (node {:start (p* :vec3) :end (p* :vec3)
+          ;; Optional fan-out endpoints are used by chained strike effects:
+          ;; one declarative arc node can draw the impact point to each target.
+          :end-points (opt :any nil)
           :pattern (opt :any :weak) :seed (opt :long 0)
           ;; Universal scene :age is :double (cn.li.vfx.scene); coerce in
           ;; frame/arc-geometry. :arc-life-ticks matches main EntityArc ttl.
@@ -119,4 +122,3 @@
           :curves (p)})})
 
 (def nodes (attach-presentation raw-nodes))
-

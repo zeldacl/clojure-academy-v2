@@ -169,3 +169,29 @@
     (is (= #{"academy:textures/effects/glow_line.png"
              "academy:textures/effects/solid.png"}
            (set (map :texture ops))))))
+
+(deftest arc-end-points-fan-out-from-impact-to-entity-eyes
+  "Thunder Bolt's chained arcs use the projected entity position plus eye
+   height, while ordinary arcs retain their original single-endpoint path."
+  (let [base {:kind :arc
+              :start {:x 0.0 :y 64.0 :z 0.0}
+              :end {:x 0.0 :y 64.0 :z 8.0}
+              :pattern :aoe
+              :seed 7
+              :arc-life-ticks 20
+              :life-ratio 0.0}
+        material {:alpha 1.0 :color [255 255 255 255]}
+        one (with-redefs [arc-geometry/arc-visible? (constantly true)]
+              (arc-geometry/arc-quad-ops base material nil))
+        chained (with-redefs [arc-geometry/arc-visible? (constantly true)]
+                  (arc-geometry/arc-quad-ops
+                   (assoc base :end-points
+                          [{:position {:x 2.0 :y 65.0 :z 2.0}
+                            :eye-height 1.5}
+                           {:position {:x -2.0 :y 65.0 :z 2.0}
+                            :eye-height 1.5}])
+                   material nil))]
+    (is (= {:x 2.0 :y 66.5 :z 2.0}
+           (#'arc-geometry/endpoint-position
+            {:position {:x 2.0 :y 65.0 :z 2.0} :eye-height 1.5})))
+    (is (= (* 2 (count one)) (count chained)))))
