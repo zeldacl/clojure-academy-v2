@@ -1394,6 +1394,7 @@
         {:effect-id :audio-loop-session,
          :operation :update,
          :instance-key [:activation :mag-movement-audio],
+         :audience {:type :nearby, :radius 32.0},
          :payload
          {:position
           {:nid :n/n--entry--pulse-4-el-657619f3,
@@ -1454,6 +1455,7 @@
         {:effect-id :arc-channel-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-arc],
+         :audience {:type :nearby, :radius 64.0},
          :payload {:fade-ticks 0}}},
        :n--entry--pulse-4-then-9
        {:type :component,
@@ -1463,6 +1465,7 @@
         {:effect-id :audio-loop-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-audio],
+         :audience {:type :nearby, :radius 32.0},
          :payload {:fade-ticks 0}}},
        :n145 {:type :component, :component :vec3/dot, :nid :n/n145},
        :n--entry--pulse-4-el-63d893dd
@@ -1486,6 +1489,7 @@
         {:effect-id :arc-channel-session,
          :operation :update,
          :instance-key [:activation :mag-movement-arc],
+         :audience {:type :nearby, :radius 64.0},
          :payload
          {:block-bounds nil,
           :charge-ticks
@@ -2109,6 +2113,7 @@
         {:effect-id :arc-channel-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-arc],
+         :audience {:type :nearby, :radius 64.0},
          :payload {:fade-ticks 0}}},
        :n--entry--release-9
        {:type :component,
@@ -2118,6 +2123,7 @@
         {:effect-id :audio-loop-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-audio],
+         :audience {:type :nearby, :radius 32.0},
          :payload {:fade-ticks 0}}},
        :n--entry--release-10
        {:type :end,
@@ -2306,6 +2312,7 @@
         {:effect-id :arc-channel-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-arc],
+         :audience {:type :nearby, :radius 64.0},
          :payload {:fade-ticks 0}}},
        :n--entry--abort-9
        {:type :component,
@@ -2315,6 +2322,7 @@
         {:effect-id :audio-loop-session,
          :operation :destroy,
          :instance-key [:activation :mag-movement-audio],
+         :audience {:type :nearby, :radius 32.0},
          :payload {:fade-ticks 0}}},
        :n--entry--abort-10
        {:type :end,
